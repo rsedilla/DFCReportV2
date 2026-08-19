@@ -159,8 +159,6 @@ These are Stop Conditions. Do not invent answers.
 
    The recommendation on the table is to split the term: for **counting**, a leader is a current Cell Leader; for **authorization**, eligibility comes from the capability grant plus upline position and never consults cell leadership. Deferred by the author on 2026-08-19 for further discussion. Until it is settled, do not implement either metric.
 
-2. **Stack** — `SKILL.md` §2 recommends NestJS or a separated Next.js backend without choosing. Under discussion; the deciding consideration is whether authorization is enforced by the framework or by developer discipline on ~40 endpoints (§7, §22).
-
 ### Not yet settled, lower priority
 
 - No "on behalf" path for pastoral assignment. §14 records responsible leader and actual actor for attendance; assignment records only the actor. Recommendation is to decline it — there is no reporting consumer for the distinction.
@@ -171,4 +169,3 @@ These are Stop Conditions. Do not invent answers.
 - Cell membership workflow and permissions, deferred by §10 to Cells module planning.
 - Duplicate-match threshold and field weighting for §3 fuzzy matching.
 - Member ID generation rule. The format `M-001842` is given; the sequence is not.
-- No git repository. None of this work is under version control.
