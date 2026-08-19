@@ -891,14 +891,15 @@ Prolonged inactivity is a signal worth surfacing to a person, and Section 15 req
 
 Exactly:
 
-- `MULTIPLIED` — the Cell split into new Cells
 - `MERGED_INTO_ANOTHER_CELL`
 - `LEADER_STEPPED_DOWN` — with no replacement leader
 - `MEMBERS_DISPERSED` — members moved away, graduated, or transferred
 - `CREATED_IN_ERROR`
 - `OTHER` — requires a note
 
-`MULTIPLIED` is listed first deliberately. A Cell closing because it multiplied is the outcome the whole model exists to produce, and the reason list must not read as a list of failures (Section 1, Principle 7).
+Multiplication is deliberately absent, and must not be added. When a Cell multiplies, a disciple opens a new Cell and the original continues under the same leader. Multiplication creates Cells; it never closes one. A leader who hands their Cells to disciples and stops leading has stepped down, which the list already covers.
+
+Keep every reason factual and free of judgement (Section 1, Principle 7). A closure is an operational fact about a Cell, never an assessment of its leader.
 
 #### What closing does
 
