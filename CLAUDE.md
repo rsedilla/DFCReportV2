@@ -194,11 +194,20 @@ Inferring closure would punish the leader who declares `NOT_HELD` honestly, asse
 
 Prolonged inactivity instead drives an attention list (§15) that prompts a person to confirm or close. Closure carries a reason from a fixed list. Multiplication is deliberately not one of them: when a Cell multiplies, a disciple opens a new Cell and the original continues under the same leader, so multiplication creates Cells rather than closing one. Written to `SKILL.md` §10, §11, §15, §7.
 
+### 2026-08-20 — "Qualifies as a leader" means current Cell Leader
+For counting, a leader is a current Cell Leader: an active Cell leadership assignment on an `ACTIVE` Cell. There is no commissioning flag or graduation status. In the author's words, leadership is not an award and not a grant — it is earned by leading a Cell weekly.
+
+Qualification is not filtered by recent activity, because that would drop a leader from the count for honestly declaring `NOT_HELD` and would make development metrics flicker with submission timing. The weekly expectation is enforced through the Cell: a Cell that has stopped meeting is surfaced on the attention list and closed by a person, and the closure ends the leadership assignment.
+
+Authorization never consults this definition; it depends on capability grant and tree position only. Written to `SKILL.md` §11, with cross-references from §5 and §16.
+
+### 2026-08-20 — DCC monthly buckets derive from N
+Buckets run to the number of applicable DCC events in the month, not the number of Sundays in the calendar, since a Sunday may carry no service. Matches the Cell rule in §12. Written to `SKILL.md` §9.
+
+### 2026-08-20 — Dashboard rules
+The sidebar carries navigation only. Every tile carries scope and period; current-state and period-based tiles are grouped separately; attendance tiles count unique people; outstanding work appears above the counts; dashboards differ by role. Written to `SKILL.md` §19.
+
 ### Open — awaiting a ruling
 
-These are Stop Conditions. Do not invent answers.
-
-1. **"Qualifies as a leader"** — a current Cell Leader (`SKILL.md` §11), or something broader? Gates Direct Leaders and Leaders with 12+ Direct Leaders.
-
-   The recommendation on the table is to split the term: for **counting**, a leader is a current Cell Leader; for **authorization**, eligibility comes from the capability grant plus upline position and never consults cell leadership. Deferred by the author on 2026-08-19 for further discussion. Until it is settled, do not implement either metric.
+Nothing is currently awaiting a ruling. Items reaching a Stop Condition are recorded here until settled.
 

@@ -339,7 +339,7 @@ An assignment is active when `ended_at` is null. That is the single definition. 
 Always distinguish:
 
 - Direct Leader: immediate parent in pastoral tree
-- Direct Leaders: immediate children who qualify as leaders
+- Direct Leaders: immediate children who qualify as leaders (Section 11, What "qualifies as a leader" means)
 - Descendants / subtree: all people recursively below a leader
 
 For "completed 12 leaders", count direct leaders only, not all descendants.
@@ -806,24 +806,24 @@ Each person must appear in exactly one classification bucket for the report snap
 
 #### Monthly Attendance view
 
-Classify each unique person by how many DCC services they attended that month:
+Classify each unique person by how many DCC services they attended that month.
 
-For a 4-Sunday month:
+Let **N** be the number of applicable DCC events in the month — the Sundays that carry a DCC event, per the DCC calendar above. N is normally 4 or 5, and is fewer where a Sunday carries no service.
 
-- Once
-- Twice
-- Thrice
-- Completed (4/4)
-
-For a 5-Sunday month:
+Buckets are derived from N:
 
 - Once
 - Twice
 - Thrice
-- 4 Times
-- Completed (5/5)
+- ... continuing to N-1
+- Completed (N/N)
+- Total unique people
 
-`Completed` always means attendance at every applicable DCC event for that calendar month — not always exactly four, and not an arbitrary reporting limit; it follows directly from the DCC calendar rule above.
+Never label buckets from the number of Sundays in the calendar. A month with five Sundays where one carried no service has N = 4, and its highest bucket is `Completed (4/4)`.
+
+`Completed` always means attendance at every applicable DCC event that month. It is never a fixed number and never an arbitrary reporting limit.
+
+This is the same derived-denominator rule Cell monthly attendance follows (Section 12), and the two must not diverge.
 
 All bucket counts must sum to the same unique total.
 
@@ -992,6 +992,20 @@ A person is a current Cell Leader when they have at least one active Cell leader
 The leadership assignment record itself is preserved in full. History shows that the person led that Cell for that period.
 
 Cell Leader is the normal qualification for a standard Leader login account.
+
+### What "qualifies as a leader" means
+
+For counting — Direct Leaders (Section 5) and Leaders with 12+ Direct Leaders (Section 16) — a person qualifies as a leader when they are a **current Cell Leader**: they hold at least one active Cell leadership assignment on an `ACTIVE` Cell.
+
+Leadership is earned by leading a Cell, not conferred by designation. There is no commissioning flag, no graduation status, and no leader role existing apart from actually leading a Cell.
+
+A person with disciples but no Cell is not counted as a leader. They remain in Total People, they appear in the pastoral tree, and their own disciples count normally. They enter the leader count when their Cell opens.
+
+**Qualification is not filtered by recent activity.** A leader whose Cell has met irregularly, or who has honestly declared `NOT_HELD` through a difficult season (Section 13), remains a current Cell Leader. Filtering the count on recent meetings would remove a leader for reporting truthfully, and would make every development metric flicker month to month with the timing of submissions.
+
+The expectation of weekly meeting is real, and it is enforced through the Cell rather than through the count. A Cell that has genuinely stopped meeting appears on the attention list (Section 15), and a person closes it. Closing ends the leadership assignment, and that is what removes the leader from the count — a recorded human decision, never a filter applied at report time.
+
+**Authorization never consults this definition.** Whether someone may reassign a person, manage Cell membership, or take attendance depends on their capability grant and their position in the pastoral tree (Section 7), not on whether they currently lead a Cell. A leader who has stepped back from leading keeps managing the people pastorally under them. Hierarchy position and system permission are separate concepts (Section 1, Principle 3).
 
 ---
 
@@ -1340,7 +1354,7 @@ Do not label leaders negatively for being below 12.
 
 Definition:
 
-A leader with at least 12 direct pastoral children who qualify as leaders.
+A leader with at least 12 direct pastoral children who qualify as leaders (Section 11, What "qualifies as a leader" means) — that is, twelve immediate children who are each themselves a current Cell Leader.
 
 Count direct leaders only. Do not include deeper descendants.
 
@@ -1461,6 +1475,51 @@ Historical reports must respect historical pastoral assignments and Cell categor
 ---
 
 ## 19. Dashboard / Sidebar Guidance
+
+### The sidebar is navigation
+
+The sidebar carries links, never counts. Metrics belong on the Dashboard and inside the reporting modules, where they can carry the scope and period that make them meaningful. Adding live numbers to navigation means computing scoped queries on every page load and displaying figures stripped of the context needed to read them.
+
+This is the same rule already applied to leadership-development metrics and Participation, both of which live inside Network Summary rather than earning their own sidebar link (Section 16).
+
+### Dashboard
+
+Every tile carries four things: what it counts, the value, the scope it covers, and the period it covers.
+
+```text
+People                          DCC — October 2026
+4,203                           340 people attended
+Whole Church · as of today      Whole Church · open until 7 Nov
+```
+
+Scope must appear on the tile. The same tile reads 12 for a Cell leader and 4,203 for a Senior Pastor, and a figure without its scope cannot be discussed, screenshotted, or compared.
+
+**Separate current-state tiles from period-based tiles.** Total People, Cell Leaders, Cell Groups and Direct Leaders are current-state and carry no period. Attendance figures are period-based and are meaningless without one. Group them separately; never interleave them in one row. Section 3 depends on this distinction being clear, and a dashboard is where it is most easily lost.
+
+**An open period must say so.** A month still open for submission is still changing. The same tile on the 5th and the 31st of a month shows very different numbers with nothing having happened.
+
+**Attendance tiles count unique people, never occurrences.** A tile reading `DCC` shows the number of distinct people who attended at least once in the period, per Section 9, and drills through to the classification and monthly attendance views. Never surface an occurrence total as a headline figure (Section 1, Principle 10).
+
+### Lead with what needs doing
+
+A dashboard of counts tells a leader nothing to act on. Dashboard is the first item in the sidebar and the screen every user lands on, so outstanding work belongs above the numbers:
+
+- meetings awaiting a record, for the user's own Cells (Section 13)
+- Cells needing attention within their scope (Section 15)
+- people with no active Cell membership within their scope (Section 10)
+
+Each entry carries the action that resolves it.
+
+### Dashboards differ by role
+
+One fixed set of tiles serves nobody. A Cell leader has no downline leaders to count; a Senior Pastor has no attendance of their own to record.
+
+- **Cell leader** — meetings awaiting a record first, then their own Cells: members, and this month's recorded meetings and attendance.
+- **Upline leader** — Cells needing attention first, then subtree totals: People, Direct Leaders, Cell Leaders, Cell Groups, and recording coverage.
+- **Senior Pastor** — scope selector for Whole Church, Men's, and Women's; church-wide totals, coverage, and the Development metrics from Section 16.
+- **Admin** — platform operations, per the Admin dashboard below, not pastoral metrics.
+
+No dashboard ranks leaders, scores them, or colour-grades them (Section 13, Meeting summary and the ranking prohibition).
 
 ### Leader sidebar
 
