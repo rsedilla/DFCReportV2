@@ -151,6 +151,18 @@ Desktop web, mobile web, and native Android/iOS, against one API, by the same pe
 - version checks on updates, with conflicts resolved by a person rather than by last-write-wins
 - idempotency keys, client-generated UUIDs, and server-side sync validation required from the first write endpoint
 
+### 2026-08-20 — DCC has no meeting status
+The three-status model is Cell-only. DCC is a single church-wide service, so whether it took place is one fact about the whole church, not 140 separate leader reports. A Sunday with no service simply carries no DCC event, removed from the calendar by a deliberate, audited Admin action. Written to `SKILL.md` §9.
+
+### 2026-08-20 — Cell membership workflow
+Capability `cell.manage_membership`, held by the Cell's leader, their upline within scope, Admin, and Senior Pastors. At most one active membership, moves are single-transaction, same-Network required, membership need not mirror pastoral assignment, and archival ends membership while preserving the record. Written to `SKILL.md` §10 and §7.
+
+### 2026-08-20 — Duplicate matching rules
+Never auto-merge and never block creation; surface candidates and let a person decide. Normalize for comparison only, with whitespace normalization called out because `Dela Cruz` and `DelaCruz` is the common duplicate. Two tiers of candidate strength, sex as a supporting signal only, and surname equality never required because a woman's surname may change. Thresholds calibrated against real data, not fixed in the specification. Written to `SKILL.md` §3.
+
+### 2026-08-20 — Member ID generation
+`M-` plus six digits from a database sequence, server-assigned, immutable, never reused, gaps acceptable, encodes nothing. Distinguished from the UUID, which may be client-generated so a Person created offline keeps their identity on sync. Written to `SKILL.md` §3.
+
 ### Open — awaiting a ruling
 
 These are Stop Conditions. Do not invent answers.
@@ -164,8 +176,4 @@ These are Stop Conditions. Do not invent answers.
 - No "on behalf" path for pastoral assignment. §14 records responsible leader and actual actor for attendance; assignment records only the actor. Recommendation is to decline it — there is no reporting consumer for the distinction.
 - No migration policy, despite a Stop Condition about migrations destroying historical data.
 - DCC submission window is unspecified. Cell closes on the 7th (§13); DCC has the same late-submission exposure.
-- Whether `NOT_HELD` applies to DCC. DCC is one church-wide event per Sunday, not per leader, so the recommendation is no.
 - Archiving a Person who is a current Cell Leader — what happens to their Cells and members is undefined.
-- Cell membership workflow and permissions, deferred by §10 to Cells module planning.
-- Duplicate-match threshold and field weighting for §3 fuzzy matching.
-- Member ID generation rule. The format `M-001842` is given; the sequence is not.
