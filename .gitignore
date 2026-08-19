@@ -1,0 +1,28 @@
+# dependencies
+node_modules/
+.pnp/
+.yarn/
+
+# build output
+dist/
+build/
+.next/
+out/
+
+# environment
+.env
+.env.*
+!.env.example
+
+# logs
+*.log
+npm-debug.log*
+
+# editors / OS
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# claude local overrides
+.claude/settings.local.json
