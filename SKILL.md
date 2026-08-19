@@ -187,7 +187,7 @@ A real Person who has stopped attending must not automatically be archived. Lack
 
 An archived Person can be restored to `CURRENT`. Archiving and restoring must be recorded as historical events, not merely toggled, so that Network Summary can show and explain when and why a Person's status changed (Section 16).
 
-Historical reports must remain reproducible: a report for a past period reflects each Person's lifecycle state as it stood at that time, not their current state. Archiving someone today must never change the total shown for a period before their archive date, no matter when the report is re-run. Classification and monthly-attendance reports (DCC, Cell) are period-based and never filtered by current lifecycle state, for any period including the present one. Only current-state inventory metrics (Total People, Current Cell Leaders, Cell Leaders with 12+ Members, Participation) reflect lifecycle state, and only as of the period being reported.
+Historical reports must remain reproducible: a report for a past period reflects each Person's lifecycle state as it stood at that time, not their current state. Archiving someone today must never change the total shown for a period before their archive date, no matter when the report is re-run. Classification and monthly-attendance reports (DCC, Cell) are period-based and never filtered by current lifecycle state, for any period including the present one. Only current-state inventory metrics (Total People, Current Cell Leaders, Cell Groups, Cell Leaders with 12+ Members, Participation) reflect lifecycle state, and only as of the period being reported.
 
 "New Cell Leaders for a selected period" (Section 16) is period-based like attendance reporting and is not affected by a leader's later archival. "Leaders with 12+ Direct Leaders" (Section 16) is a current-state snapshot and does reflect current lifecycle state, for both the leader and the counted direct leaders.
 
@@ -205,7 +205,7 @@ Archiving and restoring are RBAC-controlled capabilities (Section 7). Ordinary l
 
 A Person holding an active Cell leadership assignment (Section 11) cannot be archived while that assignment stands. The archive is rejected, naming what must be resolved first — for example, that the Person leads `CELL-011`, which has nine members.
 
-Resolve it deliberately, in one of two ways: reassign the Cell to another leader, or close the Cell. Either is an explicit, authorized, audited action.
+Resolve it deliberately, in one of two ways: reassign the Cell to another leader, or close the Cell (Section 10, Cell lifecycle). Either is an explicit, authorized, audited action.
 
 Two alternatives were considered and rejected. Allowing the archive and leaving the leadership assignment in place produces a Cell whose leader is not a current Person, which corrupts Current Cell Leaders and every metric derived from it. Allowing the archive and automatically closing the Cell silently ends nine people's Cell membership, dropping them out of Cell reporting with no decision recorded about where they go.
 
@@ -575,6 +575,7 @@ Example permissions may include:
 - `cell.submit_on_behalf`
 - `cell.correct_subtree`
 - `cell.manage_membership`
+- `cell.manage_lifecycle`
 - `reports.view_subtree`
 - `records.backdate_effective_date`
 - `accounts.manage`
@@ -614,6 +615,7 @@ Three roles exist. Each carries the default capabilities and scopes below. Anyth
 | `cell.submit_on_behalf` | Whole Church | Whole Church | own/subtree |
 | `cell.correct_subtree` | Whole Church | Whole Church | own/subtree |
 | `cell.manage_membership` | Whole Church | Whole Church | own/subtree |
+| `cell.manage_lifecycle` | Whole Church | Whole Church | own/subtree |
 | `reports.view_subtree` | Whole Church | Whole Church | own/subtree |
 | `audit.view` | Whole Church | Whole Church | — |
 | `records.backdate_effective_date` | — | Whole Church | — |
@@ -839,6 +841,7 @@ A Cell Group has only the required operational information:
 - category
 - day schedule
 - time schedule
+- lifecycle state: `ACTIVE` or `CLOSED`
 
 No Cell Name is required.
 
@@ -869,6 +872,55 @@ Cell category is editable over time, e.g. Youth -> Young Pro.
 - Preserve category history with effective dates.
 - Historical reports must use the category valid at the time being reported.
 - Audit category changes.
+
+### Cell lifecycle
+
+A Cell Group is `ACTIVE` or `CLOSED`. Every count of Cells, Cell Leaders, Cell categories, and Cell members means active Cells unless a report explicitly says otherwise.
+
+#### Closing is declared, never inferred
+
+No period of inactivity closes a Cell. Not three months of `NOT_HELD`, not three months of silence, not any threshold.
+
+The reasoning is the same as for `NOT_HELD` itself (Section 13). A leader honestly declaring `NOT_HELD` through a difficult quarter is engaged and telling the truth; closing their Cell for it teaches them to record `HELD` instead. A leader who has reported nothing has told the system nothing, and inferring closure from silence asserts a fact on no evidence.
+
+Automatic closure would also defeat two rules deliberately written elsewhere. Archiving a Person who leads a Cell is rejected until the Cell is resolved (Section 3); if Cells closed themselves, that decision about their members could be waited out instead of made. And Cell Leader is the qualification for a Leader account (Section 6), so an inferred closure could remove a real leader's system access while they are caring for a sick parent.
+
+Prolonged inactivity is a signal worth surfacing to a person, and Section 15 requires it. It is never an instruction to the database.
+
+#### Closure reasons
+
+Exactly:
+
+- `MULTIPLIED` — the Cell split into new Cells
+- `MERGED_INTO_ANOTHER_CELL`
+- `LEADER_STEPPED_DOWN` — with no replacement leader
+- `MEMBERS_DISPERSED` — members moved away, graduated, or transferred
+- `CREATED_IN_ERROR`
+- `OTHER` — requires a note
+
+`MULTIPLIED` is listed first deliberately. A Cell closing because it multiplied is the outcome the whole model exists to produce, and the reason list must not read as a list of failures (Section 1, Principle 7).
+
+#### What closing does
+
+Closing a Cell is an explicit, authorized, audited action carrying an effective date and a reason. The capability is `cell.manage_lifecycle` (Section 7), held by the Cell's current leader, any leader upline of them acting within their own authorized subtree, Admin, and Senior Pastors.
+
+On closure, as one transaction:
+
+- the Cell's state becomes `CLOSED` as of the effective date
+- the active Cell leadership assignment ends on that date (Section 11)
+- active memberships end on that date, preserving every membership record in full (Section 10, Managing Cell membership)
+
+Members must be dealt with explicitly rather than silently. Present the Cell's current members at the point of closure, allow them to be assigned to another Cell in bulk, and allow them to be left unassigned by explicit choice. People left without a Cell appear in the attention list in Section 15. Closure is not blocked on reassigning them — `MEMBERS_DISPERSED` has nowhere to send them — but it must not complete without the decision being made and recorded.
+
+A closed Cell keeps its Cell ID permanently. The ID is never reused, for the same reason a Member ID is not (Section 3).
+
+Attendance already recorded against a closed Cell remains exactly as recorded, and historical reports for periods before the closure are unaffected. A Cell closed mid-month simply has fewer recorded meetings that month, and the denominator follows automatically (Section 12).
+
+#### Reopening
+
+A closed Cell is not reopened as an ordinary action. Where a ministry restarts, create a new Cell.
+
+Reversing a closure recorded in error is an Admin correction requiring a reason and an audit entry, not a control available to a leader.
 
 ### Cell Membership
 
@@ -934,7 +986,9 @@ cell_leaderships
 - ended_at nullable
 ```
 
-A person is a current Cell Leader when they have at least one active Cell leadership assignment.
+A person is a current Cell Leader when they have at least one active Cell leadership assignment on an `ACTIVE` Cell (Section 10). Closing a Cell ends its leadership assignment on the closure effective date; a leader whose only Cell closes is no longer a current Cell Leader from that date, and this is recorded rather than inferred.
+
+The leadership assignment record itself is preserved in full. History shows that the person led that Cell for that period.
 
 Cell Leader is the normal qualification for a standard Leader login account.
 
@@ -1177,6 +1231,20 @@ Purpose:
 - show classification and monthly attendance reports
 - show Met / Moved / Did not meet counts and trends factually, with the reason breakdown and the coverage line (Section 13)
 - show meetings conducted by someone other than the Cell leader, as a factual support signal, never as a score
+
+### Cells needing attention
+
+Surface Cells that have gone quiet, as a working list for the leader who oversees them:
+
+- Cells with no meeting held for a configurable number of months, three by default
+- Cells with meetings still awaiting a record (Section 13)
+- People with no active Cell membership within the viewer's scope (Section 10)
+
+Each entry offers the actions that resolve it — recording the missing meeting, confirming the Cell is still running, or closing it with a reason. The list detects; a person decides. Nothing on it changes any record on its own.
+
+This is an attention list, not a ranking. It is filtered by a threshold, never sorted into an order of merit, and carries no score or colour grading (Section 13, Meeting summary and the ranking prohibition).
+
+Because the threshold triggers a prompt rather than a state change, it can be tuned freely. Nothing irreversible depends on where it is set.
 
 Because one leader can have multiple Cells, always distinguish:
 
@@ -1508,6 +1576,8 @@ Audit important actions, including:
 - Cell meeting declared Not Held, with reason
 - Cell meeting facilitator recorded
 - Cell membership added, moved, or ended
+- Cell closed, with reason and the decision taken about its members
+- Cell closure reversed by Admin, with reason
 - DCC event removed from the calendar, with reason
 - Person archive
 - Person restore
