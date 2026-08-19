@@ -95,6 +95,23 @@ The API must therefore be stateless, must support several concurrent sessions pe
   - `SINGLE`
   - `MARRIED`
   - `WIDOWED`
+- Mobile Number — optional
+
+### Contact information
+
+The mobile number is the only contact detail the system holds, and it is the primary means of reaching a person.
+
+**No email address on a Person.** Email exists solely as a login credential on an Account (Section 6), where it is required and unique. It is deliberately not personal information, and must not be added as one. Most people in the church never hold an account; making an email mandatory would stall the VIP registration workflow (Section 9), and a mandatory field that people cannot fill is filled with fictions, which corrupts both the data and duplicate matching.
+
+Keeping the two apart also closes an escalation path. Every leader holds `people.edit_basic` within their subtree (Section 7). If the login email were an editable Person field, a leader could change a downline leader's email to one they control, trigger a password reset, and take over the account. The mobile number carries no such risk because it authenticates nothing.
+
+**No messaging handles.** Do not store Messenger, Viber, WhatsApp, or similar identifiers. They change often, they are held inconsistently, and a mobile number already reaches the same person. Following someone up is the leader's pastoral responsibility, and the system's job is to hold the number, not the conversation.
+
+**Optional, not required.** A first-time visitor may decline to give a number, and a required field would be satisfied with a fabricated one. Prompt for it clearly when a Person is created, particularly when adding a DCC VIP (Section 9), and leave it empty when it is genuinely not given.
+
+Store a normalized form suitable for dialling alongside the value as entered. Validate loosely: family abroad, visitors, and landlines all produce numbers that do not match a local mobile pattern, and rejecting them loses real contact detail for no benefit.
+
+A mobile number is ordinary descriptive information, editable under `people.edit_basic` (Section 7). It is not visible outside the viewer's pastoral scope (Section 8).
 
 ### System-generated / derived
 
@@ -167,6 +184,8 @@ Whitespace normalization carries unusual weight here. `Dela Cruz`, `DelaCruz`, a
 - high whole-name similarity with birthdays differing by a transposition of digits
 
 **Never a match on its own:** a common surname alone, a first name alone, or sex alone. Sex is a supporting signal: a mismatch lowers confidence but never excludes a candidate, because it is a frequently mis-keyed field.
+
+**A matching mobile number is a strong signal, but never sufficient alone.** Households share numbers, and a minor is commonly recorded with a parent's number, so two different people legitimately holding the same number is normal rather than exceptional. Treat a matching number with an equal last name as Tier 2, and with equal first and last names as Tier 1. Never treat a number alone as a match, and never block creation on one.
 
 **Middle name absence never counts against a match.** It is optional (above) and is frequently left blank.
 
@@ -590,7 +609,7 @@ Admins may have system-wide operational permissions even if they are not pastora
 
 ### Scope of `people.edit_basic`
 
-`people.edit_basic` covers corrections to a person's own descriptive fields only: first name, middle name, last name, birthday, and civil status.
+`people.edit_basic` covers corrections to a person's own descriptive fields only: first name, middle name, last name, birthday, civil status, and mobile number.
 
 It does not cover sex, Network, pastoral assignment, Cell membership, Cell leadership, lifecycle state, or account state. Each of those is governed by its own capability.
 
@@ -707,6 +726,7 @@ Do not expose, for a person outside the searching leader's pastoral scope:
 - birthday / date of birth
 - calculated age
 - civil status
+- mobile number, or any other contact detail
 - DCC attendance, DCC history, or DCC classification
 - Cell attendance, Cell history, or Cell classification
 - Cell membership or Cell IDs
@@ -780,8 +800,9 @@ When adding a VIP:
 1. Search existing People first.
 2. Reuse existing Person if matched.
 3. Otherwise create one Person record using the core personal fields.
-4. Record DCC attendance only.
-5. Do not automatically create Cell attendance.
+4. Ask for a mobile number. It is optional (Section 3), but this is the moment it is most likely to be given and most needed later: a first-time visitor who does not return is exactly who Participation reporting surfaces (Section 16), and a leader cannot follow up a name alone.
+5. Record DCC attendance only.
+6. Do not automatically create Cell attendance.
 
 The Person becomes available to other authorized modules, but participation remains domain-specific.
 
