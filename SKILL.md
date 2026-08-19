@@ -201,6 +201,18 @@ Duplicate Person records must be corrected through Person Merge (below), never t
 
 Archiving and restoring are RBAC-controlled capabilities (Section 7). Ordinary leaders do not have unrestricted authority to archive people.
 
+### Archiving a Person who leads a Cell
+
+A Person holding an active Cell leadership assignment (Section 11) cannot be archived while that assignment stands. The archive is rejected, naming what must be resolved first — for example, that the Person leads `CELL-011`, which has nine members.
+
+Resolve it deliberately, in one of two ways: reassign the Cell to another leader, or close the Cell. Either is an explicit, authorized, audited action.
+
+Two alternatives were considered and rejected. Allowing the archive and leaving the leadership assignment in place produces a Cell whose leader is not a current Person, which corrupts Current Cell Leaders and every metric derived from it. Allowing the archive and automatically closing the Cell silently ends nine people's Cell membership, dropping them out of Cell reporting with no decision recorded about where they go.
+
+The membership of nine people is a pastoral decision, not a side effect of an administrative form. This follows the same principle as a Network change that would orphan a pastoral edge (Section 4): reject and require the conflict to be resolved, rather than resolving it silently.
+
+The same rule applies to Person Merge where the absorbed Person leads a Cell.
+
 ### Person Merge (Duplicate Correction)
 
 Duplicate or created-in-error Person records must be correctable separately from ordinary archiving. Appropriately authorized users may merge one Person record into another while preserving and safely reconciling historical references.
@@ -728,7 +740,15 @@ Where the church holds no service on a given Sunday — a calamity closing the b
 
 Removing a Sunday from the DCC calendar is a deliberate Admin action, never inferred from an absence of attendance records. It requires a reason, is audit logged (Section 21), and must be visible on any report covering that month, so that a month showing four events where the calendar shows five is explained rather than merely odd.
 
-A leader who has not yet submitted their people's attendance for an event that did take place is a reporting gap, not a cancelled service. Those are tracked as coverage, exactly as for Cells (Section 12).
+A leader who has not yet submitted their people's attendance for an event that did take place is a reporting gap, not a cancelled service. Those are tracked as coverage.
+
+### DCC submission window
+
+DCC attendance for a calendar month may be recorded or corrected until the 7th of the following month, at 23:59 Asia/Manila — the same close as Cell attendance (Section 13). After that the month is closed, and only Admin may amend it, using `records.backdate_effective_date` (Section 7), with a reason, audit logged, and surfaced in Network Summary as a correction.
+
+DCC coverage is shaped differently from Cell coverage. A Cell has one leader and its coverage counts recorded meetings out of scheduled meetings. A DCC event is church-wide, and many leaders each submit for their own people, so DCC coverage counts **how many responsible leaders have submitted** for an event, not how many events exist.
+
+Report that figure at every scope, as a single line, on the same terms as Cell coverage: factual, no ranking of leaders by it, and no derived score (Section 13).
 
 Each attendance record must ultimately identify:
 
@@ -1107,6 +1127,8 @@ Conducting a meeting and reporting a meeting are separate facts, and this sectio
 
 - **Conducting** on behalf is recorded as `facilitated_by` on the Cell meeting (Section 13). It describes who ran the meeting.
 - **Reporting** on behalf is recorded as the submitter below. It describes who entered the record.
+
+Neither concept extends to pastoral assignment. A reassignment records the actor only, and this is deliberate. Attendance carries a responsible leader because attendance rolls up to whose meeting it was, and that leader is a reporting dimension. A pastoral assignment has no equivalent: the assignment row is itself the fact, no report aggregates by "whose assignment this was", and a responsible-leader field would be written on every reassignment and read by nothing. The actor is recorded in the audit log (Section 21) and the movement is surfaced in Network Summary (Section 16), which is sufficient.
 
 Either may happen without the other. A disciple may conduct a meeting that the Cell leader then reports; an upline leader may report a meeting the Cell leader conducted. Neither changes who the responsible leader is, and neither changes any leadership assignment.
 

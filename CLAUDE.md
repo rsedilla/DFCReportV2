@@ -51,6 +51,18 @@ A change is not complete until it is verified.
 - Authorization is tested at the API layer, not only the service layer, because the API is the sole authority for authorization (`SKILL.md` §7).
 - Invariants that can be expressed as database constraints are verified to exist as database constraints, not only as application code.
 
+### Migration policy
+
+Migrations touch the history that `SKILL.md` guarantees is preserved. Treat every one as capable of destroying it.
+
+- **Additive by default.** New columns are nullable or carry a default.
+- **Never `DROP` a column or table holding historical relationship or attendance data.** Deprecate in place and stop writing to it. A column removed from the specification is not thereby removable from the database.
+- **Reversible, or explicitly marked irreversible** and escalated as a Stop Condition before it runs.
+- **A backfill that sets an effective date is backdating** (`SKILL.md` §5). It requires the same authorization, a reason, and an audit entry. Defaulting `started_at` on existing rows silently rewrites every historical report.
+- **Validate constraints against existing data before enforcing them.** Adding the partial unique index to a table that already holds two active assignments for one person aborts mid-deploy. Find and fix the data first.
+- **Snapshot before, reconcile after** for any migration touching `pastoral_assignments`, `cell_memberships`, `cell_leaderships`, network assignments, or attendance. Re-run the `SKILL.md` §20 reconciliation test on completion.
+- **Constraint DDL is written by hand.** No ORM generates partial unique indexes, constraint triggers, or cycle-safe recursive queries; keep the SQL in the migration history rather than outside it.
+
 ### Authorization test suite
 
 Pastoral assignment is the highest-risk authorization surface in the system (`SKILL.md` §5, Changing a person's pastoral leader). These cases must be pinned by tests and must stay green.
@@ -163,6 +175,18 @@ Never auto-merge and never block creation; surface candidates and let a person d
 ### 2026-08-20 — Member ID generation
 `M-` plus six digits from a database sequence, server-assigned, immutable, never reused, gaps acceptable, encodes nothing. Distinguished from the UUID, which may be client-generated so a Person created offline keeps their identity on sync. Written to `SKILL.md` §3.
 
+### 2026-08-20 — No "on behalf" for pastoral assignment
+Declined deliberately. Attendance carries a responsible leader because attendance rolls up to whose meeting it was; an assignment row is itself the fact and nothing aggregates by it. The actor is in the audit log and the movement appears in Network Summary. Written to `SKILL.md` §14.
+
+### 2026-08-20 — DCC submission window
+Same close as Cell: the 7th of the following month, 23:59 Asia/Manila, Admin-only afterwards. DCC coverage counts how many responsible leaders have submitted for an event, not how many events exist. Written to `SKILL.md` §9.
+
+### 2026-08-20 — Archiving a Person who leads a Cell
+Rejected while an active Cell leadership assignment stands. Reassign or close the Cell first. Allowing it would either leave a Cell led by a non-current Person or silently end its members' memberships. Written to `SKILL.md` §3.
+
+### 2026-08-20 — Migration policy
+Additive by default, never DROP historical data, reversible or escalated, backfills of effective dates are backdating, constraints validated against existing data before enforcement, snapshot and reconcile around relationship tables, constraint DDL hand-written. Written to Definition of Done above.
+
 ### Open — awaiting a ruling
 
 These are Stop Conditions. Do not invent answers.
@@ -171,9 +195,3 @@ These are Stop Conditions. Do not invent answers.
 
    The recommendation on the table is to split the term: for **counting**, a leader is a current Cell Leader; for **authorization**, eligibility comes from the capability grant plus upline position and never consults cell leadership. Deferred by the author on 2026-08-19 for further discussion. Until it is settled, do not implement either metric.
 
-### Not yet settled, lower priority
-
-- No "on behalf" path for pastoral assignment. §14 records responsible leader and actual actor for attendance; assignment records only the actor. Recommendation is to decline it — there is no reporting consumer for the distinction.
-- No migration policy, despite a Stop Condition about migrations destroying historical data.
-- DCC submission window is unspecified. Cell closes on the 7th (§13); DCC has the same late-submission exposure.
-- Archiving a Person who is a current Cell Leader — what happens to their Cells and members is undefined.
