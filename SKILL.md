@@ -1048,11 +1048,11 @@ This is not optional bookkeeping. Scheduled meetings for a month are derived by 
 
 Without history, moving a Cell from Saturday to Sunday in June silently rewrites the coverage figure for every earlier month, because March has five Sundays and four Saturdays. A month recorded as `4 of 4` becomes `4 of 5`, and shifts again on the next schedule change. That breaks the guarantee in Section 3 that a past period's figures do not move.
 
-**Where a schedule changes mid-month**, the schedule in force on the **first day of the week a meeting belongs to** determines that meeting's scheduled date. A week is the unit because Section 13 makes the weekly meeting the unit of identity: one logical meeting per Cell per calendar week, whatever date it eventually lands on.
+**A schedule change takes effect at the start of the following month.** A Cell moving from Saturday to Sunday, decided in August, runs on Sunday from 1 September. A month therefore has exactly one schedule throughout, and always 4 or 5 scheduled meetings.
 
-Working the rule through a move from Saturday to Sunday effective Wednesday 12 August: the week beginning Monday 10 August was still Saturday when it opened, so that week's scheduled meeting is Saturday 15 August; the following week is Sunday. The month keeps exactly one scheduled meeting per week, with no week left holding two candidate dates and none left holding zero.
+Mid-month changes were considered and rejected. Resolving them per week is possible but leaves a month able to hold three or six scheduled meetings, sometimes two on consecutive days, and the coverage denominator becomes something a leader cannot predict from their own calendar.
 
-Without this rule a mid-month change can produce a month of three or six scheduled meetings, which is a coverage denominator with no defined value — the failure this subsection exists to prevent.
+A Cell needing to move a **single** meeting at short notice — a lost venue, a clash — does not use the schedule for it. That is a `RESCHEDULED` meeting (Section 13). The two mechanisms are deliberately separate: the schedule is the Cell's standing day and time, and a reschedule is one meeting moving once.
 
 Audit schedule changes as category changes are audited.
 
@@ -1142,7 +1142,7 @@ Keep every reason factual and free of judgement (Section 1, Principle 7). A clos
 
 #### What closing does
 
-Closing a Cell is governed by `cell.manage_lifecycle` (Section 7). Creating one is not: a Cell comes into existence only through the request-and-approve workflow above, and `cell.manage_lifecycle` confers no power to create. Closing is an explicit, authorized, audited action carrying an effective date and a reason, held by the Cell's current leader, any leader upline of them acting within their own authorized subtree, Admin, and Senior Pastors.
+Closing a Cell is governed by `cell.manage_lifecycle` (Section 7). Creating one is not: outside initial encoding (Section 2), a Cell comes into existence only through the request-and-approve workflow above, and `cell.manage_lifecycle` confers no power to create. Closing is an explicit, authorized, audited action carrying an effective date and a reason, held by the Cell's current leader, any leader upline of them acting within their own authorized subtree, Admin, and Senior Pastors.
 
 On closure, as one transaction:
 
@@ -1184,15 +1184,11 @@ A Cell member is assigned to exactly one active Cell Group at a time. This is di
 
 A person's Cell monthly attendance denominator (Section 12) is therefore determined only by the applicable meetings of that person's one assigned Cell Group — never combined across every Cell the same leader happens to lead. For example, if Mark leads `CELL-001842` (Youth) and `CELL-002193` (Young Pro), Juan — assigned to `CELL-001842` — is evaluated only against `CELL-001842`'s meetings; `CELL-002193`'s meetings are not part of Juan's denominator. Do not introduce a "primary Cell" concept — the single active assignment already defines this relationship.
 
-**A person is reported under the Cell they belonged to most recently during the month**, and their denominator is that Cell's recorded meetings **that fell within their membership of it**.
+**A person who moves between Cells during a month is reported under the Cell they belong to at the end of that month**, and the meetings they attended before moving still count toward their figure there (Section 12).
 
-Both halves are needed. Reporting under the most recent Cell rather than the month-end Cell covers the person who left a Cell and joined none — which Section 10 permits when a Cell closes and its members are deliberately left unassigned, and which Section 15 surfaces as an attention list. Without it such a person attends, carries a Cell classification, and yet has no denominator and no monthly bucket, so the two views stop reconciling (Section 20).
+Nothing is lost and nothing is double-counted. Their attendance at the Cell they left remains exactly as recorded in that Cell's meeting records; it simply does not place them in that Cell's report, because they are not one of its members at month end. Their own figure reflects every Cell meeting they attended, because the question a monthly attendance report answers about a person is how often they came, not which room they were in.
 
-Bounding the denominator by membership covers the person who joined mid-month. Someone joining on 25 October is not on the roster of the meetings held before they joined (Managing Cell membership, below) and could not have been recorded present at them. Counting those meetings against them makes `Completed` unreachable and reports them as `Once`, indistinguishable from a member who was there all month and came once.
-
-Attendance recorded at a Cell they have since left remains exactly as recorded, and remains part of that Cell's meeting records. It does not place them in that Cell's monthly attendance buckets.
-
-At leader and Network scope none of this changes a total, because those deduplicate with `COUNT(DISTINCT person_id)` (Section 12) and the person is counted once however many Cells they passed through.
+A person belonging to no Cell at month end appears in no Cell report. They remain in Total People, in Participation (Section 16), and on the attention list of people with no active Cell membership (Section 15).
 
 At leader and Network scope this changes nothing, because those totals deduplicate with `COUNT(DISTINCT person_id)` (Section 12) and the person is counted once regardless of how many Cells they passed through.
 
@@ -1304,46 +1300,66 @@ Use the same two views as DCC:
 
 #### Classification
 
+Covers the same population as Monthly Attendance below: the Cell's members at the end of the reporting month. Both views describe the same people, which is what allows them to reconcile (Section 20).
+
+- Not yet attended
 - VIP
 - 2nd Timer
 - 3rd Timer
 - 4th Timer
 - Regular
-- Total unique people
+- Total members
+
+`Not yet attended` holds members with no Cell attendance in their history at all. Classification begins at VIP with a first attendance (above), so a newly added member has no classification until they come, and the bucket names that state factually rather than leaving them out of the report.
 
 #### Monthly Attendance
 
 Each Cell has exactly one logical scheduled Cell meeting per calendar week, per its configured schedule (Section 10, Schedule changes). A Cell therefore has 4 or 5 **scheduled** meetings in a calendar month, determined the same way as the DCC calendar rule (Section 9).
 
+**The report covers the Cell's members**, not only those who attended. Its population is every person holding an active membership of that Cell at the end of the reporting month.
+
+This is the view a leader needs. A report listing only the people who came cannot show the leader who did not, and the person who came to nothing is the one most worth seeing.
+
 Scheduled meetings are not the denominator. The denominator is the meetings that actually took place and were recorded:
 
 ```text
-denominator = count of HELD + RESCHEDULED meetings
-              for that person's assigned Cell, in that month
+N = count of HELD + RESCHEDULED meetings
+    for the Cell, in that month
 ```
+
+N belongs to the Cell, not to the person. Every member of a Cell is measured against the same N, so the Cell's report has one bucket set and `Completed (N/N)` means one thing on the screen.
 
 `NOT_HELD` meetings are excluded. Nobody can attend a meeting that did not take place, and counting one would mark every member of the Cell absent for something that never happened.
 
 Unreported meetings are excluded. An unreported meeting is an absence of data, not a fact about attendance (Section 13). Treating silence as non-attendance penalises disciples for a record their leader has not yet submitted.
 
-Because the denominator is derived per Cell per month, the buckets vary with it. For a denominator of N:
+Because N is derived per Cell per month, the buckets vary with it:
 
+- None
 - Once
 - Twice
 - Thrice
 - ... continuing to N-1
 - Completed (N/N)
-- Total unique people
+- Total members
 
-A Cell whose October held five scheduled meetings, one of them `NOT_HELD`, reports against a denominator of 4, and its highest bucket is `Completed (4/4)`. Never label buckets from the calendar count.
+A Cell whose October held five scheduled meetings, one of them `NOT_HELD`, reports against N = 4, and its highest bucket is `Completed (4/4)`. Never label buckets from the calendar count.
 
-`Completed` means the person attended every `HELD` or `RESCHEDULED` meeting of their assigned Cell (Section 10) recorded in the reporting month.
+`None` is a factual bucket, not a judgement. It records that a member of the Cell has no attendance this month, which is a pastoral fact the leader needs and which no attendee-only report can show.
+
+**A member's count is their recorded Cell attendance during the month, at any Cell.** Someone who moved Cells mid-month is reported under the Cell they belong to at month end, and the meetings they attended before moving still count toward their figure. They attended Cell that month, and the report should say so.
+
+Where a person's count exceeds N — possible when the Cell they left held more meetings than the one they joined — report them as `Completed`. A count is never shown above its denominator.
+
+`Completed` means a count of N or more. `None` means a count of zero.
 
 Every Cell monthly attendance view must show recording coverage beside the buckets, as a single line — for example `4 of 5 meetings recorded`. Coverage is never a bucket, and never a fourth status.
 
 Coverage is what stops a thin record reading as a strong one. A Cell that records one meeting out of four and reports every attendee as `Completed (1/1)` is not a complete Cell, and the coverage line says so on the same screen, factually and without judgement.
 
-When aggregating multiple Cells, deduplicate people with `COUNT(DISTINCT person_id)` so a person attending more than one Cell is not counted twice in the leader/network total.
+When aggregating multiple Cells, deduplicate people with `COUNT(DISTINCT person_id)`. A person belongs to at most one Cell (Section 10), so at leader and Network scope the population is every person holding a Cell membership within that scope at month end, each counted once and bucketed against their own Cell's N.
+
+A person belonging to no Cell at month end appears in no Cell report. They are not lost: they remain in Total People, in Participation (Section 16), and on the attention list of people with no active Cell membership (Section 15). Cell reporting describes Cells and the people in them, and someone in no Cell is surfaced elsewhere rather than counted here.
 
 ---
 
@@ -1525,6 +1541,11 @@ Purpose:
 - show Cell Leaders in the current user's authorized scope
 - show how many Cells each leader leads
 - show Cell IDs, categories, schedules, and unique people
+- show a Cell's category and schedule history, with effective dates
+
+Schedule and category history are shown because both are effective-dated and both change what a past month's figures mean (Section 10). A Cell that has moved day three times in a year is worth a leader knowing about — it usually means a venue problem or a leader under strain.
+
+It is shown as history, never as a count or a rate. Do not derive a stability score, do not surface frequent changes on the attention list, and do not order leaders by them. A leader who changes day often is not thereby a worse leader, and Section 13's prohibition on derived scores applies here as it does to meeting status.
 - drill into a leader and then into each Cell
 - show classification and monthly attendance reports
 - show Met / Moved / Did not meet counts and trends factually, with the reason breakdown and the coverage line (Section 13)
@@ -1864,7 +1885,7 @@ Asia/Manila observes no daylight saving time, so the offset is a constant +08:00
 
 **A calendar week begins on Monday**, following ISO 8601, consistently with the date format used throughout. Sunday belongs to the week that began on the preceding Monday.
 
-This is not a formatting preference. Section 13 makes the weekly meeting the unit of a Cell's identity, and Section 10 resolves a mid-month schedule change by the schedule in force on the first day of the week a meeting belongs to — so the week boundary decides which of two schedules governs, and therefore the scheduled date and the coverage denominator. A Sunday-start convention is common locally and will be somebody's default, which is why the rule is fixed here rather than left to the calendar library.
+This is not a formatting preference. Section 13 makes the weekly meeting the unit of a Cell's identity — one logical meeting per Cell per calendar week, whatever date it lands on — so the week boundary decides which meetings fall in which week, and a rescheduled meeting's week is the week it was scheduled in. A Sunday-start convention is common locally and will be somebody's default, which is why the rule is fixed here rather than left to the calendar library.
 
 ### Unique people
 
@@ -1907,19 +1928,25 @@ Stored figures are a cache, never a source. They are always derivable from the u
 
 ### Reconciliation
 
-For a classification report:
+Both views of a domain cover the same population, and both must sum to it.
+
+For DCC, the population is the unique people who attended at least once in the scope and period (Section 9):
 
 ```text
-VIP + 2nd + 3rd + 4th + Regular = Total Unique People
+VIP + 2nd + 3rd + 4th + Regular              = Total Unique People
+Once + Twice + Thrice + ... + Completed      = Total Unique People
 ```
 
-For monthly attendance:
+For Cells, the population is the members of the Cells in scope at the end of the month (Section 12):
 
 ```text
-Once + Twice + Thrice + 4 Times (if applicable) + Completed = Total Unique People
+Not yet attended + VIP + 2nd + 3rd + 4th + Regular   = Total Members
+None + Once + Twice + Thrice + ... + Completed       = Total Members
 ```
 
-If reconciliation fails, treat it as a data/reporting integrity issue.
+The two domains differ deliberately. DCC is a church-wide service with no roster, so the only population it can report on is the people who came. A Cell has a membership, so its report can and should show the members who did not come — and both of its views therefore carry a bucket for them.
+
+If reconciliation fails, treat it as a data and reporting integrity issue.
 
 ---
 

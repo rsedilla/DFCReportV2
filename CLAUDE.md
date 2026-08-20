@@ -353,7 +353,7 @@ Approval revalidates the target as of approval, not request: archived, merged, m
 
 The approval transaction opens the category and schedule rows, not only the Cell. A Cell without a schedule row has no coverage figure for its first month. Everything takes effect at approval, so a request made 30 September and approved 2 October belongs to October.
 
-Requests are `PENDING`, `APPROVED`, or `DECLINED`, at most one pending per prospective leader, declines retained. Decline reasons are a fixed list — `NOT_YET_READY`, `TIMING_DEFERRED`, `DUPLICATE_REQUEST`, `SUBMITTED_IN_ERROR`, `OTHER` with a note — because a decline is a durable record about a named person and free text is where a judgmental label would be written.
+Requests are `PENDING`, `APPROVED`, or `DECLINED`, at most one pending per prospective leader, declines retained. Decline reasons are a fixed list — `LEADER_DEVELOPMENT_CONTINUING`, `TIMING_DEFERRED`, `DUPLICATE_REQUEST`, `SUBMITTED_IN_ERROR`, `OTHER` with a note — because a decline is a durable record about a named person and free text is where a judgmental label would be written.
 
 Pending requests appear on the Admin dashboard. The earlier wording forbade any surface at all, leaving the approver nowhere to see a request that blocks a leader's account.
 
@@ -366,6 +366,7 @@ While open, Admin may create Cells directly. Once closed, that path is gone and 
 The VIP workflow captures the pastoral leader at creation. In practice the answer is already settled outside the system — someone brings a visitor, and who they sit under is decided by that relationship before anyone opens the app. A Person with no active assignment simply cannot have DCC attendance recorded, since there would be no responsible leader. Written to `SKILL.md` §9.
 
 ### 2026-08-20 — A person who changes Cell mid-month reports under the new Cell
+**Superseded** by "Cell monthly attendance reports on members" below. The direction held — the new Cell — but the denominator described here was replaced.
 Their denominator is the new Cell's recorded meetings, and attendance at the Cell they left stays in that Cell's records without placing them in its monthly buckets. Leader and Network totals are unaffected, since those deduplicate by person. Written to `SKILL.md` §10.
 
 ### 2026-08-20 — A rescheduled meeting takes its roster from the actual date
@@ -386,9 +387,22 @@ The schedule in force on the first day of the week a meeting belongs to determin
 ISO 8601, consistent with the date format already in use. Not a formatting preference: §13 makes the weekly meeting the unit of a Cell's identity and §10 resolves a mid-month schedule change by the schedule in force on the first day of the meeting's week, so the boundary decides which schedule governs and therefore the coverage denominator. Sunday-start is the common local convention and would otherwise be somebody's default. Written to `SKILL.md` §20.
 
 ### 2026-08-20 — Monthly attendance is measured over the membership window
+**Superseded** by "Cell monthly attendance reports on members" below. The membership window was found to reintroduce the unbucketed person it was written to remove, and to give members of one Cell different denominators, leaving the Cell's report with no single bucket axis.
 A person is reported under the Cell they belonged to most recently during the month, and their denominator is that Cell's recorded meetings that fell within their membership of it.
 
 This replaces the earlier month-end rule, which had no answer for a person who left a Cell and joined none — permitted when a Cell closes — leaving them with a classification but no bucket, so the two views stopped reconciling. Bounding by membership also fixes the mid-month joiner, who was previously measured against meetings held before they joined and whose roster they were absent from, making `Completed` unreachable. Written to `SKILL.md` §10.
+
+### 2026-08-20 — Cell monthly attendance reports on members
+The population of a Cell's monthly report is the Cell's members at month end, not only those who attended. Buckets gain `None`, and the classification view gains `Not yet attended`, so both views cover the same people and reconcile to the member count.
+
+The denominator N is the Cell's recorded meetings for the month and belongs to the Cell, so every member is measured against the same N and `Completed (N/N)` means one thing on the screen. A member's count is their Cell attendance anywhere that month, capped at N, so someone who moved mid-month keeps credit for meetings they attended before moving.
+
+Chosen over the two attendee-only alternatives because a report listing only the people who came cannot show a leader who did not come — and that person is the one most worth seeing. DCC keeps the attendee-only population, because a church-wide service has no roster to report against. Written to `SKILL.md` §12 and §20.
+
+### 2026-08-20 — A schedule change takes effect the following month
+A Cell decided in August to move from Saturday to Sunday runs on Sunday from 1 September. A month therefore holds one schedule throughout and always 4 or 5 scheduled meetings.
+
+Mid-month resolution was tried and rejected: it left a month able to hold three or six scheduled meetings, sometimes two on consecutive days, and made the coverage denominator unpredictable from a leader's own calendar. A single meeting moving at short notice is a `RESCHEDULED` meeting, which is what that status is for. Written to `SKILL.md` §10.
 
 ### Open — awaiting a ruling
 
