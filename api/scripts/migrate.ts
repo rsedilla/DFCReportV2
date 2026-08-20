@@ -142,6 +142,17 @@ export function parse(fileName: string, sql: string): Migration {
           `escalated as a Stop Condition before it runs, and the reason is what gets escalated.`,
       );
     }
+    if (!hasStatements(sql.slice(upAt, irreversibleMatch.index))) {
+      // The same rule as the down path below, and it matters more here: an
+      // irreversible migration recorded as applied against a schema it never
+      // created cannot be reverted at all, because `down` refuses it by design.
+      // There is no way back from that except a restore.
+      throw new Error(
+        `${fileName}: the up section holds no statements, only comments or whitespace. ` +
+          `Applying it would record an irreversible migration that did nothing, and ` +
+          `irreversible migrations cannot be reverted.`,
+      );
+    }
 
     return {
       version,

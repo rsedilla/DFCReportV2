@@ -123,6 +123,18 @@ describe('the migration parser (CLAUDE.md, migration policy)', () => {
       ).toThrow(/would leave the up section empty/);
     });
 
+    it('refuses an up section holding only comments', () => {
+      // Worse here than on the down path: an irreversible migration recorded as
+      // applied against a schema it never created cannot be reverted, because
+      // `down` refuses it by design. The only way back is a restore.
+      expect(() =>
+        parse(
+          '0002_x.sql',
+          '-- migrate:up\n-- nothing here yet\n-- migrate:irreversible because\n',
+        ),
+      ).toThrow(/holds no statements/);
+    });
+
     it('refuses a file carrying both a down section and an irreversible marker', () => {
       expect(() =>
         parse(
@@ -154,10 +166,17 @@ describe('the migration parser (CLAUDE.md, migration policy)', () => {
     const migration = parse('0001_foundations.sql', sql);
 
     it('guards every table its down section drops', () => {
-      const dropped = [...sql.matchAll(/DROP TABLE IF EXISTS ([a-z_]+)/g)].map((match) => match[1]);
+      // Matched over the down section alone, and without requiring IF EXISTS: a
+      // bare `DROP TABLE cell_memberships;` would otherwise match nothing, leave
+      // both sides equal, and pass while dropping an unguarded history table.
+      const dropped = [
+        ...(migration.down ?? '').matchAll(/DROP TABLE\s+(?:IF EXISTS\s+)?([a-z_]+)/g),
+      ]
+        .map((match) => match[1])
+        .sort();
 
       expect(dropped.length).toBeGreaterThan(0);
-      expect([...migration.refuseIfPopulated].sort()).toEqual([...dropped].sort());
+      expect([...migration.refuseIfPopulated].sort()).toEqual(dropped);
     });
 
     it('names the tables SKILL.md guarantees history for', () => {

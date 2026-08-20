@@ -222,10 +222,29 @@ jobs:
           total=$(echo "$summary" | grep -oE '[0-9]+ total' | grep -oE '[0-9]+')
 
           if [ "$failed" != "$total" ]; then
-            echo "::error::Some cases passed, which is progress rather than a fault:"
+            if echo "$summary" | grep -qE '[0-9]+ (skipped|todo)'; then
+              # The 2026-08-20 ruling is explicit: these are not skipped, not
+              # marked pending, and not inverted to pass on failure.
+              echo "::error::Some cases were skipped or marked todo:"
+            else
+              echo "::error::Some cases passed, which is progress rather than a fault:"
+            fi
             echo "::error::  $summary"
-            echo "::error::This job asserts they all fail. If Stage 2 has landed, move"
+            echo "::error::This job asserts every case fails. If Stage 2 has landed, move"
             echo "::error::them into the api suite and delete this job."
+            exit 1
+          fi
+
+          # `Tests:` counts only the cases that ran. A second spec file that fails
+          # to collect prints `Test Suites: 1 failed, 1 passed, 2 total` while the
+          # case counts stay consistent, so the suite line is checked too.
+          suites=$(grep -E '^Test Suites:' suite.log | tail -1)
+          suitesFailed=$(echo "$suites" | grep -oE '[0-9]+ failed' | grep -oE '[0-9]+')
+          suitesTotal=$(echo "$suites" | grep -oE '[0-9]+ total' | grep -oE '[0-9]+')
+
+          if [ "$suitesFailed" != "$suitesTotal" ]; then
+            echo "::error::A spec file in this suite did not fail as expected:"
+            echo "::error::  $suites"
             exit 1
           fi
 

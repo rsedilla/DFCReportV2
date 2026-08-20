@@ -679,7 +679,9 @@ refresh_tokens
 
 An access token lives **15 minutes**. A refresh token lives 30 days from issue and is rotated on use: the old row is revoked and a new one issued, so a refresh token replayed after use is a reuse signal and revokes the whole account chain.
 
-`replaced_by_id` is what makes that signal readable, and it is set by rotation and by nothing else. A revoked token carrying a replacement was rotated; a revoked token without one was signed out, and signing out ends that session only. Without the column the two are indistinguishable, and an ordinary sign-out looks exactly like a stolen token.
+`replaced_by_id` is what makes that signal readable, and it is set by rotation and by nothing else. It governs what happens when a revoked token is *presented*: one carrying a replacement was rotated, so presenting it again is a reuse signal; one without was revoked by a sign-out or by an account-wide revocation, and is simply refused. Without the column those cases are indistinguishable, and an ordinary sign-out looks exactly like a stolen token.
+
+It is not a classification of every revoked row. Account-wide revocation leaves the same shape as a sign-out, deliberately: nothing needs to escalate a token whose account has already been revoked.
 
 **Immediate revocation and a stateless API are in tension, and the resolution is explicit.** A bearer token verified by signature alone cannot be revoked before it expires, so Section 6's requirement that revocation take effect immediately, on all devices, is not satisfiable by a short lifetime alone.
 
