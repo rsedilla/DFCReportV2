@@ -715,9 +715,12 @@ Do not require 2-step verification/MFA in V1.
 
 **Signing in supports a password manager** (WCAG 2.2, criterion 3.3.8; Section 23). Paste into the password field is never blocked, autofill is never obstructed, and the field is marked up so a manager can fill it.
 
-That is what makes a password permissible. A password *is* a cognitive function test under 3.3.8 — it is remembered — and the criterion allows it only where something assists the user in completing it. The password manager is that mechanism, so blocking paste does not merely inconvenience: it removes the thing conformance rests on. It is usually done in the name of security and produces the opposite, by pushing people toward passwords short enough to type from memory.
+That is what makes a password permissible. A password *is* a cognitive function test under 3.3.8 — it is remembered — and the criterion permits one where any of four conditions holds: an alternative not relying on such a test, a mechanism that assists in completing it, object recognition, or personal content. Two are live for a password, and **this system relies on the mechanism**: support for password managers. Blocking paste therefore does not merely inconvenience, it removes the thing conformance rests on. It is usually done in the name of security and produces the opposite, by pushing people toward passwords short enough to type from memory.
 
-Beyond the criterion, and as a decision of this system rather than a requirement of WCAG: **no sign-in step is a puzzle, an image-selection challenge, or a transcription task.** 3.3.8 permits object recognition and personal content; refusing them here is a choice about the people using this system, most of whom are signing in on a phone, and it is recorded as a choice rather than dressed up as conformance.
+**No sign-in step is a puzzle, an image-selection challenge, or a transcription task.** Two of those three are already required, and only one is a house rule, which is worth keeping straight:
+
+- a puzzle or a transcription challenge is a cognitive function test that neither object-recognition nor personal-content covers, so 3.3.8 forbids it outright unless an alternative or a mechanism is provided. A distorted-text CAPTCHA on its own is a conformance failure, not a matter of taste
+- **image selection is permitted by 3.3.8** under object recognition. Refusing it here goes beyond Level AA and matches 3.3.9 at AAA, and it is a choice about the people using this system, most of whom sign in on a phone
 
 ### Tokens, not browser sessions
 
@@ -2671,6 +2674,10 @@ Six criteria are called out, in four groups, because this system's own rules bea
 **2.4.11 Focus Not Obscured (Minimum), and 2.4.7 Focus Visible.** Focus is always visible, and the focused control is never *entirely* hidden behind a sticky header or a dialog. Level AA requires that much; requiring no part of it to be obscured is 2.4.12 at Level AAA, and is not claimed here. This is what makes the keyboard path usable at all, and it cannot be verified from a screenshot.
 
 Conformance is about whether a person can perceive and operate the interface. It is not a licence to encode meaning in colour: Sections 13, 17 and 19 forbid encoding meeting status, coverage or a leader in colour, and no contrast ratio makes that permissible.
+
+**No palette token is named for a judgement about a person, a Cell, or a figure derived from them.** There is no `success`, `danger` or `warning` token, and none is to be added. A palette that acquires one has settled the question those sections exist to keep open, before any screen is designed, and the name is what spreads: a token is used by whoever writes the next screen, on whatever it seems to fit.
+
+This reaches names, not colour. Colour for structure, hierarchy and legibility is expected (Section 2). Whether a form field failing validation may carry a colour of its own, and what it would be called, is **not settled here** and is recorded as open in `CLAUDE.md` — it is a different question from judging a leader, and answering it by extending this rule would be reading the rule wider than it is.
 
 The native clients are not covered here. Their framework is not chosen (Section 2), and the equivalent obligation for them is the platform's own accessibility API rather than WCAG. That is a ruling to make when the client is, and it is indexed as open in `CLAUDE.md`.
 

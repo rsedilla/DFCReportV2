@@ -15,11 +15,16 @@
  * decided by the palette, and a defect there is a defect on every screen at once.
  *
  * **What it cannot do is notice a pair nobody listed.** `bg-accent text-ink` is
- * idiomatic Tailwind and produces a 2.14:1 button, and no script that checks a
- * fixed list will see it until the pair is added here. Adding a token, or using
- * an existing one in a new position, means adding the pair — the list below is
- * the set of combinations the application is permitted to use, not a survey of
- * what it happens to use today. Whatever is not listed is not approved.
+ * idiomatic Tailwind and produces a 2.14:1 button, and no script checking a fixed
+ * list will see it until the pair is added here. Adding a token, or using an
+ * existing one in a new position, means adding the pair.
+ *
+ * The list is the set of combinations that *carry a contrast requirement*, not
+ * the set the application may use. `line` is permitted and deliberately absent,
+ * because a decorative divider is exempt from 1.4.11.
+ *
+ * It also refuses a token named for a judgement, which is a rule about names
+ * rather than ratios (SKILL.md section 23).
  *
  * The criteria a browser is needed for — focus order, keyboard operability,
  * accessible names — are checked by axe from the first real screen (CLAUDE.md,
@@ -38,11 +43,15 @@ const CSS = fileURLToPath(new URL('../app/globals.css', import.meta.url));
 /**
  * Body text. WCAG 1.4.3 asks 4.5:1, and nothing here is large enough to relax it.
  *
- * `accent` appears on both sides. As a foreground it is a link on a page; as a
- * background it is a primary button, and then the only permitted foregrounds are
- * `surface` and `raised`. `ink` on `accent` is 2.14:1 and `muted` on `accent` is
- * 1.37:1 — both fail, and neither is listed, which is what makes them not
- * permitted rather than merely unchecked.
+ * Contrast is symmetric, so each entry covers both directions: `accent` on
+ * `surface` is the same ratio as `surface` on `accent`, and listing both would
+ * add a number and no information.
+ *
+ * What that symmetry does not tell you is which direction is *permitted*, and
+ * the palette has one trap worth naming. `accent` as a background is a primary
+ * button, and the only foregrounds that clear 4.5:1 on it are `surface` and
+ * `raised`. `ink` on `accent` is 2.14:1 and `muted` on `accent` is 1.37:1. Both
+ * are one Tailwind class away and neither can be caught here.
  */
 const TEXT_PAIRS = [
   ['ink', 'surface'],
@@ -51,8 +60,6 @@ const TEXT_PAIRS = [
   ['muted', 'raised'],
   ['accent', 'surface'],
   ['accent', 'raised'],
-  ['surface', 'accent'],
-  ['raised', 'accent'],
 ];
 
 /** The boundary of a control. WCAG 1.4.11 asks 3:1. */
@@ -83,73 +90,83 @@ function contrast(a, b) {
  * layering the second over the first gives exactly what a browser resolves.
  */
 function readThemes(css) {
-  const mediaBlocks = [...css.matchAll(/@media[^{]*\{/g)];
-  if (mediaBlocks.length !== 1 || !/prefers-color-scheme:\s*dark/.test(mediaBlocks[0][0])) {
+  // Only a block that declares a custom property can be misfiled by the
+  // position-based split below. `prefers-reduced-motion` and its like touch no
+  // token and are none of this reader's business.
+  const themeBlocks = [...css.matchAll(/@media([^{]*)\{((?:[^{}]|\{[^{}]*\})*)\}/g)].filter(
+    (block) => block[2].includes('--'),
+  );
+
+  if (themeBlocks.length !== 1 || !/prefers-color-scheme:\s*dark/.test(themeBlocks[0][1])) {
     throw new Error(
-      'globals.css no longer has exactly one @media block for the dark theme. This ' +
-        'reader assigns every declaration after it to dark, so a second block would ' +
-        'be misfiled silently. Teach it the new shape rather than trusting it.',
+      'globals.css no longer has exactly one @media block declaring tokens. This ' +
+        'reader assigns every declaration after it to the dark theme, so a second ' +
+        'such block would be misfiled silently. Teach it the new shape rather than ' +
+        'trusting it.',
     );
   }
 
   const light = {};
   const dark = {};
-  const darkAt = mediaBlocks[0].index;
-  // Any custom property with a colour-ish value; the hex requirement is checked
-  // below, so a token written in oklch() reports what it is rather than reading
-  // as undeclared.
-  const declaration = /^\s*--([a-z-]+):\s*([^;]+);/gm;
+  const names = new Set();
+  const darkAt = themeBlocks[0].index;
+  // Any custom property. The hex requirement is checked at the point of use, so a
+  // token written in oklch() reports what it is rather than reading as undeclared.
+  const declaration = /^\s*--([a-z0-9-]+):\s*([^;]+);/gm;
 
   for (const match of css.matchAll(declaration)) {
     const [, name, rawValue] = match;
     const value = rawValue.trim();
+
+    // Every name, wherever it is declared. The `@theme inline` block aliases each
+    // token through `var()`, and it is the block that mints the Tailwind
+    // utilities: `--color-danger: var(--accent)` gives working `bg-danger` and
+    // `text-danger` classes without declaring a colour anywhere. The name rule has
+    // to see it, even though the contrast rule has nothing to measure.
+    names.add(name);
+
     if (value.startsWith('var(')) {
       continue;
     }
+
     (match.index < darkAt ? light : dark)[name] = value;
   }
 
-  return { light, dark: { ...light, ...dark } };
+  return { light, dark: { ...light, ...dark }, names };
 }
 
 /**
  * Names a token may not have.
  *
- * The decisions log says: "No `success`, no `danger`, no `warning` token exists,
- * and none is to be added." That is the rule sections 13, 17 and 19 actually
- * turn on, and it was enforced by a comment while the framework rule next door
- * was enforced by a script. A palette that acquires a `danger` token has already
- * lost the argument, whatever the ratio comes out at.
+ * SKILL.md section 23: no palette token is named for a judgement about a person,
+ * a Cell, or a figure derived from them — no `success`, `danger` or `warning`,
+ * and none to be added. A palette that acquires one has settled the question
+ * sections 13, 17 and 19 exist to keep open, and the name is what spreads.
+ *
+ * Exactly the three the rule names. An earlier version of this list added seven
+ * more of its own — `error`, `critical`, `severity` and the like — which refused
+ * names no rule refuses: whether a form field failing validation may carry a
+ * colour is open (CLAUDE.md), and a lint script is not where it gets decided.
+ * Section 23 warns in terms against reading the prohibition wider than it is.
  */
-const FORBIDDEN_TOKEN_NAMES = [
-  'success',
-  'danger',
-  'warning',
-  'error',
-  'positive',
-  'negative',
-  'good',
-  'bad',
-  'critical',
-  'severity',
-];
+const FORBIDDEN_TOKEN_NAMES = ['success', 'danger', 'warning'];
 
 const css = await readFile(CSS, 'utf8');
-const themes = readThemes(css);
+const { names, ...themes } = readThemes(css);
 const failures = [];
 let checked = 0;
 
-for (const name of Object.keys(themes.dark)) {
+for (const name of names) {
   const offending = FORBIDDEN_TOKEN_NAMES.find(
     (word) => name === word || name.startsWith(`${word}-`) || name.endsWith(`-${word}`),
   );
 
   if (offending) {
     failures.push(
-      `--${name} names a judgement, not a colour. Sections 13, 17 and 19 forbid encoding ` +
-        `meeting status, coverage or a leader in colour; a token called "${offending}" is ` +
-        `how that arrives. A figure needing attention belongs on the attention list ` +
-        `(section 15), not in red.`,
+      `--${name} names a judgement, not a colour. SKILL.md section 23 allows no palette ` +
+        `token named for a judgement about a person, a Cell, or a figure derived from ` +
+        `them, and "${offending}" is one. A figure needing attention belongs on the ` +
+        `attention list (section 15), not in red.`,
     );
   }
 }
