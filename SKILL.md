@@ -110,9 +110,13 @@ The two halves of the data live in different places and are loaded differently.
 
 The sequence matters. The tree must exist before leaders can be assigned, accounts provisioned, or Cells attached in the right place.
 
-**Admin creates the initial Cells and their leadership assignments.** A leader cannot create their own first Cell: an account is provisioned when a person becomes a Cell Leader (Section 6), and a person becomes a Cell Leader only through an active leadership assignment on an existing Cell (Section 11). Admin therefore creates the Cell and the leadership assignment directly, under `cell.manage_lifecycle` and `cell.manage_leadership` at Whole Church scope, which is also what allows the leader's account to be provisioned. The request-and-approve workflow (Section 10) governs Cells created after launch; during initial encoding there is nothing to request, because the Cells already exist and are not in dispute.
+**Admin creates the initial Cells and their leadership assignments.** A leader cannot create their own first Cell: an account is provisioned when a person becomes a Cell Leader (Section 6), and a person becomes a Cell Leader only through an active leadership assignment on an existing Cell (Section 11). Admin therefore creates the Cell and the leadership assignment directly, exercising `cell.approve_creation` and `cell.manage_leadership` at Whole Church scope, which is also what allows the leader's account to be provisioned. During initial encoding there is nothing to request, because the Cells already exist and are not in dispute; approval is not bypassed, since Admin is the approver.
 
-One rule is relaxed for this phase and only this phase: **the request step is skipped.** Approval is not bypassed — Admin, who approves, is the actor.
+One rule is relaxed for this phase: **the request step is skipped**, and Admin creates Cells directly (Section 10). Approval is not bypassed, since Admin is the approver.
+
+**Initial encoding ends by a deliberate, audited Admin action, and ends once.** While it is open, the direct-create path is available. Once closed, that path is gone and every new Cell goes through request-and-approve. The transition records actor and timestamp (Section 21).
+
+A relaxation attached to a phase with no defined end is a permanent relaxation. The flag is what makes this one temporary, so it is a required part of the design rather than an operational detail.
 
 Everything else holds, and three points are stated because they are where a bulk load is most likely to go wrong.
 
@@ -689,7 +693,7 @@ Three roles exist. Each carries the default capabilities and scopes below. Anyth
 | `cell.correct_subtree` | Whole Church | Whole Church | own/subtree |
 | `cell.manage_membership` | Whole Church | Whole Church | own/subtree |
 | `cell.manage_leadership` | Whole Church | Whole Church | own/subtree |
-| `cell.request_creation` | Whole Church | Whole Church | own/subtree |
+| `cell.request_creation` | subtree, excl. self | subtree, excl. self | subtree, excl. self |
 | `cell.approve_creation` | — | Whole Church | — |
 | `cell.manage_lifecycle` | Whole Church | Whole Church | own/subtree |
 | `reports.view_subtree` | Whole Church | Whole Church | own/subtree |
@@ -1028,25 +1032,55 @@ Audit schedule changes as category changes are audited.
 
 ### Creating a Cell
 
-A Cell is created through a two-step workflow: the prospective leader's own leader **requests** it, and **Admin approves**. No single actor does both.
+A Cell is created through a two-step workflow: the prospective leader's upline **requests** it, and **Admin approves**. **No actor may approve a request they submitted.**
 
-**Step one — the request.** The upline leader of the prospective Cell Leader submits a request naming that person, the Cell's category, and its day and time. The capability is `cell.request_creation` (Section 7), held at own/subtree scope. In practice this is a leader saying that one of their own disciples is ready to lead.
+This is the only path by which a Cell comes into existence. `cell.manage_lifecycle` governs closure and confers no power to create one (Cell lifecycle, below).
 
-**Step two — Admin approves.** The capability is `cell.approve_creation`, held by Admin only. On approval, in a single transaction:
+**Step one — the request.** A leader upline of the prospective Cell Leader submits a request naming that person, the Cell's category, and its day and time. The capability is `cell.request_creation` (Section 7), held over the actor's subtree **excluding themselves**. In practice this is a leader saying that one of their own disciples is ready to lead.
+
+No holder of the capability, at any scope, may name themselves. Without that exclusion a leader whose only Cell has closed — who keeps their account (Section 11) — could restore their own Current Cell Leader status, re-enter New Cell Leaders for the period, and restore their upline's Leaders-with-12+ count, with no upline involved and with Admin, who has no pastoral basis to judge readiness, as the only reviewer. Section 5, invariant 4 writes the same prohibition for pastoral assignment, for the same reason.
+
+**Step two — Admin approves.** The capability is `cell.approve_creation`, held by Admin only. It is not granted to any other role or actor, and in particular is never held alongside `cell.request_creation` by the same person.
+
+Admin holds approval because approving a new Cell Leader means provisioning their account, and Section 6 requires one actor to hold both `cell.manage_leadership` and `accounts.manage` against the same target. Admin is the only role holding `accounts.manage` (Section 7), so approval and the account land with one authorized actor rather than stalling between two.
+
+**Approval revalidates the target.** The state at approval governs, never the state at request. Reject the request, creating nothing, where the prospective leader has since been archived (Section 3), absorbed by a Merge (Section 3), moved outside the requester's authorized subtree, or had their Network changed (Section 4). Approval must also confirm that the prospective leader and their pastoral leader share a Network, because a Cell inherits its leader's Network and Section 5 forbids a cross-Network edge.
+
+Without revalidation, approval creates an active leadership assignment for an archived Person and proceeds to provision their credentials — precisely the outcome Section 3's archive guard exists to prevent.
+
+**On approval**, in a single transaction:
 
 - the Cell is created as `ACTIVE`, with a server-assigned Cell ID (above)
+- its category history row opens (Category changes, above)
+- its schedule row opens (Schedule changes, above)
 - the Cell leadership assignment is created for the named leader (Section 11)
 - the account step for that leader proceeds (Section 6)
 
-Admin holds approval because approving a new Cell Leader means provisioning their account, and Section 6 requires the actor to hold both `cell.manage_leadership` and `accounts.manage` against the same target. Admin is the only role holding `accounts.manage` (Section 7), so the approval and the account land with one authorized actor rather than stalling between two.
+The category and schedule rows are not optional extras. A Cell created without a schedule row has no derivable set of scheduled meetings, and therefore no coverage figure for its first month (Section 12).
 
-Admin may also create a Cell directly, without a request, and does so during initial encoding (Section 2, Initial data load).
+**Everything takes effect at approval, never at request.** New Cell Leaders is defined by when a leadership assignment starts (Section 16), so a request submitted on 30 September and approved on 2 October belongs to October. Nothing about a request is backdated to when it was made.
 
-**Rejection.** Admin may decline a request, with a reason. Nothing is created, and the decision is audit logged (Section 21). A request awaiting a decision creates no Cell, holds no members, records no attendance, and appears in no count.
+**Direct creation during initial encoding.** While initial encoding is open (Section 2), Admin may create a Cell and its leadership assignment directly, without a request. That path closes with the phase and is not available afterwards.
 
-**Why two steps.** Creating a Cell mints a Cell Leader, and that single act moves Current Cell Leaders, New Cell Leaders for the period, and the requesting leader's own progress toward Leaders with 12+ Direct Leaders (Section 16). The requester therefore benefits from the outcome. It is the one routine action in this system where the actor has an interest in the result, and it is the only one that carries a second party.
+**Request states.** A request is `PENDING`, `APPROVED`, or `DECLINED`. Never add another. A `PENDING` request creates no Cell, holds no members, records no attendance, and appears in no count or metric. At most one `PENDING` request may exist for a given prospective leader. Declined requests are retained — they are part of the record of how a leader was developed.
 
-**What the system does not model.** The church communicates a new Cell Leader to the Senior Pastors and their direct leaders outside the application — in conversation, not in software. Do not build a notification, an approval tier, or a sign-off step for it. Notifications are confined to what Section 13 defines.
+**Declining.** Admin may decline a request with a reason, from a fixed list:
+
+- `NOT_YET_READY`
+- `TIMING_DEFERRED`
+- `DUPLICATE_REQUEST`
+- `SUBMITTED_IN_ERROR`
+- `OTHER` — requires a note
+
+The list is fixed and not administrator-configurable, for the reason given in Section 13. It is deliberately short and neutral. A decline is a durable record about a named person, and an unconstrained free-text field is exactly where a judgmental label about a prospective leader would be written (Section 1, Principle 7). A decline records that a Cell was not opened at this time. It never records an assessment of the person.
+
+**Seeing the queue.** Pending requests appear on the Admin dashboard (Section 19), and a request's outcome appears to the requester in their own outstanding work (Section 19). Neither is a notification; notifications remain confined to Section 13. This surface is necessary rather than optional: a pending request holds up a real leader's account provisioning, so the person who can act on it must be able to see it.
+
+**Why two steps.** Creating a Cell mints a Cell Leader, and that act moves Current Cell Leaders, New Cell Leaders for the period, and the requesting leader's own progress toward Leaders with 12+ Direct Leaders (Section 16). The requester benefits from the outcome, so a second party is required.
+
+The same shape governs the other actions where a leader would benefit from the result: archival, which reduces a leader's own People count, and Person Merge — both requested by a leader and performed by Admin or a Senior Pastor (Section 7).
+
+**What the system does not model.** The church communicates a new Cell Leader to the Senior Pastors and their direct leaders outside the application, in conversation. Do not build a notification or an approval tier for that. It is a different thing from the Admin queue above, which is the workflow's own task surface.
 
 ### Cell lifecycle
 
@@ -1078,7 +1112,7 @@ Keep every reason factual and free of judgement (Section 1, Principle 7). A clos
 
 #### What closing does
 
-Creating and closing a Cell are both governed by `cell.manage_lifecycle` (Section 7). Closing is an explicit, authorized, audited action carrying an effective date and a reason, held by the Cell's current leader, any leader upline of them acting within their own authorized subtree, Admin, and Senior Pastors.
+Closing a Cell is governed by `cell.manage_lifecycle` (Section 7). Creating one is not: a Cell comes into existence only through the request-and-approve workflow above, and `cell.manage_lifecycle` confers no power to create. Closing is an explicit, authorized, audited action carrying an effective date and a reason, held by the Cell's current leader, any leader upline of them acting within their own authorized subtree, Admin, and Senior Pastors.
 
 On closure, as one transaction:
 
@@ -1745,6 +1779,7 @@ Keep navigation similarly compact. Senior Pastors have whole-church scope for th
 
 Admin focuses on platform operations:
 
+- Pending Cell creation requests (Section 10)
 - People management
 - Networks / pastoral assignments
 - DCC Attendance administration
@@ -1847,6 +1882,11 @@ Audit important actions, including:
 - Role/permission changes
 - Attendance submission on behalf
 - Attendance corrections
+- Cell creation requested
+- Cell creation approved
+- Cell creation declined, with reason
+- Cell created directly by Admin during initial encoding
+- Initial encoding closed
 - Cell creation
 - Cell leader assignment
 - Cell category change
