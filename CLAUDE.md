@@ -252,6 +252,14 @@ The mapping is total under the homogeneous-network rule, so a confirmation step 
 ### 2026-08-20 — Closed months may be materialized
 After the 7th a month's figures are stable, so its reports may be computed once and stored; only the open month needs live computation. An Admin amendment invalidates and recomputes that month. Stored figures are a cache and must always remain derivable from source records. Written to `SKILL.md` §20.
 
+### 2026-08-20 — Backups are daily, not weekly
+Daily minimum, 30 days retention, point-in-time recovery where the host supports it, and a restore tested before go-live and annually after.
+
+Weekly was considered and rejected: attendance exists nowhere else, so a week of loss is one DCC Sunday and around a hundred and forty Cell meetings that nobody can reconstruct, and corruption is typically noticed weeks after it happens. The database is small enough that daily costs almost nothing. Written to `SKILL.md` §24.
+
+### 2026-08-20 — Two capabilities were referenced but never named
+`cell.manage_leadership` (assigning and ending Cell leadership, and referenced by the dual-authorization rule in §6) and `people.merge` (§3, and a row in the §7 role table with no identifier). Both now appear in the §7 capability list and role catalog. `cell.manage_lifecycle` is also stated to cover creating a Cell, not only closing one.
+
 ### Open — awaiting a ruling
 
 Nothing is currently awaiting a ruling. Items reaching a Stop Condition are recorded here until settled.

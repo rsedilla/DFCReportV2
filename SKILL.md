@@ -248,7 +248,7 @@ Because a previously published total can change, every merge must be surfaced in
 
 A Person may only be merged once (into a survivor that has never itself been merged away) — this keeps identity resolution unambiguous. If a survivor later turns out to also be a duplicate, that requires a separate, deliberate correction; there is no automatic chain-merging.
 
-Because a merge is effectively irreversible, cross-entity, and can affect more than one leader's or Network's data, Person Merge requires Whole Church-level authorization (Section 7) — in practice, an Admin-level capability, not an ordinary leader action — and requires an explicit reason. There is no "undo merge" capability; an incorrect merge must be corrected manually and deliberately, not automatically reversed.
+Because a merge is effectively irreversible, cross-entity, and can affect more than one leader's or Network's data, Person Merge requires the `people.merge` capability at Whole Church scope (Section 7). It is Admin-only, is not held by Senior Pastors, is never an ordinary leader action, and requires an explicit reason. There is no "undo merge" capability; an incorrect merge must be corrected manually and deliberately, not automatically reversed.
 
 Where merging the two records' current relationships (e.g. both have an active but different Cell membership) would require choosing between two legitimately different current facts, the system must not silently pick one — it must flag the conflict for authorized human resolution rather than guessing.
 
@@ -550,7 +550,7 @@ When a person becomes a Cell Leader and has no account:
 
 One person has one account even if they lead multiple Cell Groups.
 
-Assigning Cell leadership and provisioning an account are separately authorized. Where designating a person as a Cell Leader would trigger account creation, the actor must hold both the Cell-leadership capability and `accounts.manage` against that same target — mirroring the dual-authorization rule for archiving a Person who holds an active account (Account access at archive, below).
+Assigning Cell leadership and provisioning an account are separately authorized. Where designating a person as a Cell Leader would trigger account creation, the actor must hold both `cell.manage_leadership` and `accounts.manage` against that same target — mirroring the dual-authorization rule for archiving a Person who holds an active account (Account access at archive, below).
 
 An actor authorized only to assign Cell leadership may record the leadership assignment, but must not thereby cause an account to be created or an activation email to be sent. The account step is left pending for an authorized actor and is separately audit logged (Section 21). Leadership assignment is never a back door into account provisioning.
 
@@ -598,8 +598,10 @@ Example permissions may include:
 - `cell.submit_on_behalf`
 - `cell.correct_subtree`
 - `cell.manage_membership`
+- `cell.manage_leadership`
 - `cell.manage_lifecycle`
 - `reports.view_subtree`
+- `people.merge`
 - `records.backdate_effective_date`
 - `accounts.manage`
 - `roles.manage`
@@ -638,13 +640,14 @@ Three roles exist. Each carries the default capabilities and scopes below. Anyth
 | `cell.submit_on_behalf` | Whole Church | Whole Church | own/subtree |
 | `cell.correct_subtree` | Whole Church | Whole Church | own/subtree |
 | `cell.manage_membership` | Whole Church | Whole Church | own/subtree |
+| `cell.manage_leadership` | Whole Church | Whole Church | own/subtree |
 | `cell.manage_lifecycle` | Whole Church | Whole Church | own/subtree |
 | `reports.view_subtree` | Whole Church | Whole Church | own/subtree |
 | `audit.view` | Whole Church | Whole Church | — |
 | `records.backdate_effective_date` | — | Whole Church | — |
 | `accounts.manage` | — | Whole Church | — |
 | `roles.manage` | — | Whole Church | — |
-| Person Merge | — | Whole Church | — |
+| `people.merge` | — | Whole Church | — |
 
 Four of these defaults are deliberate and must not be widened for convenience.
 
@@ -652,7 +655,7 @@ Four of these defaults are deliberate and must not be widened for convenience.
 
 **Senior Pastors do not hold `records.backdate_effective_date`.** Backdating rewrites totals for periods already reported (Section 3) and is a data-correction operation, not a pastoral one.
 
-**Senior Pastors do not perform Person Merge.** Section 3 already places it at Whole Church authorization as an Admin-level capability.
+**Senior Pastors do not hold `people.merge`.** Section 3 places it at Whole Church scope as an Admin capability. A merge is irreversible, crosses both Networks, and can lower totals for periods already reported, so it stays with the role whose job is data correction.
 
 **Leaders do not hold `people.manage_lifecycle`.** Archiving reduces a leader's own People count, which is precisely the incentive Person Lifecycle guards against (Section 3). Archival is requested by a leader and performed by Admin or a Senior Pastor.
 
@@ -981,7 +984,7 @@ Keep every reason factual and free of judgement (Section 1, Principle 7). A clos
 
 #### What closing does
 
-Closing a Cell is an explicit, authorized, audited action carrying an effective date and a reason. The capability is `cell.manage_lifecycle` (Section 7), held by the Cell's current leader, any leader upline of them acting within their own authorized subtree, Admin, and Senior Pastors.
+Creating and closing a Cell are both governed by `cell.manage_lifecycle` (Section 7). Closing is an explicit, authorized, audited action carrying an effective date and a reason, held by the Cell's current leader, any leader upline of them acting within their own authorized subtree, Admin, and Senior Pastors.
 
 On closure, as one transaction:
 
@@ -1964,9 +1967,25 @@ Do not build offline complexity before it is needed. Do not make architectural c
 - Rate limiting for authentication and sensitive endpoints
 - CORS restrictions
 - Secure secrets/environment handling
-- Automated backups
+- Automated backups, daily at minimum, with at least 30 days of retention
+- Point-in-time recovery wherever the database host supports it
+- A restore tested before go-live, and at least annually thereafter
 - Audit logging
 - Least-privilege database/application credentials
+
+### Backups
+
+Daily is the minimum, and weekly is not acceptable here.
+
+Attendance exists nowhere else. A week of loss is one DCC Sunday and roughly a hundred and forty Cell meetings, and nobody can reconstruct who was present three weeks ago — leaders will not remember, and the submission window may have closed even if they did (Section 13). Unlike most business data, none of it can be re-derived from another system or a paper trail.
+
+Corruption is also usually noticed late. A bad migration discovered three weeks after it ran needs a restore point from before it, which weekly backups with short retention will not have.
+
+The cost argument does not apply. A church of several thousand people with years of attendance is a small database, and daily backups of it are inexpensive on any host. Point-in-time recovery, standard on managed PostgreSQL, reduces worst-case loss from a day to minutes and should be used where available.
+
+A backup that has never been restored is an assumption. Test one before go-live and annually after, and record that it was done.
+
+This is distinct from the per-migration snapshot required before touching relationship tables (Definition of Done, migration policy). Routine backups cover accidents; migration snapshots cover deliberate schema changes. Both are required.
 
 Do not expose the entire church dataset to the browser and filter it client-side.
 
