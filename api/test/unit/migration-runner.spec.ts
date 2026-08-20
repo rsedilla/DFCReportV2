@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
 import { parse } from '../../scripts/migrate';
 
 /**
@@ -54,6 +57,27 @@ describe('the migration parser (CLAUDE.md, migration policy)', () => {
           '-- migrate:up\n-- migrate:down:refuse-if-populated persons\nCREATE TABLE persons (id uuid);\n-- migrate:down\nDROP TABLE persons;\n',
         ),
       ).toThrow(/must be the down marker itself, or the line directly below it/);
+    });
+
+    it('refuses a guard stranded in the up section even with no plain marker', () => {
+      // The placement check cannot fire here: with no plain marker to compare
+      // against, the guard simply becomes the down marker, the up section
+      // truncates to a comment, and the real DDL is parsed as the down section
+      // with the guard pointing at tables that were never created.
+      expect(() =>
+        parse(
+          '0001_x.sql',
+          '-- migrate:up\n-- migrate:down:refuse-if-populated persons\nCREATE TABLE persons (id uuid);\n',
+        ),
+      ).toThrow(/up section holds no statements/);
+    });
+
+    it('refuses an up section holding only comments', () => {
+      // It would run an empty statement, record the version as applied against a
+      // schema it never created, and then freeze the file with its own checksum.
+      expect(() =>
+        parse('0001_x.sql', '-- migrate:up\n-- nothing here yet\n-- migrate:down\nDROP TABLE x;\n'),
+      ).toThrow(/up section holds no statements/);
     });
 
     it('refuses more than one guard, so there is one list to read', () => {
@@ -116,6 +140,44 @@ describe('the migration parser (CLAUDE.md, migration policy)', () => {
 
     it('must be numeric', () => {
       expect(() => parse('seven_x.sql', `${up}-- migrate:down\n`)).toThrow(/numeric version/);
+    });
+  });
+
+  describe('the migration this repository actually ships', () => {
+    // Everything above runs on string fixtures. CI cannot catch a regression here
+    // either: it reverts against empty tables, where the guard is a no-op by
+    // construction. So the real file is parsed, and what it yields is asserted.
+    const sql = readFileSync(
+      join(__dirname, '..', '..', 'migrations', '0001_foundations.sql'),
+      'utf8',
+    );
+    const migration = parse('0001_foundations.sql', sql);
+
+    it('guards every table its down section drops', () => {
+      const dropped = [...sql.matchAll(/DROP TABLE IF EXISTS ([a-z_]+)/g)].map((match) => match[1]);
+
+      expect(dropped.length).toBeGreaterThan(0);
+      expect([...migration.refuseIfPopulated].sort()).toEqual([...dropped].sort());
+    });
+
+    it('names the tables SKILL.md guarantees history for', () => {
+      expect(migration.refuseIfPopulated).toEqual(
+        expect.arrayContaining([
+          'persons',
+          'person_lifecycle',
+          'network_assignments',
+          'pastoral_assignments',
+          'accounts',
+          'account_roles',
+          'capability_grants',
+        ]),
+      );
+    });
+
+    it('splits the sections where they belong', () => {
+      expect(migration.up).toContain('CREATE TABLE persons');
+      expect(migration.up).not.toContain('DROP TABLE');
+      expect(migration.down).toContain('DROP TABLE IF EXISTS persons');
     });
   });
 

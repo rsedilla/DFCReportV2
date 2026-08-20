@@ -84,6 +84,14 @@ export interface Migration {
   checksum: string;
 }
 
+/** Whether a section holds anything the database would execute. */
+function hasStatements(section: string): boolean {
+  return section
+    .split('\n')
+    .map((line) => line.trim())
+    .some((line) => line !== '' && !line.startsWith('--'));
+}
+
 export function parse(fileName: string, sql: string): Migration {
   const upAt = sql.search(UP_MARKER);
   const plainDown = PLAIN_DOWN_MARKER.exec(sql);
@@ -156,6 +164,7 @@ export function parse(fileName: string, sql: string): Migration {
   if (downAt < upAt) {
     throw new Error(`${fileName}: "-- migrate:down" appears before "-- migrate:up"`);
   }
+
   if (guards.length > 1) {
     throw new Error(
       `${fileName}: more than one "-- migrate:down:refuse-if-populated" directive. ` +
@@ -181,6 +190,20 @@ export function parse(fileName: string, sql: string): Migration {
           `not guard the section it appears to guard.`,
       );
     }
+  }
+
+  // The same reasoning as the irreversible ordering check above, which this
+  // branch was missing: an up section holding nothing executable runs an empty
+  // statement, records the version as applied against a schema that was never
+  // created, and is then frozen by its own checksum. It is also how a guard
+  // stranded in the up section of a file with no plain down marker presents --
+  // the guard becomes the marker, the up section truncates to a comment, and the
+  // real DDL is parsed as the down section.
+  if (!hasStatements(sql.slice(upAt, downAt))) {
+    throw new Error(
+      `${fileName}: the up section holds no statements, only comments or whitespace. ` +
+        `Applying it would record the migration against a schema it never created.`,
+    );
   }
 
   return {
@@ -257,7 +280,9 @@ function assertUnchanged(migration: Migration, row: AppliedRow): void {
   if (row.checksum !== migration.checksum) {
     throw new Error(
       `${migration.name} has changed since it was applied. Migration history is ` +
-        `immutable: write a new migration rather than editing this one.`,
+        `immutable: write a new migration rather than editing this one. ` +
+        `While this schema is not yet deployed anywhere, correcting 0001 in place is ` +
+        `permitted (CLAUDE.md, 2026-08-21) -- drop and rebuild this database instead.`,
     );
   }
 }

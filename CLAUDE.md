@@ -175,6 +175,8 @@ There is no seed command. Section 2 of `SKILL.md` loads real data through the im
 
 Migrations are plain `.sql` files in `api/migrations/`, applied in filename order by `api/scripts/migrate.ts`. Each holds a `-- migrate:up` and a `-- migrate:down` section, and an applied migration is checksummed: editing one that has already run is refused, because the file and the database would otherwise disagree with nothing to say so. Write a new migration instead.
 
+**One exception is in force and will end.** Until this schema is applied to a database anybody depends on, `0001_foundations.sql` may be corrected in place — see the ruling of 2026-08-21 below, which defines when the exception lapses. Rebuild your development database when the checksum refuses.
+
 ## Stop Conditions
 Stop and request architectural clarification rather than inventing a rule when:
 - `SKILL.md` does not define a required ministry rule.
@@ -568,7 +570,7 @@ The four that were live defects:
 
 **A counting trigger is not a constraint.** The `SENIOR_PASTOR` cap counted active rows in a deferred trigger, and under READ COMMITTED neither of two concurrent transactions sees the other's uncommitted row — both count two, both commit, three Senior Pastors. This is the failure authorization case 7 exists to warn about, written while citing it. Fixed with a transaction-scoped advisory lock, and pinned by a concurrent test.
 
-The reason first recorded for rejecting a `senior_pastor_slot` column — that §7 gives `account_roles` its shape and that shape has no slot — does not survive scrutiny: `refresh_tokens.replaced_by_id` is a column §6's shape does not list either, added because a rule required it. The honest position is that the slot with a partial unique index is the **stronger** design, because a unique index is enforced under `pg_restore --disable-triggers` where a constraint trigger is skipped entirely. The lock closes the race; it does not close the restore path. Adopting the slot is an open question below, and the lock stands until it is answered.
+The reason first recorded for rejecting a `senior_pastor_slot` column — that §7 gives `account_roles` its shape and that shape has no slot — does not survive scrutiny. `refresh_tokens.replaced_by_id` was the counter-example, a column §6's shape did not list, added because a rule required it; that was drift rather than licence, and §6 now carries it. The point stands without the precedent: a shape is amended when a rule needs a column, deliberately and in the same change. The honest position is that the slot with a partial unique index is the **stronger** design, because a unique index is enforced under `pg_restore --disable-triggers` where a constraint trigger is skipped entirely. The lock closes the race; it does not close the restore path. Adopting the slot is an open question below, and the lock stands until it is answered.
 
 **Refresh-token rotation was not atomic.** Issue-then-revoke, in two statements, with the revoke's row count discarded — so two requests presenting one token could both mint a replacement while only one revoke landed, and the reuse signal §6 requires was never raised for the loser. Rotation now claims the presented token conditionally inside a transaction and treats a lost claim as reuse.
 
@@ -589,7 +591,7 @@ The cost is real and accepted: a developer who applied 0001 locally sees `migrat
 
 ### Open — awaiting a ruling
 
-**One item awaits a ruling and blocks Stage 5. Nine other things are unsettled; five of them are questions Stage 2 will run into and should be answered before it does. They are listed at the end, so this section is the whole of what is open.**
+**One item awaits a ruling and blocks Stage 5. Nine other things are unsettled, four of them questions Stage 2 will run into and should answer before it builds. They are listed at the end, so this section is the whole of what is open.**
 
 **What an aggregate Cell attendance view offers in place of buckets.** Monthly-attendance buckets are a Cell-scope view only, because N belongs to a Cell and aggregating across different N inflates `Completed` for the Cells that recorded least (`SKILL.md` §12). At leader and Network scope the spec offers unique people, classification and coverage, and does not say whether anything should replace the buckets. Settle it in Stage 5 against real data.
 

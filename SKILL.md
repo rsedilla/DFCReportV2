@@ -670,6 +670,7 @@ refresh_tokens
 - account_id
 - token_hash         the token itself is never stored
 - device_label       nullable, for the user's own sign-out list
+- replaced_by_id     nullable, the token issued when this one was rotated
 - issued_at
 - expires_at
 - last_used_at       nullable
@@ -677,6 +678,8 @@ refresh_tokens
 ```
 
 An access token lives **15 minutes**. A refresh token lives 30 days from issue and is rotated on use: the old row is revoked and a new one issued, so a refresh token replayed after use is a reuse signal and revokes the whole account chain.
+
+`replaced_by_id` is what makes that signal readable, and it is set by rotation and by nothing else. A revoked token carrying a replacement was rotated; a revoked token without one was signed out, and signing out ends that session only. Without the column the two are indistinguishable, and an ordinary sign-out looks exactly like a stolen token.
 
 **Immediate revocation and a stateless API are in tension, and the resolution is explicit.** A bearer token verified by signature alone cannot be revoked before it expires, so Section 6's requirement that revocation take effect immediately, on all devices, is not satisfiable by a short lifetime alone.
 
