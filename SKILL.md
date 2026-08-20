@@ -169,6 +169,24 @@ Member IDs are assigned by the server from the sequence. Nothing is backdated.
   - `WIDOWED`
 - Mobile Number — optional
 
+```text
+persons
+- id                  UUID, may be client-generated (Two identifiers, below)
+- member_id           M-000000, server-assigned, immutable, never reused
+- first_name
+- middle_name         nullable
+- last_name
+- birth_date
+- sex                 MALE | FEMALE
+- civil_status        SINGLE | MARRIED | WIDOWED
+- mobile_number       nullable
+- merged_into_id      nullable, set where this Person was absorbed by a merge
+- created_at
+- updated_at
+```
+
+Lifecycle, Network, pastoral assignment, Cell membership and Cell leadership are not columns here. Each is effective-dated in its own table, because each carries history the specification guarantees (Section 26).
+
 ### Contact information
 
 The mobile number is the only contact detail the system holds, and it is the primary means of reaching a person.
@@ -447,10 +465,10 @@ Prefer a pastoral assignment/history table for a long-lived production system:
 ```text
 pastoral_assignments
 - id
-- member_id
-- leader_id nullable
+- person_id
+- leader_id          nullable, only for a Network root
 - started_at
-- ended_at nullable
+- ended_at           nullable
 ```
 
 This allows a person to move to another leader without destroying history.
@@ -506,6 +524,8 @@ Zero is legitimate in exactly three situations: a Person encoded but not yet ass
 
 A reassignment closes the current assignment and opens the new one within a single transaction. It must never leave two open assignments, and must never leave a person who had a leader without one. Enforce with a uniqueness constraint over the person where `ended_at` is null — the constraint permits zero rows and forbids two.
 
+Every effective-dated table in this specification carries the same shape of constraint, and each is required rather than optional (Database enforcement, below): one open row per person for `person_lifecycle`, `network_assignments` and `cell_memberships`; one open row per Cell for `cell_categories` and `cell_schedules`; one open row per Cell for `cell_leaderships`, since a Cell has one leader at a time; and one `PENDING` row per prospective leader for `cell_creation_requests`.
+
 Two concurrently open assignments would place one person in two branches at once and double-count them in every subtree total, violating the unique-people rule in Section 20.
 
 **4. No self-assignment and no upline re-parenting.**
@@ -544,7 +564,7 @@ One active assignment — a partial unique index over the person, where the assi
 
 ```sql
 CREATE UNIQUE INDEX pastoral_assignments_one_active
-  ON pastoral_assignments (member_id)
+  ON pastoral_assignments (person_id)
   WHERE ended_at IS NULL;
 ```
 
@@ -553,10 +573,16 @@ No self-assignment — a check constraint covers the degenerate case; the wider 
 ```sql
 ALTER TABLE pastoral_assignments
   ADD CONSTRAINT pastoral_assignments_no_self
-  CHECK (member_id <> leader_id);
+  CHECK (person_id <> leader_id);
 ```
 
 Same-Network edge — because Network is effective-dated on the Person rather than stored on the assignment row, this cannot be a simple check constraint. Enforce it with a constraint trigger on insert and update of `pastoral_assignments`, and re-validate it on every Network change (Section 4).
+
+The trigger must be **`DEFERRABLE INITIALLY DEFERRED`**. Section 4 requires a Network change and its accompanying reassignment to happen in one atomic operation, because either alone leaves the tree invalid. A trigger firing per statement sees that intermediate state and rejects whichever runs first, making the mandated operation unperformable. Deferred to commit, it sees only the final state.
+
+It compares the Network in force **as of the assignment's `started_at`**, not the Network in force now. An edge must have been legal when it was created; where Admin backdates an assignment under `records.backdate_effective_date`, the two differ, and validating against today would reject a correction that was true at the time.
+
+A root leader has a null `leader_id` (Network roots, above) and the trigger passes such a row without comparison — there is no leader to compare against.
 
 No cycles — a cycle spans many rows and cannot be expressed as a row-level constraint. Reject it in the domain layer before writing, and make every recursive subtree query cycle-safe so that a cycle introduced by any other means surfaces as an error rather than an unbounded query:
 
@@ -564,10 +590,10 @@ No cycles — a cycle spans many rows and cannot be expressed as a row-level con
 WITH RECURSIVE subtree AS (
   ...
 )
-CYCLE member_id SET is_cycle USING path
+CYCLE person_id SET is_cycle USING path
 ```
 
-The `CYCLE` clause requires PostgreSQL 14 or later. On earlier versions, carry an explicit visited-path array and stop when a node repeats.
+**PostgreSQL 16 is the minimum version.** The `CYCLE` clause requires 14 or later, and pinning the version here means the visited-path fallback is never written.
 
 Any query that walks the pastoral tree must carry cycle detection. A subtree query without it is a defect, not a performance preference.
 
@@ -601,10 +627,49 @@ Exceptions with explicit system access:
 - person_id
 - email — required for accounts and unique after normalization
 - password_hash
-- account status
+- account status — exactly:
+  - `PENDING_ACTIVATION` — created, activation email sent, no password set
+  - `ACTIVE`
+  - `DISABLED`
 - role(s)/permissions
 - last_login
 - created_at / updated_at
+
+### Session and token storage
+
+```text
+refresh_tokens
+- id
+- account_id
+- token_hash         the token itself is never stored
+- device_label       nullable, for the user's own sign-out list
+- issued_at
+- expires_at
+- last_used_at       nullable
+- revoked_at         nullable
+```
+
+An access token lives **15 minutes**. A refresh token lives 30 days from issue and is rotated on use: the old row is revoked and a new one issued, so a refresh token replayed after use is a reuse signal and revokes the whole account chain.
+
+**Immediate revocation and a stateless API are in tension, and the resolution is explicit.** A bearer token verified by signature alone cannot be revoked before it expires, so Section 6's requirement that revocation take effect immediately, on all devices, is not satisfiable by a short lifetime alone.
+
+Every request therefore checks the account against a revocation marker — a single lookup keyed by account, cacheable, invalidated on revoke. The API remains stateless in the sense Section 2 requires: it holds no server-side session, no per-request state, and any instance can serve any request. What it does not do is trust a signature unconditionally.
+
+A 15-minute access token is short enough that this check can be cached briefly without making "immediately" a lie, and long enough that the refresh path is not on every request.
+
+```text
+accounts
+- id
+- person_id
+- email               unique after normalization
+- password_hash       nullable until activated
+- status              PENDING_ACTIVATION | ACTIVE | DISABLED
+- last_login_at       nullable
+- created_at
+- updated_at
+```
+
+One Person has at most one Account, whatever number of Cells they lead (above). Roles and capability grants are not columns here; they are held separately (Section 7, How grants are held).
 
 ### Authentication V1
 
@@ -782,10 +847,20 @@ Authorization is expressed as two independent dimensions that combine to form Ac
   - manage people
   - administer accounts/permissions
 - **Scope** — what data a capability applies to, e.g.:
-  - own/subtree
-  - Men's Network
-  - Women's Network
-  - Whole Church
+  - `OWN_SUBTREE` — the actor's pastoral subtree, including the actor
+  - `SUBTREE_EXCL_SELF` — the same, excluding the actor
+  - `NETWORK` — one Network, named on the grant
+  - `WHOLE_CHURCH`
+
+The four scope values are a closed enumeration. A guard cannot fail closed against an open one, so do not add a fifth without amending this specification.
+
+`SUBTREE_EXCL_SELF` exists because two capabilities must not be exercisable on oneself: requesting a Cell for oneself (Section 10) and reassigning one's own pastoral leader (Section 5, invariant 4). Everywhere else `OWN_SUBTREE` includes the actor, and that is deliberate — a leader edits their own basic details and records their own attendance.
+
+Scope resolves against a target. Where the target is a Person, it resolves through their pastoral position. Where it is not:
+
+- a **Cell**, a Cell meeting, a membership or a leadership resolves through the Cell's current leader
+- an **audit entry** resolves through its target
+- a **setting** is Whole Church only, and is never in scope at any narrower value
 
 A capability without an explicit scope grant is not usable; a scope grant without an explicit capability grants nothing.
 
@@ -799,6 +874,16 @@ The settings it governs today are the Cell attention threshold (Section 15) and 
 
 A setting is not a place to record domain rules. Anything that changes what a figure means, rather than a single operational parameter, belongs in this specification and not behind a control.
 
+```text
+settings
+- key                 a fixed identifier, e.g. cell_attention_months
+- value
+- updated_by
+- updated_at
+```
+
+The key set is fixed by this specification, not open. Today it holds the Cell attention threshold (Section 15) and the initial-encoding phase flag (Section 2).
+
 `records.backdate_effective_date` governs setting an effective date in the past on any effective-dated relationship: pastoral assignment (Section 5), Network (Section 4), Cell membership (Section 10), and Cell leadership (Section 11). It is Admin-only and always requires a reason. It is never granted to ordinary leaders, because backdating changes totals for periods that have already been reported (Section 3).
 
 Being an Associate Pastor, or being part of a Senior Pastor's direct 12, does not by itself grant Whole Church or Network-level reporting scope. Pastoral hierarchy position and system authorization are separate concepts (Section 1, Principle 3). Any leader other than a Senior Pastor who needs reporting visibility beyond their own pastoral subtree must receive that scope through an explicit, Admin-issued grant.
@@ -808,6 +893,42 @@ Expanded reporting scope granted this way is read-only by default. It grants vis
 Example: an Associate Pastor may remain pastorally under Bishop Oriel while Admin separately grants DCC report visibility at Whole Church scope. This allows whole-church DCC report visibility. It does not allow that Associate Pastor to edit attendance, move people, change Cell assignments, or manage accounts outside their normal authorized management scope.
 
 All permission and scope grants — creation, modification, and revocation — must be audit logged (Section 21).
+
+### How grants are held
+
+An account's effective authority is the union of two sources: the defaults of the roles it holds, and any capability granted to it explicitly.
+
+```text
+account_roles
+- id
+- account_id
+- role               SENIOR_PASTOR | ADMIN | LEADER
+- granted_by
+- granted_at
+- revoked_at         nullable
+```
+
+```text
+capability_grants
+- id
+- account_id
+- capability         an identifier from the list above
+- scope_type         OWN_SUBTREE | SUBTREE_EXCL_SELF | NETWORK | WHOLE_CHURCH
+- scope_network      nullable, required where scope_type is NETWORK
+- read_only          defaults to true
+- reason
+- granted_by
+- granted_at
+- revoked_at         nullable
+```
+
+**Role defaults are specification, not data.** The role catalog below is the authority for what each role carries, and it is not editable at runtime. Changing a role default is a change to this document and a deploy, which is what keeps the catalog and the running system from diverging. `roles.manage` governs which roles and grants an account holds, never what a role means.
+
+**Every capability check names both halves.** The guard resolves a capability and a scope for the actor, then evaluates the scope against the target. Neither alone is sufficient, and an account with no matching row is denied — the absence of a grant is a denial, never a default allow.
+
+A grant is revoked by setting `revoked_at`, never by deleting the row. The history of who could do what, and when, is part of the audit record.
+
+`read_only` defaults to true because a scope widened beyond a leader's normal management scope is a reporting grant unless something says otherwise (above). A grant conferring management authority at a wider scope sets it false explicitly, and that is the visible difference between letting someone see a Network and letting them change it.
 
 The backend/API is the sole authority for authorization. Web and mobile UI filtering is never sufficient security on its own (Section 1, Principle 4).
 
@@ -893,14 +1014,33 @@ DCC coverage is shaped differently from Cell coverage. A Cell has one leader and
 
 Report that figure at every scope, as a single line, on the same terms as Cell coverage: factual, no ranking of leaders by it, and no derived score (Section 13).
 
-Each attendance record must ultimately identify:
+```text
+dcc_events
+- id
+- event_date          a Sunday, Asia/Manila
+- removed_at          nullable
+- removed_by          nullable
+- removal_reason      nullable, required where removed_at is set
+```
 
-- person
-- DCC event/date
-- present state
-- responsible leader (below)
-- actor who entered/submitted it
-- timestamps/audit metadata
+A removed event is retained rather than deleted, so a month showing four events where the calendar holds five is explained by a record rather than by an absence.
+
+```text
+dcc_attendance
+- id
+- dcc_event_id
+- person_id
+- present
+- responsible_leader_id    nullable only for a Network root (below)
+- recorded_by
+- recorded_at
+- superseded_at            nullable
+- superseded_by            nullable
+- correction_reason        nullable
+- version
+```
+
+A correction never overwrites. The prior row is marked superseded and a new row written, so the record carries its own history (Section 1, Principle 12; Section 14).
 
 ### Generating the DCC calendar
 
@@ -955,6 +1095,8 @@ Classification is derived from lifetime DCC attendance history:
 - 3rd -> `3RD_TIMER`
 - 4th -> `4TH_TIMER`
 - 5th and beyond -> `REGULAR`
+
+Classification is **evaluated as of the end of the reporting month**, from the attendance history standing at that moment. A person who was a VIP in October and attended again in November is a VIP on October's report forever. Without this rule a closed month's figures move every time someone attends again, which Section 20 forbids and Section 3 makes a reproducibility guarantee. Cell classification carries the identical rule (Section 12).
 
 Do not let leaders manually maintain classification when it can be derived from attendance history.
 
@@ -1043,6 +1185,19 @@ A Cell Group has only the required operational information:
 
 No Cell Name is required.
 
+```text
+cells
+- id
+- cell_id             CELL-000000, server-assigned, immutable, never reused
+- state               ACTIVE | CLOSED
+- closed_at           nullable
+- closure_reason      nullable, required where closed_at is set
+- closure_note        nullable, required where the reason is OTHER
+- created_at
+```
+
+Leader, category and schedule are not columns here. Each is effective-dated in its own table, so a Cell's report for a past month reads the values in force then (Sections 10 and 11).
+
 ### Cell ID generation
 
 The internal UUID is the key every relationship points at. The Cell ID is a human-readable handle for staff, reports, and conversation — the same split as Person (Section 3, Two identifiers, two jobs).
@@ -1122,7 +1277,7 @@ A Cell needing to move a **single** meeting at short notice — a lost venue, a 
 Two invariants here are expressible as database constraints and must exist as constraints, not only in service code (Section 5, Database enforcement):
 
 - one active schedule per Cell — a partial unique index on `cell_id` where `ended_at` is null
-- a schedule row starts on the first day of a month — a check constraint on `started_at`
+- a schedule row starts on the first day of a month — a trigger, not a check constraint, because the rule admits an exception a row-level check cannot see
 
 The second admits one exception: a Cell created part-way through a month opens its first schedule row at approval. Only `records.backdate_effective_date` may open a schedule row on any other date, and doing so is a correction, audited as one.
 
@@ -1271,7 +1426,7 @@ A person currently belongs to a Cell when they have an active (not ended) Cell m
 
 A Cell member is assigned to exactly one active Cell Group at a time. This is distinct from Cell Leadership: a Cell Leader may lead multiple Cell Groups (conducting different Cell meetings for different sets of people, Section 11), but an ordinary member's active assignment is always to a single Cell.
 
-A person's Cell monthly attendance denominator (Section 12) is therefore determined only by the applicable meetings of that person's one assigned Cell Group — never combined across every Cell the same leader happens to lead. For example, if Mark leads `CELL-001842` (Youth) and `CELL-002193` (Young Pro), Juan — assigned to `CELL-001842` — is evaluated only against `CELL-001842`'s meetings; `CELL-002193`'s meetings are not part of Juan's denominator. Do not introduce a "primary Cell" concept — the single active assignment already defines this relationship.
+A Cell's monthly denominator is its own recorded meetings and is never combined across every Cell the same leader happens to lead (Section 12). For example, if Mark leads `CELL-001842` (Youth) and `CELL-002193` (Young Pro), Juan — assigned to `CELL-001842` — is evaluated only against `CELL-001842`'s meetings; `CELL-002193`'s meetings are not part of Juan's denominator. Do not introduce a "primary Cell" concept — the single active assignment already defines this relationship.
 
 **A person's attendance is recorded against the Cell whose meeting they attended**, always, and moving between Cells never alters a record already made.
 
@@ -1467,13 +1622,15 @@ A Cell report belongs to the Cell's leader. It appears within the authorized sco
 
 Three questions about Cell monthly attendance are known to be open and are not answered here:
 
-- whether a person who attended a Cell they have since left should appear in any monthly report, and under which Cell
-- whether a member who joined part-way through a month should be measured against the whole month, given they were not on the roster of the earlier meetings and cannot reach `Completed`
-- what an aggregate view should offer in place of buckets, beyond unique people and coverage
+The rules above **do** define what happens in each of the first two cases. What is unsettled is whether the answer is the right one:
 
-Each was answered twice in this specification and each answer was found to break either reconciliation (Section 20) or reproducibility (Section 3). They are reporting definitions and therefore Stop Conditions: settle them against real data during implementation, verify with the reconciliation tests, and record the ruling here.
+- A person who attended a Cell and has since left appears in that Cell's report, because the population is who attended it. Whether a leader should see someone no longer theirs is open.
+- A member who joined part-way through the month is measured against the Cell's whole month, so `Completed` is unreachable for them and they read the same as a full-month member who came once. Whether that is acceptable is open.
+- What an aggregate view should offer in place of buckets, beyond unique people and coverage, is genuinely undefined.
 
-Until then the rules above hold, and they are internally consistent — they simply do not yet answer these three questions.
+The first two are fairness questions with a defined behaviour behind them; an implementer follows the rules above and does not stop. The third has no defined behaviour and is a Stop Condition.
+
+Each of the first two was previously "fixed" by changing the definition, and each fix broke either reconciliation (Section 20) or reproducibility (Section 3). Settle them against real data during implementation, verify with the reconciliation tests, and record the ruling here.
 
 Whatever answers them must satisfy all of: every person in the population lands in exactly one bucket of each view; both views sum to the same total; a closed month's figures never move; no bucket rewards a Cell for recording fewer meetings; and no person's silence is reported as another person's absence.
 
@@ -1565,9 +1722,15 @@ cell_meetings
 - reporting_month         the month this meeting reports in, fixed at creation
 - scheduled_date
 - status                  HELD | RESCHEDULED | NOT_HELD
+- scheduled_time
 - actual_date             nullable, set where the meeting was rescheduled
+- actual_time             nullable
+- rescheduled_by          nullable
+- rescheduled_at          nullable
+- reschedule_note         nullable
 - not_held_reason         nullable, required where status is NOT_HELD
-- note                    nullable, required where the reason is OTHER
+- not_held_note           nullable, required where the reason is OTHER
+- previous_status         nullable, where the status has changed
 - facilitated_by          nullable, defaults to the Cell's current leader
 - responsible_leader_id
 - submitted_by            nullable
@@ -1585,10 +1748,13 @@ cell_attendance
 - present
 - recorded_by
 - recorded_at
+- superseded_at        nullable
+- superseded_by        nullable
+- correction_reason    nullable
 - version
 ```
 
-A correction never overwrites in place. The prior values, the actor, and the reason are preserved (Section 14), and an `UPDATE` plus an audit row does not satisfy that — Principle 12 requires the record itself to carry its history.
+A correction never overwrites in place. The prior row is marked superseded and a new row written; `version` detects a concurrent write (Section 14) and is not a history mechanism. An `UPDATE` plus an audit row does not satisfy Principle 12 — the record must carry its own history, and a shape offering only one mutable row per person per meeting cannot.
 
 For a rescheduled meeting, preserve:
 
@@ -1791,7 +1957,7 @@ Store leadership start date/history.
 
 Definition:
 
-A current Cell Leader qualifies for `Cell Leaders with 12+ Members` when at least 12 distinct people belong (per Section 10, Cell Membership) to one or more Cell Groups led by that leader, **as of the end of the period being reported** — which for the current period means now. Section 3 already classes this as a current-state metric reflecting state as of the period reported; naming the as-of date here keeps it agreeing with the membership a Cell's roster shows for the same month.
+A current Cell Leader qualifies for `Cell Leaders with 12+ Members` when at least 12 distinct people belong (per Section 10, Cell Membership) to one or more Cell Groups led by that leader, **as of the end of the period being reported** — which for the current period means now. Section 3 already classes this as a current-state metric reflecting state as of the period reported; naming the as-of date here keeps it agreeing with the membership figures for the same month, and stops a closed period's answer moving as people join and leave.
 
 This metric is based on current Cell membership, not DCC attendance and not Cell attendance for a selected month.
 
@@ -1894,7 +2060,7 @@ Useful views include:
 - DCC classification
 - DCC monthly attendance
 - Cell classification
-- Cell monthly attendance
+- Cell coverage — monthly-attendance buckets are a Cell-scope view only (Section 12)
 - Current Cell Leaders
 - New Cell Leaders
 - Cell Leaders with 12+ Members
@@ -2153,7 +2319,23 @@ Audit important actions, including:
 - Account reactivation
 - System setting changed, with previous and new values
 
+```text
+audit_log
+- id
+- actor_id            nullable only for a system action
+- action              an identifier from the list above
+- target_type
+- target_id
+- before              nullable
+- after               nullable
+- reason              nullable, required where the action demands one
+- batch_id            nullable, groups the records of one bulk import
+- occurred_at
+```
+
 Record actor, target, action, timestamp, and relevant before/after values.
+
+The audit log is append-only. Nothing updates or deletes a row, and it is never a source for as-of state — a report answering "who was `CURRENT` in March" reads the effective-dated table, not this (Section 3).
 
 Audit logs should preserve facts without judgmental labels.
 
@@ -2298,6 +2480,18 @@ Every state-changing request carries an `Idempotency-Key` header holding a clien
 
 ```text
 Idempotency-Key: 6f2b1c94-8b6a-4a1e-9a1e-2c9f4d5b7e01
+```
+
+```text
+idempotency_keys
+- key                 the client-generated UUID
+- account_id
+- request_fingerprint a hash of method, path and body
+- state               IN_FLIGHT | COMPLETED
+- response_status     nullable until completed
+- response_body       nullable until completed
+- created_at
+- expires_at
 ```
 
 - The server stores the key with the response it produced, for at least 24 hours.
@@ -2480,7 +2674,9 @@ Shapes are given in the section that owns each rule; this is the index.
 | `network_assignments` | `networks` | Section 4 |
 | `pastoral_assignments` | `hierarchy` | Section 5 |
 | `accounts` | `auth` | Section 6 |
-| `refresh_tokens` | `auth` | Section 6, Several devices at once |
+| `account_roles` | `auth` | Section 7, How grants are held |
+| `capability_grants` | `auth` | Section 7, How grants are held |
+| `refresh_tokens` | `auth` | Section 6, Session and token storage |
 | `cells` | `cells` | Section 10 |
 | `cell_categories` | `cells` | Section 10 |
 | `cell_schedules` | `cells` | Section 10 |

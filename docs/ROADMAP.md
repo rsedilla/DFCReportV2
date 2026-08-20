@@ -8,19 +8,11 @@ Read [SKILL.md](../SKILL.md) before starting any stage. Read [CLAUDE.md](../CLAU
 
 ---
 
-## Stage 0 — Finish the specification
+## Stage 0 — Finish the specification — **complete**
 
-**Where the project currently is.**
+`main` carries the specification. Pull request #1 merged on 2026-08-20 after six `architecture-guardian` passes and review by a second code owner.
 
-The specification is complete and the open-ruling list is empty. What remains is the last review pass and getting it onto `main`.
-
-- Final `architecture-guardian` pass on the open pull request
-- Address whatever it finds
-- Merge
-
-**Done when:** `main` carries the specification, and the decisions log in `CLAUDE.md` has nothing awaiting a ruling.
-
-**Risk:** merging a large specification branch on a self-approval. Add a second code owner first — a single-owner `CODEOWNERS` cannot be satisfied by the author.
+One thing from this stage remains open and is recorded in `CLAUDE.md`: what an aggregate Cell attendance view offers in place of buckets. It is a Stop Condition and blocks nothing before Stage 5.
 
 ---
 
@@ -95,7 +87,7 @@ The skeleton everything else hangs on. **No features are built in this stage.**
 - Role-specific dashboards, with scope and period on every tile (§19)
 - Materialized closed months (§20)
 
-**Done when:** the reconciliation tests pass at every scope — classification buckets and monthly-attendance buckets each summing to the same unique-people total — and they run in CI.
+**Done when:** the reconciliation tests pass and run in CI — classification at every scope, and monthly-attendance buckets at Cell scope, each summing to the same unique-people total (`SKILL.md` §20).
 
 **Why it matters:** this is where §20 stops being prose and becomes something enforced. A reconciliation failure is a data-integrity defect, not a rounding issue.
 
