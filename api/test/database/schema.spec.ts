@@ -28,7 +28,9 @@ describe('the schema (SKILL.md sections 4, 5 and 7)', () => {
   });
 
   it('runs on PostgreSQL 16 or later, which the CYCLE clause requires', async () => {
-    const result = await sql<{ version: string }>`SHOW server_version`.execute(db);
+    const result = await sql<{
+      version: string;
+    }>`SELECT current_setting('server_version') AS version`.execute(db);
     const major = Number.parseInt(result.rows[0].version.split('.')[0], 10);
 
     expect(major).toBeGreaterThanOrEqual(16);
