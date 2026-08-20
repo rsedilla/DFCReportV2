@@ -222,7 +222,7 @@ Archiving and restoring are RBAC-controlled capabilities (Section 7). Ordinary l
 
 ### Archiving a Person who leads a Cell
 
-A Person holding an active Cell leadership assignment (Section 11) cannot be archived while that assignment stands. The archive is rejected, naming what must be resolved first — for example, that the Person leads `CELL-011`, which has nine members.
+A Person holding an active Cell leadership assignment (Section 11) cannot be archived while that assignment stands. The archive is rejected, naming what must be resolved first — for example, that the Person leads `CELL-000482`, which has nine members.
 
 Resolve it deliberately, in one of two ways: reassign the Cell to another leader, or close the Cell (Section 10, Cell lifecycle). Either is an explicit, authorized, audited action.
 
@@ -1024,7 +1024,7 @@ A person currently belongs to a Cell when they have an active (not ended) Cell m
 
 A Cell member is assigned to exactly one active Cell Group at a time. This is distinct from Cell Leadership: a Cell Leader may lead multiple Cell Groups (conducting different Cell meetings for different sets of people, Section 11), but an ordinary member's active assignment is always to a single Cell.
 
-A person's Cell monthly attendance denominator (Section 12) is therefore determined only by the applicable meetings of that person's one assigned Cell Group — never combined across every Cell the same leader happens to lead. For example, if Mark leads CELL-001 (Youth) and CELL-002 (Young Pro), Juan — assigned to CELL-001 — is evaluated only against CELL-001's meetings; CELL-002's meetings are not part of Juan's denominator. Do not introduce a "primary Cell" concept — the single active assignment already defines this relationship.
+A person's Cell monthly attendance denominator (Section 12) is therefore determined only by the applicable meetings of that person's one assigned Cell Group — never combined across every Cell the same leader happens to lead. For example, if Mark leads `CELL-001842` (Youth) and `CELL-002193` (Young Pro), Juan — assigned to `CELL-001842` — is evaluated only against `CELL-001842`'s meetings; `CELL-002193`'s meetings are not part of Juan's denominator. Do not introduce a "primary Cell" concept — the single active assignment already defines this relationship.
 
 ### Only members are recorded
 
@@ -1239,7 +1239,9 @@ Before close, outstanding records are surfaced in two distinct ways, and they mu
 
 **Notifications go to the top of each Network only.** In-app notifications about outstanding records are sent to Bishop Oriel Ballano, Pastora Geraldine Ballano, and the direct pastoral children of each. Nobody else receives one.
 
-Notifications are in-app only. No email, no SMS, no push. This keeps the reminder path free of a mail provider, a queue, and a background worker (Section 2), and it means a notification is never a channel through which church data leaves the system.
+Notifications are in-app only. No email, no SMS, no push.
+
+The system does send transactional email — password reset and account activation — and that provider stays (Sections 2 and 6). What this rule settles is that pastoral reminders add no channel beyond the application itself: no scheduled mail job, no queue, and no background worker, and no church data leaving the system inside a message.
 
 The design is deliberate. Accountability in this church runs through pastoral relationship, not through the application: the two Senior Pastors and their direct leaders see where their Networks stand, and follow up with the people they oversee personally. A leader behind on records hears from their own leader, not from an automated message. The application's job is to make the gap visible to the person who will make the call.
 
@@ -1706,7 +1708,14 @@ A closed month's figures are therefore stable, and its reports may be computed o
 
 This matters at whole-church scope. A Network Summary for a single month aggregates a recursive walk of the pastoral tree against every DCC event and every Cell meeting in that month, deduplicated by person and bucketed twice, and each drill-down repeats it at a narrower scope. Recomputing years of closed history on every page view is avoidable work that the submission window has already made unnecessary.
 
-Where an Admin amends a closed month, the stored figures for that month are invalidated and recomputed. This is a rare, explicit, audited event and is a natural point at which to do so.
+Stored figures are invalidated and recomputed whenever the records they derive from change. Attendance amendment is not the only such change:
+
+- **An Admin amends attendance in a closed month** (Sections 9 and 13). Invalidates that month.
+- **A Person Merge** (Section 3). Invalidates **every** period, not one month. Identity resolution applies to all periods, and a merge deliberately lowers the unique-people total for periods already reported.
+- **A backdated effective date** on any effective-dated relationship (Section 5). Invalidates every period the effective date reaches back into, because it changes which subtree a person belonged to during those periods.
+- **An Admin reversal of a Cell closure** (Section 10). Invalidates the periods affected.
+
+Prefer not to enumerate these in code at all. Key each stored figure to a version of the source records it derives from, and treat any change to those records as invalidating. A hand-maintained list of triggers is a list somebody eventually forgets to extend, and a stale stored figure fails silently — it returns a number that looks right.
 
 Stored figures are a cache, never a source. They are always derivable from the underlying records (Section 18), and a stored figure that cannot be reproduced from source data is a defect.
 
@@ -1745,7 +1754,8 @@ Audit important actions, including:
 - Cell creation
 - Cell leader assignment
 - Cell category change
-- Cell reschedule
+- Cell schedule change, day or time, with effective date
+- Cell meeting rescheduled
 - Cell meeting declared Not Held, with reason
 - Cell meeting facilitator recorded
 - Cell membership added, moved, or ended
@@ -1865,6 +1875,7 @@ One envelope, always:
 | `VALIDATION_FAILED` | 422 | Malformed or missing input |
 | `VERSION_CONFLICT` | 409 | The record changed since it was read (below) |
 | `PERIOD_CLOSED` | 409 | The reporting month is closed (Section 13) |
+| `IDEMPOTENCY_KEY_REUSED` | 409 | The key was used for a different request, or the original is still in flight |
 | `INVARIANT_VIOLATION` | 409 | A domain rule rejects the write — cycle, cross-Network edge, two active assignments |
 | `NOT_FOUND` | 404 | No such record, or its existence must not be disclosed |
 
@@ -1905,7 +1916,8 @@ Idempotency-Key: 6f2b1c94-8b6a-4a1e-9a1e-2c9f4d5b7e01
 
 - The server stores the key with the response it produced, for at least 24 hours.
 - A repeat of the same key with the same body returns the stored response and does not execute again.
-- The same key with a different body is `VALIDATION_FAILED`.
+- The same key with a different body is `IDEMPOTENCY_KEY_REUSED`. It is a conflict, not malformed input — a client branching on `VALIDATION_FAILED` would show the user a field error for a replay.
+- A retry arriving while the original request is still in flight also returns `IDEMPOTENCY_KEY_REUSED`, rather than executing concurrently. The client retries after a short delay. This is the case the header exists to handle: a phone on an unreliable connection resends before the first response arrives.
 
 This is required from the first write endpoint, not added later. A leader recording attendance on an unreliable connection will retry, and a retry must never create a second record.
 
@@ -1919,7 +1931,15 @@ Sorting uses `sort`, with a leading `-` for descending:
 GET /api/v1/cells?leader_id=...&sort=-not_held_count
 ```
 
-Sorting and filtering are permitted, including on meeting-status figures — finding the Cells that need help is pastoral work (Section 13). What the API must never expose is a field to rank by: there is no score, rate, position, or grade anywhere in the model, so there is nothing of that kind to sort on.
+Sorting and filtering are permitted, including on meeting-status figures — finding the Cells that need help is pastoral work (Section 13).
+
+The prohibition on ranking must be stated directly, because it does not follow from the shape of the model. Coverage is a rate (Section 13), so `sort=-coverage` over a collection of leaders is expressible and must be refused:
+
+- No response carries a rank position, a composite score, or a grade. No such field exists, and none may be added.
+- No endpoint sorts a collection of **leaders** by coverage, by `NOT_HELD`, or by any figure derived from them.
+- No endpoint applies such a sort by default.
+
+Sorting a leader's **own Cells** by those figures is permitted and useful — that is how a leader finds which of their Cells needs attention. Ordering **leaders against one another** by them is what Section 13 forbids.
 
 #### Versioning
 
@@ -2002,7 +2022,7 @@ When generating or reviewing code for this system:
 5. Never add civil-status values beyond Single, Married, Widowed unless requirements explicitly change.
 6. Never add sex values beyond Male and Female unless requirements explicitly change.
 7. Never add Cell categories beyond Youth, Young Pro, Couple unless requirements explicitly change.
-8. Never add Cell meeting statuses beyond Held and Rescheduled unless requirements explicitly change.
+8. Never add Cell meeting statuses beyond `HELD`, `RESCHEDULED`, and `NOT_HELD` (Section 1, Principle 8), and never infer `NOT_HELD` from missing data.
 9. Never introduce negative/judgmental leader labels or analytics.
 10. Never assume one Cell Leader has only one Cell.
 11. Never count duplicate people twice when aggregating multiple Cells or branches.
