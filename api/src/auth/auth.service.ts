@@ -41,10 +41,16 @@ export class AuthService {
 
   /**
    * Refresh tokens rotate on use: the presented token is revoked and a new one
-   * issued. A token presented after it has already been rotated is a reuse
+   * issued. A token presented after it has already been **rotated** is a reuse
    * signal -- it means a copy is in circulation -- and the response is to revoke
    * the whole account, on every device, rather than to refuse this one request
    * (SKILL.md section 6).
+   *
+   * A token revoked by signing out is a different matter and is simply refused.
+   * The two are told apart by `replaced_by_id`, which only rotation sets.
+   * Without that distinction, an ordinary sign-out followed by a retry from the
+   * same device would end every other session the leader holds -- section 6 is
+   * explicit that signing out on one device ends that session only.
    */
   async refresh(token: string, deviceLabel: string | null): Promise<SessionTokens> {
     const row = await this.tokens.findRefreshToken(token);
@@ -54,10 +60,13 @@ export class AuthService {
     }
 
     if (row.revoked_at !== null) {
-      this.logger.warn(
-        `Refresh token ${row.id} was presented after rotation; revoking every session for account ${row.account_id}.`,
-      );
-      await this.tokens.revokeAllSessions(row.account_id);
+      if (row.replaced_by_id !== null) {
+        this.logger.warn(
+          `Refresh token ${row.id} was presented after rotation; revoking every session for account ${row.account_id}.`,
+        );
+        await this.tokens.revokeAllSessions(row.account_id);
+      }
+
       throw new ApiError(ApiErrorCode.UNAUTHENTICATED, 'Your session has ended. Sign in again.');
     }
 

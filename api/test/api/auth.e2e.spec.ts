@@ -169,6 +169,17 @@ describe('authentication (SKILL.md section 6)', () => {
         .send({ refresh_token: phone.token });
       expect(phoneRefresh.status).toBe(401);
 
+      // A signed-out token presented again is a retry from a device that has
+      // just signed out, not a copy in circulation. It is refused, and nothing
+      // else is: rotation is what marks a token as reused, and this token was
+      // never rotated.
+      const marker = await db
+        .selectFrom('accounts')
+        .select('sessions_revoked_at')
+        .where('id', '=', account.id)
+        .executeTakeFirstOrThrow();
+      expect(marker.sessions_revoked_at).toBeNull();
+
       const laptopRefresh = await request(app.getHttpServer())
         .post('/api/v1/auth/refresh')
         .send({ refresh_token: laptop.token });

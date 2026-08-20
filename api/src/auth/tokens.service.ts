@@ -86,10 +86,11 @@ export class TokensService {
     account_id: string;
     expires_at: Date;
     revoked_at: Date | null;
+    replaced_by_id: string | null;
   } | null> {
     const row = await this.db
       .selectFrom('refresh_tokens')
-      .select(['id', 'account_id', 'expires_at', 'revoked_at'])
+      .select(['id', 'account_id', 'expires_at', 'revoked_at', 'replaced_by_id'])
       .where('token_hash', '=', hashToken(token))
       .executeTakeFirst();
 
