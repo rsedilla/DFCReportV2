@@ -84,7 +84,7 @@ What is forbidden is precise, and is worth stating precisely here so that nobody
 
 The collision is that those frameworks make the prohibited use the *easy* one. `severity="error"` on a Cell that reported `NOT_HELD` is a five-second change that reads as idiomatic in review. `NOT_HELD` exists so that a leader can report honestly that their Cell could not meet, and if declaring it paints their row red, leaders will record `HELD` instead — ranking the measure destroys the measure (Section 13). A toolkit whose defaults push against a rule this specification cares about has to be resisted on every screen, by everyone, indefinitely, so it is not adopted.
 
-Accessibility is the other half of "headless", and is stated here as a **criterion for choosing the primitives**, not as a conformance requirement the application is measured against. A dialog that traps focus, or a menu that cannot be dismissed from a keyboard, is not a styling defect and is not fixed by a stylesheet, and building those behaviours by hand is where the defects come from. Leaders use this on their own phones, at a range of ages. Adopting a conformance standard — a named WCAG level, with something in the Definition of Done that can fail — would be a separate ruling, and this specification does not make one.
+Accessibility is the other half of "headless". A dialog that traps focus, or a menu that cannot be dismissed from a keyboard, is not a styling defect and is not fixed by a stylesheet, and building those behaviours by hand is where the defects come from. The web application conforms to **WCAG 2.2 Level AA** (Section 23, Accessibility), so the primitives are chosen for whether they meet it rather than for how they look.
 
 ### The frontend is a client, like the phones
 
@@ -712,6 +712,8 @@ Include:
 - Secure token handling
 
 Do not require 2-step verification/MFA in V1.
+
+**No sign-in step may be a cognitive function test** (WCAG 2.2, criterion 3.3.8; Section 23). No puzzle, no image selection, no transcription, and no memory task beyond the password itself. Paste into the password field is never blocked, and nothing obstructs a password manager: disabling paste is done in the name of security and produces the opposite, because it pushes people toward passwords short enough to type from memory.
 
 ### Tokens, not browser sessions
 
@@ -2647,6 +2649,26 @@ Controllers/routes should delegate to authorization and application/domain servi
 ## 23. Offline / Mobile Readiness
 
 Web UI must be responsive from the beginning. Leaders will use the web application on phones before any native app exists, so mobile is a current surface, not a future one (Section 2).
+
+### Accessibility
+
+**The web application conforms to WCAG 2.2 Level AA.** This is a requirement, not an aspiration, and the things that make it checkable are in `CLAUDE.md` under Definition of Done.
+
+Level AA rather than A, because Level A omits colour contrast, and contrast is the criterion that decides whether a leader can read an attendance figure on their own phone, in a hall, at fifty. Not AAA: it asks for 7:1 contrast and a reading level this material cannot always meet, and a standard nobody meets is one everybody ignores.
+
+Four criteria are called out because this system's own rules bear on them.
+
+**1.4.3 Contrast, and 1.4.11 Non-text Contrast.** Body text meets 4.5:1 and the boundary of a control meets 3:1, against the background it actually sits on, in both light and dark. A purely decorative rule or divider is exempt, and the palette keeps the two apart so that reaching for the decorative one on a form field is a visible mistake.
+
+**2.5.8 Target Size (Minimum).** Interactive targets are at least 24 by 24 CSS pixels. Cell attendance is recorded by a leader tapping down a roster on a phone, often standing up, and a mis-tap here is a wrong attendance record rather than a cosmetic annoyance.
+
+**3.3.8 Accessible Authentication (Minimum).** Signing in requires no cognitive function test: no puzzle, no memory game, no transcription. Paste into the password field is never blocked and password managers are never obstructed. Disabling paste is done in the name of security and makes accounts less secure, since it pushes people toward passwords they can type from memory — Section 24 asks for the opposite.
+
+**2.4.11 Focus Not Obscured, and 2.4.7 Focus Visible.** Focus is always visible and never hidden behind a sticky header or a dialog. This is what makes the keyboard path usable at all, and it cannot be verified by looking at a screenshot.
+
+Conformance is about whether a person can perceive and operate the interface. It is not a licence to encode meaning in colour: Sections 13, 17 and 19 forbid encoding meeting status, coverage or a leader in colour, and no contrast ratio makes that permissible.
+
+The native clients are not covered here. Their framework is not chosen (Section 2), and the equivalent obligation for them is the platform's own accessibility API rather than WCAG. That is a ruling to make when the client is.
 
 ### Required from the first write endpoint
 

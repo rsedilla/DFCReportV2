@@ -51,6 +51,16 @@ A change is not complete until it is verified.
 - Authorization is tested at the API layer, not only the service layer, because the API is the sole authority for authorization (`SKILL.md` §7).
 - Invariants that can be expressed as database constraints are verified to exist as database constraints, not only as application code.
 
+### Accessibility
+
+`SKILL.md` §23 commits the web application to **WCAG 2.2 Level AA**. A conformance claim with nothing that can fail is a wish, so it is discharged in three parts.
+
+- **The palette is checked on every build.** `web/scripts/check-contrast.mjs` computes 1.4.3 and 1.4.11 against the tokens in both themes and fails `npm run lint`. Contrast is decided by the palette, so a defect there is a defect on every screen at once, and no browser is needed to find it.
+- **From the first real screen, axe-core runs in CI** over every route, and a violation fails the build. That arrives with Stage 2, because a browser harness for a placeholder page checks nothing. Automated rules catch only part of AA — treat a green axe run as the floor, not the ceiling.
+- **A pull request that adds or changes a screen states how it meets the four criteria §23 calls out**, because automation cannot see them: keyboard operable end to end with focus visible and never obscured (2.4.7, 2.4.11), targets at least 24 by 24 CSS pixels (2.5.8), and no cognitive function test or blocked paste in the sign-in path (3.3.8).
+
+Conformance concerns whether a person can perceive and operate the interface. It never licenses encoding meaning in colour: §13, §17 and §19 forbid encoding meeting status, coverage or a leader that way, whatever its contrast ratio.
+
 ### Migration policy
 
 Migrations touch the history that `SKILL.md` guarantees is preserved. Treat every one as capable of destroying it.
@@ -532,16 +542,28 @@ The ordinary objection is that each brings a second styling engine to fight Tail
 
 Recorded also because elegance in this application is mostly not a dependency. One typographic scale, consistent spacing, restraint with colour, and real empty and loading states decide how it feels, and the two screens that will decide it — the arbitrary-depth pastoral tree (§5) and the attendance grid (§13) — are not solved by any library.
 
+### 2026-08-21 — WCAG 2.2 Level AA, with something that can fail
+`architecture-guardian` found accessibility asserted in `SKILL.md` §2 with no standard, no test and nothing in the Definition of Done — a rule a reviewer could not apply and a developer could not fail. This settles it.
+
+**Level AA.** Level A omits colour contrast, which is the criterion that decides whether a leader can read an attendance figure on a phone in a hall at fifty. Not AAA: 7:1 contrast and its reading-level requirement are not achievable for this material, and a standard nobody meets is one everybody ignores.
+
+**Made checkable in three parts**, recorded under Definition of Done: the palette is checked deterministically on every build, axe-core runs in CI from the first real screen in Stage 2, and a pull request adding a screen states how it meets the four criteria automation cannot see. The phasing has a terminating condition rather than being open-ended.
+
+**Four criteria are named in §23 because this system's rules bear on them.** 1.4.11 splits the palette into a decorative border and a control border, so reaching for the wrong one on a form field is visible. 2.5.8 exists because Cell attendance is recorded by tapping down a roster on a phone, often standing, where a mis-tap is a wrong attendance record. 3.3.8 forbids blocking paste in the password field, which is written into §6 as well — it is done in the name of security and produces the opposite. 2.4.11 is what makes the keyboard path usable and cannot be seen in a screenshot.
+
+Conformance is about perceiving and operating the interface, and licenses nothing about meaning: §13, §17 and §19 still forbid encoding meeting status, coverage or a leader in colour at any contrast ratio.
+
+The native clients are deliberately out of scope. Their framework is not chosen, and their equivalent obligation is the platform accessibility API rather than WCAG.
+
 ### Open — awaiting a ruling
 
-**One item awaits a ruling. Two other things are unsettled and block nothing; they are listed at the end so this section is the whole of what is open.**
+**One item awaits a ruling. One other thing is unsettled and blocks nothing; it is listed at the end so this section is the whole of what is open.**
 
 **What an aggregate Cell attendance view offers in place of buckets.** Monthly-attendance buckets are a Cell-scope view only, because N belongs to a Cell and aggregating across different N inflates `Completed` for the Cells that recorded least (`SKILL.md` §12). At leader and Network scope the spec offers unique people, classification and coverage, and does not say whether anything should replace the buckets. Settle it in Stage 5 against real data.
 
 Two related questions have defined behaviour and are recorded in `SKILL.md` §12 as fairness questions rather than Stop Conditions: whether a leader should see someone who attended and has since left, and whether a mid-month joiner measured against the whole month is acceptable. An implementer follows the stated rules and does not stop on either.
 
-**Unsettled, and not blocking anything.** These are not Stop Conditions. An implementer proceeds and settles them in passing; they are listed here because a reader looking for what is open should not have to find them inside the body of a ruling.
+**Unsettled, and not blocking anything.** This is not a Stop Condition. An implementer proceeds and settles it in passing; it is listed here because a reader looking for what is open should not have to find it inside the body of a ruling.
 
 - **The client libraries beyond the component question** — TanStack Query, TanStack Table, a chart library, icons and fonts. Recorded as expectations in the UI direction entry above, deliberately not in `SKILL.md`, and confirmed against a real screen in Stage 2 rather than now. A list headed "This is settled, not a suggestion" is no place for a library nobody has used yet.
-- **Whether the web application adopts an accessibility conformance standard.** `SKILL.md` §2 names accessibility as a criterion for choosing the primitives, and explicitly does not make it a requirement the application is measured against. Adopting a named WCAG level would be a ruling, and would need something in the Definition of Done that can fail; until then a reviewer has nothing to apply and should not pretend otherwise.
 
