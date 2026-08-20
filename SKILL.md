@@ -524,7 +524,7 @@ Zero is legitimate in exactly three situations: a Person encoded but not yet ass
 
 A reassignment closes the current assignment and opens the new one within a single transaction. It must never leave two open assignments, and must never leave a person who had a leader without one. Enforce with a uniqueness constraint over the person where `ended_at` is null — the constraint permits zero rows and forbids two.
 
-Every effective-dated table in this specification carries the same shape of constraint, and each is required rather than optional (Database enforcement, below): one open row per person for `person_lifecycle`, `network_assignments` and `cell_memberships`; one open row per Cell for `cell_categories` and `cell_schedules`; one open row per Cell for `cell_leaderships`, since a Cell has one leader at a time; and one `PENDING` row per prospective leader for `cell_creation_requests`.
+Every effective-dated table carries the same shape of constraint, and each is required rather than optional (Database enforcement, below): one open row per person for `person_lifecycle`, `network_assignments` and `cell_memberships`; one open row per Cell for `cell_categories` and `cell_schedules`; one open row per Cell for `cell_leaderships`, since a Cell has one leader at a time; one `PENDING` row per prospective leader for `cell_creation_requests`; and one active row per account per role for `account_roles`. `capability_grants` is deliberately exempt: an account may hold the same capability at more than one scope, and the widest applicable grant governs.
 
 Two concurrently open assignments would place one person in two branches at once and double-count them in every subtree total, violating the unique-people rule in Section 20.
 
@@ -580,7 +580,11 @@ Same-Network edge — because Network is effective-dated on the Person rather th
 
 The trigger must be **`DEFERRABLE INITIALLY DEFERRED`**. Section 4 requires a Network change and its accompanying reassignment to happen in one atomic operation, because either alone leaves the tree invalid. A trigger firing per statement sees that intermediate state and rejects whichever runs first, making the mandated operation unperformable. Deferred to commit, it sees only the final state.
 
-It compares the Network in force **as of the assignment's `started_at`**, not the Network in force now. An edge must have been legal when it was created; where Admin backdates an assignment under `records.backdate_effective_date`, the two differ, and validating against today would reject a correction that was true at the time.
+The two firing paths need **different** comparison dates, and one rule cannot serve both.
+
+**On a write to `pastoral_assignments`**, compare the Networks in force as of the assignment's `started_at`. An edge must have been legal when it was created, and where Admin backdates one under `records.backdate_effective_date` that differs from today — validating against now would reject a correction that was true at the time.
+
+**On a Network change**, compare as of the **Network change's effective date**, against every assignment open at that date. Using the assignment's `started_at` here makes the check a no-op: a person assigned in January under a same-Network leader, whose Network is corrected in August, is compared against January's Networks, which matched, so the change commits and leaves them under a leader in their former Network — exactly what Section 4 requires the system to reject.
 
 A root leader has a null `leader_id` (Network roots, above) and the trigger passes such a row without comparison — there is no leader to compare against.
 
@@ -631,8 +635,7 @@ Exceptions with explicit system access:
   - `PENDING_ACTIVATION` — created, activation email sent, no password set
   - `ACTIVE`
   - `DISABLED`
-- role(s)/permissions
-- last_login
+- last_login_at
 - created_at / updated_at
 
 ### Session and token storage
@@ -653,7 +656,7 @@ An access token lives **15 minutes**. A refresh token lives 30 days from issue a
 
 **Immediate revocation and a stateless API are in tension, and the resolution is explicit.** A bearer token verified by signature alone cannot be revoked before it expires, so Section 6's requirement that revocation take effect immediately, on all devices, is not satisfiable by a short lifetime alone.
 
-Every request therefore checks the account against a revocation marker — a single lookup keyed by account, cacheable, invalidated on revoke. The API remains stateless in the sense Section 2 requires: it holds no server-side session, no per-request state, and any instance can serve any request. What it does not do is trust a signature unconditionally.
+Every request therefore checks the account's `sessions_revoked_at` (above) against the access token's issued-at, and rejects a token issued before it — a single lookup keyed by account, cacheable, invalidated on revoke. A per-token `revoked_at` cannot answer this, because an access token has no row. The API remains stateless in the sense Section 2 requires: it holds no server-side session, no per-request state, and any instance can serve any request. What it does not do is trust a signature unconditionally.
 
 A 15-minute access token is short enough that this check can be cached briefly without making "immediately" a lie, and long enough that the refresh path is not on every request.
 
@@ -664,6 +667,7 @@ accounts
 - email               unique after normalization
 - password_hash       nullable until activated
 - status              PENDING_ACTIVATION | ACTIVE | DISABLED
+- sessions_revoked_at nullable, the account-wide revocation marker
 - last_login_at       nullable
 - created_at
 - updated_at
@@ -705,6 +709,19 @@ Revocation, by contrast, is account-wide. Where account access is disabled — a
 - Return the same forgot-password response whether or not the email exists
 - Invalidate token after use
 - Do not let admins know or choose another user's password
+
+```text
+account_tokens
+- id
+- account_id
+- purpose             PASSWORD_RESET | ACTIVATION
+- token_hash          the token itself is never stored
+- expires_at
+- used_at             nullable
+- created_at
+```
+
+Single-use: `used_at` is set on redemption and a token with it set is refused. Issuing a new token of a purpose invalidates any outstanding one of the same purpose for that account.
 
 ### Account activation
 
@@ -750,7 +767,7 @@ Identity + Permission + Pastoral Scope = Access
 
 Do not equate hierarchy position with software permissions.
 
-Example permissions may include:
+The capabilities are exactly:
 
 - `people.view_subtree`
 - `people.edit_basic`
@@ -776,6 +793,15 @@ Example permissions may include:
 - `accounts.manage`
 - `roles.manage`
 - `audit.view`
+
+Each capability guards one endpoint family, and the boundaries are not left to inference:
+
+- `dcc.*` guards everything under `/api/v1/dcc` — rosters, submissions, corrections, and DCC figures reached directly
+- `cell.*` guards everything under `/api/v1/cells`, including meeting records, membership, leadership, and outstanding-record lists
+- `reports.view_subtree` guards `/api/v1/reports` — the aggregate reporting surface, Network Summary, and the notification content derived from it (Section 13). It never substitutes for `dcc.view_subtree` or `cell.view_subtree` on the domain endpoints, and neither of those substitutes for it
+- `dcc.correct_subtree` and `cell.correct_subtree` guard amendment of an already-submitted record (Section 14), separately from `take_attendance`, which guards the first submission
+
+This list is a **closed enumeration**, on the same terms as the scope values below. A guard cannot fail closed against an open list, and `capability_grants.capability` stores one of these identifiers. Adding a capability is an amendment to this specification, never a runtime action.
 
 The API must check both permission and scope.
 
@@ -838,14 +864,7 @@ A role is a starting set, never a ceiling or a substitute for the checks themsel
 
 Authorization is expressed as two independent dimensions that combine to form Access:
 
-- **Capability** — what an action a user may perform, e.g.:
-  - view DCC reports
-  - view Cell reports
-  - view Cell Leader reports
-  - view Network Summary
-  - manage attendance
-  - manage people
-  - administer accounts/permissions
+- **Capability** — the action a user may perform, named by one of the identifiers above
 - **Scope** — what data a capability applies to, e.g.:
   - `OWN_SUBTREE` — the actor's pastoral subtree, including the actor
   - `SUBTREE_EXCL_SELF` — the same, excluding the actor
@@ -854,17 +873,20 @@ Authorization is expressed as two independent dimensions that combine to form Ac
 
 The four scope values are a closed enumeration. A guard cannot fail closed against an open one, so do not add a fifth without amending this specification.
 
-`SUBTREE_EXCL_SELF` exists because two capabilities must not be exercisable on oneself: requesting a Cell for oneself (Section 10) and reassigning one's own pastoral leader (Section 5, invariant 4). Everywhere else `OWN_SUBTREE` includes the actor, and that is deliberate — a leader edits their own basic details and records their own attendance.
+`SUBTREE_EXCL_SELF` is used by `cell.request_creation` alone, where the only prohibited object is the target itself (Section 10). Everywhere else `OWN_SUBTREE` includes the actor, deliberately — a leader edits their own basic details and records their own attendance. Where a rule forbids acting on oneself but the grant must still reach oneself as a *source* — pastoral reassignment, Section 5 invariant 4 — the prohibition is a domain check, not a scope value (How grants are held, below).
 
 Scope resolves against a target. Where the target is a Person, it resolves through their pastoral position. Where it is not:
 
-- a **Cell**, a Cell meeting, a membership or a leadership resolves through the Cell's current leader
+- a **Cell**, a Cell meeting, a membership or a leadership resolves through the Cell's leader **as of the period being viewed**, falling back to its last leader where the Cell is closed. A closed Cell keeps its history and its roster visible to the leader who led it (Sections 10 and 15), which resolving through a current leader it no longer has would prevent
+- a **DCC event** is church-wide and resolves through nothing; the endpoints on it are scoped by the people they return, so a roster or a submission covers only the requester's own authorized people (Section 9)
+- an **Account** resolves through its Person
+- a **report scope selector** is itself the target: a request for a scope the actor does not hold is `SCOPE_DENIED`, never silently narrowed to what they do hold
 - an **audit entry** resolves through its target
 - a **setting** is Whole Church only, and is never in scope at any narrower value
 
 A capability without an explicit scope grant is not usable; a scope grant without an explicit capability grants nothing.
 
-Senior Pastors (Bishop Oriel Ballano, Pastora Geraldine Ballano) receive Whole Church scope by role/policy, built in — this does not require a separate Admin-issued grant.
+Senior Pastors (Bishop Oriel Ballano, Pastora Geraldine Ballano) receive Whole Church scope by role/policy, built in, on every capability their role carries — this does not require a separate Admin-issued grant. The one exception is visible in the catalog: `cell.request_creation` is held at subtree scope by every role, because naming oneself on a request is prohibited for everyone (Section 10).
 
 `people.manage_pastoral_assignment` is a management capability, not a reporting one. Admin holds it per explicit administrative permission. A leader holds it at own/subtree scope, over their own pastoral subtree only. Senior Pastors hold it at Whole Church scope and may therefore reassign within either Network. It is never conferred by a read-only reporting scope grant. The invariants governing its use are defined in Section 5, Changing a person's pastoral leader.
 
@@ -908,6 +930,8 @@ account_roles
 - revoked_at         nullable
 ```
 
+`SENIOR_PASTOR` is held by exactly the two Persons named in Section 4, and by nobody else. Section 1, Principle 6 names them, and the role carries Whole Church scope on `people.manage_lifecycle`, `people.manage_pastoral_assignment` and `audit.view` — so this is a constraint the system enforces, not a convention it assumes. Granting it to a third account is rejected. An account holds at most one active row per role.
+
 ```text
 capability_grants
 - id
@@ -922,13 +946,28 @@ capability_grants
 - revoked_at         nullable
 ```
 
-**Role defaults are specification, not data.** The role catalog below is the authority for what each role carries, and it is not editable at runtime. Changing a role default is a change to this document and a deploy, which is what keeps the catalog and the running system from diverging. `roles.manage` governs which roles and grants an account holds, never what a role means.
+**Role defaults are specification, not data.** The role catalog above is the authority for what each role carries, and it is not editable at runtime. Changing a role default is a change to this document and a deploy, which is what keeps the catalog and the running system from diverging. `roles.manage` governs which roles and grants an account holds, never what a role means.
 
-**Every capability check names both halves.** The guard resolves a capability and a scope for the actor, then evaluates the scope against the target. Neither alone is sufficient, and an account with no matching row is denied — the absence of a grant is a denial, never a default allow.
+**Every capability check names both halves.** The guard resolves a capability and a scope for the actor, then evaluates the scope against **the request's primary target** — the record being read or written. Neither half alone is sufficient, and an account with no matching row is denied: the absence of a grant is a denial, never a default allow.
+
+A request is allowed where **any** active role default or active grant for that capability covers the target. Authority only widens; there is no mechanism for narrowing a role default on one account, and none is needed — removing the role or disabling the account is the answer.
+
+**The guard is not the whole check.** Several operations impose further conditions that a capability and a scope cannot express, because they concern objects other than the primary target. Reassigning a person is the clearest: Section 5 requires the person's *current* leader and their *new* leader both to be within the actor's scope, forbids the actor acting on themselves, and forbids acting on anyone upline of them. That is three objects with three different rules, and a grant carries one scope.
+
+Those conditions are enforced in the owning module's domain layer — `hierarchy` for Section 5, `cells` for the Section 10 workflow — and are additional to the guard, never a substitute for it and never expressible as a scope value. A developer who implements the guard and believes the rule is implemented has built half of it.
+
+`SUBTREE_EXCL_SELF` exists for the one case where a scope value genuinely does the work: `cell.request_creation`, where the only prohibited object *is* the target (Section 10).
 
 A grant is revoked by setting `revoked_at`, never by deleting the row. The history of who could do what, and when, is part of the audit record.
 
-`read_only` defaults to true because a scope widened beyond a leader's normal management scope is a reporting grant unless something says otherwise (above). A grant conferring management authority at a wider scope sets it false explicitly, and that is the visible difference between letting someone see a Network and letting them change it.
+**`read_only` is valid only on a read capability.** The twenty-four divide cleanly:
+
+- **Read:** `people.view_subtree`, `dcc.view_subtree`, `cell.view_subtree`, `reports.view_subtree`, `audit.view`
+- **Write:** every other capability in the list
+
+A grant of a read capability may set `read_only` true or false; true is the default and the normal case, and false is meaningless there but harmless. A grant of a **write** capability with `read_only` true is **rejected at creation**, not stored and silently ineffective. Without that rejection an Admin granting a management capability and leaving the flag at its default creates a row that grants nothing, with nothing to indicate why the holder is being denied.
+
+The flag exists because a scope widened beyond a leader's normal management scope is a reporting grant unless something says otherwise (above). It is the visible difference between letting someone see a Network and letting them change it.
 
 The backend/API is the sole authority for authorization. Web and mobile UI filtering is never sufficient security on its own (Section 1, Principle 4).
 
@@ -1039,6 +1078,8 @@ dcc_attendance
 - correction_reason        nullable
 - version
 ```
+
+At most one non-superseded row may exist per `(dcc_event_id, person_id)`, enforced by a partial unique index where `superseded_at` is null. `superseded_by` holds the id of the replacing row, not an actor.
 
 A correction never overwrites. The prior row is marked superseded and a new row written, so the record carries its own history (Section 1, Principle 12; Section 14).
 
@@ -1430,7 +1471,7 @@ A Cell's monthly denominator is its own recorded meetings and is never combined 
 
 **A person's attendance is recorded against the Cell whose meeting they attended**, always, and moving between Cells never alters a record already made.
 
-How a person who moved is then presented in monthly reporting is deliberately unsettled — see Section 12, What is deliberately unsettled. Two answers were written into this specification and both broke either reconciliation or reproducibility, so it is a Stop Condition to be settled against real data rather than a rule asserted here.
+How a person who moved is presented in monthly reporting is defined in Section 12: they appear in the report of each Cell whose meetings they attended. Whether that is the right answer is open, and Section 12 records it as a fairness question rather than a Stop Condition — an implementer follows the rule and does not stop.
 
 What holds regardless: their attendance at each Cell stays in that Cell's meeting records; they are counted once at leader and Network scope; and they remain in Total People and in Participation (Section 16) whatever their Cell membership.
 
@@ -1620,7 +1661,7 @@ A Cell report belongs to the Cell's leader. It appears within the authorized sco
 
 #### What is deliberately unsettled
 
-Three questions about Cell monthly attendance are known to be open and are not answered here:
+Three questions about Cell monthly attendance remain live. Two have defined behaviour and are open only as to whether that behaviour is right; the third has none.
 
 The rules above **do** define what happens in each of the first two cases. What is unsettled is whether the answer is the right one:
 
@@ -1702,6 +1743,17 @@ Before close, outstanding records are surfaced in two distinct ways, and they mu
 
 **Notifications go to the direct leaders of both Senior Pastors, and to Admin.** In-app notifications about outstanding records are sent to the direct pastoral children of Bishop Oriel Ballano, the direct pastoral children of Pastora Geraldine Ballano, and Admin. Nobody else receives one.
 
+```text
+notifications
+- id
+- recipient_account_id
+- kind
+- period              nullable, the month the content concerns
+- payload             rendered at read time, never stored beyond what scope permits
+- read_at             nullable
+- created_at
+```
+
 **The Senior Pastors are deliberately not notified.** They retain full church-wide visibility and see everything they choose to look at (Section 7); they are simply not the people the application interrupts. Following up an outstanding record is the work of the leaders directly under them, and a notification reaching the top of the church for a Cell that has not filed a record inverts that.
 
 Recipients see church-wide figures, including names, which exceeds the own/subtree scope a leader holds by default. That visibility is not implied by their position — Section 7 is explicit that a Senior Pastor's direct leaders receive no wider scope by virtue of being in the direct 12. It comes from an explicit, Admin-issued grant of `reports.view_subtree` at Whole Church scope, read-only, recorded and audited like any other grant.
@@ -1725,18 +1777,32 @@ cell_meetings
 - scheduled_time
 - actual_date             nullable, set where the meeting was rescheduled
 - actual_time             nullable
-- rescheduled_by          nullable
-- rescheduled_at          nullable
-- reschedule_note         nullable
 - not_held_reason         nullable, required where status is NOT_HELD
 - not_held_note           nullable, required where the reason is OTHER
-- previous_status         nullable, where the status has changed
 - facilitated_by          nullable, defaults to the Cell's current leader
 - responsible_leader_id
 - submitted_by            nullable
 - submitted_at            nullable
 - version                 for conflict detection (Section 14)
 ```
+
+```text
+cell_meeting_changes
+- id
+- cell_meeting_id
+- from_status
+- to_status
+- from_date               nullable
+- from_time               nullable
+- to_date                 nullable
+- to_time                 nullable
+- reason                  nullable
+- note                    nullable
+- actor_id
+- occurred_at
+```
+
+A meeting's changes live in their own rows, not in columns on the meeting. A meeting rescheduled twice would overwrite the first reschedule in a single set of columns, and Section 13 requires a `RESCHEDULED` meeting later declared `NOT_HELD` to preserve both records. The same argument that made attendance append-only applies here: the record must carry its own history (Section 1, Principle 12).
 
 `reporting_month` is stored rather than derived. A rescheduled meeting keeps its original reporting month even when its actual date falls in the next one (below), so deriving the month from a date would move the meeting between periods the moment it is rescheduled.
 
@@ -1753,6 +1819,10 @@ cell_attendance
 - correction_reason    nullable
 - version
 ```
+
+At most one non-superseded row may exist per `(cell_meeting_id, person_id)`. Enforce it with a partial unique index where `superseded_at` is null (Section 5, Database enforcement); two live rows for one person at one meeting inflate their monthly bucket and break the reconciliation in Section 20.
+
+`superseded_by` holds the id of the row that replaced this one, not an actor. The actor is `recorded_by` on the successor.
 
 A correction never overwrites in place. The prior row is marked superseded and a new row written; `version` detects a concurrent write (Section 14) and is not a history mechanism. An `UPDATE` plus an audit row does not satisfy Principle 12 — the record must carry its own history, and a shape offering only one mutable row per person per meeting cannot.
 
@@ -2688,6 +2758,9 @@ Shapes are given in the section that owns each rule; this is the index.
 | `cell_meetings` | `attendance` | Section 13 |
 | `cell_attendance` | `attendance` | Section 13 |
 | `report_snapshots` | `reporting` | Section 20 |
+| `account_tokens` | `auth` | Section 6, Account activation |
+| `cell_meeting_changes` | `attendance` | Section 13 |
+| `notifications` | `reporting` | Section 13 |
 | `audit_log` | `audit` | Section 21 |
 | `settings` | `admin` | Section 7, `settings.manage` |
 | `idempotency_keys` | shared | Section 22 |
