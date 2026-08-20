@@ -214,7 +214,17 @@ jobs:
             exit 1
           fi
 
-          echo "The suite ran, reached the endpoint, and every status assertion received 404."
+          # Nothing above ties the failure count to the case count. Half an endpoint
+          # landing, with six cases passing and five failing on 404, would read as
+          # "expected" -- so require that no case passed quietly.
+          if ! grep -qE 'Tests:[[:space:]]+([0-9]+) failed,  total' suite.log; then
+            echo "::error::Some cases passed. That is progress rather than a fault, but"
+            echo "::error::this job asserts they all fail; move them into the api suite."
+            grep -E 'Tests:' suite.log
+            exit 1
+          fi
+
+          echo "The suite ran, every case failed, and every status assertion received 404."
 
       - name: Report
         run: |
@@ -231,8 +241,10 @@ jobs:
             else
               echo "The eleven cases fail, which is expected until Stage 2 builds"
               echo "\`PUT /api/v1/people/{id}/pastoral-leader\`, and the step above"
-              echo "checked that every one of them failed on a 404 rather than on"
-              echo "something new."
+              echo "checked that no case passed quietly and that every status"
+              echo "assertion received a 404 rather than something new. Cases that"
+              echo "assert with toContain print no bare status line and contribute"
+              echo "no evidence either way."
               echo
               echo "See \`api/test/authorization/pastoral-assignment.spec.ts\` for the"
               echo "contract they pin, and docs/ROADMAP.md for why they are written"
