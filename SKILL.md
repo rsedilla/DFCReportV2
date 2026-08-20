@@ -56,6 +56,7 @@ This is settled, not a suggestion.
 - **Data access:** a typed query builder over the PostgreSQL driver, not an ORM
 - **Frontend:** Next.js + TypeScript, as a pure client
 - **Styling:** Tailwind CSS, in the web application only; its palette carries no judgement (Section 13)
+- **UI components:** headless, accessible primitives vendored into the repository; never a component framework carrying its own design system
 - **API:** REST, versioned under `/api/v1`
 - **Deployment:** containerized, portable across AWS, Hostinger/VPS, or another provider
 - **Email:** provider abstraction; business logic must never depend directly on SES or any other provider
@@ -72,6 +73,14 @@ One reason decides the migration and data-access tooling, and it is the same rea
 **The constraints are the design.** Section 5 requires a partial unique index, a check constraint, and a constraint trigger that is `DEFERRABLE INITIALLY DEFERRED`, and every subtree query carries a `CYCLE` clause. No ORM models any of those. A tool that generates migrations by diffing a model against the database does not merely fail to create them — it proposes dropping what it cannot see, on every migration, forever. So the schema lives in hand-written SQL, and the query layer is a typed builder that composes SQL rather than hiding it.
 
 The cost is accepted deliberately: table types are written and reviewed rather than generated, and the schema tests are what keep them honest.
+
+**A component library may style, and may not judge.** The web application uses headless, accessible primitives — dialog, combobox, menu, tabs, date picker — vendored into the repository as source the team owns, rather than consumed as a versioned dependency with a look attached. Component frameworks that carry their own design system are deliberately not used.
+
+The ordinary reason is that they bring a second styling engine, which duplicates and fights the first.
+
+The reason that puts this in the specification rather than in somebody's preferences is the vocabulary they impose. Those frameworks express state as `error`, `success`, `warning` and `severity`, and hand that to every developer as the default way to render a figure. Section 13 forbids value-laden colour encoding for a practical reason: `NOT_HELD` exists so that a leader can report honestly that their Cell could not meet, and a toolkit whose idiom paints that row red will produce a month of `HELD` instead. Ranking the measure destroys the measure, and colour is a ranking. A toolkit whose defaults push against a rule this specification cares about has to be resisted on every screen, by everyone, indefinitely — so it is not adopted.
+
+Accessibility is the other half of "headless". A dialog that traps focus, or a menu that cannot be dismissed from a keyboard, is not a styling defect and is not fixed by a stylesheet. Leaders use this on their own phones, at a range of ages, and the primitives are chosen for that rather than for appearance.
 
 ### The frontend is a client, like the phones
 

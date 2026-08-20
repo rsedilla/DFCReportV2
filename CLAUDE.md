@@ -515,6 +515,17 @@ Chosen now rather than at Stage 5 for the same reason CI was chosen at Stage 1. 
 
 **The palette carries the §13 and §17 prohibition.** No `success`, no `danger`, no `warning` token exists, and none is to be added. In a utility framework a red-and-green performance palette is one class away, and colouring a leader's row red for declaring `NOT_HELD` destroys the honest reporting that status exists to obtain — ranking the measure destroys the measure. A figure needing attention is surfaced by the attention list (§15), never by being coloured as a failure. The reasoning is written into `web/app/globals.css`, where somebody adding a colour will read it.
 
+### 2026-08-20 — UI direction: headless primitives the repository owns, and no design-system framework
+Settled in `SKILL.md` §2 (Chosen stack). The firm half and the expected half are separated below, because only one of them is a ruling.
+
+**Firm.** Components are headless, accessible primitives — Radix, vendored through `shadcn/ui` so the source lands in the repository rather than arriving as a dependency with a look attached. **MUI, Ant Design, Chakra, Mantine and Bootstrap are refused.** The ordinary objection is that each brings a second styling engine to fight Tailwind. The objection that makes this a rule is that they express state as `error`, `success`, `warning` and `severity` and hand that vocabulary to every developer as the default. §13 forbids value-laden colour encoding because `NOT_HELD` exists to obtain honest reporting, and a framework whose idiom paints that row red produces a month of `HELD` instead. A toolkit whose defaults push against the specification is resisted on every screen, by everyone, forever.
+
+**Expected, and confirmed against a real screen rather than now.** TanStack Query for server state, since cursor pagination, retry and cache invalidation are where `VERSION_CONFLICT` and `Idempotency-Key` retries actually get handled (§14, §22, §23). TanStack Table, headless, for rosters and attendance grids — sorting and filtering stay server-side per §22, so its job is column definition and virtualization. A chart library with no built-in colour semantics. `lucide-react` and `next/font`.
+
+**Nothing is installed yet, deliberately.** Stage 1 has no screens, and generating a component library before there is anything to build with it is scaffolding for nothing. The direction is recorded so it is not re-litigated; the first install happens with the first real screen in Stage 2.
+
+Recorded also because elegance in this application is mostly not a dependency. One typographic scale, consistent spacing, restraint with colour, and real empty and loading states decide how it feels, and the two screens that will decide it — the arbitrary-depth pastoral tree (§5) and the attendance grid (§13) — are not solved by any library.
+
 ### Open — awaiting a ruling
 
 **One item awaits a ruling.**
