@@ -327,6 +327,18 @@ The church runs roughly 800 active Cells with 3,000 to 4,000 attending DCC weekl
 
 Initial encoding is a distinct phase: Admin imports the leadership tree centrally, and each Cell Leader encodes their own members. Cell-creation approval and individual attribution are relaxed for that phase only; duplicate matching applies at full force, since a large encoding effort across many hands is the likeliest source of duplicates this system will see. Written to `SKILL.md` §2.
 
+### 2026-08-20 — Cell creation is request then approve
+The prospective leader's own upline requests the Cell, naming the leader, category, day and time (`cell.request_creation`, own/subtree). Admin approves (`cell.approve_creation`, Admin only), and approval creates the Cell, the leadership assignment, and proceeds to the account step in one transaction.
+
+Admin holds approval because approving a new Cell Leader means provisioning their account, and §6 requires one actor to hold both `cell.manage_leadership` and `accounts.manage`. Admin is the only role holding the latter, so the choice falls out of the role catalog rather than being arbitrary.
+
+Two steps because creating a Cell mints a Cell Leader, which moves the requester's own progress toward Leaders with 12+ Direct Leaders. It is the only routine action where the actor benefits from the outcome, and the only one carrying a second party.
+
+Communicating a new Cell Leader to the Senior Pastors' direct leaders happens outside the application, in conversation. The system deliberately does not model it. Written to `SKILL.md` §10 and §7.
+
+### 2026-08-20 — Admin creates the initial Cells
+A leader cannot create their own first Cell: an account arrives with Cell leadership (§6), and Cell leadership requires an existing Cell (§11). Admin therefore creates the initial Cells and leadership assignments at Whole Church scope, which is also what allows the accounts to be provisioned. Only the request step is skipped during initial encoding; approval is not bypassed, since Admin is the approver. Written to `SKILL.md` §2.
+
 ### Open — awaiting a ruling
 
 Nothing is currently awaiting a ruling. Items reaching a Stop Condition are recorded here until settled.
