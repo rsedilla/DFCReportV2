@@ -1,11 +1,16 @@
 # Changes to the source of truth and to project governance require
-# review by the specification owner. See CLAUDE.md -> Mandatory Review.
+# review by a code owner. See CLAUDE.md -> Working in this repository.
+#
+# Two owners, so neither ever has to approve their own pull request.
+# GitHub does not permit a PR author to approve their own PR, so a
+# single-owner file would deadlock every change to these paths.
 
-/SKILL.md       @rsedilla
-/CLAUDE.md      @rsedilla
-/README.md      @rsedilla
-/.claude/       @rsedilla
-/.github/       @rsedilla
+/SKILL.md       @rsedilla @raneenicole
+/CLAUDE.md      @rsedilla @raneenicole
+/README.md      @rsedilla @raneenicole
+/docs/          @rsedilla @raneenicole
+/.claude/       @rsedilla @raneenicole
+/.github/       @rsedilla @raneenicole
 
 # Add migrations here once they exist:
-# /prisma/migrations/   @rsedilla
+# /api/prisma/migrations/   @rsedilla @raneenicole

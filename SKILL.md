@@ -78,6 +78,78 @@ Desktop web, mobile web, and the native apps are used concurrently, by the same 
 
 The API must therefore be stateless, must support several concurrent sessions per account (Section 6), and must detect write conflicts rather than resolving them silently (Sections 14 and 23).
 
+### Scale
+
+Sized against the church as it stands, not a hypothetical:
+
+- roughly **800 active Cell Groups**
+- **3,000 to 4,000 people** attending DCC each Sunday, face to face
+- on the order of **10,000 to 15,000 Person records** once members, DCC-only attendees, and archived records are counted
+- roughly **3,400 Cell meetings** and **50,000 attendance records per month**, around 600,000 a year
+
+This is a small database. Three million attendance rows after five years is unremarkable for PostgreSQL on a modest instance, and the write pattern is gentle: a few hundred DCC submissions spread across Sunday evening, and around 800 Cell submissions across a week.
+
+**Do not design for a scale problem that does not exist.** Principle 13 stands — a modular monolith, with no service extraction, sharding, or general caching layer introduced without a demonstrated need. Storing closed-month reports is not such a layer: those figures are stable by rule (Section 13) rather than merely assumed to be, and the need is demonstrated below.
+
+Two consequences do follow from these figures, and both are requirements rather than optimisations:
+
+- Reports for closed months are materialized (Section 20). A live whole-church aggregate over a month of attendance, recomputed on every drill-down, is slow enough to be felt.
+- The indexes reporting depends on exist in the **first** migration, not once somebody complains: attendance by event and person, attendance by person and date, and pastoral assignment by leader for subtree traversal.
+
+Design headroom for two to three times these figures. The church is growing toward a larger structure, and the tree is arbitrary-depth by rule (Principle 11) precisely so that growth never requires a schema change.
+
+### Modules
+
+Principle 13 requires a modular monolith. These are the modules, and the list is not advisory — a monolith with no named seams is just a monolith, and the option to extract a service later exists only if the seams were drawn at the start.
+
+| Module | Owns |
+| --- | --- |
+| `people` | Person, Member ID, lifecycle, duplicate matching, merge |
+| `networks` | Network assignment and its history |
+| `hierarchy` | Pastoral assignments, subtree resolution, the Section 5 invariants |
+| `auth` | Accounts, tokens, sessions, the capability and scope guard |
+| `cells` | Cells, categories, schedules, membership, leadership, the creation workflow |
+| `attendance` | DCC events and attendance, Cell meetings and attendance, the submission window |
+| `reporting` | Classification, monthly attendance, coverage, Network Summary, stored figures |
+| `audit` | The audit log |
+| `admin` | Settings, the initial-encoding phase, administrative operations |
+
+**A module owns its tables.** No other module reads or writes them directly. Cross-module access goes through the owning module's service interface, never through its repository or its tables.
+
+This is what makes "enforced in the domain layer" a statement rather than a hope. The five pastoral-assignment invariants (Section 5) have exactly one place to live because `hierarchy` is the only writer of `pastoral_assignments`. Where four modules write a table, an invariant needs checking in four places, and the fourth is the one somebody forgets — which is also why those invariants carry database constraints as a backstop.
+
+Organise by module, never by layer. A `controllers/`, `services/`, `entities/` layout spreads every feature across four folders and gives no boundary anything can be enforced on.
+
+### Initial data load
+
+The church already exists. Roughly 800 Cells are running under an established leadership structure, and the system's first task is to record what is already there rather than to govern what gets created. Initial encoding is a distinct phase with its own rules.
+
+The two halves of the data live in different places and are loaded differently.
+
+**The leadership tree is known centrally and is small.** The Senior Pastors, their direct leaders, and the leaders below them number in the low thousands. Admin imports it: names, sex, and each person's direct leader. Network follows from sex (Section 4). Every pastoral assignment created this way takes an effective date of the encoding date, exactly as Section 4 requires for initial Network assignment. Do not fabricate historical dates for relationships that predate the system.
+
+**Cell members are known only to their own leaders.** Nobody holds a central, current list of every member of every Cell. Each Cell Leader encodes their own members once they have an account. This is slower than a central import and considerably more accurate, and it doubles as the leader's first real use of the application.
+
+The sequence matters. The tree must exist before leaders can be assigned, accounts provisioned, or Cells attached in the right place.
+
+**Admin creates the initial Cells and their leadership assignments.** A leader cannot create their own first Cell: an account is provisioned when a person becomes a Cell Leader (Section 6), and a person becomes a Cell Leader only through an active leadership assignment on an existing Cell (Section 11). Admin therefore creates the Cell and the leadership assignment directly, exercising `cell.approve_creation` and `cell.manage_leadership` at Whole Church scope, which is also what allows the leader's account to be provisioned. During initial encoding there is nothing to request, because the Cells already exist and are not in dispute; approval is not bypassed, since Admin is the approver.
+
+One rule is relaxed for this phase: **the request step is skipped**, and Admin creates Cells directly (Section 10). Approval is not bypassed, since Admin is the approver.
+
+**Initial encoding ends by a deliberate, audited Admin action, and ends once.** The phase flag is held under `settings.manage` (Section 7). While it is open, the direct-create path is available. Once closed, that path is gone and every new Cell goes through request-and-approve. The transition records actor and timestamp (Section 21).
+
+A relaxation attached to a phase with no defined end is a permanent relaxation. The flag is what makes this one temporary, so it is a required part of the design rather than an operational detail.
+
+Everything else holds, and three points are stated because they are where a bulk load is most likely to go wrong.
+
+**Imports execute through the domain services, never as direct database writes.** Every pastoral assignment created by an import is subject to the full set of Section 5 invariants: both endpoints in scope, no cycles, at most one active assignment, no self-assignment, and the same-Network edge. A spreadsheet of a leadership tree is the most likely source of a cycle this system will ever see, and Section 5 says plainly that a script written straight against the database bypasses every service-layer check. The partial unique index and the same-Network constraint trigger must exist **before** the import runs, per the migration policy in `CLAUDE.md`.
+
+**Every record carries its own audit entry.** Admin is the actor on all of them, but a single entry for an import touching thousands of Persons and assignments records no target and no before-and-after values, which Section 21 requires. Write per-record entries linked by an import batch identifier.
+
+**Duplicate matching runs as a separate pass, not inline.** Section 3 fixes two bounds: the system never merges automatically and never blocks creation, and a Tier 1 candidate requires a person to acknowledge it before a new Person is created. An unattended import has nobody present at each row, so it can satisfy neither bound inline. Import therefore runs in two phases: a dry run that produces a candidate report, human adjudication of what it finds, and only then a commit. A large encoding effort spread across many hands is the most likely source of duplicate Person records this system will ever see, and this is the phase where the matcher earns its keep.
+
+Member IDs are assigned by the server from the sequence. Nothing is backdated.
+
 ---
 
 ## 3. Person Model
@@ -206,6 +278,22 @@ A real Person who has stopped attending must not automatically be archived. Lack
 
 An archived Person can be restored to `CURRENT`. Archiving and restoring must be recorded as historical events, not merely toggled, so that Network Summary can show and explain when and why a Person's status changed (Section 16).
 
+Lifecycle is therefore effective-dated, not a column:
+
+```text
+person_lifecycle
+- id
+- person_id
+- state              CURRENT | ARCHIVED
+- reason             nullable, from the archive reason list above
+- note               nullable, required where reason is OTHER
+- actor_id
+- started_at
+- ended_at           nullable
+```
+
+A `lifecycle_state` column on the Person plus audit rows satisfies every sentence above and still cannot answer "who was `CURRENT` on 31 March". An audit log is a log, not a queryable as-of source: it is not indexed for the question, it is archived off in time, and reconstructing state by replaying it is exactly what this table exists to avoid. Without the table the reproducibility guarantee below is a hope; with it, the guarantee is a query.
+
 Historical reports must remain reproducible: a report for a past period reflects each Person's lifecycle state as it stood at that time, not their current state. Archiving someone today must never change the total shown for a period before their archive date, no matter when the report is re-run. Classification and monthly-attendance reports (DCC, Cell) are period-based and never filtered by current lifecycle state, for any period including the present one. Only current-state inventory metrics (Total People, Current Cell Leaders, Cell Groups, Cell Leaders with 12+ Members, Participation) reflect lifecycle state, and only as of the period being reported.
 
 "New Cell Leaders for a selected period" (Section 16) is period-based like attendance reporting and is not affected by a leader's later archival. "Leaders with 12+ Direct Leaders" (Section 16) is a current-state snapshot and does reflect current lifecycle state, for both the leader and the counted direct leaders.
@@ -222,7 +310,7 @@ Archiving and restoring are RBAC-controlled capabilities (Section 7). Ordinary l
 
 ### Archiving a Person who leads a Cell
 
-A Person holding an active Cell leadership assignment (Section 11) cannot be archived while that assignment stands. The archive is rejected, naming what must be resolved first — for example, that the Person leads `CELL-011`, which has nine members.
+A Person holding an active Cell leadership assignment (Section 11) cannot be archived while that assignment stands. The archive is rejected, naming what must be resolved first — for example, that the Person leads `CELL-000482`, which has nine members.
 
 Resolve it deliberately, in one of two ways: reassign the Cell to another leader, or close the Cell (Section 10, Cell lifecycle). Either is an explicit, authorized, audited action.
 
@@ -248,7 +336,7 @@ Because a previously published total can change, every merge must be surfaced in
 
 A Person may only be merged once (into a survivor that has never itself been merged away) — this keeps identity resolution unambiguous. If a survivor later turns out to also be a duplicate, that requires a separate, deliberate correction; there is no automatic chain-merging.
 
-Because a merge is effectively irreversible, cross-entity, and can affect more than one leader's or Network's data, Person Merge requires Whole Church-level authorization (Section 7) — in practice, an Admin-level capability, not an ordinary leader action — and requires an explicit reason. There is no "undo merge" capability; an incorrect merge must be corrected manually and deliberately, not automatically reversed.
+Because a merge is effectively irreversible, cross-entity, and can affect more than one leader's or Network's data, Person Merge requires the `people.merge` capability at Whole Church scope (Section 7). It is Admin-only, is not held by Senior Pastors, is never an ordinary leader action, and requires an explicit reason. There is no "undo merge" capability; an incorrect merge must be corrected manually and deliberately, not automatically reversed.
 
 Where merging the two records' current relationships (e.g. both have an active but different Cell membership) would require choosing between two legitimately different current facts, the system must not silently pick one — it must flag the conflict for authorized human resolution rather than guessing.
 
@@ -277,9 +365,27 @@ Senior Pastors:
 
 Both Senior Pastors have church-wide visibility across both Men's and Women's Networks.
 
-Sex may be used to automatically propose/assign the appropriate network according to the church's homogeneous-network rule, but store the actual network relationship explicitly rather than deriving it on every query.
+Network is assigned automatically from sex, according to the homogeneous-network rule, and is displayed on the form while the Person is being encoded. Store the resulting relationship explicitly rather than deriving it on every query.
+
+It is assigned rather than proposed for confirmation. Under the homogeneous-network rule the mapping is total, so a confirmation step asks the encoder to approve a tautology, and confirmations of tautologies are clicked without being read. The field that can genuinely be wrong is sex, which the encoder is entering at that moment, so the Network is shown beside it rather than behind a second click.
+
+A sex recorded in error is corrected through the audited Network-change path (Correcting a person's sex, below), which is the proper remedy and leaves a trail that a silent confirmation click would not.
 
 ### Network assignment history
+
+```text
+network_assignments
+- id
+- person_id
+- network            MENS | WOMENS
+- reason             nullable, for a correction
+- actor_id
+- started_at
+- ended_at           nullable
+```
+
+A `network` column on the Person cannot answer which Network someone belonged to during a past month, and every Network-scoped report for a closed period depends on that answer.
+
 
 A person's network relationship must be preserved historically (effective-dated), the same way pastoral assignments and Cell category are, so that Network-scoped reports remain accurate for past periods even if a person's network is later corrected or changed.
 
@@ -546,7 +652,7 @@ When a person becomes a Cell Leader and has no account:
 
 One person has one account even if they lead multiple Cell Groups.
 
-Assigning Cell leadership and provisioning an account are separately authorized. Where designating a person as a Cell Leader would trigger account creation, the actor must hold both the Cell-leadership capability and `accounts.manage` against that same target — mirroring the dual-authorization rule for archiving a Person who holds an active account (Account access at archive, below).
+Assigning Cell leadership and provisioning an account are separately authorized. Where designating a person as a Cell Leader would trigger account creation, the actor must hold both `cell.manage_leadership` and `accounts.manage` against that same target — mirroring the dual-authorization rule for archiving a Person who holds an active account (Account access at archive, below).
 
 An actor authorized only to assign Cell leadership may record the leadership assignment, but must not thereby cause an account to be created or an activation email to be sent. The account step is left pending for an authorized actor and is separately audit logged (Section 21). Leadership assignment is never a back door into account provisioning.
 
@@ -594,9 +700,14 @@ Example permissions may include:
 - `cell.submit_on_behalf`
 - `cell.correct_subtree`
 - `cell.manage_membership`
+- `cell.manage_leadership`
+- `cell.request_creation`
+- `cell.approve_creation`
 - `cell.manage_lifecycle`
 - `reports.view_subtree`
+- `people.merge`
 - `records.backdate_effective_date`
+- `settings.manage`
 - `accounts.manage`
 - `roles.manage`
 - `audit.view`
@@ -634,13 +745,17 @@ Three roles exist. Each carries the default capabilities and scopes below. Anyth
 | `cell.submit_on_behalf` | Whole Church | Whole Church | own/subtree |
 | `cell.correct_subtree` | Whole Church | Whole Church | own/subtree |
 | `cell.manage_membership` | Whole Church | Whole Church | own/subtree |
+| `cell.manage_leadership` | Whole Church | Whole Church | own/subtree |
+| `cell.request_creation` | subtree, excl. self | subtree, excl. self | subtree, excl. self |
+| `cell.approve_creation` | — | Whole Church | — |
 | `cell.manage_lifecycle` | Whole Church | Whole Church | own/subtree |
 | `reports.view_subtree` | Whole Church | Whole Church | own/subtree |
 | `audit.view` | Whole Church | Whole Church | — |
 | `records.backdate_effective_date` | — | Whole Church | — |
+| `settings.manage` | — | Whole Church | — |
 | `accounts.manage` | — | Whole Church | — |
 | `roles.manage` | — | Whole Church | — |
-| Person Merge | — | Whole Church | — |
+| `people.merge` | — | Whole Church | — |
 
 Four of these defaults are deliberate and must not be widened for convenience.
 
@@ -648,7 +763,7 @@ Four of these defaults are deliberate and must not be widened for convenience.
 
 **Senior Pastors do not hold `records.backdate_effective_date`.** Backdating rewrites totals for periods already reported (Section 3) and is a data-correction operation, not a pastoral one.
 
-**Senior Pastors do not perform Person Merge.** Section 3 already places it at Whole Church authorization as an Admin-level capability.
+**Senior Pastors do not hold `people.merge`.** Section 3 places it at Whole Church scope as an Admin capability. A merge is irreversible, crosses both Networks, and can lower totals for periods already reported, so it stays with the role whose job is data correction.
 
 **Leaders do not hold `people.manage_lifecycle`.** Archiving reduces a leader's own People count, which is precisely the incentive Person Lifecycle guards against (Section 3). Archival is requested by a leader and performed by Admin or a Senior Pastor.
 
@@ -677,6 +792,12 @@ A capability without an explicit scope grant is not usable; a scope grant withou
 Senior Pastors (Bishop Oriel Ballano, Pastora Geraldine Ballano) receive Whole Church scope by role/policy, built in — this does not require a separate Admin-issued grant.
 
 `people.manage_pastoral_assignment` is a management capability, not a reporting one. Admin holds it per explicit administrative permission. A leader holds it at own/subtree scope, over their own pastoral subtree only. Senior Pastors hold it at Whole Church scope and may therefore reassign within either Network. It is never conferred by a read-only reporting scope grant. The invariants governing its use are defined in Section 5, Changing a person's pastoral leader.
+
+`settings.manage` governs the church-wide operational settings held by the system. It is Admin-only, at Whole Church scope, and every change is audit logged with its previous and new values (Section 21).
+
+The settings it governs today are the Cell attention threshold (Section 15) and the initial-encoding phase flag (Section 2). Both alter behaviour for the entire church from a single control, which is why neither is per leader and why both carry an audit trail: a threshold change silently re-populates every leader's attention list, and closing the encoding phase permanently removes Admin's direct-create path for Cells.
+
+A setting is not a place to record domain rules. Anything that changes what a figure means, rather than a single operational parameter, belongs in this specification and not behind a control.
 
 `records.backdate_effective_date` governs setting an effective date in the past on any effective-dated relationship: pastoral assignment (Section 5), Network (Section 4), Cell membership (Section 10), and Cell leadership (Section 11). It is Admin-only and always requires a reason. It is never granted to ordinary leaders, because backdating changes totals for periods that have already been reported (Section 3).
 
@@ -756,7 +877,7 @@ Therefore a calendar month has 4 or 5 applicable DCC events, determined by the a
 
 The three-status model in Section 13 is specific to Cell meetings and does not apply to DCC. `NOT_HELD` in particular has no DCC equivalent.
 
-A Cell meeting is one leader's meeting, and only that leader can say whether it took place. DCC is a single church-wide service. Whether it happened is one fact about the whole church, known to church leadership, not something 140 leaders each report separately.
+A Cell meeting is one leader's meeting, and only that leader can say whether it took place. DCC is a single church-wide service. Whether it happened is one fact about the whole church, known to church leadership, not something several hundred leaders each report separately.
 
 Where the church holds no service on a given Sunday — a calamity closing the building, or a Sunday absorbed into a conference — that Sunday simply carries no DCC event. The month then has one fewer applicable event, and every report follows automatically.
 
@@ -768,7 +889,7 @@ A leader who has not yet submitted their people's attendance for an event that d
 
 DCC attendance for a calendar month may be recorded or corrected until the 7th of the following month, at 23:59 Asia/Manila — the same close as Cell attendance (Section 13). After that the month is closed, and only Admin may amend it, using `records.backdate_effective_date` (Section 7), with a reason, audit logged, and surfaced in Network Summary as a correction.
 
-DCC coverage is shaped differently from Cell coverage. A Cell has one leader and its coverage counts recorded meetings out of scheduled meetings. A DCC event is church-wide, and many leaders each submit for their own people, so DCC coverage counts **how many responsible leaders have submitted** for an event, not how many events exist.
+DCC coverage is shaped differently from Cell coverage. A Cell has one leader and its coverage counts recorded meetings out of scheduled meetings. A DCC event is church-wide, and many leaders each record their own people, so DCC coverage counts **how many responsible leaders have a record for the event**, not how many events exist. It measures whether the record exists, never who entered it — a submission made on behalf, or by an upline standing in for a leader who holds no account (below), completes that leader's coverage.
 
 Report that figure at every scope, as a single line, on the same terms as Cell coverage: factual, no ranking of leaders by it, and no derived score (Section 13).
 
@@ -777,9 +898,53 @@ Each attendance record must ultimately identify:
 - person
 - DCC event/date
 - present state
-- responsible leader/reporting scope
+- responsible leader (below)
 - actor who entered/submitted it
 - timestamps/audit metadata
+
+### Generating the DCC calendar
+
+DCC events are generated automatically, one per Sunday, on a rolling horizon of at least twelve months ahead. Every Sunday carries an event unless an Admin has deliberately removed it.
+
+Do not create events lazily on first use. If an event exists only once somebody has recorded attendance against it, then a Sunday nobody submitted for has no event at all — and a missing event becomes indistinguishable from a cancelled service. That is precisely the ambiguity the Cell meeting statuses exist to remove (Section 13), and it must not be reintroduced here.
+
+Because every Sunday has an event by default, an absent event always means a recorded, audited decision, and coverage is measurable against a denominator that exists before anyone submits anything.
+
+### Attendance is face to face
+
+Only physical attendance at the DCC service is recorded. Online or streamed participation creates no attendance record and affects no classification, monthly attendance bucket, total, or Participation report (Section 16).
+
+This is a deliberate exclusion, not an omission. Recording attendance is a leader's responsibility for the people under them (below), and that responsibility rests on a leader knowing who was in the room. Do not add an online attendance state, a viewing record, or a separate present-state value for remote participation.
+
+Naming Participation matters, because that is where the exclusion has pastoral rather than merely numerical effect: a person who watches every week online is indistinguishable from one who has stopped attending, and will appear on the list of people with no DCC attendance in three months. That is a consequence of the rule, and it must be a known one rather than a surprise.
+
+The same rule applies to Cell meetings, and is stated in Section 12.
+
+### Responsible leader for DCC attendance
+
+The responsible leader for a person's DCC attendance is their **direct pastoral leader, as of the event date** (Section 5).
+
+Every person has exactly one direct pastoral leader, so every person is covered exactly once. A leader records their **direct** pastoral children only; totals aggregate upward through the tree, so no leader re-records people their downline has already recorded, and nobody is missed between two levels.
+
+**Cell leadership is not involved.** A leader who disciples people but leads no Cell is still the responsible leader for their direct children's DCC attendance. This is deliberately different from qualifying as a leader for counting (Section 11): responsibility for attendance follows position in the pastoral tree, while counting follows Cell leadership. A person may be a responsible leader without being counted as a leader, and that is correct.
+
+**Fixed as of the event date.** A later reassignment never moves historical records. If a person moves from one leader to another in November, October's DCC records remain with whoever was responsible in October, and re-running October's report returns the same figures (Section 3).
+
+**An upline leader may record on behalf** of a downline leader within their pastoral subtree (Section 14). The responsible leader remains the direct pastoral leader; the actor is recorded separately. Coverage measures whether the record exists, not who entered it, so a submission made on behalf completes that leader's coverage for the event.
+
+**Where the responsible leader holds no account**, the submission falls to the nearest upline leader who does.
+
+An account is provisioned when a person becomes a Cell Leader (Section 6), so a leader who disciples people but has not yet opened a Cell cannot sign in. They remain the responsible leader — the definition follows position in the pastoral tree and never depends on whether someone can log in — and their upline records for them under the on-behalf rule above.
+
+The interface must make this workable. A leader's DCC checklist shows their own direct pastoral children, **and** the direct children of every downline leader for whom they are the nearest account-holding upline. That qualification matters: where a leader with an account sits between them and the leader without one, the obligation is the nearer leader's, and showing it to both leaves each assuming the other will submit.
+
+Coverage will then show such a leader as covered by someone else every week, and that is worth seeing rather than hiding: a leader carrying several account-less downlines is stretched, and nothing else in the system would reveal it.
+
+The arrangement is intended to be temporary. When that leader takes a Cell, their account becomes provisionable and, once provisioned, they become their own submitter and the covering load falls away. Leadership is earned by leading a Cell (Section 11), and the account follows the Cell rather than preceding it.
+
+Provisioning is not automatic. Section 6 requires an actor holding both `cell.manage_leadership` and `accounts.manage` against that person, and where only the first is held the account step is left pending. A pending account can persist, so the covering arrangement must be able to persist with it rather than assuming it resolves on its own.
+
+A Network root leader has no pastoral leader and therefore no responsible leader (Section 5, Network roots). Admin records their attendance, and roots are excluded from coverage denominators.
 
 ### DCC classification
 
@@ -799,12 +964,24 @@ When adding a VIP:
 
 1. Search existing People first.
 2. Reuse existing Person if matched.
-3. Otherwise create one Person record using the core personal fields.
+3. Otherwise create one Person record using the core personal fields, **including the pastoral leader they are being placed under**.
 4. Ask for a mobile number. It is optional (Section 3), but this is the moment it is most likely to be given and most needed later: a first-time visitor who does not return is exactly who Participation reporting surfaces (Section 16), and a leader cannot follow up a name alone.
 5. Record DCC attendance only.
 6. Do not automatically create Cell attendance.
 
 The Person becomes available to other authorized modules, but participation remains domain-specific.
+
+### A DCC attendance record requires a pastoral leader
+
+Every DCC attendance record carries a responsible leader, and that is the person's direct pastoral leader (below). A Person with no active pastoral assignment therefore has no responsible leader, and their attendance cannot be recorded — **with one exception, the Network roots.**
+
+A root leader's absent assignment is the intended state rather than missing data (Section 5, Network roots). Their attendance is recorded by Admin, their record carries no responsible leader, and they are excluded from coverage denominators. They remain in every unique-people total; nothing here removes the two Senior Pastors from the figures they appear in.
+
+This is why step 3 above captures the leader at creation rather than leaving it for later. In practice the answer is already known outside the system: someone brings a visitor, and the leader they are being placed under is settled by that relationship before anyone opens the application. The workflow records a decision the church has already made.
+
+Naming the leader on the creation form is not a side effect of another action, which Section 5 forbids. It is a field on the form, entered deliberately, and it creates a pastoral assignment subject to every invariant in Section 5 — in particular the same-Network rule.
+
+Section 5 still permits a Person to exist with no active assignment, which happens during bulk import and wherever a record is created before the placement is settled. Such a Person simply cannot have DCC attendance recorded until they have a leader.
 
 ### DCC monthly reporting
 
@@ -844,7 +1021,7 @@ Never label buckets from the number of Sundays in the calendar. A month with fiv
 
 `Completed` always means attendance at every applicable DCC event that month. It is never a fixed number and never an arbitrary reporting limit.
 
-This is the same derived-denominator rule Cell monthly attendance follows (Section 12), and the two must not diverge.
+Cell monthly attendance derives its denominator the same way (Section 12), but the two domains diverge deliberately beyond that: DCC aggregates its buckets at any scope because one applicable event set covers the whole church, while a Cell's N belongs to that Cell alone and its buckets are a Cell-scope view only. Section 12 gives the reason.
 
 All bucket counts must sum to the same unique total.
 
@@ -865,6 +1042,18 @@ A Cell Group has only the required operational information:
 - lifecycle state: `ACTIVE` or `CLOSED`
 
 No Cell Name is required.
+
+### Cell ID generation
+
+The internal UUID is the key every relationship points at. The Cell ID is a human-readable handle for staff, reports, and conversation — the same split as Person (Section 3, Two identifiers, two jobs).
+
+- Format `CELL-` followed by six zero-padded digits, from a database sequence.
+- Assigned once, at creation, by the server. Immutable thereafter.
+- **Never reused.** A closed Cell keeps its ID permanently (Cell lifecycle, below), and reassigning it would make two different Cells share an identifier across time.
+- Gaps are expected and acceptable. The Cell ID is a handle, not a count of Cells.
+- **It encodes nothing.** Not category, not Network, not year, not leader.
+
+The last rule matters more here than it looks. Category is editable and the Cell ID deliberately does not change with it (Category changes, below), so an identifier such as `YTH-0042` becomes a lie the moment a Youth Cell becomes Young Pro. Every attribute a Cell ID might encode is an attribute that can change.
 
 ### Cell categories
 
@@ -887,12 +1076,130 @@ Mark
 
 ### Category changes
 
+```text
+cell_categories
+- id
+- cell_id
+- category           YOUTH | YOUNG_PRO | COUPLE
+- actor_id
+- started_at
+- ended_at           nullable
+```
+
+
 Cell category is editable over time, e.g. Youth -> Young Pro.
 
 - Keep the same Cell ID.
 - Preserve category history with effective dates.
 - Historical reports must use the category valid at the time being reported.
 - Audit category changes.
+
+### Schedule changes
+
+Day and time are editable over time, and are effective-dated exactly as category is:
+
+```text
+cell_schedules
+- cell_id
+- day_of_week
+- time_of_day
+- started_at
+- ended_at nullable
+```
+
+This is not optional bookkeeping. Scheduled meetings for a month are derived by running the Cell's configured day against the calendar (Sections 12 and 13), so a report for a past month must use the schedule that was in force **during that month**, never the current one.
+
+Without history, moving a Cell from Saturday to Sunday in June silently rewrites the coverage figure for every earlier month, because March has five Sundays and four Saturdays. A month recorded as `4 of 4` becomes `4 of 5`, and shifts again on the next schedule change. That breaks the guarantee in Section 3 that a past period's figures do not move.
+
+**A schedule change takes effect at the start of the following month.** A Cell moving from Saturday to Sunday, decided in August, runs on Sunday from 1 September. A month therefore has exactly one schedule throughout.
+
+A Cell running for a whole month has 4 or 5 scheduled meetings. A Cell created or closed part-way through a month has fewer, because its schedule row opens at approval (Creating a Cell, above) or ends at closure. That is a partial month rather than an anomaly, and N follows from the meetings actually recorded either way.
+
+Mid-month changes were considered and rejected. Resolving them per week is possible but leaves a month able to hold three or six scheduled meetings, sometimes two on consecutive days, and the coverage denominator becomes something a leader cannot predict from their own calendar.
+
+A Cell needing to move a **single** meeting at short notice — a lost venue, a clash — does not use the schedule for it. That is a `RESCHEDULED` meeting (Section 13). The two mechanisms are deliberately separate: the schedule is the Cell's standing day and time, and a reschedule is one meeting moving once.
+
+Two invariants here are expressible as database constraints and must exist as constraints, not only in service code (Section 5, Database enforcement):
+
+- one active schedule per Cell — a partial unique index on `cell_id` where `ended_at` is null
+- a schedule row starts on the first day of a month — a check constraint on `started_at`
+
+The second admits one exception: a Cell created part-way through a month opens its first schedule row at approval. Only `records.backdate_effective_date` may open a schedule row on any other date, and doing so is a correction, audited as one.
+
+Audit schedule changes as category changes are audited.
+
+### Creating a Cell
+
+A Cell is created through a two-step workflow: the prospective leader's upline **requests** it, and **Admin approves**. **No actor may approve a request they submitted.**
+
+Outside initial encoding (Section 2), this is the only path by which a Cell comes into existence. `cell.manage_lifecycle` governs closure and confers no power to create one (Cell lifecycle, below).
+
+**Step one — the request.** A leader upline of the prospective Cell Leader submits a request naming that person, the Cell's category, and its day and time. The capability is `cell.request_creation` (Section 7), held over the actor's subtree **excluding themselves**. In practice this is a leader saying that one of their own disciples is ready to lead.
+
+No holder of the capability, at any scope, may name themselves. Without that exclusion a leader whose only Cell has closed — who keeps their account (Section 11) — could restore their own Current Cell Leader status, re-enter New Cell Leaders for the period, and restore their upline's Leaders-with-12+ count, with no upline involved and with Admin, who has no pastoral basis to judge readiness, as the only reviewer. Section 5, invariant 4 writes the same prohibition for pastoral assignment, for the same reason.
+
+**Step two — Admin approves.** The capability is `cell.approve_creation`, held by Admin only and granted to no other role.
+
+The enforceable control is the per-request rule stated above: **no actor may approve a request they submitted.** That is what must be checked on every approval, and it holds even where one person happens to hold both capabilities. Do not rely instead on the two capabilities never meeting in one actor — Admin holds both by default, and separation expressed only through role defaults is separation an Admin-issued grant can undo (Section 7).
+
+Admin holds approval because approving a new Cell Leader means provisioning their account, and Section 6 requires one actor to hold both `cell.manage_leadership` and `accounts.manage` against the same target. Admin is the only role holding `accounts.manage` (Section 7), so approval and the account land with one authorized actor rather than stalling between two.
+
+**Approval revalidates the target.** The state at approval governs, never the state at request. Reject the request, creating nothing, where the prospective leader has since been archived (Section 3), absorbed by a Merge (Section 3), moved outside the requester's authorized subtree, or had their Network changed (Section 4). Approval must also confirm that the prospective leader and their pastoral leader share a Network, because a Cell inherits its leader's Network and Section 5 forbids a cross-Network edge.
+
+Without revalidation, approval creates an active leadership assignment for an archived Person and proceeds to provision their credentials — precisely the outcome Section 3's archive guard exists to prevent.
+
+**On approval**, in a single transaction:
+
+- the Cell is created as `ACTIVE`, with a server-assigned Cell ID (above)
+- its category history row opens (Category changes, above)
+- its schedule row opens (Schedule changes, above)
+- the Cell leadership assignment is created for the named leader (Section 11)
+- the account step for that leader proceeds (Section 6)
+
+The category and schedule rows are not optional extras. A Cell created without a schedule row has no derivable set of scheduled meetings, and therefore no coverage figure for its first month (Section 12).
+
+**Everything takes effect at approval, never at request.** New Cell Leaders is defined by when a leadership assignment starts (Section 16), so a request submitted on 30 September and approved on 2 October belongs to October. Nothing about a request is backdated to when it was made.
+
+**Direct creation during initial encoding.** While initial encoding is open (Section 2), Admin may create a Cell and its leadership assignment directly, without a request. That path closes with the phase and is not available afterwards.
+
+```text
+cell_creation_requests
+- id
+- prospective_leader_id
+- requested_by
+- category                YOUTH | YOUNG_PRO | COUPLE
+- day_of_week
+- time_of_day
+- state                   PENDING | APPROVED | DECLINED
+- decline_reason          nullable, from the fixed list below
+- note                    nullable, required where the reason is OTHER
+- decided_by              nullable
+- cell_id                 nullable, set on approval
+- requested_at
+- decided_at              nullable
+```
+
+**Request states.** A request is `PENDING`, `APPROVED`, or `DECLINED`. Never add another. A `PENDING` request creates no Cell, holds no members, records no attendance, and appears in no count or metric. At most one `PENDING` request may exist for a given prospective leader. Enforce it with a partial unique index on the prospective leader where the state is `PENDING`, exactly as pastoral assignment and Cell membership do for their own single-active rules (Section 5, Section 10). Without it two uplines may each submit, both may be approved, and nothing downstream catches the duplicate, because a leader may legitimately lead many Cells.
+
+Declined requests are retained — they are part of the record of how a leader was developed.
+
+**Declining.** Admin may decline a request with a reason, from a fixed list:
+
+- `LEADER_DEVELOPMENT_CONTINUING`
+- `TIMING_DEFERRED`
+- `DUPLICATE_REQUEST`
+- `SUBMITTED_IN_ERROR`
+- `OTHER` — requires a note
+
+The list is fixed and not administrator-configurable, for the reason given in Section 13. It is deliberately short and neutral. A decline is a durable record about a named person, and an unconstrained free-text field is exactly where a judgmental label about a prospective leader would be written (Section 1, Principle 7). A decline records that a Cell was not opened at this time. It never records an assessment of the person.
+
+**Seeing the queue.** Pending requests appear on the Admin dashboard (Section 19), and a request's outcome appears to the requester in their own outstanding work (Section 19). Neither is a notification; notifications remain confined to Section 13. This surface is necessary rather than optional: a pending request holds up a real leader's account provisioning, so the person who can act on it must be able to see it.
+
+**Why two steps.** Creating a Cell mints a Cell Leader, and that act moves Current Cell Leaders, New Cell Leaders for the period, and the requesting leader's own progress toward Leaders with 12+ Direct Leaders (Section 16). The requester benefits from the outcome, so a second party is required.
+
+The same shape governs the other actions where a leader would benefit from the result. Archival reduces a leader's own People count, and is requested by a leader and performed by Admin or a Senior Pastor. Person Merge lowers totals for periods already reported, and is Admin only — not held by Senior Pastors (Section 3, Section 7).
+
+**What the system does not model.** The church communicates a new Cell Leader to the Senior Pastors and their direct leaders outside the application, in conversation. Do not build a notification or an approval tier for that. It is a different thing from the Admin queue above, which is the workflow's own task surface.
 
 ### Cell lifecycle
 
@@ -924,7 +1231,7 @@ Keep every reason factual and free of judgement (Section 1, Principle 7). A clos
 
 #### What closing does
 
-Closing a Cell is an explicit, authorized, audited action carrying an effective date and a reason. The capability is `cell.manage_lifecycle` (Section 7), held by the Cell's current leader, any leader upline of them acting within their own authorized subtree, Admin, and Senior Pastors.
+Closing a Cell is governed by `cell.manage_lifecycle` (Section 7). Creating one is not: outside initial encoding (Section 2), a Cell comes into existence only through the request-and-approve workflow above, and `cell.manage_lifecycle` confers no power to create. Closing is an explicit, authorized, audited action carrying an effective date and a reason, held by the Cell's current leader, any leader upline of them acting within their own authorized subtree, Admin, and Senior Pastors.
 
 On closure, as one transaction:
 
@@ -964,9 +1271,31 @@ A person currently belongs to a Cell when they have an active (not ended) Cell m
 
 A Cell member is assigned to exactly one active Cell Group at a time. This is distinct from Cell Leadership: a Cell Leader may lead multiple Cell Groups (conducting different Cell meetings for different sets of people, Section 11), but an ordinary member's active assignment is always to a single Cell.
 
-A person's Cell monthly attendance denominator (Section 12) is therefore determined only by the applicable meetings of that person's one assigned Cell Group — never combined across every Cell the same leader happens to lead. For example, if Mark leads CELL-001 (Youth) and CELL-002 (Young Pro), Juan — assigned to CELL-001 — is evaluated only against CELL-001's meetings; CELL-002's meetings are not part of Juan's denominator. Do not introduce a "primary Cell" concept — the single active assignment already defines this relationship.
+A person's Cell monthly attendance denominator (Section 12) is therefore determined only by the applicable meetings of that person's one assigned Cell Group — never combined across every Cell the same leader happens to lead. For example, if Mark leads `CELL-001842` (Youth) and `CELL-002193` (Young Pro), Juan — assigned to `CELL-001842` — is evaluated only against `CELL-001842`'s meetings; `CELL-002193`'s meetings are not part of Juan's denominator. Do not introduce a "primary Cell" concept — the single active assignment already defines this relationship.
 
-Cell attendance does not automatically create or end Cell membership. Membership changes only through an explicit, authorized workflow. Attendance at a Cell other than a person's assigned Cell, if ever supported, must not automatically transfer their assignment or alter their monthly denominator.
+**A person's attendance is recorded against the Cell whose meeting they attended**, always, and moving between Cells never alters a record already made.
+
+How a person who moved is then presented in monthly reporting is deliberately unsettled — see Section 12, What is deliberately unsettled. Two answers were written into this specification and both broke either reconciliation or reproducibility, so it is a Stop Condition to be settled against real data rather than a rule asserted here.
+
+What holds regardless: their attendance at each Cell stays in that Cell's meeting records; they are counted once at leader and Network scope; and they remain in Total People and in Participation (Section 16) whatever their Cell membership.
+
+At leader and Network scope this changes nothing, because those totals deduplicate with `COUNT(DISTINCT person_id)` (Section 12) and the person is counted once regardless of how many Cells they passed through.
+
+### Only members are recorded
+
+Cell attendance is recorded only for the Cell's own members. The roster for a meeting is exactly the people holding an active membership of that Cell on the meeting date.
+
+Where a meeting was rescheduled (Section 13), the roster is taken from the **actual date the meeting took place**, not the date it was originally scheduled for. Membership can change between the two, and the roster should be the people who could actually have been there. The meeting still belongs to its original reporting month; only the roster follows the actual date.
+
+There is no visitor or guest state. A person coming to a Cell for the first time is added as a member by the leader, and then recorded present. A person is either a member of the Cell or is not recorded against it.
+
+This keeps one list on the leader's screen rather than two, and keeps the roster, the membership, and the monthly denominator the same set of people.
+
+Attendance at another leader's Cell is not recorded. Someone who visits a Cell they do not belong to is not marked present there, and their own monthly denominator remains their own Cell's meetings.
+
+The consequence is accepted deliberately: a person who attends once and does not return remains a member until removed, and counts toward that leader's member total. Removing them is an ordinary authorized action (below), so this is routine tidying rather than a defect. Do not compensate for it by inventing a visitor state or by expiring membership automatically — membership ends when a person ends it (Section 10, Cell lifecycle applies the same principle to Cells).
+
+Cell attendance still never creates or ends membership by itself. Membership changes only through the explicit workflow below, and marking someone present is not that workflow.
 
 ### Managing Cell membership
 
@@ -1038,6 +1367,8 @@ Cell Attendance uses the same familiar checklist UX as DCC but is a separate att
 
 DCC attendance and Cell attendance must never automatically create each other.
 
+Cell attendance is face to face. Only physical attendance at the Cell meeting is recorded; online or remote participation creates no attendance record and affects no classification, monthly attendance bucket, total, or Participation report. This mirrors DCC (Section 9), and for the same reason: recording attendance is the leader's responsibility for the people in front of them.
+
 ### Cell classification
 
 Cell has its own independent classification journey:
@@ -1054,9 +1385,14 @@ Unless church rules later state otherwise, treat Cell classification as a Cell-m
 
 ### Cell monthly reporting
 
-Use the same two views as DCC:
+Two artifacts, doing two different jobs. Conflating them is a mistake this specification made twice and reversed twice; the note at the end of this section records why.
+
+- The **monthly report** is statistical. It reconciles, it is reproducible, it aggregates. Its population is the people who attended.
+- The **roster view** is operational. It shows a leader every member and who came. It reconciles with nothing, because it makes no statistical claim.
 
 #### Classification
+
+Population: the unique people who attended this Cell at least once in the reporting month.
 
 - VIP
 - 2nd Timer
@@ -1065,22 +1401,28 @@ Use the same two views as DCC:
 - Regular
 - Total unique people
 
+Classification is **evaluated as of the end of the reporting month**, from the attendance history standing at that moment. A person who was a VIP in October and attended again in November is a VIP on October's report forever. Without this rule a closed month's figures move every time someone attends again, which Section 20 forbids and Section 3 makes a reproducibility guarantee.
+
+Classification carries no denominator, so it aggregates at any scope: a person's bucket is the same figure whichever Cell they attended.
+
 #### Monthly Attendance
 
-Each Cell has exactly one logical scheduled Cell meeting per calendar week, per its configured schedule (Section 13). A Cell therefore has 4 or 5 **scheduled** meetings in a calendar month, determined the same way as the DCC calendar rule (Section 9).
+Population: the same unique people who attended this Cell at least once in the month. Both views therefore cover the same people and reconcile to the same total (Section 20).
+
+Each Cell has one logical scheduled meeting per calendar week, per its configured schedule (Section 10, Schedule changes). A Cell running for a whole month therefore has 4 or 5 **scheduled** meetings. A Cell created or closed part-way through a month has fewer, and that is not an anomaly.
 
 Scheduled meetings are not the denominator. The denominator is the meetings that actually took place and were recorded:
 
 ```text
-denominator = count of HELD + RESCHEDULED meetings
-              for that person's assigned Cell, in that month
+N = count of HELD + RESCHEDULED meetings
+    for the Cell, in that month
 ```
 
-`NOT_HELD` meetings are excluded. Nobody can attend a meeting that did not take place, and counting one would mark every member of the Cell absent for something that never happened.
+`NOT_HELD` meetings are excluded. Nobody can attend a meeting that did not take place, and counting one would mark every attendee absent for something that never happened.
 
 Unreported meetings are excluded. An unreported meeting is an absence of data, not a fact about attendance (Section 13). Treating silence as non-attendance penalises disciples for a record their leader has not yet submitted.
 
-Because the denominator is derived per Cell per month, the buckets vary with it. For a denominator of N:
+Buckets are derived from N:
 
 - Once
 - Twice
@@ -1089,15 +1431,51 @@ Because the denominator is derived per Cell per month, the buckets vary with it.
 - Completed (N/N)
 - Total unique people
 
-A Cell whose October held five scheduled meetings, one of them `NOT_HELD`, reports against a denominator of 4, and its highest bucket is `Completed (4/4)`. Never label buckets from the calendar count.
+`Completed` means attendance at every recorded meeting of this Cell in the month. Never label buckets from the calendar count.
 
-`Completed` means the person attended every `HELD` or `RESCHEDULED` meeting of their assigned Cell (Section 10) recorded in the reporting month.
+**Where N is zero**, the Cell recorded no meetings, so nobody attended and the population is empty. The view shows the coverage line alone and no buckets. Do not render a `Completed (0/0)` bucket: with no meetings there is nothing to complete, and a bucket whose condition every person satisfies is not a bucket.
 
-Every Cell monthly attendance view must show recording coverage beside the buckets, as a single line — for example `4 of 5 meetings recorded`. Coverage is never a bucket, and never a fourth status.
+Every Cell monthly attendance view shows recording coverage beside the buckets, as a single line — for example `4 of 5 meetings recorded`. Coverage is never a bucket and never a status.
 
-Coverage is what stops a thin record reading as a strong one. A Cell that records one meeting out of four and reports every attendee as `Completed (1/1)` is not a complete Cell, and the coverage line says so on the same screen, factually and without judgement.
+Coverage is what stops a thin record reading as a strong one. A Cell that records one meeting of four and reports every attendee as `Completed (1/1)` is not a complete Cell, and the coverage line says so on the same screen, factually and without judgement.
 
-When aggregating multiple Cells, deduplicate people with `COUNT(DISTINCT person_id)` so a person attending more than one Cell is not counted twice in the leader/network total.
+#### Monthly Attendance does not aggregate
+
+**Bucket views exist at Cell scope only.** At leader, Network and Whole Church scope, report unique people, classification, and coverage — never monthly-attendance buckets.
+
+N belongs to a Cell. Two Cells in the same month can hold N = 5 and N = 2, so a member of the second who attended twice is `Completed` while a member of the first who attended twice is `Twice`. Placing both in one column makes aggregate `Completed` mean "attended everything their own Cell happened to record", which is inflated by exactly the Cells that recorded least. A leader recording one meeting a month would contribute the most `Completed` people in the Network.
+
+That is the pattern Section 13 removes from meeting status, reappearing in a denominator. It is not fixable by relabelling, because the buckets have no common axis to relabel onto.
+
+DCC aggregates precisely because it does not have this problem: there is one applicable event set for the whole church in a month, so every person shares one N (Section 9). The asymmetry is real and deliberate, not an inconsistency between the two domains.
+
+#### The roster view
+
+The monthly report cannot show a leader who did **not** come, because its population is people who attended. That person is often the one most worth seeing, so the leader gets a second artifact for it.
+
+The roster lists every current member of the Cell with their attendance for the month — which meetings they attended, and whether they attended at all. It is available to the Cell's leader, their upline within scope, Admin and Senior Pastors.
+
+It is an operational list, not a statistical report. It carries no buckets, no classification, and no totals that must reconcile with anything, and it is never aggregated across Cells. It reflects membership as it currently stands, so unlike the monthly report it is **not** reproducible for a past period and must not be presented as though it were.
+
+Keep the wording factual. A member with no attendance is shown with no attendance; nothing labels them, scores them, or orders members against one another (Section 13).
+
+#### Scope
+
+A Cell report belongs to the Cell's leader. It appears within the authorized scope of that leader, their upline, Admin and Senior Pastors (Section 15). It is not resolved through the pastoral leader of each individual member, who may differ — membership need not mirror pastoral assignment (Section 10).
+
+#### What is deliberately unsettled
+
+Three questions about Cell monthly attendance are known to be open and are not answered here:
+
+- whether a person who attended a Cell they have since left should appear in any monthly report, and under which Cell
+- whether a member who joined part-way through a month should be measured against the whole month, given they were not on the roster of the earlier meetings and cannot reach `Completed`
+- what an aggregate view should offer in place of buckets, beyond unique people and coverage
+
+Each was answered twice in this specification and each answer was found to break either reconciliation (Section 20) or reproducibility (Section 3). They are reporting definitions and therefore Stop Conditions: settle them against real data during implementation, verify with the reconciliation tests, and record the ruling here.
+
+Until then the rules above hold, and they are internally consistent — they simply do not yet answer these three questions.
+
+Whatever answers them must satisfy all of: every person in the population lands in exactly one bucket of each view; both views sum to the same total; a closed month's figures never move; no bucket rewards a Cell for recording fewer meetings; and no person's silence is reported as another person's absence.
 
 ---
 
@@ -1161,7 +1539,56 @@ Attendance for a calendar month may be recorded or corrected until the 7th of th
 
 Once closed, unreported meetings remain permanently unreported and outside the denominator, and coverage for that month is frozen. Only Admin may amend a closed month, using `records.backdate_effective_date` (Section 7), with a reason, audit logged (Section 21), and surfaced in Network Summary as a correction (Section 16).
 
-Before close, remind the responsible leader of any meeting still awaiting a record. Prompting a leader before the deadline is always preferable to labelling the gap after it.
+Before close, outstanding records are surfaced in two distinct ways, and they must not be confused.
+
+**Every leader sees their own outstanding work**, always, on their dashboard: meetings awaiting a record appear as tasks with the action attached (Section 19). This is not a notification and is not limited to anyone; it is simply the leader's own list.
+
+**Notifications go to the direct leaders of both Senior Pastors, and to Admin.** In-app notifications about outstanding records are sent to the direct pastoral children of Bishop Oriel Ballano, the direct pastoral children of Pastora Geraldine Ballano, and Admin. Nobody else receives one.
+
+**The Senior Pastors are deliberately not notified.** They retain full church-wide visibility and see everything they choose to look at (Section 7); they are simply not the people the application interrupts. Following up an outstanding record is the work of the leaders directly under them, and a notification reaching the top of the church for a Cell that has not filed a record inverts that.
+
+Recipients see church-wide figures, including names, which exceeds the own/subtree scope a leader holds by default. That visibility is not implied by their position — Section 7 is explicit that a Senior Pastor's direct leaders receive no wider scope by virtue of being in the direct 12. It comes from an explicit, Admin-issued grant of `reports.view_subtree` at Whole Church scope, read-only, recorded and audited like any other grant.
+
+Notification content never exceeds the recipient's granted scope. Where the grant is withdrawn, the notification narrows with it rather than continuing to disclose what the recipient may no longer see.
+
+Notifications are in-app only. No email, no SMS, no push.
+
+The system does send transactional email — password reset and account activation — and that provider stays (Sections 2 and 6). What this rule settles is that pastoral reminders add no channel beyond the application itself: no scheduled mail job, no queue, and no background worker, and no church data leaving the system inside a message.
+
+The design is deliberate. Accountability in this church runs through pastoral relationship, not through the application: the two Senior Pastors and their direct leaders see where their Networks stand, and follow up with the people they oversee personally. A leader behind on records hears from their own leader, not from an automated message. The application's job is to make the gap visible to the person who will make the call.
+
+```text
+cell_meetings
+- id
+- cell_id
+- week_starting           the Monday of the week this meeting belongs to (Section 20)
+- reporting_month         the month this meeting reports in, fixed at creation
+- scheduled_date
+- status                  HELD | RESCHEDULED | NOT_HELD
+- actual_date             nullable, set where the meeting was rescheduled
+- not_held_reason         nullable, required where status is NOT_HELD
+- note                    nullable, required where the reason is OTHER
+- facilitated_by          nullable, defaults to the Cell's current leader
+- responsible_leader_id
+- submitted_by            nullable
+- submitted_at            nullable
+- version                 for conflict detection (Section 14)
+```
+
+`reporting_month` is stored rather than derived. A rescheduled meeting keeps its original reporting month even when its actual date falls in the next one (below), so deriving the month from a date would move the meeting between periods the moment it is rescheduled.
+
+```text
+cell_attendance
+- id
+- cell_meeting_id
+- person_id
+- present
+- recorded_by
+- recorded_at
+- version
+```
+
+A correction never overwrites in place. The prior values, the actor, and the reason are preserved (Section 14), and an `UPDATE` plus an audit row does not satisfy that — Principle 12 requires the record itself to carry its history.
 
 For a rescheduled meeting, preserve:
 
@@ -1263,6 +1690,8 @@ Purpose:
 - show Cell Leaders in the current user's authorized scope
 - show how many Cells each leader leads
 - show Cell IDs, categories, schedules, and unique people
+- show a Cell's category and schedule history, with effective dates
+- show a Cell's roster for a month: every current member and their attendance (Section 12, The roster view)
 - drill into a leader and then into each Cell
 - show classification and monthly attendance reports
 - show Met / Moved / Did not meet counts and trends factually, with the reason breakdown and the coverage line (Section 13)
@@ -1272,7 +1701,7 @@ Purpose:
 
 Surface Cells that have gone quiet, as a working list for the leader who oversees them:
 
-- Cells with no meeting held for a configurable number of months, three by default
+- Cells with no meeting held for a set number of months, three by default. The threshold is a single church-wide Admin setting, changed under `settings.manage` (Section 7) and audit logged, never per leader: an attention list that differs by viewer makes two people discussing the same Cell talk past each other, one seeing it flagged and the other not.
 - Cells with meetings still awaiting a record (Section 13)
 - People with no active Cell membership within the viewer's scope (Section 10)
 
@@ -1281,6 +1710,10 @@ Each entry offers the actions that resolve it — recording the missing meeting,
 This is an attention list, not a ranking. It is filtered by a threshold, never sorted into an order of merit, and carries no score or colour grading (Section 13, Meeting summary and the ranking prohibition).
 
 Because the threshold triggers a prompt rather than a state change, it can be tuned freely. Nothing irreversible depends on where it is set.
+
+Schedule and category history are shown because both are effective-dated, and both change what a past month's figures mean (Section 10). A Cell that has moved day three times in a year is worth a leader knowing about; it usually means a venue problem or a leader under strain.
+
+Both are shown as history, never as a count or a rate. Do not derive a stability score, do not surface frequent changes on the attention list, and do not order leaders by them. A leader who changes day often is not thereby a worse leader, and Section 13's prohibition on derived scores applies here exactly as it does to meeting status.
 
 Because one leader can have multiple Cells, always distinguish:
 
@@ -1358,7 +1791,7 @@ Store leadership start date/history.
 
 Definition:
 
-A current Cell Leader qualifies for `Cell Leaders with 12+ Members` when at least 12 distinct people currently belong (per Section 10, Cell Membership) to one or more Cell Groups led by that leader.
+A current Cell Leader qualifies for `Cell Leaders with 12+ Members` when at least 12 distinct people belong (per Section 10, Cell Membership) to one or more Cell Groups led by that leader, **as of the end of the period being reported** — which for the current period means now. Section 3 already classes this as a current-state metric reflecting state as of the period reported; naming the as-of date here keeps it agreeing with the membership a Cell's roster shows for the same month.
 
 This metric is based on current Cell membership, not DCC attendance and not Cell attendance for a selected month.
 
@@ -1509,11 +1942,11 @@ Every tile carries four things: what it counts, the value, the scope it covers, 
 
 ```text
 People                          DCC — October 2026
-4,203                           340 people attended
+11,480                          4,120 people attended
 Whole Church · as of today      Whole Church · open until 7 Nov
 ```
 
-Scope must appear on the tile. The same tile reads 12 for a Cell leader and 4,203 for a Senior Pastor, and a figure without its scope cannot be discussed, screenshotted, or compared.
+Scope must appear on the tile. The same tile reads 12 for a Cell leader and 11,480 for a Senior Pastor, and a figure without its scope cannot be discussed, screenshotted, or compared.
 
 **Separate current-state tiles from period-based tiles.** Total People, Cell Leaders, Cell Groups and Direct Leaders are current-state and carry no period. Attendance figures are period-based and are meaningless without one. Group them separately; never interleave them in one row. Section 3 depends on this distinction being clear, and a dashboard is where it is most easily lost.
 
@@ -1528,6 +1961,7 @@ A dashboard of counts tells a leader nothing to act on. Dashboard is the first i
 - meetings awaiting a record, for the user's own Cells (Section 13)
 - Cells needing attention within their scope (Section 15)
 - people with no active Cell membership within their scope (Section 10)
+- the outcome of a Cell creation request the user submitted (Section 10)
 
 Each entry carries the action that resolves it.
 
@@ -1567,6 +2001,7 @@ Keep navigation similarly compact. Senior Pastors have whole-church scope for th
 
 Admin focuses on platform operations:
 
+- Pending Cell creation requests (Section 10)
 - People management
 - Networks / pastoral assignments
 - DCC Attendance administration
@@ -1598,6 +2033,10 @@ Never bucket a report directly by a raw UTC timestamp. A Cell meeting at 16:00 S
 
 Asia/Manila observes no daylight saving time, so the offset is a constant +08:00. Do not hard-code `+8`. Use the named zone, so the system stays correct if that ever changes.
 
+**A calendar week begins on Monday**, following ISO 8601, consistently with the date format used throughout. Sunday belongs to the week that began on the preceding Monday.
+
+This is not a formatting preference. Section 13 makes the weekly meeting the unit of a Cell's identity — one logical meeting per Cell per calendar week, whatever date it lands on — so the week boundary decides which meetings fall in which week, and a rescheduled meeting's week is the week it was scheduled in. A Sunday-start convention is common locally and will be somebody's default, which is why the rule is fixed here rather than left to the calendar library.
+
 ### Unique people
 
 When a report says `Total People`, it means distinct people in the relevant scope and period.
@@ -1618,21 +2057,62 @@ Monthly Attendance:
 
 Keep them separate in UI and data logic.
 
+### Closed periods are stable
+
+A month closes on the 7th of the following month, 23:59 Asia/Manila (Sections 9 and 13). After close, no leader may add or correct a record, and only Admin may amend, with a reason and an audit entry.
+
+A closed month's figures are therefore stable, and its reports **are** computed once and stored rather than recalculated on every request. Only the open month requires live computation. At the scale this church actually runs (Section 2), this is a requirement rather than an optimisation.
+
+This matters at whole-church scope. A Network Summary for a single month aggregates a recursive walk of the pastoral tree against every DCC event and every Cell meeting in that month, deduplicated by person and bucketed twice, and each drill-down repeats it at a narrower scope. Recomputing years of closed history on every page view is avoidable work that the submission window has already made unnecessary.
+
+Stored figures are invalidated and recomputed whenever the records they derive from change. Attendance amendment is not the only such change:
+
+- **An Admin amends attendance in a closed month** (Sections 9 and 13). Invalidates that month.
+- **A Person Merge** (Section 3). Invalidates **every** period, not one month. Identity resolution applies to all periods, and a merge deliberately lowers the unique-people total for periods already reported.
+- **A backdated effective date** on any effective-dated relationship (Section 5). Invalidates every period the effective date reaches back into, because it changes which subtree a person belonged to during those periods.
+- **An Admin reversal of a Cell closure** (Section 10). Invalidates the periods affected.
+
+Prefer not to enumerate these in code at all. Key each stored figure to a version of the source records it derives from, and treat any change to those records as invalidating.
+
+```text
+report_snapshots
+- id
+- report_kind
+- scope_type              CELL | LEADER | NETWORK | WHOLE_CHURCH
+- scope_id                nullable for Whole Church
+- period                  the reporting month
+- source_version          see below
+- payload
+- computed_at
+```
+
+`source_version` is a value that changes whenever any record the figure derives from changes. A monotonic counter incremented by every write to attendance, membership, assignment, lifecycle, or merge — scoped no more narrowly than the widest of those a report reads — is sufficient and is cheaper to reason about than tracking which rows a given figure touched. A snapshot whose `source_version` no longer matches is recomputed rather than served. A hand-maintained list of triggers is a list somebody eventually forgets to extend, and a stale stored figure fails silently — it returns a number that looks right.
+
+Stored figures are a cache, never a source. They are always derivable from the underlying records (Section 18), and a stored figure that cannot be reproduced from source data is a defect.
+
 ### Reconciliation
 
-For a classification report:
+Both views of a domain cover the same population, and both must sum to it.
+
+For DCC, the population is the unique people who attended at least once in the scope and period (Section 9):
 
 ```text
-VIP + 2nd + 3rd + 4th + Regular = Total Unique People
+VIP + 2nd + 3rd + 4th + Regular              = Total Unique People
+Once + Twice + Thrice + ... + Completed      = Total Unique People
 ```
 
-For monthly attendance:
+For Cells, the population is the unique people who attended a Cell in the scope and period (Section 12):
 
 ```text
-Once + Twice + Thrice + 4 Times (if applicable) + Completed = Total Unique People
+VIP + 2nd + 3rd + 4th + Regular              = Total Unique People
+Once + Twice + Thrice + ... + Completed      = Total Unique People
 ```
 
-If reconciliation fails, treat it as a data/reporting integrity issue.
+Both domains report on attendees, so both reconcile the same way. Cell monthly-attendance buckets exist at Cell scope only, so the second identity is checked per Cell; classification reconciles at every scope, because it carries no denominator (Section 12).
+
+A Cell's members who did not attend are shown in the roster view (Section 12), which is an operational list rather than a statistical report and reconciles with nothing. Attempts to make one report do both jobs failed twice, in both cases by breaking one of the two identities above.
+
+If reconciliation fails, treat it as a data and reporting integrity issue.
 
 ---
 
@@ -1650,10 +2130,16 @@ Audit important actions, including:
 - Role/permission changes
 - Attendance submission on behalf
 - Attendance corrections
+- Cell creation requested
+- Cell creation approved
+- Cell creation declined, with reason
+- Cell created directly by Admin during initial encoding
+- Initial encoding closed
 - Cell creation
 - Cell leader assignment
 - Cell category change
-- Cell reschedule
+- Cell schedule change, day or time, with effective date
+- Cell meeting rescheduled
 - Cell meeting declared Not Held, with reason
 - Cell meeting facilitator recorded
 - Cell membership added, moved, or ended
@@ -1665,6 +2151,7 @@ Audit important actions, including:
 - Person merge
 - Account access decision at archive (Disable or Keep)
 - Account reactivation
+- System setting changed, with previous and new values
 
 Record actor, target, action, timestamp, and relevant before/after values.
 
@@ -1719,6 +2206,135 @@ GET  /api/v1/reports/cells/yearly
 GET  /api/v1/reports/network-summary
 ```
 
+### Conventions
+
+Three clients consume this API concurrently (Section 2) and mobile builds cannot be force-updated, so these conventions are part of the contract rather than house style. Settle them before the third controller is written.
+
+All requests and responses are JSON. No redirects, no HTML error pages, no form encoding — only one of the three surfaces is a browser.
+
+#### Dates and times
+
+Timestamps are ISO 8601 with an offset. Date-only fields — an attendance date, an effective date, a Cell meeting date — are plain `YYYY-MM-DD` and are always Asia/Manila dates (Section 20). Never send a date-only field as a timestamp; the conversion is where months silently shift.
+
+#### Pagination
+
+Cursor-based, on every collection endpoint:
+
+```text
+GET /api/v1/people/search?q=dela+cruz&limit=50
+{
+  "data": [ ... ],
+  "next_cursor": "b3BhcXVlLWN1cnNvcg"
+}
+```
+
+- `limit` defaults to 50, maximum 200.
+- The cursor is opaque. Clients pass it back unmodified and never construct one.
+- `next_cursor` is absent or null on the last page.
+
+Offset pagination is not used. Rows inserted while a client is paging shift every subsequent offset, which duplicates and skips records — a real problem on a directory that grows during a Sunday service, and a worse one for mobile sync.
+
+Collection endpoints do not return total counts. A count over a large scoped set is expensive on every page, and totals are a reporting concern with their own endpoints and their own rules (Section 20).
+
+#### Errors
+
+One envelope, always:
+
+```json
+{
+  "error": {
+    "code": "SCOPE_DENIED",
+    "message": "Human-readable, safe to display.",
+    "details": {}
+  }
+}
+```
+
+`code` is stable and machine-readable; clients branch on it and never on `message`. At minimum:
+
+| Code | HTTP | Meaning |
+| --- | --- | --- |
+| `UNAUTHENTICATED` | 401 | No valid access token |
+| `CAPABILITY_DENIED` | 403 | The actor lacks the capability (Section 7) |
+| `SCOPE_DENIED` | 403 | The actor holds the capability but not over this target |
+| `VALIDATION_FAILED` | 422 | Malformed or missing input |
+| `VERSION_CONFLICT` | 409 | The record changed since it was read (below) |
+| `PERIOD_CLOSED` | 409 | The reporting month is closed (Section 13) |
+| `IDEMPOTENCY_KEY_REUSED` | 409 | The key was already used for a different request. Never retry |
+| `REQUEST_IN_FLIGHT` | 409 | The original request with this key has not finished. Retry after a short delay |
+| `INVARIANT_VIOLATION` | 409 | A domain rule rejects the write — cycle, cross-Network edge, two active assignments |
+| `NOT_FOUND` | 404 | No such record, or its existence must not be disclosed |
+
+`CAPABILITY_DENIED` and `SCOPE_DENIED` are deliberately distinct, because capability and scope are independent grants (Section 7) and an administrator diagnosing a permission problem needs to know which one failed.
+
+Where revealing that a record exists would itself disclose something, return `NOT_FOUND` rather than a denial. People are not such a case: Section 8 already discloses minimal identity church-wide by design.
+
+#### Write conflicts
+
+`VERSION_CONFLICT` carries what Section 14 requires a person to see. The client renders a resolution dialog directly from it:
+
+```json
+{
+  "error": {
+    "code": "VERSION_CONFLICT",
+    "message": "This record changed after you opened it.",
+    "details": {
+      "submitted_version": 3,
+      "current_version": 4,
+      "submitted": { "present": 9, "recorded_at": "2026-10-17T18:02:11+08:00",
+                     "actor": { "id": "...", "name": "Manuel" } },
+      "current":   { "present": 8, "recorded_at": "2026-10-17T18:15:40+08:00",
+                     "actor": { "id": "...", "name": "Raymond" } }
+    }
+  }
+}
+```
+
+Both values, both actors, both timestamps. A conflict response that omits any of them cannot satisfy Section 14, because the person resolving it cannot tell which record to keep.
+
+#### Idempotency
+
+Every state-changing request carries an `Idempotency-Key` header holding a client-generated UUID (Section 23):
+
+```text
+Idempotency-Key: 6f2b1c94-8b6a-4a1e-9a1e-2c9f4d5b7e01
+```
+
+- The server stores the key with the response it produced, for at least 24 hours.
+- A repeat of the same key with the same body returns the stored response and does not execute again.
+- The same key with a **different body** returns `IDEMPOTENCY_KEY_REUSED`. This is permanent and the client must never retry it. It is a conflict rather than malformed input, so `VALIDATION_FAILED` would be wrong — a client branching on that code would show a field error for a replay.
+- A retry arriving while the **original request is still in flight** returns `REQUEST_IN_FLIGHT`, and the client retries after a short delay. This is the case the header exists to handle: a phone on an unreliable connection resends before the first response arrives.
+
+The two are separate codes deliberately. They demand opposite client behaviour — never retry, and retry shortly — and clients branch on the code alone (above), so a single code covering both would send a client into an endless retry of a permanent conflict.
+
+This is required from the first write endpoint, not added later. A leader recording attendance on an unreliable connection will retry, and a retry must never create a second record.
+
+#### Filtering and sorting
+
+Filters are explicit named query parameters. Do not build a general query language; every filter is a parameter someone deliberately exposed and authorized.
+
+Sorting uses `sort`, with a leading `-` for descending:
+
+```text
+GET /api/v1/cells?leader_id=...&sort=-not_held_count
+```
+
+Sorting and filtering are permitted, including on meeting-status figures — finding the Cells that need help is pastoral work (Section 13).
+
+The prohibition on ranking must be stated directly, because it does not follow from the shape of the model. Coverage is a rate (Section 13), so `sort=-coverage` over a collection of leaders is expressible and must be refused:
+
+- No response carries a rank position, a composite score, or a grade. No such field exists, and none may be added.
+- No endpoint sorts a collection of **leaders** by coverage, by `NOT_HELD`, or by any figure derived from them.
+- No endpoint applies such a sort by default.
+
+Sorting a leader's **own Cells** by those figures is permitted and useful — that is how a leader finds which of their Cells needs attention. Ordering **leaders against one another** by them is what Section 13 forbids.
+
+#### Versioning
+
+`/api/v1` remains available and behaviourally unchanged for as long as any client calls it. An installed mobile build keeps calling it for months, and an iOS release passes through review before it can reach anyone.
+
+Additive changes — a new optional field, a new endpoint — do not require a new version. Removing a field, renaming one, narrowing a type, or changing the meaning of an existing value does. When in doubt, add rather than change.
+
 Controllers/routes should delegate to authorization and application/domain services rather than containing SQL/business logic directly.
 
 ---
@@ -1759,9 +2375,25 @@ Do not build offline complexity before it is needed. Do not make architectural c
 - Rate limiting for authentication and sensitive endpoints
 - CORS restrictions
 - Secure secrets/environment handling
-- Automated backups
+- Automated backups, daily at minimum, with at least 30 days of retention
+- Point-in-time recovery wherever the database host supports it
+- A restore tested before go-live, and at least annually thereafter
 - Audit logging
 - Least-privilege database/application credentials
+
+### Backups
+
+Daily is the minimum, and weekly is not acceptable here.
+
+Attendance exists nowhere else. A week of loss is one DCC Sunday and roughly eight hundred Cell meetings (Section 2, Scale), and nobody can reconstruct who was present three weeks ago — leaders will not remember, and the submission window may have closed even if they did (Section 13). Unlike most business data, none of it can be re-derived from another system or a paper trail.
+
+Corruption is also usually noticed late. A bad migration discovered three weeks after it ran needs a restore point from before it, which weekly backups with short retention will not have.
+
+The cost argument does not apply. A church of several thousand people with years of attendance is a small database, and daily backups of it are inexpensive on any host. Point-in-time recovery, standard on managed PostgreSQL, reduces worst-case loss from a day to minutes and should be used where available.
+
+A backup that has never been restored is an assumption. Test one before go-live and annually after, and record that it was done.
+
+This is distinct from the per-migration snapshot required before touching relationship tables (Definition of Done, migration policy). Routine backups cover accidents; migration snapshots cover deliberate schema changes. Both are required.
 
 Do not expose the entire church dataset to the browser and filter it client-side.
 
@@ -1778,7 +2410,7 @@ When generating or reviewing code for this system:
 5. Never add civil-status values beyond Single, Married, Widowed unless requirements explicitly change.
 6. Never add sex values beyond Male and Female unless requirements explicitly change.
 7. Never add Cell categories beyond Youth, Young Pro, Couple unless requirements explicitly change.
-8. Never add Cell meeting statuses beyond Held and Rescheduled unless requirements explicitly change.
+8. Never add Cell meeting statuses beyond `HELD`, `RESCHEDULED`, and `NOT_HELD` (Section 1, Principle 8), and never infer `NOT_HELD` from missing data.
 9. Never introduce negative/judgmental leader labels or analytics.
 10. Never assume one Cell Leader has only one Cell.
 11. Never count duplicate people twice when aggregating multiple Cells or branches.
@@ -1834,5 +2466,40 @@ REPORTING
        +-- Generations
        +-- Tree
 ```
+
+### Required persistent structures
+
+Every structure the rules above depend on. A rule whose structure is missing is a rule that can be implemented in prose and fail in practice, so this list exists to be checked against a migration rather than read.
+
+Shapes are given in the section that owns each rule; this is the index.
+
+| Structure | Owner | Shape in |
+| --- | --- | --- |
+| `persons` | `people` | Section 3 |
+| `person_lifecycle` | `people` | Section 3 |
+| `network_assignments` | `networks` | Section 4 |
+| `pastoral_assignments` | `hierarchy` | Section 5 |
+| `accounts` | `auth` | Section 6 |
+| `refresh_tokens` | `auth` | Section 6, Several devices at once |
+| `cells` | `cells` | Section 10 |
+| `cell_categories` | `cells` | Section 10 |
+| `cell_schedules` | `cells` | Section 10 |
+| `cell_memberships` | `cells` | Section 10 |
+| `cell_leaderships` | `cells` | Section 11 |
+| `cell_creation_requests` | `cells` | Section 10 |
+| `dcc_events` | `attendance` | Section 9 |
+| `dcc_attendance` | `attendance` | Section 9 |
+| `cell_meetings` | `attendance` | Section 13 |
+| `cell_attendance` | `attendance` | Section 13 |
+| `report_snapshots` | `reporting` | Section 20 |
+| `audit_log` | `audit` | Section 21 |
+| `settings` | `admin` | Section 7, `settings.manage` |
+| `idempotency_keys` | shared | Section 22 |
+
+Five of these carry history the specification guarantees and would otherwise be built as a column on their parent, losing it silently: `person_lifecycle`, `network_assignments`, `cell_categories`, `cell_schedules`, `cell_memberships`. A column satisfies every sentence about them and cannot answer a question about a past period.
+
+Adding a structure to this list is part of the change that introduces the rule needing it, never a follow-up.
+
+---
 
 This specification is the architectural source of truth unless a later explicit church requirement changes a rule.
