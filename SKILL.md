@@ -1757,6 +1757,122 @@ GET  /api/v1/reports/cells/yearly
 GET  /api/v1/reports/network-summary
 ```
 
+### Conventions
+
+Three clients consume this API concurrently (Section 2) and mobile builds cannot be force-updated, so these conventions are part of the contract rather than house style. Settle them before the third controller is written.
+
+All requests and responses are JSON. No redirects, no HTML error pages, no form encoding — only one of the three surfaces is a browser.
+
+#### Dates and times
+
+Timestamps are ISO 8601 with an offset. Date-only fields — an attendance date, an effective date, a Cell meeting date — are plain `YYYY-MM-DD` and are always Asia/Manila dates (Section 20). Never send a date-only field as a timestamp; the conversion is where months silently shift.
+
+#### Pagination
+
+Cursor-based, on every collection endpoint:
+
+```text
+GET /api/v1/people/search?q=dela+cruz&limit=50
+{
+  "data": [ ... ],
+  "next_cursor": "b3BhcXVlLWN1cnNvcg"
+}
+```
+
+- `limit` defaults to 50, maximum 200.
+- The cursor is opaque. Clients pass it back unmodified and never construct one.
+- `next_cursor` is absent or null on the last page.
+
+Offset pagination is not used. Rows inserted while a client is paging shift every subsequent offset, which duplicates and skips records — a real problem on a directory that grows during a Sunday service, and a worse one for mobile sync.
+
+Collection endpoints do not return total counts. A count over a large scoped set is expensive on every page, and totals are a reporting concern with their own endpoints and their own rules (Section 20).
+
+#### Errors
+
+One envelope, always:
+
+```json
+{
+  "error": {
+    "code": "SCOPE_DENIED",
+    "message": "Human-readable, safe to display.",
+    "details": {}
+  }
+}
+```
+
+`code` is stable and machine-readable; clients branch on it and never on `message`. At minimum:
+
+| Code | HTTP | Meaning |
+| --- | --- | --- |
+| `UNAUTHENTICATED` | 401 | No valid access token |
+| `CAPABILITY_DENIED` | 403 | The actor lacks the capability (Section 7) |
+| `SCOPE_DENIED` | 403 | The actor holds the capability but not over this target |
+| `VALIDATION_FAILED` | 422 | Malformed or missing input |
+| `VERSION_CONFLICT` | 409 | The record changed since it was read (below) |
+| `PERIOD_CLOSED` | 409 | The reporting month is closed (Section 13) |
+| `INVARIANT_VIOLATION` | 409 | A domain rule rejects the write — cycle, cross-Network edge, two active assignments |
+| `NOT_FOUND` | 404 | No such record, or its existence must not be disclosed |
+
+`CAPABILITY_DENIED` and `SCOPE_DENIED` are deliberately distinct, because capability and scope are independent grants (Section 7) and an administrator diagnosing a permission problem needs to know which one failed.
+
+Where revealing that a record exists would itself disclose something, return `NOT_FOUND` rather than a denial. People are not such a case: Section 8 already discloses minimal identity church-wide by design.
+
+#### Write conflicts
+
+`VERSION_CONFLICT` carries what Section 14 requires a person to see. The client renders a resolution dialog directly from it:
+
+```json
+{
+  "error": {
+    "code": "VERSION_CONFLICT",
+    "message": "This record changed after you opened it.",
+    "details": {
+      "submitted_version": 3,
+      "current_version": 4,
+      "submitted": { "present": 9, "recorded_at": "2026-10-17T18:02:11+08:00",
+                     "actor": { "id": "...", "name": "Manuel" } },
+      "current":   { "present": 8, "recorded_at": "2026-10-17T18:15:40+08:00",
+                     "actor": { "id": "...", "name": "Raymond" } }
+    }
+  }
+}
+```
+
+Both values, both actors, both timestamps. A conflict response that omits any of them cannot satisfy Section 14, because the person resolving it cannot tell which record to keep.
+
+#### Idempotency
+
+Every state-changing request carries an `Idempotency-Key` header holding a client-generated UUID (Section 23):
+
+```text
+Idempotency-Key: 6f2b1c94-8b6a-4a1e-9a1e-2c9f4d5b7e01
+```
+
+- The server stores the key with the response it produced, for at least 24 hours.
+- A repeat of the same key with the same body returns the stored response and does not execute again.
+- The same key with a different body is `VALIDATION_FAILED`.
+
+This is required from the first write endpoint, not added later. A leader recording attendance on an unreliable connection will retry, and a retry must never create a second record.
+
+#### Filtering and sorting
+
+Filters are explicit named query parameters. Do not build a general query language; every filter is a parameter someone deliberately exposed and authorized.
+
+Sorting uses `sort`, with a leading `-` for descending:
+
+```text
+GET /api/v1/cells?leader_id=...&sort=-not_held_count
+```
+
+Sorting and filtering are permitted, including on meeting-status figures — finding the Cells that need help is pastoral work (Section 13). What the API must never expose is a field to rank by: there is no score, rate, position, or grade anywhere in the model, so there is nothing of that kind to sort on.
+
+#### Versioning
+
+`/api/v1` remains available and behaviourally unchanged for as long as any client calls it. An installed mobile build keeps calling it for months, and an iOS release passes through review before it can reach anyone.
+
+Additive changes — a new optional field, a new endpoint — do not require a new version. Removing a field, renaming one, narrowing a type, or changing the meaning of an existing value does. When in doubt, add rather than change.
+
 Controllers/routes should delegate to authorization and application/domain services rather than containing SQL/business logic directly.
 
 ---
