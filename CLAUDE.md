@@ -314,6 +314,19 @@ Weekly was considered and rejected: attendance exists nowhere else, so a week of
 ### 2026-08-20 — Two capabilities were referenced but never named
 `cell.manage_leadership` (assigning and ending Cell leadership, and referenced by the dual-authorization rule in §6) and `people.merge` (§3, and a row in the §7 role table with no identifier). Both now appear in the §7 capability list and role catalog. `cell.manage_lifecycle` is also stated to cover creating a Cell, not only closing one.
 
+### 2026-08-20 — DCC attendance is face to face only
+Online or streamed participation creates no attendance record and affects no total. Recording rests on a leader knowing who was in the room. Recorded as a deliberate exclusion so an online state is not added later as though it were an oversight. Written to `SKILL.md` §9.
+
+### 2026-08-20 — Submission rolls up to the nearest upline with an account
+A leader who disciples people but has not opened a Cell cannot sign in, since accounts arrive with Cell leadership (§6). They remain the responsible leader — that definition follows tree position and never depends on account status — and their upline submits for them under §14.
+
+Section 6 was deliberately not widened. An account for someone who has not opened a Cell would detach "leader" from "leads a Cell", which §11 makes non-negotiable. The arrangement self-corrects: the account arrives with the Cell. Written to `SKILL.md` §9.
+
+### 2026-08-20 — Recorded scale and initial data load
+The church runs roughly 800 active Cells with 3,000 to 4,000 attending DCC weekly, giving around 50,000 attendance records a month. That is a small PostgreSQL database and changes no technology choice, but it makes materialized closed months and first-migration indexes requirements rather than optimisations.
+
+Initial encoding is a distinct phase: Admin imports the leadership tree centrally, and each Cell Leader encodes their own members. Cell-creation approval and individual attribution are relaxed for that phase only; duplicate matching applies at full force, since a large encoding effort across many hands is the likeliest source of duplicates this system will see. Written to `SKILL.md` §2.
+
 ### Open — awaiting a ruling
 
 Nothing is currently awaiting a ruling. Items reaching a Stop Condition are recorded here until settled.

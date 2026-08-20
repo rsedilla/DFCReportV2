@@ -78,6 +78,45 @@ Desktop web, mobile web, and the native apps are used concurrently, by the same 
 
 The API must therefore be stateless, must support several concurrent sessions per account (Section 6), and must detect write conflicts rather than resolving them silently (Sections 14 and 23).
 
+### Scale
+
+Sized against the church as it stands, not a hypothetical:
+
+- roughly **800 active Cell Groups**
+- **3,000 to 4,000 people** attending DCC each Sunday, face to face
+- on the order of **10,000 to 15,000 Person records** once members, DCC-only attendees, and archived records are counted
+- roughly **3,400 Cell meetings** and **50,000 attendance records per month**, around 600,000 a year
+
+This is a small database. Three million attendance rows after five years is unremarkable for PostgreSQL on a modest instance, and the write pattern is gentle: a few hundred DCC submissions spread across Sunday evening, and around 800 Cell submissions across a week.
+
+**Do not design for a scale problem that does not exist.** Principle 13 stands — a modular monolith, with no service extraction, sharding, or caching layer introduced without a demonstrated need.
+
+Two consequences do follow from these figures, and both are requirements rather than optimisations:
+
+- Reports for closed months are materialized (Section 20). A live whole-church aggregate over a month of attendance, recomputed on every drill-down, is slow enough to be felt.
+- The indexes reporting depends on exist in the **first** migration, not once somebody complains: attendance by event and person, attendance by person and date, and pastoral assignment by leader for subtree traversal.
+
+Design headroom for two to three times these figures. The church is growing toward a larger structure, and the tree is arbitrary-depth by rule (Principle 11) precisely so that growth never requires a schema change.
+
+### Initial data load
+
+The church already exists. Roughly 800 Cells are running under an established leadership structure, and the system's first task is to record what is already there rather than to govern what gets created. Initial encoding is a distinct phase with its own rules.
+
+The two halves of the data live in different places and are loaded differently.
+
+**The leadership tree is known centrally and is small.** The Senior Pastors, their direct leaders, and the leaders below them number in the low thousands. Admin imports it: names, sex, and each person's direct leader. Network follows from sex (Section 4). Every pastoral assignment created this way takes an effective date of the encoding date, exactly as Section 4 requires for initial Network assignment. Do not fabricate historical dates for relationships that predate the system.
+
+**Cell members are known only to their own leaders.** Nobody holds a central, current list of every member of every Cell. Each Cell Leader encodes their own members once they have an account. This is slower than a central import and considerably more accurate, and it doubles as the leader's first real use of the application.
+
+The sequence matters. The tree must exist before leaders can be assigned, accounts provisioned, or Cells attached in the right place.
+
+Two rules are relaxed for this phase and only this phase:
+
+- **Cell creation requires no approval during initial encoding.** The Cells being recorded already exist and are not in dispute. Approval governs Cells created after launch (Section 10).
+- **Bulk import is an Admin action**, audited as one, rather than a sequence of individual creations attributed to leaders who were not present.
+
+Everything else holds without exception. Duplicate matching applies at full force during bulk import (Section 3): a large encoding effort spread across many hands is the most likely source of duplicate Person records this system will ever see, and candidate surfacing exists precisely for it. Member IDs are assigned by the server from the sequence. Nothing is backdated.
+
 ---
 
 ## 3. Person Model
@@ -796,6 +835,14 @@ Do not create events lazily on first use. If an event exists only once somebody 
 
 Because every Sunday has an event by default, an absent event always means a recorded, audited decision, and coverage is measurable against a denominator that exists before anyone submits anything.
 
+### Attendance is face to face
+
+Only physical attendance at the DCC service is recorded. Online or streamed participation creates no attendance record and affects no classification, monthly attendance bucket, or total.
+
+This is a deliberate exclusion, not an omission. Recording attendance is a leader's responsibility for the people under them (below), and that responsibility rests on a leader knowing who was in the room. Do not add an online attendance state, a viewing record, or a separate present-state value for remote participation.
+
+The same applies to Cell meetings (Section 12).
+
 ### Responsible leader for DCC attendance
 
 The responsible leader for a person's DCC attendance is their **direct pastoral leader, as of the event date** (Section 5).
@@ -807,6 +854,16 @@ Every person has exactly one direct pastoral leader, so every person is covered 
 **Fixed as of the event date.** A later reassignment never moves historical records. If a person moves from one leader to another in November, October's DCC records remain with whoever was responsible in October, and re-running October's report returns the same figures (Section 3).
 
 **An upline leader may record on behalf** of a downline leader within their pastoral subtree (Section 14). The responsible leader remains the direct pastoral leader; the actor is recorded separately. Coverage measures whether the record exists, not who entered it, so a submission made on behalf completes that leader's coverage for the event.
+
+**Where the responsible leader holds no account**, the submission falls to the nearest upline leader who does.
+
+An account is provisioned when a person becomes a Cell Leader (Section 6), so a leader who disciples people but has not yet opened a Cell cannot sign in. They remain the responsible leader — the definition follows position in the pastoral tree and never depends on whether someone can log in — and their upline records for them under the on-behalf rule above.
+
+The interface must make this workable. A leader's DCC checklist shows their own direct pastoral children **and** the direct children of any downline leader who holds no account. Without that, the covering leader has no way of knowing what they owe.
+
+Coverage will then show such a leader as covered by someone else every week, and that is worth seeing rather than hiding: a leader carrying several account-less downlines is stretched, and nothing else in the system would reveal it.
+
+The arrangement resolves itself. When that leader opens a Cell they receive an account, become their own submitter, and the covering load falls away. Leadership is earned by leading a Cell (Section 11), and the account arrives with the Cell rather than ahead of it.
 
 A Network root leader has no pastoral leader and therefore no responsible leader (Section 5, Network roots). Admin records their attendance, and roots are excluded from coverage denominators.
 
