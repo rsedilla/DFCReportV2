@@ -133,9 +133,35 @@ One commit per coherent change. Do not mix a rule change with unrelated tidying.
 
 ### Running the project
 
-No application code exists yet.
+Two applications, each with its own dependencies: `api/` (NestJS) and `web/` (Next.js). Node 22 or later, and Docker for the local database.
 
-When the API and web application are scaffolded, this section carries the commands to install, run, migrate, seed, and test. Until it does, the Definition of Done above is a statement of intent rather than something anyone can check — filling this in is part of the scaffolding work, not a follow-up to it.
+```bash
+cp .env.example .env                 # POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_DB
+docker compose up -d                 # PostgreSQL 16, the minimum version (SKILL.md §5)
+
+cd api && npm ci && cp .env.example .env
+npm run migrate:up
+npm run start:dev                    # http://localhost:3001/api/v1
+
+cd ../web && npm ci && cp .env.example .env.local
+npm run dev                          # http://localhost:3000
+```
+
+`api/.env` and `web/.env.local` are not committed. `JWT_SECRET` must be at least 32 characters, and the application refuses to start without it rather than falling back to a default that would be wrong in production.
+
+| Command | In | What it does |
+| --- | --- | --- |
+| `npm run lint` | `api`, `web` | ESLint. In `web` it also fails on an API route or a server action |
+| `npm run typecheck` | `api`, `web` | `tsc --noEmit` |
+| `npm run format:check` | `api` | Prettier |
+| `npm test` | `api` | The suite that must stay green. Needs a migrated database |
+| `npm run test:authorization` | `api` | The eleven authorization cases. **Fails until Stage 2** |
+| `npm run migrate:up` / `:down` / `:status` | `api` | Applies, reverts one, or lists migrations |
+| `npm run build` | `api`, `web` | Production build |
+
+There is no seed command. Section 2 of `SKILL.md` loads real data through the import flow rather than through fixtures, and test fixtures are built by the tests that need them.
+
+Migrations are plain `.sql` files in `api/migrations/`, applied in filename order by `api/scripts/migrate.ts`. Each holds a `-- migrate:up` and a `-- migrate:down` section, and an applied migration is checksummed: editing one that has already run is refused, because the file and the database would otherwise disagree with nothing to say so. Write a new migration instead.
 
 ## Stop Conditions
 Stop and request architectural clarification rather than inventing a rule when:
@@ -436,6 +462,28 @@ Stated because a capability and a scope cannot express three objects with three 
 
 ### 2026-08-20 — `read_only` is valid only on a read capability
 Five capabilities are reads: the four `view_subtree` variants and `audit.view`. The other nineteen are writes, and a grant of one with `read_only` true is rejected at creation rather than stored and silently ineffective — otherwise an Admin who leaves the flag at its default creates a row that grants nothing, with nothing to explain the denial. Written to `SKILL.md` §7.
+
+### 2026-08-20 — Migrations are hand-written SQL, and there is no ORM
+Migration files are plain SQL applied in order by a small runner in the repository. Data access is a typed query builder over the PostgreSQL driver.
+
+Both fall out of §5 rather than from taste. The partial unique index, the check constraint, the `DEFERRABLE INITIALLY DEFERRED` constraint trigger and the `CYCLE` clause are not expressible in any ORM's model, and a tool that generates migrations by diffing a model against the database proposes dropping what it cannot see — on every migration, forever. An ORM would therefore have to be fought on exactly the parts of the schema the specification cares most about.
+
+The accepted cost is that table types are hand-written and reviewed rather than generated, kept honest by the schema tests. Written to `SKILL.md` §2 (Chosen stack).
+
+### 2026-08-20 — An endpoint that declares no capability is denied
+`SKILL.md` §2 already said a NestJS guard fails closed; §7 now says what that means as a rule, and names the only two exemptions: an endpoint reachable without authentication, and an endpoint that requires authentication and acts solely on the caller's own session. Each names its reason where it is written, so the whole exempt set is one search.
+
+Stated as a rule because the alternative failure is silent. An endpoint missing its declaration looks exactly like an endpoint that needs no declaration, and on a team the difference is invisible in review unless the guard refuses it. Written to `SKILL.md` §7.
+
+### 2026-08-20 — Invariant 4 answers `SCOPE_DENIED`, not `INVARIANT_VIOLATION`
+A leader acting on their own assignment, or on an upline's, is refused with `SCOPE_DENIED` even though the check runs in the `hierarchy` domain layer rather than in the guard. It is a statement about the actor's authority over a target, which is what that code means.
+
+`INVARIANT_VIOLATION` stays for a record the rules reject however it was submitted and by whomever: a cycle, a cross-Network edge, a second active assignment. §22 distinguishes the codes so an administrator can tell which half of a grant failed, and that only survives if domain-layer authority checks answer the same way the guard does. Written to `SKILL.md` §22.
+
+### 2026-08-20 — The eleven authorization cases ship failing, in their own CI job
+They are written against `PUT /api/v1/people/{id}/pastoral-leader`, which Stage 2 builds, and they fail today because nothing serves it. They are not skipped, not marked pending, and not inverted to pass on failure: a test that passes because it expects failure stops being a test the moment the feature arrives.
+
+They run as a separate job that is reported and not required, so the `api` job stays honestly green on an application with no features. Stage 2 is done when they pass, at which point they move into the main suite and that job is deleted. The endpoint contract they pin, including its error codes, is documented at the top of `api/test/authorization/pastoral-assignment.spec.ts`.
 
 ### Open — awaiting a ruling
 

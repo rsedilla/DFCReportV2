@@ -52,6 +52,8 @@ This is settled, not a suggestion.
 
 - **Backend:** NestJS + TypeScript
 - **Database:** PostgreSQL
+- **Migrations:** hand-written SQL files, applied in order by a runner held in the repository
+- **Data access:** a typed query builder over the PostgreSQL driver, not an ORM
 - **Frontend:** Next.js + TypeScript, as a pure client
 - **API:** REST, versioned under `/api/v1`
 - **Deployment:** containerized, portable across AWS, Hostinger/VPS, or another provider
@@ -63,6 +65,12 @@ Two reasons decide the backend, and both come from requirements rather than tast
 **Authorization must be enforced structurally.** Section 7 makes the API the sole authority, and Section 22 sketches roughly forty endpoints, each needing a capability check and a scope check. NestJS guards make that declarative and reviewable in one line, and an endpoint that fails to declare a capability fails closed. On a team, the alternative — remembering to call a check inside every handler — erodes: the check is only as reliable as the least familiar developer writing the newest route.
 
 **Mobile clients cannot be force-updated.** An installed app keeps calling `/api/v1` for months after the web client has moved on, and an iOS release passes through review before it can reach anyone. The API must therefore be deployable independently of the web application. If the API ships inside the web app, no web change can be released without redeploying the API that every phone depends on. Separate deployables is a requirement here, not a preference.
+
+One reason decides the migration and data-access tooling, and it is the same reason.
+
+**The constraints are the design.** Section 5 requires a partial unique index, a check constraint, and a constraint trigger that is `DEFERRABLE INITIALLY DEFERRED`, and every subtree query carries a `CYCLE` clause. No ORM models any of those. A tool that generates migrations by diffing a model against the database does not merely fail to create them — it proposes dropping what it cannot see, on every migration, forever. So the schema lives in hand-written SQL, and the query layer is a typed builder that composes SQL rather than hiding it.
+
+The cost is accepted deliberately: table types are written and reviewed rather than generated, and the schema tests are what keep them honest.
 
 ### The frontend is a client, like the phones
 
@@ -949,6 +957,15 @@ capability_grants
 **Role defaults are specification, not data.** The role catalog above is the authority for what each role carries, and it is not editable at runtime. Changing a role default is a change to this document and a deploy, which is what keeps the catalog and the running system from diverging. `roles.manage` governs which roles and grants an account holds, never what a role means.
 
 **Every capability check names both halves.** The guard resolves a capability and a scope for the actor, then evaluates the scope against **the request's primary target** — the record being read or written. Neither half alone is sufficient, and an account with no matching row is denied: the absence of a grant is a denial, never a default allow.
+
+**An endpoint that declares no capability is denied.** The capability and the target are declared on the endpoint, and an endpoint declaring neither is refused rather than allowed. This is what makes Section 2's structural enforcement real: forgetting the declaration closes an endpoint instead of opening it, which is the failure a busy afternoon actually produces.
+
+Exactly two exemptions exist, and each names its reason where it is written:
+
+- an endpoint reachable **without authentication** — sign-in, and the password reset and activation flows, where there is no token to present yet
+- an endpoint requiring **authentication and no capability**, because it acts on the caller's own session: reading their own claims, signing out, ending their own sessions
+
+Neither ever covers an endpoint that reads or writes a Person, a Cell, attendance, a report, an account other than the caller's own, or a setting. An exemption is reviewed as a change to authorization, because that is what it is.
 
 A request is allowed where **any** active role default or active grant for that capability covers the target. Authority only widens; there is no mechanism for narrowing a role default on one account, and none is needed — removing the role or disabling the account is the answer.
 
@@ -2518,6 +2535,8 @@ One envelope, always:
 | `NOT_FOUND` | 404 | No such record, or its existence must not be disclosed |
 
 `CAPABILITY_DENIED` and `SCOPE_DENIED` are deliberately distinct, because capability and scope are independent grants (Section 7) and an administrator diagnosing a permission problem needs to know which one failed.
+
+A domain check that rejects the **actor's authority over a target** answers `SCOPE_DENIED`, even though it runs in the domain layer rather than in the guard. Section 5's prohibition on acting on oneself or on anyone upline is the case in point: it concerns who may act on this record, which is what `SCOPE_DENIED` means. `INVARIANT_VIOLATION` is for a record the rules reject however it was submitted and whoever submitted it — a cycle, a cross-Network edge, a second active assignment. Keeping the two apart is what lets a client, and an administrator reading a log, tell "you may not do this" from "this cannot be recorded".
 
 Where revealing that a record exists would itself disclose something, return `NOT_FOUND` rather than a denial. People are not such a case: Section 8 already discloses minimal identity church-wide by design.
 
