@@ -106,9 +106,11 @@ jobs:
       - name: Install
         run: npm ci
 
-      # `lint` also runs the client-boundary check: no API routes, no server
-      # actions. The web application is a client, like the phones (SKILL.md
-      # section 2).
+      # `lint` runs three checks beyond ESLint, each holding a rule the
+      # specification states and review would not catch: no API routes or server
+      # actions (SKILL.md section 2), no design-system component framework
+      # (section 2), and WCAG 2.2 AA contrast with no judgement-named token
+      # (section 23, and sections 13, 17 and 19).
       - name: Lint
         run: npm run lint
 

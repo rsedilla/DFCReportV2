@@ -19,6 +19,21 @@
  * `@theme inline` maps each token to a custom property, so the utilities Tailwind
  * generates follow the values below into dark mode rather than being frozen at
  * build time.
+ *
+ * Two border tokens, and the difference matters for conformance. `line` is
+ * decorative -- a rule between sections, a table divider -- and is exempt from
+ * WCAG 1.4.11 because removing it loses nothing. `edge` is for anything whose
+ * boundary carries meaning: the outline of an input, a checkbox, a button. That
+ * needs 3:1 against its background, and `edge` meets it in both themes while
+ * `line` does not. Reaching for `line` on a form field is the mistake this pair
+ * exists to prevent.
+ *
+ * `scripts/check-contrast.mjs` runs in lint and checks the pairs it lists: text
+ * against its backgrounds both ways round, and `edge` against its backgrounds. It
+ * does not check `line`, which is decorative and exempt, and it cannot see a
+ * combination nobody listed — `bg-accent text-ink` is 2.14:1 and would pass lint
+ * unnoticed. Using a token in a new position means adding the pair there. The
+ * same check refuses a token named for a judgement.
  */
 @theme inline {
   --color-surface: var(--surface);
@@ -26,6 +41,7 @@
   --color-ink: var(--ink);
   --color-muted: var(--muted);
   --color-line: var(--line);
+  --color-edge: var(--edge);
   --color-accent: var(--accent);
 
   --font-sans:
@@ -40,6 +56,7 @@
   --ink: #16191d;
   --muted: #5b6470;
   --line: #e2e6ea;
+  --edge: #767f8a;
   --accent: #1f4f8b;
 }
 
@@ -50,6 +67,7 @@
     --ink: #e9edf1;
     --muted: #9aa5b1;
     --line: #2a2f36;
+    --edge: #6b7480;
     --accent: #8ab4e8;
   }
 }

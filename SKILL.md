@@ -56,6 +56,7 @@ This is settled, not a suggestion.
 - **Data access:** a typed query builder over the PostgreSQL driver, not an ORM
 - **Frontend:** Next.js + TypeScript, as a pure client
 - **Styling:** Tailwind CSS, in the web application only; its palette carries no judgement (Section 13)
+- **UI components:** in the web application, headless primitives vendored into the repository; not a component framework carrying its own design system
 - **API:** REST, versioned under `/api/v1`
 - **Deployment:** containerized, portable across AWS, Hostinger/VPS, or another provider
 - **Email:** provider abstraction; business logic must never depend directly on SES or any other provider
@@ -72,6 +73,18 @@ One reason decides the migration and data-access tooling, and it is the same rea
 **The constraints are the design.** Section 5 requires a partial unique index, a check constraint, and a constraint trigger that is `DEFERRABLE INITIALLY DEFERRED`, and every subtree query carries a `CYCLE` clause. No ORM models any of those. A tool that generates migrations by diffing a model against the database does not merely fail to create them — it proposes dropping what it cannot see, on every migration, forever. So the schema lives in hand-written SQL, and the query layer is a typed builder that composes SQL rather than hiding it.
 
 The cost is accepted deliberately: table types are written and reviewed rather than generated, and the schema tests are what keep them honest.
+
+**A component library may style, and may not judge.** The web application uses headless, accessible primitives — dialog, combobox, menu, tabs, date picker — vendored into the repository as source the team owns, rather than consumed as a versioned dependency with a look attached. Component frameworks that carry their own design system are deliberately not used **in the web application**. This says nothing about the native clients: their framework is not chosen, and a platform toolkit is a different question from a web component library. That ruling is open, and is indexed as open in `CLAUDE.md`.
+
+The ordinary reason is that they bring a second styling engine, which duplicates and fights the first.
+
+The reason that puts this in the specification rather than in somebody's preferences is the vocabulary they impose. Those frameworks express state as `error`, `success`, `warning` and `severity`, and hand that to every developer as the default way to render a figure.
+
+What is forbidden is precise, and is worth stating precisely here so that nobody reads it as wider than it is. Section 13 forbids value-laden encoding **of meeting status**, red/amber/green named among the examples. Section 17 forbids leaders being ranked, scored **or colour-coded by `NOT_HELD`, by coverage, or by any figure derived from them**. Section 19 forbids a dashboard colour-grading leaders. Colour itself is not prohibited and is not a ranking — this application uses it for structure, hierarchy and legibility, and the palette that shipped with Tailwind does exactly that.
+
+The collision is that those frameworks make the prohibited use the *easy* one. `severity="error"` on a Cell that reported `NOT_HELD` is a five-second change that reads as idiomatic in review. `NOT_HELD` exists so that a leader can report honestly that their Cell could not meet, and if declaring it paints their row red, leaders will record `HELD` instead — ranking the measure destroys the measure (Section 13). A toolkit whose defaults push against a rule this specification cares about has to be resisted on every screen, by everyone, indefinitely, so it is not adopted.
+
+Accessibility is the other half of "headless". A dialog that traps focus, or a menu that cannot be dismissed from a keyboard, is not a styling defect and is not fixed by a stylesheet, and building those behaviours by hand is where the defects come from. The web application conforms to **WCAG 2.2 Level AA** (Section 23, Accessibility), so the primitives are chosen for whether they meet it rather than for how they look.
 
 ### The frontend is a client, like the phones
 
@@ -699,6 +712,15 @@ Include:
 - Secure token handling
 
 Do not require 2-step verification/MFA in V1.
+
+**Signing in supports a password manager** (WCAG 2.2, criterion 3.3.8; Section 23). Paste into the password field is never blocked, autofill is never obstructed, and the field is marked up so a manager can fill it.
+
+That is what makes a password permissible. A password *is* a cognitive function test under 3.3.8 — it is remembered — and the criterion permits one where any of four conditions holds: an alternative not relying on such a test, a mechanism that assists in completing it, object recognition, or personal content. Two are live for a password, and **this system relies on the mechanism**: support for password managers. Blocking paste therefore does not merely inconvenience, it removes the thing conformance rests on. It is usually done in the name of security and produces the opposite, by pushing people toward passwords short enough to type from memory.
+
+**No sign-in step is a puzzle, an image-selection challenge, or a transcription task.** Two of those three are already required, and only one is a house rule, which is worth keeping straight:
+
+- a puzzle or a transcription challenge is a cognitive function test that neither object-recognition nor personal-content covers, so 3.3.8 forbids it outright unless an alternative or a mechanism is provided. A distorted-text CAPTCHA on its own is a conformance failure, not a matter of taste
+- **image selection is permitted by 3.3.8** under object recognition. Refusing it here goes beyond Level AA and matches 3.3.9 at AAA, and it is a choice about the people using this system, most of whom sign in on a phone
 
 ### Tokens, not browser sessions
 
@@ -2634,6 +2656,30 @@ Controllers/routes should delegate to authorization and application/domain servi
 ## 23. Offline / Mobile Readiness
 
 Web UI must be responsive from the beginning. Leaders will use the web application on phones before any native app exists, so mobile is a current surface, not a future one (Section 2).
+
+### Accessibility
+
+**The web application conforms to WCAG 2.2 Level AA.** This is a requirement, not an aspiration, and the things that make it checkable are in `CLAUDE.md` under Definition of Done.
+
+Level AA rather than A, because Level A omits colour contrast, and contrast is the criterion that decides whether a leader can read an attendance figure on their own phone, in a hall, at fifty. Not AAA: it asks for 7:1 contrast and a reading level this material cannot always meet, and a standard nobody meets is one everybody ignores.
+
+Six criteria are called out, in four groups, because this system's own rules bear on them.
+
+**1.4.3 Contrast, and 1.4.11 Non-text Contrast.** Body text meets 4.5:1 against the background it actually sits on, in both light and dark. 1.4.11 asks 3:1 of three things, and reporting needs all of them: the boundary of a control, the visible states of one such as focus or checked, and any graphical object required to understand content — which is what a chart mark is. A purely decorative rule or divider is exempt, and the palette keeps the decorative and the meaningful apart so that reaching for the wrong one on a form field is a visible mistake.
+
+**2.5.8 Target Size (Minimum).** Interactive targets are at least 24 by 24 CSS pixels. Cell attendance is recorded by a leader tapping down a roster on a phone, often standing up, and a mis-tap here is a wrong attendance record rather than a cosmetic annoyance.
+
+**3.3.8 Accessible Authentication (Minimum).** A password is a cognitive function test, and the criterion permits one only where a mechanism assists the user in completing it. Support for password managers is that mechanism: paste is never blocked, autofill is never obstructed. Section 6 carries the rule and the house decision that goes beyond it.
+
+**2.4.11 Focus Not Obscured (Minimum), and 2.4.7 Focus Visible.** Focus is always visible, and the focused control is never *entirely* hidden behind a sticky header or a dialog. Level AA requires that much; requiring no part of it to be obscured is 2.4.12 at Level AAA, and is not claimed here. This is what makes the keyboard path usable at all, and it cannot be verified from a screenshot.
+
+Conformance is about whether a person can perceive and operate the interface. It is not a licence to encode meaning in colour: Sections 13, 17 and 19 forbid encoding meeting status, coverage or a leader in colour, and no contrast ratio makes that permissible.
+
+**No palette token is named for a judgement about a person, a Cell, or a figure derived from them.** There is no `success`, `danger` or `warning` token, and none is to be added. A palette that acquires one has settled the question those sections exist to keep open, before any screen is designed, and the name is what spreads: a token is used by whoever writes the next screen, on whatever it seems to fit.
+
+This reaches names, not colour. Colour for structure, hierarchy and legibility is expected (Section 2). Whether a form field failing validation may carry a colour of its own, and what it would be called, is **not settled here** and is recorded as open in `CLAUDE.md` — it is a different question from judging a leader, and answering it by extending this rule would be reading the rule wider than it is.
+
+The native clients are not covered here. Their framework is not chosen (Section 2), and the equivalent obligation for them is the platform's own accessibility API rather than WCAG. That is a ruling to make when the client is, and it is indexed as open in `CLAUDE.md`.
 
 ### Required from the first write endpoint
 

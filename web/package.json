@@ -11,9 +11,11 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint . && node scripts/check-client-boundary.mjs",
+    "lint": "eslint . && node scripts/check-client-boundary.mjs && node scripts/check-ui-dependencies.mjs && node scripts/check-contrast.mjs",
     "typecheck": "tsc --noEmit",
-    "check:boundary": "node scripts/check-client-boundary.mjs"
+    "check:boundary": "node scripts/check-client-boundary.mjs",
+    "check:ui-deps": "node scripts/check-ui-dependencies.mjs",
+    "check:contrast": "node scripts/check-contrast.mjs"
   },
   "dependencies": {
     "next": "^16.3.1",
