@@ -277,7 +277,11 @@ Senior Pastors:
 
 Both Senior Pastors have church-wide visibility across both Men's and Women's Networks.
 
-Sex may be used to automatically propose/assign the appropriate network according to the church's homogeneous-network rule, but store the actual network relationship explicitly rather than deriving it on every query.
+Network is assigned automatically from sex, according to the homogeneous-network rule, and is displayed on the form while the Person is being encoded. Store the resulting relationship explicitly rather than deriving it on every query.
+
+It is assigned rather than proposed for confirmation. Under the homogeneous-network rule the mapping is total, so a confirmation step asks the encoder to approve a tautology, and confirmations of tautologies are clicked without being read. The field that can genuinely be wrong is sex, which the encoder is entering at that moment, so the Network is shown beside it rather than behind a second click.
+
+A sex recorded in error is corrected through the audited Network-change path (Correcting a person's sex, below), which is the proper remedy and leaves a trail that a silent confirmation click would not.
 
 ### Network assignment history
 
@@ -781,6 +785,14 @@ Each attendance record must ultimately identify:
 - actor who entered/submitted it
 - timestamps/audit metadata
 
+### Generating the DCC calendar
+
+DCC events are generated automatically, one per Sunday, on a rolling horizon of at least twelve months ahead. Every Sunday carries an event unless an Admin has deliberately removed it.
+
+Do not create events lazily on first use. If an event exists only once somebody has recorded attendance against it, then a Sunday nobody submitted for has no event at all — and a missing event becomes indistinguishable from a cancelled service. That is precisely the ambiguity the Cell meeting statuses exist to remove (Section 13), and it must not be reintroduced here.
+
+Because every Sunday has an event by default, an absent event always means a recorded, audited decision, and coverage is measurable against a denominator that exists before anyone submits anything.
+
 ### Responsible leader for DCC attendance
 
 The responsible leader for a person's DCC attendance is their **direct pastoral leader, as of the event date** (Section 5).
@@ -919,6 +931,25 @@ Cell category is editable over time, e.g. Youth -> Young Pro.
 - Preserve category history with effective dates.
 - Historical reports must use the category valid at the time being reported.
 - Audit category changes.
+
+### Schedule changes
+
+Day and time are editable over time, and are effective-dated exactly as category is:
+
+```text
+cell_schedules
+- cell_id
+- day_of_week
+- time_of_day
+- started_at
+- ended_at nullable
+```
+
+This is not optional bookkeeping. Scheduled meetings for a month are derived by running the Cell's configured day against the calendar (Sections 12 and 13), so a report for a past month must use the schedule that was in force **during that month**, never the current one.
+
+Without history, moving a Cell from Saturday to Sunday in June silently rewrites the coverage figure for every earlier month, because March has five Sundays and four Saturdays. A month recorded as `4 of 4` becomes `4 of 5`, and shifts again on the next schedule change. That breaks the guarantee in Section 3 that a past period's figures do not move.
+
+Audit schedule changes as category changes are audited.
 
 ### Cell lifecycle
 
@@ -1199,7 +1230,15 @@ Attendance for a calendar month may be recorded or corrected until the 7th of th
 
 Once closed, unreported meetings remain permanently unreported and outside the denominator, and coverage for that month is frozen. Only Admin may amend a closed month, using `records.backdate_effective_date` (Section 7), with a reason, audit logged (Section 21), and surfaced in Network Summary as a correction (Section 16).
 
-Before close, remind the responsible leader of any meeting still awaiting a record. Prompting a leader before the deadline is always preferable to labelling the gap after it.
+Before close, outstanding records are surfaced in two distinct ways, and they must not be confused.
+
+**Every leader sees their own outstanding work**, always, on their dashboard: meetings awaiting a record appear as tasks with the action attached (Section 19). This is not a notification and is not limited to anyone; it is simply the leader's own list.
+
+**Notifications go to the top of each Network only.** In-app notifications about outstanding records are sent to Bishop Oriel Ballano, Pastora Geraldine Ballano, and the direct pastoral children of each. Nobody else receives one.
+
+Notifications are in-app only. No email, no SMS, no push. This keeps the reminder path free of a mail provider, a queue, and a background worker (Section 2), and it means a notification is never a channel through which church data leaves the system.
+
+The design is deliberate. Accountability in this church runs through pastoral relationship, not through the application: the two Senior Pastors and their direct leaders see where their Networks stand, and follow up with the people they oversee personally. A leader behind on records hears from their own leader, not from an automated message. The application's job is to make the gap visible to the person who will make the call.
 
 For a rescheduled meeting, preserve:
 
@@ -1310,7 +1349,7 @@ Purpose:
 
 Surface Cells that have gone quiet, as a working list for the leader who oversees them:
 
-- Cells with no meeting held for a configurable number of months, three by default
+- Cells with no meeting held for a set number of months, three by default. The threshold is a single church-wide Admin setting (Section 19, System Settings), never per leader: an attention list that differs by viewer makes two people discussing the same Cell talk past each other, one seeing it flagged and the other not.
 - Cells with meetings still awaiting a record (Section 13)
 - People with no active Cell membership within the viewer's scope (Section 10)
 
@@ -1655,6 +1694,18 @@ Monthly Attendance:
 > How many applicable meetings/services did this person attend during this month?
 
 Keep them separate in UI and data logic.
+
+### Closed periods are stable
+
+A month closes on the 7th of the following month, 23:59 Asia/Manila (Sections 9 and 13). After close, no leader may add or correct a record, and only Admin may amend, with a reason and an audit entry.
+
+A closed month's figures are therefore stable, and its reports may be computed once and stored rather than recalculated on every request. Only the open month requires live computation.
+
+This matters at whole-church scope. A Network Summary for a single month aggregates a recursive walk of the pastoral tree against every DCC event and every Cell meeting in that month, deduplicated by person and bucketed twice, and each drill-down repeats it at a narrower scope. Recomputing years of closed history on every page view is avoidable work that the submission window has already made unnecessary.
+
+Where an Admin amends a closed month, the stored figures for that month are invalidated and recomputed. This is a rare, explicit, audited event and is a natural point at which to do so.
+
+Stored figures are a cache, never a source. They are always derivable from the underlying records (Section 18), and a stored figure that cannot be reproduced from source data is a defect.
 
 ### Reconciliation
 

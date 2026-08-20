@@ -232,6 +232,26 @@ Settled in `SKILL.md` §22: JSON only, ISO 8601 with Asia/Manila date-only field
 
 Fixed before implementation because three clients consume the API concurrently and mobile builds cannot be force-updated, so a convention invented per-controller becomes permanent the moment a phone depends on it.
 
+### 2026-08-20 — Cell schedule is effective-dated
+Day and time carry history exactly as category does, because scheduled meetings for a past month are derived from the schedule in force during that month. Without it, moving a Cell from Saturday to Sunday silently rewrites every earlier coverage figure. Written to `SKILL.md` §10.
+
+### 2026-08-20 — DCC events are generated ahead, not lazily
+One event per Sunday on a rolling twelve-month horizon. Lazy creation would make a Sunday nobody submitted for indistinguishable from a cancelled service, reintroducing the ambiguity the Cell statuses exist to remove. Written to `SKILL.md` §9.
+
+### 2026-08-20 — Notifications go to the two Senior Pastors and their direct leaders only
+In-app only. No email, no SMS, no push, so no mail provider, queue, or worker is required.
+
+Every leader still sees their own outstanding records on their own dashboard — that is a task list, not a notification. Accountability runs through pastoral relationship: the Senior Pastors and their direct leaders see where their Networks stand and follow up personally. A leader behind on records hears from their own leader, not from the application. Written to `SKILL.md` §13.
+
+### 2026-08-20 — Attention threshold is one church-wide Admin setting
+Three months by default, never per leader. A list that differs by viewer makes two people discussing the same Cell talk past each other. Written to `SKILL.md` §15.
+
+### 2026-08-20 — Network is assigned from sex, not proposed
+The mapping is total under the homogeneous-network rule, so a confirmation step approves a tautology and gets clicked unread. The Network is displayed beside sex during encoding instead, and an error is corrected through the audited sex-correction path. Written to `SKILL.md` §4.
+
+### 2026-08-20 — Closed months may be materialized
+After the 7th a month's figures are stable, so its reports may be computed once and stored; only the open month needs live computation. An Admin amendment invalidates and recomputes that month. Stored figures are a cache and must always remain derivable from source records. Written to `SKILL.md` §20.
+
 ### Open — awaiting a ruling
 
 Nothing is currently awaiting a ruling. Items reaching a Stop Condition are recorded here until settled.
