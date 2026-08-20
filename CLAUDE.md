@@ -429,6 +429,14 @@ Six entities were required by rules and had no shape, of which five would natura
 
 Shapes now sit in the section owning each rule, and §26 carries an index of all twenty structures to be checked against a migration. Adding to that index is part of the change introducing the rule, never a follow-up. Written to `SKILL.md` §3, §4, §10, §13, §20, §26.
 
+### 2026-08-20 — The guard checks one target; the rest is domain layer
+A grant's scope is evaluated against the request's primary target. Where a rule concerns other objects — §5's requirement that both the source and destination leader be in scope, and that the actor act on neither themselves nor an upline — those are checks in the owning module's domain layer, additional to the guard and never expressible as a scope value.
+
+Stated because a capability and a scope cannot express three objects with three different rules, and a developer who implements the guard and believes the rule is implemented has built half of it. `SUBTREE_EXCL_SELF` survives for `cell.request_creation` alone, where the only prohibited object is the target. Written to `SKILL.md` §7.
+
+### 2026-08-20 — `read_only` is valid only on a read capability
+Five capabilities are reads: the four `view_subtree` variants and `audit.view`. The other nineteen are writes, and a grant of one with `read_only` true is rejected at creation rather than stored and silently ineffective — otherwise an Admin who leaves the flag at its default creates a row that grants nothing, with nothing to explain the denial. Written to `SKILL.md` §7.
+
 ### Open — awaiting a ruling
 
 **One item awaits a ruling.**
