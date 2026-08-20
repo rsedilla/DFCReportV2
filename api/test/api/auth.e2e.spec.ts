@@ -105,6 +105,27 @@ describe('authentication (SKILL.md section 6)', () => {
         }),
       );
     });
+
+    it('reports no read_only value for authority carried by a role', () => {
+      // SKILL.md section 7 defines read_only as a column on capability_grants and
+      // says nothing about role defaults. Publishing a derived value here would
+      // put a rule the specification does not contain into every session, for
+      // clients to branch on.
+      const fromRole = (capabilities: { source: string; read_only: boolean | null }[]) =>
+        capabilities.filter((capability) => capability.source === 'role');
+
+      return request(app.getHttpServer())
+        .get('/api/v1/auth/me')
+        .set('Authorization', `Bearer ${account.accessToken}`)
+        .expect(200)
+        .expect((response) => {
+          const roleGrants = fromRole(response.body.capabilities);
+          expect(roleGrants.length).toBeGreaterThan(0);
+          for (const grant of roleGrants) {
+            expect(grant.read_only).toBeNull();
+          }
+        });
+    });
   });
 
   describe('refresh tokens rotate on use', () => {
@@ -184,6 +205,59 @@ describe('authentication (SKILL.md section 6)', () => {
         .post('/api/v1/auth/refresh')
         .send({ refresh_token: laptop.token });
       expect(laptopRefresh.status).toBe(200);
+    });
+  });
+
+  describe('rotation under concurrency', () => {
+    it('lets exactly one of two simultaneous presentations win, and revokes the account', async () => {
+      // Issuing the replacement before claiming the presented token let both
+      // callers mint one and only one revoke land: two live chains from one
+      // presentation, with the reuse signal never raised for the loser.
+      const issued = await tokens.issueRefreshToken(account.id, 'Test phone');
+
+      const [first, second] = await Promise.all([
+        request(app.getHttpServer())
+          .post('/api/v1/auth/refresh')
+          .send({ refresh_token: issued.token }),
+        request(app.getHttpServer())
+          .post('/api/v1/auth/refresh')
+          .send({ refresh_token: issued.token }),
+      ]);
+
+      const statuses = [first.status, second.status].sort();
+      expect(statuses).toEqual([200, 401]);
+
+      // The loser is treated as a copy in circulation, so nothing survives.
+      const live = await db
+        .selectFrom('refresh_tokens')
+        .select('id')
+        .where('account_id', '=', account.id)
+        .where('revoked_at', 'is', null)
+        .execute();
+      expect(live).toHaveLength(0);
+    });
+
+    it('does not let signing out erase a reuse signal already recorded', async () => {
+      // Rotation sets replaced_by_id; a later sign-out with the same token must
+      // not clear it, or a stolen token could be laundered into an ordinary
+      // sign-out and the account would never be revoked.
+      const issued = await tokens.issueRefreshToken(account.id, 'Test phone');
+      await request(app.getHttpServer())
+        .post('/api/v1/auth/refresh')
+        .send({ refresh_token: issued.token });
+
+      await request(app.getHttpServer())
+        .post('/api/v1/auth/logout')
+        .set('Authorization', `Bearer ${account.accessToken}`)
+        .send({ refresh_token: issued.token });
+
+      const row = await db
+        .selectFrom('refresh_tokens')
+        .select('replaced_by_id')
+        .where('id', '=', issued.id)
+        .executeTakeFirstOrThrow();
+
+      expect(row.replaced_by_id).not.toBeNull();
     });
   });
 

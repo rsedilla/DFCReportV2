@@ -1,9 +1,14 @@
 name: CI
 
-# Continuous integration from day one, required by branch protection.
+# Continuous integration from day one.
 #
 # Retrofitting CI across an existing codebase is how gaps ship (docs/ROADMAP.md,
 # Stage 1 risk), so this exists before the application has a single feature.
+#
+# `api` and `web` are intended to be required status checks on `main`. Until they
+# are marked required in branch protection, this workflow reports and gates
+# nothing, which is a weaker thing than it looks: a pull request with a red build
+# can still be merged on an approval alone.
 
 on:
   pull_request:
@@ -128,7 +133,10 @@ jobs:
     # an endpoint Stage 2 builds, and they fail today because it does not exist.
     # Stage 2 is done when they are green, at which point they fold into `api`
     # and this job is deleted.
-    continue-on-error: true
+    #
+    # The flag is on the suite step alone, not on the job. On the job it made the
+    # check conclude success whatever happened -- including a failure of the step
+    # that checks *why* the suite failed, which would then report nothing.
 
     services:
       postgres:
@@ -170,7 +178,22 @@ jobs:
       - name: Run the eleven authorization cases
         id: suite
         continue-on-error: true
-        run: npm run test:authorization
+        run: npm run test:authorization 2>&1 | tee suite.log; exit ${PIPESTATUS[0]}
+
+      # "Failing for the right reason" was asserted in prose and checked by nobody.
+      # The suite may fail -- that is the point of the job -- but it may not fail in
+      # a new way, and a suite that failed because the application would not boot
+      # would have read as expected here.
+      - name: Check that they fail for the right reason
+        if: steps.suite.outcome == 'failure'
+        run: |
+          if grep -E 'Received:' suite.log | grep -qv 'Received: 404'; then
+            echo "::error::The authorization suite failed for a reason other than the"
+            echo "::error::endpoint being absent. Every case should receive 404."
+            grep -nE 'Received:' suite.log | grep -v 'Received: 404' | head -20
+            exit 1
+          fi
+          echo "Every failing case received 404: the endpoint is absent, as expected."
 
       - name: Report
         run: |
@@ -186,7 +209,9 @@ jobs:
               echo "this job."
             else
               echo "The eleven cases fail, which is expected until Stage 2 builds"
-              echo "\`PUT /api/v1/people/{id}/pastoral-leader\`."
+              echo "\`PUT /api/v1/people/{id}/pastoral-leader\`, and the step above"
+              echo "checked that every one of them failed on a 404 rather than on"
+              echo "something new."
               echo
               echo "See \`api/test/authorization/pastoral-assignment.spec.ts\` for the"
               echo "contract they pin, and docs/ROADMAP.md for why they are written"

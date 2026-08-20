@@ -97,13 +97,82 @@ export class TokensService {
     return row ?? null;
   }
 
-  async revokeRefreshToken(id: string, replacedById: string | null): Promise<void> {
-    await this.db
+  /**
+   * Revokes a token, and reports whether this call is the one that did it.
+   *
+   * The `revoked_at is null` clause is load-bearing twice over. It is what stops
+   * a sign-out clearing the `replaced_by_id` of a token that was already rotated,
+   * which would erase the reuse signal; and it is what makes rotation safe under
+   * concurrency, because exactly one of two racing callers gets a row back.
+   */
+  async revokeRefreshToken(id: string, replacedById: string | null): Promise<boolean> {
+    const now = new Date();
+    const revoked = await this.db
       .updateTable('refresh_tokens')
-      .set({ revoked_at: new Date(), last_used_at: new Date(), replaced_by_id: replacedById })
+      .set({ revoked_at: now, last_used_at: now, replaced_by_id: replacedById })
       .where('id', '=', id)
       .where('revoked_at', 'is', null)
-      .execute();
+      .returning('id')
+      .executeTakeFirst();
+
+    return revoked !== undefined;
+  }
+
+  /**
+   * Rotation, as one transaction: claim the presented token, then issue its
+   * replacement.
+   *
+   * The order matters and so does the claim. Issuing first and revoking second --
+   * two statements, the row count discarded -- let two requests presenting the
+   * same token concurrently both read it live, both mint a replacement, and only
+   * one revoke land. Two live chains from one presentation, and the reuse signal
+   * section 6 requires never raised for the loser. That is the exact window
+   * rotation exists to close.
+   *
+   * Returns null where the token was already claimed, which the caller treats as
+   * the reuse case.
+   */
+  async rotateRefreshToken(
+    id: string,
+    accountId: string,
+    deviceLabel: string | null,
+  ): Promise<IssuedRefreshToken | null> {
+    return this.db.transaction().execute(async (trx) => {
+      const now = new Date();
+      const claimed = await trx
+        .updateTable('refresh_tokens')
+        .set({ revoked_at: now, last_used_at: now })
+        .where('id', '=', id)
+        .where('revoked_at', 'is', null)
+        .returning('id')
+        .executeTakeFirst();
+
+      if (!claimed) {
+        return null;
+      }
+
+      const token = randomBytes(32).toString('base64url');
+      const expiresAt = new Date(Date.now() + REFRESH_TOKEN_TTL_DAYS * 24 * 60 * 60 * 1000);
+
+      const issued = await trx
+        .insertInto('refresh_tokens')
+        .values({
+          account_id: accountId,
+          token_hash: hashToken(token),
+          device_label: deviceLabel,
+          expires_at: expiresAt,
+        })
+        .returning('id')
+        .executeTakeFirstOrThrow();
+
+      await trx
+        .updateTable('refresh_tokens')
+        .set({ replaced_by_id: issued.id })
+        .where('id', '=', id)
+        .execute();
+
+      return { id: issued.id, token, expiresAt };
+    });
   }
 
   /**

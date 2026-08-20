@@ -187,7 +187,7 @@ describe('reassigning a pastoral leader (SKILL.md section 5)', () => {
 
     expect(response.status).toBe(403);
     expect(response.body.error.code).toBe('SCOPE_DENIED');
-    await expectLeaderUnchanged(raymond.id, oriel.id);
+    await expectLeaderUnchanged(raymond.id, ben.id);
   });
 
   it('4. refuses to let a leader change the assignment of anyone upline of them', async () => {

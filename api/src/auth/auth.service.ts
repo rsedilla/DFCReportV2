@@ -79,8 +79,17 @@ export class AuthService {
       throw new ApiError(ApiErrorCode.UNAUTHENTICATED, 'Your session has ended. Sign in again.');
     }
 
-    const issued = await this.tokens.issueRefreshToken(account.id, deviceLabel);
-    await this.tokens.revokeRefreshToken(row.id, issued.id);
+    const issued = await this.tokens.rotateRefreshToken(row.id, account.id, deviceLabel);
+
+    if (!issued) {
+      // Another request claimed this token between the read above and here. It is
+      // the same fact as a replay, one moment earlier: a copy is in circulation.
+      this.logger.warn(
+        `Refresh token ${row.id} was claimed concurrently; revoking every session for account ${row.account_id}.`,
+      );
+      await this.tokens.revokeAllSessions(row.account_id);
+      throw new ApiError(ApiErrorCode.UNAUTHENTICATED, 'Your session has ended. Sign in again.');
+    }
 
     return {
       access_token: this.tokens.issueAccessToken(account.id, account.person_id),

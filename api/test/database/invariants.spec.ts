@@ -312,6 +312,86 @@ describe('the database enforces the section 3 and section 7 rules it can', () =>
     ).resolves.toBeDefined();
   });
 
+  it('records who granted a role, and permits no actor only for a system action', async () => {
+    // Section 7 marks nullability explicitly, and `account_roles.granted_by` is
+    // nullable for exactly one case: the first Admin account, which no account
+    // above it could have granted. Every later grant carries an actor, and
+    // nothing in the schema can tell the two apart -- so the column is at least
+    // exercised both ways here rather than never at all.
+    const admin = await accountFor(db, 'Ester', 'WOMENS');
+    const leader = await accountFor(db, 'Manuel', 'MENS');
+
+    await expect(
+      db
+        .insertInto('account_roles')
+        .values({ account_id: admin, role: 'ADMIN', granted_by: null })
+        .execute(),
+    ).resolves.toBeDefined();
+
+    await db
+      .insertInto('account_roles')
+      .values({ account_id: leader, role: 'LEADER', granted_by: admin })
+      .execute();
+
+    const row = await db
+      .selectFrom('account_roles')
+      .select('granted_by')
+      .where('account_id', '=', leader)
+      .executeTakeFirstOrThrow();
+
+    expect(row.granted_by).toBe(admin);
+  });
+
+  it('refuses a third SENIOR_PASTOR under concurrent writes', async () => {
+    // The sequential case above passes against a counting trigger that is not a
+    // constraint at all: under READ COMMITTED neither transaction sees the
+    // other's uncommitted row, so both count two and both commit. This is the
+    // same shape as authorization case 7, and the same reason it exists.
+    const holder = await accountFor(db, 'Oriel', 'MENS');
+    const first = await accountFor(db, 'Ester', 'WOMENS');
+    const second = await accountFor(db, 'Nora', 'WOMENS');
+
+    await db
+      .insertInto('account_roles')
+      .values({ account_id: holder, role: 'SENIOR_PASTOR' })
+      .execute();
+
+    const [a, b] = [await openClient(), await openClient()];
+
+    try {
+      await a.query('BEGIN');
+      await b.query('BEGIN');
+
+      await a.query('INSERT INTO account_roles (account_id, role) VALUES ($1, $2)', [
+        first,
+        'SENIOR_PASTOR',
+      ]);
+      await b.query('INSERT INTO account_roles (account_id, role) VALUES ($1, $2)', [
+        second,
+        'SENIOR_PASTOR',
+      ]);
+
+      // Both inserts succeed: the trigger is deferred. One commit has to lose.
+      const commits = await Promise.allSettled([a.query('COMMIT'), b.query('COMMIT')]);
+      const rejected = commits.filter((result) => result.status === 'rejected');
+
+      expect(rejected).toHaveLength(1);
+      expect(String(rejected[0].reason)).toMatch(/SENIOR_PASTOR/);
+    } finally {
+      await a.end();
+      await b.end();
+    }
+
+    const active = await db
+      .selectFrom('account_roles')
+      .select('id')
+      .where('role', '=', 'SENIOR_PASTOR')
+      .where('revoked_at', 'is', null)
+      .execute();
+
+    expect(active).toHaveLength(2);
+  });
+
   it('refuses a read-only grant of a write capability', async () => {
     const person = await createPerson(db, { firstName: 'Rico', network: 'MENS' });
     const account = await db

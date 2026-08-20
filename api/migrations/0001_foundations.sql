@@ -471,11 +471,29 @@ CREATE INDEX account_roles_active_by_account
 -- This enforces the count. Which two Persons hold it is checked in the `auth`
 -- domain layer, because the database has no durable representation of who
 -- Bishop Oriel and Pastora Geraldine are.
+--
+-- A `senior_pastor_slot` column with a partial unique index would let the index
+-- do the work and was the obvious alternative. It is not used because section 7
+-- gives `account_roles` its shape and that shape has no slot, so taking this
+-- route would mean amending the specification to accommodate an implementation
+-- detail. The advisory lock keeps the shape and makes the count honest.
 CREATE FUNCTION assert_two_senior_pastors_at_most() RETURNS trigger
 LANGUAGE plpgsql AS $$
 DECLARE
   v_active integer;
 BEGIN
+  -- Serialize the check. A counting trigger without this is not a constraint: it
+  -- is an application check that happens to live in SQL. Two transactions
+  -- granting the role at the same moment each fire at commit, neither sees the
+  -- other's uncommitted row under READ COMMITTED, both count two, and both
+  -- commit -- three Senior Pastors, by exactly the route the partial unique index
+  -- on pastoral_assignments exists to block (CLAUDE.md, authorization case 7).
+  --
+  -- The lock is held to the end of the transaction, so the second writer waits
+  -- for the first to finish committing and then counts a snapshot that includes
+  -- it. The key is arbitrary and belongs to this rule alone.
+  PERFORM pg_advisory_xact_lock(hashtext('account_roles.senior_pastor_cap'));
+
   SELECT count(*) INTO v_active
     FROM account_roles
    WHERE role = 'SENIOR_PASTOR'
@@ -598,12 +616,18 @@ CREATE UNIQUE INDEX account_tokens_one_outstanding
   ON account_tokens (account_id, purpose)
   WHERE used_at IS NULL;
 
--- migrate:down:refuse-if-populated persons pastoral_assignments network_assignments person_lifecycle accounts
+-- migrate:down:refuse-if-populated persons person_lifecycle network_assignments pastoral_assignments accounts account_roles capability_grants refresh_tokens account_tokens
 
 -- This down drops the tables it created, so it is safe only while they are
 -- empty. The directive above is not a comment: the runner refuses to apply this
 -- section if any table named there holds a row, and says so rather than
--- executing. CLAUDE.md is unambiguous that history in these tables is never
+-- executing.
+--
+-- It names every table this section drops, not only the ones holding Persons.
+-- Section 7 is explicit that grant history is audit material -- "the history of
+-- who could do what, and when, is part of the audit record" -- so a database with
+-- roles and grants but no Persons, which is exactly the state after the first
+-- Admin is provisioned, must not revert silently either. CLAUDE.md is unambiguous that history in these tables is never
 -- dropped, and an operator reaching for `migrate:down` on a populated database
 -- is reaching for the wrong tool.
 

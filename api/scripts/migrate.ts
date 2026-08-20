@@ -40,13 +40,26 @@ const MIGRATIONS_DIR = join(__dirname, '..', 'migrations');
 const UP_MARKER = /^--\s*migrate:up\s*$/m;
 
 /**
- * `-- migrate:down`, optionally carrying the tables the down section must find
- * empty:
- *
- *   -- migrate:down
- *   -- migrate:down:refuse-if-populated persons pastoral_assignments
+ * `-- migrate:down`, which may itself carry the guard, as in
+ * `-- migrate:down:refuse-if-populated persons accounts`.
  */
 const DOWN_MARKER = /^--[ \t]*migrate:down(?::refuse-if-populated([^\n]*))?[ \t]*$/m;
+
+/**
+ * The guard, matched wherever it appears.
+ *
+ * Parsed independently of the marker on purpose. Matching it only as part of the
+ * marker meant that a file carrying both lines --
+ *
+ *   -- migrate:down
+ *   -- migrate:down:refuse-if-populated persons accounts
+ *
+ * -- matched the plain one first and turned the guard off, with no error and no
+ * warning. A guard against destroying history the specification guarantees must
+ * not have a silent off switch, and the layout that triggers it is the one this
+ * file's own documentation invites.
+ */
+const REFUSE_IF_POPULATED = /^--[ \t]*migrate:down:refuse-if-populated([^\n]*)$/gm;
 
 /**
  * `-- migrate:irreversible <why>`, which stands in place of a down section.
@@ -98,6 +111,15 @@ function parse(fileName: string, sql: string): Migration {
         `${fileName}: marked irreversible and also carries a down section. Choose one.`,
       );
     }
+    if (irreversibleMatch.index < upAt) {
+      // Otherwise the up section slices to nothing, an empty statement runs, and
+      // the version is recorded as applied against a schema that was never
+      // created -- after which the checksum makes the file unfixable in place.
+      throw new Error(
+        `${fileName}: "-- migrate:irreversible" appears before "-- migrate:up", which ` +
+          `would leave the up section empty and record the migration as applied.`,
+      );
+    }
     if (irreversibleMatch[1].trim() === '') {
       throw new Error(
         `${fileName}: "-- migrate:irreversible" must say why, on the same line. It is ` +
@@ -127,13 +149,27 @@ function parse(fileName: string, sql: string): Migration {
     throw new Error(`${fileName}: "-- migrate:down" appears before "-- migrate:up"`);
   }
 
+  const guards = [...sql.matchAll(REFUSE_IF_POPULATED)];
+  if (guards.length > 1) {
+    throw new Error(
+      `${fileName}: more than one "-- migrate:down:refuse-if-populated" directive. ` +
+        `Name every table on one line, so there is one list to read.`,
+    );
+  }
+  if (guards.length === 1 && guards[0].index < downMatch.index) {
+    throw new Error(
+      `${fileName}: the "-- migrate:down:refuse-if-populated" directive sits above the ` +
+        `down section it guards, where it would never be read.`,
+    );
+  }
+
   return {
     version,
     name: fileName,
     up: sql.slice(upAt, downMatch.index),
     down: sql.slice(downMatch.index),
     irreversibleBecause: null,
-    refuseIfPopulated: (downMatch[1] ?? '')
+    refuseIfPopulated: (guards[0]?.[1] ?? '')
       .split(/[\s,]+/)
       .map((table) => table.trim())
       .filter((table) => table !== ''),

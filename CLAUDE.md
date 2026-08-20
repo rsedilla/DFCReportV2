@@ -103,6 +103,8 @@ Name branches with a type prefix and a short description: `spec/cell-lifecycle`,
 
 **Run `architecture-guardian` before requesting human review**, not after. If the change meets any Mandatory Review condition above, run it yourself and resolve what it reports. Arriving at review with its findings already addressed is the point of having it; asking a reviewer to discover them is not.
 
+**Then run it again on what you changed in response.** A batch of fixes breaks something about as often as new writing does — measured on this repository, across four passes on two pull requests, every fix batch introduced defects of its own, including one that reinstated the exact failure the specification warns about. A review of the original that is not followed by a review of the fixes has checked the version nobody merged.
+
 A pull request needs one approval. Changes to `SKILL.md`, `CLAUDE.md`, and `.claude/` additionally require a code owner (`.github/CODEOWNERS`).
 
 Resolve every conversation before merging. Approvals are dismissed when new commits are pushed, so push fixes before asking for re-review.
@@ -557,9 +559,26 @@ Conformance is about perceiving and operating the interface, and licenses nothin
 
 The native clients are deliberately out of scope. Their framework is not chosen, and their equivalent obligation is the platform accessibility API rather than WCAG.
 
+### 2026-08-21 — Twelve findings from the Stage 1 verification, and why they existed
+`architecture-guardian` reviewed the Stage 1 branch **once, before its fixes**, and the branch was merged without re-running it on the eight fixes that review produced. A later pull request established that a fix batch introduces defects about as often as new writing does; a verification pass over merged `main` found twelve, four of them from that unreviewed batch.
+
+The lesson is procedural and is now written into Branches and pull requests above: **the review runs again on what the review produced.** Arriving at human review with findings addressed is the point; merging the addressing itself unreviewed gives that up.
+
+The four that were live defects:
+
+**A counting trigger is not a constraint.** The `SENIOR_PASTOR` cap counted active rows in a deferred trigger, and under READ COMMITTED neither of two concurrent transactions sees the other's uncommitted row — both count two, both commit, three Senior Pastors. This is the failure authorization case 7 exists to warn about, written while citing it. Fixed with a transaction-scoped advisory lock, and pinned by a concurrent test. A `senior_pastor_slot` column with a partial unique index was the alternative and was rejected: §7 gives `account_roles` its shape and that shape has no slot.
+
+**Refresh-token rotation was not atomic.** Issue-then-revoke, in two statements, with the revoke's row count discarded — so two requests presenting one token could both mint a replacement while only one revoke landed, and the reuse signal §6 requires was never raised for the loser. Rotation now claims the presented token conditionally inside a transaction and treats a lost claim as reuse.
+
+**Authorization case 3 asserted a fact the tree no longer contained.** Inserting Ben to give case 4 a non-root upline left case 3 asserting Raymond's leader was Oriel. Masked while every case dies on a 404, and it would have blocked Stage 2's own exit criterion the moment the endpoint returned 403 — with the obvious temptation to weaken the assertion rather than fix it.
+
+**The migration guard had a silent off switch.** A file carrying a plain `-- migrate:down` line above the `refuse-if-populated` directive matched the plain one first and disabled the guard, with no error. The directive is now parsed on its own and its placement is checked. Its table list also named five of the nine tables the down drops, omitting the grant history §7 calls audit material.
+
+Also closed: an `-- migrate:irreversible` marker above the up marker recorded an empty migration as applied; the CI job for the eleven concluded success whatever happened, so "failing for the right reason" was asserted and never checked; and two rules — `granted_by` on a role, and `read_only` null for role authority — had no test holding them.
+
 ### Open — awaiting a ruling
 
-**One item awaits a ruling and blocks Stage 5. Four other things are unsettled and block nothing; they are listed at the end, so this section is the whole of what is open.**
+**One item awaits a ruling and blocks Stage 5. Seven other things are unsettled; three of them are questions Stage 2 will run into and should be answered before it does. They are listed at the end, so this section is the whole of what is open.**
 
 **What an aggregate Cell attendance view offers in place of buckets.** Monthly-attendance buckets are a Cell-scope view only, because N belongs to a Cell and aggregating across different N inflates `Completed` for the Cells that recorded least (`SKILL.md` §12). At leader and Network scope the spec offers unique people, classification and coverage, and does not say whether anything should replace the buckets. Settle it in Stage 5 against real data.
 
@@ -568,6 +587,9 @@ Two related questions have defined behaviour and are recorded in `SKILL.md` §12
 **Unsettled, and not blocking anything.** None of these is a Stop Condition. An implementer proceeds and settles them in passing; they are listed here because a reader looking for what is open should not have to find it inside the body of a ruling.
 
 - **The client libraries beyond the component question** — TanStack Query, TanStack Table, a chart library, icons and fonts. Recorded as expectations in the UI direction entry above, deliberately not in `SKILL.md`, and confirmed against a real screen in Stage 2 rather than now. A list headed "This is settled, not a suggestion" is no place for a library nobody has used yet.
+- **Whether a row of an effective-dated table may ever be deleted.** Principle 12 says history is preserved and §5 says it is never overwritten in place; neither addresses `DELETE`, and the schema permits it. A `DELETE` on `network_assignments` walks around every same-Network constraint in the first migration, because both triggers fire on insert and update only. Settle it, then enforce whichever answer — a `DELETE` is the one path around every constraint there.
+- **What Admin should do when a backdated Network correction cannot be made.** The trigger validates assignments that closed after the effective date, so a correction backdated into a closed period can fail with no legal remedy: the reassignment §4 requires cannot be made for a period already ended, and rewriting a closed assignment row is forbidden by §5 and Principle 12. Stage 2 builds this endpoint.
+- **Whether a Network change and the reassignment it forces must share one effective instant.** The schema now requires it — the old edge escapes validation only because `ended_at > started_at` is false when the two are exactly equal, so closing one microsecond later makes the mandated atomic operation impossible. Defensible, but unwritten, and Stage 2 will implement against it either way.
 - **The native client framework.** `SKILL.md` §2 settles the web stack and says nothing about Android and iOS. Deferred since the specification was written; indexed here because two rules now point at it as open.
 - **Whether a form field failing validation may carry a colour of its own, and what it would be called.** `SKILL.md` §23 forbids a palette token named for a judgement about a person, a Cell, or a figure derived from them, and says in terms that this reaches names rather than colour. Validation is a different question: nothing in §13, §17 or §19 addresses it, and an earlier version of the lint check quietly decided it by refusing `error` and `critical` as well. Stage 2 builds sign-in and person forms, so settle it there — in `SKILL.md`, not in a script.
 - **What the native clients owe on accessibility.** `SKILL.md` §23 binds the web application to WCAG 2.2 AA and says the equivalent obligation for a native client is the platform accessibility API rather than WCAG. Which platform guarantees, and what would fail a build, is a ruling to make when the client is.
