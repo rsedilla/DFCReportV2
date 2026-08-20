@@ -992,7 +992,19 @@ A Cell member is assigned to exactly one active Cell Group at a time. This is di
 
 A person's Cell monthly attendance denominator (Section 12) is therefore determined only by the applicable meetings of that person's one assigned Cell Group — never combined across every Cell the same leader happens to lead. For example, if Mark leads CELL-001 (Youth) and CELL-002 (Young Pro), Juan — assigned to CELL-001 — is evaluated only against CELL-001's meetings; CELL-002's meetings are not part of Juan's denominator. Do not introduce a "primary Cell" concept — the single active assignment already defines this relationship.
 
-Cell attendance does not automatically create or end Cell membership. Membership changes only through an explicit, authorized workflow. Attendance at a Cell other than a person's assigned Cell, if ever supported, must not automatically transfer their assignment or alter their monthly denominator.
+### Only members are recorded
+
+Cell attendance is recorded only for the Cell's own members. The roster for a meeting is exactly the people holding an active membership of that Cell on the meeting date.
+
+There is no visitor or guest state. A person coming to a Cell for the first time is added as a member by the leader, and then recorded present. A person is either a member of the Cell or is not recorded against it.
+
+This keeps one list on the leader's screen rather than two, and keeps the roster, the membership, and the monthly denominator the same set of people.
+
+Attendance at another leader's Cell is not recorded. Someone who visits a Cell they do not belong to is not marked present there, and their own monthly denominator remains their own Cell's meetings.
+
+The consequence is accepted deliberately: a person who attends once and does not return remains a member until removed, and counts toward that leader's member total. Removing them is an ordinary authorized action (below), so this is routine tidying rather than a defect. Do not compensate for it by inventing a visitor state or by expiring membership automatically — membership ends when a person ends it (Section 10, Cell lifecycle applies the same principle to Cells).
+
+Cell attendance still never creates or ends membership by itself. Membership changes only through the explicit workflow below, and marking someone present is not that workflow.
 
 ### Managing Cell membership
 

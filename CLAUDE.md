@@ -222,6 +222,11 @@ Cell leadership is not involved: a leader who disciples people but leads no Cell
 ### 2026-08-20 — Cell ID generation
 `CELL-` plus six digits from a database sequence, server-assigned, immutable, never reused, gaps acceptable, encodes nothing. Mirrors the Member ID rule. Encoding category in the ID would break the existing rule that a Cell keeps its ID through a category change. Written to `SKILL.md` §10.
 
+### 2026-08-20 — Cell attendance records members only
+No visitor or guest state. A first-time attendee is added as a member by the leader and then recorded present; a person is either a member of the Cell or is not recorded against it. Attendance at another leader's Cell is not recorded at all.
+
+Chosen for simplicity: one list on the leader's screen, and the roster, the membership, and the monthly denominator are the same set of people. The accepted cost is that a one-time attendee stays a member until removed and counts toward that leader's total, which is ordinary tidying rather than a defect. Written to `SKILL.md` §10.
+
 ### Open — awaiting a ruling
 
 Nothing is currently awaiting a ruling. Items reaching a Stop Condition are recorded here until settled.
