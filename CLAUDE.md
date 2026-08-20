@@ -381,9 +381,11 @@ Recipients see church-wide figures, which exceeds the own/subtree scope their po
 Admin-only, Whole Church, audit logged with previous and new values. It governs the Cell attention threshold (§15) and the initial-encoding phase flag (§2) — both alter behaviour for the whole church from one control. A setting is explicitly not a place to record domain rules: anything that changes what a figure means belongs in the specification, not behind a control. Written to `SKILL.md` §7, §15, §2, §21.
 
 ### 2026-08-20 — A mid-month schedule change is resolved per week
+**Superseded** by "A schedule change takes effect the following month" below. Per-week resolution left a month able to hold three or six scheduled meetings, sometimes two on consecutive days.
 The schedule in force on the first day of the week a meeting belongs to determines that meeting's scheduled date. The week is the unit because §13 already makes the weekly meeting the unit of identity. Without the rule a mid-month move can leave a week with two candidate dates or none, producing a month of three or six scheduled meetings and a coverage denominator with no defined value. Written to `SKILL.md` §10.
 
 ### 2026-08-20 — A calendar week begins on Monday
+**Still standing; its original justification changed.** It no longer rests on mid-month schedule resolution, which was removed, but on §13's one-logical-meeting-per-calendar-week identity.
 ISO 8601, consistent with the date format already in use. Not a formatting preference: §13 makes the weekly meeting the unit of a Cell's identity and §10 resolves a mid-month schedule change by the schedule in force on the first day of the meeting's week, so the boundary decides which schedule governs and therefore the coverage denominator. Sunday-start is the common local convention and would otherwise be somebody's default. Written to `SKILL.md` §20.
 
 ### 2026-08-20 — Monthly attendance is measured over the membership window
@@ -393,6 +395,7 @@ A person is reported under the Cell they belonged to most recently during the mo
 This replaces the earlier month-end rule, which had no answer for a person who left a Cell and joined none — permitted when a Cell closes — leaving them with a classification but no bucket, so the two views stopped reconciling. Bounding by membership also fixes the mid-month joiner, who was previously measured against meetings held before they joined and whose roster they were absent from, making `Completed` unreachable. Written to `SKILL.md` §10.
 
 ### 2026-08-20 — Cell monthly attendance reports on members
+**Superseded** by "Cell monthly attendance reverts to attendees" below. A member population filters by lifecycle, because archival ends membership, which breaks the §3 rule that period-based reports are never filtered by current lifecycle state. It also made `None` and `Completed` overlap whenever a Cell had recorded no meetings.
 The population of a Cell's monthly report is the Cell's members at month end, not only those who attended. Buckets gain `None`, and the classification view gains `Not yet attended`, so both views cover the same people and reconcile to the member count.
 
 The denominator N is the Cell's recorded meetings for the month and belongs to the Cell, so every member is measured against the same N and `Completed (N/N)` means one thing on the screen. A member's count is their Cell attendance anywhere that month, capped at N, so someone who moved mid-month keeps credit for meetings they attended before moving.
@@ -403,6 +406,18 @@ Chosen over the two attendee-only alternatives because a report listing only the
 A Cell decided in August to move from Saturday to Sunday runs on Sunday from 1 September. A month therefore holds one schedule throughout and always 4 or 5 scheduled meetings.
 
 Mid-month resolution was tried and rejected: it left a month able to hold three or six scheduled meetings, sometimes two on consecutive days, and made the coverage denominator unpredictable from a leader's own calendar. A single meeting moving at short notice is a `RESCHEDULED` meeting, which is what that status is for. Written to `SKILL.md` §10.
+
+### 2026-08-20 — Cell monthly attendance reverts to attendees, with a separate roster view
+Three attempts to make one report both reconcile and show non-attenders all failed. Attendee-only could not show who was missing; the membership window left people unbucketed; the member population filtered by lifecycle and so broke reproducibility.
+
+They are two jobs, not one. The **monthly report** is statistical: attendee population, reconciles, reproducible, and classification is evaluated as of month end so a closed month stops moving. The **roster view** is operational: every current member and who came, no buckets, reconciles with nothing, and is explicitly not reproducible for a past period.
+
+Monthly-attendance buckets are now a Cell-scope view only. N belongs to a Cell, so aggregating across Cells with different N makes `Completed` mean "attended everything their own Cell happened to record" — inflated by exactly the Cells that recorded least, which is the Goodhart pattern §13 exists to prevent. DCC aggregates because one event set covers the whole church. Written to `SKILL.md` §12, §9, §15, §16, §20.
+
+### 2026-08-20 — Three reporting questions are deferred to implementation
+How a person who moved Cells mid-month appears in monthly reporting; whether a mid-month joiner is measured against a whole month they were not present for; and what an aggregate view offers in place of buckets.
+
+Each was answered twice, and each answer broke reconciliation or reproducibility. They are recorded in `SKILL.md` §12 with the constraints any answer must satisfy, to be settled against real data in Stage 5 and verified by the reconciliation tests. Continuing to specify them in prose was producing rules that read well and did not hold.
 
 ### Open — awaiting a ruling
 
