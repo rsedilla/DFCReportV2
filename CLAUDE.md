@@ -83,6 +83,60 @@ Using the example tree `Raymond -> Manuel -> Mark`:
 
 Case 7 must be exercised concurrently, not only sequentially — a sequential test passes against application-layer checks alone and will not detect a missing database constraint.
 
+## Working in this repository
+
+### Branches and pull requests
+
+`main` is protected. Work on a branch and open a pull request. Direct pushes are blocked for everyone but an administrator, and an administrator pushing directly to `main` is bypassing the review this file requires.
+
+Name branches with a type prefix and a short description: `spec/cell-lifecycle`, `feat/attendance-api`, `fix/subtree-cycle`.
+
+**Run `architecture-guardian` before requesting human review**, not after. If the change meets any Mandatory Review condition above, run it yourself and resolve what it reports. Arriving at review with its findings already addressed is the point of having it; asking a reviewer to discover them is not.
+
+A pull request needs one approval. Changes to `SKILL.md`, `CLAUDE.md`, and `.claude/` additionally require a code owner (`.github/CODEOWNERS`).
+
+Resolve every conversation before merging. Approvals are dismissed when new commits are pushed, so push fixes before asking for re-review.
+
+Keep a pull request to one coherent change. A branch carrying six unrelated decisions is a branch nobody reads carefully.
+
+### Commits
+
+```text
+<type>(<scope>): <summary, imperative, <= 72 characters>
+
+<body: why, not what>
+```
+
+Types:
+
+- `spec` — a change to `SKILL.md`, the domain source of truth
+- `docs` — README and other non-normative documentation
+- `feat`, `fix`, `refactor`, `test` — application code
+- `chore` — tooling, configuration, CI
+
+Scope is optional and names the area: `spec(cells)`, `feat(auth)`, `fix(reports)`.
+
+**The body matters more than the subject.** A domain rule almost always has a reason that the diff does not show, and in six months the reason is the only part anyone needs. Write why the rule exists, and what was considered and rejected. A body that restates the diff is wasted.
+
+Cite the specification section a commit implements or amends.
+
+One commit per coherent change. Do not mix a rule change with unrelated tidying.
+
+### Secrets
+
+**This repository is public.** Nothing secret belongs in it, including in history. A committed secret is compromised even after it is deleted, because the commit remains reachable.
+
+- No credentials, tokens, connection strings, or keys in any file, at any time.
+- Configuration comes from the environment. Commit `.env.example` with variable names and no values. Never commit `.env`.
+- Test fixtures use invented data. Never real member names, birthdays, or mobile numbers — the church holds records for minors, and a fixture is as public as the rest of the repository.
+- If a secret is committed, **rotate it first and clean history second**. Rotation is the fix; removing the commit is tidying.
+
+### Running the project
+
+No application code exists yet.
+
+When the API and web application are scaffolded, this section carries the commands to install, run, migrate, seed, and test. Until it does, the Definition of Done above is a statement of intent rather than something anyone can check — filling this in is part of the scaffolding work, not a follow-up to it.
+
 ## Stop Conditions
 Stop and request architectural clarification rather than inventing a rule when:
 - `SKILL.md` does not define a required ministry rule.
