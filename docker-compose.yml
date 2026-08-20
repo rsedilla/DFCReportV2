@@ -1,0 +1,30 @@
+# Local PostgreSQL for development.
+#
+# PostgreSQL 16 is the minimum version, and the pin is a domain requirement rather
+# than a preference: the CYCLE clause that makes every recursive subtree query
+# cycle-safe needs 14 or later, and pinning it means the visited-path fallback is
+# never written by hand (SKILL.md section 5).
+#
+# Credentials come from the environment, never from this file. Copy .env.example
+# to .env and fill it in; .env is not committed, and this repository is public.
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: dfc-postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?set POSTGRES_USER in .env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:?set POSTGRES_DB in .env}
+    ports:
+      - '${POSTGRES_PORT:-5432}:5432'
+    volumes:
+      - dfc-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  dfc-postgres-data:
