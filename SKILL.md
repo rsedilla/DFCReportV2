@@ -74,7 +74,7 @@ One reason decides the migration and data-access tooling, and it is the same rea
 
 The cost is accepted deliberately: table types are written and reviewed rather than generated, and the schema tests are what keep them honest.
 
-**A component library may style, and may not judge.** The web application uses headless, accessible primitives — dialog, combobox, menu, tabs, date picker — vendored into the repository as source the team owns, rather than consumed as a versioned dependency with a look attached. Component frameworks that carry their own design system are deliberately not used **in the web application**. This says nothing about the native clients: their framework is not chosen and is not settled here (docs/ROADMAP.md), and a platform toolkit is a different question from a web component library.
+**A component library may style, and may not judge.** The web application uses headless, accessible primitives — dialog, combobox, menu, tabs, date picker — vendored into the repository as source the team owns, rather than consumed as a versioned dependency with a look attached. Component frameworks that carry their own design system are deliberately not used **in the web application**. This says nothing about the native clients: their framework is not chosen, and a platform toolkit is a different question from a web component library. That ruling is open, and is indexed as open in `CLAUDE.md`.
 
 The ordinary reason is that they bring a second styling engine, which duplicates and fights the first.
 
@@ -713,7 +713,11 @@ Include:
 
 Do not require 2-step verification/MFA in V1.
 
-**No sign-in step may be a cognitive function test** (WCAG 2.2, criterion 3.3.8; Section 23). No puzzle, no image selection, no transcription, and no memory task beyond the password itself. Paste into the password field is never blocked, and nothing obstructs a password manager: disabling paste is done in the name of security and produces the opposite, because it pushes people toward passwords short enough to type from memory.
+**Signing in supports a password manager** (WCAG 2.2, criterion 3.3.8; Section 23). Paste into the password field is never blocked, autofill is never obstructed, and the field is marked up so a manager can fill it.
+
+That is what makes a password permissible. A password *is* a cognitive function test under 3.3.8 — it is remembered — and the criterion allows it only where something assists the user in completing it. The password manager is that mechanism, so blocking paste does not merely inconvenience: it removes the thing conformance rests on. It is usually done in the name of security and produces the opposite, by pushing people toward passwords short enough to type from memory.
+
+Beyond the criterion, and as a decision of this system rather than a requirement of WCAG: **no sign-in step is a puzzle, an image-selection challenge, or a transcription task.** 3.3.8 permits object recognition and personal content; refusing them here is a choice about the people using this system, most of whom are signing in on a phone, and it is recorded as a choice rather than dressed up as conformance.
 
 ### Tokens, not browser sessions
 
@@ -2656,19 +2660,19 @@ Web UI must be responsive from the beginning. Leaders will use the web applicati
 
 Level AA rather than A, because Level A omits colour contrast, and contrast is the criterion that decides whether a leader can read an attendance figure on their own phone, in a hall, at fifty. Not AAA: it asks for 7:1 contrast and a reading level this material cannot always meet, and a standard nobody meets is one everybody ignores.
 
-Four criteria are called out because this system's own rules bear on them.
+Six criteria are called out, in four groups, because this system's own rules bear on them.
 
-**1.4.3 Contrast, and 1.4.11 Non-text Contrast.** Body text meets 4.5:1 and the boundary of a control meets 3:1, against the background it actually sits on, in both light and dark. A purely decorative rule or divider is exempt, and the palette keeps the two apart so that reaching for the decorative one on a form field is a visible mistake.
+**1.4.3 Contrast, and 1.4.11 Non-text Contrast.** Body text meets 4.5:1 against the background it actually sits on, in both light and dark. 1.4.11 asks 3:1 of three things, and reporting needs all of them: the boundary of a control, the visible states of one such as focus or checked, and any graphical object required to understand content — which is what a chart mark is. A purely decorative rule or divider is exempt, and the palette keeps the decorative and the meaningful apart so that reaching for the wrong one on a form field is a visible mistake.
 
 **2.5.8 Target Size (Minimum).** Interactive targets are at least 24 by 24 CSS pixels. Cell attendance is recorded by a leader tapping down a roster on a phone, often standing up, and a mis-tap here is a wrong attendance record rather than a cosmetic annoyance.
 
-**3.3.8 Accessible Authentication (Minimum).** Signing in requires no cognitive function test: no puzzle, no memory game, no transcription. Paste into the password field is never blocked and password managers are never obstructed. Disabling paste is done in the name of security and makes accounts less secure, since it pushes people toward passwords they can type from memory — Section 24 asks for the opposite.
+**3.3.8 Accessible Authentication (Minimum).** A password is a cognitive function test, and the criterion permits one only where a mechanism assists the user in completing it. Support for password managers is that mechanism: paste is never blocked, autofill is never obstructed. Section 6 carries the rule and the house decision that goes beyond it.
 
-**2.4.11 Focus Not Obscured, and 2.4.7 Focus Visible.** Focus is always visible and never hidden behind a sticky header or a dialog. This is what makes the keyboard path usable at all, and it cannot be verified by looking at a screenshot.
+**2.4.11 Focus Not Obscured (Minimum), and 2.4.7 Focus Visible.** Focus is always visible, and the focused control is never *entirely* hidden behind a sticky header or a dialog. Level AA requires that much; requiring no part of it to be obscured is 2.4.12 at Level AAA, and is not claimed here. This is what makes the keyboard path usable at all, and it cannot be verified from a screenshot.
 
 Conformance is about whether a person can perceive and operate the interface. It is not a licence to encode meaning in colour: Sections 13, 17 and 19 forbid encoding meeting status, coverage or a leader in colour, and no contrast ratio makes that permissible.
 
-The native clients are not covered here. Their framework is not chosen (Section 2), and the equivalent obligation for them is the platform's own accessibility API rather than WCAG. That is a ruling to make when the client is.
+The native clients are not covered here. Their framework is not chosen (Section 2), and the equivalent obligation for them is the platform's own accessibility API rather than WCAG. That is a ruling to make when the client is, and it is indexed as open in `CLAUDE.md`.
 
 ### Required from the first write endpoint
 

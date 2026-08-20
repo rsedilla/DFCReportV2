@@ -57,7 +57,7 @@ A change is not complete until it is verified.
 
 - **The palette is checked on every build.** `web/scripts/check-contrast.mjs` computes 1.4.3 and 1.4.11 against the tokens in both themes and fails `npm run lint`. Contrast is decided by the palette, so a defect there is a defect on every screen at once, and no browser is needed to find it.
 - **From the first real screen, axe-core runs in CI** over every route, and a violation fails the build. That arrives with Stage 2, because a browser harness for a placeholder page checks nothing. Automated rules catch only part of AA — treat a green axe run as the floor, not the ceiling.
-- **A pull request that adds or changes a screen states how it meets the four criteria §23 calls out**, because automation cannot see them: keyboard operable end to end with focus visible and never obscured (2.4.7, 2.4.11), targets at least 24 by 24 CSS pixels (2.5.8), and no cognitive function test or blocked paste in the sign-in path (3.3.8).
+- **A pull request that adds or changes a screen states how it meets the criteria automation cannot see**: keyboard operable end to end, with focus visible and the focused control never entirely obscured (2.4.7, 2.4.11); targets at least 24 by 24 CSS pixels (2.5.8); and, on the sign-in path, paste and password managers unobstructed (3.3.8). §23 names these alongside the two the contrast check covers.
 
 Conformance concerns whether a person can perceive and operate the interface. It never licenses encoding meaning in colour: §13, §17 and §19 forbid encoding meeting status, coverage or a leader that way, whatever its contrast ratio.
 
@@ -534,7 +534,9 @@ The ordinary objection is that each brings a second styling engine to fight Tail
 
 **Firm — the current implementation.** Radix, vendored through `shadcn/ui`. The rule is what is settled and what `SKILL.md` §2 carries; the vendor is how it is met today and may be replaced by anything satisfying it, without amending the specification.
 
-**Checked, not remembered.** `web/scripts/check-ui-dependencies.mjs` fails `npm run lint` if a refused package appears in `web/package.json`, beside the check that holds the pure-client boundary. The rule's own argument is that a framework's defaults get applied by whoever writes the newest screen, which is an argument that review will not catch it.
+**Checked, not remembered.** `web/scripts/check-ui-dependencies.mjs` fails `npm run lint` if a refused package appears in `web/package.json`, and `web/scripts/check-contrast.mjs` refuses a palette token named for a judgement — `danger`, `success`, `warning` and their kind. Both sit beside the check that holds the pure-client boundary. The rule's own argument is that a framework's defaults get applied by whoever writes the newest screen, which is an argument that review will not catch it, and the same is true of a colour named for a verdict.
+
+The dependency list is illustrative of the rule, never a definition of it: a package absent from it is not thereby approved. It names no headless package, including headless packages published by the refused projects, because those are what the rule prescribes.
 
 **Expected, and confirmed against a real screen rather than now.** TanStack Query for server state, since cursor pagination, retry and cache invalidation are where `VERSION_CONFLICT` and `Idempotency-Key` retries actually get handled (§14, §22, §23). TanStack Table, headless, for rosters and attendance grids — §22 fixes the sort and filter contract as named query parameters and forbids ordering leaders against one another, so the table's job is column definition and virtualization rather than inventing its own query language. A chart library with no built-in colour semantics. `lucide-react` and `next/font`.
 
@@ -549,7 +551,7 @@ Recorded also because elegance in this application is mostly not a dependency. O
 
 **Made checkable in three parts**, recorded under Definition of Done: the palette is checked deterministically on every build, axe-core runs in CI from the first real screen in Stage 2, and a pull request adding a screen states how it meets the four criteria automation cannot see. The phasing has a terminating condition rather than being open-ended.
 
-**Four criteria are named in §23 because this system's rules bear on them.** 1.4.11 splits the palette into a decorative border and a control border, so reaching for the wrong one on a form field is visible. 2.5.8 exists because Cell attendance is recorded by tapping down a roster on a phone, often standing, where a mis-tap is a wrong attendance record. 3.3.8 forbids blocking paste in the password field, which is written into §6 as well — it is done in the name of security and produces the opposite. 2.4.11 is what makes the keyboard path usable and cannot be seen in a screenshot.
+**Four criteria are named in §23 because this system's rules bear on them.** 1.4.11 splits the palette into a decorative border and a control border, so reaching for the wrong one on a form field is visible. 2.5.8 exists because Cell attendance is recorded by tapping down a roster on a phone, often standing, where a mis-tap is a wrong attendance record. 3.3.8 is why paste in the password field is never blocked, written into §6 as well: a password is itself a cognitive function test, and the criterion permits one only where a mechanism assists in completing it, which is the password manager. Blocking paste removes the thing conformance rests on. 2.4.11 is what makes the keyboard path usable and cannot be seen in a screenshot.
 
 Conformance is about perceiving and operating the interface, and licenses nothing about meaning: §13, §17 and §19 still forbid encoding meeting status, coverage or a leader in colour at any contrast ratio.
 
@@ -557,13 +559,15 @@ The native clients are deliberately out of scope. Their framework is not chosen,
 
 ### Open — awaiting a ruling
 
-**One item awaits a ruling. One other thing is unsettled and blocks nothing; it is listed at the end so this section is the whole of what is open.**
+**One item awaits a ruling and blocks Stage 5. Three other things are unsettled and block nothing; they are listed at the end, so this section is the whole of what is open.**
 
 **What an aggregate Cell attendance view offers in place of buckets.** Monthly-attendance buckets are a Cell-scope view only, because N belongs to a Cell and aggregating across different N inflates `Completed` for the Cells that recorded least (`SKILL.md` §12). At leader and Network scope the spec offers unique people, classification and coverage, and does not say whether anything should replace the buckets. Settle it in Stage 5 against real data.
 
 Two related questions have defined behaviour and are recorded in `SKILL.md` §12 as fairness questions rather than Stop Conditions: whether a leader should see someone who attended and has since left, and whether a mid-month joiner measured against the whole month is acceptable. An implementer follows the stated rules and does not stop on either.
 
-**Unsettled, and not blocking anything.** This is not a Stop Condition. An implementer proceeds and settles it in passing; it is listed here because a reader looking for what is open should not have to find it inside the body of a ruling.
+**Unsettled, and not blocking anything.** None of these is a Stop Condition. An implementer proceeds and settles them in passing; they are listed here because a reader looking for what is open should not have to find it inside the body of a ruling.
 
 - **The client libraries beyond the component question** — TanStack Query, TanStack Table, a chart library, icons and fonts. Recorded as expectations in the UI direction entry above, deliberately not in `SKILL.md`, and confirmed against a real screen in Stage 2 rather than now. A list headed "This is settled, not a suggestion" is no place for a library nobody has used yet.
+- **The native client framework.** `SKILL.md` §2 settles the web stack and says nothing about Android and iOS. Deferred since the specification was written; indexed here because two rules now point at it as open.
+- **What the native clients owe on accessibility.** `SKILL.md` §23 binds the web application to WCAG 2.2 AA and says the equivalent obligation for a native client is the platform accessibility API rather than WCAG. Which platform guarantees, and what would fail a build, is a ruling to make when the client is.
 

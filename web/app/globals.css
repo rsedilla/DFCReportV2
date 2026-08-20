@@ -28,7 +28,12 @@
  * `line` does not. Reaching for `line` on a form field is the mistake this pair
  * exists to prevent.
  *
- * Every pair here is checked by `scripts/check-contrast.mjs`, which runs in lint.
+ * `scripts/check-contrast.mjs` runs in lint and checks the pairs it lists: text
+ * against its backgrounds both ways round, and `edge` against its backgrounds. It
+ * does not check `line`, which is decorative and exempt, and it cannot see a
+ * combination nobody listed — `bg-accent text-ink` is 2.14:1 and would pass lint
+ * unnoticed. Using a token in a new position means adding the pair there. The
+ * same check refuses a token named for a judgement.
  */
 @theme inline {
   --color-surface: var(--surface);

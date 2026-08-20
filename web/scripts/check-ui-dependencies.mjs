@@ -15,6 +15,11 @@
  * `warning` and `severity` that sections 13, 17 and 19 forbid applying to
  * meeting status, to coverage, or to a leader. Headless primitives carry no such
  * vocabulary, which is the whole of why they were chosen.
+ *
+ * Section 2 does not refuse CSS-in-JS as a rule of its own — it gives the second
+ * styling engine as a *reason* design-system frameworks are refused. So this does
+ * not check for one. A chart library declaring an emotion peer dependency would
+ * otherwise fail lint against a rule nobody wrote.
  */
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
@@ -22,13 +27,25 @@ import process from 'node:process';
 
 const PACKAGE_JSON = fileURLToPath(new URL('../package.json', import.meta.url));
 
-/** Named in SKILL.md section 2 and in the decisions log. */
+/**
+ * Packages that ship a design system: a look, and a vocabulary of state to
+ * express it with. The five families named in SKILL.md section 2 and the
+ * decisions log, plus two of the same kind.
+ *
+ * The list is illustrative of the rule, never a definition of it. A package
+ * absent from it is not thereby approved, and the rule is what review applies.
+ *
+ * Headless packages are what the rule *prescribes*, including headless packages
+ * published by the same projects. `@mui/base` ships unstyled primitives with no
+ * Material look and no state vocabulary, which puts it in the same category as
+ * Radix; an icon set is not a component framework either. Neither is listed here,
+ * because neither is refused by the rule — and a check that blocked a permitted
+ * choice would need a specification amendment to unblock, which is backwards.
+ */
 const REFUSED = [
   '@mui/material',
   '@mui/joy',
-  '@mui/base',
   'antd',
-  '@ant-design/icons',
   '@chakra-ui/react',
   '@mantine/core',
   'bootstrap',
@@ -36,12 +53,6 @@ const REFUSED = [
   'primereact',
   '@fluentui/react-components',
 ];
-
-/**
- * A second styling engine duplicates and fights Tailwind, which is the ordinary
- * half of the same rule.
- */
-const REFUSED_STYLING = ['styled-components', '@emotion/styled', '@emotion/react'];
 
 const manifest = JSON.parse(await readFile(PACKAGE_JSON, 'utf8'));
 const declared = new Set([
@@ -61,15 +72,6 @@ for (const name of REFUSED) {
   }
 }
 
-for (const name of REFUSED_STYLING) {
-  if (declared.has(name)) {
-    failures.push(
-      `${name} is a second styling engine beside Tailwind. SKILL.md section 2 ` +
-        `settles one, and two of them fight.`,
-    );
-  }
-}
-
 if (failures.length > 0) {
   process.stderr.write('The web application declares a dependency SKILL.md section 2 refuses:\n\n');
   for (const failure of failures) {
@@ -82,4 +84,4 @@ if (failures.length > 0) {
   process.exit(1);
 }
 
-process.stdout.write('web: no design-system component framework, one styling engine.\n');
+process.stdout.write('web: no design-system component framework declared.\n');
