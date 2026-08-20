@@ -1,0 +1,193 @@
+name: CI
+
+# Continuous integration from day one, required by branch protection.
+#
+# Retrofitting CI across an existing codebase is how gaps ship (docs/ROADMAP.md,
+# Stage 1 risk), so this exists before the application has a single feature.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  api:
+    name: api
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        # PostgreSQL 16 is the minimum version. The CYCLE clause that makes every
+        # recursive subtree query cycle-safe needs 14 or later, and pinning it
+        # means the visited-path fallback is never written (SKILL.md section 5).
+        image: postgres:16-alpine
+        env:
+          # Not a secret. This container lives for the length of one job, is
+          # reachable only from it, and holds nothing but fixtures.
+          POSTGRES_USER: dfc_ci
+          POSTGRES_PASSWORD: dfc_ci
+          POSTGRES_DB: dfc_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U dfc_ci -d dfc_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgresql://dfc_ci:dfc_ci@localhost:5432/dfc_ci
+
+    defaults:
+      run:
+        working-directory: api
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: api/package-lock.json
+
+      - name: Install
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Check formatting
+        run: npm run format:check
+
+      # Reversible, or explicitly marked irreversible and escalated before it runs
+      # (CLAUDE.md, migration policy). Down and up again is how that stays true.
+      - name: Apply migrations
+        run: npm run migrate:up
+
+      - name: Revert and re-apply migrations
+        run: |
+          npm run migrate:down
+          npm run migrate:up
+
+      - name: Test
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+  web:
+    name: web
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: web
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install
+        run: npm ci
+
+      # `lint` also runs the client-boundary check: no API routes, no server
+      # actions. The web application is a client, like the phones (SKILL.md
+      # section 2).
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Build
+        run: npm run build
+
+  authorization-suite:
+    name: authorization suite (Stage 2 target, failing by design)
+    runs-on: ubuntu-latest
+
+    # Reported, never required. The eleven cases of CLAUDE.md are written against
+    # an endpoint Stage 2 builds, and they fail today because it does not exist.
+    # Stage 2 is done when they are green, at which point they fold into `api`
+    # and this job is deleted.
+    continue-on-error: true
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: dfc_ci
+          POSTGRES_PASSWORD: dfc_ci
+          POSTGRES_DB: dfc_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U dfc_ci -d dfc_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgresql://dfc_ci:dfc_ci@localhost:5432/dfc_ci
+
+    defaults:
+      run:
+        working-directory: api
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: api/package-lock.json
+
+      - name: Install
+        run: npm ci
+
+      - name: Apply migrations
+        run: npm run migrate:up
+
+      - name: Run the eleven authorization cases
+        id: suite
+        continue-on-error: true
+        run: npm run test:authorization
+
+      - name: Report
+        run: |
+          {
+            echo "## Authorization suite"
+            echo
+            if [ "${{ steps.suite.outcome }}" = "success" ]; then
+              echo "All eleven cases passed."
+              echo
+              echo "If this is still Stage 1, that is a surprise worth investigating:"
+              echo "the endpoint they exercise is not built yet, so they should fail."
+              echo "If Stage 2 has landed, move them into the main suite and delete"
+              echo "this job."
+            else
+              echo "The eleven cases fail, which is expected until Stage 2 builds"
+              echo "\`PUT /api/v1/people/{id}/pastoral-leader\`."
+              echo
+              echo "See \`api/test/authorization/pastoral-assignment.spec.ts\` for the"
+              echo "contract they pin, and docs/ROADMAP.md for why they are written"
+              echo "first."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
