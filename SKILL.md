@@ -777,9 +777,23 @@ Each attendance record must ultimately identify:
 - person
 - DCC event/date
 - present state
-- responsible leader/reporting scope
+- responsible leader (below)
 - actor who entered/submitted it
 - timestamps/audit metadata
+
+### Responsible leader for DCC attendance
+
+The responsible leader for a person's DCC attendance is their **direct pastoral leader, as of the event date** (Section 5).
+
+Every person has exactly one direct pastoral leader, so every person is covered exactly once. A leader records their **direct** pastoral children only; totals aggregate upward through the tree, so no leader re-records people their downline has already recorded, and nobody is missed between two levels.
+
+**Cell leadership is not involved.** A leader who disciples people but leads no Cell is still the responsible leader for their direct children's DCC attendance. This is deliberately different from qualifying as a leader for counting (Section 11): responsibility for attendance follows position in the pastoral tree, while counting follows Cell leadership. A person may be a responsible leader without being counted as a leader, and that is correct.
+
+**Fixed as of the event date.** A later reassignment never moves historical records. If a person moves from one leader to another in November, October's DCC records remain with whoever was responsible in October, and re-running October's report returns the same figures (Section 3).
+
+**An upline leader may record on behalf** of a downline leader within their pastoral subtree (Section 14). The responsible leader remains the direct pastoral leader; the actor is recorded separately. Coverage measures whether the record exists, not who entered it, so a submission made on behalf completes that leader's coverage for the event.
+
+A Network root leader has no pastoral leader and therefore no responsible leader (Section 5, Network roots). Admin records their attendance, and roots are excluded from coverage denominators.
 
 ### DCC classification
 
@@ -865,6 +879,18 @@ A Cell Group has only the required operational information:
 - lifecycle state: `ACTIVE` or `CLOSED`
 
 No Cell Name is required.
+
+### Cell ID generation
+
+The internal UUID is the key every relationship points at. The Cell ID is a human-readable handle for staff, reports, and conversation — the same split as Person (Section 3, Two identifiers, two jobs).
+
+- Format `CELL-` followed by six zero-padded digits, from a database sequence.
+- Assigned once, at creation, by the server. Immutable thereafter.
+- **Never reused.** A closed Cell keeps its ID permanently (Cell lifecycle, below), and reassigning it would make two different Cells share an identifier across time.
+- Gaps are expected and acceptable. The Cell ID is a handle, not a count of Cells.
+- **It encodes nothing.** Not category, not Network, not year, not leader.
+
+The last rule matters more here than it looks. Category is editable and the Cell ID deliberately does not change with it (Category changes, below), so an identifier such as `YTH-0042` becomes a lie the moment a Youth Cell becomes Young Pro. Every attribute a Cell ID might encode is an attribute that can change.
 
 ### Cell categories
 
