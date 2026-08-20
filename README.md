@@ -33,6 +33,7 @@ Settled in [SKILL.md](SKILL.md) §2. Changing it requires a recorded decision, n
 - **API** — NestJS + TypeScript, REST under `/api/v1`, separately deployable
 - **Database** — PostgreSQL 16, with hand-written SQL migrations and no ORM
 - **Web** — Next.js + TypeScript as a pure client: no API routes, no server actions
+- **Styling** — Tailwind CSS, with a palette that carries no judgement (§13)
 - **Mobile** — Android and iOS later, against the same API
 
 The API is the product. The web application is its first client; the phones are the next two. All three surfaces are used concurrently, so the API is stateless, token-authenticated, and detects write conflicts rather than resolving them silently.

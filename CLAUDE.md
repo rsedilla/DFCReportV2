@@ -508,6 +508,13 @@ The exemption sentence claimed the unauthenticated set was sign-in and the passw
 
 `read_only` is defined by §7 as a column on `capability_grants` and says nothing about role defaults, so deriving one for a role default and publishing it from `/api/v1/auth/me` invented a rule for clients to branch on. Authority carried by a role now reports no value. Written to `SKILL.md` §7.
 
+### 2026-08-20 — Tailwind CSS, chosen while there is one page to convert
+Settled in `SKILL.md` §2 (Chosen stack). It affects no architectural boundary: Tailwind is a build-time PostCSS plugin, adds no route, no server action and no data access, and the phones never load the stylesheet.
+
+Chosen now rather than at Stage 5 for the same reason CI was chosen at Stage 1. Converting one placeholder page costs minutes; converting the dashboards, Network Summary and the role-specific screens costs a week, and the framework that arrives after the screens tends to be applied to only half of them.
+
+**The palette carries the §13 and §17 prohibition.** No `success`, no `danger`, no `warning` token exists, and none is to be added. In a utility framework a red-and-green performance palette is one class away, and colouring a leader's row red for declaring `NOT_HELD` destroys the honest reporting that status exists to obtain — ranking the measure destroys the measure. A figure needing attention is surfaced by the attention list (§15), never by being coloured as a failure. The reasoning is written into `web/app/globals.css`, where somebody adding a colour will read it.
+
 ### Open — awaiting a ruling
 
 **One item awaits a ruling.**

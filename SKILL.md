@@ -55,6 +55,7 @@ This is settled, not a suggestion.
 - **Migrations:** hand-written SQL files, applied in order by a runner held in the repository
 - **Data access:** a typed query builder over the PostgreSQL driver, not an ORM
 - **Frontend:** Next.js + TypeScript, as a pure client
+- **Styling:** Tailwind CSS, in the web application only; its palette carries no judgement (Section 13)
 - **API:** REST, versioned under `/api/v1`
 - **Deployment:** containerized, portable across AWS, Hostinger/VPS, or another provider
 - **Email:** provider abstraction; business logic must never depend directly on SES or any other provider
