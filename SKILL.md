@@ -114,7 +114,7 @@ The sequence matters. The tree must exist before leaders can be assigned, accoun
 
 One rule is relaxed for this phase: **the request step is skipped**, and Admin creates Cells directly (Section 10). Approval is not bypassed, since Admin is the approver.
 
-**Initial encoding ends by a deliberate, audited Admin action, and ends once.** While it is open, the direct-create path is available. Once closed, that path is gone and every new Cell goes through request-and-approve. The transition records actor and timestamp (Section 21).
+**Initial encoding ends by a deliberate, audited Admin action, and ends once.** The phase flag is held under `settings.manage` (Section 7). While it is open, the direct-create path is available. Once closed, that path is gone and every new Cell goes through request-and-approve. The transition records actor and timestamp (Section 21).
 
 A relaxation attached to a phase with no defined end is a permanent relaxation. The flag is what makes this one temporary, so it is a required part of the design rather than an operational detail.
 
@@ -655,6 +655,7 @@ Example permissions may include:
 - `reports.view_subtree`
 - `people.merge`
 - `records.backdate_effective_date`
+- `settings.manage`
 - `accounts.manage`
 - `roles.manage`
 - `audit.view`
@@ -699,6 +700,7 @@ Three roles exist. Each carries the default capabilities and scopes below. Anyth
 | `reports.view_subtree` | Whole Church | Whole Church | own/subtree |
 | `audit.view` | Whole Church | Whole Church | — |
 | `records.backdate_effective_date` | — | Whole Church | — |
+| `settings.manage` | — | Whole Church | — |
 | `accounts.manage` | — | Whole Church | — |
 | `roles.manage` | — | Whole Church | — |
 | `people.merge` | — | Whole Church | — |
@@ -738,6 +740,12 @@ A capability without an explicit scope grant is not usable; a scope grant withou
 Senior Pastors (Bishop Oriel Ballano, Pastora Geraldine Ballano) receive Whole Church scope by role/policy, built in — this does not require a separate Admin-issued grant.
 
 `people.manage_pastoral_assignment` is a management capability, not a reporting one. Admin holds it per explicit administrative permission. A leader holds it at own/subtree scope, over their own pastoral subtree only. Senior Pastors hold it at Whole Church scope and may therefore reassign within either Network. It is never conferred by a read-only reporting scope grant. The invariants governing its use are defined in Section 5, Changing a person's pastoral leader.
+
+`settings.manage` governs the church-wide operational settings held by the system. It is Admin-only, at Whole Church scope, and every change is audit logged with its previous and new values (Section 21).
+
+The settings it governs today are the Cell attention threshold (Section 15) and the initial-encoding phase flag (Section 2). Both alter behaviour for the entire church from a single control, which is why neither is per leader and why both carry an audit trail: a threshold change silently re-populates every leader's attention list, and closing the encoding phase permanently removes Admin's direct-create path for Cells.
+
+A setting is not a place to record domain rules. Anything that changes what a figure means, rather than a single operational parameter, belongs in this specification and not behind a control.
 
 `records.backdate_effective_date` governs setting an effective date in the past on any effective-dated relationship: pastoral assignment (Section 5), Network (Section 4), Cell membership (Section 10), and Cell leadership (Section 11). It is Admin-only and always requires a reason. It is never granted to ordinary leaders, because backdating changes totals for periods that have already been reported (Section 3).
 
@@ -1038,6 +1046,12 @@ This is not optional bookkeeping. Scheduled meetings for a month are derived by 
 
 Without history, moving a Cell from Saturday to Sunday in June silently rewrites the coverage figure for every earlier month, because March has five Sundays and four Saturdays. A month recorded as `4 of 4` becomes `4 of 5`, and shifts again on the next schedule change. That breaks the guarantee in Section 3 that a past period's figures do not move.
 
+**Where a schedule changes mid-month**, the schedule in force on the **first day of the week a meeting belongs to** determines that meeting's scheduled date. A week is the unit because Section 13 makes the weekly meeting the unit of identity: one logical meeting per Cell per calendar week, whatever date it eventually lands on.
+
+Working the rule through a move from Saturday to Sunday effective Wednesday 12 August: the week beginning Monday 10 August was still Saturday when it opened, so that week's scheduled meeting is Saturday 15 August; the following week is Sunday. The month keeps exactly one scheduled meeting per week, with no week left holding two candidate dates and none left holding zero.
+
+Without this rule a mid-month change can produce a month of three or six scheduled meetings, which is a coverage denominator with no defined value — the failure this subsection exists to prevent.
+
 Audit schedule changes as category changes are audited.
 
 ### Creating a Cell
@@ -1287,7 +1301,7 @@ Use the same two views as DCC:
 
 #### Monthly Attendance
 
-Each Cell has exactly one logical scheduled Cell meeting per calendar week, per its configured schedule (Section 13). A Cell therefore has 4 or 5 **scheduled** meetings in a calendar month, determined the same way as the DCC calendar rule (Section 9).
+Each Cell has exactly one logical scheduled Cell meeting per calendar week, per its configured schedule (Section 10, Schedule changes). A Cell therefore has 4 or 5 **scheduled** meetings in a calendar month, determined the same way as the DCC calendar rule (Section 9).
 
 Scheduled meetings are not the denominator. The denominator is the meetings that actually took place and were recorded:
 
@@ -1508,7 +1522,7 @@ Purpose:
 
 Surface Cells that have gone quiet, as a working list for the leader who oversees them:
 
-- Cells with no meeting held for a set number of months, three by default. The threshold is a single church-wide Admin setting (Section 19, System Settings), never per leader: an attention list that differs by viewer makes two people discussing the same Cell talk past each other, one seeing it flagged and the other not.
+- Cells with no meeting held for a set number of months, three by default. The threshold is a single church-wide Admin setting, changed under `settings.manage` (Section 7) and audit logged, never per leader: an attention list that differs by viewer makes two people discussing the same Cell talk past each other, one seeing it flagged and the other not.
 - Cells with meetings still awaiting a record (Section 13)
 - People with no active Cell membership within the viewer's scope (Section 10)
 
@@ -1927,6 +1941,7 @@ Audit important actions, including:
 - Person merge
 - Account access decision at archive (Disable or Keep)
 - Account reactivation
+- System setting changed, with previous and new values
 
 Record actor, target, action, timestamp, and relevant before/after values.
 
