@@ -23,7 +23,7 @@ The skeleton everything else hangs on. **No features are built in this stage.**
 Pull request #4 merged on 2026-08-21, after `architecture-guardian` review and approval by a second code owner.
 
 - Repository layout: `api/` (NestJS), `web/` (Next.js), `docker-compose.yml` for local PostgreSQL
-- **Continuous integration from day one** — lint, typecheck and tests on every pull request, required by branch protection
+- **Continuous integration from day one** — lint, typecheck and tests on every pull request. *Not yet required by branch protection: no status check gates `main`, so a red build can still be merged on an approval alone*
 - Authentication skeleton: short-lived access tokens, refresh tokens, several concurrent sessions per account, account-wide revocation (`SKILL.md` §6)
 - The authorization guard: capability × scope, failing closed, applied declaratively (`SKILL.md` §7)
 - **First migration** carrying §5's constraints as hand-written SQL: the partial unique index, the no-self check, the same-Network constraint trigger, and cycle-safe recursive queries

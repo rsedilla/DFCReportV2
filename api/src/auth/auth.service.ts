@@ -82,12 +82,22 @@ export class AuthService {
     const issued = await this.tokens.rotateRefreshToken(row.id, account.id, deviceLabel);
 
     if (!issued) {
-      // Another request claimed this token between the read above and here. It is
-      // the same fact as a replay, one moment earlier: a copy is in circulation.
-      this.logger.warn(
-        `Refresh token ${row.id} was claimed concurrently; revoking every session for account ${row.account_id}.`,
-      );
-      await this.tokens.revokeAllSessions(row.account_id);
+      // Something claimed the token between the read above and here, and which
+      // something it was decides the response. `replaced_by_id` is set by
+      // rotation and by nothing else, so the same distinction the sequential
+      // path makes above applies here.
+      const claimed = await this.tokens.findRefreshTokenById(row.id);
+
+      if (claimed?.replaced_by_id) {
+        this.logger.warn(
+          `Refresh token ${row.id} was rotated concurrently; revoking every session for account ${row.account_id}.`,
+        );
+        await this.tokens.revokeAllSessions(row.account_id);
+      }
+
+      // Otherwise the device signed out a moment ago and this is its last
+      // in-flight request. Section 6 is explicit that signing out on one device
+      // ends that session only, so it is refused and nothing else happens.
       throw new ApiError(ApiErrorCode.UNAUTHENTICATED, 'Your session has ended. Sign in again.');
     }
 
@@ -106,7 +116,7 @@ export class AuthService {
     // Signing out is idempotent, and never discloses whether the token existed or
     // whose it was. A token belonging to another account is simply not revoked.
     if (row && row.account_id === actor.accountId) {
-      await this.tokens.revokeRefreshToken(row.id, null);
+      await this.tokens.revokeRefreshToken(row.id);
     }
   }
 

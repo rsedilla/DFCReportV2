@@ -187,13 +187,34 @@ jobs:
       - name: Check that they fail for the right reason
         if: steps.suite.outcome == 'failure'
         run: |
-          if grep -E 'Received:' suite.log | grep -qv 'Received: 404'; then
-            echo "::error::The authorization suite failed for a reason other than the"
-            echo "::error::endpoint being absent. Every case should receive 404."
-            grep -nE 'Received:' suite.log | grep -v 'Received: 404' | head -20
+          # Assert what should be there, not merely the absence of what should not.
+          # "No counter-evidence" cannot tell "every case failed on a 404" from
+          # "nothing ran at all" -- a failed migration, a missing JWT_SECRET or a
+          # throw in beforeAll produces no `Received:` line whatsoever, and the
+          # earlier form of this check reported those as expected.
+          if ! grep -qE 'Tests:[[:space:]]+[0-9]+ failed' suite.log; then
+            echo "::error::The authorization suite produced no test results at all."
+            echo "::error::That is a suite that did not run, not a suite failing as expected."
+            tail -30 suite.log
             exit 1
           fi
-          echo "Every failing case received 404: the endpoint is absent, as expected."
+
+          if ! grep -q 'Received: 404' suite.log; then
+            echo "::error::No case reached the endpoint and received a 404."
+            tail -30 suite.log
+            exit 1
+          fi
+
+          # Cases asserting with toContain or toHaveLength print `Received array:`
+          # and `Received length:`; only a bare `Received:` is a status assertion.
+          if grep -E '^[[:space:]]*Received: ' suite.log | grep -qv 'Received: 404'; then
+            echo "::error::A case failed on a status other than 404, so the suite is no"
+            echo "::error::longer failing only because the endpoint is absent."
+            grep -nE '^[[:space:]]*Received: ' suite.log | grep -v 'Received: 404' | head -20
+            exit 1
+          fi
+
+          echo "The suite ran, reached the endpoint, and every status assertion received 404."
 
       - name: Report
         run: |

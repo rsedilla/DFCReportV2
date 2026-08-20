@@ -473,10 +473,16 @@ CREATE INDEX account_roles_active_by_account
 -- Bishop Oriel and Pastora Geraldine are.
 --
 -- A `senior_pastor_slot` column with a partial unique index would let the index
--- do the work and was the obvious alternative. It is not used because section 7
--- gives `account_roles` its shape and that shape has no slot, so taking this
--- route would mean amending the specification to accommodate an implementation
--- detail. The advisory lock keeps the shape and makes the count honest.
+-- do the work, and is the stronger design: it needs no lock, it does not
+-- serialize unrelated `account_roles` writes at commit, and -- decisively -- a
+-- unique index is enforced under `pg_restore --disable-triggers`, where a
+-- constraint trigger is skipped entirely. A restore could load three Senior
+-- Pastors past this trigger.
+--
+-- It is not used *yet* because it adds a column section 7's shape does not carry,
+-- which is an amendment rather than an implementation detail. That amendment is
+-- an open question in CLAUDE.md. The lock closes the race today; it does not
+-- close the restore path, and that is written down rather than glossed.
 CREATE FUNCTION assert_two_senior_pastors_at_most() RETURNS trigger
 LANGUAGE plpgsql AS $$
 DECLARE

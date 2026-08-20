@@ -39,11 +39,8 @@ import { Client } from 'pg';
 const MIGRATIONS_DIR = join(__dirname, '..', 'migrations');
 const UP_MARKER = /^--\s*migrate:up\s*$/m;
 
-/**
- * `-- migrate:down`, which may itself carry the guard, as in
- * `-- migrate:down:refuse-if-populated persons accounts`.
- */
-const DOWN_MARKER = /^--[ \t]*migrate:down(?::refuse-if-populated([^\n]*))?[ \t]*$/m;
+/** `-- migrate:down` on its own, without the guard. */
+const PLAIN_DOWN_MARKER = /^--[ \t]*migrate:down[ \t]*$/m;
 
 /**
  * The guard, matched wherever it appears.
@@ -74,7 +71,7 @@ const IRREVERSIBLE_MARKER = /^--[ \t]*migrate:irreversible[ \t]*([^\n]*)$/m;
 // One lock for the whole migration history, so two deploys cannot race.
 const ADVISORY_LOCK_KEY = 4_120_197_301;
 
-interface Migration {
+export interface Migration {
   version: string;
   name: string;
   up: string;
@@ -87,10 +84,21 @@ interface Migration {
   checksum: string;
 }
 
-function parse(fileName: string, sql: string): Migration {
+export function parse(fileName: string, sql: string): Migration {
   const upAt = sql.search(UP_MARKER);
-  const downMatch = DOWN_MARKER.exec(sql);
+  const plainDown = PLAIN_DOWN_MARKER.exec(sql);
+  const guards = [...sql.matchAll(REFUSE_IF_POPULATED)];
   const irreversibleMatch = IRREVERSIBLE_MARKER.exec(sql);
+
+  // The down section starts at whichever marker comes first. The two are matched
+  // by separate expressions on purpose: one regex matching both meant the plain
+  // marker always won, which silently disabled the guard, and it also made the
+  // placement check below unreachable, because every guard line was itself a
+  // match for that regex.
+  const downIndexes = [plainDown?.index, guards[0]?.index].filter(
+    (index): index is number => index !== undefined,
+  );
+  const downAt = downIndexes.length > 0 ? Math.min(...downIndexes) : undefined;
 
   if (upAt === -1) {
     throw new Error(`${fileName}: no "-- migrate:up" marker`);
@@ -106,7 +114,7 @@ function parse(fileName: string, sql: string): Migration {
   const checksum = createHash('sha256').update(sql).digest('hex');
 
   if (irreversibleMatch) {
-    if (downMatch) {
+    if (downAt !== undefined) {
       throw new Error(
         `${fileName}: marked irreversible and also carries a down section. Choose one.`,
       );
@@ -138,36 +146,48 @@ function parse(fileName: string, sql: string): Migration {
     };
   }
 
-  if (!downMatch) {
+  if (downAt === undefined) {
     throw new Error(
       `${fileName}: no "-- migrate:down" marker. A migration is reversible, or is ` +
         `explicitly marked irreversible with "-- migrate:irreversible <why>" and ` +
         `escalated before it runs (CLAUDE.md).`,
     );
   }
-  if (downMatch.index < upAt) {
+  if (downAt < upAt) {
     throw new Error(`${fileName}: "-- migrate:down" appears before "-- migrate:up"`);
   }
-
-  const guards = [...sql.matchAll(REFUSE_IF_POPULATED)];
   if (guards.length > 1) {
     throw new Error(
       `${fileName}: more than one "-- migrate:down:refuse-if-populated" directive. ` +
         `Name every table on one line, so there is one list to read.`,
     );
   }
-  if (guards.length === 1 && guards[0].index < downMatch.index) {
-    throw new Error(
-      `${fileName}: the "-- migrate:down:refuse-if-populated" directive sits above the ` +
-        `down section it guards, where it would never be read.`,
-    );
+  // A guard is either the down marker itself, or the line directly below a plain
+  // one. Anywhere else -- inside the up section, or paragraphs below the marker --
+  // the file means something other than what the runner would do with it, so it
+  // is refused rather than guessed at.
+  if (guards.length === 1 && plainDown) {
+    // Where both lines are present they must be adjacent, in that order. The
+    // dangerous placement is a guard stranded in the up section: it becomes the
+    // first down marker, the up section truncates there, and the real DDL is
+    // parsed as the down section with nothing to say so.
+    const linesBetween = sql.slice(plainDown.index, guards[0].index).split('\n').length - 1;
+    const adjacent = guards[0].index > plainDown.index && linesBetween === 1;
+
+    if (!adjacent) {
+      throw new Error(
+        `${fileName}: the "-- migrate:down:refuse-if-populated" directive must be the ` +
+          `down marker itself, or the line directly below it. Anywhere else it does ` +
+          `not guard the section it appears to guard.`,
+      );
+    }
   }
 
   return {
     version,
     name: fileName,
-    up: sql.slice(upAt, downMatch.index),
-    down: sql.slice(downMatch.index),
+    up: sql.slice(upAt, downAt),
+    down: sql.slice(downAt),
     irreversibleBecause: null,
     refuseIfPopulated: (guards[0]?.[1] ?? '')
       .split(/[\s,]+/)

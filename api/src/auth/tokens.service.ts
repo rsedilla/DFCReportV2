@@ -100,22 +100,37 @@ export class TokensService {
   /**
    * Revokes a token, and reports whether this call is the one that did it.
    *
-   * The `revoked_at is null` clause is load-bearing twice over. It is what stops
-   * a sign-out clearing the `replaced_by_id` of a token that was already rotated,
-   * which would erase the reuse signal; and it is what makes rotation safe under
-   * concurrency, because exactly one of two racing callers gets a row back.
+   * Sign-out only. It never sets `replaced_by_id`, which is what keeps the two
+   * facts distinguishable: a token carrying a replacement was rotated, and one
+   * without was signed out.
+   *
+   * The `revoked_at is null` clause is load-bearing twice over. It stops a
+   * sign-out touching a token that was already rotated, which would blur that
+   * distinction; and it makes the claim exclusive, so exactly one of two racing
+   * callers gets a row back.
    */
-  async revokeRefreshToken(id: string, replacedById: string | null): Promise<boolean> {
+  async revokeRefreshToken(id: string): Promise<boolean> {
     const now = new Date();
     const revoked = await this.db
       .updateTable('refresh_tokens')
-      .set({ revoked_at: now, last_used_at: now, replaced_by_id: replacedById })
+      .set({ revoked_at: now, last_used_at: now })
       .where('id', '=', id)
       .where('revoked_at', 'is', null)
       .returning('id')
       .executeTakeFirst();
 
     return revoked !== undefined;
+  }
+
+  /** Reads a token row by id, for telling a rotation apart from a sign-out. */
+  async findRefreshTokenById(id: string): Promise<{ replaced_by_id: string | null } | null> {
+    const row = await this.db
+      .selectFrom('refresh_tokens')
+      .select('replaced_by_id')
+      .where('id', '=', id)
+      .executeTakeFirst();
+
+    return row ?? null;
   }
 
   /**
