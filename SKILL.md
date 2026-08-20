@@ -98,6 +98,28 @@ Two consequences do follow from these figures, and both are requirements rather 
 
 Design headroom for two to three times these figures. The church is growing toward a larger structure, and the tree is arbitrary-depth by rule (Principle 11) precisely so that growth never requires a schema change.
 
+### Modules
+
+Principle 13 requires a modular monolith. These are the modules, and the list is not advisory — a monolith with no named seams is just a monolith, and the option to extract a service later exists only if the seams were drawn at the start.
+
+| Module | Owns |
+| --- | --- |
+| `people` | Person, Member ID, lifecycle, duplicate matching, merge |
+| `networks` | Network assignment and its history |
+| `hierarchy` | Pastoral assignments, subtree resolution, the Section 5 invariants |
+| `auth` | Accounts, tokens, sessions, the capability and scope guard |
+| `cells` | Cells, categories, schedules, membership, leadership, the creation workflow |
+| `attendance` | DCC events and attendance, Cell meetings and attendance, the submission window |
+| `reporting` | Classification, monthly attendance, coverage, Network Summary, stored figures |
+| `audit` | The audit log |
+| `admin` | Settings, the initial-encoding phase, administrative operations |
+
+**A module owns its tables.** No other module reads or writes them directly. Cross-module access goes through the owning module's service interface, never through its repository or its tables.
+
+This is what makes "enforced in the domain layer" a statement rather than a hope. The five pastoral-assignment invariants (Section 5) have exactly one place to live because `hierarchy` is the only writer of `pastoral_assignments`. Where four modules write a table, an invariant needs checking in four places, and the fourth is the one somebody forgets — which is also why those invariants carry database constraints as a backstop.
+
+Organise by module, never by layer. A `controllers/`, `services/`, `entities/` layout spreads every feature across four folders and gives no boundary anything can be enforced on.
+
 ### Initial data load
 
 The church already exists. Roughly 800 Cells are running under an established leadership structure, and the system's first task is to record what is already there rather than to govern what gets created. Initial encoding is a distinct phase with its own rules.
@@ -256,6 +278,22 @@ A real Person who has stopped attending must not automatically be archived. Lack
 
 An archived Person can be restored to `CURRENT`. Archiving and restoring must be recorded as historical events, not merely toggled, so that Network Summary can show and explain when and why a Person's status changed (Section 16).
 
+Lifecycle is therefore effective-dated, not a column:
+
+```text
+person_lifecycle
+- id
+- person_id
+- state              CURRENT | ARCHIVED
+- reason             nullable, from the archive reason list above
+- note               nullable, required where reason is OTHER
+- actor_id
+- started_at
+- ended_at           nullable
+```
+
+A `lifecycle_state` column on the Person plus audit rows satisfies every sentence above and still cannot answer "who was `CURRENT` on 31 March". An audit log is a log, not a queryable as-of source: it is not indexed for the question, it is archived off in time, and reconstructing state by replaying it is exactly what this table exists to avoid. Without the table the reproducibility guarantee below is a hope; with it, the guarantee is a query.
+
 Historical reports must remain reproducible: a report for a past period reflects each Person's lifecycle state as it stood at that time, not their current state. Archiving someone today must never change the total shown for a period before their archive date, no matter when the report is re-run. Classification and monthly-attendance reports (DCC, Cell) are period-based and never filtered by current lifecycle state, for any period including the present one. Only current-state inventory metrics (Total People, Current Cell Leaders, Cell Groups, Cell Leaders with 12+ Members, Participation) reflect lifecycle state, and only as of the period being reported.
 
 "New Cell Leaders for a selected period" (Section 16) is period-based like attendance reporting and is not affected by a leader's later archival. "Leaders with 12+ Direct Leaders" (Section 16) is a current-state snapshot and does reflect current lifecycle state, for both the leader and the counted direct leaders.
@@ -334,6 +372,20 @@ It is assigned rather than proposed for confirmation. Under the homogeneous-netw
 A sex recorded in error is corrected through the audited Network-change path (Correcting a person's sex, below), which is the proper remedy and leaves a trail that a silent confirmation click would not.
 
 ### Network assignment history
+
+```text
+network_assignments
+- id
+- person_id
+- network            MENS | WOMENS
+- reason             nullable, for a correction
+- actor_id
+- started_at
+- ended_at           nullable
+```
+
+A `network` column on the Person cannot answer which Network someone belonged to during a past month, and every Network-scoped report for a closed period depends on that answer.
+
 
 A person's network relationship must be preserved historically (effective-dated), the same way pastoral assignments and Cell category are, so that Network-scoped reports remain accurate for past periods even if a person's network is later corrected or changed.
 
@@ -1024,6 +1076,17 @@ Mark
 
 ### Category changes
 
+```text
+cell_categories
+- id
+- cell_id
+- category           YOUTH | YOUNG_PRO | COUPLE
+- actor_id
+- started_at
+- ended_at           nullable
+```
+
+
 Cell category is editable over time, e.g. Youth -> Young Pro.
 
 - Keep the same Cell ID.
@@ -1098,6 +1161,23 @@ The category and schedule rows are not optional extras. A Cell created without a
 **Everything takes effect at approval, never at request.** New Cell Leaders is defined by when a leadership assignment starts (Section 16), so a request submitted on 30 September and approved on 2 October belongs to October. Nothing about a request is backdated to when it was made.
 
 **Direct creation during initial encoding.** While initial encoding is open (Section 2), Admin may create a Cell and its leadership assignment directly, without a request. That path closes with the phase and is not available afterwards.
+
+```text
+cell_creation_requests
+- id
+- prospective_leader_id
+- requested_by
+- category                YOUTH | YOUNG_PRO | COUPLE
+- day_of_week
+- time_of_day
+- state                   PENDING | APPROVED | DECLINED
+- decline_reason          nullable, from the fixed list below
+- note                    nullable, required where the reason is OTHER
+- decided_by              nullable
+- cell_id                 nullable, set on approval
+- requested_at
+- decided_at              nullable
+```
 
 **Request states.** A request is `PENDING`, `APPROVED`, or `DECLINED`. Never add another. A `PENDING` request creates no Cell, holds no members, records no attendance, and appears in no count or metric. At most one `PENDING` request may exist for a given prospective leader. Enforce it with a partial unique index on the prospective leader where the state is `PENDING`, exactly as pastoral assignment and Cell membership do for their own single-active rules (Section 5, Section 10). Without it two uplines may each submit, both may be approved, and nothing downstream catches the duplicate, because a leader may legitimately lead many Cells.
 
@@ -1476,6 +1556,39 @@ Notifications are in-app only. No email, no SMS, no push.
 The system does send transactional email — password reset and account activation — and that provider stays (Sections 2 and 6). What this rule settles is that pastoral reminders add no channel beyond the application itself: no scheduled mail job, no queue, and no background worker, and no church data leaving the system inside a message.
 
 The design is deliberate. Accountability in this church runs through pastoral relationship, not through the application: the two Senior Pastors and their direct leaders see where their Networks stand, and follow up with the people they oversee personally. A leader behind on records hears from their own leader, not from an automated message. The application's job is to make the gap visible to the person who will make the call.
+
+```text
+cell_meetings
+- id
+- cell_id
+- week_starting           the Monday of the week this meeting belongs to (Section 20)
+- reporting_month         the month this meeting reports in, fixed at creation
+- scheduled_date
+- status                  HELD | RESCHEDULED | NOT_HELD
+- actual_date             nullable, set where the meeting was rescheduled
+- not_held_reason         nullable, required where status is NOT_HELD
+- note                    nullable, required where the reason is OTHER
+- facilitated_by          nullable, defaults to the Cell's current leader
+- responsible_leader_id
+- submitted_by            nullable
+- submitted_at            nullable
+- version                 for conflict detection (Section 14)
+```
+
+`reporting_month` is stored rather than derived. A rescheduled meeting keeps its original reporting month even when its actual date falls in the next one (below), so deriving the month from a date would move the meeting between periods the moment it is rescheduled.
+
+```text
+cell_attendance
+- id
+- cell_meeting_id
+- person_id
+- present
+- recorded_by
+- recorded_at
+- version
+```
+
+A correction never overwrites in place. The prior values, the actor, and the reason are preserved (Section 14), and an `UPDATE` plus an audit row does not satisfy that — Principle 12 requires the record itself to carry its history.
 
 For a rescheduled meeting, preserve:
 
@@ -1959,7 +2072,21 @@ Stored figures are invalidated and recomputed whenever the records they derive f
 - **A backdated effective date** on any effective-dated relationship (Section 5). Invalidates every period the effective date reaches back into, because it changes which subtree a person belonged to during those periods.
 - **An Admin reversal of a Cell closure** (Section 10). Invalidates the periods affected.
 
-Prefer not to enumerate these in code at all. Key each stored figure to a version of the source records it derives from, and treat any change to those records as invalidating. A hand-maintained list of triggers is a list somebody eventually forgets to extend, and a stale stored figure fails silently — it returns a number that looks right.
+Prefer not to enumerate these in code at all. Key each stored figure to a version of the source records it derives from, and treat any change to those records as invalidating.
+
+```text
+report_snapshots
+- id
+- report_kind
+- scope_type              CELL | LEADER | NETWORK | WHOLE_CHURCH
+- scope_id                nullable for Whole Church
+- period                  the reporting month
+- source_version          see below
+- payload
+- computed_at
+```
+
+`source_version` is a value that changes whenever any record the figure derives from changes. A monotonic counter incremented by every write to attendance, membership, assignment, lifecycle, or merge — scoped no more narrowly than the widest of those a report reads — is sufficient and is cheaper to reason about than tracking which rows a given figure touched. A snapshot whose `source_version` no longer matches is recomputed rather than served. A hand-maintained list of triggers is a list somebody eventually forgets to extend, and a stale stored figure fails silently — it returns a number that looks right.
 
 Stored figures are a cache, never a source. They are always derivable from the underlying records (Section 18), and a stored figure that cannot be reproduced from source data is a defect.
 
@@ -2339,5 +2466,40 @@ REPORTING
        +-- Generations
        +-- Tree
 ```
+
+### Required persistent structures
+
+Every structure the rules above depend on. A rule whose structure is missing is a rule that can be implemented in prose and fail in practice, so this list exists to be checked against a migration rather than read.
+
+Shapes are given in the section that owns each rule; this is the index.
+
+| Structure | Owner | Shape in |
+| --- | --- | --- |
+| `persons` | `people` | Section 3 |
+| `person_lifecycle` | `people` | Section 3 |
+| `network_assignments` | `networks` | Section 4 |
+| `pastoral_assignments` | `hierarchy` | Section 5 |
+| `accounts` | `auth` | Section 6 |
+| `refresh_tokens` | `auth` | Section 6, Several devices at once |
+| `cells` | `cells` | Section 10 |
+| `cell_categories` | `cells` | Section 10 |
+| `cell_schedules` | `cells` | Section 10 |
+| `cell_memberships` | `cells` | Section 10 |
+| `cell_leaderships` | `cells` | Section 11 |
+| `cell_creation_requests` | `cells` | Section 10 |
+| `dcc_events` | `attendance` | Section 9 |
+| `dcc_attendance` | `attendance` | Section 9 |
+| `cell_meetings` | `attendance` | Section 13 |
+| `cell_attendance` | `attendance` | Section 13 |
+| `report_snapshots` | `reporting` | Section 20 |
+| `audit_log` | `audit` | Section 21 |
+| `settings` | `admin` | Section 7, `settings.manage` |
+| `idempotency_keys` | shared | Section 22 |
+
+Five of these carry history the specification guarantees and would otherwise be built as a column on their parent, losing it silently: `person_lifecycle`, `network_assignments`, `cell_categories`, `cell_schedules`, `cell_memberships`. A column satisfies every sentence about them and cannot answer a question about a past period.
+
+Adding a structure to this list is part of the change that introduces the rule needing it, never a follow-up.
+
+---
 
 This specification is the architectural source of truth unless a later explicit church requirement changes a rule.

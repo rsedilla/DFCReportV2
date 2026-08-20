@@ -419,6 +419,16 @@ How a person who moved Cells mid-month appears in monthly reporting; whether a m
 
 Each was answered twice, and each answer broke reconciliation or reproducibility. They are recorded in `SKILL.md` §12 with the constraints any answer must satisfy, to be settled against real data in Stage 5 and verified by the reconciliation tests. Continuing to specify them in prose was producing rules that read well and did not hold.
 
+### 2026-08-20 — Nine modules, each owning its tables
+`people`, `networks`, `hierarchy`, `auth`, `cells`, `attendance`, `reporting`, `audit`, `admin`. A module owns its tables and no other module touches them directly; cross-module access goes through the owning service interface.
+
+Named because Principle 13's modular monolith is otherwise just a monolith, and because it is what makes "enforced in the domain layer" real: the five §5 invariants have one home only because `hierarchy` is the only writer of `pastoral_assignments`. Organise by module, never by layer. Written to `SKILL.md` §2.
+
+### 2026-08-20 — Every required structure is named and indexed
+Six entities were required by rules and had no shape, of which five would naturally have been built as a column on their parent — losing history the specification guarantees, with nothing failing to warn anyone. `person_lifecycle` is the clearest: a state column plus audit rows satisfies every sentence in §3 and still cannot answer who was `CURRENT` on a given past date.
+
+Shapes now sit in the section owning each rule, and §26 carries an index of all twenty structures to be checked against a migration. Adding to that index is part of the change introducing the rule, never a follow-up. Written to `SKILL.md` §3, §4, §10, §13, §20, §26.
+
 ### Open — awaiting a ruling
 
 Nothing is currently awaiting a ruling. Items reaching a Stop Condition are recorded here until settled.
