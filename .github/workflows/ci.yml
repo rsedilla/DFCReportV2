@@ -217,10 +217,15 @@ jobs:
           # Nothing above ties the failure count to the case count. Half an endpoint
           # landing, with six cases passing and five failing on 404, would read as
           # "expected" -- so require that no case passed quietly.
-          if ! grep -qE 'Tests:[[:space:]]+([0-9]+) failed,  total' suite.log; then
-            echo "::error::Some cases passed. That is progress rather than a fault, but"
-            echo "::error::this job asserts they all fail; move them into the api suite."
-            grep -E 'Tests:' suite.log
+          summary=$(grep -E '^Tests:' suite.log | tail -1)
+          failed=$(echo "$summary" | grep -oE '[0-9]+ failed' | grep -oE '[0-9]+')
+          total=$(echo "$summary" | grep -oE '[0-9]+ total' | grep -oE '[0-9]+')
+
+          if [ "$failed" != "$total" ]; then
+            echo "::error::Some cases passed, which is progress rather than a fault:"
+            echo "::error::  $summary"
+            echo "::error::This job asserts they all fail. If Stage 2 has landed, move"
+            echo "::error::them into the api suite and delete this job."
             exit 1
           fi
 
