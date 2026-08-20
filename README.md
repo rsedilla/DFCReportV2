@@ -2,7 +2,7 @@
 
 People, pastoral hierarchy, DCC and Cell attendance, leadership development, and reporting for a G12 church organised into two homogeneous networks.
 
-**Status: specification.** There is no application code yet. The documents in this repository are the contract that code will be written against.
+**Status: Stage 1, foundations.** The skeleton is in place and carries no features: authentication, the authorization guard, the first migration with the Section 5 constraints, and continuous integration. `SKILL.md` remains the contract everything is written against.
 
 ## Start here
 
@@ -14,13 +14,26 @@ People, pastoral hierarchy, DCC and Cell attendance, leadership development, and
 
 Read `SKILL.md` before planning or implementing anything. Where any other instruction disagrees with it, `SKILL.md` wins.
 
+## Layout
+
+| Path | What it is |
+| --- | --- |
+| `api/` | The API. NestJS, TypeScript, PostgreSQL, served under `/api/v1` |
+| `api/migrations/` | Hand-written SQL. The constraints of `SKILL.md` §5 live here |
+| `api/test/authorization/` | The eleven authorization cases. **They fail until Stage 2, deliberately** |
+| `web/` | The web client. Next.js, no API routes, no server actions |
+| `docker-compose.yml` | PostgreSQL 16 for local development |
+
+Commands to install, run, migrate and test are in [CLAUDE.md](CLAUDE.md) under Running the project.
+
 ## Stack
 
 Settled in [SKILL.md](SKILL.md) §2. Changing it requires a recorded decision, not a pull request.
 
 - **API** — NestJS + TypeScript, REST under `/api/v1`, separately deployable
-- **Database** — PostgreSQL
+- **Database** — PostgreSQL 16, with hand-written SQL migrations and no ORM
 - **Web** — Next.js + TypeScript as a pure client: no API routes, no server actions
+- **Styling** — Tailwind CSS, with a palette that carries no judgement (§13)
 - **Mobile** — Android and iOS later, against the same API
 
 The API is the product. The web application is its first client; the phones are the next two. All three surfaces are used concurrently, so the API is stateless, token-authenticated, and detects write conflicts rather than resolving them silently.

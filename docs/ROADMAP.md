@@ -16,9 +16,11 @@ One thing from this stage remains open and is recorded in `CLAUDE.md`: what an a
 
 ---
 
-## Stage 1 — Foundations
+## Stage 1 — Foundations — **complete, pending merge**
 
 The skeleton everything else hangs on. **No features are built in this stage.**
+
+Pull request #4 carries it, with `architecture-guardian` findings resolved and a second code owner's review outstanding.
 
 - Repository layout: `api/` (NestJS), `web/` (Next.js), `docker-compose.yml` for local PostgreSQL
 - **Continuous integration from day one** — lint, typecheck and tests on every pull request, required by branch protection
@@ -28,6 +30,10 @@ The skeleton everything else hangs on. **No features are built in this stage.**
 - **The eleven authorization tests, written and failing** (`CLAUDE.md`, Authorization test suite)
 
 **Done when:** CI is green on an application with no features, the guard denies by default, and the eleven tests fail for the right reason.
+
+All three hold. The eleven fail on `PUT /api/v1/people/{id}/pastoral-leader` returning 404, because Stage 2 builds it; they run as their own CI job, reported and not required, so the `api` job is honestly green.
+
+Four rulings were forced by building it, each recorded in `CLAUDE.md` and amended into `SKILL.md`: hand-written SQL migrations with no ORM, an endpoint declaring no capability is denied, §5's invariant 4 answers `SCOPE_DENIED`, and the eleven ship failing rather than skipped. Two further corrections came out of the architecture review and are recorded there too.
 
 **Why the tests come first:** they are derived entirely from the specification and need no implementation to exist. Writing them now makes guard behaviour the thing the API is built toward, rather than something verified afterwards when it is expensive to change.
 
@@ -40,8 +46,11 @@ The skeleton everything else hangs on. **No features are built in this stage.**
 - Person: core fields, mobile number, Member ID sequence, duplicate matching (`SKILL.md` §3)
 - Networks, effective-dated (§4)
 - Pastoral assignments, with all five invariants enforced in the domain layer and in the database (§5)
-- Accounts: provisioning, activation, password reset (§6)
+- Accounts: provisioning, activation, password reset (§6), and the email provider adapter behind it
+- **`audit_log`** (§21) and **`idempotency_keys`** (§22), with the first write endpoint
 - **Import the leadership tree**, through the dry-run, adjudicate, commit flow (`SKILL.md` §2, Initial data load)
+
+The two tables Stage 1 did not create arrive here rather than later. §5 requires every reassignment to be audit logged, and §22 requires an `Idempotency-Key` on every state-changing request "from the first write endpoint, not added later" — and reassignment *is* the first write endpoint, so neither can wait for the stage that merely makes heavy use of them.
 
 **Done when:** all eleven authorization tests are **green**, including case 7 exercised concurrently, and the real leadership tree is loaded in a development database.
 

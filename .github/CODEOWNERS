@@ -12,5 +12,6 @@
 /.claude/       @rsedilla @raneenicole
 /.github/       @rsedilla @raneenicole
 
-# Add migrations here once they exist:
-# /api/prisma/migrations/   @rsedilla @raneenicole
+# Migrations carry the constraints SKILL.md guarantees, and touch the history it
+# says is preserved. They are reviewed on the same terms as the specification.
+/api/migrations/            @rsedilla @raneenicole

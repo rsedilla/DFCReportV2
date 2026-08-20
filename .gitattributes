@@ -1,0 +1,6 @@
+# One line ending everywhere.
+#
+# CI runs on Linux and part of the team works on Windows. Without this, a file
+# round-tripped through an editor arrives as a whole-file diff and nobody can see
+# what actually changed.
+* text=auto eol=lf

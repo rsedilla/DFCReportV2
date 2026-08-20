@@ -1,0 +1,64 @@
+@import 'tailwindcss';
+
+/*
+ * The palette, and the one domain rule that governs it.
+ *
+ * SKILL.md section 13 and section 17 forbid ranking leaders against one another,
+ * and forbid value-laden colour encoding along with rank positions, composite
+ * scores and default leaderboards. The reason is practical rather than
+ * decorative: NOT_HELD exists so that a leader can report honestly that their
+ * Cell could not meet, and if declaring it paints their row red, leaders will
+ * record HELD instead and the signal is lost.
+ *
+ * In a utility framework a red-and-green performance palette is one class away,
+ * so this palette does not contain one. There is no `success`, no `danger`, no
+ * `warning`. Colour here carries structure and legibility; a figure that needs
+ * attention is surfaced by putting it on an attention list (section 15), never by
+ * colouring it as a failure.
+ *
+ * `@theme inline` maps each token to a custom property, so the utilities Tailwind
+ * generates follow the values below into dark mode rather than being frozen at
+ * build time.
+ */
+@theme inline {
+  --color-surface: var(--surface);
+  --color-raised: var(--raised);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-accent: var(--accent);
+
+  --font-sans:
+    system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+}
+
+:root {
+  color-scheme: light dark;
+
+  --surface: #ffffff;
+  --raised: #f7f8f9;
+  --ink: #16191d;
+  --muted: #5b6470;
+  --line: #e2e6ea;
+  --accent: #1f4f8b;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --surface: #14171a;
+    --raised: #1b1f24;
+    --ink: #e9edf1;
+    --muted: #9aa5b1;
+    --line: #2a2f36;
+    --accent: #8ab4e8;
+  }
+}
+
+/*
+ * Responsive from the beginning: leaders will open this on their phones long
+ * before a native app exists, so mobile web is a current surface rather than
+ * preparation for the future (SKILL.md section 23).
+ */
+body {
+  @apply bg-surface text-ink font-sans antialiased;
+}

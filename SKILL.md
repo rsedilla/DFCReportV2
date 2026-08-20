@@ -52,7 +52,10 @@ This is settled, not a suggestion.
 
 - **Backend:** NestJS + TypeScript
 - **Database:** PostgreSQL
+- **Migrations:** hand-written SQL files, applied in order by a runner held in the repository
+- **Data access:** a typed query builder over the PostgreSQL driver, not an ORM
 - **Frontend:** Next.js + TypeScript, as a pure client
+- **Styling:** Tailwind CSS, in the web application only; its palette carries no judgement (Section 13)
 - **API:** REST, versioned under `/api/v1`
 - **Deployment:** containerized, portable across AWS, Hostinger/VPS, or another provider
 - **Email:** provider abstraction; business logic must never depend directly on SES or any other provider
@@ -63,6 +66,12 @@ Two reasons decide the backend, and both come from requirements rather than tast
 **Authorization must be enforced structurally.** Section 7 makes the API the sole authority, and Section 22 sketches roughly forty endpoints, each needing a capability check and a scope check. NestJS guards make that declarative and reviewable in one line, and an endpoint that fails to declare a capability fails closed. On a team, the alternative — remembering to call a check inside every handler — erodes: the check is only as reliable as the least familiar developer writing the newest route.
 
 **Mobile clients cannot be force-updated.** An installed app keeps calling `/api/v1` for months after the web client has moved on, and an iOS release passes through review before it can reach anyone. The API must therefore be deployable independently of the web application. If the API ships inside the web app, no web change can be released without redeploying the API that every phone depends on. Separate deployables is a requirement here, not a preference.
+
+One reason decides the migration and data-access tooling, and it is the same reason.
+
+**The constraints are the design.** Section 5 requires a partial unique index, a check constraint, and a constraint trigger that is `DEFERRABLE INITIALLY DEFERRED`, and every subtree query carries a `CYCLE` clause. No ORM models any of those. A tool that generates migrations by diffing a model against the database does not merely fail to create them — it proposes dropping what it cannot see, on every migration, forever. So the schema lives in hand-written SQL, and the query layer is a typed builder that composes SQL rather than hiding it.
+
+The cost is accepted deliberately: table types are written and reviewed rather than generated, and the schema tests are what keep them honest.
 
 ### The frontend is a client, like the phones
 
@@ -584,7 +593,9 @@ The two firing paths need **different** comparison dates, and one rule cannot se
 
 **On a write to `pastoral_assignments`**, compare the Networks in force as of the assignment's `started_at`. An edge must have been legal when it was created, and where Admin backdates one under `records.backdate_effective_date` that differs from today — validating against now would reject a correction that was true at the time.
 
-**On a Network change**, compare as of the **Network change's effective date**, against every assignment open at that date. Using the assignment's `started_at` here makes the check a no-op: a person assigned in January under a same-Network leader, whose Network is corrected in August, is compared against January's Networks, which matched, so the change commits and leaves them under a leader in their former Network — exactly what Section 4 requires the system to reject.
+**On a Network change**, compare against every assignment that is **open at the change's effective date or begins after it**, each one as of the later of the two dates — the moment from which the corrected Network governs that edge. Using the assignment's `started_at` here makes the check a no-op: a person assigned in January under a same-Network leader, whose Network is corrected in August, is compared against January's Networks, which matched, so the change commits and leaves them under a leader in their former Network — exactly what Section 4 requires the system to reject.
+
+"Or begins after it" is not a refinement, it closes a hole. `records.backdate_effective_date` allows Admin to set the effective date in the past, so an assignment can begin *after* the date a Network correction takes effect and therefore not be open at it. A correction backdated to April, with an assignment opened in June that was legal when it was made, would commit while leaving a permanent cross-Network edge — and nothing revisits it, because no row of `pastoral_assignments` is written and the other trigger never fires. Section 4's guarantee is absolute, so this check has to reach forward from the effective date rather than stopping at it.
 
 A root leader has a null `leader_id` (Network roots, above) and the trigger passes such a row without comparison — there is no leader to compare against.
 
@@ -925,12 +936,16 @@ account_roles
 - id
 - account_id
 - role               SENIOR_PASTOR | ADMIN | LEADER
-- granted_by
+- granted_by         null only for a system action, which is the first Admin account
 - granted_at
 - revoked_at         nullable
 ```
 
 `SENIOR_PASTOR` is held by exactly the two Persons named in Section 4, and by nobody else. Section 1, Principle 6 names them, and the role carries Whole Church scope on `people.manage_lifecycle`, `people.manage_pastoral_assignment` and `audit.view` — so this is a constraint the system enforces, not a convention it assumes. Granting it to a third account is rejected. An account holds at most one active row per role.
+
+The enforcement is in two places, because the two halves of that rule are enforceable in different ways. The **count** is a database constraint: a third active `SENIOR_PASTOR` row is rejected. **Which two Persons** hold it is checked in the `auth` domain layer, since the database holds no durable representation of who Bishop Oriel Ballano and Pastora Geraldine Ballano are, and inventing one — a flag on the Person, a reserved identifier — would make the two most consequential accounts in the church depend on a row somebody could edit.
+
+`granted_by` is null only for a role granted by a **system action**, which is the first Admin account and nothing else: there is no account above it to have granted it. This mirrors the same allowance for `audit_log.actor_id` (Section 21). Every other role grant has an actor.
 
 ```text
 capability_grants
@@ -940,8 +955,8 @@ capability_grants
 - scope_type         OWN_SUBTREE | SUBTREE_EXCL_SELF | NETWORK | WHOLE_CHURCH
 - scope_network      nullable, required where scope_type is NETWORK
 - read_only          defaults to true
-- reason
-- granted_by
+- reason             required; a grant explains itself
+- granted_by         required; an explicit grant is always issued by an Admin
 - granted_at
 - revoked_at         nullable
 ```
@@ -949,6 +964,15 @@ capability_grants
 **Role defaults are specification, not data.** The role catalog above is the authority for what each role carries, and it is not editable at runtime. Changing a role default is a change to this document and a deploy, which is what keeps the catalog and the running system from diverging. `roles.manage` governs which roles and grants an account holds, never what a role means.
 
 **Every capability check names both halves.** The guard resolves a capability and a scope for the actor, then evaluates the scope against **the request's primary target** — the record being read or written. Neither half alone is sufficient, and an account with no matching row is denied: the absence of a grant is a denial, never a default allow.
+
+**An endpoint that declares no capability is denied.** The capability and the target are declared on the endpoint, and an endpoint declaring neither is refused rather than allowed. This is what makes Section 2's structural enforcement real: forgetting the declaration closes an endpoint instead of opening it, which is the failure a busy afternoon actually produces.
+
+Exactly two kinds of exemption exist, and each endpoint taking one names its reason where it is written:
+
+- an endpoint reachable **without authentication**, which is a closed list: sign-in, token refresh, the password reset and activation flows, and the liveness probe. The first four have no token to present yet, or are presenting the refresh token as the credential. The probe answers only whether the process is serving and reads nothing belonging to the church
+- an endpoint requiring **authentication and no capability**, because it acts on the caller's own session: reading their own claims, signing out, ending their own sessions
+
+Neither ever covers an endpoint that reads or writes a Person, a Cell, attendance, a report, an account other than the caller's own, or a setting. Adding an endpoint to the unauthenticated list is an amendment to this section, not a decision taken in a controller, because that list is the whole of the API's unauthenticated surface and its value is that it can be read in one place.
 
 A request is allowed where **any** active role default or active grant for that capability covers the target. Authority only widens; there is no mechanism for narrowing a role default on one account, and none is needed — removing the role or disabling the account is the answer.
 
@@ -968,6 +992,8 @@ A grant is revoked by setting `revoked_at`, never by deleting the row. The histo
 A grant of a read capability may set `read_only` true or false; true is the default and the normal case, and false is meaningless there but harmless. A grant of a **write** capability with `read_only` true is **rejected at creation**, not stored and silently ineffective. Without that rejection an Admin granting a management capability and leaving the flag at its default creates a row that grants nothing, with nothing to indicate why the holder is being denied.
 
 The flag exists because a scope widened beyond a leader's normal management scope is a reporting grant unless something says otherwise (above). It is the visible difference between letting someone see a Network and letting them change it.
+
+`read_only` belongs to `capability_grants` and to nothing else. **A role default carries no such flag**, and none is to be derived for one: a role's authority is exactly what the catalog above says it is. Anywhere an account's effective authority is presented — `/api/v1/auth/me` is the case that exists — authority carried by a role reports no `read_only` value rather than an invented one, because a client branching on a value this specification never defined is branching on a rule that does not exist.
 
 The backend/API is the sole authority for authorization. Web and mobile UI filtering is never sufficient security on its own (Section 1, Principle 4).
 
@@ -2518,6 +2544,8 @@ One envelope, always:
 | `NOT_FOUND` | 404 | No such record, or its existence must not be disclosed |
 
 `CAPABILITY_DENIED` and `SCOPE_DENIED` are deliberately distinct, because capability and scope are independent grants (Section 7) and an administrator diagnosing a permission problem needs to know which one failed.
+
+A domain check that rejects the **actor's authority over a target** answers `SCOPE_DENIED`, even though it runs in the domain layer rather than in the guard. Section 5's prohibition on acting on oneself or on anyone upline is the case in point: it concerns who may act on this record, which is what `SCOPE_DENIED` means. `INVARIANT_VIOLATION` is for a record the rules reject however it was submitted and whoever submitted it — a cycle, a cross-Network edge, a second active assignment. Keeping the two apart is what lets a client, and an administrator reading a log, tell "you may not do this" from "this cannot be recorded".
 
 Where revealing that a record exists would itself disclose something, return `NOT_FOUND` rather than a denial. People are not such a case: Section 8 already discloses minimal identity church-wide by design.
 
