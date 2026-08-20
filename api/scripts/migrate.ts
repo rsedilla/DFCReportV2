@@ -426,7 +426,12 @@ async function main(): Promise<void> {
   }
 }
 
-main().catch((error: unknown) => {
-  process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
-  process.exitCode = 1;
-});
+// Only when run as a command. `parse` is imported by its tests, and without this
+// guard that import runs the migrator: it read Jest's own argv, failed on
+// `--runInBand`, and set a non-zero exit code while every test passed.
+if (require.main === module) {
+  main().catch((error: unknown) => {
+    process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
+    process.exitCode = 1;
+  });
+}
