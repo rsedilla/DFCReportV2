@@ -56,7 +56,7 @@ This is settled, not a suggestion.
 - **Data access:** a typed query builder over the PostgreSQL driver, not an ORM
 - **Frontend:** Next.js + TypeScript, as a pure client
 - **Styling:** Tailwind CSS, in the web application only; its palette carries no judgement (Section 13)
-- **UI components:** headless, accessible primitives vendored into the repository; never a component framework carrying its own design system
+- **UI components:** in the web application, headless primitives vendored into the repository; not a component framework carrying its own design system
 - **API:** REST, versioned under `/api/v1`
 - **Deployment:** containerized, portable across AWS, Hostinger/VPS, or another provider
 - **Email:** provider abstraction; business logic must never depend directly on SES or any other provider
@@ -74,13 +74,17 @@ One reason decides the migration and data-access tooling, and it is the same rea
 
 The cost is accepted deliberately: table types are written and reviewed rather than generated, and the schema tests are what keep them honest.
 
-**A component library may style, and may not judge.** The web application uses headless, accessible primitives — dialog, combobox, menu, tabs, date picker — vendored into the repository as source the team owns, rather than consumed as a versioned dependency with a look attached. Component frameworks that carry their own design system are deliberately not used.
+**A component library may style, and may not judge.** The web application uses headless, accessible primitives — dialog, combobox, menu, tabs, date picker — vendored into the repository as source the team owns, rather than consumed as a versioned dependency with a look attached. Component frameworks that carry their own design system are deliberately not used **in the web application**. This says nothing about the native clients: their framework is not chosen and is not settled here (docs/ROADMAP.md), and a platform toolkit is a different question from a web component library.
 
 The ordinary reason is that they bring a second styling engine, which duplicates and fights the first.
 
-The reason that puts this in the specification rather than in somebody's preferences is the vocabulary they impose. Those frameworks express state as `error`, `success`, `warning` and `severity`, and hand that to every developer as the default way to render a figure. Section 13 forbids value-laden colour encoding for a practical reason: `NOT_HELD` exists so that a leader can report honestly that their Cell could not meet, and a toolkit whose idiom paints that row red will produce a month of `HELD` instead. Ranking the measure destroys the measure, and colour is a ranking. A toolkit whose defaults push against a rule this specification cares about has to be resisted on every screen, by everyone, indefinitely — so it is not adopted.
+The reason that puts this in the specification rather than in somebody's preferences is the vocabulary they impose. Those frameworks express state as `error`, `success`, `warning` and `severity`, and hand that to every developer as the default way to render a figure.
 
-Accessibility is the other half of "headless". A dialog that traps focus, or a menu that cannot be dismissed from a keyboard, is not a styling defect and is not fixed by a stylesheet. Leaders use this on their own phones, at a range of ages, and the primitives are chosen for that rather than for appearance.
+What is forbidden is precise, and is worth stating precisely here so that nobody reads it as wider than it is. Section 13 forbids value-laden encoding **of meeting status**, red/amber/green named among the examples. Section 17 forbids leaders being ranked, scored **or colour-coded by `NOT_HELD`, by coverage, or by any figure derived from them**. Section 19 forbids a dashboard colour-grading leaders. Colour itself is not prohibited and is not a ranking — this application uses it for structure, hierarchy and legibility, and the palette that shipped with Tailwind does exactly that.
+
+The collision is that those frameworks make the prohibited use the *easy* one. `severity="error"` on a Cell that reported `NOT_HELD` is a five-second change that reads as idiomatic in review. `NOT_HELD` exists so that a leader can report honestly that their Cell could not meet, and if declaring it paints their row red, leaders will record `HELD` instead — ranking the measure destroys the measure (Section 13). A toolkit whose defaults push against a rule this specification cares about has to be resisted on every screen, by everyone, indefinitely, so it is not adopted.
+
+Accessibility is the other half of "headless", and is stated here as a **criterion for choosing the primitives**, not as a conformance requirement the application is measured against. A dialog that traps focus, or a menu that cannot be dismissed from a keyboard, is not a styling defect and is not fixed by a stylesheet, and building those behaviours by hand is where the defects come from. Leaders use this on their own phones, at a range of ages. Adopting a conformance standard — a named WCAG level, with something in the Definition of Done that can fail — would be a separate ruling, and this specification does not make one.
 
 ### The frontend is a client, like the phones
 

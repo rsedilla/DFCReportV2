@@ -508,19 +508,25 @@ The exemption sentence claimed the unauthenticated set was sign-in and the passw
 
 `read_only` is defined by §7 as a column on `capability_grants` and says nothing about role defaults, so deriving one for a role default and publishing it from `/api/v1/auth/me` invented a rule for clients to branch on. Authority carried by a role now reports no value. Written to `SKILL.md` §7.
 
-### 2026-08-20 — Tailwind CSS, chosen while there is one page to convert
+### 2026-08-21 — Tailwind CSS, chosen while there is one page to convert
 Settled in `SKILL.md` §2 (Chosen stack). It affects no architectural boundary: Tailwind is a build-time PostCSS plugin, adds no route, no server action and no data access, and the phones never load the stylesheet.
 
 Chosen now rather than at Stage 5 for the same reason CI was chosen at Stage 1. Converting one placeholder page costs minutes; converting the dashboards, Network Summary and the role-specific screens costs a week, and the framework that arrives after the screens tends to be applied to only half of them.
 
 **The palette carries the §13 and §17 prohibition.** No `success`, no `danger`, no `warning` token exists, and none is to be added. In a utility framework a red-and-green performance palette is one class away, and colouring a leader's row red for declaring `NOT_HELD` destroys the honest reporting that status exists to obtain — ranking the measure destroys the measure. A figure needing attention is surfaced by the attention list (§15), never by being coloured as a failure. The reasoning is written into `web/app/globals.css`, where somebody adding a colour will read it.
 
-### 2026-08-20 — UI direction: headless primitives the repository owns, and no design-system framework
+### 2026-08-21 — UI direction: headless primitives the repository owns, and no design-system framework
 Settled in `SKILL.md` §2 (Chosen stack). The firm half and the expected half are separated below, because only one of them is a ruling.
 
-**Firm.** Components are headless, accessible primitives — Radix, vendored through `shadcn/ui` so the source lands in the repository rather than arriving as a dependency with a look attached. **MUI, Ant Design, Chakra, Mantine and Bootstrap are refused.** The ordinary objection is that each brings a second styling engine to fight Tailwind. The objection that makes this a rule is that they express state as `error`, `success`, `warning` and `severity` and hand that vocabulary to every developer as the default. §13 forbids value-laden colour encoding because `NOT_HELD` exists to obtain honest reporting, and a framework whose idiom paints that row red produces a month of `HELD` instead. A toolkit whose defaults push against the specification is resisted on every screen, by everyone, forever.
+**Firm — the rule.** In the web application, components are headless primitives, vendored into the repository rather than arriving as a dependency with a look attached, and **no component framework carrying its own design system is used**: MUI, Ant Design, Chakra, Mantine and Bootstrap are refused. It says nothing about the native clients, whose framework is not chosen.
 
-**Expected, and confirmed against a real screen rather than now.** TanStack Query for server state, since cursor pagination, retry and cache invalidation are where `VERSION_CONFLICT` and `Idempotency-Key` retries actually get handled (§14, §22, §23). TanStack Table, headless, for rosters and attendance grids — sorting and filtering stay server-side per §22, so its job is column definition and virtualization. A chart library with no built-in colour semantics. `lucide-react` and `next/font`.
+The ordinary objection is that each brings a second styling engine to fight Tailwind. The objection that makes it a rule is that they express state as `error`, `success`, `warning` and `severity` and hand that vocabulary to every developer as the default, which makes the prohibited use the easy one. §13 forbids value-laden encoding of meeting status; §17 forbids leaders being colour-coded by `NOT_HELD`, coverage, or any figure derived from them; §19 forbids a dashboard colour-grading leaders. `NOT_HELD` exists to obtain honest reporting, and a framework whose idiom paints that row red produces a month of `HELD` instead. Colour itself is not forbidden and is not a ranking — the palette uses it for structure and legibility, which is the distinction the rule turns on.
+
+**Firm — the current implementation.** Radix, vendored through `shadcn/ui`. The rule is what is settled and what `SKILL.md` §2 carries; the vendor is how it is met today and may be replaced by anything satisfying it, without amending the specification.
+
+**Checked, not remembered.** `web/scripts/check-ui-dependencies.mjs` fails `npm run lint` if a refused package appears in `web/package.json`, beside the check that holds the pure-client boundary. The rule's own argument is that a framework's defaults get applied by whoever writes the newest screen, which is an argument that review will not catch it.
+
+**Expected, and confirmed against a real screen rather than now.** TanStack Query for server state, since cursor pagination, retry and cache invalidation are where `VERSION_CONFLICT` and `Idempotency-Key` retries actually get handled (§14, §22, §23). TanStack Table, headless, for rosters and attendance grids — §22 fixes the sort and filter contract as named query parameters and forbids ordering leaders against one another, so the table's job is column definition and virtualization rather than inventing its own query language. A chart library with no built-in colour semantics. `lucide-react` and `next/font`.
 
 **Nothing is installed yet, deliberately.** Stage 1 has no screens, and generating a component library before there is anything to build with it is scaffolding for nothing. The direction is recorded so it is not re-litigated; the first install happens with the first real screen in Stage 2.
 
@@ -528,9 +534,14 @@ Recorded also because elegance in this application is mostly not a dependency. O
 
 ### Open — awaiting a ruling
 
-**One item awaits a ruling.**
+**One item awaits a ruling. Two other things are unsettled and block nothing; they are listed at the end so this section is the whole of what is open.**
 
 **What an aggregate Cell attendance view offers in place of buckets.** Monthly-attendance buckets are a Cell-scope view only, because N belongs to a Cell and aggregating across different N inflates `Completed` for the Cells that recorded least (`SKILL.md` §12). At leader and Network scope the spec offers unique people, classification and coverage, and does not say whether anything should replace the buckets. Settle it in Stage 5 against real data.
 
 Two related questions have defined behaviour and are recorded in `SKILL.md` §12 as fairness questions rather than Stop Conditions: whether a leader should see someone who attended and has since left, and whether a mid-month joiner measured against the whole month is acceptable. An implementer follows the stated rules and does not stop on either.
+
+**Unsettled, and not blocking anything.** These are not Stop Conditions. An implementer proceeds and settles them in passing; they are listed here because a reader looking for what is open should not have to find them inside the body of a ruling.
+
+- **The client libraries beyond the component question** — TanStack Query, TanStack Table, a chart library, icons and fonts. Recorded as expectations in the UI direction entry above, deliberately not in `SKILL.md`, and confirmed against a real screen in Stage 2 rather than now. A list headed "This is settled, not a suggestion" is no place for a library nobody has used yet.
+- **Whether the web application adopts an accessibility conformance standard.** `SKILL.md` §2 names accessibility as a criterion for choosing the primitives, and explicitly does not make it a requirement the application is measured against. Adopting a named WCAG level would be a ruling, and would need something in the Definition of Done that can fail; until then a reviewer has nothing to apply and should not pretend otherwise.
 
