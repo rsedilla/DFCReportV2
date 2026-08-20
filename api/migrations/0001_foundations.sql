@@ -13,9 +13,14 @@
 --   account_roles, capability_grants   section 7, How grants are held
 --
 -- The tables for cells, attendance, reporting, audit and settings arrive with the
--- stages that own them (docs/ROADMAP.md). Their indexes arrive in the same migration
--- as their tables, which is what SKILL.md section 2 asks for: the point being that an
--- index reporting depends on is never a later errand.
+-- stages that own them, each named in docs/ROADMAP.md. Their indexes arrive in the
+-- same migration as their tables, which is what SKILL.md section 2 asks for: the
+-- point being that an index reporting depends on is never a later errand.
+--
+-- `audit_log` and `idempotency_keys` arrive in Stage 2, with the first write
+-- endpoint. Section 5 requires every reassignment to be audit logged and section
+-- 22 requires an idempotency key on every state-changing request, so neither can
+-- wait for the stage that merely makes heavy use of it.
 --
 -- `actor_id` throughout references `accounts (id)`. The actor is the authenticated
 -- account that performed the action, and is null only for a system action
@@ -368,16 +373,28 @@ CREATE CONSTRAINT TRIGGER pastoral_assignments_same_network
   FOR EACH ROW EXECUTE FUNCTION assert_assignment_same_network();
 
 -- On a Network change: compare as of the Network change's own effective date,
--- against every assignment open at that date. That means both the person's
--- assignment to their leader and the assignments of everyone under them. Using
--- the assignment's started_at here would make the check a no-op: a person
--- assigned in January under a same-Network leader, whose Network is corrected in
--- August, would be compared against January's Networks, which matched.
+-- against every assignment that is open at that date or starts after it. That
+-- means both the person's assignment to their leader and the assignments of
+-- everyone under them. Using the assignment's started_at here would make the
+-- check a no-op: a person assigned in January under a same-Network leader, whose
+-- Network is corrected in August, would be compared against January's Networks,
+-- which matched.
+--
+-- "or starts after it" is not decoration. records.backdate_effective_date lets
+-- Admin set the effective date in the past, and an assignment that begins after
+-- that date is not open at it. Considering only what was open then would let a
+-- correction backdated to April commit while a June edge, legal when it was
+-- made, becomes cross-Network with nothing left to complain: no row of
+-- pastoral_assignments is written, so the other trigger never fires either.
+--
+-- Each edge is compared as of the later of the two dates, which is the moment
+-- the corrected Network governs it (section 4, section 5, Effective dating).
 CREATE FUNCTION assert_network_change_keeps_edges() RETURNS trigger
 LANGUAGE plpgsql AS $$
 DECLARE
   v_row network_assignments%ROWTYPE;
   v_edge record;
+  v_at timestamptz;
   v_person network;
   v_leader network;
 BEGIN
@@ -387,20 +404,21 @@ BEGIN
   END IF;
 
   FOR v_edge IN
-    SELECT pa.id, pa.person_id, pa.leader_id
+    SELECT pa.id, pa.person_id, pa.leader_id, pa.started_at
       FROM pastoral_assignments pa
      WHERE pa.leader_id IS NOT NULL
        AND (pa.person_id = v_row.person_id OR pa.leader_id = v_row.person_id)
-       AND pa.started_at <= v_row.started_at
        AND (pa.ended_at IS NULL OR pa.ended_at > v_row.started_at)
   LOOP
-    v_person := network_as_of(v_edge.person_id, v_row.started_at);
-    v_leader := network_as_of(v_edge.leader_id, v_row.started_at);
+    v_at := GREATEST(v_edge.started_at, v_row.started_at);
+
+    v_person := network_as_of(v_edge.person_id, v_at);
+    v_leader := network_as_of(v_edge.leader_id, v_at);
 
     IF v_person IS NULL OR v_person IS DISTINCT FROM v_leader THEN
       RAISE EXCEPTION
         'Network change for person % leaves pastoral assignment % crossing Networks as of %; reassign in the same operation',
-        v_row.person_id, v_edge.id, v_row.started_at
+        v_row.person_id, v_edge.id, v_at
         USING ERRCODE = 'check_violation';
     END IF;
   END LOOP;
@@ -422,6 +440,9 @@ CREATE TABLE account_roles (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   account_id uuid NOT NULL REFERENCES accounts (id),
   role account_role NOT NULL,
+  -- Null only for a role granted by a system action, which is the first Admin
+  -- account and nothing else: there is no account above it to have granted it.
+  -- Every later grant has an actor (section 7, section 21).
   granted_by uuid REFERENCES accounts (id),
   granted_at timestamptz NOT NULL DEFAULT now(),
   revoked_at timestamptz,
@@ -438,6 +459,44 @@ CREATE INDEX account_roles_active_by_account
   ON account_roles (account_id)
   WHERE revoked_at IS NULL;
 
+-- SENIOR_PASTOR is held by exactly the two Persons named in section 4, and by
+-- nobody else; granting it to a third account is rejected. Section 7 says that is
+-- a constraint the system enforces rather than a convention it assumes, so the
+-- cap lives here rather than only in a service.
+--
+-- The role carries Whole Church scope on people.manage_lifecycle,
+-- people.manage_pastoral_assignment and audit.view, which is why a third holder
+-- matters: it is the widest authority in the church.
+--
+-- This enforces the count. Which two Persons hold it is checked in the `auth`
+-- domain layer, because the database has no durable representation of who
+-- Bishop Oriel and Pastora Geraldine are.
+CREATE FUNCTION assert_two_senior_pastors_at_most() RETURNS trigger
+LANGUAGE plpgsql AS $$
+DECLARE
+  v_active integer;
+BEGIN
+  SELECT count(*) INTO v_active
+    FROM account_roles
+   WHERE role = 'SENIOR_PASTOR'
+     AND revoked_at IS NULL;
+
+  IF v_active > 2 THEN
+    RAISE EXCEPTION
+      'SENIOR_PASTOR is held by exactly the two Persons named in SKILL.md section 4 (% active rows)',
+      v_active
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  RETURN NULL;
+END;
+$$;
+
+CREATE CONSTRAINT TRIGGER account_roles_two_senior_pastors_at_most
+  AFTER INSERT OR UPDATE ON account_roles
+  DEFERRABLE INITIALLY DEFERRED
+  FOR EACH ROW EXECUTE FUNCTION assert_two_senior_pastors_at_most();
+
 -- ---------------------------------------------------------------------------
 -- capability_grants (SKILL.md section 7, How grants are held)
 --
@@ -453,12 +512,18 @@ CREATE TABLE capability_grants (
   scope_type scope_type NOT NULL,
   scope_network network,
   read_only boolean NOT NULL DEFAULT true,
-  reason text,
-  granted_by uuid REFERENCES accounts (id),
+  -- Required. A grant is authority somebody decided to hand out, and section 7
+  -- gives the reason no nullability marker. An unexplained grant leaves the next
+  -- administrator with nothing to weigh when deciding whether it still applies.
+  reason text NOT NULL,
+  -- Required. Unlike a role, an explicit grant is always issued by an Admin;
+  -- there is no bootstrap case.
+  granted_by uuid NOT NULL REFERENCES accounts (id),
   granted_at timestamptz NOT NULL DEFAULT now(),
   revoked_at timestamptz,
   CONSTRAINT capability_grants_period_ordered
     CHECK (revoked_at IS NULL OR revoked_at >= granted_at),
+  CONSTRAINT capability_grants_reason_not_blank CHECK (btrim(reason) <> ''),
   -- scope_network is required where scope_type is NETWORK, and meaningless
   -- otherwise.
   CONSTRAINT capability_grants_network_scope_named
@@ -533,17 +598,22 @@ CREATE UNIQUE INDEX account_tokens_one_outstanding
   ON account_tokens (account_id, purpose)
   WHERE used_at IS NULL;
 
--- migrate:down
+-- migrate:down:refuse-if-populated persons pastoral_assignments network_assignments person_lifecycle accounts
 
--- Reversible, and intended only before this schema holds data: it drops the
--- tables it created. Beyond the first deployment the migration policy in
--- CLAUDE.md applies. Historical relationship data is never dropped, and a
--- migration that would destroy it is escalated as a Stop Condition instead.
+-- This down drops the tables it created, so it is safe only while they are
+-- empty. The directive above is not a comment: the runner refuses to apply this
+-- section if any table named there holds a row, and says so rather than
+-- executing. CLAUDE.md is unambiguous that history in these tables is never
+-- dropped, and an operator reaching for `migrate:down` on a populated database
+-- is reaching for the wrong tool.
 
 DROP TABLE IF EXISTS account_tokens;
 DROP TABLE IF EXISTS refresh_tokens;
 DROP TABLE IF EXISTS capability_grants;
 DROP TABLE IF EXISTS account_roles;
+
+DROP TRIGGER IF EXISTS account_roles_two_senior_pastors_at_most ON account_roles;
+DROP FUNCTION IF EXISTS assert_two_senior_pastors_at_most();
 
 DROP TRIGGER IF EXISTS network_assignments_keep_edges_same_network ON network_assignments;
 DROP TRIGGER IF EXISTS pastoral_assignments_same_network ON pastoral_assignments;

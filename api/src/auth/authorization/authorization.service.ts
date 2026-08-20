@@ -19,7 +19,17 @@ export interface EffectiveGrant {
   scope: Scope;
   /** Where the authority came from, for diagnosing a denial. */
   source: 'role' | 'grant';
-  readOnly: boolean;
+  /**
+   * Null for authority carried by a role.
+   *
+   * SKILL.md section 7 defines `read_only` as a column on `capability_grants`
+   * and says what it means there: the visible difference between letting someone
+   * see a Network and letting them change it, on a scope widened beyond a
+   * leader's normal management scope. It says nothing about the flag on a role
+   * default, and inventing a value here would put a rule the specification does
+   * not contain into every /auth/me response for a client to branch on.
+   */
+  readOnly: boolean | null;
 }
 
 /**
@@ -67,7 +77,7 @@ export class AuthorizationService {
           capability: capability as Capability,
           scope: { type: scopeType, network: null },
           source: 'role',
-          readOnly: isReadCapability(capability as Capability),
+          readOnly: null,
         });
       }
     }

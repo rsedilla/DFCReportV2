@@ -205,6 +205,37 @@ describe('the database enforces the section 5 invariants', () => {
       expect(open).toEqual([{ leader_id: womensLeader.id }]);
     });
 
+    it('refuses a Network change backdated before an assignment that begins after it', async () => {
+      // records.backdate_effective_date lets Admin set an effective date in the
+      // past, so an assignment can begin after the date a Network correction takes
+      // effect. Considering only what was open at that date would let this commit
+      // and leave a permanent cross-Network edge that no later write revisits.
+      const mensLeader = await createPerson(db, { firstName: 'Manuel', network: 'MENS' });
+      const person = await createPerson(db, { firstName: 'Mark', network: 'MENS' });
+
+      const assignedAt = new Date('2026-06-01T00:00:00+08:00');
+      const correctedFrom = new Date('2026-04-01T00:00:00+08:00');
+
+      await assignTo(db, person.id, mensLeader.id, assignedAt);
+
+      const client = await openClient();
+      try {
+        await client.query('BEGIN');
+        await client.query('UPDATE network_assignments SET ended_at = $1 WHERE person_id = $2', [
+          correctedFrom,
+          person.id,
+        ]);
+        await client.query(
+          'INSERT INTO network_assignments (person_id, network, started_at) VALUES ($1, $2, $3)',
+          [person.id, 'WOMENS', correctedFrom],
+        );
+
+        await expect(client.query('COMMIT')).rejects.toThrow(/crossing Networks/);
+      } finally {
+        await client.end();
+      }
+    });
+
     it('passes a Network root, which has no leader to compare against', async () => {
       const root = await createPerson(db, { firstName: 'Oriel', network: 'MENS' });
 
@@ -248,6 +279,39 @@ describe('the database enforces the section 3 and section 7 rules it can', () =>
     ).rejects.toThrow(/immutable/);
   });
 
+  it('holds SENIOR_PASTOR to two accounts, as section 4 names two Persons', async () => {
+    // The role carries Whole Church scope on people.manage_lifecycle,
+    // people.manage_pastoral_assignment and audit.view. A third holder is the
+    // widest authority in the church, handed to somebody the specification does
+    // not name.
+    const first = await accountFor(db, 'Oriel', 'MENS');
+    const second = await accountFor(db, 'Geraldine', 'WOMENS');
+    const third = await accountFor(db, 'Rico', 'MENS');
+
+    await db
+      .insertInto('account_roles')
+      .values([
+        { account_id: first, role: 'SENIOR_PASTOR' },
+        { account_id: second, role: 'SENIOR_PASTOR' },
+      ])
+      .execute();
+
+    await expect(
+      db.insertInto('account_roles').values({ account_id: third, role: 'SENIOR_PASTOR' }).execute(),
+    ).rejects.toThrow(/SENIOR_PASTOR/);
+
+    // Revoking one makes room for another, which is how a succession happens.
+    await db
+      .updateTable('account_roles')
+      .set({ revoked_at: new Date() })
+      .where('account_id', '=', first)
+      .execute();
+
+    await expect(
+      db.insertInto('account_roles').values({ account_id: third, role: 'SENIOR_PASTOR' }).execute(),
+    ).resolves.toBeDefined();
+  });
+
   it('refuses a read-only grant of a write capability', async () => {
     const person = await createPerson(db, { firstName: 'Rico', network: 'MENS' });
     const account = await db
@@ -270,6 +334,8 @@ describe('the database enforces the section 3 and section 7 rules it can', () =>
           capability: 'people.manage_pastoral_assignment',
           scope_type: 'WHOLE_CHURCH',
           read_only: true,
+          reason: 'Exercising the read_only rule.',
+          granted_by: account.id,
         })
         .execute(),
     ).rejects.toThrow(/capability_grants_read_only_is_a_read/);
@@ -283,11 +349,36 @@ describe('the database enforces the section 3 and section 7 rules it can', () =>
           capability: 'people.manage_pastoral_assignment',
           scope_type: 'WHOLE_CHURCH',
           read_only: false,
+          reason: 'Exercising the read_only rule.',
+          granted_by: account.id,
         })
         .execute(),
     ).resolves.toBeDefined();
   });
 });
+
+async function accountFor(
+  db: Kysely<Database>,
+  firstName: string,
+  network: 'MENS' | 'WOMENS',
+): Promise<string> {
+  const person = await createPerson(db, { firstName, network });
+  const email = `${firstName.toLowerCase()}.${person.id.slice(0, 8)}@example.test`;
+
+  const account = await db
+    .insertInto('accounts')
+    .values({
+      person_id: person.id,
+      email,
+      email_normalized: email,
+      password_hash: 'placeholder',
+      status: 'ACTIVE',
+    })
+    .returning('id')
+    .executeTakeFirstOrThrow();
+
+  return account.id;
+}
 
 async function openClient(): Promise<Client> {
   const client = new Client({ connectionString: process.env.DATABASE_URL });

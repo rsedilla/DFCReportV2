@@ -94,6 +94,14 @@ describe('the schema (SKILL.md sections 4, 5 and 7)', () => {
     });
   });
 
+  describe('account_roles', () => {
+    it('caps SENIOR_PASTOR at the two Persons section 4 names', async () => {
+      const trigger = await triggerFacts(db, 'account_roles_two_senior_pastors_at_most');
+
+      expect(trigger.is_constraint_trigger).toBe(true);
+    });
+  });
+
   describe('the closed enumerations of section 7', () => {
     it('stores exactly the twenty-four capabilities', async () => {
       expect(await enumLabels(db, 'capability')).toEqual([...ALL_CAPABILITIES]);

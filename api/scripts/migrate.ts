@@ -13,6 +13,17 @@
  * already run is refused rather than silently ignored, because the database and
  * the file would then disagree with nothing to say so.
  *
+ * Three directives, each enforcing a line of the migration policy in CLAUDE.md:
+ *
+ *   -- migrate:up
+ *   -- migrate:down
+ *   -- migrate:down:refuse-if-populated persons pastoral_assignments
+ *       the down section will not run while any named table holds a row, unless
+ *       the operator passes --force
+ *   -- migrate:irreversible <why>
+ *       stands in place of a down section, for a migration that cannot be
+ *       reversed and is escalated as a Stop Condition before it runs
+ *
  * Usage:
  *   npm run migrate:up
  *   npm run migrate:down        (reverts the most recently applied migration)
@@ -27,7 +38,25 @@ import { Client } from 'pg';
 
 const MIGRATIONS_DIR = join(__dirname, '..', 'migrations');
 const UP_MARKER = /^--\s*migrate:up\s*$/m;
-const DOWN_MARKER = /^--\s*migrate:down\s*$/m;
+
+/**
+ * `-- migrate:down`, optionally carrying the tables the down section must find
+ * empty:
+ *
+ *   -- migrate:down
+ *   -- migrate:down:refuse-if-populated persons pastoral_assignments
+ */
+const DOWN_MARKER = /^--[ \t]*migrate:down(?::refuse-if-populated([^\n]*))?[ \t]*$/m;
+
+/**
+ * `-- migrate:irreversible <why>`, which stands in place of a down section.
+ *
+ * CLAUDE.md asks for a migration to be reversible, or explicitly marked
+ * irreversible and escalated as a Stop Condition before it runs. Without a way
+ * to mark one, the only way to satisfy this runner would be to write a
+ * destructive down and call it reversible, which is worse than saying so.
+ */
+const IRREVERSIBLE_MARKER = /^--[ \t]*migrate:irreversible[ \t]*([^\n]*)$/m;
 
 // One lock for the whole migration history, so two deploys cannot race.
 const ADVISORY_LOCK_KEY = 4_120_197_301;
@@ -36,25 +65,22 @@ interface Migration {
   version: string;
   name: string;
   up: string;
-  down: string;
+  /** Null where the migration is marked irreversible. */
+  down: string | null;
+  /** Why it is irreversible, as written in the file. */
+  irreversibleBecause: string | null;
+  /** Tables the down section refuses to run against while they hold rows. */
+  refuseIfPopulated: string[];
   checksum: string;
 }
 
 function parse(fileName: string, sql: string): Migration {
   const upAt = sql.search(UP_MARKER);
-  const downAt = sql.search(DOWN_MARKER);
+  const downMatch = DOWN_MARKER.exec(sql);
+  const irreversibleMatch = IRREVERSIBLE_MARKER.exec(sql);
 
   if (upAt === -1) {
     throw new Error(`${fileName}: no "-- migrate:up" marker`);
-  }
-  if (downAt === -1) {
-    throw new Error(
-      `${fileName}: no "-- migrate:down" marker. A migration is reversible, or is ` +
-        `explicitly marked irreversible and escalated before it runs (CLAUDE.md).`,
-    );
-  }
-  if (downAt < upAt) {
-    throw new Error(`${fileName}: "-- migrate:down" appears before "-- migrate:up"`);
   }
 
   const version = fileName.split('_')[0];
@@ -62,14 +88,56 @@ function parse(fileName: string, sql: string): Migration {
     throw new Error(`${fileName}: filename must start with a numeric version, e.g. 0002_name.sql`);
   }
 
+  // The checksum covers the whole file, comments included: a comment explaining
+  // why a constraint exists is part of the migration.
+  const checksum = createHash('sha256').update(sql).digest('hex');
+
+  if (irreversibleMatch) {
+    if (downMatch) {
+      throw new Error(
+        `${fileName}: marked irreversible and also carries a down section. Choose one.`,
+      );
+    }
+    if (irreversibleMatch[1].trim() === '') {
+      throw new Error(
+        `${fileName}: "-- migrate:irreversible" must say why, on the same line. It is ` +
+          `escalated as a Stop Condition before it runs, and the reason is what gets escalated.`,
+      );
+    }
+
+    return {
+      version,
+      name: fileName,
+      up: sql.slice(upAt, irreversibleMatch.index),
+      down: null,
+      irreversibleBecause: irreversibleMatch[1].trim(),
+      refuseIfPopulated: [],
+      checksum,
+    };
+  }
+
+  if (!downMatch) {
+    throw new Error(
+      `${fileName}: no "-- migrate:down" marker. A migration is reversible, or is ` +
+        `explicitly marked irreversible with "-- migrate:irreversible <why>" and ` +
+        `escalated before it runs (CLAUDE.md).`,
+    );
+  }
+  if (downMatch.index < upAt) {
+    throw new Error(`${fileName}: "-- migrate:down" appears before "-- migrate:up"`);
+  }
+
   return {
     version,
     name: fileName,
-    up: sql.slice(upAt, downAt),
-    down: sql.slice(downAt),
-    // The checksum covers the whole file, comments included: a comment explaining
-    // why a constraint exists is part of the migration.
-    checksum: createHash('sha256').update(sql).digest('hex'),
+    up: sql.slice(upAt, downMatch.index),
+    down: sql.slice(downMatch.index),
+    irreversibleBecause: null,
+    refuseIfPopulated: (downMatch[1] ?? '')
+      .split(/[\s,]+/)
+      .map((table) => table.trim())
+      .filter((table) => table !== ''),
+    checksum,
   };
 }
 
@@ -185,6 +253,16 @@ async function down(client: Client): Promise<void> {
   }
   assertUnchanged(migration, last);
 
+  if (migration.down === null) {
+    throw new Error(
+      `${migration.name} is marked irreversible and cannot be reverted: ` +
+        `${migration.irreversibleBecause ?? ''}\n` +
+        `Restore from a backup, or write a new migration that moves forward.`,
+    );
+  }
+
+  await assertNotPopulated(client, migration);
+
   process.stdout.write(`reverting ${migration.name}\n`);
   await client.query('BEGIN');
   try {
@@ -195,6 +273,67 @@ async function down(client: Client): Promise<void> {
     await client.query('ROLLBACK');
     throw error;
   }
+}
+
+/**
+ * A down section that drops a table holding history is the failure the migration
+ * policy in CLAUDE.md exists to prevent, and it is one command away at three in
+ * the morning. A migration naming its tables is refused rather than run once any
+ * of them holds a row.
+ *
+ * `--force` exists because a refusal with no override gets worked around by
+ * running the SQL by hand, which is the same act with no record of it. Using it
+ * is a deliberate decision, and it says so on the way past.
+ */
+async function assertNotPopulated(client: Client, migration: Migration): Promise<void> {
+  if (migration.refuseIfPopulated.length === 0) {
+    return;
+  }
+
+  const populated: string[] = [];
+
+  for (const table of migration.refuseIfPopulated) {
+    const { rows } = await client.query<{ exists: boolean }>(
+      'SELECT to_regclass($1) IS NOT NULL AS exists',
+      [table],
+    );
+    if (!rows[0].exists) {
+      continue;
+    }
+
+    const { rowCount } = await client.query(`SELECT 1 FROM ${quoteIdentifier(table)} LIMIT 1`);
+    if (rowCount !== null && rowCount > 0) {
+      populated.push(table);
+    }
+  }
+
+  if (populated.length === 0) {
+    return;
+  }
+
+  if (process.argv.includes('--force')) {
+    process.stdout.write(
+      `--force: reverting ${migration.name} although ${populated.join(', ')} hold data. ` +
+        `This destroys history the specification guarantees is preserved.\n`,
+    );
+    return;
+  }
+
+  throw new Error(
+    `${migration.name} will not be reverted: ${populated.join(', ')} hold data, and its ` +
+      `down section drops them.\n` +
+      `History in these tables is never dropped (CLAUDE.md, migration policy). Write a ` +
+      `migration that moves forward, or restore from a backup. Pass --force only as a ` +
+      `deliberate decision to destroy that data.`,
+  );
+}
+
+/** Table names come from the migration file, never from input, but quote anyway. */
+function quoteIdentifier(name: string): string {
+  if (!/^[a-z_][a-z0-9_]*$/i.test(name)) {
+    throw new Error(`invalid table name in a refuse-if-populated directive: ${name}`);
+  }
+  return `"${name}"`;
 }
 
 async function status(client: Client): Promise<void> {

@@ -485,6 +485,29 @@ They are written against `PUT /api/v1/people/{id}/pastoral-leader`, which Stage 
 
 They run as a separate job that is reported and not required, so the `api` job stays honestly green on an application with no features. Stage 2 is done when they pass, at which point they move into the main suite and that job is deleted. The endpoint contract they pin, including its error codes, is documented at the top of `api/test/authorization/pastoral-assignment.spec.ts`.
 
+### 2026-08-20 — A Network change validates forward from its effective date
+The same-Network trigger, on a Network change, checks every assignment open at the change's effective date **or beginning after it**, comparing each as of the later of the two dates.
+
+Found by `architecture-guardian` on the Stage 1 branch. `records.backdate_effective_date` lets Admin set the effective date in the past, so an assignment can begin after that date and therefore not be open at it. A correction backdated to April, with an assignment opened in June that was legal when made, would commit and leave a permanent cross-Network edge — and nothing revisits it, because no row of `pastoral_assignments` is written and the assignment trigger never fires.
+
+§4's guarantee is absolute, so the check reaches forward rather than stopping at the effective date. Written to `SKILL.md` §5 (Database enforcement), with a regression test in `api/test/database/invariants.spec.ts`.
+
+### 2026-08-20 — Three enforcement gaps closed at the schema, not in prose
+Also from the same review, and grouped because each is the same mistake: a rule the specification states, left to an application that does not exist yet.
+
+**`SENIOR_PASTOR` is capped at two active rows by a constraint trigger.** §7 says the two-holder limit is "a constraint the system enforces, not a convention it assumes". The count is enforceable in the database; *which* two Persons hold it is not, because the database has no durable representation of who the Senior Pastors are, and inventing one would put the church's two most consequential accounts behind a row somebody could edit. That half is a domain check in `auth`. Written to `SKILL.md` §7.
+
+**`capability_grants.reason` and `granted_by` are `NOT NULL`.** §7 marks nullability explicitly everywhere else, so their unmarked state means required. An unexplained grant of authority leaves the next administrator nothing to weigh. `account_roles.granted_by` stays nullable for one case, now written down: the first Admin account, granted by a system action, mirroring §21's allowance for `audit_log.actor_id`.
+
+**`migrate:down` refuses to run against populated tables.** The runner made an irreversible migration unexpressible, so the only way to satisfy it was a destructive down — and 0001's down drops `pastoral_assignments`, `network_assignments` and `person_lifecycle`. There is now a `-- migrate:irreversible <why>` marker, and a `-- migrate:down:refuse-if-populated <tables>` directive that stops the down unless the operator passes `--force`. The pattern mattered more than the file: Stage 3 and Stage 4 migrations would have copied it onto `cell_memberships`, `cell_leaderships` and attendance.
+
+### 2026-08-20 — The unauthenticated surface is a closed list, and `read_only` is not a role concept
+Two corrections to rulings made earlier the same day, both found by the review reading the new §7 text against the code it was written for.
+
+The exemption sentence claimed the unauthenticated set was sign-in and the password flows; the API also exposes token refresh and a liveness probe. Rather than leave the specification describing something narrower than the code, §7 now carries the closed list — sign-in, token refresh, password reset, activation, and the probe — and says that adding to it is an amendment rather than a decision taken in a controller.
+
+`read_only` is defined by §7 as a column on `capability_grants` and says nothing about role defaults, so deriving one for a role default and publishing it from `/api/v1/auth/me` invented a rule for clients to branch on. Authority carried by a role now reports no value. Written to `SKILL.md` §7.
+
 ### Open — awaiting a ruling
 
 **One item awaits a ruling.**

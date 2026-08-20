@@ -212,6 +212,7 @@ describe('the capability guard (SKILL.md section 7)', () => {
           scope_network: 'MENS',
           read_only: false,
           reason: 'Guard probe.',
+          granted_by: adminAccount.id,
         })
         .execute();
 
@@ -234,6 +235,7 @@ describe('the capability guard (SKILL.md section 7)', () => {
           scope_type: 'WHOLE_CHURCH',
           read_only: true,
           reason: 'Guard probe.',
+          granted_by: adminAccount.id,
         })
         .execute();
 
@@ -251,6 +253,7 @@ describe('the capability guard (SKILL.md section 7)', () => {
           scope_type: 'WHOLE_CHURCH',
           read_only: true,
           reason: 'Guard probe.',
+          granted_by: adminAccount.id,
         })
         .returning('id')
         .executeTakeFirstOrThrow();

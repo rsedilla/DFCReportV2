@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+
 import request from 'supertest';
 
 import { createTestDb, truncateAll } from '../setup/database';
@@ -29,6 +31,7 @@ import type { TestAccount, TestPerson } from '../setup/fixtures';
  * these tests deliberately and says why.
  *
  *   PUT /api/v1/people/{id}/pastoral-leader
+ *   Idempotency-Key: <client-generated UUID>
  *   { "leader_id": uuid, "effective_date": "YYYY-MM-DD"?, "reason": string? }
  *
  *   200                       the reassignment was recorded
@@ -38,6 +41,16 @@ import type { TestAccount, TestPerson } from '../setup/fixtures';
  *   403 SCOPE_DENIED          the actor holds the capability but not over one of
  *                             the objects the operation touches
  *   409 INVARIANT_VIOLATION   the resulting record breaks a section 5 rule
+ *   409 IDEMPOTENCY_KEY_REUSED  the key was used for a different request
+ *   409 REQUEST_IN_FLIGHT     the first request with this key has not finished
+ *
+ * The header is not optional and is not a Stage 4 concern. Section 22 requires it
+ * on every state-changing request "from the first write endpoint, not added
+ * later", and this is that endpoint. Every case below sends one, so an
+ * implementation that ignores the header passes these tests and an implementation
+ * that rejects a request without one still passes them -- which is the point:
+ * these cases pin authorization, and the idempotency layer is tested where it is
+ * built. What they must not do is pin a contract section 22 forbids.
  *
  * Two of those deserve saying out loud, because section 22 does not map error
  * codes to individual rules and an implementer would otherwise have to guess.
@@ -64,9 +77,15 @@ describe('reassigning a pastoral leader (SKILL.md section 5)', () => {
   let app: INestApplication;
   let db: Kysely<Database>;
 
-  // Men's Network: Oriel -> Raymond -> Manuel -> Mark, and a sibling branch
-  // Oriel -> Rico -> Juan that Raymond does not oversee.
+  // Men's Network: Oriel -> Ben -> Raymond -> Manuel -> Mark, and a sibling
+  // branch Oriel -> Rico -> Juan that Raymond does not oversee.
+  //
+  // Ben exists so that Raymond has an upline who is not the Network root. A root
+  // is protected by its own rule (section 5, Network roots), so a case built on
+  // one would pass against an implementation that checks for a root and never
+  // implements invariant 4 at all.
   let oriel: TestPerson;
+  let ben: TestPerson;
   let raymond: TestPerson;
   let manuel: TestPerson;
   let mark: TestPerson;
@@ -93,6 +112,7 @@ describe('reassigning a pastoral leader (SKILL.md section 5)', () => {
     await truncateAll(db);
 
     oriel = await createPerson(db, { firstName: 'Oriel', network: 'MENS' });
+    ben = await createPerson(db, { firstName: 'Ben', network: 'MENS' });
     raymond = await createPerson(db, { firstName: 'Raymond', network: 'MENS' });
     manuel = await createPerson(db, { firstName: 'Manuel', network: 'MENS' });
     mark = await createPerson(db, { firstName: 'Mark', network: 'MENS' });
@@ -109,7 +129,8 @@ describe('reassigning a pastoral leader (SKILL.md section 5)', () => {
     await assignTo(db, oriel.id, null);
     await assignTo(db, geraldine.id, null);
 
-    await assignTo(db, raymond.id, oriel.id);
+    await assignTo(db, ben.id, oriel.id);
+    await assignTo(db, raymond.id, ben.id);
     await assignTo(db, manuel.id, raymond.id);
     await assignTo(db, mark.id, manuel.id);
     await assignTo(db, rico.id, oriel.id);
@@ -170,13 +191,28 @@ describe('reassigning a pastoral leader (SKILL.md section 5)', () => {
   });
 
   it('4. refuses to let a leader change the assignment of anyone upline of them', async () => {
-    const response = await reassign(raymondAccount, oriel.id, rico.id);
+    // Ben is Raymond's own leader. Without this rule a leader can re-attach their
+    // upline, or themselves, higher in the tree -- privilege escalation through
+    // the org chart, since authorized scope is derived from tree position.
+    const response = await reassign(raymondAccount, ben.id, rico.id);
 
     expect(response.status).toBe(403);
     expect(response.body.error.code).toBe('SCOPE_DENIED');
+    await expectLeaderUnchanged(ben.id, oriel.id);
+  });
 
-    // Oriel is a Network root and has no leader. The row must still be absent
-    // rather than newly created.
+  // Beyond the eleven, and from section 5, Network roots rather than from the
+  // CLAUDE.md list. It is here because case 4 used to be written against the root
+  // and so proved this instead of what it claimed.
+  it('refuses to reassign a Network root, Admin included', async () => {
+    const byLeader = await reassign(raymondAccount, oriel.id, rico.id);
+    expect(byLeader.status).toBe(403);
+
+    const byAdmin = await reassign(adminAccount, oriel.id, rico.id);
+    expect([403, 409]).toContain(byAdmin.status);
+
+    // A root has no leader above them. That is the intended state, not missing
+    // data, and no write may give them one.
     const assignment = await openAssignment(oriel.id);
     expect(assignment?.leader_id ?? null).toBeNull();
   });
@@ -331,10 +367,16 @@ describe('reassigning a pastoral leader (SKILL.md section 5)', () => {
     leaderId: string,
     extra: Record<string, unknown> = {},
   ) {
-    return request(app.getHttpServer())
-      .put(ENDPOINT(personId))
-      .set('Authorization', `Bearer ${actor.accessToken}`)
-      .send({ leader_id: leaderId, ...extra });
+    return (
+      request(app.getHttpServer())
+        .put(ENDPOINT(personId))
+        .set('Authorization', `Bearer ${actor.accessToken}`)
+        // Client-generated, one per request, as section 22 and section 23 require.
+        // A leader on an unreliable connection will retry, and a retry must never
+        // create a second record.
+        .set('Idempotency-Key', randomUUID())
+        .send({ leader_id: leaderId, ...extra })
+    );
   }
 
   async function openAssignment(

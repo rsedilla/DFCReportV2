@@ -592,7 +592,9 @@ The two firing paths need **different** comparison dates, and one rule cannot se
 
 **On a write to `pastoral_assignments`**, compare the Networks in force as of the assignment's `started_at`. An edge must have been legal when it was created, and where Admin backdates one under `records.backdate_effective_date` that differs from today — validating against now would reject a correction that was true at the time.
 
-**On a Network change**, compare as of the **Network change's effective date**, against every assignment open at that date. Using the assignment's `started_at` here makes the check a no-op: a person assigned in January under a same-Network leader, whose Network is corrected in August, is compared against January's Networks, which matched, so the change commits and leaves them under a leader in their former Network — exactly what Section 4 requires the system to reject.
+**On a Network change**, compare against every assignment that is **open at the change's effective date or begins after it**, each one as of the later of the two dates — the moment from which the corrected Network governs that edge. Using the assignment's `started_at` here makes the check a no-op: a person assigned in January under a same-Network leader, whose Network is corrected in August, is compared against January's Networks, which matched, so the change commits and leaves them under a leader in their former Network — exactly what Section 4 requires the system to reject.
+
+"Or begins after it" is not a refinement, it closes a hole. `records.backdate_effective_date` allows Admin to set the effective date in the past, so an assignment can begin *after* the date a Network correction takes effect and therefore not be open at it. A correction backdated to April, with an assignment opened in June that was legal when it was made, would commit while leaving a permanent cross-Network edge — and nothing revisits it, because no row of `pastoral_assignments` is written and the other trigger never fires. Section 4's guarantee is absolute, so this check has to reach forward from the effective date rather than stopping at it.
 
 A root leader has a null `leader_id` (Network roots, above) and the trigger passes such a row without comparison — there is no leader to compare against.
 
@@ -933,12 +935,16 @@ account_roles
 - id
 - account_id
 - role               SENIOR_PASTOR | ADMIN | LEADER
-- granted_by
+- granted_by         null only for a system action, which is the first Admin account
 - granted_at
 - revoked_at         nullable
 ```
 
 `SENIOR_PASTOR` is held by exactly the two Persons named in Section 4, and by nobody else. Section 1, Principle 6 names them, and the role carries Whole Church scope on `people.manage_lifecycle`, `people.manage_pastoral_assignment` and `audit.view` — so this is a constraint the system enforces, not a convention it assumes. Granting it to a third account is rejected. An account holds at most one active row per role.
+
+The enforcement is in two places, because the two halves of that rule are enforceable in different ways. The **count** is a database constraint: a third active `SENIOR_PASTOR` row is rejected. **Which two Persons** hold it is checked in the `auth` domain layer, since the database holds no durable representation of who Bishop Oriel Ballano and Pastora Geraldine Ballano are, and inventing one — a flag on the Person, a reserved identifier — would make the two most consequential accounts in the church depend on a row somebody could edit.
+
+`granted_by` is null only for a role granted by a **system action**, which is the first Admin account and nothing else: there is no account above it to have granted it. This mirrors the same allowance for `audit_log.actor_id` (Section 21). Every other role grant has an actor.
 
 ```text
 capability_grants
@@ -948,8 +954,8 @@ capability_grants
 - scope_type         OWN_SUBTREE | SUBTREE_EXCL_SELF | NETWORK | WHOLE_CHURCH
 - scope_network      nullable, required where scope_type is NETWORK
 - read_only          defaults to true
-- reason
-- granted_by
+- reason             required; a grant explains itself
+- granted_by         required; an explicit grant is always issued by an Admin
 - granted_at
 - revoked_at         nullable
 ```
@@ -960,12 +966,12 @@ capability_grants
 
 **An endpoint that declares no capability is denied.** The capability and the target are declared on the endpoint, and an endpoint declaring neither is refused rather than allowed. This is what makes Section 2's structural enforcement real: forgetting the declaration closes an endpoint instead of opening it, which is the failure a busy afternoon actually produces.
 
-Exactly two exemptions exist, and each names its reason where it is written:
+Exactly two kinds of exemption exist, and each endpoint taking one names its reason where it is written:
 
-- an endpoint reachable **without authentication** — sign-in, and the password reset and activation flows, where there is no token to present yet
+- an endpoint reachable **without authentication**, which is a closed list: sign-in, token refresh, the password reset and activation flows, and the liveness probe. The first four have no token to present yet, or are presenting the refresh token as the credential. The probe answers only whether the process is serving and reads nothing belonging to the church
 - an endpoint requiring **authentication and no capability**, because it acts on the caller's own session: reading their own claims, signing out, ending their own sessions
 
-Neither ever covers an endpoint that reads or writes a Person, a Cell, attendance, a report, an account other than the caller's own, or a setting. An exemption is reviewed as a change to authorization, because that is what it is.
+Neither ever covers an endpoint that reads or writes a Person, a Cell, attendance, a report, an account other than the caller's own, or a setting. Adding an endpoint to the unauthenticated list is an amendment to this section, not a decision taken in a controller, because that list is the whole of the API's unauthenticated surface and its value is that it can be read in one place.
 
 A request is allowed where **any** active role default or active grant for that capability covers the target. Authority only widens; there is no mechanism for narrowing a role default on one account, and none is needed — removing the role or disabling the account is the answer.
 
@@ -985,6 +991,8 @@ A grant is revoked by setting `revoked_at`, never by deleting the row. The histo
 A grant of a read capability may set `read_only` true or false; true is the default and the normal case, and false is meaningless there but harmless. A grant of a **write** capability with `read_only` true is **rejected at creation**, not stored and silently ineffective. Without that rejection an Admin granting a management capability and leaving the flag at its default creates a row that grants nothing, with nothing to indicate why the holder is being denied.
 
 The flag exists because a scope widened beyond a leader's normal management scope is a reporting grant unless something says otherwise (above). It is the visible difference between letting someone see a Network and letting them change it.
+
+`read_only` belongs to `capability_grants` and to nothing else. **A role default carries no such flag**, and none is to be derived for one: a role's authority is exactly what the catalog above says it is. Anywhere an account's effective authority is presented — `/api/v1/auth/me` is the case that exists — authority carried by a role reports no `read_only` value rather than an invented one, because a client branching on a value this specification never defined is branching on a rule that does not exist.
 
 The backend/API is the sole authority for authorization. Web and mobile UI filtering is never sufficient security on its own (Section 1, Principle 4).
 
