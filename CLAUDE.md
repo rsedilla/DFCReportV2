@@ -293,6 +293,7 @@ Day and time carry history exactly as category does, because scheduled meetings 
 One event per Sunday on a rolling twelve-month horizon. Lazy creation would make a Sunday nobody submitted for indistinguishable from a cancelled service, reintroducing the ambiguity the Cell statuses exist to remove. Written to `SKILL.md` §9.
 
 ### 2026-08-20 — Notifications go to the two Senior Pastors and their direct leaders only
+**Superseded the same day** by "Notifications go to the direct leaders and Admin, not the Senior Pastors" below. Retained for the reasoning, which still holds; the recipient list does not.
 In-app only. No email, no SMS, no push, so no mail provider, queue, or worker is required.
 
 Every leader still sees their own outstanding records on their own dashboard — that is a task list, not a notification. Accountability runs through pastoral relationship: the Senior Pastors and their direct leaders see where their Networks stand and follow up personally. A leader behind on records hears from their own leader, not from the application. Written to `SKILL.md` §13.
@@ -312,6 +313,7 @@ Daily minimum, 30 days retention, point-in-time recovery where the host supports
 Weekly was considered and rejected: attendance exists nowhere else, so a week of loss is one DCC Sunday and around a hundred and forty Cell meetings that nobody can reconstruct, and corruption is typically noticed weeks after it happens. The database is small enough that daily costs almost nothing. Written to `SKILL.md` §24.
 
 ### 2026-08-20 — Two capabilities were referenced but never named
+**Partly superseded.** The closing sentence, that `cell.manage_lifecycle` also covers creating a Cell, was reversed by "Cell creation workflow, hardened" below: creation is reachable only through request-and-approve, and `cell.manage_lifecycle` governs closure alone.
 `cell.manage_leadership` (assigning and ending Cell leadership, and referenced by the dual-authorization rule in §6) and `people.merge` (§3, and a row in the §7 role table with no identifier). Both now appear in the §7 capability list and role catalog. `cell.manage_lifecycle` is also stated to cover creating a Cell, not only closing one.
 
 ### 2026-08-20 — DCC attendance is face to face only
@@ -328,6 +330,7 @@ The church runs roughly 800 active Cells with 3,000 to 4,000 attending DCC weekl
 Initial encoding is a distinct phase: Admin imports the leadership tree centrally, and each Cell Leader encodes their own members. Cell-creation approval and individual attribution are relaxed for that phase only; duplicate matching applies at full force, since a large encoding effort across many hands is the likeliest source of duplicates this system will see. Written to `SKILL.md` §2.
 
 ### 2026-08-20 — Cell creation is request then approve
+**Amended** by "Cell creation workflow, hardened" below. Two details here are superseded: `cell.request_creation` is scoped subtree-excluding-self rather than own/subtree, and the claim that this is the only action carrying a second party is wrong — archival and Person Merge share the shape.
 The prospective leader's own upline requests the Cell, naming the leader, category, day and time (`cell.request_creation`, own/subtree). Admin approves (`cell.approve_creation`, Admin only), and approval creates the Cell, the leadership assignment, and proceeds to the account step in one transaction.
 
 Admin holds approval because approving a new Cell Leader means provisioning their account, and §6 requires one actor to hold both `cell.manage_leadership` and `accounts.manage`. Admin is the only role holding the latter, so the choice falls out of the role catalog rather than being arbitrary.
@@ -378,6 +381,14 @@ Admin-only, Whole Church, audit logged with previous and new values. It governs 
 
 ### 2026-08-20 — A mid-month schedule change is resolved per week
 The schedule in force on the first day of the week a meeting belongs to determines that meeting's scheduled date. The week is the unit because §13 already makes the weekly meeting the unit of identity. Without the rule a mid-month move can leave a week with two candidate dates or none, producing a month of three or six scheduled meetings and a coverage denominator with no defined value. Written to `SKILL.md` §10.
+
+### 2026-08-20 — A calendar week begins on Monday
+ISO 8601, consistent with the date format already in use. Not a formatting preference: §13 makes the weekly meeting the unit of a Cell's identity and §10 resolves a mid-month schedule change by the schedule in force on the first day of the meeting's week, so the boundary decides which schedule governs and therefore the coverage denominator. Sunday-start is the common local convention and would otherwise be somebody's default. Written to `SKILL.md` §20.
+
+### 2026-08-20 — Monthly attendance is measured over the membership window
+A person is reported under the Cell they belonged to most recently during the month, and their denominator is that Cell's recorded meetings that fell within their membership of it.
+
+This replaces the earlier month-end rule, which had no answer for a person who left a Cell and joined none — permitted when a Cell closes — leaving them with a classification but no bucket, so the two views stopped reconciling. Bounding by membership also fixes the mid-month joiner, who was previously measured against meetings held before they joined and whose roster they were absent from, making `Completed` unreachable. Written to `SKILL.md` §10.
 
 ### Open — awaiting a ruling
 

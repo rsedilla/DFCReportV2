@@ -49,7 +49,7 @@ The skeleton everything else hangs on. **No features are built in this stage.**
 - Networks, effective-dated (§4)
 - Pastoral assignments, with all five invariants enforced in the domain layer and in the database (§5)
 - Accounts: provisioning, activation, password reset (§6)
-- **Import the leadership tree** — roughly a thousand people, through the dry-run, adjudicate, commit flow (§2, Initial data load)
+- **Import the leadership tree**, through the dry-run, adjudicate, commit flow (`SKILL.md` §2, Initial data load)
 
 **Done when:** all eleven authorization tests are **green**, including case 7 exercised concurrently, and the real leadership tree is loaded in a development database.
 
@@ -69,7 +69,7 @@ The skeleton everything else hangs on. **No features are built in this stage.**
 
 **Done when:** a Cell can be requested, approved, and closed; membership moves atomically without leaving two open rows; and a schedule change preserves history so a past month's coverage figure does not move.
 
-**Risk:** creating a Cell without opening its category and schedule rows. A Cell with no schedule row has no derivable scheduled meetings and therefore no coverage figure for its first month.
+**Risk:** creating a Cell without opening its category and schedule rows (`SKILL.md` §10, Creating a Cell).
 
 ---
 
@@ -77,8 +77,8 @@ The skeleton everything else hangs on. **No features are built in this stage.**
 
 - DCC calendar generated twelve months ahead (§9)
 - DCC recording, responsible leader, roll-up to the nearest account-holding upline
-- Cell meetings: three statuses, five `NOT_HELD` reasons, `facilitated_by` (§13)
-- Month close on the 7th, Admin-only amendment afterwards
+- Cell meetings: the meeting statuses, their reasons, and `facilitated_by` (§13)
+- The monthly submission window and its close (§13)
 - **Idempotency keys and version conflicts** (§14, §23)
 
 **Done when:** a leader records a full month of Cell meetings and a month of DCC, the month closes on the 7th, and a concurrent double submission produces a conflict for a person to resolve rather than a silent overwrite.
@@ -130,7 +130,7 @@ The skeleton everything else hangs on. **No features are built in this stage.**
 
 ## Later — Mobile
 
-React Native, against the same `/api/v1`.
+Against the same `/api/v1`. The client framework is not chosen and is not settled here — a stack decision is recorded in `CLAUDE.md` and amended into `SKILL.md` §2, never in a roadmap.
 
 Nothing in Stages 1 through 7 should need to change. That is what the API-first constraint and the separate deployables were bought for — if a mobile client forces an API change, something in the earlier stages was built as a web feature rather than as an API.
 

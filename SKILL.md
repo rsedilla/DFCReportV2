@@ -921,7 +921,9 @@ The Person becomes available to other authorized modules, but participation rema
 
 ### A DCC attendance record requires a pastoral leader
 
-Every DCC attendance record carries a responsible leader, and that is the person's direct pastoral leader (below). A Person with no active pastoral assignment therefore has no responsible leader, and their attendance cannot be recorded.
+Every DCC attendance record carries a responsible leader, and that is the person's direct pastoral leader (below). A Person with no active pastoral assignment therefore has no responsible leader, and their attendance cannot be recorded — **with one exception, the Network roots.**
+
+A root leader's absent assignment is the intended state rather than missing data (Section 5, Network roots). Their attendance is recorded by Admin, their record carries no responsible leader, and they are excluded from coverage denominators. They remain in every unique-people total; nothing here removes the two Senior Pastors from the figures they appear in.
 
 This is why step 3 above captures the leader at creation rather than leaving it for later. In practice the answer is already known outside the system: someone brings a visitor, and the leader they are being placed under is settled by that relationship before anyone opens the application. The workflow records a decision the church has already made.
 
@@ -1058,13 +1060,15 @@ Audit schedule changes as category changes are audited.
 
 A Cell is created through a two-step workflow: the prospective leader's upline **requests** it, and **Admin approves**. **No actor may approve a request they submitted.**
 
-This is the only path by which a Cell comes into existence. `cell.manage_lifecycle` governs closure and confers no power to create one (Cell lifecycle, below).
+Outside initial encoding (Section 2), this is the only path by which a Cell comes into existence. `cell.manage_lifecycle` governs closure and confers no power to create one (Cell lifecycle, below).
 
 **Step one — the request.** A leader upline of the prospective Cell Leader submits a request naming that person, the Cell's category, and its day and time. The capability is `cell.request_creation` (Section 7), held over the actor's subtree **excluding themselves**. In practice this is a leader saying that one of their own disciples is ready to lead.
 
 No holder of the capability, at any scope, may name themselves. Without that exclusion a leader whose only Cell has closed — who keeps their account (Section 11) — could restore their own Current Cell Leader status, re-enter New Cell Leaders for the period, and restore their upline's Leaders-with-12+ count, with no upline involved and with Admin, who has no pastoral basis to judge readiness, as the only reviewer. Section 5, invariant 4 writes the same prohibition for pastoral assignment, for the same reason.
 
-**Step two — Admin approves.** The capability is `cell.approve_creation`, held by Admin only. It is not granted to any other role or actor, and in particular is never held alongside `cell.request_creation` by the same person.
+**Step two — Admin approves.** The capability is `cell.approve_creation`, held by Admin only and granted to no other role.
+
+The enforceable control is the per-request rule stated above: **no actor may approve a request they submitted.** That is what must be checked on every approval, and it holds even where one person happens to hold both capabilities. Do not rely instead on the two capabilities never meeting in one actor — Admin holds both by default, and separation expressed only through role defaults is separation an Admin-issued grant can undo (Section 7).
 
 Admin holds approval because approving a new Cell Leader means provisioning their account, and Section 6 requires one actor to hold both `cell.manage_leadership` and `accounts.manage` against the same target. Admin is the only role holding `accounts.manage` (Section 7), so approval and the account land with one authorized actor rather than stalling between two.
 
@@ -1086,11 +1090,13 @@ The category and schedule rows are not optional extras. A Cell created without a
 
 **Direct creation during initial encoding.** While initial encoding is open (Section 2), Admin may create a Cell and its leadership assignment directly, without a request. That path closes with the phase and is not available afterwards.
 
-**Request states.** A request is `PENDING`, `APPROVED`, or `DECLINED`. Never add another. A `PENDING` request creates no Cell, holds no members, records no attendance, and appears in no count or metric. At most one `PENDING` request may exist for a given prospective leader. Declined requests are retained — they are part of the record of how a leader was developed.
+**Request states.** A request is `PENDING`, `APPROVED`, or `DECLINED`. Never add another. A `PENDING` request creates no Cell, holds no members, records no attendance, and appears in no count or metric. At most one `PENDING` request may exist for a given prospective leader. Enforce it with a partial unique index on the prospective leader where the state is `PENDING`, exactly as pastoral assignment and Cell membership do for their own single-active rules (Section 5, Section 10). Without it two uplines may each submit, both may be approved, and nothing downstream catches the duplicate, because a leader may legitimately lead many Cells.
+
+Declined requests are retained — they are part of the record of how a leader was developed.
 
 **Declining.** Admin may decline a request with a reason, from a fixed list:
 
-- `NOT_YET_READY`
+- `LEADER_DEVELOPMENT_CONTINUING`
 - `TIMING_DEFERRED`
 - `DUPLICATE_REQUEST`
 - `SUBMITTED_IN_ERROR`
@@ -1102,7 +1108,7 @@ The list is fixed and not administrator-configurable, for the reason given in Se
 
 **Why two steps.** Creating a Cell mints a Cell Leader, and that act moves Current Cell Leaders, New Cell Leaders for the period, and the requesting leader's own progress toward Leaders with 12+ Direct Leaders (Section 16). The requester benefits from the outcome, so a second party is required.
 
-The same shape governs the other actions where a leader would benefit from the result: archival, which reduces a leader's own People count, and Person Merge — both requested by a leader and performed by Admin or a Senior Pastor (Section 7).
+The same shape governs the other actions where a leader would benefit from the result. Archival reduces a leader's own People count, and is requested by a leader and performed by Admin or a Senior Pastor. Person Merge lowers totals for periods already reported, and is Admin only — not held by Senior Pastors (Section 3, Section 7).
 
 **What the system does not model.** The church communicates a new Cell Leader to the Senior Pastors and their direct leaders outside the application, in conversation. Do not build a notification or an approval tier for that. It is a different thing from the Admin queue above, which is the workflow's own task surface.
 
@@ -1178,9 +1184,15 @@ A Cell member is assigned to exactly one active Cell Group at a time. This is di
 
 A person's Cell monthly attendance denominator (Section 12) is therefore determined only by the applicable meetings of that person's one assigned Cell Group — never combined across every Cell the same leader happens to lead. For example, if Mark leads `CELL-001842` (Youth) and `CELL-002193` (Young Pro), Juan — assigned to `CELL-001842` — is evaluated only against `CELL-001842`'s meetings; `CELL-002193`'s meetings are not part of Juan's denominator. Do not introduce a "primary Cell" concept — the single active assignment already defines this relationship.
 
-**A person who moves between Cells during a month is reported under the Cell they belong to at the end of that month.** Their denominator is that Cell's recorded meetings, and the attendance counted against it is their attendance at that Cell.
+**A person is reported under the Cell they belonged to most recently during the month**, and their denominator is that Cell's recorded meetings **that fell within their membership of it**.
 
-Attendance recorded at the Cell they left remains exactly as recorded and remains part of that Cell's meeting records. It does not place them in the former Cell's monthly attendance buckets, because they are no longer that leader's person, and the monthly report answers a question about the leader's current people.
+Both halves are needed. Reporting under the most recent Cell rather than the month-end Cell covers the person who left a Cell and joined none — which Section 10 permits when a Cell closes and its members are deliberately left unassigned, and which Section 15 surfaces as an attention list. Without it such a person attends, carries a Cell classification, and yet has no denominator and no monthly bucket, so the two views stop reconciling (Section 20).
+
+Bounding the denominator by membership covers the person who joined mid-month. Someone joining on 25 October is not on the roster of the meetings held before they joined (Managing Cell membership, below) and could not have been recorded present at them. Counting those meetings against them makes `Completed` unreachable and reports them as `Once`, indistinguishable from a member who was there all month and came once.
+
+Attendance recorded at a Cell they have since left remains exactly as recorded, and remains part of that Cell's meeting records. It does not place them in that Cell's monthly attendance buckets.
+
+At leader and Network scope none of this changes a total, because those deduplicate with `COUNT(DISTINCT person_id)` (Section 12) and the person is counted once however many Cells they passed through.
 
 At leader and Network scope this changes nothing, because those totals deduplicate with `COUNT(DISTINCT person_id)` (Section 12) and the person is counted once regardless of how many Cells they passed through.
 
@@ -1778,6 +1790,7 @@ A dashboard of counts tells a leader nothing to act on. Dashboard is the first i
 - meetings awaiting a record, for the user's own Cells (Section 13)
 - Cells needing attention within their scope (Section 15)
 - people with no active Cell membership within their scope (Section 10)
+- the outcome of a Cell creation request the user submitted (Section 10)
 
 Each entry carries the action that resolves it.
 
@@ -1848,6 +1861,10 @@ Store timestamps in UTC. Convert to Asia/Manila whenever deriving a date, a week
 Never bucket a report directly by a raw UTC timestamp. A Cell meeting at 16:00 Saturday in Manila is 08:00 Saturday UTC and buckets correctly by accident, but a record written at 07:00 Monday in Manila is 23:00 Sunday UTC, and a report grouped in UTC places it in the wrong week and, at a month boundary, the wrong month. Historical reports would then disagree with what leaders actually recorded.
 
 Asia/Manila observes no daylight saving time, so the offset is a constant +08:00. Do not hard-code `+8`. Use the named zone, so the system stays correct if that ever changes.
+
+**A calendar week begins on Monday**, following ISO 8601, consistently with the date format used throughout. Sunday belongs to the week that began on the preceding Monday.
+
+This is not a formatting preference. Section 13 makes the weekly meeting the unit of a Cell's identity, and Section 10 resolves a mid-month schedule change by the schedule in force on the first day of the week a meeting belongs to — so the week boundary decides which of two schedules governs, and therefore the scheduled date and the coverage denominator. A Sunday-start convention is common locally and will be somebody's default, which is why the rule is fixed here rather than left to the calendar library.
 
 ### Unique people
 
