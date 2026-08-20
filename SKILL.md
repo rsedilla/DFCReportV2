@@ -904,12 +904,22 @@ When adding a VIP:
 
 1. Search existing People first.
 2. Reuse existing Person if matched.
-3. Otherwise create one Person record using the core personal fields.
+3. Otherwise create one Person record using the core personal fields, **including the pastoral leader they are being placed under**.
 4. Ask for a mobile number. It is optional (Section 3), but this is the moment it is most likely to be given and most needed later: a first-time visitor who does not return is exactly who Participation reporting surfaces (Section 16), and a leader cannot follow up a name alone.
 5. Record DCC attendance only.
 6. Do not automatically create Cell attendance.
 
 The Person becomes available to other authorized modules, but participation remains domain-specific.
+
+### A DCC attendance record requires a pastoral leader
+
+Every DCC attendance record carries a responsible leader, and that is the person's direct pastoral leader (below). A Person with no active pastoral assignment therefore has no responsible leader, and their attendance cannot be recorded.
+
+This is why step 3 above captures the leader at creation rather than leaving it for later. In practice the answer is already known outside the system: someone brings a visitor, and the leader they are being placed under is settled by that relationship before anyone opens the application. The workflow records a decision the church has already made.
+
+Naming the leader on the creation form is not a side effect of another action, which Section 5 forbids. It is a field on the form, entered deliberately, and it creates a pastoral assignment subject to every invariant in Section 5 — in particular the same-Network rule.
+
+Section 5 still permits a Person to exist with no active assignment, which happens during bulk import and wherever a record is created before the placement is settled. Such a Person simply cannot have DCC attendance recorded until they have a leader.
 
 ### DCC monthly reporting
 
@@ -1154,9 +1164,17 @@ A Cell member is assigned to exactly one active Cell Group at a time. This is di
 
 A person's Cell monthly attendance denominator (Section 12) is therefore determined only by the applicable meetings of that person's one assigned Cell Group — never combined across every Cell the same leader happens to lead. For example, if Mark leads `CELL-001842` (Youth) and `CELL-002193` (Young Pro), Juan — assigned to `CELL-001842` — is evaluated only against `CELL-001842`'s meetings; `CELL-002193`'s meetings are not part of Juan's denominator. Do not introduce a "primary Cell" concept — the single active assignment already defines this relationship.
 
+**A person who moves between Cells during a month is reported under the Cell they belong to at the end of that month.** Their denominator is that Cell's recorded meetings, and the attendance counted against it is their attendance at that Cell.
+
+Attendance recorded at the Cell they left remains exactly as recorded and remains part of that Cell's meeting records. It does not place them in the former Cell's monthly attendance buckets, because they are no longer that leader's person, and the monthly report answers a question about the leader's current people.
+
+At leader and Network scope this changes nothing, because those totals deduplicate with `COUNT(DISTINCT person_id)` (Section 12) and the person is counted once regardless of how many Cells they passed through.
+
 ### Only members are recorded
 
 Cell attendance is recorded only for the Cell's own members. The roster for a meeting is exactly the people holding an active membership of that Cell on the meeting date.
+
+Where a meeting was rescheduled (Section 13), the roster is taken from the **actual date the meeting took place**, not the date it was originally scheduled for. Membership can change between the two, and the roster should be the people who could actually have been there. The meeting still belongs to its original reporting month; only the roster follows the actual date.
 
 There is no visitor or guest state. A person coming to a Cell for the first time is added as a member by the leader, and then recorded present. A person is either a member of the Cell or is not recorded against it.
 
@@ -1367,7 +1385,13 @@ Before close, outstanding records are surfaced in two distinct ways, and they mu
 
 **Every leader sees their own outstanding work**, always, on their dashboard: meetings awaiting a record appear as tasks with the action attached (Section 19). This is not a notification and is not limited to anyone; it is simply the leader's own list.
 
-**Notifications go to the top of each Network only.** In-app notifications about outstanding records are sent to Bishop Oriel Ballano, Pastora Geraldine Ballano, and the direct pastoral children of each. Nobody else receives one.
+**Notifications go to the direct leaders of both Senior Pastors, and to Admin.** In-app notifications about outstanding records are sent to the direct pastoral children of Bishop Oriel Ballano, the direct pastoral children of Pastora Geraldine Ballano, and Admin. Nobody else receives one.
+
+**The Senior Pastors are deliberately not notified.** They retain full church-wide visibility and see everything they choose to look at (Section 7); they are simply not the people the application interrupts. Following up an outstanding record is the work of the leaders directly under them, and a notification reaching the top of the church for a Cell that has not filed a record inverts that.
+
+Recipients see church-wide figures, including names, which exceeds the own/subtree scope a leader holds by default. That visibility is not implied by their position — Section 7 is explicit that a Senior Pastor's direct leaders receive no wider scope by virtue of being in the direct 12. It comes from an explicit, Admin-issued grant of `reports.view_subtree` at Whole Church scope, read-only, recorded and audited like any other grant.
+
+Notification content never exceeds the recipient's granted scope. Where the grant is withdrawn, the notification narrows with it rather than continuing to disclose what the recipient may no longer see.
 
 Notifications are in-app only. No email, no SMS, no push.
 

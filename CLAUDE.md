@@ -359,6 +359,20 @@ Written to `SKILL.md` §10, §7, §19, §21.
 ### 2026-08-20 — Initial encoding ends by an audited Admin action
 While open, Admin may create Cells directly. Once closed, that path is gone and every Cell goes through request-and-approve. Three commits had attached relaxations to a phase with no terminating condition; a relaxation tied to a phase that never ends is a permanent relaxation. Written to `SKILL.md` §2 and §10.
 
+### 2026-08-20 — A DCC attendance record requires a pastoral leader
+The VIP workflow captures the pastoral leader at creation. In practice the answer is already settled outside the system — someone brings a visitor, and who they sit under is decided by that relationship before anyone opens the app. A Person with no active assignment simply cannot have DCC attendance recorded, since there would be no responsible leader. Written to `SKILL.md` §9.
+
+### 2026-08-20 — A person who changes Cell mid-month reports under the new Cell
+Their denominator is the new Cell's recorded meetings, and attendance at the Cell they left stays in that Cell's records without placing them in its monthly buckets. Leader and Network totals are unaffected, since those deduplicate by person. Written to `SKILL.md` §10.
+
+### 2026-08-20 — A rescheduled meeting takes its roster from the actual date
+Membership can change between the original and actual dates, and the roster should be the people who could actually have been there. The meeting still belongs to its original reporting month. Written to `SKILL.md` §10.
+
+### 2026-08-20 — Notifications go to the direct leaders and Admin, not the Senior Pastors
+The two Senior Pastors keep full visibility but are not interrupted by the application. Following up an outstanding record is the work of the leaders directly under them.
+
+Recipients see church-wide figures, which exceeds the own/subtree scope their position confers. §7 is explicit that being in a Senior Pastor's direct 12 grants no wider scope, so this comes from an explicit Admin-issued grant of `reports.view_subtree` at Whole Church scope, read-only and audited. Notification content never exceeds the recipient's granted scope. Written to `SKILL.md` §13.
+
 ### Open — awaiting a ruling
 
 Nothing is currently awaiting a ruling. Items reaching a Stop Condition are recorded here until settled.
