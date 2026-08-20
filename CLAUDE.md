@@ -431,5 +431,9 @@ Shapes now sit in the section owning each rule, and §26 carries an index of all
 
 ### Open — awaiting a ruling
 
-Nothing is currently awaiting a ruling. Items reaching a Stop Condition are recorded here until settled.
+**One item awaits a ruling.**
+
+**What an aggregate Cell attendance view offers in place of buckets.** Monthly-attendance buckets are a Cell-scope view only, because N belongs to a Cell and aggregating across different N inflates `Completed` for the Cells that recorded least (`SKILL.md` §12). At leader and Network scope the spec offers unique people, classification and coverage, and does not say whether anything should replace the buckets. Settle it in Stage 5 against real data.
+
+Two related questions have defined behaviour and are recorded in `SKILL.md` §12 as fairness questions rather than Stop Conditions: whether a leader should see someone who attended and has since left, and whether a mid-month joiner measured against the whole month is acceptable. An implementer follows the stated rules and does not stop on either.
 
