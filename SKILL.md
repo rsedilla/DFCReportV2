@@ -703,13 +703,21 @@ An access token lives **15 minutes**. A refresh token lives 30 days from issue a
 
 It is not a classification of every revoked row. Account-wide revocation leaves the same shape as a sign-out, deliberately: nothing needs to escalate a token whose account has already been revoked.
 
-**Two rules make immediate revocation hold, and both are easy to lose.**
+**Three rules make immediate revocation hold, and each is easy to lose.**
 
 `issued_at` is **stamped by the API process**, not by a database default. It is compared against `sessions_revoked_at` and against an access token's issued-at, both of which the API stamps, and the database's clock is a different one. A token sitting on the wrong side of that comparison is a session that outlives its revocation, or a sign-in refused for no reason.
 
 **Rotation is ordered against revocation in the database, not in the application.** A rotation takes the account row under a lock before it claims a token, and re-reads the marker there. Checking the marker before opening the transaction is not enough: that read sees committed state, so a revocation that has stamped its marker and not yet committed reads as absent, and a token can be rotated in that window into a replacement the revocation never sees.
 
 Revocation takes the same row, in the same order, first. Two paths taking one pair of locks in opposite orders deadlock, and the loser is normally the revocation — which would mean the one operation that must not fail silently failing silently.
+
+**The marker is the boundary.** A refresh token whose `issued_at` is at or before `sessions_revoked_at` is dead, whatever its own row says; one issued after it is a new session and is untouched. Everything below follows from that one comparison — `issued_at` against the marker, never the order in which rows happened to commit.
+
+The marker is stamped **last**, after the tokens are revoked. That is what catches a row the revoking statement missed: the statement takes its snapshot before the marker is read, so a row it could not see but which was issued before that read still sorts on the dead side of the comparison. A row issued after the marker is read escapes both, and is meant to.
+
+A sign-in can land inside a revocation's transaction. Issuing a refresh token takes no lock on the account, so the revocation does not exclude the insert itself — though in practice a sign-in usually waits a statement earlier, when it stamps `last_login_at` on the account row, which the revocation does hold. What remains is a sign-in that passed that point before the revocation began: it is refused if its `issued_at` precedes the marker read, and survives if it follows it.
+
+That is the intended answer rather than an accident of lock modes. Revocation ends the sessions that existed when it ran; it was never a bar on signing in again, and somebody holding the password signs in a moment later in any case. Closing the window would buy nothing that an attacker cannot simply wait out.
 
 **Simultaneous presentation is not reuse.** Where two requests present the same live refresh token at the same instant, one wins the rotation and the other is refused — and that is all. The winner's session is untouched and no account-wide revocation follows.
 
@@ -719,7 +727,9 @@ The cost is accepted deliberately and stated so it is not mistaken for an oversi
 
 **Immediate revocation and a stateless API are in tension, and the resolution is explicit.** A bearer token verified by signature alone cannot be revoked before it expires, so Section 6's requirement that revocation take effect immediately, on all devices, is not satisfiable by a short lifetime alone.
 
-Every request therefore checks the account's `sessions_revoked_at` (above) against the access token's issued-at, and rejects a token issued before it — a single lookup keyed by account, cacheable, invalidated on revoke. A per-token `revoked_at` cannot answer this, because an access token has no row. The API remains stateless in the sense Section 2 requires: it holds no server-side session, no per-request state, and any instance can serve any request. What it does not do is trust a signature unconditionally.
+Every request therefore checks the account's `sessions_revoked_at` (above) against the access token's issued-at, and rejects a token issued at or before it — a single lookup keyed by account, cacheable, invalidated on revoke.
+
+That comparison is inclusive as the refresh-token one is, but it is **not the same boundary, and it is coarser**. A JWT's `iat` carries whole seconds, so an access token minted in the same second as a revocation cannot be ordered against it, and is refused. It errs towards ending a session the holder can restart by signing in, rather than towards honouring one an administrator has just revoked. The consequence is bounded and accepted: a sign-in that lands **after** the marker but within the same second as it holds a refresh token that is valid — the session lives, by the rule above — and an access token refused until that second has elapsed. A sign-in falling at or before the marker has no divergence to describe, because both its tokens are correctly dead. A per-token `revoked_at` cannot answer this, because an access token has no row. The API remains stateless in the sense Section 2 requires: it holds no server-side session, no per-request state, and any instance can serve any request. What it does not do is trust a signature unconditionally.
 
 A 15-minute access token is short enough that this check can be cached briefly without making "immediately" a lie, and long enough that the refresh path is not on every request.
 

@@ -266,19 +266,22 @@ export class TokensService {
         .where('revoked_at', 'is', null)
         .execute();
 
-      // Stamped *after* the revocation, deliberately. A rotation running
-      // alongside this inserts its replacement while that statement waits on the
-      // row lock, so the replacement is never revoked by it -- and a marker read
-      // before the statement would sort *earlier* than that replacement's
-      // issued_at, leaving it alive. Read afterwards, the marker dominates
-      // anything that escaped, and `refresh` refuses it.
+      // Stamped *after* the tokens are revoked, deliberately, and read here
+      // rather than earlier: a timestamp computed before a statement that then
+      // waits on a lock carries a pre-wait reading, which is how the marker once
+      // came to sort before tokens it was meant to kill.
       //
-      // The cost is that a sign-in racing a revocation is also killed. That is
-      // the right direction: section 6 says revocation invalidates every session
-      // immediately, and a session begun in that instant is one of them.
-      // Read here rather than earlier: a timestamp computed before a statement
-      // that then waits on a lock carries a pre-wait reading, which is how the
-      // marker came to sort before tokens it was meant to kill.
+      // What the ordering catches is a sign-in, not a rotation. A rotation cannot
+      // run alongside this at all -- the account row taken above excludes it --
+      // but `issueRefreshToken` takes no account lock, and the foreign key's
+      // FOR KEY SHARE does not conflict with the FOR NO KEY UPDATE held here. So
+      // a sign-in can insert its row after the statement above took its snapshot,
+      // and a marker read afterwards is what dominates it.
+      //
+      // A sign-in landing after this timestamp is read survives the revocation,
+      // and section 6 says so rather than leaving it to the lock mode: the marker
+      // is the boundary, and revocation ends the sessions that existed rather
+      // than barring the next sign-in.
       const revokedAt = new Date();
 
       await trx

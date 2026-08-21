@@ -80,16 +80,16 @@ export class AuthService {
     }
 
     // Section 6 says revocation invalidates **every** token for the account,
-    // immediately. Revoking by row alone does not achieve that: a rotation
-    // committing alongside `revokeAllSessions` inserts its replacement after that
-    // statement has taken its snapshot, so the replacement is never seen and
-    // stays live for thirty days -- minting access tokens whose issued-at
-    // post-dates the revocation, which the guard then admits.
+    // immediately. Revoking by row alone does not achieve that. An access token
+    // carries no row to revoke at all, and a sign-in committing alongside
+    // `revokeAllSessions` can insert its row after that statement took its
+    // snapshot, since `issueRefreshToken` takes no account lock and so is not
+    // excluded by the one the revocation holds.
     //
-    // The marker closes it, as it does for access tokens, and both sides of this
-    // comparison are stamped by the application so that it spans one clock. A
-    // token issued before the account was revoked is dead whatever its own row
-    // says; one issued after is a new sign-in and is untouched.
+    // The marker closes both, and both sides of this comparison are stamped by
+    // the application so that it spans one clock. A token issued at or before the
+    // marker is dead whatever its own row says; one issued after it is a new
+    // session and is untouched, which is the boundary section 6 draws.
     if (account.sessions_revoked_at && row.issued_at <= account.sessions_revoked_at) {
       throw new ApiError(ApiErrorCode.UNAUTHENTICATED, 'Your session has ended. Sign in again.');
     }

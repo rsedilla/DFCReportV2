@@ -8,6 +8,7 @@ import { assignTo, createAccount, createPerson, createTestApp } from '../setup/f
 
 import type { INestApplication } from '@nestjs/common';
 import type { Kysely } from 'kysely';
+import type { IssuedRefreshToken } from '../../src/auth/tokens.service';
 import type { Database } from '../../src/database/schema';
 import type { TestAccount } from '../setup/fixtures';
 
@@ -319,11 +320,11 @@ describe('authentication (SKILL.md section 6)', () => {
     });
 
     it('kills a token that predates the revocation even if the row was missed', async () => {
-      // Revoking by row alone is not enough. A rotation committing alongside
-      // revokeAllSessions inserts its replacement after that statement took its
-      // snapshot, so the replacement is never seen and would otherwise stay live
-      // for thirty days. The marker is what closes it, exactly as it does for
-      // access tokens.
+      // Revoking by row alone is not enough. A sign-in committing alongside
+      // revokeAllSessions inserts its row after that statement took its snapshot
+      // -- issueRefreshToken takes no account lock, so the revocation does not
+      // exclude it -- and the row would otherwise stay live for thirty days. The
+      // marker is what closes it, exactly as it does for access tokens.
       const issued = await tokens.issueRefreshToken(account.id, 'Test phone');
 
       await request(app.getHttpServer())
@@ -402,6 +403,166 @@ describe('authentication (SKILL.md section 6)', () => {
         .where('revoked_at', 'is', null)
         .execute();
       expect(live.map((row) => row.id)).toEqual([issued.id]);
+    });
+
+    it('takes the account row before the tokens, in the order rotation takes them', async () => {
+      // What the previous fix got wrong, and the reason for this one. Rotation
+      // takes the account row and then claims its token. When revocation took the
+      // tokens first and stamped the marker second, the two paths held one pair
+      // of locks in opposite orders -- a cycle, which PostgreSQL breaks by
+      // aborting the side that began waiting first, normally the revocation. So
+      // `logout-all` answered 500 and every session stayed live, at exactly the
+      // moment somebody was trying to end them.
+      //
+      // Holding the account row and firing logout-all would not distinguish the
+      // two orders: the old order ended on `UPDATE accounts` and blocked there
+      // too. What distinguishes them is which row logout-all holds *while* it is
+      // blocked on the other. So hold a refresh_tokens row, fire logout-all, and
+      // probe the account row from a third connection.
+      const issued = await tokens.issueRefreshToken(account.id, 'Test phone');
+
+      const holder = new Client({ connectionString: process.env.DATABASE_URL });
+      const probe = new Client({ connectionString: process.env.DATABASE_URL });
+      await holder.connect();
+      await probe.connect();
+
+      let settled = false;
+      let logout: Promise<request.Response> | undefined;
+
+      try {
+        await holder.query('BEGIN');
+        // FOR NO KEY UPDATE conflicts with itself, and the revocation's UPDATE of
+        // a non-key column takes the same mode, so this is what it blocks on.
+        await holder.query('SELECT id FROM refresh_tokens WHERE id = $1 FOR NO KEY UPDATE', [
+          issued.id,
+        ]);
+
+        logout = request(app.getHttpServer())
+          .post('/api/v1/auth/logout-all')
+          .set('Authorization', `Bearer ${account.accessToken}`)
+          .then((response) => {
+            settled = true;
+            return response;
+          });
+
+        await new Promise((resolve) => setTimeout(resolve, 250));
+
+        // Blocked on the token this test holds, which is where it should be.
+        expect(settled).toBe(false);
+
+        // And holding the account row while it waits. NOWAIT raises 55P03 rather
+        // than queueing, so this reads the lock as held now rather than waiting
+        // out a timeout that would elapse under either order. Under the inverted
+        // order logout-all is blocked on refresh_tokens without having touched
+        // accounts at all, and this probe takes the row instead of failing.
+        await expect(
+          probe.query('SELECT id FROM accounts WHERE id = $1 FOR NO KEY UPDATE NOWAIT', [
+            account.id,
+          ]),
+        ).rejects.toMatchObject({ code: '55P03' });
+      } finally {
+        await holder.query('ROLLBACK').catch(() => undefined);
+        await holder.end();
+        await probe.end();
+        // Let the revocation finish before the test ends. An assertion failing
+        // above would otherwise leave it running into the next test's truncate,
+        // which takes ACCESS EXCLUSIVE and turns one red test into two.
+        await logout?.catch(() => undefined);
+      }
+
+      // Freed, it completes rather than aborting: one order, so no cycle to break.
+      expect(settled).toBe(true);
+      expect((await logout)?.status).toBe(204);
+
+      const live = await db
+        .selectFrom('refresh_tokens')
+        .select('id')
+        .where('account_id', '=', account.id)
+        .where('revoked_at', 'is', null)
+        .execute();
+      expect(live).toEqual([]);
+    });
+
+    it('stamps the marker after revoking, so a row that escaped is still refused', async () => {
+      // Section 6 states marker-last as a rule, and this is what it buys.
+      // `issueRefreshToken` takes no lock on the account -- the foreign key's
+      // FOR KEY SHARE does not conflict with the FOR NO KEY UPDATE the revocation
+      // holds -- so a sign-in can insert a row while the revoking statement is
+      // blocked. That row is invisible to the statement's snapshot and is never
+      // revoked, so the marker read afterwards is the only thing between it and
+      // thirty days of use.
+      //
+      // Read the marker before the revoking statement instead and it dates from
+      // earlier than the escapee's issued_at, and the escapee lives.
+      const held = await tokens.issueRefreshToken(account.id, 'Test phone');
+
+      const holder = new Client({ connectionString: process.env.DATABASE_URL });
+      await holder.connect();
+
+      let settled = false;
+      let logout: Promise<request.Response> | undefined;
+      let escapee: IssuedRefreshToken | undefined;
+
+      try {
+        await holder.query('BEGIN');
+        await holder.query('SELECT id FROM refresh_tokens WHERE id = $1 FOR NO KEY UPDATE', [
+          held.id,
+        ]);
+
+        logout = request(app.getHttpServer())
+          .post('/api/v1/auth/logout-all')
+          .set('Authorization', `Bearer ${account.accessToken}`)
+          .then((response) => {
+            settled = true;
+            return response;
+          });
+
+        await new Promise((resolve) => setTimeout(resolve, 250));
+        // Necessary but not sufficient: this proves the request has not finished,
+        // not that the revoking statement has taken its snapshot. On a loaded
+        // runner the escapee below can be inserted before that snapshot, get
+        // revoked with everything else, and red the `revoked_at` assertion at the
+        // end. That is the safe direction and the assertion is the thing stopping
+        // a trivial pass -- if it reds, make this wait deterministic rather than
+        // weakening it.
+        expect(settled).toBe(false);
+
+        // Through the ordinary path, while the revoking statement waits. Note
+        // that this is unbounded: were `revokeAllSessions` ever changed to take
+        // FOR UPDATE on the account -- the alternative CLAUDE.md records and
+        // rejects -- the insert's FOR KEY SHARE would block behind it, this await
+        // would never reach the `finally` that releases `holder`, and the file's
+        // remaining tests would block on the next truncate.
+        escapee = await tokens.issueRefreshToken(account.id, 'Second phone');
+      } finally {
+        await holder.query('ROLLBACK').catch(() => undefined);
+        await holder.end();
+        await logout?.catch(() => undefined);
+      }
+
+      expect((await logout)?.status).toBe(204);
+
+      if (!escapee) {
+        throw new Error('the escaping token was never issued');
+      }
+
+      // It genuinely escaped, so the assertion below cannot pass for the trivial
+      // reason. An UPDATE that waits on a row lock re-checks the row it waited
+      // for; it does not take a new snapshot, so a row committed since stays
+      // invisible to it.
+      const row = await db
+        .selectFrom('refresh_tokens')
+        .select('revoked_at')
+        .where('id', '=', escapee.id)
+        .executeTakeFirstOrThrow();
+      expect(row.revoked_at).toBeNull();
+
+      // And is refused anyway, on the marker alone.
+      const response = await request(app.getHttpServer())
+        .post('/api/v1/auth/refresh')
+        .send({ refresh_token: escapee.token });
+
+      expect(response.status).toBe(401);
     });
 
     it('lets a sign-in after a revocation work normally', async () => {

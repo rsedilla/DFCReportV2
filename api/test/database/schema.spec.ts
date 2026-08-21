@@ -9,14 +9,16 @@ import type { Database } from '../../src/database/schema';
 /**
  * An invariant that can be expressed as a database constraint must exist as a
  * database constraint (CLAUDE.md, Definition of Done). This suite checks that the
- * ones SKILL.md section 5 names are actually in the schema, by name, and that the
- * constraint trigger is deferred as section 4 requires.
+ * ones SKILL.md sections 4, 5, 6 and 7 name are actually in the schema, by name,
+ * and that the constraint trigger is deferred as section 4 requires. A rule
+ * stated as the *absence* of something — section 6's refusal of a database
+ * default on `issued_at` — is held here too, since nothing else can fail for it.
  *
  * The behavioural half is in `invariants.spec.ts`. Both are needed: a constraint
  * that exists but does not fire, and a rule that fires from application code with
  * no constraint behind it, look identical from a passing test of the other kind.
  */
-describe('the schema (SKILL.md sections 4, 5 and 7)', () => {
+describe('the schema (SKILL.md sections 4, 5, 6 and 7)', () => {
   let db: Kysely<Database>;
 
   beforeAll(() => {
@@ -118,6 +120,29 @@ describe('the schema (SKILL.md sections 4, 5 and 7)', () => {
     });
   });
 
+  describe('refresh_tokens', () => {
+    it('gives issued_at no default, because the absence is the enforcement', async () => {
+      // `issued_at` is compared against `accounts.sessions_revoked_at` and against
+      // a JWT's `iat`, both stamped by an API process (SKILL.md section 6), and
+      // that comparison decides whether a revoked session stays alive. `now()` is
+      // the database's clock, so a default here is a silent fallback to the wrong
+      // one for any writer that omits the column -- a backfill, a data fix, a
+      // future service.
+      //
+      // The rule is therefore stated as an absence, and an absence is what has to
+      // be held: a later migration adding `DEFAULT now()` back would reinstate the
+      // defect with the whole suite green. The TypeScript type covers only writers
+      // that go through the query builder, which is the gap this closes.
+      const column = await columnFacts(db, 'refresh_tokens', 'issued_at');
+
+      expect(column.default_expression).toBeNull();
+      // The other half. Without NOT NULL, a writer omitting the column inserts a
+      // null rather than failing, and every comparison against it is false -- so
+      // the token sorts on neither side of a revocation.
+      expect(column.not_null).toBe(true);
+    });
+  });
+
   describe('history is never deleted (principle 12)', () => {
     it.each([
       'person_lifecycle',
@@ -198,6 +223,35 @@ async function constraintDefinition(db: Kysely<Database>, name: string): Promise
   }
 
   return result.rows[0].definition;
+}
+
+async function columnFacts(
+  db: Kysely<Database>,
+  table: string,
+  column: string,
+): Promise<{ not_null: boolean; default_expression: string | null }> {
+  // Read from the catalog rather than information_schema.columns, whose
+  // column_default is null both for a column with no default and for one whose
+  // default the caller may not see -- and a test of an absence cannot use a
+  // source that reports absence for two different reasons. Throwing when the
+  // column is missing keeps a rename from reading as a passing absence.
+  const result = await sql<{ not_null: boolean; default_expression: string | null }>`
+    SELECT a.attnotnull                        AS not_null,
+           pg_get_expr(d.adbin, d.adrelid)     AS default_expression
+      FROM pg_attribute a
+      JOIN pg_class c ON c.oid = a.attrelid
+      LEFT JOIN pg_attrdef d ON d.adrelid = a.attrelid AND d.adnum = a.attnum
+     WHERE c.relname = ${table}
+       AND a.attname = ${column}
+       AND a.attnum > 0
+       AND NOT a.attisdropped
+  `.execute(db);
+
+  if (result.rows.length === 0) {
+    throw new Error(`column ${table}.${column} does not exist`);
+  }
+
+  return result.rows[0];
 }
 
 async function triggerFacts(
