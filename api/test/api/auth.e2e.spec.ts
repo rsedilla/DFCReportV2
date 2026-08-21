@@ -361,16 +361,31 @@ describe('authentication (SKILL.md section 6)', () => {
 
       try {
         await revoker.query('BEGIN');
-        await revoker.query('UPDATE accounts SET sessions_revoked_at = now() WHERE id = $1', [
+        // Stamped from this process, not with now(): the whole rule is that both
+        // sides of the comparison come from the application's clock, and a test
+        // using the database's would contradict what it is protecting.
+        await revoker.query('UPDATE accounts SET sessions_revoked_at = $2 WHERE id = $1', [
           account.id,
+          new Date(),
         ]);
 
+        let settled = false;
         const refresh = request(app.getHttpServer())
           .post('/api/v1/auth/refresh')
-          .send({ refresh_token: issued.token });
+          .send({ refresh_token: issued.token })
+          .then((response) => {
+            settled = true;
+            return response;
+          });
 
-        // Give the request time to reach the lock rather than race past it.
         await new Promise((resolve) => setTimeout(resolve, 250));
+
+        // The point of the test. Without the lock the rotation reads past the
+        // uncommitted marker and answers immediately -- and it would answer 401
+        // anyway once the marker commits, for an entirely different reason, so a
+        // test that only checked the status could pass with the lock removed.
+        expect(settled).toBe(false);
+
         await revoker.query('COMMIT');
 
         const response = await refresh;

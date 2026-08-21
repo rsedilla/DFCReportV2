@@ -97,14 +97,24 @@ export class AuthService {
     // The check above is the cheap early refusal and reads committed state only.
     // The authoritative one is inside the rotation, under a row lock on the
     // account, where a revocation still in flight cannot be missed.
-    const issued = await this.tokens.rotateRefreshToken(
+    const rotation = await this.tokens.rotateRefreshToken(
       row.id,
       account.id,
       deviceLabel,
       row.issued_at,
     );
 
-    if (!issued) {
+    if (rotation.outcome === 'revoked') {
+      // The account was revoked while this request was in flight, and the lock
+      // is what let this see it. Nothing further follows: the sessions are
+      // already gone, and this token was not consumed.
+      this.logger.debug(
+        `Refresh token ${row.id} belongs to a session revoked while the request was in flight.`,
+      );
+      throw new ApiError(ApiErrorCode.UNAUTHENTICATED, 'Your session has ended. Sign in again.');
+    }
+
+    if (rotation.outcome === 'claimed') {
       // Something claimed the token between the read above and here: another
       // refresh in flight at the same instant, or a sign-out a moment earlier.
       // Neither is a replay.
@@ -127,7 +137,7 @@ export class AuthService {
 
     return {
       access_token: this.tokens.issueAccessToken(account.id, account.person_id),
-      refresh_token: issued.token,
+      refresh_token: rotation.issued.token,
       token_type: 'Bearer',
       expires_in: ACCESS_TOKEN_TTL_SECONDS,
     };

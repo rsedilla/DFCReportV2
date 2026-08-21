@@ -630,7 +630,14 @@ CREATE TABLE refresh_tokens (
   -- signal, and the chain is what makes the whole chain revocable in response
   -- (section 6).
   replaced_by_id uuid REFERENCES refresh_tokens (id),
-  issued_at timestamptz NOT NULL DEFAULT now(),
+  -- No default, deliberately. `issued_at` is compared against
+  -- `accounts.sessions_revoked_at` and against a JWT's `iat`, both stamped by an
+  -- API process, and `now()` is the database's clock. A default here is a silent
+  -- fallback to the wrong clock for any writer that omits the column -- a
+  -- backfill, a data fix, a future service -- and the comparison decides whether
+  -- a revoked session stays alive. Requiring it is the enforcement; the
+  -- TypeScript type only covers writers that go through the query builder.
+  issued_at timestamptz NOT NULL,
   expires_at timestamptz NOT NULL,
   last_used_at timestamptz,
   revoked_at timestamptz,

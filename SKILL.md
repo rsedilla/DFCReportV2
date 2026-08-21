@@ -691,7 +691,7 @@ refresh_tokens
 - token_hash         the token itself is never stored
 - device_label       nullable, for the user's own sign-out list
 - replaced_by_id     nullable, the token issued when this one was rotated
-- issued_at
+- issued_at          stamped by the API process, never by the database
 - expires_at
 - last_used_at       nullable
 - revoked_at         nullable
@@ -702,6 +702,14 @@ An access token lives **15 minutes**. A refresh token lives 30 days from issue a
 `replaced_by_id` is what makes that signal readable, and it is set by rotation and by nothing else. It governs what happens when a revoked token is *presented*: one carrying a replacement was rotated, so presenting it again is a reuse signal; one without was revoked by a sign-out or by an account-wide revocation, and is simply refused. Without the column those cases are indistinguishable, and an ordinary sign-out looks exactly like a stolen token.
 
 It is not a classification of every revoked row. Account-wide revocation leaves the same shape as a sign-out, deliberately: nothing needs to escalate a token whose account has already been revoked.
+
+**Two rules make immediate revocation hold, and both are easy to lose.**
+
+`issued_at` is **stamped by the API process**, not by a database default. It is compared against `sessions_revoked_at` and against an access token's issued-at, both of which the API stamps, and the database's clock is a different one. A token sitting on the wrong side of that comparison is a session that outlives its revocation, or a sign-in refused for no reason.
+
+**Rotation is ordered against revocation in the database, not in the application.** A rotation takes the account row under a lock before it claims a token, and re-reads the marker there. Checking the marker before opening the transaction is not enough: that read sees committed state, so a revocation that has stamped its marker and not yet committed reads as absent, and a token can be rotated in that window into a replacement the revocation never sees.
+
+Revocation takes the same row, in the same order, first. Two paths taking one pair of locks in opposite orders deadlock, and the loser is normally the revocation — which would mean the one operation that must not fail silently failing silently.
 
 **Simultaneous presentation is not reuse.** Where two requests present the same live refresh token at the same instant, one wins the rotation and the other is refused — and that is all. The winner's session is untouched and no account-wide revocation follows.
 
@@ -2752,7 +2760,7 @@ Do not build offline complexity before it is needed. Do not make architectural c
 - A restore tested before go-live, and at least annually thereafter
 - Audit logging
 - Least-privilege database/application credentials
-- **Synchronised clocks on every host running the API.** Account-wide revocation compares a token's issued-at against the account's revocation marker, and both are stamped by an API process (Section 6). On more than one instance those are two clocks, and skew moves tokens across the boundary in both directions — admitting a token that should be dead, or refusing a sign-in that should work. Ordinary NTP is sufficient; the requirement is that it is not left to chance
+- **Synchronised clocks on every host running the API.** Account-wide revocation compares a token's issued-at against the account's revocation marker, and Section 6 requires both to be stamped by an API process. On more than one instance those are two clocks, and skew moves tokens across the boundary in both directions — admitting a token that should be dead, or refusing a sign-in that should work. Ordinary NTP is sufficient; the requirement is that it is not left to chance
 
 ### Backups
 
