@@ -47,6 +47,7 @@ Four rulings were forced by building it, each recorded in `CLAUDE.md` and amende
 - Networks, effective-dated (§4)
 - Pastoral assignments, with all five invariants enforced in the domain layer and in the database (§5)
 - Accounts: provisioning, activation, password reset (§6), and the email provider adapter behind it
+- **The domain half of the `SENIOR_PASTOR` rule** (§7): the database caps the count at two, and `auth` checks that the two are the Persons §4 names. The check had no owning stage until now
 - The first real screens, and with them the UI libraries recorded in `CLAUDE.md`, and axe-core in CI over every route (`SKILL.md` §23, WCAG 2.2 AA)
 - **`audit_log`** (§21) and **`idempotency_keys`** (§22), with the first write endpoint
 - **Import the leadership tree**, through the dry-run, adjudicate, commit flow (`SKILL.md` §2, Initial data load)

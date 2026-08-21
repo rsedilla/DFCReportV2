@@ -84,6 +84,12 @@ export interface AccountRolesTable {
   id: Generated<string>;
   account_id: string;
   role: AccountRole;
+  /**
+   * One of the two Senior Pastor slots (SKILL.md section 7). Required where the
+   * role is SENIOR_PASTOR and null otherwise; a partial unique index over it is
+   * what caps the role at the two Persons section 4 names.
+   */
+  senior_pastor_slot: number | null;
   granted_by: string | null;
   granted_at: ServerTimestamp;
   revoked_at: Date | null;
@@ -96,8 +102,10 @@ export interface CapabilityGrantsTable {
   scope_type: ScopeTypeValue;
   scope_network: NetworkName | null;
   read_only: Generated<boolean>;
-  reason: string | null;
-  granted_by: string | null;
+  /** Required. A grant explains itself (SKILL.md section 7). */
+  reason: string;
+  /** Required. An explicit grant is always issued by an Admin. */
+  granted_by: string;
   granted_at: ServerTimestamp;
   revoked_at: Date | null;
 }
@@ -108,7 +116,13 @@ export interface RefreshTokensTable {
   token_hash: string;
   device_label: string | null;
   replaced_by_id: string | null;
-  issued_at: ServerTimestamp;
+  /**
+   * Written by the application, never left to the column default. It is compared
+   * against `accounts.sessions_revoked_at` and against a JWT's `iat`, both of
+   * which the application stamps, and the database's clock is a different one.
+   * Required on insert so the compiler holds that at every path.
+   */
+  issued_at: ColumnType<Date, Date, Date>;
   expires_at: ColumnType<Date, Date | string, Date | string>;
   last_used_at: Date | null;
   revoked_at: Date | null;

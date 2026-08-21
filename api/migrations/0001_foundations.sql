@@ -433,6 +433,53 @@ CREATE CONSTRAINT TRIGGER network_assignments_keep_edges_same_network
   FOR EACH ROW EXECUTE FUNCTION assert_network_change_keeps_edges();
 
 -- ---------------------------------------------------------------------------
+-- History is never deleted (SKILL.md section 1, principle 12; section 5)
+--
+-- Principle 12 preserves history and section 5 says an effective-dated row is
+-- never overwritten in place. Neither said anything about DELETE, and until this
+-- trigger the schema permitted it -- which made it the one path around every
+-- other constraint in this file.
+--
+-- The same-Network triggers fire on insert and update. Deleting a person's
+-- current network_assignments row makes network_as_of resolve to an older row,
+-- or to none, from that instant forward: every open pastoral edge beneath them
+-- becomes cross-Network, no trigger fires, and nothing revisits it. Section 5
+-- puts these rules in the database precisely because "the first data-fix script
+-- written directly against the database bypasses every one of them", and a
+-- DELETE is that script.
+--
+-- A row entered in error is corrected by closing it and opening the right one,
+-- which is what effective dating is for. Removing it destroys the answer to a
+-- question about a past period, which is the thing the table exists to answer.
+--
+-- TRUNCATE fires no row triggers and is deliberately still permitted: it is how
+-- the test suite resets between cases, and it cannot be reached by the
+-- application, which holds no rights to it.
+-- ---------------------------------------------------------------------------
+
+CREATE FUNCTION refuse_delete_of_history() RETURNS trigger
+LANGUAGE plpgsql AS $$
+BEGIN
+  RAISE EXCEPTION
+    'rows of %.% are never deleted: close the row and open a new one (SKILL.md principle 12)',
+    TG_TABLE_SCHEMA, TG_TABLE_NAME
+    USING ERRCODE = 'restrict_violation';
+END;
+$$;
+
+CREATE TRIGGER person_lifecycle_no_delete
+  BEFORE DELETE ON person_lifecycle
+  FOR EACH ROW EXECUTE FUNCTION refuse_delete_of_history();
+
+CREATE TRIGGER network_assignments_no_delete
+  BEFORE DELETE ON network_assignments
+  FOR EACH ROW EXECUTE FUNCTION refuse_delete_of_history();
+
+CREATE TRIGGER pastoral_assignments_no_delete
+  BEFORE DELETE ON pastoral_assignments
+  FOR EACH ROW EXECUTE FUNCTION refuse_delete_of_history();
+
+-- ---------------------------------------------------------------------------
 -- account_roles (SKILL.md section 7, How grants are held)
 -- ---------------------------------------------------------------------------
 
@@ -462,40 +509,45 @@ CREATE INDEX account_roles_active_by_account
 -- SENIOR_PASTOR is held by exactly the two Persons named in section 4, and by
 -- nobody else; granting it to a third account is rejected. Section 7 says that is
 -- a constraint the system enforces rather than a convention it assumes, so the
--- cap lives here rather than only in a service.
+-- cap is a unique index rather than a check that runs.
 --
 -- The role carries Whole Church scope on people.manage_lifecycle,
 -- people.manage_pastoral_assignment and audit.view, which is why a third holder
 -- matters: it is the widest authority in the church.
 --
+-- The slot is what makes the cap expressible as an index. Two slots exist, a
+-- holder occupies one, and the partial unique index below permits no second
+-- occupant of either. A counting trigger was tried first and rejected: even made
+-- race-free with an advisory lock, a constraint trigger is skipped entirely under
+-- `pg_restore --disable-triggers`, so a restore could load a third Senior Pastor
+-- in silence. A unique index is enforced there. The restore is exactly the moment
+-- nobody is watching.
+--
 -- This enforces the count. Which two Persons hold it is checked in the `auth`
 -- domain layer, because the database has no durable representation of who
 -- Bishop Oriel and Pastora Geraldine are.
-CREATE FUNCTION assert_two_senior_pastors_at_most() RETURNS trigger
-LANGUAGE plpgsql AS $$
-DECLARE
-  v_active integer;
-BEGIN
-  SELECT count(*) INTO v_active
-    FROM account_roles
-   WHERE role = 'SENIOR_PASTOR'
-     AND revoked_at IS NULL;
+ALTER TABLE account_roles
+  ADD COLUMN senior_pastor_slot smallint,
+  ADD CONSTRAINT account_roles_slot_belongs_to_the_role
+    CHECK (
+      -- `IS NOT NULL` is load-bearing and is not redundant with `IN (1, 2)`.
+      -- A CHECK fails only on FALSE, and passes on NULL. Without this clause, a
+      -- SENIOR_PASTOR row with a null slot evaluates to NULL OR FALSE, which is
+      -- NULL, which is accepted -- and null slots do not conflict in the unique
+      -- index below, because nulls are distinct. The cap would then permit any
+      -- number of Senior Pastors, which is weaker than the counting trigger this
+      -- design replaced.
+      (
+        role = 'SENIOR_PASTOR'
+        AND senior_pastor_slot IS NOT NULL
+        AND senior_pastor_slot IN (1, 2)
+      )
+      OR (role <> 'SENIOR_PASTOR' AND senior_pastor_slot IS NULL)
+    );
 
-  IF v_active > 2 THEN
-    RAISE EXCEPTION
-      'SENIOR_PASTOR is held by exactly the two Persons named in SKILL.md section 4 (% active rows)',
-      v_active
-      USING ERRCODE = 'check_violation';
-  END IF;
-
-  RETURN NULL;
-END;
-$$;
-
-CREATE CONSTRAINT TRIGGER account_roles_two_senior_pastors_at_most
-  AFTER INSERT OR UPDATE ON account_roles
-  DEFERRABLE INITIALLY DEFERRED
-  FOR EACH ROW EXECUTE FUNCTION assert_two_senior_pastors_at_most();
+CREATE UNIQUE INDEX account_roles_one_senior_pastor_per_slot
+  ON account_roles (senior_pastor_slot)
+  WHERE revoked_at IS NULL;
 
 -- ---------------------------------------------------------------------------
 -- capability_grants (SKILL.md section 7, How grants are held)
@@ -551,6 +603,19 @@ CREATE INDEX capability_grants_active_by_account
   ON capability_grants (account_id, capability)
   WHERE revoked_at IS NULL;
 
+-- The same rule as the effective-dated tables above, and section 7 states it for
+-- these two directly: "A grant is revoked by setting `revoked_at`, never by
+-- deleting the row. The history of who could do what, and when, is part of the
+-- audit record." A DELETE here removes the record that somebody once held Whole
+-- Church authority.
+CREATE TRIGGER account_roles_no_delete
+  BEFORE DELETE ON account_roles
+  FOR EACH ROW EXECUTE FUNCTION refuse_delete_of_history();
+
+CREATE TRIGGER capability_grants_no_delete
+  BEFORE DELETE ON capability_grants
+  FOR EACH ROW EXECUTE FUNCTION refuse_delete_of_history();
+
 -- ---------------------------------------------------------------------------
 -- refresh_tokens (SKILL.md section 6, Session and token storage)
 -- ---------------------------------------------------------------------------
@@ -565,7 +630,14 @@ CREATE TABLE refresh_tokens (
   -- signal, and the chain is what makes the whole chain revocable in response
   -- (section 6).
   replaced_by_id uuid REFERENCES refresh_tokens (id),
-  issued_at timestamptz NOT NULL DEFAULT now(),
+  -- No default, deliberately. `issued_at` is compared against
+  -- `accounts.sessions_revoked_at` and against a JWT's `iat`, both stamped by an
+  -- API process, and `now()` is the database's clock. A default here is a silent
+  -- fallback to the wrong clock for any writer that omits the column -- a
+  -- backfill, a data fix, a future service -- and the comparison decides whether
+  -- a revoked session stays alive. Requiring it is the enforcement; the
+  -- TypeScript type only covers writers that go through the query builder.
+  issued_at timestamptz NOT NULL,
   expires_at timestamptz NOT NULL,
   last_used_at timestamptz,
   revoked_at timestamptz,
@@ -598,22 +670,33 @@ CREATE UNIQUE INDEX account_tokens_one_outstanding
   ON account_tokens (account_id, purpose)
   WHERE used_at IS NULL;
 
--- migrate:down:refuse-if-populated persons pastoral_assignments network_assignments person_lifecycle accounts
+-- migrate:down:refuse-if-populated persons person_lifecycle network_assignments pastoral_assignments accounts account_roles capability_grants refresh_tokens account_tokens
 
 -- This down drops the tables it created, so it is safe only while they are
 -- empty. The directive above is not a comment: the runner refuses to apply this
 -- section if any table named there holds a row, and says so rather than
--- executing. CLAUDE.md is unambiguous that history in these tables is never
+-- executing.
+--
+-- It names every table this section drops, not only the ones holding Persons.
+-- Section 7 is explicit that grant history is audit material -- "the history of
+-- who could do what, and when, is part of the audit record" -- so a database with
+-- roles and grants but no Persons, which is exactly the state after the first
+-- Admin is provisioned, must not revert silently either. CLAUDE.md is unambiguous that history in these tables is never
 -- dropped, and an operator reaching for `migrate:down` on a populated database
 -- is reaching for the wrong tool.
 
 DROP TABLE IF EXISTS account_tokens;
 DROP TABLE IF EXISTS refresh_tokens;
+DROP TRIGGER IF EXISTS capability_grants_no_delete ON capability_grants;
+DROP TRIGGER IF EXISTS account_roles_no_delete ON account_roles;
+
 DROP TABLE IF EXISTS capability_grants;
 DROP TABLE IF EXISTS account_roles;
 
-DROP TRIGGER IF EXISTS account_roles_two_senior_pastors_at_most ON account_roles;
-DROP FUNCTION IF EXISTS assert_two_senior_pastors_at_most();
+DROP TRIGGER IF EXISTS person_lifecycle_no_delete ON person_lifecycle;
+DROP TRIGGER IF EXISTS network_assignments_no_delete ON network_assignments;
+DROP TRIGGER IF EXISTS pastoral_assignments_no_delete ON pastoral_assignments;
+DROP FUNCTION IF EXISTS refuse_delete_of_history();
 
 DROP TRIGGER IF EXISTS network_assignments_keep_edges_same_network ON network_assignments;
 DROP TRIGGER IF EXISTS pastoral_assignments_same_network ON pastoral_assignments;

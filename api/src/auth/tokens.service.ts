@@ -31,6 +31,19 @@ export interface IssuedRefreshToken {
   expiresAt: Date;
 }
 
+/**
+ * Why a rotation did not produce a token, when it did not.
+ *
+ * The two refusals are different facts and an operator reading a log during an
+ * incident needs to know which happened: `claimed` is another request winning the
+ * same instant and nothing else follows, while `revoked` means the account was
+ * revoked under the lock and the session is gone.
+ */
+export type RotationOutcome =
+  | { outcome: 'rotated'; issued: IssuedRefreshToken }
+  | { outcome: 'claimed' }
+  | { outcome: 'revoked' };
+
 @Injectable()
 export class TokensService {
   constructor(
@@ -65,7 +78,8 @@ export class TokensService {
     deviceLabel: string | null,
   ): Promise<IssuedRefreshToken> {
     const token = randomBytes(32).toString('base64url');
-    const expiresAt = new Date(Date.now() + REFRESH_TOKEN_TTL_DAYS * 24 * 60 * 60 * 1000);
+    const issuedAt = new Date();
+    const expiresAt = new Date(issuedAt.getTime() + REFRESH_TOKEN_TTL_DAYS * 24 * 60 * 60 * 1000);
 
     const row = await this.db
       .insertInto('refresh_tokens')
@@ -73,6 +87,13 @@ export class TokensService {
         account_id: accountId,
         token_hash: hashToken(token),
         device_label: deviceLabel,
+        // Written explicitly rather than left to the column default. `issued_at`
+        // is compared against `accounts.sessions_revoked_at`, which the
+        // application stamps, and against a JWT's `iat`, which it also stamps.
+        // Leaving this one to the database's clock made that comparison span two
+        // clocks, so a token could sit on the wrong side of a revocation by
+        // whatever the two disagreed by.
+        issued_at: issuedAt,
         expires_at: expiresAt,
       })
       .returning('id')
@@ -84,26 +105,132 @@ export class TokensService {
   async findRefreshToken(token: string): Promise<{
     id: string;
     account_id: string;
+    issued_at: Date;
     expires_at: Date;
     revoked_at: Date | null;
     replaced_by_id: string | null;
   } | null> {
     const row = await this.db
       .selectFrom('refresh_tokens')
-      .select(['id', 'account_id', 'expires_at', 'revoked_at', 'replaced_by_id'])
+      .select(['id', 'account_id', 'issued_at', 'expires_at', 'revoked_at', 'replaced_by_id'])
       .where('token_hash', '=', hashToken(token))
       .executeTakeFirst();
 
     return row ?? null;
   }
 
-  async revokeRefreshToken(id: string, replacedById: string | null): Promise<void> {
-    await this.db
+  /**
+   * Revokes a token, and reports whether this call is the one that did it.
+   *
+   * Sign-out only. It never sets `replaced_by_id`, which is what keeps the two
+   * facts distinguishable: a token carrying a replacement was rotated, and one
+   * without was signed out.
+   *
+   * The `revoked_at is null` clause is load-bearing twice over. It stops a
+   * sign-out touching a token that was already rotated, which would blur that
+   * distinction; and it makes the claim exclusive, so exactly one of two racing
+   * callers gets a row back.
+   */
+  async revokeRefreshToken(id: string): Promise<boolean> {
+    const now = new Date();
+    const revoked = await this.db
       .updateTable('refresh_tokens')
-      .set({ revoked_at: new Date(), last_used_at: new Date(), replaced_by_id: replacedById })
+      .set({ revoked_at: now, last_used_at: now })
       .where('id', '=', id)
       .where('revoked_at', 'is', null)
-      .execute();
+      .returning('id')
+      .executeTakeFirst();
+
+    return revoked !== undefined;
+  }
+
+  /**
+   * Rotation, as one transaction: claim the presented token, then issue its
+   * replacement.
+   *
+   * The order matters and so does the claim. Issuing first and revoking second --
+   * two statements, the row count discarded -- let two requests presenting the
+   * same token concurrently both read it live, both mint a replacement, and only
+   * one revoke land. Two live chains from one presentation, and the reuse signal
+   * section 6 requires never raised for the loser. That is the exact window
+   * rotation exists to close.
+   *
+   * Returns null where the token was already claimed, which the caller treats as
+   * the reuse case.
+   */
+  async rotateRefreshToken(
+    id: string,
+    accountId: string,
+    deviceLabel: string | null,
+    presentedIssuedAt: Date,
+  ): Promise<RotationOutcome> {
+    return this.db.transaction().execute(async (trx) => {
+      // Take the account row first, and lock it.
+      //
+      // Checking the revocation marker before opening this transaction is not
+      // enough, and the reason is worth stating: that read sees committed state
+      // only, so a revocation that has stamped the marker but not yet committed
+      // reads as absent. A token that escaped the revoking UPDATE could then be
+      // rotated in that window into a replacement issued *after* the marker,
+      // which every later check would accept. Thirty days of a session that was
+      // revoked.
+      //
+      // The lock orders this rotation against the revocation in the database
+      // rather than in the application: if a revocation is in flight, this waits
+      // for it and then sees its marker. Nothing about the two clocks matters
+      // for the ordering, only for the comparison.
+      const account = await trx
+        .selectFrom('accounts')
+        .select(['sessions_revoked_at'])
+        .where('id', '=', accountId)
+        .forNoKeyUpdate()
+        .executeTakeFirst();
+
+      if (!account) {
+        return { outcome: 'revoked' };
+      }
+
+      if (account.sessions_revoked_at && presentedIssuedAt <= account.sessions_revoked_at) {
+        return { outcome: 'revoked' };
+      }
+
+      const now = new Date();
+      const claimed = await trx
+        .updateTable('refresh_tokens')
+        .set({ revoked_at: now, last_used_at: now })
+        .where('id', '=', id)
+        .where('revoked_at', 'is', null)
+        .returning('id')
+        .executeTakeFirst();
+
+      if (!claimed) {
+        return { outcome: 'claimed' };
+      }
+
+      const token = randomBytes(32).toString('base64url');
+      const issuedAt = new Date();
+      const expiresAt = new Date(issuedAt.getTime() + REFRESH_TOKEN_TTL_DAYS * 24 * 60 * 60 * 1000);
+
+      const issued = await trx
+        .insertInto('refresh_tokens')
+        .values({
+          account_id: accountId,
+          token_hash: hashToken(token),
+          device_label: deviceLabel,
+          issued_at: issuedAt,
+          expires_at: expiresAt,
+        })
+        .returning('id')
+        .executeTakeFirstOrThrow();
+
+      await trx
+        .updateTable('refresh_tokens')
+        .set({ replaced_by_id: issued.id })
+        .where('id', '=', id)
+        .execute();
+
+      return { outcome: 'rotated', issued: { id: issued.id, token, expiresAt } };
+    });
   }
 
   /**
@@ -115,19 +242,51 @@ export class TokensService {
    * tokens already out there, which carry no row of their own to revoke.
    */
   async revokeAllSessions(accountId: string): Promise<void> {
-    const now = new Date();
-
     await this.db.transaction().execute(async (trx) => {
+      // The account row first, and for the same reason rotation takes it first:
+      // so that both paths take these two locks in the same order.
+      //
+      // Taking `refresh_tokens` first inverted it. A rotation holding the account
+      // row and about to claim its token, against a revocation holding that token
+      // and about to stamp the marker, is a cycle -- and PostgreSQL aborts the
+      // side that began waiting first, which is normally this one. The revocation
+      // then does not happen at all: `logout-all` answers 500 and every session
+      // stays live, at exactly the moment somebody is trying to end them.
+      await trx
+        .selectFrom('accounts')
+        .select('id')
+        .where('id', '=', accountId)
+        .forNoKeyUpdate()
+        .executeTakeFirst();
+
       await trx
         .updateTable('refresh_tokens')
-        .set({ revoked_at: now })
+        .set({ revoked_at: new Date() })
         .where('account_id', '=', accountId)
         .where('revoked_at', 'is', null)
         .execute();
 
+      // Stamped *after* the tokens are revoked, deliberately, and read here
+      // rather than earlier: a timestamp computed before a statement that then
+      // waits on a lock carries a pre-wait reading, which is how the marker once
+      // came to sort before tokens it was meant to kill.
+      //
+      // What the ordering catches is a sign-in, not a rotation. A rotation cannot
+      // run alongside this at all -- the account row taken above excludes it --
+      // but `issueRefreshToken` takes no account lock, and the foreign key's
+      // FOR KEY SHARE does not conflict with the FOR NO KEY UPDATE held here. So
+      // a sign-in can insert its row after the statement above took its snapshot,
+      // and a marker read afterwards is what dominates it.
+      //
+      // A sign-in landing after this timestamp is read survives the revocation,
+      // and section 6 says so rather than leaving it to the lock mode: the marker
+      // is the boundary, and revocation ends the sessions that existed rather
+      // than barring the next sign-in.
+      const revokedAt = new Date();
+
       await trx
         .updateTable('accounts')
-        .set({ sessions_revoked_at: now })
+        .set({ sessions_revoked_at: revokedAt })
         .where('id', '=', accountId)
         .execute();
     });

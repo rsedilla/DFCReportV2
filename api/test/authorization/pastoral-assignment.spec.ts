@@ -141,10 +141,15 @@ describe('reassigning a pastoral leader (SKILL.md section 5)', () => {
     await assignTo(db, cely.id, geraldine.id);
 
     raymondAccount = await createAccount(app, db, { person: raymond, roles: ['LEADER'] });
-    orielAccount = await createAccount(app, db, { person: oriel, roles: ['SENIOR_PASTOR'] });
+    orielAccount = await createAccount(app, db, {
+      person: oriel,
+      roles: ['SENIOR_PASTOR'],
+      seniorPastorSlot: 1,
+    });
     geraldineAccount = await createAccount(app, db, {
       person: geraldine,
       roles: ['SENIOR_PASTOR'],
+      seniorPastorSlot: 2,
     });
     adminAccount = await createAccount(app, db, {
       person: await createPerson(db, { firstName: 'Ester', network: 'WOMENS' }),
@@ -187,7 +192,7 @@ describe('reassigning a pastoral leader (SKILL.md section 5)', () => {
 
     expect(response.status).toBe(403);
     expect(response.body.error.code).toBe('SCOPE_DENIED');
-    await expectLeaderUnchanged(raymond.id, oriel.id);
+    await expectLeaderUnchanged(raymond.id, ben.id);
   });
 
   it('4. refuses to let a leader change the assignment of anyone upline of them', async () => {

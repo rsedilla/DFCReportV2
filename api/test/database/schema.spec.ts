@@ -9,14 +9,16 @@ import type { Database } from '../../src/database/schema';
 /**
  * An invariant that can be expressed as a database constraint must exist as a
  * database constraint (CLAUDE.md, Definition of Done). This suite checks that the
- * ones SKILL.md section 5 names are actually in the schema, by name, and that the
- * constraint trigger is deferred as section 4 requires.
+ * ones SKILL.md sections 4, 5, 6 and 7 name are actually in the schema, by name,
+ * and that the constraint trigger is deferred as section 4 requires. A rule
+ * stated as the *absence* of something — section 6's refusal of a database
+ * default on `issued_at` — is held here too, since nothing else can fail for it.
  *
  * The behavioural half is in `invariants.spec.ts`. Both are needed: a constraint
  * that exists but does not fire, and a rule that fires from application code with
  * no constraint behind it, look identical from a passing test of the other kind.
  */
-describe('the schema (SKILL.md sections 4, 5 and 7)', () => {
+describe('the schema (SKILL.md sections 4, 5, 6 and 7)', () => {
   let db: Kysely<Database>;
 
   beforeAll(() => {
@@ -95,10 +97,70 @@ describe('the schema (SKILL.md sections 4, 5 and 7)', () => {
   });
 
   describe('account_roles', () => {
-    it('caps SENIOR_PASTOR at the two Persons section 4 names', async () => {
-      const trigger = await triggerFacts(db, 'account_roles_two_senior_pastors_at_most');
+    it('caps SENIOR_PASTOR with an index, not a check that runs', async () => {
+      // A constraint trigger is skipped under `pg_restore --disable-triggers`; a
+      // unique index is not. The restore is exactly when nobody is watching.
+      const index = await indexDefinition(db, 'account_roles_one_senior_pastor_per_slot');
 
-      expect(trigger.is_constraint_trigger).toBe(true);
+      expect(index).toMatch(/CREATE UNIQUE INDEX/i);
+      expect(index).toMatch(/\(senior_pastor_slot\)/i);
+      expect(index).toMatch(/WHERE \(revoked_at IS NULL\)/i);
+    });
+
+    it('ties the slot to the role, and refuses a null slot explicitly', async () => {
+      const constraint = await constraintDefinition(db, 'account_roles_slot_belongs_to_the_role');
+
+      expect(constraint).toMatch(/CHECK/i);
+      expect(constraint).toMatch(/senior_pastor_slot/i);
+      // Not redundant with `IN (1, 2)`: a CHECK passes on NULL, so without this
+      // the cap admits any number of slotless Senior Pastors. The behavioural
+      // proof is in invariants.spec.ts; this holds the constraint's shape so a
+      // rewrite cannot quietly drop it.
+      expect(constraint).toMatch(/senior_pastor_slot IS NOT NULL/i);
+    });
+  });
+
+  describe('refresh_tokens', () => {
+    it('gives issued_at no default, because the absence is the enforcement', async () => {
+      // `issued_at` is compared against `accounts.sessions_revoked_at` and against
+      // a JWT's `iat`, both stamped by an API process (SKILL.md section 6), and
+      // that comparison decides whether a revoked session stays alive. `now()` is
+      // the database's clock, so a default here is a silent fallback to the wrong
+      // one for any writer that omits the column -- a backfill, a data fix, a
+      // future service.
+      //
+      // The rule is therefore stated as an absence, and an absence is what has to
+      // be held: a later migration adding `DEFAULT now()` back would reinstate the
+      // defect with the whole suite green. The TypeScript type covers only writers
+      // that go through the query builder, which is the gap this closes.
+      const column = await columnFacts(db, 'refresh_tokens', 'issued_at');
+
+      expect(column.default_expression).toBeNull();
+      // The other half. Without NOT NULL, a writer omitting the column inserts a
+      // null rather than failing, and every comparison against it is false -- so
+      // the token sorts on neither side of a revocation.
+      expect(column.not_null).toBe(true);
+    });
+  });
+
+  describe('history is never deleted (principle 12)', () => {
+    it.each([
+      'person_lifecycle',
+      'network_assignments',
+      'pastoral_assignments',
+      'account_roles',
+      'capability_grants',
+    ])('%s refuses a DELETE, before the row goes', async (table) => {
+      // Asserting only that a trigger of this name exists would pass for a
+      // trigger on INSERT that did nothing.
+      const trigger = await deleteTriggerFacts(db, `${table}_no_delete`);
+
+      expect(trigger.fires_on_delete).toBe(true);
+      expect(trigger.timing).toBe('BEFORE');
+      expect(trigger.per_row).toBe(true);
+      expect(trigger.enabled).toBe(true);
+      expect(trigger.table_name).toBe(table);
+      expect(trigger.function_name).toBe('refuse_delete_of_history');
     });
   });
 
@@ -163,6 +225,35 @@ async function constraintDefinition(db: Kysely<Database>, name: string): Promise
   return result.rows[0].definition;
 }
 
+async function columnFacts(
+  db: Kysely<Database>,
+  table: string,
+  column: string,
+): Promise<{ not_null: boolean; default_expression: string | null }> {
+  // Read from the catalog rather than information_schema.columns, whose
+  // column_default is null both for a column with no default and for one whose
+  // default the caller may not see -- and a test of an absence cannot use a
+  // source that reports absence for two different reasons. Throwing when the
+  // column is missing keeps a rename from reading as a passing absence.
+  const result = await sql<{ not_null: boolean; default_expression: string | null }>`
+    SELECT a.attnotnull                        AS not_null,
+           pg_get_expr(d.adbin, d.adrelid)     AS default_expression
+      FROM pg_attribute a
+      JOIN pg_class c ON c.oid = a.attrelid
+      LEFT JOIN pg_attrdef d ON d.adrelid = a.attrelid AND d.adnum = a.attnum
+     WHERE c.relname = ${table}
+       AND a.attname = ${column}
+       AND a.attnum > 0
+       AND NOT a.attisdropped
+  `.execute(db);
+
+  if (result.rows.length === 0) {
+    throw new Error(`column ${table}.${column} does not exist`);
+  }
+
+  return result.rows[0];
+}
+
 async function triggerFacts(
   db: Kysely<Database>,
   name: string,
@@ -178,6 +269,48 @@ async function triggerFacts(
       FROM pg_trigger
      WHERE tgname = ${name}
        AND NOT tgisinternal
+  `.execute(db);
+
+  if (result.rows.length === 0) {
+    throw new Error(`trigger ${name} does not exist`);
+  }
+
+  return result.rows[0];
+}
+
+async function deleteTriggerFacts(
+  db: Kysely<Database>,
+  name: string,
+): Promise<{
+  fires_on_delete: boolean;
+  timing: string;
+  function_name: string;
+  per_row: boolean;
+  enabled: boolean;
+  table_name: string;
+}> {
+  // Trigger names are per-relation in PostgreSQL, so matching on the name alone
+  // would pass for a trigger of the right name attached to the wrong table --
+  // and for one left disabled by ALTER TABLE ... DISABLE TRIGGER.
+  const result = await sql<{
+    fires_on_delete: boolean;
+    timing: string;
+    function_name: string;
+    per_row: boolean;
+    enabled: boolean;
+    table_name: string;
+  }>`
+    SELECT (t.tgtype & 8) <> 0   AS fires_on_delete,
+           (t.tgtype & 1) <> 0   AS per_row,
+           CASE WHEN (t.tgtype & 2) <> 0 THEN 'BEFORE' ELSE 'AFTER' END AS timing,
+           t.tgenabled IN ('O', 'A') AS enabled,
+           c.relname             AS table_name,
+           p.proname             AS function_name
+      FROM pg_trigger t
+      JOIN pg_proc p ON p.oid = t.tgfoid
+      JOIN pg_class c ON c.oid = t.tgrelid
+     WHERE t.tgname = ${name}
+       AND NOT t.tgisinternal
   `.execute(db);
 
   if (result.rows.length === 0) {

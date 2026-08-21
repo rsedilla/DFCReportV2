@@ -103,6 +103,8 @@ Name branches with a type prefix and a short description: `spec/cell-lifecycle`,
 
 **Run `architecture-guardian` before requesting human review**, not after. If the change meets any Mandatory Review condition above, run it yourself and resolve what it reports. Arriving at review with its findings already addressed is the point of having it; asking a reviewer to discover them is not.
 
+**Then run it again on what you changed in response.** A batch of fixes breaks something about as often as new writing does — measured on this repository, across four passes on two pull requests, every fix batch introduced defects of its own, including one that reinstated the exact failure the specification warns about. A review of the original that is not followed by a review of the fixes has checked the version nobody merged.
+
 A pull request needs one approval. Changes to `SKILL.md`, `CLAUDE.md`, and `.claude/` additionally require a code owner (`.github/CODEOWNERS`).
 
 Resolve every conversation before merging. Approvals are dismissed when new commits are pushed, so push fixes before asking for re-review.
@@ -172,6 +174,8 @@ npm run dev                          # http://localhost:3000
 There is no seed command. Section 2 of `SKILL.md` loads real data through the import flow rather than through fixtures, and test fixtures are built by the tests that need them.
 
 Migrations are plain `.sql` files in `api/migrations/`, applied in filename order by `api/scripts/migrate.ts`. Each holds a `-- migrate:up` and a `-- migrate:down` section, and an applied migration is checksummed: editing one that has already run is refused, because the file and the database would otherwise disagree with nothing to say so. Write a new migration instead.
+
+**One exception is in force and will end.** Until this schema is applied to a database anybody depends on, `0001_foundations.sql` may be corrected in place — see the ruling of 2026-08-21 below, which defines when the exception lapses. Rebuild your development database when the checksum refuses.
 
 ## Stop Conditions
 Stop and request architectural clarification rather than inventing a rule when:
@@ -557,9 +561,75 @@ Conformance is about perceiving and operating the interface, and licenses nothin
 
 The native clients are deliberately out of scope. Their framework is not chosen, and their equivalent obligation is the platform accessibility API rather than WCAG.
 
+### 2026-08-21 — Twelve findings from the Stage 1 verification, and why they existed
+`architecture-guardian` reviewed the Stage 1 branch **once, before its fixes**, and the branch was merged without re-running it on the eight fixes that review produced. A later pull request established that a fix batch introduces defects about as often as new writing does; a verification pass over merged `main` found twelve, four of them from that unreviewed batch.
+
+The lesson is procedural and is now written into Branches and pull requests above: **the review runs again on what the review produced.** Arriving at human review with findings addressed is the point; merging the addressing itself unreviewed gives that up.
+
+The four that were live defects:
+
+**A counting trigger is not a constraint.** The `SENIOR_PASTOR` cap counted active rows in a deferred trigger, and under READ COMMITTED neither of two concurrent transactions sees the other's uncommitted row — both count two, both commit, three Senior Pastors. This is the failure authorization case 7 exists to warn about, written while citing it. Fixed first with a transaction-scoped advisory lock, and then replaced by the slot column and its unique index (ruling below), which needs no lock and survives a restore.
+
+The reason first recorded for rejecting a `senior_pastor_slot` column — that §7 gives `account_roles` its shape and that shape has no slot — does not survive scrutiny. `refresh_tokens.replaced_by_id` was the counter-example, a column §6's shape did not list, added because a rule required it; that was drift rather than licence, and §6 now carries it. The point stands without the precedent: a shape is amended when a rule needs a column, deliberately and in the same change. The honest position is that the slot with a partial unique index is the **stronger** design, because a unique index is enforced under `pg_restore --disable-triggers` where a constraint trigger is skipped entirely. The lock closed the race; it did not close the restore path. The slot was adopted the same day — see the ruling below — and the trigger is gone.
+
+**Refresh-token rotation was not atomic.** Issue-then-revoke, in two statements, with the revoke's row count discarded — so two requests presenting one token could both mint a replacement while only one revoke landed, and the reuse signal §6 requires was never raised for the loser. Rotation now claims the presented token conditionally inside a transaction and treats a lost claim as reuse.
+
+**Authorization case 3 asserted a fact the tree no longer contained.** Inserting Ben to give case 4 a non-root upline left case 3 asserting Raymond's leader was Oriel. Masked while every case dies on a 404, and it would have blocked Stage 2's own exit criterion the moment the endpoint returned 403 — with the obvious temptation to weaken the assertion rather than fix it.
+
+**The migration guard had a silent off switch.** A file carrying a plain `-- migrate:down` line above the `refuse-if-populated` directive matched the plain one first and disabled the guard, with no error. The directive is now parsed on its own and its placement is checked. Its table list also named five of the nine tables the down drops, omitting the grant history §7 calls audit material.
+
+Also closed: an `-- migrate:irreversible` marker above the up marker recorded an empty migration as applied; the CI job for the eleven concluded success whatever happened, so "failing for the right reason" was asserted and never checked; and two rules — `granted_by` on a role, and `read_only` null for role authority — had no test holding them.
+
+### 2026-08-21 — Migration 0001 may be corrected in place until first deployment
+Twice now a defect in `0001_foundations.sql` has been fixed by editing the file rather than by writing a new migration, and both times the choice was made without being recorded. The Running the project section says an applied migration is checksummed and that editing one is refused, so this is either a ruling or it stops.
+
+**It is allowed, and the allowance ends at first deployment.** No durable database has applied 0001: CI builds the schema from empty on every run, and nothing is deployed anywhere. There is no history for a checksum to disagree with, and the alternative is beginning Stage 2 on a schema whose first migration is known to be wrong, carrying a corrective migration that exists only because of the order we happened to review in.
+
+The cost is real and accepted: a developer who applied 0001 locally sees `migrate:up` refuse the changed checksum and must rebuild their development database. That is a minute of work now and impossible later, which is the whole distinction.
+
+**The phase ends the first time this schema is applied to a database anybody depends on.** From that point 0001 is immutable and every correction is a new migration, as the migration policy says. This mirrors the initial-encoding relaxation in §2: a relaxation attached to a phase with no defined end is a permanent relaxation, so the end is defined here.
+
+### 2026-08-21 — Simultaneous presentation of a refresh token is not reuse
+Two requests presenting the same live refresh token at the same instant: one wins the rotation, the other is refused, and nothing else happens. The winner's session survives and no account-wide revocation follows.
+
+§6 defines the reuse signal as a presentation **after** use, and that case is unchanged — a token that already reads as revoked and carries a replacement still revokes every session on the account. Simultaneity is different: two calls hitting 401 together is what an ordinary mobile HTTP interceptor does, and treating it as theft signed a leader out of every device for behaving normally, on clients §2 says cannot be force-updated.
+
+The cost is real and is written into §6 rather than glossed: an attacker racing a stolen token within the same instant is not caught at that moment. They are caught on the next presentation, which is the case the specification actually describes.
+
+Two rules that make the marker work are written to §6 alongside it, because both were found only after they had been got wrong: `issued_at` is stamped by the API process rather than by a database default, so the comparison spans one clock; and rotation is ordered against revocation by a row lock on the account, taken first by both paths, because a marker read outside the rotation's transaction cannot see a revocation still in flight — and two paths taking the same pair of locks in opposite orders deadlock, with the revocation the likely victim. Written to `SKILL.md` §6.
+
+### 2026-08-21 — `account_roles` gains `senior_pastor_slot`
+Two slots; a holder occupies one; a partial unique index over the slot permits no second occupant. Revoking a row frees its slot, which is how a succession happens. The number is a seat, not a rank, and it orders nothing.
+
+This replaces a constraint trigger that counted active rows. The count was made race-free with an advisory lock and was still the weaker design, because `pg_restore --disable-triggers` skips a constraint trigger and does not skip a unique index — so a restore could load a third Senior Pastor in silence, at exactly the moment nobody is watching.
+
+The reason first recorded for refusing the column, that §7's shape has no slot, was the wrong test. A shape is amended when a rule needs a column, deliberately and in the same change, which is what this is. Written to `SKILL.md` §7.
+
+### 2026-08-21 — A row of an effective-dated table is never deleted
+`person_lifecycle`, `network_assignments`, `pastoral_assignments`, and every table that follows their shape. A row entered in error is corrected by closing it and opening the right one, which is what effective dating is for. Enforced by a `BEFORE DELETE` trigger on each, not by convention.
+
+Principle 12 said history is preserved and §5 said a row is never overwritten in place; neither addressed `DELETE`, and the schema permitted it. That made it the one write passing none of the same-Network checks, since both triggers fire on insert and update: removing a person's current Network row turns every open edge beneath them cross-Network, with nothing raised and nothing to revisit it.
+
+It reaches `account_roles` and `capability_grants` too. §7 says a grant is revoked by setting `revoked_at` and never by deleting the row, because the history of who could do what, and when, is part of the audit record — so the rule was already stated for them and only the enforcement was missing.
+
+`refresh_tokens` and `account_tokens` are excluded: they carry operational state rather than history, and whether they may be pruned is recorded as open rather than assumed either way.
+
+`TRUNCATE` fires no row trigger and stays available, because it is how the test suite resets. What is meant to keep it safe is privilege rather than the trigger — §24's least-privilege credentials — and that role does not exist yet, so the exemption is currently unprotected. Recorded as open rather than claimed. Written to `SKILL.md` §5.
+
+### 2026-08-22 — A sign-in landing inside a revocation's transaction survives it
+The marker is the boundary. A refresh token whose `issued_at` is at or before `sessions_revoked_at` is dead whatever its own row says; one issued after it is a new session and is untouched.
+
+Found by `architecture-guardian` reviewing the lock-order fix. Issuing a refresh token takes no lock on the account — the foreign key's `FOR KEY SHARE` does not conflict with the `FOR NO KEY UPDATE` the revocation holds — so a sign-in can commit inside the revocation's transaction, after the marker's timestamp is read and before the transaction commits. The code let it survive, one comment asserted it was killed, and `SKILL.md` did not address it at all, so the behaviour was a consequence of a lock mode rather than a rule anyone had chosen.
+
+`FOR UPDATE` would close the window, by making the insert's foreign-key check wait on the account row too. It is rejected because it achieves nothing: revocation ends the sessions that existed when it ran and was never a bar on signing in again, so somebody holding the password succeeds a moment later regardless. The window is not a security boundary and cannot be made into one by a lock.
+
+It is **not** rejected on the cost first recorded here, that it would put a lock on the sign-in path. Sign-ins already wait on that row — `recordLogin` stamps `last_login_at` on the account before a token is issued — so most of that cost is paid already, and the window is correspondingly narrower than it looks: reaching it needs `recordLogin` to have committed before the revocation took the row, leaving only the insert inside. The first version of this entry had the cost wrong and the conclusion right, which is worth recording, because the reason is the part that gets reused.
+
+Written to `SKILL.md` §6, which now carries three rules for immediate revocation rather than two.
+
 ### Open — awaiting a ruling
 
-**One item awaits a ruling and blocks Stage 5. Four other things are unsettled and block nothing; they are listed at the end, so this section is the whole of what is open.**
+**One item awaits a ruling and blocks Stage 5. Eleven other things are unsettled, five of them raised by the reviews of the rulings above and worth settling before Stage 2 builds. They are listed at the end, so this section is the whole of what is open.**
 
 **What an aggregate Cell attendance view offers in place of buckets.** Monthly-attendance buckets are a Cell-scope view only, because N belongs to a Cell and aggregating across different N inflates `Completed` for the Cells that recorded least (`SKILL.md` §12). At leader and Network scope the spec offers unique people, classification and coverage, and does not say whether anything should replace the buckets. Settle it in Stage 5 against real data.
 
@@ -567,7 +637,14 @@ Two related questions have defined behaviour and are recorded in `SKILL.md` §12
 
 **Unsettled, and not blocking anything.** None of these is a Stop Condition. An implementer proceeds and settles them in passing; they are listed here because a reader looking for what is open should not have to find it inside the body of a ruling.
 
+- **Whether the API runs as more than one instance, and what clock skew revocation may assume.** §6 says any instance can serve any request, and account-wide revocation compares two timestamps both stamped by an API process. On one instance that is one clock; on several it is not, and §24 now requires synchronised clocks without bounding the skew this comparison tolerates. The row lock added for the uncommitted-revocation window orders the two events in the database and does not depend on clocks, so this affects the comparison rather than the ordering. Settle it before the first multi-instance deployment.
+- **The application's database role.** §24 requires least-privilege credentials and none exist: the API connects as the owner of every table, so it holds `TRUNCATE`, which bypasses the no-delete triggers entirely, and `DROP`. The no-delete rule leans on this role to make its `TRUNCATE` exemption safe. Creating it is deployment work with no ruling attached, but until it happens §5's exemption is unprotected.
+- **Whether refresh tokens and activation tokens may be pruned.** §5 now says a row of an effective-dated table is never deleted, and deliberately does not name `refresh_tokens` or `account_tokens`. Both accumulate: a 30-day token per device per rotation. A retention job is ordinary and will be wanted, and it either violates a stated invariant or is blocked by a trigger nobody expected. Settle it before Stage 2 writes one.
+- **Whether a revocation may be undone in place.** Nothing addresses setting `revoked_at` back to `NULL`, and the schema permits it on `account_roles` and `capability_grants`. It erases a revocation exactly as a `DELETE` would, one column over — and the Senior Pastor cap depends on `revoked_at` being monotone for the count to mean anything over time.
+- **How a row entered in error is corrected within the same instant.** §5 answers "close it and open the right one", but `CHECK (ended_at > started_at)` makes a zero-length close impossible, so the prescribed correction always records a non-zero period of a fact that was never true. This bears on the already-open question about a Network change sharing one instant with its reassignment, and on the initial-encoding import, where a botched bulk load has no clean remedy.
 - **The client libraries beyond the component question** — TanStack Query, TanStack Table, a chart library, icons and fonts. Recorded as expectations in the UI direction entry above, deliberately not in `SKILL.md`, and confirmed against a real screen in Stage 2 rather than now. A list headed "This is settled, not a suggestion" is no place for a library nobody has used yet.
+- **What Admin should do when a backdated Network correction cannot be made.** The trigger validates assignments that closed after the effective date, so a correction backdated into a closed period can fail with no legal remedy: the reassignment §4 requires cannot be made for a period already ended, and rewriting a closed assignment row is forbidden by §5 and Principle 12. Stage 2 builds this endpoint.
+- **Whether a Network change and the reassignment it forces must share one effective instant.** The schema now requires it — the old edge escapes validation only because `ended_at > started_at` is false when the two are exactly equal, so closing one microsecond later makes the mandated atomic operation impossible. Defensible, but unwritten, and Stage 2 will implement against it either way.
 - **The native client framework.** `SKILL.md` §2 settles the web stack and says nothing about Android and iOS. Deferred since the specification was written; indexed here because two rules now point at it as open.
 - **Whether a form field failing validation may carry a colour of its own, and what it would be called.** `SKILL.md` §23 forbids a palette token named for a judgement about a person, a Cell, or a figure derived from them, and says in terms that this reaches names rather than colour. Validation is a different question: nothing in §13, §17 or §19 addresses it, and an earlier version of the lint check quietly decided it by refusing `error` and `critical` as well. Stage 2 builds sign-in and person forms, so settle it there — in `SKILL.md`, not in a script.
 - **What the native clients owe on accessibility.** `SKILL.md` §23 binds the web application to WCAG 2.2 AA and says the equivalent obligation for a native client is the platform accessibility API rather than WCAG. Which platform guarantees, and what would fail a build, is a ruling to make when the client is.

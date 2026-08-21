@@ -79,12 +79,65 @@ export class AuthService {
       throw new ApiError(ApiErrorCode.UNAUTHENTICATED, 'Your session has ended. Sign in again.');
     }
 
-    const issued = await this.tokens.issueRefreshToken(account.id, deviceLabel);
-    await this.tokens.revokeRefreshToken(row.id, issued.id);
+    // Section 6 says revocation invalidates **every** token for the account,
+    // immediately. Revoking by row alone does not achieve that. An access token
+    // carries no row to revoke at all, and a sign-in committing alongside
+    // `revokeAllSessions` can insert its row after that statement took its
+    // snapshot, since `issueRefreshToken` takes no account lock and so is not
+    // excluded by the one the revocation holds.
+    //
+    // The marker closes both, and both sides of this comparison are stamped by
+    // the application so that it spans one clock. A token issued at or before the
+    // marker is dead whatever its own row says; one issued after it is a new
+    // session and is untouched, which is the boundary section 6 draws.
+    if (account.sessions_revoked_at && row.issued_at <= account.sessions_revoked_at) {
+      throw new ApiError(ApiErrorCode.UNAUTHENTICATED, 'Your session has ended. Sign in again.');
+    }
+
+    // The check above is the cheap early refusal and reads committed state only.
+    // The authoritative one is inside the rotation, under a row lock on the
+    // account, where a revocation still in flight cannot be missed.
+    const rotation = await this.tokens.rotateRefreshToken(
+      row.id,
+      account.id,
+      deviceLabel,
+      row.issued_at,
+    );
+
+    if (rotation.outcome === 'revoked') {
+      // The account was revoked while this request was in flight, and the lock
+      // is what let this see it. Nothing further follows: the sessions are
+      // already gone, and this token was not consumed.
+      this.logger.debug(
+        `Refresh token ${row.id} belongs to a session revoked while the request was in flight.`,
+      );
+      throw new ApiError(ApiErrorCode.UNAUTHENTICATED, 'Your session has ended. Sign in again.');
+    }
+
+    if (rotation.outcome === 'claimed') {
+      // Something claimed the token between the read above and here: another
+      // refresh in flight at the same instant, or a sign-out a moment earlier.
+      // Neither is a replay.
+      //
+      // Section 6 defines the reuse signal as a token presented **after** use,
+      // and that case is handled above, where the token already reads as
+      // revoked. A simultaneous presentation is what an ordinary mobile client
+      // does when two requests hit 401 together, and revoking the account for it
+      // would sign a leader out of every device for behaving normally. This one
+      // request is refused; the winner's session is untouched.
+      //
+      // The cost is accepted deliberately: an attacker racing a stolen token
+      // within the same instant is not caught here. They are caught on the next
+      // presentation, which is the case the specification actually describes.
+      this.logger.debug(
+        `Refresh token ${row.id} was claimed concurrently; refusing this request only.`,
+      );
+      throw new ApiError(ApiErrorCode.UNAUTHENTICATED, 'Your session has ended. Sign in again.');
+    }
 
     return {
       access_token: this.tokens.issueAccessToken(account.id, account.person_id),
-      refresh_token: issued.token,
+      refresh_token: rotation.issued.token,
       token_type: 'Bearer',
       expires_in: ACCESS_TOKEN_TTL_SECONDS,
     };
@@ -97,7 +150,7 @@ export class AuthService {
     // Signing out is idempotent, and never discloses whether the token existed or
     // whose it was. A token belonging to another account is simply not revoked.
     if (row && row.account_id === actor.accountId) {
-      await this.tokens.revokeRefreshToken(row.id, null);
+      await this.tokens.revokeRefreshToken(row.id);
     }
   }
 

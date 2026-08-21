@@ -104,7 +104,21 @@ export async function assignTo(
 export async function createAccount(
   app: INestApplication,
   db: Kysely<Database>,
-  options: { person: TestPerson; roles: AccountRole[]; passwordHash?: string },
+  options: {
+    person: TestPerson;
+    roles: AccountRole[];
+    passwordHash?: string;
+    /**
+     * The account that granted the roles. Null is reserved by SKILL.md section 7
+     * for a system action, which is the first Admin account and nothing else.
+     */
+    grantedBy?: string;
+    /**
+     * Which of the two Senior Pastor slots this account occupies. Required when
+     * granting SENIOR_PASTOR and meaningless otherwise (SKILL.md section 7).
+     */
+    seniorPastorSlot?: 1 | 2;
+  },
 ): Promise<TestAccount> {
   const email = `${options.person.firstName.toLowerCase()}.${randomUUID().slice(0, 8)}@example.test`;
 
@@ -123,7 +137,15 @@ export async function createAccount(
     .executeTakeFirstOrThrow();
 
   for (const role of options.roles) {
-    await db.insertInto('account_roles').values({ account_id: account.id, role }).execute();
+    await db
+      .insertInto('account_roles')
+      .values({
+        account_id: account.id,
+        role,
+        granted_by: options.grantedBy ?? null,
+        senior_pastor_slot: role === 'SENIOR_PASTOR' ? (options.seniorPastorSlot ?? 1) : null,
+      })
+      .execute();
   }
 
   const tokens = app.get(TokensService);

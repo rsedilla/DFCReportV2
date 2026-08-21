@@ -578,9 +578,29 @@ Backdating is therefore a separate capability, `records.backdate_effective_date`
 
 The same rule governs every other effective-dated relationship: Network assignment (Section 4), Cell membership (Section 10), and Cell leadership (Section 11). Ordinary users record changes as of now. Only Admin may set an effective date in the past, and only with a reason.
 
+**History is never deleted.**
+
+A row of an effective-dated table is never removed: `person_lifecycle`, `network_assignments` and `pastoral_assignments` here, and `account_roles` and `capability_grants`, whose revocation history Section 7 calls audit material. A table added later that carries the same shape is covered by the same rule and gets the same trigger in the migration that creates it — the rule is not satisfied by being written here. A row entered in error is corrected by closing it and opening the right one, which is what effective dating is for. This is Principle 12 stated as an operation rather than as an aspiration, and it is enforced by the database.
+
+`refresh_tokens` and `account_tokens` are deliberately not named. They carry operational state rather than history, and whether they may be pruned is an open question rather than a settled rule — see `CLAUDE.md`.
+
+The reason is narrower than "history is valuable". Every same-Network check in this section fires on insert and update, so a `DELETE` is the one write that passes none of them: removing a person's current Network row makes their Network resolve to an older one, or to none, and every open pastoral edge beneath them becomes cross-Network with nothing raised and nothing to revisit it. The first data-fix script written straight against the database is exactly where that arrives.
+
 **Database enforcement.**
 
 Service-layer checks are not sufficient on their own. The first data-fix script written directly against the database bypasses every one of them. Each invariant that can be expressed as a constraint must also exist as a constraint.
+
+No deletion — a trigger on every table holding history, refusing unconditionally:
+
+```sql
+CREATE TRIGGER pastoral_assignments_no_delete
+  BEFORE DELETE ON pastoral_assignments
+  FOR EACH ROW EXECUTE FUNCTION refuse_delete_of_history();
+```
+
+`TRUNCATE` fires no row trigger, so it bypasses this rule exactly as a `DELETE` would. It is left available because it is how a test suite resets between cases, and **the protection is meant to be the privilege, not the trigger**: Section 24 requires least-privilege database credentials, and an application role without `TRUNCATE` on these tables is what makes the exemption safe.
+
+That role does not exist yet. Until it does, nothing prevents the application from truncating a history table, and saying otherwise would be asserting an enforcement that is not there — which is the failure this rule exists to prevent. It is recorded as open in `CLAUDE.md`.
 
 One active assignment — a partial unique index over the person, where the assignment is open:
 
@@ -670,7 +690,8 @@ refresh_tokens
 - account_id
 - token_hash         the token itself is never stored
 - device_label       nullable, for the user's own sign-out list
-- issued_at
+- replaced_by_id     nullable, the token issued when this one was rotated
+- issued_at          stamped by the API process, never by the database
 - expires_at
 - last_used_at       nullable
 - revoked_at         nullable
@@ -678,9 +699,37 @@ refresh_tokens
 
 An access token lives **15 minutes**. A refresh token lives 30 days from issue and is rotated on use: the old row is revoked and a new one issued, so a refresh token replayed after use is a reuse signal and revokes the whole account chain.
 
+`replaced_by_id` is what makes that signal readable, and it is set by rotation and by nothing else. It governs what happens when a revoked token is *presented*: one carrying a replacement was rotated, so presenting it again is a reuse signal; one without was revoked by a sign-out or by an account-wide revocation, and is simply refused. Without the column those cases are indistinguishable, and an ordinary sign-out looks exactly like a stolen token.
+
+It is not a classification of every revoked row. Account-wide revocation leaves the same shape as a sign-out, deliberately: nothing needs to escalate a token whose account has already been revoked.
+
+**Three rules make immediate revocation hold, and each is easy to lose.**
+
+`issued_at` is **stamped by the API process**, not by a database default. It is compared against `sessions_revoked_at` and against an access token's issued-at, both of which the API stamps, and the database's clock is a different one. A token sitting on the wrong side of that comparison is a session that outlives its revocation, or a sign-in refused for no reason.
+
+**Rotation is ordered against revocation in the database, not in the application.** A rotation takes the account row under a lock before it claims a token, and re-reads the marker there. Checking the marker before opening the transaction is not enough: that read sees committed state, so a revocation that has stamped its marker and not yet committed reads as absent, and a token can be rotated in that window into a replacement the revocation never sees.
+
+Revocation takes the same row, in the same order, first. Two paths taking one pair of locks in opposite orders deadlock, and the loser is normally the revocation — which would mean the one operation that must not fail silently failing silently.
+
+**The marker is the boundary.** A refresh token whose `issued_at` is at or before `sessions_revoked_at` is dead, whatever its own row says; one issued after it is a new session and is untouched. Everything below follows from that one comparison — `issued_at` against the marker, never the order in which rows happened to commit.
+
+The marker is stamped **last**, after the tokens are revoked. That is what catches a row the revoking statement missed: the statement takes its snapshot before the marker is read, so a row it could not see but which was issued before that read still sorts on the dead side of the comparison. A row issued after the marker is read escapes both, and is meant to.
+
+A sign-in can land inside a revocation's transaction. Issuing a refresh token takes no lock on the account, so the revocation does not exclude the insert itself — though in practice a sign-in usually waits a statement earlier, when it stamps `last_login_at` on the account row, which the revocation does hold. What remains is a sign-in that passed that point before the revocation began: it is refused if its `issued_at` precedes the marker read, and survives if it follows it.
+
+That is the intended answer rather than an accident of lock modes. Revocation ends the sessions that existed when it ran; it was never a bar on signing in again, and somebody holding the password signs in a moment later in any case. Closing the window would buy nothing that an attacker cannot simply wait out.
+
+**Simultaneous presentation is not reuse.** Where two requests present the same live refresh token at the same instant, one wins the rotation and the other is refused — and that is all. The winner's session is untouched and no account-wide revocation follows.
+
+Reuse is a presentation of a token **after** it has been used, which is the case above: the token already reads as revoked, and it carries a replacement. Two requests arriving together is what an ordinary mobile client does when two calls hit 401 at once, and treating it as theft would sign a leader out of every device for behaving normally — on clients that cannot be force-updated (Section 2).
+
+The cost is accepted deliberately and stated so it is not mistaken for an oversight: an attacker racing a stolen token within the same instant is not detected at that moment. They are detected on the next presentation, because the token they hold is by then revoked and replaced.
+
 **Immediate revocation and a stateless API are in tension, and the resolution is explicit.** A bearer token verified by signature alone cannot be revoked before it expires, so Section 6's requirement that revocation take effect immediately, on all devices, is not satisfiable by a short lifetime alone.
 
-Every request therefore checks the account's `sessions_revoked_at` (above) against the access token's issued-at, and rejects a token issued before it — a single lookup keyed by account, cacheable, invalidated on revoke. A per-token `revoked_at` cannot answer this, because an access token has no row. The API remains stateless in the sense Section 2 requires: it holds no server-side session, no per-request state, and any instance can serve any request. What it does not do is trust a signature unconditionally.
+Every request therefore checks the account's `sessions_revoked_at` (above) against the access token's issued-at, and rejects a token issued at or before it — a single lookup keyed by account, cacheable, invalidated on revoke.
+
+That comparison is inclusive as the refresh-token one is, but it is **not the same boundary, and it is coarser**. A JWT's `iat` carries whole seconds, so an access token minted in the same second as a revocation cannot be ordered against it, and is refused. It errs towards ending a session the holder can restart by signing in, rather than towards honouring one an administrator has just revoked. The consequence is bounded and accepted: a sign-in that lands **after** the marker but within the same second as it holds a refresh token that is valid — the session lives, by the rule above — and an access token refused until that second has elapsed. A sign-in falling at or before the marker has no divergence to describe, because both its tokens are correctly dead. A per-token `revoked_at` cannot answer this, because an access token has no row. The API remains stateless in the sense Section 2 requires: it holds no server-side session, no per-request state, and any instance can serve any request. What it does not do is trust a signature unconditionally.
 
 A 15-minute access token is short enough that this check can be cached briefly without making "immediately" a lie, and long enough that the refresh path is not on every request.
 
@@ -958,6 +1007,7 @@ account_roles
 - id
 - account_id
 - role               SENIOR_PASTOR | ADMIN | LEADER
+- senior_pastor_slot 1 or 2 where role is SENIOR_PASTOR, null otherwise
 - granted_by         null only for a system action, which is the first Admin account
 - granted_at
 - revoked_at         nullable
@@ -965,7 +1015,9 @@ account_roles
 
 `SENIOR_PASTOR` is held by exactly the two Persons named in Section 4, and by nobody else. Section 1, Principle 6 names them, and the role carries Whole Church scope on `people.manage_lifecycle`, `people.manage_pastoral_assignment` and `audit.view` — so this is a constraint the system enforces, not a convention it assumes. Granting it to a third account is rejected. An account holds at most one active row per role.
 
-The enforcement is in two places, because the two halves of that rule are enforceable in different ways. The **count** is a database constraint: a third active `SENIOR_PASTOR` row is rejected. **Which two Persons** hold it is checked in the `auth` domain layer, since the database holds no durable representation of who Bishop Oriel Ballano and Pastora Geraldine Ballano are, and inventing one — a flag on the Person, a reserved identifier — would make the two most consequential accounts in the church depend on a row somebody could edit.
+The enforcement is in two places, because the two halves of that rule are enforceable in different ways. The **count** is a database constraint: there are two slots, a holder occupies one, and a partial unique index over the slot permits no second occupant of either. Revoking a row frees its slot, which is how a succession happens.
+
+The slot exists so that an *index* enforces the cap rather than a check that runs. A constraint trigger counting active rows is skipped entirely under `pg_restore --disable-triggers`, so a restore could load a third Senior Pastor in silence; a unique index is enforced there. The slot number itself means nothing and is not an ordering: it is a seat, not a rank. **Which two Persons** hold it is checked in the `auth` domain layer, since the database holds no durable representation of who Bishop Oriel Ballano and Pastora Geraldine Ballano are, and inventing one — a flag on the Person, a reserved identifier — would make the two most consequential accounts in the church depend on a row somebody could edit.
 
 `granted_by` is null only for a role granted by a **system action**, which is the first Admin account and nothing else: there is no account above it to have granted it. This mirrors the same allowance for `audit_log.actor_id` (Section 21). Every other role grant has an actor.
 
@@ -2718,6 +2770,7 @@ Do not build offline complexity before it is needed. Do not make architectural c
 - A restore tested before go-live, and at least annually thereafter
 - Audit logging
 - Least-privilege database/application credentials
+- **Synchronised clocks on every host running the API.** Account-wide revocation compares a token's issued-at against the account's revocation marker, and Section 6 requires both to be stamped by an API process. On more than one instance those are two clocks, and skew moves tokens across the boundary in both directions — admitting a token that should be dead, or refusing a sign-in that should work. Ordinary NTP is sufficient; the requirement is that it is not left to chance
 
 ### Backups
 

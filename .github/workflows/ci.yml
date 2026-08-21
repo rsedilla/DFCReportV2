@@ -1,9 +1,14 @@
 name: CI
 
-# Continuous integration from day one, required by branch protection.
+# Continuous integration from day one.
 #
 # Retrofitting CI across an existing codebase is how gaps ship (docs/ROADMAP.md,
 # Stage 1 risk), so this exists before the application has a single feature.
+#
+# `api` and `web` are required status checks on `main`, and branches must be up to
+# date before merging. The authorization suite is deliberately not required: it
+# fails by design until Stage 2. Changing which checks gate `main` is a change to
+# branch protection, not to this file.
 
 on:
   pull_request:
@@ -128,7 +133,10 @@ jobs:
     # an endpoint Stage 2 builds, and they fail today because it does not exist.
     # Stage 2 is done when they are green, at which point they fold into `api`
     # and this job is deleted.
-    continue-on-error: true
+    #
+    # The flag is on the suite step alone, not on the job. On the job it made the
+    # check conclude success whatever happened -- including a failure of the step
+    # that checks *why* the suite failed, which would then report nothing.
 
     services:
       postgres:
@@ -170,7 +178,77 @@ jobs:
       - name: Run the eleven authorization cases
         id: suite
         continue-on-error: true
-        run: npm run test:authorization
+        run: npm run test:authorization 2>&1 | tee suite.log; exit ${PIPESTATUS[0]}
+
+      # "Failing for the right reason" was asserted in prose and checked by nobody.
+      # The suite may fail -- that is the point of the job -- but it may not fail in
+      # a new way, and a suite that failed because the application would not boot
+      # would have read as expected here.
+      - name: Check that they fail for the right reason
+        if: steps.suite.outcome == 'failure'
+        run: |
+          # Assert what should be there, not merely the absence of what should not.
+          # "No counter-evidence" cannot tell "every case failed on a 404" from
+          # "nothing ran at all" -- a failed migration, a missing JWT_SECRET or a
+          # throw in beforeAll produces no `Received:` line whatsoever, and the
+          # earlier form of this check reported those as expected.
+          if ! grep -qE 'Tests:[[:space:]]+[0-9]+ failed' suite.log; then
+            echo "::error::The authorization suite produced no test results at all."
+            echo "::error::That is a suite that did not run, not a suite failing as expected."
+            tail -30 suite.log
+            exit 1
+          fi
+
+          if ! grep -q 'Received: 404' suite.log; then
+            echo "::error::No case reached the endpoint and received a 404."
+            tail -30 suite.log
+            exit 1
+          fi
+
+          # Cases asserting with toContain or toHaveLength print `Received array:`
+          # and `Received length:`; only a bare `Received:` is a status assertion.
+          if grep -E '^[[:space:]]*Received: ' suite.log | grep -qv 'Received: 404'; then
+            echo "::error::A case failed on a status other than 404, so the suite is no"
+            echo "::error::longer failing only because the endpoint is absent."
+            grep -nE '^[[:space:]]*Received: ' suite.log | grep -v 'Received: 404' | head -20
+            exit 1
+          fi
+
+          # Nothing above ties the failure count to the case count. Half an endpoint
+          # landing, with six cases passing and five failing on 404, would read as
+          # "expected" -- so require that no case passed quietly.
+          summary=$(grep -E '^Tests:' suite.log | tail -1)
+          failed=$(echo "$summary" | grep -oE '[0-9]+ failed' | grep -oE '[0-9]+')
+          total=$(echo "$summary" | grep -oE '[0-9]+ total' | grep -oE '[0-9]+')
+
+          if [ "$failed" != "$total" ]; then
+            if echo "$summary" | grep -qE '[0-9]+ (skipped|todo)'; then
+              # The 2026-08-20 ruling is explicit: these are not skipped, not
+              # marked pending, and not inverted to pass on failure.
+              echo "::error::Some cases were skipped or marked todo:"
+            else
+              echo "::error::Some cases passed, which is progress rather than a fault:"
+            fi
+            echo "::error::  $summary"
+            echo "::error::This job asserts every case fails. If Stage 2 has landed, move"
+            echo "::error::them into the api suite and delete this job."
+            exit 1
+          fi
+
+          # `Tests:` counts only the cases that ran. A second spec file that fails
+          # to collect prints `Test Suites: 1 failed, 1 passed, 2 total` while the
+          # case counts stay consistent, so the suite line is checked too.
+          suites=$(grep -E '^Test Suites:' suite.log | tail -1)
+          suitesFailed=$(echo "$suites" | grep -oE '[0-9]+ failed' | grep -oE '[0-9]+')
+          suitesTotal=$(echo "$suites" | grep -oE '[0-9]+ total' | grep -oE '[0-9]+')
+
+          if [ "$suitesFailed" != "$suitesTotal" ]; then
+            echo "::error::A spec file in this suite did not fail as expected:"
+            echo "::error::  $suites"
+            exit 1
+          fi
+
+          echo "The suite ran, every case failed, and every status assertion received 404."
 
       - name: Report
         run: |
@@ -186,7 +264,11 @@ jobs:
               echo "this job."
             else
               echo "The eleven cases fail, which is expected until Stage 2 builds"
-              echo "\`PUT /api/v1/people/{id}/pastoral-leader\`."
+              echo "\`PUT /api/v1/people/{id}/pastoral-leader\`, and the step above"
+              echo "checked that no case passed quietly and that every status"
+              echo "assertion received a 404 rather than something new. Cases that"
+              echo "assert with toContain print no bare status line and contribute"
+              echo "no evidence either way."
               echo
               echo "See \`api/test/authorization/pastoral-assignment.spec.ts\` for the"
               echo "contract they pin, and docs/ROADMAP.md for why they are written"
