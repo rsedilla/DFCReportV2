@@ -102,8 +102,10 @@ export interface CapabilityGrantsTable {
   scope_type: ScopeTypeValue;
   scope_network: NetworkName | null;
   read_only: Generated<boolean>;
-  reason: string | null;
-  granted_by: string | null;
+  /** Required. A grant explains itself (SKILL.md section 7). */
+  reason: string;
+  /** Required. An explicit grant is always issued by an Admin. */
+  granted_by: string;
   granted_at: ServerTimestamp;
   revoked_at: Date | null;
 }

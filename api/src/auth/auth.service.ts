@@ -86,9 +86,10 @@ export class AuthService {
     // stays live for thirty days -- minting access tokens whose issued-at
     // post-dates the revocation, which the guard then admits.
     //
-    // The marker is what closes it, exactly as it does for access tokens. A token
-    // issued before the account was revoked is dead whatever its own row says; one
-    // issued after is a new sign-in and is untouched.
+    // The marker closes it, as it does for access tokens, and both sides of this
+    // comparison are stamped by the application so that it spans one clock. A
+    // token issued before the account was revoked is dead whatever its own row
+    // says; one issued after is a new sign-in and is untouched.
     if (account.sessions_revoked_at && row.issued_at <= account.sessions_revoked_at) {
       throw new ApiError(ApiErrorCode.UNAUTHENTICATED, 'Your session has ended. Sign in again.');
     }

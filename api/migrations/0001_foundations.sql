@@ -680,11 +680,12 @@ CREATE UNIQUE INDEX account_tokens_one_outstanding
 
 DROP TABLE IF EXISTS account_tokens;
 DROP TABLE IF EXISTS refresh_tokens;
+DROP TRIGGER IF EXISTS capability_grants_no_delete ON capability_grants;
+DROP TRIGGER IF EXISTS account_roles_no_delete ON account_roles;
+
 DROP TABLE IF EXISTS capability_grants;
 DROP TABLE IF EXISTS account_roles;
 
-DROP TRIGGER IF EXISTS capability_grants_no_delete ON capability_grants;
-DROP TRIGGER IF EXISTS account_roles_no_delete ON account_roles;
 DROP TRIGGER IF EXISTS person_lifecycle_no_delete ON person_lifecycle;
 DROP TRIGGER IF EXISTS network_assignments_no_delete ON network_assignments;
 DROP TRIGGER IF EXISTS pastoral_assignments_no_delete ON pastoral_assignments;

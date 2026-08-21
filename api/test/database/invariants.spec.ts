@@ -488,6 +488,15 @@ describe('the database enforces the section 3 and section 7 rules it can', () =>
         .where('account_id', '=', account)
         .execute(),
     ).rejects.toThrow(/account_roles_slot_belongs_to_the_role/);
+
+    const active = await db
+      .selectFrom('account_roles')
+      .select('role')
+      .where('account_id', '=', account)
+      .where('revoked_at', 'is', null)
+      .execute();
+
+    expect(active).toEqual([{ role: 'LEADER' }]);
   });
 
   it('refuses a Senior Pastor giving up their slot while still holding the role', async () => {
@@ -505,6 +514,14 @@ describe('the database enforces the section 3 and section 7 rules it can', () =>
         .where('account_id', '=', account)
         .execute(),
     ).rejects.toThrow(/account_roles_slot_belongs_to_the_role/);
+
+    const row = await db
+      .selectFrom('account_roles')
+      .select('senior_pastor_slot')
+      .where('account_id', '=', account)
+      .executeTakeFirstOrThrow();
+
+    expect(row.senior_pastor_slot).toBe(1);
   });
 
   it('records who granted a role, and permits no actor only for a system action', async () => {

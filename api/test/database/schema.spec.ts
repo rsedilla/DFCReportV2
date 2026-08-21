@@ -132,6 +132,9 @@ describe('the schema (SKILL.md sections 4, 5 and 7)', () => {
 
       expect(trigger.fires_on_delete).toBe(true);
       expect(trigger.timing).toBe('BEFORE');
+      expect(trigger.per_row).toBe(true);
+      expect(trigger.enabled).toBe(true);
+      expect(trigger.table_name).toBe(table);
       expect(trigger.function_name).toBe('refuse_delete_of_history');
     });
   });
@@ -224,13 +227,34 @@ async function triggerFacts(
 async function deleteTriggerFacts(
   db: Kysely<Database>,
   name: string,
-): Promise<{ fires_on_delete: boolean; timing: string; function_name: string }> {
-  const result = await sql<{ fires_on_delete: boolean; timing: string; function_name: string }>`
+): Promise<{
+  fires_on_delete: boolean;
+  timing: string;
+  function_name: string;
+  per_row: boolean;
+  enabled: boolean;
+  table_name: string;
+}> {
+  // Trigger names are per-relation in PostgreSQL, so matching on the name alone
+  // would pass for a trigger of the right name attached to the wrong table --
+  // and for one left disabled by ALTER TABLE ... DISABLE TRIGGER.
+  const result = await sql<{
+    fires_on_delete: boolean;
+    timing: string;
+    function_name: string;
+    per_row: boolean;
+    enabled: boolean;
+    table_name: string;
+  }>`
     SELECT (t.tgtype & 8) <> 0   AS fires_on_delete,
+           (t.tgtype & 1) <> 0   AS per_row,
            CASE WHEN (t.tgtype & 2) <> 0 THEN 'BEFORE' ELSE 'AFTER' END AS timing,
-           p.proname AS function_name
+           t.tgenabled = 'O'     AS enabled,
+           c.relname             AS table_name,
+           p.proname             AS function_name
       FROM pg_trigger t
       JOIN pg_proc p ON p.oid = t.tgfoid
+      JOIN pg_class c ON c.oid = t.tgrelid
      WHERE t.tgname = ${name}
        AND NOT t.tgisinternal
   `.execute(db);

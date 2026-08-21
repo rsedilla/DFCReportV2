@@ -65,7 +65,8 @@ export class TokensService {
     deviceLabel: string | null,
   ): Promise<IssuedRefreshToken> {
     const token = randomBytes(32).toString('base64url');
-    const expiresAt = new Date(Date.now() + REFRESH_TOKEN_TTL_DAYS * 24 * 60 * 60 * 1000);
+    const issuedAt = new Date();
+    const expiresAt = new Date(issuedAt.getTime() + REFRESH_TOKEN_TTL_DAYS * 24 * 60 * 60 * 1000);
 
     const row = await this.db
       .insertInto('refresh_tokens')
@@ -73,6 +74,13 @@ export class TokensService {
         account_id: accountId,
         token_hash: hashToken(token),
         device_label: deviceLabel,
+        // Written explicitly rather than left to the column default. `issued_at`
+        // is compared against `accounts.sessions_revoked_at`, which the
+        // application stamps, and against a JWT's `iat`, which it also stamps.
+        // Leaving this one to the database's clock made that comparison span two
+        // clocks, so a token could sit on the wrong side of a revocation by
+        // whatever the two disagreed by.
+        issued_at: issuedAt,
         expires_at: expiresAt,
       })
       .returning('id')
@@ -157,7 +165,8 @@ export class TokensService {
       }
 
       const token = randomBytes(32).toString('base64url');
-      const expiresAt = new Date(Date.now() + REFRESH_TOKEN_TTL_DAYS * 24 * 60 * 60 * 1000);
+      const issuedAt = new Date();
+      const expiresAt = new Date(issuedAt.getTime() + REFRESH_TOKEN_TTL_DAYS * 24 * 60 * 60 * 1000);
 
       const issued = await trx
         .insertInto('refresh_tokens')
@@ -165,6 +174,7 @@ export class TokensService {
           account_id: accountId,
           token_hash: hashToken(token),
           device_label: deviceLabel,
+          issued_at: issuedAt,
           expires_at: expiresAt,
         })
         .returning('id')
@@ -189,19 +199,27 @@ export class TokensService {
    * tokens already out there, which carry no row of their own to revoke.
    */
   async revokeAllSessions(accountId: string): Promise<void> {
-    const now = new Date();
-
     await this.db.transaction().execute(async (trx) => {
       await trx
         .updateTable('refresh_tokens')
-        .set({ revoked_at: now })
+        .set({ revoked_at: new Date() })
         .where('account_id', '=', accountId)
         .where('revoked_at', 'is', null)
         .execute();
 
+      // Stamped *after* the revocation, deliberately. A rotation running
+      // alongside this inserts its replacement while that statement waits on the
+      // row lock, so the replacement is never revoked by it -- and a marker read
+      // before the statement would sort *earlier* than that replacement's
+      // issued_at, leaving it alive. Read afterwards, the marker dominates
+      // anything that escaped, and `refresh` refuses it.
+      //
+      // The cost is that a sign-in racing a revocation is also killed. That is
+      // the right direction: section 6 says revocation invalidates every session
+      // immediately, and a session begun in that instant is one of them.
       await trx
         .updateTable('accounts')
-        .set({ sessions_revoked_at: now })
+        .set({ sessions_revoked_at: new Date() })
         .where('id', '=', accountId)
         .execute();
     });

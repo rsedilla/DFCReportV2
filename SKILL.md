@@ -598,7 +598,9 @@ CREATE TRIGGER pastoral_assignments_no_delete
   FOR EACH ROW EXECUTE FUNCTION refuse_delete_of_history();
 ```
 
-`TRUNCATE` fires no row trigger and is deliberately left available: it is how a test suite resets between cases, and the application's database role holds no rights to it.
+`TRUNCATE` fires no row trigger, so it bypasses this rule exactly as a `DELETE` would. It is left available because it is how a test suite resets between cases, and **the protection is meant to be the privilege, not the trigger**: Section 24 requires least-privilege database credentials, and an application role without `TRUNCATE` on these tables is what makes the exemption safe.
+
+That role does not exist yet. Until it does, nothing prevents the application from truncating a history table, and saying otherwise would be asserting an enforcement that is not there — which is the failure this rule exists to prevent. It is recorded as open in `CLAUDE.md`.
 
 One active assignment — a partial unique index over the person, where the assignment is open:
 
