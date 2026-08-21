@@ -608,11 +608,15 @@ The reason first recorded for refusing the column, that §7's shape has no slot,
 
 Principle 12 said history is preserved and §5 said a row is never overwritten in place; neither addressed `DELETE`, and the schema permitted it. That made it the one write passing none of the same-Network checks, since both triggers fire on insert and update: removing a person's current Network row turns every open edge beneath them cross-Network, with nothing raised and nothing to revisit it.
 
+It reaches `account_roles` and `capability_grants` too. §7 says a grant is revoked by setting `revoked_at` and never by deleting the row, because the history of who could do what, and when, is part of the audit record — so the rule was already stated for them and only the enforcement was missing.
+
+`refresh_tokens` and `account_tokens` are excluded: they carry operational state rather than history, and whether they may be pruned is recorded as open rather than assumed either way.
+
 `TRUNCATE` fires no row trigger and stays available. It is how the test suite resets, and the application holds no rights to it. Written to `SKILL.md` §5.
 
 ### Open — awaiting a ruling
 
-**One item awaits a ruling and blocks Stage 5. Six other things are unsettled and block nothing. They are listed at the end, so this section is the whole of what is open.**
+**One item awaits a ruling and blocks Stage 5. Nine other things are unsettled, three of them raised by the review of the rulings above and worth settling before Stage 2 builds. They are listed at the end, so this section is the whole of what is open.**
 
 **What an aggregate Cell attendance view offers in place of buckets.** Monthly-attendance buckets are a Cell-scope view only, because N belongs to a Cell and aggregating across different N inflates `Completed` for the Cells that recorded least (`SKILL.md` §12). At leader and Network scope the spec offers unique people, classification and coverage, and does not say whether anything should replace the buckets. Settle it in Stage 5 against real data.
 
@@ -620,6 +624,9 @@ Two related questions have defined behaviour and are recorded in `SKILL.md` §12
 
 **Unsettled, and not blocking anything.** None of these is a Stop Condition. An implementer proceeds and settles them in passing; they are listed here because a reader looking for what is open should not have to find it inside the body of a ruling.
 
+- **Whether refresh tokens and activation tokens may be pruned.** §5 now says a row of an effective-dated table is never deleted, and deliberately does not name `refresh_tokens` or `account_tokens`. Both accumulate: a 30-day token per device per rotation. A retention job is ordinary and will be wanted, and it either violates a stated invariant or is blocked by a trigger nobody expected. Settle it before Stage 2 writes one.
+- **Whether a revocation may be undone in place.** Nothing addresses setting `revoked_at` back to `NULL`, and the schema permits it on `account_roles` and `capability_grants`. It erases a revocation exactly as a `DELETE` would, one column over — and the Senior Pastor cap depends on `revoked_at` being monotone for the count to mean anything over time.
+- **How a row entered in error is corrected within the same instant.** §5 answers "close it and open the right one", but `CHECK (ended_at > started_at)` makes a zero-length close impossible, so the prescribed correction always records a non-zero period of a fact that was never true. This bears on the already-open question about a Network change sharing one instant with its reassignment, and on the initial-encoding import, where a botched bulk load has no clean remedy.
 - **The client libraries beyond the component question** — TanStack Query, TanStack Table, a chart library, icons and fonts. Recorded as expectations in the UI direction entry above, deliberately not in `SKILL.md`, and confirmed against a real screen in Stage 2 rather than now. A list headed "This is settled, not a suggestion" is no place for a library nobody has used yet.
 - **What Admin should do when a backdated Network correction cannot be made.** The trigger validates assignments that closed after the effective date, so a correction backdated into a closed period can fail with no legal remedy: the reassignment §4 requires cannot be made for a period already ended, and rewriting a closed assignment row is forbidden by §5 and Principle 12. Stage 2 builds this endpoint.
 - **Whether a Network change and the reassignment it forces must share one effective instant.** The schema now requires it — the old edge escapes validation only because `ended_at > started_at` is false when the two are exactly equal, so closing one microsecond later makes the mandated atomic operation impossible. Defensible, but unwritten, and Stage 2 will implement against it either way.

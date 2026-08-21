@@ -123,6 +123,34 @@ describe('the database enforces the section 5 invariants', () => {
       ).rejects.toThrow(/never deleted/);
     });
 
+    it('refuses a DELETE on the grant tables, which section 7 calls audit material', async () => {
+      // "A grant is revoked by setting revoked_at, never by deleting the row. The
+      // history of who could do what, and when, is part of the audit record."
+      const account = await accountFor(db, 'Ester', 'WOMENS');
+
+      await db.insertInto('account_roles').values({ account_id: account, role: 'ADMIN' }).execute();
+
+      await db
+        .insertInto('capability_grants')
+        .values({
+          account_id: account,
+          capability: 'people.view_subtree',
+          scope_type: 'WHOLE_CHURCH',
+          read_only: true,
+          reason: 'Exercising the no-delete rule.',
+          granted_by: account,
+        })
+        .execute();
+
+      await expect(
+        db.deleteFrom('account_roles').where('account_id', '=', account).execute(),
+      ).rejects.toThrow(/never deleted/);
+
+      await expect(
+        db.deleteFrom('capability_grants').where('account_id', '=', account).execute(),
+      ).rejects.toThrow(/never deleted/);
+    });
+
     it('leaves the row and the edge intact after a refused DELETE', async () => {
       const person = await createPerson(db, { firstName: 'Bea', network: 'WOMENS' });
 
@@ -409,6 +437,103 @@ describe('the database enforces the section 3 and section 7 rules it can', () =>
       .execute();
 
     expect(active).toHaveLength(2);
+  });
+
+  it('refuses SENIOR_PASTOR with no slot at all', async () => {
+    // The case that matters most, and the one every other test here misses by
+    // supplying a slot. A CHECK fails only on FALSE and passes on NULL, so a
+    // constraint written without an explicit IS NOT NULL accepts this row -- and
+    // null slots never conflict in the partial unique index, because nulls are
+    // distinct. The cap would then permit any number of Senior Pastors.
+    const first = await accountFor(db, 'Oriel', 'MENS');
+    const second = await accountFor(db, 'Geraldine', 'WOMENS');
+    const third = await accountFor(db, 'Rico', 'MENS');
+
+    await db
+      .insertInto('account_roles')
+      .values([
+        { account_id: first, role: 'SENIOR_PASTOR', senior_pastor_slot: 1 },
+        { account_id: second, role: 'SENIOR_PASTOR', senior_pastor_slot: 2 },
+      ])
+      .execute();
+
+    await expect(
+      db
+        .insertInto('account_roles')
+        .values({ account_id: third, role: 'SENIOR_PASTOR', senior_pastor_slot: null })
+        .execute(),
+    ).rejects.toThrow(/account_roles_slot_belongs_to_the_role/);
+
+    const active = await db
+      .selectFrom('account_roles')
+      .select('id')
+      .where('role', '=', 'SENIOR_PASTOR')
+      .where('revoked_at', 'is', null)
+      .execute();
+
+    expect(active).toHaveLength(2);
+  });
+
+  it('refuses a role changed into SENIOR_PASTOR without taking a slot', async () => {
+    // The count can rise by an UPDATE as well as an INSERT, which is the ground
+    // the counting trigger covered and a constraint must cover too.
+    const account = await accountFor(db, 'Manuel', 'MENS');
+
+    await db.insertInto('account_roles').values({ account_id: account, role: 'LEADER' }).execute();
+
+    await expect(
+      db
+        .updateTable('account_roles')
+        .set({ role: 'SENIOR_PASTOR' })
+        .where('account_id', '=', account)
+        .execute(),
+    ).rejects.toThrow(/account_roles_slot_belongs_to_the_role/);
+  });
+
+  it('refuses a Senior Pastor giving up their slot while still holding the role', async () => {
+    const account = await accountFor(db, 'Oriel', 'MENS');
+
+    await db
+      .insertInto('account_roles')
+      .values({ account_id: account, role: 'SENIOR_PASTOR', senior_pastor_slot: 1 })
+      .execute();
+
+    await expect(
+      db
+        .updateTable('account_roles')
+        .set({ senior_pastor_slot: null })
+        .where('account_id', '=', account)
+        .execute(),
+    ).rejects.toThrow(/account_roles_slot_belongs_to_the_role/);
+  });
+
+  it('records who granted a role, and permits no actor only for a system action', async () => {
+    // Section 7 marks nullability explicitly, and `account_roles.granted_by` is
+    // nullable for exactly one case: the first Admin account, which no account
+    // above it could have granted. Nothing in the schema can tell the two apart,
+    // so the column is at least exercised both ways here rather than never.
+    const admin = await accountFor(db, 'Ester', 'WOMENS');
+    const leader = await accountFor(db, 'Rico', 'MENS');
+
+    await expect(
+      db
+        .insertInto('account_roles')
+        .values({ account_id: admin, role: 'ADMIN', granted_by: null })
+        .execute(),
+    ).resolves.toBeDefined();
+
+    await db
+      .insertInto('account_roles')
+      .values({ account_id: leader, role: 'LEADER', granted_by: admin })
+      .execute();
+
+    const row = await db
+      .selectFrom('account_roles')
+      .select('granted_by')
+      .where('account_id', '=', leader)
+      .executeTakeFirstOrThrow();
+
+    expect(row.granted_by).toBe(admin);
   });
 
   it('refuses a slot on a role that is not SENIOR_PASTOR', async () => {

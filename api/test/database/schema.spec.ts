@@ -105,23 +105,35 @@ describe('the schema (SKILL.md sections 4, 5 and 7)', () => {
       expect(index).toMatch(/WHERE \(revoked_at IS NULL\)/i);
     });
 
-    it('ties the slot to the role', async () => {
+    it('ties the slot to the role, and refuses a null slot explicitly', async () => {
       const constraint = await constraintDefinition(db, 'account_roles_slot_belongs_to_the_role');
 
       expect(constraint).toMatch(/CHECK/i);
       expect(constraint).toMatch(/senior_pastor_slot/i);
+      // Not redundant with `IN (1, 2)`: a CHECK passes on NULL, so without this
+      // the cap admits any number of slotless Senior Pastors. The behavioural
+      // proof is in invariants.spec.ts; this holds the constraint's shape so a
+      // rewrite cannot quietly drop it.
+      expect(constraint).toMatch(/senior_pastor_slot IS NOT NULL/i);
     });
   });
 
   describe('history is never deleted (principle 12)', () => {
-    it.each(['person_lifecycle', 'network_assignments', 'pastoral_assignments'])(
-      '%s refuses a DELETE',
-      async (table) => {
-        const trigger = await triggerFacts(db, `${table}_no_delete`);
+    it.each([
+      'person_lifecycle',
+      'network_assignments',
+      'pastoral_assignments',
+      'account_roles',
+      'capability_grants',
+    ])('%s refuses a DELETE, before the row goes', async (table) => {
+      // Asserting only that a trigger of this name exists would pass for a
+      // trigger on INSERT that did nothing.
+      const trigger = await deleteTriggerFacts(db, `${table}_no_delete`);
 
-        expect(trigger.deferrable).toBe(false);
-      },
-    );
+      expect(trigger.fires_on_delete).toBe(true);
+      expect(trigger.timing).toBe('BEFORE');
+      expect(trigger.function_name).toBe('refuse_delete_of_history');
+    });
   });
 
   describe('the closed enumerations of section 7', () => {
@@ -200,6 +212,27 @@ async function triggerFacts(
       FROM pg_trigger
      WHERE tgname = ${name}
        AND NOT tgisinternal
+  `.execute(db);
+
+  if (result.rows.length === 0) {
+    throw new Error(`trigger ${name} does not exist`);
+  }
+
+  return result.rows[0];
+}
+
+async function deleteTriggerFacts(
+  db: Kysely<Database>,
+  name: string,
+): Promise<{ fires_on_delete: boolean; timing: string; function_name: string }> {
+  const result = await sql<{ fires_on_delete: boolean; timing: string; function_name: string }>`
+    SELECT (t.tgtype & 8) <> 0   AS fires_on_delete,
+           CASE WHEN (t.tgtype & 2) <> 0 THEN 'BEFORE' ELSE 'AFTER' END AS timing,
+           p.proname AS function_name
+      FROM pg_trigger t
+      JOIN pg_proc p ON p.oid = t.tgfoid
+     WHERE t.tgname = ${name}
+       AND NOT t.tgisinternal
   `.execute(db);
 
   if (result.rows.length === 0) {

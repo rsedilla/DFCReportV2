@@ -224,6 +224,11 @@ describe('authentication (SKILL.md section 6)', () => {
           .send({ refresh_token: issued.token }),
       ]);
 
+      // Promise.all does not force both handlers to read the row before either
+      // rotation commits. If they happen to serialize, the loser takes the
+      // sequential-replay branch instead and this fails -- so a red run here can
+      // mean an unlucky interleaving rather than a defect. It cannot pass while
+      // the rule is broken, which is what makes it worth keeping.
       const statuses = [first.status, second.status].sort();
       expect(statuses).toEqual([200, 401]);
 
@@ -310,6 +315,53 @@ describe('authentication (SKILL.md section 6)', () => {
         .where('id', '=', account.id)
         .executeTakeFirstOrThrow();
       expect(marker.sessions_revoked_at).not.toBeNull();
+    });
+
+    it('kills a token that predates the revocation even if the row was missed', async () => {
+      // Revoking by row alone is not enough. A rotation committing alongside
+      // revokeAllSessions inserts its replacement after that statement took its
+      // snapshot, so the replacement is never seen and would otherwise stay live
+      // for thirty days. The marker is what closes it, exactly as it does for
+      // access tokens.
+      const issued = await tokens.issueRefreshToken(account.id, 'Test phone');
+
+      await request(app.getHttpServer())
+        .post('/api/v1/auth/logout-all')
+        .set('Authorization', `Bearer ${account.accessToken}`)
+        .expect(204);
+
+      // Put the row back exactly as the race would leave it: live, but issued
+      // before the account was revoked.
+      await db
+        .updateTable('refresh_tokens')
+        .set({ revoked_at: null })
+        .where('id', '=', issued.id)
+        .execute();
+
+      const response = await request(app.getHttpServer())
+        .post('/api/v1/auth/refresh')
+        .send({ refresh_token: issued.token });
+
+      expect(response.status).toBe(401);
+    });
+
+    it('lets a sign-in after a revocation work normally', async () => {
+      // The marker must not outlive its purpose: a token issued after the
+      // revocation is a new session and is untouched by it.
+      await request(app.getHttpServer())
+        .post('/api/v1/auth/logout-all')
+        .set('Authorization', `Bearer ${account.accessToken}`)
+        .expect(204);
+
+      const signIn = await request(app.getHttpServer())
+        .post('/api/v1/auth/login')
+        .send({ email: account.email, password: PASSWORD });
+      expect(signIn.status).toBe(200);
+
+      const refreshed = await request(app.getHttpServer())
+        .post('/api/v1/auth/refresh')
+        .send({ refresh_token: signIn.body.refresh_token });
+      expect(refreshed.status).toBe(200);
     });
   });
 

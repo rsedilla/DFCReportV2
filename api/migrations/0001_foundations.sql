@@ -530,7 +530,18 @@ ALTER TABLE account_roles
   ADD COLUMN senior_pastor_slot smallint,
   ADD CONSTRAINT account_roles_slot_belongs_to_the_role
     CHECK (
-      (role = 'SENIOR_PASTOR' AND senior_pastor_slot IN (1, 2))
+      -- `IS NOT NULL` is load-bearing and is not redundant with `IN (1, 2)`.
+      -- A CHECK fails only on FALSE, and passes on NULL. Without this clause, a
+      -- SENIOR_PASTOR row with a null slot evaluates to NULL OR FALSE, which is
+      -- NULL, which is accepted -- and null slots do not conflict in the unique
+      -- index below, because nulls are distinct. The cap would then permit any
+      -- number of Senior Pastors, which is weaker than the counting trigger this
+      -- design replaced.
+      (
+        role = 'SENIOR_PASTOR'
+        AND senior_pastor_slot IS NOT NULL
+        AND senior_pastor_slot IN (1, 2)
+      )
       OR (role <> 'SENIOR_PASTOR' AND senior_pastor_slot IS NULL)
     );
 
@@ -591,6 +602,19 @@ CREATE TABLE capability_grants (
 CREATE INDEX capability_grants_active_by_account
   ON capability_grants (account_id, capability)
   WHERE revoked_at IS NULL;
+
+-- The same rule as the effective-dated tables above, and section 7 states it for
+-- these two directly: "A grant is revoked by setting `revoked_at`, never by
+-- deleting the row. The history of who could do what, and when, is part of the
+-- audit record." A DELETE here removes the record that somebody once held Whole
+-- Church authority.
+CREATE TRIGGER account_roles_no_delete
+  BEFORE DELETE ON account_roles
+  FOR EACH ROW EXECUTE FUNCTION refuse_delete_of_history();
+
+CREATE TRIGGER capability_grants_no_delete
+  BEFORE DELETE ON capability_grants
+  FOR EACH ROW EXECUTE FUNCTION refuse_delete_of_history();
 
 -- ---------------------------------------------------------------------------
 -- refresh_tokens (SKILL.md section 6, Session and token storage)
@@ -659,6 +683,8 @@ DROP TABLE IF EXISTS refresh_tokens;
 DROP TABLE IF EXISTS capability_grants;
 DROP TABLE IF EXISTS account_roles;
 
+DROP TRIGGER IF EXISTS capability_grants_no_delete ON capability_grants;
+DROP TRIGGER IF EXISTS account_roles_no_delete ON account_roles;
 DROP TRIGGER IF EXISTS person_lifecycle_no_delete ON person_lifecycle;
 DROP TRIGGER IF EXISTS network_assignments_no_delete ON network_assignments;
 DROP TRIGGER IF EXISTS pastoral_assignments_no_delete ON pastoral_assignments;

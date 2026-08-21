@@ -580,13 +580,25 @@ The same rule governs every other effective-dated relationship: Network assignme
 
 **History is never deleted.**
 
-A row of an effective-dated table — `person_lifecycle`, `network_assignments`, `pastoral_assignments`, and every table that follows their shape — is never removed. A row entered in error is corrected by closing it and opening the right one, which is what effective dating is for. This is Principle 12 stated as an operation rather than as an aspiration, and it is enforced by the database.
+A row of an effective-dated table is never removed: `person_lifecycle`, `network_assignments` and `pastoral_assignments` here, and `account_roles` and `capability_grants`, whose revocation history Section 7 calls audit material. A table added later that carries the same shape is covered by the same rule and gets the same trigger in the migration that creates it — the rule is not satisfied by being written here. A row entered in error is corrected by closing it and opening the right one, which is what effective dating is for. This is Principle 12 stated as an operation rather than as an aspiration, and it is enforced by the database.
+
+`refresh_tokens` and `account_tokens` are deliberately not named. They carry operational state rather than history, and whether they may be pruned is an open question rather than a settled rule — see `CLAUDE.md`.
 
 The reason is narrower than "history is valuable". Every same-Network check in this section fires on insert and update, so a `DELETE` is the one write that passes none of them: removing a person's current Network row makes their Network resolve to an older one, or to none, and every open pastoral edge beneath them becomes cross-Network with nothing raised and nothing to revisit it. The first data-fix script written straight against the database is exactly where that arrives.
 
 **Database enforcement.**
 
 Service-layer checks are not sufficient on their own. The first data-fix script written directly against the database bypasses every one of them. Each invariant that can be expressed as a constraint must also exist as a constraint.
+
+No deletion — a trigger on every table holding history, refusing unconditionally:
+
+```sql
+CREATE TRIGGER pastoral_assignments_no_delete
+  BEFORE DELETE ON pastoral_assignments
+  FOR EACH ROW EXECUTE FUNCTION refuse_delete_of_history();
+```
+
+`TRUNCATE` fires no row trigger and is deliberately left available: it is how a test suite resets between cases, and the application's database role holds no rights to it.
 
 One active assignment — a partial unique index over the person, where the assignment is open:
 

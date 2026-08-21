@@ -79,6 +79,20 @@ export class AuthService {
       throw new ApiError(ApiErrorCode.UNAUTHENTICATED, 'Your session has ended. Sign in again.');
     }
 
+    // Section 6 says revocation invalidates **every** token for the account,
+    // immediately. Revoking by row alone does not achieve that: a rotation
+    // committing alongside `revokeAllSessions` inserts its replacement after that
+    // statement has taken its snapshot, so the replacement is never seen and
+    // stays live for thirty days -- minting access tokens whose issued-at
+    // post-dates the revocation, which the guard then admits.
+    //
+    // The marker is what closes it, exactly as it does for access tokens. A token
+    // issued before the account was revoked is dead whatever its own row says; one
+    // issued after is a new sign-in and is untouched.
+    if (account.sessions_revoked_at && row.issued_at <= account.sessions_revoked_at) {
+      throw new ApiError(ApiErrorCode.UNAUTHENTICATED, 'Your session has ended. Sign in again.');
+    }
+
     const issued = await this.tokens.rotateRefreshToken(row.id, account.id, deviceLabel);
 
     if (!issued) {
