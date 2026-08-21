@@ -113,6 +113,11 @@ export async function createAccount(
      * for a system action, which is the first Admin account and nothing else.
      */
     grantedBy?: string;
+    /**
+     * Which of the two Senior Pastor slots this account occupies. Required when
+     * granting SENIOR_PASTOR and meaningless otherwise (SKILL.md section 7).
+     */
+    seniorPastorSlot?: 1 | 2;
   },
 ): Promise<TestAccount> {
   const email = `${options.person.firstName.toLowerCase()}.${randomUUID().slice(0, 8)}@example.test`;
@@ -134,7 +139,12 @@ export async function createAccount(
   for (const role of options.roles) {
     await db
       .insertInto('account_roles')
-      .values({ account_id: account.id, role, granted_by: options.grantedBy ?? null })
+      .values({
+        account_id: account.id,
+        role,
+        granted_by: options.grantedBy ?? null,
+        senior_pastor_slot: role === 'SENIOR_PASTOR' ? (options.seniorPastorSlot ?? 1) : null,
+      })
       .execute();
   }
 

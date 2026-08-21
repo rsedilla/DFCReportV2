@@ -578,6 +578,12 @@ Backdating is therefore a separate capability, `records.backdate_effective_date`
 
 The same rule governs every other effective-dated relationship: Network assignment (Section 4), Cell membership (Section 10), and Cell leadership (Section 11). Ordinary users record changes as of now. Only Admin may set an effective date in the past, and only with a reason.
 
+**History is never deleted.**
+
+A row of an effective-dated table — `person_lifecycle`, `network_assignments`, `pastoral_assignments`, and every table that follows their shape — is never removed. A row entered in error is corrected by closing it and opening the right one, which is what effective dating is for. This is Principle 12 stated as an operation rather than as an aspiration, and it is enforced by the database.
+
+The reason is narrower than "history is valuable". Every same-Network check in this section fires on insert and update, so a `DELETE` is the one write that passes none of them: removing a person's current Network row makes their Network resolve to an older one, or to none, and every open pastoral edge beneath them becomes cross-Network with nothing raised and nothing to revisit it. The first data-fix script written straight against the database is exactly where that arrives.
+
 **Database enforcement.**
 
 Service-layer checks are not sufficient on their own. The first data-fix script written directly against the database bypasses every one of them. Each invariant that can be expressed as a constraint must also exist as a constraint.
@@ -682,6 +688,12 @@ An access token lives **15 minutes**. A refresh token lives 30 days from issue a
 `replaced_by_id` is what makes that signal readable, and it is set by rotation and by nothing else. It governs what happens when a revoked token is *presented*: one carrying a replacement was rotated, so presenting it again is a reuse signal; one without was revoked by a sign-out or by an account-wide revocation, and is simply refused. Without the column those cases are indistinguishable, and an ordinary sign-out looks exactly like a stolen token.
 
 It is not a classification of every revoked row. Account-wide revocation leaves the same shape as a sign-out, deliberately: nothing needs to escalate a token whose account has already been revoked.
+
+**Simultaneous presentation is not reuse.** Where two requests present the same live refresh token at the same instant, one wins the rotation and the other is refused — and that is all. The winner's session is untouched and no account-wide revocation follows.
+
+Reuse is a presentation of a token **after** it has been used, which is the case above: the token already reads as revoked, and it carries a replacement. Two requests arriving together is what an ordinary mobile client does when two calls hit 401 at once, and treating it as theft would sign a leader out of every device for behaving normally — on clients that cannot be force-updated (Section 2).
+
+The cost is accepted deliberately and stated so it is not mistaken for an oversight: an attacker racing a stolen token within the same instant is not detected at that moment. They are detected on the next presentation, because the token they hold is by then revoked and replaced.
 
 **Immediate revocation and a stateless API are in tension, and the resolution is explicit.** A bearer token verified by signature alone cannot be revoked before it expires, so Section 6's requirement that revocation take effect immediately, on all devices, is not satisfiable by a short lifetime alone.
 
@@ -963,6 +975,7 @@ account_roles
 - id
 - account_id
 - role               SENIOR_PASTOR | ADMIN | LEADER
+- senior_pastor_slot 1 or 2 where role is SENIOR_PASTOR, null otherwise
 - granted_by         null only for a system action, which is the first Admin account
 - granted_at
 - revoked_at         nullable
@@ -970,7 +983,9 @@ account_roles
 
 `SENIOR_PASTOR` is held by exactly the two Persons named in Section 4, and by nobody else. Section 1, Principle 6 names them, and the role carries Whole Church scope on `people.manage_lifecycle`, `people.manage_pastoral_assignment` and `audit.view` — so this is a constraint the system enforces, not a convention it assumes. Granting it to a third account is rejected. An account holds at most one active row per role.
 
-The enforcement is in two places, because the two halves of that rule are enforceable in different ways. The **count** is a database constraint: a third active `SENIOR_PASTOR` row is rejected. **Which two Persons** hold it is checked in the `auth` domain layer, since the database holds no durable representation of who Bishop Oriel Ballano and Pastora Geraldine Ballano are, and inventing one — a flag on the Person, a reserved identifier — would make the two most consequential accounts in the church depend on a row somebody could edit.
+The enforcement is in two places, because the two halves of that rule are enforceable in different ways. The **count** is a database constraint: there are two slots, a holder occupies one, and a partial unique index over the slot permits no second occupant of either. Revoking a row frees its slot, which is how a succession happens.
+
+The slot exists so that an *index* enforces the cap rather than a check that runs. A constraint trigger counting active rows is skipped entirely under `pg_restore --disable-triggers`, so a restore could load a third Senior Pastor in silence; a unique index is enforced there. The slot number itself means nothing and is not an ordering: it is a seat, not a rank. **Which two Persons** hold it is checked in the `auth` domain layer, since the database holds no durable representation of who Bishop Oriel Ballano and Pastora Geraldine Ballano are, and inventing one — a flag on the Person, a reserved identifier — would make the two most consequential accounts in the church depend on a row somebody could edit.
 
 `granted_by` is null only for a role granted by a **system action**, which is the first Admin account and nothing else: there is no account above it to have granted it. This mirrors the same allowance for `audit_log.actor_id` (Section 21). Every other role grant has an actor.
 

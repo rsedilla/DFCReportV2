@@ -5,10 +5,10 @@ name: CI
 # Retrofitting CI across an existing codebase is how gaps ship (docs/ROADMAP.md,
 # Stage 1 risk), so this exists before the application has a single feature.
 #
-# `api` and `web` are intended to be required status checks on `main`. Until they
-# are marked required in branch protection, this workflow reports and gates
-# nothing, which is a weaker thing than it looks: a pull request with a red build
-# can still be merged on an approval alone.
+# `api` and `web` are required status checks on `main`, and branches must be up to
+# date before merging. The authorization suite is deliberately not required: it
+# fails by design until Stage 2. Changing which checks gate `main` is a change to
+# branch protection, not to this file.
 
 on:
   pull_request:

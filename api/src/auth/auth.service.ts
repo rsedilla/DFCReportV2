@@ -82,22 +82,23 @@ export class AuthService {
     const issued = await this.tokens.rotateRefreshToken(row.id, account.id, deviceLabel);
 
     if (!issued) {
-      // Something claimed the token between the read above and here, and which
-      // something it was decides the response. `replaced_by_id` is set by
-      // rotation and by nothing else, so the same distinction the sequential
-      // path makes above applies here.
-      const claimed = await this.tokens.findRefreshTokenById(row.id);
-
-      if (claimed?.replaced_by_id) {
-        this.logger.warn(
-          `Refresh token ${row.id} was rotated concurrently; revoking every session for account ${row.account_id}.`,
-        );
-        await this.tokens.revokeAllSessions(row.account_id);
-      }
-
-      // Otherwise the device signed out a moment ago and this is its last
-      // in-flight request. Section 6 is explicit that signing out on one device
-      // ends that session only, so it is refused and nothing else happens.
+      // Something claimed the token between the read above and here: another
+      // refresh in flight at the same instant, or a sign-out a moment earlier.
+      // Neither is a replay.
+      //
+      // Section 6 defines the reuse signal as a token presented **after** use,
+      // and that case is handled above, where the token already reads as
+      // revoked. A simultaneous presentation is what an ordinary mobile client
+      // does when two requests hit 401 together, and revoking the account for it
+      // would sign a leader out of every device for behaving normally. This one
+      // request is refused; the winner's session is untouched.
+      //
+      // The cost is accepted deliberately: an attacker racing a stolen token
+      // within the same instant is not caught here. They are caught on the next
+      // presentation, which is the case the specification actually describes.
+      this.logger.debug(
+        `Refresh token ${row.id} was claimed concurrently; refusing this request only.`,
+      );
       throw new ApiError(ApiErrorCode.UNAUTHENTICATED, 'Your session has ended. Sign in again.');
     }
 

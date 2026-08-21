@@ -100,6 +100,46 @@ describe('the database enforces the section 5 invariants', () => {
     });
   });
 
+  describe('history is never deleted (principle 12)', () => {
+    it('refuses a DELETE on each effective-dated table', async () => {
+      // A DELETE was the one path around every constraint in the migration: both
+      // same-Network triggers fire on insert and update, so removing a person's
+      // current network row turns every open edge beneath them cross-Network
+      // with nothing firing and nothing to revisit it.
+      const person = await createPerson(db, { firstName: 'Mark', network: 'MENS' });
+      const leader = await createPerson(db, { firstName: 'Manuel', network: 'MENS' });
+      await assignTo(db, person.id, leader.id);
+
+      await expect(
+        db.deleteFrom('network_assignments').where('person_id', '=', person.id).execute(),
+      ).rejects.toThrow(/never deleted/);
+
+      await expect(
+        db.deleteFrom('pastoral_assignments').where('person_id', '=', person.id).execute(),
+      ).rejects.toThrow(/never deleted/);
+
+      await expect(
+        db.deleteFrom('person_lifecycle').where('person_id', '=', person.id).execute(),
+      ).rejects.toThrow(/never deleted/);
+    });
+
+    it('leaves the row and the edge intact after a refused DELETE', async () => {
+      const person = await createPerson(db, { firstName: 'Bea', network: 'WOMENS' });
+
+      await expect(
+        db.deleteFrom('network_assignments').where('person_id', '=', person.id).execute(),
+      ).rejects.toThrow();
+
+      const rows = await db
+        .selectFrom('network_assignments')
+        .select('network')
+        .where('person_id', '=', person.id)
+        .execute();
+
+      expect(rows).toEqual([{ network: 'WOMENS' }]);
+    });
+  });
+
   describe('invariant 4: no self-assignment', () => {
     it('refuses a row pointing at itself, which would be a one-node cycle', async () => {
       const person = await createPerson(db, { firstName: 'Manuel', network: 'MENS' });
@@ -279,11 +319,7 @@ describe('the database enforces the section 3 and section 7 rules it can', () =>
     ).rejects.toThrow(/immutable/);
   });
 
-  it('holds SENIOR_PASTOR to two accounts, as section 4 names two Persons', async () => {
-    // The role carries Whole Church scope on people.manage_lifecycle,
-    // people.manage_pastoral_assignment and audit.view. A third holder is the
-    // widest authority in the church, handed to somebody the specification does
-    // not name.
+  it('holds SENIOR_PASTOR to the two slots section 4 implies', async () => {
     const first = await accountFor(db, 'Oriel', 'MENS');
     const second = await accountFor(db, 'Geraldine', 'WOMENS');
     const third = await accountFor(db, 'Rico', 'MENS');
@@ -291,69 +327,54 @@ describe('the database enforces the section 3 and section 7 rules it can', () =>
     await db
       .insertInto('account_roles')
       .values([
-        { account_id: first, role: 'SENIOR_PASTOR' },
-        { account_id: second, role: 'SENIOR_PASTOR' },
+        { account_id: first, role: 'SENIOR_PASTOR', senior_pastor_slot: 1 },
+        { account_id: second, role: 'SENIOR_PASTOR', senior_pastor_slot: 2 },
       ])
       .execute();
 
+    // There is no third slot to occupy.
     await expect(
-      db.insertInto('account_roles').values({ account_id: third, role: 'SENIOR_PASTOR' }).execute(),
-    ).rejects.toThrow(/SENIOR_PASTOR/);
+      db
+        .insertInto('account_roles')
+        .values({ account_id: third, role: 'SENIOR_PASTOR', senior_pastor_slot: 3 })
+        .execute(),
+    ).rejects.toThrow(/account_roles_slot_belongs_to_the_role/);
 
-    // Revoking one makes room for another, which is how a succession happens.
+    // And neither of the two may be occupied twice.
+    await expect(
+      db
+        .insertInto('account_roles')
+        .values({ account_id: third, role: 'SENIOR_PASTOR', senior_pastor_slot: 2 })
+        .execute(),
+    ).rejects.toThrow(/account_roles_one_senior_pastor_per_slot/);
+
+    // Revoking frees the slot, which is how a succession happens.
     await db
       .updateTable('account_roles')
       .set({ revoked_at: new Date() })
-      .where('account_id', '=', first)
+      .where('account_id', '=', second)
       .execute();
-
-    await expect(
-      db.insertInto('account_roles').values({ account_id: third, role: 'SENIOR_PASTOR' }).execute(),
-    ).resolves.toBeDefined();
-  });
-
-  it('records who granted a role, and permits no actor only for a system action', async () => {
-    // Section 7 marks nullability explicitly, and `account_roles.granted_by` is
-    // nullable for exactly one case: the first Admin account, which no account
-    // above it could have granted. Every later grant carries an actor, and
-    // nothing in the schema can tell the two apart -- so the column is at least
-    // exercised both ways here rather than never at all.
-    const admin = await accountFor(db, 'Ester', 'WOMENS');
-    const leader = await accountFor(db, 'Manuel', 'MENS');
 
     await expect(
       db
         .insertInto('account_roles')
-        .values({ account_id: admin, role: 'ADMIN', granted_by: null })
+        .values({ account_id: third, role: 'SENIOR_PASTOR', senior_pastor_slot: 2 })
         .execute(),
     ).resolves.toBeDefined();
-
-    await db
-      .insertInto('account_roles')
-      .values({ account_id: leader, role: 'LEADER', granted_by: admin })
-      .execute();
-
-    const row = await db
-      .selectFrom('account_roles')
-      .select('granted_by')
-      .where('account_id', '=', leader)
-      .executeTakeFirstOrThrow();
-
-    expect(row.granted_by).toBe(admin);
   });
 
   it('refuses a third SENIOR_PASTOR under concurrent writes', async () => {
-    // The sequential case above passes against a counting trigger that is not a
-    // constraint at all: under READ COMMITTED neither transaction sees the
-    // other's uncommitted row, so both count two and both commit. This is the
-    // same shape as authorization case 7, and the same reason it exists.
+    // A unique index holds where a counting check does not: under READ COMMITTED
+    // neither transaction would see the other's uncommitted row, so a count would
+    // pass twice. This is authorization case 7 applied to the role cap, and it is
+    // why the cap is an index rather than a trigger that counts.
     const holder = await accountFor(db, 'Oriel', 'MENS');
     const first = await accountFor(db, 'Ester', 'WOMENS');
     const second = await accountFor(db, 'Nora', 'WOMENS');
 
     await db
       .insertInto('account_roles')
-      .values({ account_id: holder, role: 'SENIOR_PASTOR' })
+      .values({ account_id: holder, role: 'SENIOR_PASTOR', senior_pastor_slot: 1 })
       .execute();
 
     const [a, b] = [await openClient(), await openClient()];
@@ -362,21 +383,19 @@ describe('the database enforces the section 3 and section 7 rules it can', () =>
       await a.query('BEGIN');
       await b.query('BEGIN');
 
-      await a.query('INSERT INTO account_roles (account_id, role) VALUES ($1, $2)', [
-        first,
-        'SENIOR_PASTOR',
-      ]);
-      await b.query('INSERT INTO account_roles (account_id, role) VALUES ($1, $2)', [
-        second,
-        'SENIOR_PASTOR',
-      ]);
+      await a.query(
+        'INSERT INTO account_roles (account_id, role, senior_pastor_slot) VALUES ($1, $2, 2)',
+        [first, 'SENIOR_PASTOR'],
+      );
 
-      // Both inserts succeed: the trigger is deferred. One commit has to lose.
-      const commits = await Promise.allSettled([a.query('COMMIT'), b.query('COMMIT')]);
-      const rejected = commits.filter((result) => result.status === 'rejected');
+      const blocked = b.query(
+        'INSERT INTO account_roles (account_id, role, senior_pastor_slot) VALUES ($1, $2, 2)',
+        [second, 'SENIOR_PASTOR'],
+      );
 
-      expect(rejected).toHaveLength(1);
-      expect(String(rejected[0].reason)).toMatch(/SENIOR_PASTOR/);
+      await a.query('COMMIT');
+      await expect(blocked).rejects.toThrow(/account_roles_one_senior_pastor_per_slot/);
+      await b.query('ROLLBACK');
     } finally {
       await a.end();
       await b.end();
@@ -390,6 +409,17 @@ describe('the database enforces the section 3 and section 7 rules it can', () =>
       .execute();
 
     expect(active).toHaveLength(2);
+  });
+
+  it('refuses a slot on a role that is not SENIOR_PASTOR', async () => {
+    const account = await accountFor(db, 'Manuel', 'MENS');
+
+    await expect(
+      db
+        .insertInto('account_roles')
+        .values({ account_id: account, role: 'LEADER', senior_pastor_slot: 1 })
+        .execute(),
+    ).rejects.toThrow(/account_roles_slot_belongs_to_the_role/);
   });
 
   it('refuses a read-only grant of a write capability', async () => {

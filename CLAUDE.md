@@ -568,9 +568,9 @@ The lesson is procedural and is now written into Branches and pull requests abov
 
 The four that were live defects:
 
-**A counting trigger is not a constraint.** The `SENIOR_PASTOR` cap counted active rows in a deferred trigger, and under READ COMMITTED neither of two concurrent transactions sees the other's uncommitted row — both count two, both commit, three Senior Pastors. This is the failure authorization case 7 exists to warn about, written while citing it. Fixed with a transaction-scoped advisory lock, and pinned by a concurrent test.
+**A counting trigger is not a constraint.** The `SENIOR_PASTOR` cap counted active rows in a deferred trigger, and under READ COMMITTED neither of two concurrent transactions sees the other's uncommitted row — both count two, both commit, three Senior Pastors. This is the failure authorization case 7 exists to warn about, written while citing it. Fixed first with a transaction-scoped advisory lock, and then replaced by the slot column and its unique index (ruling below), which needs no lock and survives a restore.
 
-The reason first recorded for rejecting a `senior_pastor_slot` column — that §7 gives `account_roles` its shape and that shape has no slot — does not survive scrutiny. `refresh_tokens.replaced_by_id` was the counter-example, a column §6's shape did not list, added because a rule required it; that was drift rather than licence, and §6 now carries it. The point stands without the precedent: a shape is amended when a rule needs a column, deliberately and in the same change. The honest position is that the slot with a partial unique index is the **stronger** design, because a unique index is enforced under `pg_restore --disable-triggers` where a constraint trigger is skipped entirely. The lock closes the race; it does not close the restore path. Adopting the slot is an open question below, and the lock stands until it is answered.
+The reason first recorded for rejecting a `senior_pastor_slot` column — that §7 gives `account_roles` its shape and that shape has no slot — does not survive scrutiny. `refresh_tokens.replaced_by_id` was the counter-example, a column §6's shape did not list, added because a rule required it; that was drift rather than licence, and §6 now carries it. The point stands without the precedent: a shape is amended when a rule needs a column, deliberately and in the same change. The honest position is that the slot with a partial unique index is the **stronger** design, because a unique index is enforced under `pg_restore --disable-triggers` where a constraint trigger is skipped entirely. The lock closed the race; it did not close the restore path. The slot was adopted the same day — see the ruling below — and the trigger is gone.
 
 **Refresh-token rotation was not atomic.** Issue-then-revoke, in two statements, with the revoke's row count discarded — so two requests presenting one token could both mint a replacement while only one revoke landed, and the reuse signal §6 requires was never raised for the loser. Rotation now claims the presented token conditionally inside a transaction and treats a lost claim as reuse.
 
@@ -589,9 +589,30 @@ The cost is real and accepted: a developer who applied 0001 locally sees `migrat
 
 **The phase ends the first time this schema is applied to a database anybody depends on.** From that point 0001 is immutable and every correction is a new migration, as the migration policy says. This mirrors the initial-encoding relaxation in §2: a relaxation attached to a phase with no defined end is a permanent relaxation, so the end is defined here.
 
+### 2026-08-21 — Simultaneous presentation of a refresh token is not reuse
+Two requests presenting the same live refresh token at the same instant: one wins the rotation, the other is refused, and nothing else happens. The winner's session survives and no account-wide revocation follows.
+
+§6 defines the reuse signal as a presentation **after** use, and that case is unchanged — a token that already reads as revoked and carries a replacement still revokes every session on the account. Simultaneity is different: two calls hitting 401 together is what an ordinary mobile HTTP interceptor does, and treating it as theft signed a leader out of every device for behaving normally, on clients §2 says cannot be force-updated.
+
+The cost is real and is written into §6 rather than glossed: an attacker racing a stolen token within the same instant is not caught at that moment. They are caught on the next presentation, which is the case the specification actually describes. Written to `SKILL.md` §6.
+
+### 2026-08-21 — `account_roles` gains `senior_pastor_slot`
+Two slots; a holder occupies one; a partial unique index over the slot permits no second occupant. Revoking a row frees its slot, which is how a succession happens. The number is a seat, not a rank, and it orders nothing.
+
+This replaces a constraint trigger that counted active rows. The count was made race-free with an advisory lock and was still the weaker design, because `pg_restore --disable-triggers` skips a constraint trigger and does not skip a unique index — so a restore could load a third Senior Pastor in silence, at exactly the moment nobody is watching.
+
+The reason first recorded for refusing the column, that §7's shape has no slot, was the wrong test. A shape is amended when a rule needs a column, deliberately and in the same change, which is what this is. Written to `SKILL.md` §7.
+
+### 2026-08-21 — A row of an effective-dated table is never deleted
+`person_lifecycle`, `network_assignments`, `pastoral_assignments`, and every table that follows their shape. A row entered in error is corrected by closing it and opening the right one, which is what effective dating is for. Enforced by a `BEFORE DELETE` trigger on each, not by convention.
+
+Principle 12 said history is preserved and §5 said a row is never overwritten in place; neither addressed `DELETE`, and the schema permitted it. That made it the one write passing none of the same-Network checks, since both triggers fire on insert and update: removing a person's current Network row turns every open edge beneath them cross-Network, with nothing raised and nothing to revisit it.
+
+`TRUNCATE` fires no row trigger and stays available. It is how the test suite resets, and the application holds no rights to it. Written to `SKILL.md` §5.
+
 ### Open — awaiting a ruling
 
-**One item awaits a ruling and blocks Stage 5. Nine other things are unsettled, four of them questions Stage 2 will run into and should answer before it builds. They are listed at the end, so this section is the whole of what is open.**
+**One item awaits a ruling and blocks Stage 5. Six other things are unsettled and block nothing. They are listed at the end, so this section is the whole of what is open.**
 
 **What an aggregate Cell attendance view offers in place of buckets.** Monthly-attendance buckets are a Cell-scope view only, because N belongs to a Cell and aggregating across different N inflates `Completed` for the Cells that recorded least (`SKILL.md` §12). At leader and Network scope the spec offers unique people, classification and coverage, and does not say whether anything should replace the buckets. Settle it in Stage 5 against real data.
 
@@ -600,9 +621,6 @@ Two related questions have defined behaviour and are recorded in `SKILL.md` §12
 **Unsettled, and not blocking anything.** None of these is a Stop Condition. An implementer proceeds and settles them in passing; they are listed here because a reader looking for what is open should not have to find it inside the body of a ruling.
 
 - **The client libraries beyond the component question** — TanStack Query, TanStack Table, a chart library, icons and fonts. Recorded as expectations in the UI direction entry above, deliberately not in `SKILL.md`, and confirmed against a real screen in Stage 2 rather than now. A list headed "This is settled, not a suggestion" is no place for a library nobody has used yet.
-- **Whether presenting one refresh token twice *simultaneously* is reuse.** §6 defines the signal as a token "replayed **after** use" and says nothing about simultaneity. It matters to every client: a mobile HTTP interceptor refreshing on two parallel 401s is ordinary, and the system currently treats the loser of that race as evidence of a stolen token and ends every session on the account. The alternative -- refuse the loser, leave the winner's session alone -- is kinder to real clients and weaker against an attacker who is racing. The code answers it one way today; §6 should answer it before Stage 2, because mobile builds cannot be force-updated.
-- **Whether `account_roles` gains a `senior_pastor_slot` column.** The advisory lock makes the count race-free, but a constraint trigger is skipped by `pg_restore --disable-triggers` while a unique index is not, so a restore can still load a third Senior Pastor. Adopting the slot means amending §7's shape, which is done when a rule needs a column, deliberately and in the same change; it would let an index do the work with no lock.
-- **Whether a row of an effective-dated table may ever be deleted.** *A present hole in a shipped invariant rather than an open question of ministry policy: §5 requires the same-Network rule on every write, and a `DELETE` is a write.* Principle 12 says history is preserved and §5 says it is never overwritten in place; neither addresses `DELETE`, and the schema permits it. A `DELETE` on `network_assignments` walks around every same-Network constraint in the first migration, because both triggers fire on insert and update only. Settle it, then enforce whichever answer — a `DELETE` is the one path around every constraint there.
 - **What Admin should do when a backdated Network correction cannot be made.** The trigger validates assignments that closed after the effective date, so a correction backdated into a closed period can fail with no legal remedy: the reassignment §4 requires cannot be made for a period already ended, and rewriting a closed assignment row is forbidden by §5 and Principle 12. Stage 2 builds this endpoint.
 - **Whether a Network change and the reassignment it forces must share one effective instant.** The schema now requires it — the old edge escapes validation only because `ended_at > started_at` is false when the two are exactly equal, so closing one microsecond later makes the mandated atomic operation impossible. Defensible, but unwritten, and Stage 2 will implement against it either way.
 - **The native client framework.** `SKILL.md` §2 settles the web stack and says nothing about Android and iOS. Deferred since the specification was written; indexed here because two rules now point at it as open.

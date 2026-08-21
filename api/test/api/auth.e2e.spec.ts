@@ -209,7 +209,7 @@ describe('authentication (SKILL.md section 6)', () => {
   });
 
   describe('rotation under concurrency', () => {
-    it('lets exactly one of two simultaneous presentations win, and revokes the account', async () => {
+    it('lets exactly one of two simultaneous presentations win, and spares the winner', async () => {
       // Issuing the replacement before claiming the presented token let both
       // callers mint one and only one revoke land: two live chains from one
       // presentation, with the reuse signal never raised for the loser.
@@ -227,14 +227,30 @@ describe('authentication (SKILL.md section 6)', () => {
       const statuses = [first.status, second.status].sort();
       expect(statuses).toEqual([200, 401]);
 
-      // The loser is treated as a copy in circulation, so nothing survives.
+      // Section 6 defines reuse as a presentation *after* use. Two requests
+      // arriving together is what a mobile client does when both hit 401, so the
+      // loser is refused and the winner keeps working: exactly one live token.
       const live = await db
         .selectFrom('refresh_tokens')
         .select('id')
         .where('account_id', '=', account.id)
         .where('revoked_at', 'is', null)
         .execute();
-      expect(live).toHaveLength(0);
+      expect(live).toHaveLength(1);
+
+      const marker = await db
+        .selectFrom('accounts')
+        .select('sessions_revoked_at')
+        .where('id', '=', account.id)
+        .executeTakeFirstOrThrow();
+      expect(marker.sessions_revoked_at).toBeNull();
+
+      // And the token the winner was given still works.
+      const winner = first.status === 200 ? first : second;
+      const again = await request(app.getHttpServer())
+        .post('/api/v1/auth/refresh')
+        .send({ refresh_token: winner.body.refresh_token });
+      expect(again.status).toBe(200);
     });
 
     it('does not let signing out erase a reuse signal already recorded', async () => {

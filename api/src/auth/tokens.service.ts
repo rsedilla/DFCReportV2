@@ -122,17 +122,6 @@ export class TokensService {
     return revoked !== undefined;
   }
 
-  /** Reads a token row by id, for telling a rotation apart from a sign-out. */
-  async findRefreshTokenById(id: string): Promise<{ replaced_by_id: string | null } | null> {
-    const row = await this.db
-      .selectFrom('refresh_tokens')
-      .select('replaced_by_id')
-      .where('id', '=', id)
-      .executeTakeFirst();
-
-    return row ?? null;
-  }
-
   /**
    * Rotation, as one transaction: claim the presented token, then issue its
    * replacement.

@@ -84,6 +84,12 @@ export interface AccountRolesTable {
   id: Generated<string>;
   account_id: string;
   role: AccountRole;
+  /**
+   * One of the two Senior Pastor slots (SKILL.md section 7). Required where the
+   * role is SENIOR_PASTOR and null otherwise; a partial unique index over it is
+   * what caps the role at the two Persons section 4 names.
+   */
+  senior_pastor_slot: number | null;
   granted_by: string | null;
   granted_at: ServerTimestamp;
   revoked_at: Date | null;

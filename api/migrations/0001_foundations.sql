@@ -433,6 +433,53 @@ CREATE CONSTRAINT TRIGGER network_assignments_keep_edges_same_network
   FOR EACH ROW EXECUTE FUNCTION assert_network_change_keeps_edges();
 
 -- ---------------------------------------------------------------------------
+-- History is never deleted (SKILL.md section 1, principle 12; section 5)
+--
+-- Principle 12 preserves history and section 5 says an effective-dated row is
+-- never overwritten in place. Neither said anything about DELETE, and until this
+-- trigger the schema permitted it -- which made it the one path around every
+-- other constraint in this file.
+--
+-- The same-Network triggers fire on insert and update. Deleting a person's
+-- current network_assignments row makes network_as_of resolve to an older row,
+-- or to none, from that instant forward: every open pastoral edge beneath them
+-- becomes cross-Network, no trigger fires, and nothing revisits it. Section 5
+-- puts these rules in the database precisely because "the first data-fix script
+-- written directly against the database bypasses every one of them", and a
+-- DELETE is that script.
+--
+-- A row entered in error is corrected by closing it and opening the right one,
+-- which is what effective dating is for. Removing it destroys the answer to a
+-- question about a past period, which is the thing the table exists to answer.
+--
+-- TRUNCATE fires no row triggers and is deliberately still permitted: it is how
+-- the test suite resets between cases, and it cannot be reached by the
+-- application, which holds no rights to it.
+-- ---------------------------------------------------------------------------
+
+CREATE FUNCTION refuse_delete_of_history() RETURNS trigger
+LANGUAGE plpgsql AS $$
+BEGIN
+  RAISE EXCEPTION
+    'rows of %.% are never deleted: close the row and open a new one (SKILL.md principle 12)',
+    TG_TABLE_SCHEMA, TG_TABLE_NAME
+    USING ERRCODE = 'restrict_violation';
+END;
+$$;
+
+CREATE TRIGGER person_lifecycle_no_delete
+  BEFORE DELETE ON person_lifecycle
+  FOR EACH ROW EXECUTE FUNCTION refuse_delete_of_history();
+
+CREATE TRIGGER network_assignments_no_delete
+  BEFORE DELETE ON network_assignments
+  FOR EACH ROW EXECUTE FUNCTION refuse_delete_of_history();
+
+CREATE TRIGGER pastoral_assignments_no_delete
+  BEFORE DELETE ON pastoral_assignments
+  FOR EACH ROW EXECUTE FUNCTION refuse_delete_of_history();
+
+-- ---------------------------------------------------------------------------
 -- account_roles (SKILL.md section 7, How grants are held)
 -- ---------------------------------------------------------------------------
 
@@ -462,64 +509,34 @@ CREATE INDEX account_roles_active_by_account
 -- SENIOR_PASTOR is held by exactly the two Persons named in section 4, and by
 -- nobody else; granting it to a third account is rejected. Section 7 says that is
 -- a constraint the system enforces rather than a convention it assumes, so the
--- cap lives here rather than only in a service.
+-- cap is a unique index rather than a check that runs.
 --
 -- The role carries Whole Church scope on people.manage_lifecycle,
 -- people.manage_pastoral_assignment and audit.view, which is why a third holder
 -- matters: it is the widest authority in the church.
 --
+-- The slot is what makes the cap expressible as an index. Two slots exist, a
+-- holder occupies one, and the partial unique index below permits no second
+-- occupant of either. A counting trigger was tried first and rejected: even made
+-- race-free with an advisory lock, a constraint trigger is skipped entirely under
+-- `pg_restore --disable-triggers`, so a restore could load a third Senior Pastor
+-- in silence. A unique index is enforced there. The restore is exactly the moment
+-- nobody is watching.
+--
 -- This enforces the count. Which two Persons hold it is checked in the `auth`
 -- domain layer, because the database has no durable representation of who
 -- Bishop Oriel and Pastora Geraldine are.
---
--- A `senior_pastor_slot` column with a partial unique index would let the index
--- do the work, and is the stronger design: it needs no lock, it does not
--- serialize unrelated `account_roles` writes at commit, and -- decisively -- a
--- unique index is enforced under `pg_restore --disable-triggers`, where a
--- constraint trigger is skipped entirely. A restore could load three Senior
--- Pastors past this trigger.
---
--- It is not used *yet* because it adds a column section 7's shape does not carry,
--- which is an amendment rather than an implementation detail. That amendment is
--- an open question in CLAUDE.md. The lock closes the race today; it does not
--- close the restore path, and that is written down rather than glossed.
-CREATE FUNCTION assert_two_senior_pastors_at_most() RETURNS trigger
-LANGUAGE plpgsql AS $$
-DECLARE
-  v_active integer;
-BEGIN
-  -- Serialize the check. A counting trigger without this is not a constraint: it
-  -- is an application check that happens to live in SQL. Two transactions
-  -- granting the role at the same moment each fire at commit, neither sees the
-  -- other's uncommitted row under READ COMMITTED, both count two, and both
-  -- commit -- three Senior Pastors, by exactly the route the partial unique index
-  -- on pastoral_assignments exists to block (CLAUDE.md, authorization case 7).
-  --
-  -- The lock is held to the end of the transaction, so the second writer waits
-  -- for the first to finish committing and then counts a snapshot that includes
-  -- it. The key is arbitrary and belongs to this rule alone.
-  PERFORM pg_advisory_xact_lock(hashtext('account_roles.senior_pastor_cap'));
+ALTER TABLE account_roles
+  ADD COLUMN senior_pastor_slot smallint,
+  ADD CONSTRAINT account_roles_slot_belongs_to_the_role
+    CHECK (
+      (role = 'SENIOR_PASTOR' AND senior_pastor_slot IN (1, 2))
+      OR (role <> 'SENIOR_PASTOR' AND senior_pastor_slot IS NULL)
+    );
 
-  SELECT count(*) INTO v_active
-    FROM account_roles
-   WHERE role = 'SENIOR_PASTOR'
-     AND revoked_at IS NULL;
-
-  IF v_active > 2 THEN
-    RAISE EXCEPTION
-      'SENIOR_PASTOR is held by exactly the two Persons named in SKILL.md section 4 (% active rows)',
-      v_active
-      USING ERRCODE = 'check_violation';
-  END IF;
-
-  RETURN NULL;
-END;
-$$;
-
-CREATE CONSTRAINT TRIGGER account_roles_two_senior_pastors_at_most
-  AFTER INSERT OR UPDATE ON account_roles
-  DEFERRABLE INITIALLY DEFERRED
-  FOR EACH ROW EXECUTE FUNCTION assert_two_senior_pastors_at_most();
+CREATE UNIQUE INDEX account_roles_one_senior_pastor_per_slot
+  ON account_roles (senior_pastor_slot)
+  WHERE revoked_at IS NULL;
 
 -- ---------------------------------------------------------------------------
 -- capability_grants (SKILL.md section 7, How grants are held)
@@ -642,8 +659,10 @@ DROP TABLE IF EXISTS refresh_tokens;
 DROP TABLE IF EXISTS capability_grants;
 DROP TABLE IF EXISTS account_roles;
 
-DROP TRIGGER IF EXISTS account_roles_two_senior_pastors_at_most ON account_roles;
-DROP FUNCTION IF EXISTS assert_two_senior_pastors_at_most();
+DROP TRIGGER IF EXISTS person_lifecycle_no_delete ON person_lifecycle;
+DROP TRIGGER IF EXISTS network_assignments_no_delete ON network_assignments;
+DROP TRIGGER IF EXISTS pastoral_assignments_no_delete ON pastoral_assignments;
+DROP FUNCTION IF EXISTS refuse_delete_of_history();
 
 DROP TRIGGER IF EXISTS network_assignments_keep_edges_same_network ON network_assignments;
 DROP TRIGGER IF EXISTS pastoral_assignments_same_network ON pastoral_assignments;

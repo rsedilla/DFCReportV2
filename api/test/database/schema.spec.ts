@@ -95,11 +95,33 @@ describe('the schema (SKILL.md sections 4, 5 and 7)', () => {
   });
 
   describe('account_roles', () => {
-    it('caps SENIOR_PASTOR at the two Persons section 4 names', async () => {
-      const trigger = await triggerFacts(db, 'account_roles_two_senior_pastors_at_most');
+    it('caps SENIOR_PASTOR with an index, not a check that runs', async () => {
+      // A constraint trigger is skipped under `pg_restore --disable-triggers`; a
+      // unique index is not. The restore is exactly when nobody is watching.
+      const index = await indexDefinition(db, 'account_roles_one_senior_pastor_per_slot');
 
-      expect(trigger.is_constraint_trigger).toBe(true);
+      expect(index).toMatch(/CREATE UNIQUE INDEX/i);
+      expect(index).toMatch(/\(senior_pastor_slot\)/i);
+      expect(index).toMatch(/WHERE \(revoked_at IS NULL\)/i);
     });
+
+    it('ties the slot to the role', async () => {
+      const constraint = await constraintDefinition(db, 'account_roles_slot_belongs_to_the_role');
+
+      expect(constraint).toMatch(/CHECK/i);
+      expect(constraint).toMatch(/senior_pastor_slot/i);
+    });
+  });
+
+  describe('history is never deleted (principle 12)', () => {
+    it.each(['person_lifecycle', 'network_assignments', 'pastoral_assignments'])(
+      '%s refuses a DELETE',
+      async (table) => {
+        const trigger = await triggerFacts(db, `${table}_no_delete`);
+
+        expect(trigger.deferrable).toBe(false);
+      },
+    );
   });
 
   describe('the closed enumerations of section 7', () => {
