@@ -149,8 +149,38 @@ export class TokensService {
     id: string,
     accountId: string,
     deviceLabel: string | null,
+    presentedIssuedAt: Date,
   ): Promise<IssuedRefreshToken | null> {
     return this.db.transaction().execute(async (trx) => {
+      // Take the account row first, and lock it.
+      //
+      // Checking the revocation marker before opening this transaction is not
+      // enough, and the reason is worth stating: that read sees committed state
+      // only, so a revocation that has stamped the marker but not yet committed
+      // reads as absent. A token that escaped the revoking UPDATE could then be
+      // rotated in that window into a replacement issued *after* the marker,
+      // which every later check would accept. Thirty days of a session that was
+      // revoked.
+      //
+      // The lock orders this rotation against the revocation in the database
+      // rather than in the application: if a revocation is in flight, this waits
+      // for it and then sees its marker. Nothing about the two clocks matters
+      // for the ordering, only for the comparison.
+      const account = await trx
+        .selectFrom('accounts')
+        .select(['sessions_revoked_at'])
+        .where('id', '=', accountId)
+        .forNoKeyUpdate()
+        .executeTakeFirst();
+
+      if (!account) {
+        return null;
+      }
+
+      if (account.sessions_revoked_at && presentedIssuedAt <= account.sessions_revoked_at) {
+        return null;
+      }
+
       const now = new Date();
       const claimed = await trx
         .updateTable('refresh_tokens')

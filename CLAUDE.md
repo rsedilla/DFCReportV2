@@ -616,7 +616,7 @@ It reaches `account_roles` and `capability_grants` too. §7 says a grant is revo
 
 ### Open — awaiting a ruling
 
-**One item awaits a ruling and blocks Stage 5. Ten other things are unsettled, four of them raised by the reviews of the rulings above and worth settling before Stage 2 builds. They are listed at the end, so this section is the whole of what is open.**
+**One item awaits a ruling and blocks Stage 5. Eleven other things are unsettled, five of them raised by the reviews of the rulings above and worth settling before Stage 2 builds. They are listed at the end, so this section is the whole of what is open.**
 
 **What an aggregate Cell attendance view offers in place of buckets.** Monthly-attendance buckets are a Cell-scope view only, because N belongs to a Cell and aggregating across different N inflates `Completed` for the Cells that recorded least (`SKILL.md` §12). At leader and Network scope the spec offers unique people, classification and coverage, and does not say whether anything should replace the buckets. Settle it in Stage 5 against real data.
 
@@ -624,6 +624,7 @@ Two related questions have defined behaviour and are recorded in `SKILL.md` §12
 
 **Unsettled, and not blocking anything.** None of these is a Stop Condition. An implementer proceeds and settles them in passing; they are listed here because a reader looking for what is open should not have to find it inside the body of a ruling.
 
+- **Whether the API runs as more than one instance, and what clock skew revocation may assume.** §6 says any instance can serve any request, and account-wide revocation compares two timestamps both stamped by an API process. On one instance that is one clock; on several it is not, and §24 now requires synchronised clocks without bounding the skew this comparison tolerates. The row lock added for the uncommitted-revocation window orders the two events in the database and does not depend on clocks, so this affects the comparison rather than the ordering. Settle it before the first multi-instance deployment.
 - **The application's database role.** §24 requires least-privilege credentials and none exist: the API connects as the owner of every table, so it holds `TRUNCATE`, which bypasses the no-delete triggers entirely, and `DROP`. The no-delete rule leans on this role to make its `TRUNCATE` exemption safe. Creating it is deployment work with no ruling attached, but until it happens §5's exemption is unprotected.
 - **Whether refresh tokens and activation tokens may be pruned.** §5 now says a row of an effective-dated table is never deleted, and deliberately does not name `refresh_tokens` or `account_tokens`. Both accumulate: a 30-day token per device per rotation. A retention job is ordinary and will be wanted, and it either violates a stated invariant or is blocked by a trigger nobody expected. Settle it before Stage 2 writes one.
 - **Whether a revocation may be undone in place.** Nothing addresses setting `revoked_at` back to `NULL`, and the schema permits it on `account_roles` and `capability_grants`. It erases a revocation exactly as a `DELETE` would, one column over — and the Senior Pastor cap depends on `revoked_at` being monotone for the count to mean anything over time.

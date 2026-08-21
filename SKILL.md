@@ -2752,6 +2752,7 @@ Do not build offline complexity before it is needed. Do not make architectural c
 - A restore tested before go-live, and at least annually thereafter
 - Audit logging
 - Least-privilege database/application credentials
+- **Synchronised clocks on every host running the API.** Account-wide revocation compares a token's issued-at against the account's revocation marker, and both are stamped by an API process (Section 6). On more than one instance those are two clocks, and skew moves tokens across the boundary in both directions — admitting a token that should be dead, or refusing a sign-in that should work. Ordinary NTP is sufficient; the requirement is that it is not left to chance
 
 ### Backups
 

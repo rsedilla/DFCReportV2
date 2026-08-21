@@ -94,7 +94,15 @@ export class AuthService {
       throw new ApiError(ApiErrorCode.UNAUTHENTICATED, 'Your session has ended. Sign in again.');
     }
 
-    const issued = await this.tokens.rotateRefreshToken(row.id, account.id, deviceLabel);
+    // The check above is the cheap early refusal and reads committed state only.
+    // The authoritative one is inside the rotation, under a row lock on the
+    // account, where a revocation still in flight cannot be missed.
+    const issued = await this.tokens.rotateRefreshToken(
+      row.id,
+      account.id,
+      deviceLabel,
+      row.issued_at,
+    );
 
     if (!issued) {
       // Something claimed the token between the read above and here: another

@@ -1,3 +1,4 @@
+import { Client } from 'pg';
 import request from 'supertest';
 
 import { PasswordService } from '../../src/auth/password.service';
@@ -343,6 +344,49 @@ describe('authentication (SKILL.md section 6)', () => {
         .send({ refresh_token: issued.token });
 
       expect(response.status).toBe(401);
+    });
+
+    it('refuses a token escaping a revocation that has stamped but not committed', async () => {
+      // The window the marker check alone could not close. `findById` reads
+      // committed state, so a revocation mid-transaction reads as absent, and a
+      // token that escaped its UPDATE could be rotated into a replacement issued
+      // after the marker -- accepted by every later check.
+      //
+      // Reconstructed deterministically: a second connection stamps the marker
+      // and holds the transaction open. The rotation must block on the account
+      // row and then refuse, rather than reading past it.
+      const issued = await tokens.issueRefreshToken(account.id, 'Test phone');
+      const revoker = new Client({ connectionString: process.env.DATABASE_URL });
+      await revoker.connect();
+
+      try {
+        await revoker.query('BEGIN');
+        await revoker.query('UPDATE accounts SET sessions_revoked_at = now() WHERE id = $1', [
+          account.id,
+        ]);
+
+        const refresh = request(app.getHttpServer())
+          .post('/api/v1/auth/refresh')
+          .send({ refresh_token: issued.token });
+
+        // Give the request time to reach the lock rather than race past it.
+        await new Promise((resolve) => setTimeout(resolve, 250));
+        await revoker.query('COMMIT');
+
+        const response = await refresh;
+        expect(response.status).toBe(401);
+      } finally {
+        await revoker.end();
+      }
+
+      // Nothing was minted in the window.
+      const live = await db
+        .selectFrom('refresh_tokens')
+        .select('id')
+        .where('account_id', '=', account.id)
+        .where('revoked_at', 'is', null)
+        .execute();
+      expect(live.map((row) => row.id)).toEqual([issued.id]);
     });
 
     it('lets a sign-in after a revocation work normally', async () => {

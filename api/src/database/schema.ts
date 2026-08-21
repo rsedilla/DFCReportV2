@@ -116,7 +116,13 @@ export interface RefreshTokensTable {
   token_hash: string;
   device_label: string | null;
   replaced_by_id: string | null;
-  issued_at: ServerTimestamp;
+  /**
+   * Written by the application, never left to the column default. It is compared
+   * against `accounts.sessions_revoked_at` and against a JWT's `iat`, both of
+   * which the application stamps, and the database's clock is a different one.
+   * Required on insert so the compiler holds that at every path.
+   */
+  issued_at: ColumnType<Date, Date, Date>;
   expires_at: ColumnType<Date, Date | string, Date | string>;
   last_used_at: Date | null;
   revoked_at: Date | null;

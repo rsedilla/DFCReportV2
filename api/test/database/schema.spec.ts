@@ -249,7 +249,7 @@ async function deleteTriggerFacts(
     SELECT (t.tgtype & 8) <> 0   AS fires_on_delete,
            (t.tgtype & 1) <> 0   AS per_row,
            CASE WHEN (t.tgtype & 2) <> 0 THEN 'BEFORE' ELSE 'AFTER' END AS timing,
-           t.tgenabled = 'O'     AS enabled,
+           t.tgenabled IN ('O', 'A') AS enabled,
            c.relname             AS table_name,
            p.proname             AS function_name
       FROM pg_trigger t
