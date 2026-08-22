@@ -4,6 +4,7 @@ import {
   type Candidate,
   type Subject,
 } from '../../src/people/duplicate-matching';
+import { isCalendarDate, transpositionsOf } from '../../src/people/people.service';
 
 /**
  * SKILL.md section 3, Matching rules.
@@ -110,8 +111,12 @@ describe('Tier 2 — possible', () => {
     // -- "first and last names equal, birthday differs or is absent" -- fires
     // first and returns tier 2 on its own, so the case would pass with the
     // transposition rule deleted entirely. It did, until this was rewritten.
-    const matches = findCandidates(subject({ firstName: 'Jaun', birthDate: '1985-06-51' }), [
-      { ...BASE, firstName: 'Juan', birthDate: '1985-06-15' },
+    // 1994-03-20 against 1994-03-02: a swap of the last two digits, and both are
+    // real dates. The pair used before was 1985-06-15 against 1985-06-51, where
+    // day 51 does not exist -- so it exercised the scoring function but described
+    // a mis-key that could never be submitted, since the DTO refuses it on input.
+    const matches = findCandidates(subject({ firstName: 'Jaun', birthDate: '1994-03-20' }), [
+      { ...BASE, firstName: 'Juan', birthDate: '1994-03-02' },
     ]);
 
     expect(matches.map((match) => match.tier)).toEqual([2]);
@@ -213,5 +218,37 @@ describe('what the caller is told', () => {
     };
 
     expect(tiersFor(subject(), [alsoTier2, BASE])).toEqual([1, 2]);
+  });
+});
+
+describe('the birthday transpositions the narrowing reaches for', () => {
+  it('produces only real calendar dates', () => {
+    // Most adjacent swaps are not dates: 1994-03-02 swapped in the month is
+    // 1994-30-02. PostgreSQL refuses to compare against one and errors the whole
+    // statement, so these must be dropped rather than escaped -- and a birthday
+    // that is not a real date cannot be in the table to be found anyway.
+    for (const date of ['1994-03-02', '1985-06-15', '2000-01-01', '1999-12-31']) {
+      for (const swapped of transpositionsOf(date)) {
+        expect(isCalendarDate(swapped)).toBe(true);
+      }
+    }
+  });
+
+  it('reaches the swap when it is a real date', () => {
+    expect(transpositionsOf('1994-03-02')).toContain('1994-03-20');
+    expect(transpositionsOf('1985-12-03')).toContain('1985-12-30');
+  });
+
+  it('drops a swap that is not a real date', () => {
+    // 1985-06-15 swapped in the day is 1985-06-51, which is no day at all. It is
+    // dropped rather than escaped: a birthday that is not a real date cannot be
+    // in the table to be found, and PostgreSQL errors the whole statement rather
+    // than simply not matching.
+    expect(transpositionsOf('1985-06-15')).not.toContain('1985-06-51');
+  });
+
+  it('returns a value that matches nothing when no swap is a date', () => {
+    // Never an empty list: `in ()` is not valid SQL.
+    expect(transpositionsOf('1111-11-11')).toEqual(['0001-01-01']);
   });
 });

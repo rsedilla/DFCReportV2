@@ -650,7 +650,7 @@ function comparisonForm(value: string): string {
  * such a row unless the surname happened to share an initial, which is not what
  * the rule says.
  */
-function transpositionsOf(date: string): string[] {
+export function transpositionsOf(date: string): string[] {
   const swaps = new Set<string>();
 
   for (let i = 0; i < date.length - 1; i += 1) {
@@ -658,11 +658,36 @@ function transpositionsOf(date: string): string[] {
       continue;
     }
 
-    swaps.add(`${date.slice(0, i)}${date[i + 1]}${date[i]}${date.slice(i + 2)}`);
+    const swapped = `${date.slice(0, i)}${date[i + 1]}${date[i]}${date.slice(i + 2)}`;
+
+    // Most swaps produce something that is not a date: `1994-03-02` swapped in
+    // the month is `1994-30-02`, and PostgreSQL refuses to compare against it —
+    // the whole statement errors rather than the value simply not matching. A
+    // mis-keyed birthday that is not a real date cannot be in the table anyway,
+    // so these are dropped rather than escaped.
+    if (isCalendarDate(swapped)) {
+      swaps.add(swapped);
+    }
   }
 
   // `in ()` is not valid SQL, so an empty set needs a value that matches nothing.
   return swaps.size === 0 ? ['0001-01-01'] : [...swaps];
+}
+
+/** Whether a string is a real `YYYY-MM-DD` day, not merely shaped like one. */
+export function isCalendarDate(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return false;
+  }
+
+  const [year, month, day] = value.split('-').map(Number);
+  const asDate = new Date(Date.UTC(year, month - 1, day));
+
+  return (
+    asDate.getUTCFullYear() === year &&
+    asDate.getUTCMonth() === month - 1 &&
+    asDate.getUTCDate() === day
+  );
 }
 
 function describeCandidate(match: Match): Record<string, unknown> {
