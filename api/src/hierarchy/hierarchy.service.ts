@@ -104,6 +104,180 @@ export class HierarchyService {
   }
 
   /**
+   * Closes the person's open assignment and opens the new one, at one instant.
+   *
+   * Both halves and nothing between them: section 5 invariant 3 says a
+   * reassignment "must never leave two open assignments, and must never leave a
+   * person who had a leader without one", and the partial unique index refuses the
+   * first of those outright. The order is forced by that index — the close has to
+   * land before the open.
+   *
+   * **The single `effectiveAt` is not tidiness.** Where this is called as half of
+   * a Network change, section 4 requires all four rows to carry one identical
+   * timestamp, because that is the only moment at which the old edge can be closed
+   * without ever having been invalid. Taking two timestamps a microsecond apart
+   * leaves the old edge open at the effective date and the constraint trigger
+   * rejects the whole operation.
+   *
+   * Returns the leader the person is being moved from, which section 5 requires
+   * the audit entry to carry, and which only this method is in a position to read.
+   * Null where they had no open assignment at all.
+   *
+   * The invariants this does **not** check are the ones that belong to the caller
+   * rather than to the write: section 5's invariant 1 (both endpoints in the
+   * actor's scope) and invariant 4 (never oneself, never an upline) are statements
+   * about an actor, and this is called from paths with different actors and
+   * different rules. Invariant 5 is enforced by the constraint trigger at commit,
+   * and by the caller beforehand so that the refusal is an answer rather than a
+   * constraint violation.
+   */
+  async reassignWithin(
+    transaction: Transaction<Database>,
+    reassignment: { personId: string; leaderId: string; effectiveAt: Date },
+  ): Promise<{ previousLeaderId: string | null }> {
+    const closed = await transaction
+      .updateTable('pastoral_assignments')
+      .set({ ended_at: reassignment.effectiveAt })
+      .where('person_id', '=', reassignment.personId)
+      .where('ended_at', 'is', null)
+      .returning('leader_id')
+      .executeTakeFirst();
+
+    await transaction
+      .insertInto('pastoral_assignments')
+      .values({
+        person_id: reassignment.personId,
+        leader_id: reassignment.leaderId,
+        started_at: reassignment.effectiveAt,
+      })
+      .execute();
+
+    return { previousLeaderId: closed?.leader_id ?? null };
+  }
+
+  /**
+   * The people this person currently leads, with enough to name them.
+   *
+   * Section 4 refuses a Network change while the person leads anyone, and requires
+   * the refusal to name the disciples that must be moved first. That refusal is
+   * enforced in `networks`, which cannot read this table — so the evidence for it
+   * is produced here.
+   *
+   * The join to `persons` mirrors `directLeaderNameOf` below: a name is what makes
+   * the refusal actionable, and returning bare identifiers would push the same
+   * join into a module that owns neither table.
+   */
+  async openDisciplesOf(
+    executor: Db,
+    personId: string,
+  ): Promise<{ personId: string; memberId: string; fullName: string }[]> {
+    const rows = await executor
+      .selectFrom('pastoral_assignments as pa')
+      .innerJoin('persons as disciple', 'disciple.id', 'pa.person_id')
+      .select([
+        'disciple.id as id',
+        'disciple.member_id as member_id',
+        'disciple.first_name as first_name',
+        'disciple.middle_name as middle_name',
+        'disciple.last_name as last_name',
+      ])
+      .where('pa.leader_id', '=', personId)
+      .where('pa.ended_at', 'is', null)
+      .orderBy('disciple.last_name')
+      .orderBy('disciple.first_name')
+      .execute();
+
+    return rows.map((row) => ({
+      personId: row.id,
+      memberId: row.member_id,
+      fullName: [row.first_name, row.middle_name, row.last_name]
+        .filter((part): part is string => part !== null && part.trim() !== '')
+        .join(' '),
+    }));
+  }
+
+  /**
+   * The instant a backdated Network change for this person must be **strictly
+   * later** than, or null where nothing bounds it (SKILL.md section 4).
+   *
+   * Two terms, and they are written against the `WHERE` clause of
+   * `assert_network_change_keeps_edges` rather than against what that trigger is
+   * for. That distinction is the reason this method exists rather than a date
+   * comparison at the call site — the trigger fires **twice** during a correction
+   * and the second firing is the one both terms come from.
+   *
+   * On the `UPDATE` that closes the old Network row, the trigger's bound is that
+   * row's own `started_at`, not the effective date, so it selects nearly every
+   * edge the person has held and compares each at `GREATEST(edge.started_at,
+   * old_row.started_at)`. That comparison passes only while the instant is still
+   * covered by the old Network row — that is, while the edge began strictly before
+   * the effective date. Hence:
+   *
+   *   - **The person's current assignment.** At an effective date equal to its
+   *     `started_at`, the atomic pair closes it at its own start; the zero-length
+   *     row is then selected and compared at that instant, where the person
+   *     already resolves to the corrected Network and their old leader does not.
+   *     There is no instant at which it can honestly be closed.
+   *   - **The `ended_at` of every already-closed edge touching them, in either
+   *     direction.** The `INSERT` of the new Network row selects anything with
+   *     `ended_at > eff` and fails it; and at exact equality a *zero-length* closed
+   *     edge is still caught by the second firing, compared at its own timestamp.
+   *     Being closed, it cannot be reassigned to resolve what it reports.
+   *
+   * The strict form is uniform, which is conservative by one instant for an
+   * ordinary closed edge whose `ended_at` genuinely would pass. Section 4 fixes it
+   * that way and it is followed rather than optimised: narrowing it to zero-length
+   * rows alone would buy one instant at the cost of the implementation disagreeing
+   * with the specification, on the mechanism this project has already misread four
+   * times.
+   *
+   * The first term is over the person's current assignment whatever its
+   * `leader_id`; the second is over **edges**, rows with a leader, which is what
+   * keeps it independent of how a Network root is represented. Open edges where
+   * the person is the *leader* need no term, because section 4 refuses the change
+   * outright while any exists.
+   *
+   * `GREATEST` ignores nulls in PostgreSQL and is null only when every argument
+   * is, which is exactly section 4's "each term is a maximum over rows that may be
+   * empty, and an empty term contributes nothing".
+   */
+  async backdateFloorFor(executor: Db, personId: string): Promise<Date | null> {
+    const result = await sql<{ floor: Date | null }>`
+      SELECT GREATEST(
+        (SELECT max(pa.started_at)
+           FROM pastoral_assignments pa
+          WHERE pa.person_id = ${personId}::uuid
+            AND pa.ended_at IS NULL),
+        (SELECT max(pa.ended_at)
+           FROM pastoral_assignments pa
+          WHERE pa.leader_id IS NOT NULL
+            AND pa.ended_at IS NOT NULL
+            AND (pa.person_id = ${personId}::uuid OR pa.leader_id = ${personId}::uuid))
+      ) AS floor
+    `.execute(executor);
+
+    return result.rows[0]?.floor ?? null;
+  }
+
+  /**
+   * The person's open assignment, or null. `leaderId` null means a Network root
+   * (section 5, Network roots), which is a row with nothing to reassign.
+   */
+  async openAssignmentOf(
+    executor: Db,
+    personId: string,
+  ): Promise<{ leaderId: string | null; startedAt: Date } | null> {
+    const row = await executor
+      .selectFrom('pastoral_assignments')
+      .select(['leader_id', 'started_at'])
+      .where('person_id', '=', personId)
+      .where('ended_at', 'is', null)
+      .executeTakeFirst();
+
+    return row === undefined ? null : { leaderId: row.leader_id, startedAt: row.started_at };
+  }
+
+  /**
    * The name of the person's current direct leader, or null.
    *
    * Section 8 permits this church-wide, for a person outside the viewer's own

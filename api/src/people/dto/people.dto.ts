@@ -135,6 +135,53 @@ export class EditPersonDto {
 }
 
 /**
+ * The audited sex correction of SKILL.md section 4.
+ *
+ * Not part of `EditPersonDto` and never will be: sex determines Network, which
+ * determines which pastoral edges are legal, so it carries its own capability
+ * (`people.correct_sex`, Admin-only at Whole Church) and forces a Network change
+ * and the reassignment that goes with it.
+ */
+export class CorrectSexDto {
+  @IsIn(SEXES)
+  sex!: Sex;
+
+  /**
+   * Required. Section 4: every use of this endpoint is a correction, and
+   * `network_assignments.reason` is nullable only because an initial assignment
+   * has nothing to explain.
+   */
+  @IsString()
+  @Length(1, 500)
+  reason!: string;
+
+  /**
+   * The leader the person moves to, in their **new** Network.
+   *
+   * Required exactly when the person holds an open pastoral edge, because section
+   * 4 makes the change and the reassignment one atomic operation and neither may
+   * validly precede the other. Rejected when they hold none, so that a client
+   * naming a leader is never quietly ignored.
+   */
+  @IsOptional()
+  @IsUUID()
+  pastoral_leader_id?: string;
+
+  /**
+   * A plain `YYYY-MM-DD` Asia/Manila date, never a timestamp (section 22),
+   * resolved to the start of that day in that zone (section 20).
+   *
+   * Its presence is what makes this a backdated correction, which additionally
+   * requires `records.backdate_effective_date` (section 5) and is bounded by the
+   * floor in section 4. Absent, the correction takes effect when it is recorded.
+   */
+  @IsOptional()
+  @Matches(DATE_ONLY, { message: 'must be a plain YYYY-MM-DD date, not a timestamp' })
+  @IsDateString({ strict: true })
+  effective_date?: string;
+}
+
+/**
  * The pre-flight duplicate check (SKILL.md section 3; section 9, step 1: "Search
  * existing People first").
  *
