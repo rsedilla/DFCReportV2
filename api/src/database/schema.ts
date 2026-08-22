@@ -189,6 +189,12 @@ export interface IdempotencyKeysTable {
   state: IdempotencyState;
   response_status: number | null;
   response_body: Json | null;
+  /**
+   * When this attempt was claimed, which bounds how long it may sit unfinished
+   * (SKILL.md section 22). Distinct from `expires_at`, which is how long the
+   * response is retained: one bounds an attempt, the other keeps an answer.
+   */
+  claimed_at: ServerTimestamp;
   created_at: ServerTimestamp;
   expires_at: ColumnType<Date, Date | string, Date | string>;
 }

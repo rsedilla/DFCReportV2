@@ -900,9 +900,114 @@ list, the role catalog, the §4 text that now names it, the `capability` enum in
 `ALL_CAPABILITIES`, so the two cannot drift. `read_only` on it is rejected at
 creation, since it is a write.
 
+### 2026-08-22 — Idempotency covers the authenticated write surface, and applies by default
+
+§22 says "every state-changing request" carries an `Idempotency-Key`, and the
+`idempotency_keys` shape §22 itself gives is keyed by account. Those two cannot
+both be unconditional: an unauthenticated request has no account, so the store
+cannot hold a row for it.
+
+**The rule reaches every authenticated state-changing request.** The exempt set
+is exactly §7's closed unauthenticated list — sign-in, token refresh, password
+reset, activation, the probe — so the exemption is closed rather than a
+judgement anyone extends. Derived from §22's own shape rather than invented, but
+recorded because it is client-visible.
+
+**It applies by default, not per endpoint**, for the reason §2 gives for the
+capability guard: a convention remembered inside each handler is only as
+reliable as the least familiar developer writing the newest route. A new write
+endpoint is covered the moment it exists.
+
+That reaches `logout` and `logout-all`, which are authenticated and
+state-changing. Exempting them was considered and refused: §7 carves out
+session endpoints from the *capability* guard, and borrowing that carve-out for
+idempotency would be applying a rule to something it was not written about —
+the mistake two review passes have already caught on this project. §22's
+sentence is unconditional, and a retried sign-out returning the first answer is
+better behaviour than a second revocation attempt.
+
+**Nest applies a handler's status *before* the interceptor chain runs**, so
+`res.statusCode` inside the interceptor is already the handler's — 201 for a
+POST, whatever `@HttpCode` declares where one is present. That is what the
+stored status is read from, and it is also what makes the replay path work: the
+interceptor's own `.status()` call comes later and therefore wins.
+
+*The first version of this entry said the opposite, and was wrong.* It claimed
+the status was applied after the chain and had to be re-derived from
+`@HttpCode` or the method. That reading came from `responseController.apply(result,
+res, httpStatusCode)` late in `router-execution-context.js` — but `setStatus`
+runs earlier: after the guards and before the interceptor chain. `apply`'s third
+argument is `undefined` there, because `createHandleResponseFn` is invoked with
+three arguments and declared with four. The re-derivation computed the same
+numbers, so nothing broke; the recorded *reason* was false, and it asserted the
+framework behaved in the way that would break the replay path in the same file.
+
+*The first correction got the mechanism wrong too*, saying `setStatus` runs
+"before the guards' own call site" when it runs after them. Both errors are the
+same one: describing an ordering from a partial read. It is only worth recording
+because the entry it appears in exists to warn against exactly that.
+
+The replay path depends on `apply`'s third argument being `undefined`, which is
+an arity accident rather than a documented guarantee. It is pinned by the case
+asserting a replayed 409 on a route whose declared status is 201, which fails if
+Nest ever starts passing it.
+
+Worth keeping as a pattern rather than a footnote: this is the third time on
+this project that a rule was written by reading part of a mechanism and
+reasoning about the rest. The other two were the backdate floor and the
+zero-length row.
+
+**A 4xx is stored and a 5xx releases the key.** A domain refusal is this
+request's outcome, decided by the rules, and a repeat of the same body is
+entitled to the same answer. An unexpected failure carries no decision and rolls
+back, so nothing was recorded and a retry cannot double-apply; storing it would
+pin a transient failure to the key for a day with no way past it.
+
+**The fingerprint is taken over a canonicalized body.** Nothing forbids a client
+reordering object keys on a retry and several JSON libraries do, and treating
+that as a different body answers `IDEMPOTENCY_KEY_REUSED` — which §22 makes
+permanent and says must never be retried, turning an ordinary retry into a dead
+end. Arrays keep their order, because order is meaning in an array.
+
+Written to `SKILL.md` §22.
+
+### 2026-08-22 — A claim and a response are bounded separately
+
+`expires_at` was doing two jobs of different lengths: retaining the response for
+§22's "at least 24 hours", and bounding how long a claim may sit unfinished. A
+request whose process died left its row `IN_FLIGHT` for the full day, and every
+retry was answered `REQUEST_IN_FLIGHT` — which §22 defines as "retry after a
+short delay". A day is not a short delay, and the caller never learned the
+outcome.
+
+`claimed_at` bounds the attempt; `expires_at` keeps the answer. A claim older
+than a one-minute lease may be taken over. Migration 0003 adds the column and
+§22's shape is amended in the same change, per the rule that a shape is amended
+when a rule needs a column.
+
+Two smaller items settled with it, both client-visible and neither derivable:
+a request **missing** the header is `VALIDATION_FAILED` — a required header that
+is absent is malformed input; and a replay reproduces **the status and the body
+and nothing else**, which is written into §22 as a constraint on endpoints rather
+than a limitation of the store: no state-changing endpoint may put meaning in a
+response header, because a `Location` or an `ETag` would not survive a retry.
+
+**What the lease does not close, and is recorded as open below.** It bounds an
+abandoned attempt, and it cannot distinguish one abandoned *before* the write
+committed from one abandoned *after*. For the second, taking the claim over
+means executing a committed write again — sooner than before, not never. That
+window is narrow and real, and closing it needs the completion to share the
+write's transaction rather than follow it.
+
 ### Open — awaiting a ruling
 
-**One item awaits a ruling and blocks Stage 5. Eight other things are unsettled, none of them blocking. They are listed at the end, so this section is the whole of what is open.**
+**Two items await a ruling and block a stage: one blocks the first write endpoint, one blocks Stage 5. Eight other things are unsettled, none of them blocking. They are listed at the end, so this section is the whole of what is open.**
+
+**What the system owes when the idempotency store fails after the handler has committed. This blocks the first write endpoint.** §22 defines `IN_FLIGHT` and `COMPLETED` and nothing else, and says nothing about a write that succeeded and was not recorded. The claim is taken before the handler and completed after it, so a failure in between — a dropped connection, a killed process, a statement timeout — leaves a committed write with an unfinished claim, and the lease then lets a retry run it again.
+
+The fix that actually closes it is for the completion to share the write's transaction, so the write and the record of it commit together or not at all. That shapes how every write endpoint is built, which is why it is settled before the first one rather than after. The alternative — a terminal state meaning "committed, outcome unknown" — is honest but hands a leader on a phone a decision they cannot make.
+
+Recorded rather than assumed, because the current behaviour is a consequence of operator ordering rather than anything anybody chose, which is the same shape as the sign-in-inside-a-revocation window settled on 2026-08-22.
 
 Eight items that stood here on 2026-08-22 were settled that day and are recorded above. Six of them were Stop Conditions for Stage 2, and the last two were found by the second and third `architecture-guardian` passes — which is why they were opened and closed on the same day.
 

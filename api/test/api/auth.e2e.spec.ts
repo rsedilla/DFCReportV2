@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+
 import { Client } from 'pg';
 import request from 'supertest';
 
@@ -182,6 +184,7 @@ describe('authentication (SKILL.md section 6)', () => {
 
       const signOut = await request(app.getHttpServer())
         .post('/api/v1/auth/logout')
+        .set('Idempotency-Key', randomUUID())
         .set('Authorization', `Bearer ${account.accessToken}`)
         .send({ refresh_token: phone.token });
 
@@ -271,6 +274,7 @@ describe('authentication (SKILL.md section 6)', () => {
 
       await request(app.getHttpServer())
         .post('/api/v1/auth/logout')
+        .set('Idempotency-Key', randomUUID())
         .set('Authorization', `Bearer ${account.accessToken}`)
         .send({ refresh_token: issued.token });
 
@@ -295,6 +299,7 @@ describe('authentication (SKILL.md section 6)', () => {
 
       const revoked = await request(app.getHttpServer())
         .post('/api/v1/auth/logout-all')
+        .set('Idempotency-Key', randomUUID())
         .set('Authorization', `Bearer ${account.accessToken}`);
       expect(revoked.status).toBe(204);
 
@@ -329,6 +334,7 @@ describe('authentication (SKILL.md section 6)', () => {
 
       await request(app.getHttpServer())
         .post('/api/v1/auth/logout-all')
+        .set('Idempotency-Key', randomUUID())
         .set('Authorization', `Bearer ${account.accessToken}`)
         .expect(204);
 
@@ -439,6 +445,7 @@ describe('authentication (SKILL.md section 6)', () => {
 
         logout = request(app.getHttpServer())
           .post('/api/v1/auth/logout-all')
+          .set('Idempotency-Key', randomUUID())
           .set('Authorization', `Bearer ${account.accessToken}`)
           .then((response) => {
             settled = true;
@@ -511,6 +518,7 @@ describe('authentication (SKILL.md section 6)', () => {
 
         logout = request(app.getHttpServer())
           .post('/api/v1/auth/logout-all')
+          .set('Idempotency-Key', randomUUID())
           .set('Authorization', `Bearer ${account.accessToken}`)
           .then((response) => {
             settled = true;
@@ -570,6 +578,7 @@ describe('authentication (SKILL.md section 6)', () => {
       // revocation is a new session and is untouched by it.
       await request(app.getHttpServer())
         .post('/api/v1/auth/logout-all')
+        .set('Idempotency-Key', randomUUID())
         .set('Authorization', `Bearer ${account.accessToken}`)
         .expect(204);
 

@@ -1,11 +1,13 @@
 import { Module } from '@nestjs/common';
-import { APP_FILTER, APP_GUARD } from '@nestjs/core';
+import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 
 import { AuthModule } from './auth/auth.module';
 import { AccessTokenGuard } from './auth/authorization/access-token.guard';
 import { CapabilityGuard } from './auth/authorization/capability.guard';
 import { ApiExceptionFilter } from './common/errors/api-exception.filter';
+import { IdempotencyInterceptor } from './common/idempotency/idempotency.interceptor';
+import { IdempotencyModule } from './common/idempotency/idempotency.module';
 import { AppConfigModule } from './config/config.module';
 import { DatabaseModule } from './database/database.module';
 import { HealthController } from './health/health.controller';
@@ -30,6 +32,7 @@ import { NetworksModule } from './networks/networks.module';
     AppConfigModule,
     DatabaseModule,
     ThrottlerModule.forRoot([{ name: 'default', ttl: 60_000, limit: 120 }]),
+    IdempotencyModule,
     AuthModule,
     HierarchyModule,
     NetworksModule,
@@ -40,6 +43,9 @@ import { NetworksModule } from './networks/networks.module';
     { provide: APP_GUARD, useClass: ThrottlerGuard },
     { provide: APP_GUARD, useClass: AccessTokenGuard },
     { provide: APP_GUARD, useClass: CapabilityGuard },
+    // After both guards, so the actor is resolved and an unauthorized request
+    // never claims a key (SKILL.md section 22).
+    { provide: APP_INTERCEPTOR, useClass: IdempotencyInterceptor },
   ],
 })
 export class AppModule {}
