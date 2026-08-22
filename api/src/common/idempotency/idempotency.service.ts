@@ -164,13 +164,47 @@ export class IdempotencyService {
     };
   }
 
-  /** Stores the response this request produced, so a repeat returns it. */
+  /**
+   * Stores the response this request produced, so a repeat returns it.
+   *
+   * Called by the interceptor after the handler, which is the right place for a
+   * request that wrote nothing. A request that **did** write calls
+   * `completeWithin` inside its own transaction instead — see there for why.
+   */
   async complete(params: {
     key: string;
     accountId: string;
     status: number;
     body: Json | null;
   }): Promise<void> {
+    await this.completeWithin(this.db, params);
+  }
+
+  /**
+   * The same, inside a caller's transaction.
+   *
+   * **A write endpoint records its completion here, in the transaction that
+   * performs the write** (SKILL.md section 22). The claim is taken before the
+   * handler and, left to the interceptor, is recorded after it — so a failure in
+   * between leaves a committed write with an unfinished claim, and the claim
+   * lease then lets a retry perform that write a second time. Committing the
+   * record with the write closes it: either both are there or neither is.
+   *
+   * The two paths compose without coordinating. This sets the row to `COMPLETED`,
+   * and the interceptor's own call afterwards carries `state = 'IN_FLIGHT'` in its
+   * predicate, so it matches nothing and leaves this response untouched. Nothing
+   * needs to tell the interceptor that the handler already recorded its own
+   * completion.
+   */
+  async completeWithin(
+    executor: Db,
+    params: {
+      key: string;
+      accountId: string;
+      status: number;
+      body: Json | null;
+    },
+  ): Promise<void> {
     await sql`
       UPDATE idempotency_keys
          SET state = 'COMPLETED',
@@ -187,8 +221,13 @@ export class IdempotencyService {
              expires_at = now() + ${`${RETENTION_HOURS} hours`}::interval
        WHERE account_id = ${params.accountId}::uuid
          AND key = ${params.key}::uuid
+         -- Load-bearing twice. It stops a second write to a row already
+         -- completed, which is what lets a handler record its own completion
+         -- transactionally and leave the interceptor's later call inert. And it
+         -- stops a completion landing on a claim that has since been taken over
+         -- by another request under the lease.
          AND state = 'IN_FLIGHT'
-    `.execute(this.db);
+    `.execute(executor);
   }
 
   /**

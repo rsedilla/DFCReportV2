@@ -999,17 +999,40 @@ means executing a committed write again — sooner than before, not never. That
 window is narrow and real, and closing it needs the completion to share the
 write's transaction rather than follow it.
 
+### 2026-08-22 — A write endpoint records its idempotency completion in its own transaction
+
+The gap the claim lease narrowed and could not close. The claim is taken before
+the handler and, left to the interceptor, recorded after it — so a failure in
+between (a dropped connection, a killed process, a statement timeout) leaves a
+committed write with an unfinished claim. The lease then lets a retry perform
+that write again, sooner rather than never.
+
+**The completion joins the write's transaction.** The effect and the record of it
+commit together or not at all, which is the only arrangement that closes the
+window rather than shrinking it.
+
+The two paths compose without coordinating, which is what makes this cheap.
+`complete` carries `state = 'IN_FLIGHT'` in its predicate, so once a handler has
+set the row to `COMPLETED` inside its transaction, the interceptor's call
+afterwards matches nothing and leaves it alone. Nothing has to tell the
+interceptor that the handler already recorded itself, and an endpoint that writes
+nothing keeps the old path unchanged — there is nothing to perform twice.
+
+Two alternatives were rejected. Requiring every write endpoint to be safe to run
+twice puts the burden on each one forever, and §5's reassignment is not naturally
+re-runnable: a second run closes and reopens rows that were already correct.
+Accepting the window and documenting it is honest but wrong for this system —
+attendance exists nowhere else (§24), and a duplicated submission is exactly what
+§22 says the header exists to prevent.
+
+`completeWithin` takes the caller's transaction and is the mechanism. It is
+recorded and available now, before the first write endpoint, because the ruling
+shapes how that endpoint is built rather than being something it can adopt later.
+Written to `SKILL.md` §22.
+
 ### Open — awaiting a ruling
 
-**Two items await a ruling and block a stage: one blocks the first write endpoint, one blocks Stage 5. Eight other things are unsettled, none of them blocking. They are listed at the end, so this section is the whole of what is open.**
-
-**What the system owes when the idempotency store fails after the handler has committed. This blocks the first write endpoint.** §22 defines `IN_FLIGHT` and `COMPLETED` and nothing else, and says nothing about a write that succeeded and was not recorded. The claim is taken before the handler and completed after it, so a failure in between — a dropped connection, a killed process, a statement timeout — leaves a committed write with an unfinished claim, and the lease then lets a retry run it again.
-
-The fix that actually closes it is for the completion to share the write's transaction, so the write and the record of it commit together or not at all. That shapes how every write endpoint is built, which is why it is settled before the first one rather than after. The alternative — a terminal state meaning "committed, outcome unknown" — is honest but hands a leader on a phone a decision they cannot make.
-
-Recorded rather than assumed, because the current behaviour is a consequence of operator ordering rather than anything anybody chose, which is the same shape as the sign-in-inside-a-revocation window settled on 2026-08-22.
-
-Eight items that stood here on 2026-08-22 were settled that day and are recorded above. Six of them were Stop Conditions for Stage 2, and the last two were found by the second and third `architecture-guardian` passes — which is why they were opened and closed on the same day.
+**One item awaits a ruling and blocks Stage 5. Eight other things are unsettled, none of them blocking. They are listed at the end, so this section is the whole of what is open.**
 
 **What an aggregate Cell attendance view offers in place of buckets.** Monthly-attendance buckets are a Cell-scope view only, because N belongs to a Cell and aggregating across different N inflates `Completed` for the Cells that recorded least (`SKILL.md` §12). At leader and Network scope the spec offers unique people, classification and coverage, and does not say whether anything should replace the buckets. Settle it in Stage 5 against real data.
 

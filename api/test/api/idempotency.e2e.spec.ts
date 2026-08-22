@@ -1,13 +1,26 @@
 import { randomUUID } from 'node:crypto';
 
-import { Body, Controller, Get, HttpCode, Post, type INestApplication } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Headers,
+  HttpCode,
+  Inject,
+  Post,
+  type INestApplication,
+} from '@nestjs/common';
 import request from 'supertest';
 
 import { AuthenticatedOnly, Public } from '../../src/auth/authorization/authorization.decorators';
+import { CurrentActor } from '../../src/auth/current-actor.decorator';
 import { ApiError, ApiErrorCode } from '../../src/common/errors/api-error';
+import { IdempotencyService } from '../../src/common/idempotency/idempotency.service';
+import { DATABASE, type Db } from '../../src/database/database.module';
 import { createTestDb, truncateAll } from '../setup/database';
 import { createAccount, createPerson, createTestApp } from '../setup/fixtures';
 
+import type { Actor } from '../../src/auth/authorization/authorization.service';
 import type { Kysely } from 'kysely';
 import type { Database } from '../../src/database/schema';
 import type { TestAccount } from '../setup/fixtures';
@@ -29,6 +42,34 @@ let releaseSlow: (() => void) | null = null;
 
 @Controller('__idempotency-probe')
 class IdempotencyProbeController {
+  constructor(
+    @Inject(DATABASE) private readonly db: Db,
+    private readonly idempotency: IdempotencyService,
+  ) {}
+
+  @Post('records-its-own-completion')
+  @AuthenticatedOnly('Probe for a write that records its completion transactionally.')
+  async recordsItsOwnCompletion(
+    @CurrentActor() actor: Actor,
+    @Headers('idempotency-key') key: string,
+  ): Promise<{ recorded: true; from: string }> {
+    executions += 1;
+
+    // What a real write endpoint does under SKILL.md section 22: the effect and
+    // the record of it commit together. There is no effect to perform here, so
+    // the transaction carries the completion alone.
+    await this.db.transaction().execute(async (trx) => {
+      await this.idempotency.completeWithin(trx, {
+        key,
+        accountId: actor.accountId,
+        status: 201,
+        body: { recorded: true, from: 'the transaction' },
+      });
+    });
+
+    return { recorded: true, from: 'the handler' };
+  }
+
   @Post('write')
   @AuthenticatedOnly('Probe. Acts on nothing; the interceptor is what is under test.')
   write(@Body() body: Record<string, unknown>): { executions: number; echoed: unknown } {
@@ -333,6 +374,43 @@ describe('idempotency (SKILL.md section 22)', () => {
       .select(['state', 'response_status'])
       .execute();
     expect(rows).toEqual([{ state: 'COMPLETED', response_status: 201 }]);
+  });
+
+  it('leaves a completion the handler recorded in its own transaction', async () => {
+    // The rule this pins: a write endpoint records its completion inside the
+    // transaction that performs the write, so the write and the record of it
+    // commit together. The interceptor's own call afterwards carries
+    // `state = 'IN_FLIGHT'` and therefore matches nothing.
+    //
+    // If it did overwrite, the stored body would be the handler's return value
+    // rather than the one the transaction recorded -- and the composition the
+    // rule depends on would be silently absent.
+    const key = randomUUID();
+
+    const first = await post('records-its-own-completion', account)
+      .set('Idempotency-Key', key)
+      .send({});
+    expect(first.status).toBe(201);
+    expect(first.body).toEqual({ recorded: true, from: 'the handler' });
+
+    const stored = await db
+      .selectFrom('idempotency_keys')
+      .select(['state', 'response_status', 'response_body'])
+      .where('key', '=', key)
+      .executeTakeFirstOrThrow();
+
+    expect(stored.state).toBe('COMPLETED');
+    expect(stored.response_status).toBe(201);
+    // The transaction's body, not the handler's.
+    expect(stored.response_body).toEqual({ recorded: true, from: 'the transaction' });
+
+    // And a retry replays what the transaction recorded.
+    const repeat = await post('records-its-own-completion', account)
+      .set('Idempotency-Key', key)
+      .send({});
+    expect(repeat.status).toBe(201);
+    expect(repeat.body).toEqual({ recorded: true, from: 'the transaction' });
+    expect(executions).toBe(1);
   });
 
   it('leaves reads alone', async () => {
