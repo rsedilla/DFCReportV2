@@ -569,10 +569,13 @@ describe('sex correction (SKILL.md sections 4, 5, 7, 21, 22)', () => {
       // committing just after the correction's commit-time comparison is seen by
       // neither deferred trigger, leaving a permanent cross-Network edge.
       //
-      // Asserted by holding the lock and watching the correction *not* proceed.
-      // Remove `lockPersonsWithin` from either path and the request settles
-      // immediately, which is what this fails on — a test that merely fired two
-      // requests at once would pass against no lock at all most of the time.
+      // **What this pins, exactly.** The correction takes both of its keys up
+      // front, so this blocks in `correctSex` and would still pass with the lock
+      // deleted from `changeWithin` or from either `hierarchy` writer. Those sites
+      // are pinned individually in `person-lock.e2e.spec.ts`, which also uses a
+      // positive `pg_locks` probe rather than inferring a block from elapsed time.
+      // Kept here because the correction reaching the lock at all is this file's
+      // business.
       const holder = new Client({ connectionString: process.env.DATABASE_URL });
       await holder.connect();
 

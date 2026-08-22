@@ -26,25 +26,38 @@ import type { Transaction } from 'kysely';
  * is. It is transaction-scoped, so it is released at commit or rollback and
  * cannot be leaked by a failing path.
  *
- * **The order is part of the rule.** A caller taking more than one of these takes
- * them in ascending person id, always. Two corrections moving people under each
- * other, each locking its own person first, would otherwise deadlock — and the
- * victim is chosen by PostgreSQL rather than by us. `lockPersonsWithin` sorts, so
- * a caller cannot get this wrong by listing its arguments in the order that reads
- * best.
+ * **The order is part of the rule, and it is ordered by the key rather than by the
+ * person id.** A caller taking more than one takes them in ascending *lock key*,
+ * always: two corrections moving people under each other, each locking its own
+ * person first, would otherwise deadlock, with PostgreSQL rather than us choosing
+ * the victim.
  *
- * One statement per key rather than one statement locking many. `FOR UPDATE` with
- * `ORDER BY` does not guarantee that rows are locked in the sorted order, and the
- * same caution applies to batching advisory locks: the ordering guarantee here
- * comes from issuing them in sequence.
+ * Sorting by person id would be very nearly right and wrong in a way worth
+ * avoiding. The lock identity is the hash, not the id, so two ids colliding on one
+ * key can invert the order between two callers and produce a genuine cycle —
+ * negligible at 64 bits, and still a claim the sort would not have earned. Ordering
+ * by the key that is actually taken makes the guarantee exact, and collisions
+ * collapse into a single lock, which over-serializes and nothing worse.
+ *
+ * One statement per key rather than one statement locking many: the ordering
+ * guarantee comes from issuing them in sequence, and `ORDER BY` does not promise
+ * that a set-returning statement acquires locks in the order it sorts.
  */
 export async function lockPersonsWithin(
   transaction: Transaction<Database>,
   personIds: readonly string[],
 ): Promise<void> {
-  const ordered = [...new Set(personIds)].sort();
+  if (personIds.length === 0) {
+    return;
+  }
 
-  for (const personId of ordered) {
-    await sql`SELECT pg_advisory_xact_lock(hashtextextended(${personId}, 0))`.execute(transaction);
+  const keys = await sql<{ key: string }>`
+    SELECT DISTINCT hashtextextended(id, 0) AS key
+      FROM unnest(${sql.val([...personIds])}::text[]) AS id
+     ORDER BY key
+  `.execute(transaction);
+
+  for (const { key } of keys.rows) {
+    await sql`SELECT pg_advisory_xact_lock(${key}::bigint)`.execute(transaction);
   }
 }

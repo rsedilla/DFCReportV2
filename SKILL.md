@@ -509,7 +509,7 @@ The case that term used to cover is worth keeping, because it is why the refusal
 
 Each term is a maximum over rows that may be empty, and an empty term contributes nothing. A Person encoded but not yet assigned has no rows at all, so their floor is unbounded and a correction may be backdated freely — there are no edges to strand.
 
-The floor's second term is written over **edges**, which are rows with a leader, so that term does not depend on how a root is represented. Section 5 describes a root both as having no active assignment and as having one with a null `leader_id`, and the two readings disagree about whether a row exists; that ambiguity is recorded as open in `CLAUDE.md`. It does not reach this rule either way, because a row with a null `leader_id` is passed without comparison by the same-Network trigger and can never be an edge the correction has to strand.
+The floor's second term is written over **edges**, which are rows with a leader, so a Network root's own row never enters it: a row with a null `leader_id` is passed without comparison by the same-Network trigger and can never be an edge the correction has to strand.
 
 **A correction may not be dated at or before the moment the Network it corrects took effect.** This is separate from the floor above and is not one of its terms: it bounds the Network row rather than the pastoral edges. At that instant the correction would close the live Network row at its own `started_at`, and Section 5 makes such a row inert — no instant resolves to it — so the period the person spent in their former Network would disappear from every as-of query, and every past-period Network-scoped report for them would move, with nothing raised.
 
@@ -1411,9 +1411,9 @@ The Person becomes available to other authorized modules, but participation rema
 
 ### A DCC attendance record requires a pastoral leader
 
-Every DCC attendance record carries a responsible leader, and that is the person's direct pastoral leader (below). A Person with no active pastoral assignment therefore has no responsible leader, and their attendance cannot be recorded — **with one exception, the Network roots.**
+Every DCC attendance record carries a responsible leader, and that is the person's direct pastoral leader (below). **The rule is written over the edge, not over the row.** A Person whose open pastoral assignment carries a null `leader_id` has no leader above them, and a Person with no open assignment row at all has no assignment to resolve one from; the two are different states and only the first is a Network root (Section 5, Network roots).
 
-A root leader's absent assignment is the intended state rather than missing data (Section 5, Network roots). Their attendance is recorded by Admin, their record carries no responsible leader, and they are excluded from coverage denominators. They remain in every unique-people total; nothing here removes the two Senior Pastors from the figures they appear in.
+A Person with no open assignment row cannot have DCC attendance recorded, because there is no responsible leader to record it against. A Network root has an open row and no leader above them, which is the intended state rather than missing data: their attendance is recorded by Admin, their record carries no responsible leader, and they are excluded from coverage denominators. They remain in every unique-people total; nothing here removes the two Senior Pastors from the figures they appear in.
 
 This is why step 3 above captures the leader at creation rather than leaving it for later. In practice the answer is already known outside the system: someone brings a visitor, and the leader they are being placed under is settled by that relationship before anyone opens the application. The workflow records a decision the church has already made.
 

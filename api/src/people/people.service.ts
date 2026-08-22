@@ -159,13 +159,6 @@ export class PeopleService {
   ): Promise<Record<string, unknown>> {
     const network = this.networks.networkForSex(input.sex);
 
-    if (input.pastoralLeaderId !== null) {
-      // Before the transaction, as this path has always done, and against now:
-      // section 4 gives a new Person's Network its effect on the date they are
-      // encoded, so there is no earlier instant for this edge to be checked at.
-      await this.assertLeaderIsAssignable(this.db, input.pastoralLeaderId, network, new Date());
-    }
-
     // Section 3: never merges automatically, never blocks creation. A Tier 1
     // candidate the actor has not acknowledged is asked about, not refused.
     // Built explicitly rather than passing `input` through. `Subject` declares
@@ -234,11 +227,19 @@ export class PeopleService {
 
     return this.db.transaction().execute(async (trx) => {
       if (input.pastoralLeaderId !== null) {
-        // The leader's Network decides whether the edge opened below is legal, and
-        // a correction to *their* Network can commit between the check above and
-        // this write without either deferred trigger seeing the overlap. Taken
-        // before the write, and before the check is relied on.
+        // **Lock first, then check.** The leader's Network decides whether the edge
+        // opened below is legal, and a correction to *their* Network can commit
+        // between a check and this write. Validating beforehand — which this path
+        // used to do, outside the transaction — left the answer stale: the deferred
+        // trigger still refuses the write at COMMIT, but as a raw constraint
+        // violation rendered `INTERNAL_ERROR`, which is the 500-instead-of-an-answer
+        // failure this module exists to avoid. Two of the three checks in there
+        // have no trigger behind them at all.
         await lockPersonsWithin(trx, [input.pastoralLeaderId]);
+
+        // Section 4 gives a new Person's Network its effect on the date they are
+        // encoded, so there is no earlier instant for this edge to be checked at.
+        await this.assertLeaderIsAssignable(trx, input.pastoralLeaderId, network, new Date());
       }
 
       const person = await trx
@@ -836,10 +837,10 @@ export class PeopleService {
       const assignment = await this.hierarchy.openAssignmentOf(trx, personId);
 
       // An open row with a null `leader_id` is a Network root (section 5), which
-      // has nothing above it to point elsewhere. The question asked is whether an
-      // **edge** is open, never whether this person is a root — the two readings
-      // section 5 gives of a root disagree about whether a row exists, and that
-      // ambiguity is recorded as open in CLAUDE.md.
+      // has nothing above it to point elsewhere. What this asks is whether an
+      // **edge** is open; whether the person is a *root* is a different question,
+      // asked by `changeWithin`, and section 5 settled on 2026-08-23 that both are
+      // answerable from the row.
       const requiresReassignment = assignment !== null && assignment.leaderId !== null;
 
       // A root holds an open row with no leader, so it satisfies neither branch

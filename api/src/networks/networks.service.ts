@@ -157,12 +157,12 @@ export class NetworksService {
     // Before the disciple refusal, because a root leads people and would otherwise
     // always be refused with the wrong reason.
     //
-    // **This detects the representation the schema actually carries** — an open
-    // row with a null `leader_id`. Section 5 also describes a root as having no
-    // active assignment at all, and the two readings disagree; that ambiguity is
-    // recorded as open in CLAUDE.md, and under the other reading this check does
-    // not fire. It is a fail-closed guard on the representation in use, not an
-    // answer to "is this person a root".
+    // **This is the answer to "is this person a root"**, settled by section 5 on
+    // 2026-08-23: a root is an open assignment row whose `leader_id` is null, and a
+    // Person with no open row at all is unassigned rather than a second root.
+    // Needing to tell those two apart here is one of the two reasons that reading
+    // was chosen — the correction is refused for the first and must not be for the
+    // second.
     const assignment = await this.hierarchy.openAssignmentOf(transaction, change.personId);
 
     if (assignment !== null && assignment.leaderId === null) {

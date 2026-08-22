@@ -3,6 +3,7 @@ import { sql } from 'kysely';
 
 import { InvariantViolationError, ScopeDeniedError } from '../common/errors/api-error';
 import { DATABASE, type Db } from '../database/database.module';
+import { lockPersonsWithin } from '../database/person-lock';
 
 import type { AccountRole, Database } from '../database/schema';
 import type { Transaction } from 'kysely';
@@ -93,6 +94,14 @@ export class HierarchyService {
     transaction: Transaction<Database>,
     assignment: { personId: string; leaderId: string | null; startedAt: Date },
   ): Promise<void> {
+    // The leader's Network governs whether this edge is legal, and the deferred
+    // trigger cannot see a correction to it committing alongside (section 5,
+    // Database enforcement). Taken here rather than left to callers because this
+    // module is the only writer of the table, which is what section 2 says makes
+    // the section 5 invariants checkable in one place — an obligation held only by
+    // callers is one the next caller can omit with nothing failing.
+    await lockPersonsWithin(transaction, assignment.leaderId === null ? [] : [assignment.leaderId]);
+
     await transaction
       .insertInto('pastoral_assignments')
       .values({
@@ -135,6 +144,12 @@ export class HierarchyService {
     transaction: Transaction<Database>,
     reassignment: { personId: string; leaderId: string; effectiveAt: Date },
   ): Promise<{ previousLeaderId: string | null }> {
+    // As above. A caller taking more than one of these — a reassignment alongside a
+    // Network change is the case that exists — must still pre-acquire them together
+    // in one `lockPersonsWithin` call, because the ordering guarantee is per call.
+    // Re-acquiring here is free: advisory locks are reference-counted per session.
+    await lockPersonsWithin(transaction, [reassignment.leaderId]);
+
     const closed = await transaction
       .updateTable('pastoral_assignments')
       .set({ ended_at: reassignment.effectiveAt })

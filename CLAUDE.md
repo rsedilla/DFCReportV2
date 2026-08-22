@@ -229,6 +229,7 @@ Bishop Oriel Ballano and Pastora Geraldine Ballano hold `people.manage_pastoral_
 The actor crosses Networks; the edge never does. The resulting leader-to-disciple edge must still be same-Network, which makes that check — rather than the shape of the tree — the only thing preventing a cross-Network edge. Written to `SKILL.md` §5 and §7, and surfaced by name in Network Summary per §16.
 
 ### 2026-08-19 — Network roots
+**Partly superseded** on 2026-08-23 by "The root is a row" below. "With no pastoral assignment" is the reading that was dropped: a root holds an active assignment row whose `leader_id` is null. Everything else here stands — exactly one root per Network, and no one may reassign them.
 Each Network has exactly one root leader with no pastoral assignment, and a root cannot be reassigned by anyone. Written to `SKILL.md` §5 (Network roots).
 
 ### 2026-08-19 — Agent roster reduced to two
