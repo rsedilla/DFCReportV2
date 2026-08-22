@@ -693,7 +693,14 @@ disagree with, and beginning Stage 2 on a first migration known to make a
 prescribed correction impossible is the alternative. Written to `SKILL.md` §5.
 
 **A backdated Network correction reaches only to the person's most recent
-pastoral event, in either direction of the tree.** That is the latest of: the
+pastoral event, in either direction of the tree.** *(**Amended** later the same
+day by "A Network change is refused while the person leads anyone" below. Two
+changes: the floor lost its leader-side `started_at` term, because open downline
+edges can no longer exist at correction time and closed ones are dominated by
+the `ended_at` term; and the bound became **strictly later than** the floor
+rather than at-or-after, since both remaining terms fail at exact equality. The
+two-term, exclusive form in `SKILL.md` §4 is the current rule. The reasoning
+below stands, and the arithmetic does not.)* That is the latest of: the
 start of their current assignment, the start of every assignment on which they
 are the leader, and the end of every already-closed assignment touching them
 either way. Further back there is no legal write that resolves it: the

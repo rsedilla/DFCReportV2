@@ -359,25 +359,32 @@ describe('the token retention floor (SKILL.md section 6, Retention)', () => {
 
   it('retains a row sitting exactly on the thirty-day boundary', async () => {
     // Section 6 permits a delete only once expires_at is *more than* 30 days
-    // past, so the boundary instant itself is still retained. A `>` comparison
-    // in the trigger would let this one go.
+    // past, so the boundary instant itself is still retained, and the trigger
+    // compares with `>=`.
+    //
+    // The boundary has to be hit exactly or the case proves nothing: a row a
+    // minute inside the window is refused by `>` and `>=` alike, so the test
+    // would pass against the very comparison it exists to reject. `now()` is
+    // transaction-stable, so computing expires_at and attempting the delete in
+    // one transaction lands on the boundary with no race.
     const accountId = await account(db, 'Mark');
+    const client = await openClient();
 
-    await db
-      .insertInto('refresh_tokens')
-      .values({
-        account_id: accountId,
-        token_hash: 'hash-of-a-token-on-the-boundary',
-        issued_at: daysFromNow(-60),
-        // A shade inside 30 days, so the row is unambiguously retained whatever
-        // few milliseconds pass between this statement and the delete below.
-        expires_at: minutesAfter(daysFromNow(-30), 1),
-      })
-      .execute();
+    try {
+      await client.query('BEGIN');
+      await client.query(
+        `INSERT INTO refresh_tokens (account_id, token_hash, issued_at, expires_at)
+         VALUES ($1, $2, now() - interval '90 days', now() - interval '30 days')`,
+        [accountId, 'hash-of-a-token-on-the-boundary'],
+      );
 
-    await expect(db.deleteFrom('refresh_tokens').execute()).rejects.toThrow(
-      /retained until 30 days past expires_at/,
-    );
+      await expect(client.query('DELETE FROM refresh_tokens')).rejects.toThrow(
+        /retained until 30 days past expires_at/,
+      );
+    } finally {
+      await client.query('ROLLBACK').catch(() => undefined);
+      await client.end();
+    }
   });
 
   it('holds the same floor on account_tokens', async () => {
@@ -433,10 +440,6 @@ function daysFromNow(days: number): Date {
 
 function minutesBefore(at: Date, minutes: number): Date {
   return new Date(at.getTime() - minutes * 60 * 1000);
-}
-
-function minutesAfter(at: Date, minutes: number): Date {
-  return new Date(at.getTime() + minutes * 60 * 1000);
 }
 
 async function openClient(): Promise<Client> {

@@ -304,6 +304,40 @@ describe('the database enforces the section 5 invariants', () => {
       }
     });
 
+    it('refuses a Network change that strands the person own disciples', async () => {
+      // The leader_id half of the trigger's WHERE clause, which had no test at
+      // all until now -- every other case here puts the corrected person on the
+      // person_id side. That is the half whose absence from SKILL.md produced the
+      // original backdate-floor defect, so it is pinned rather than described.
+      //
+      // Nothing about the disciple changes. The leader's Network is corrected,
+      // and the edge beneath them becomes cross-Network with no row of the
+      // disciple's own being written -- which is exactly why the check has to
+      // reach downward as well as upward.
+      const leader = await createPerson(db, { firstName: 'Manuel', network: 'MENS' });
+      const disciple = await createPerson(db, { firstName: 'Mark', network: 'MENS' });
+      await assignTo(db, disciple.id, leader.id);
+
+      const changedAt = new Date('2026-03-01T00:00:00+08:00');
+      const client = await openClient();
+
+      try {
+        await client.query('BEGIN');
+        await client.query('UPDATE network_assignments SET ended_at = $1 WHERE person_id = $2', [
+          changedAt,
+          leader.id,
+        ]);
+        await client.query(
+          'INSERT INTO network_assignments (person_id, network, started_at) VALUES ($1, $2, $3)',
+          [leader.id, 'WOMENS', changedAt],
+        );
+
+        await expect(client.query('COMMIT')).rejects.toThrow(/crossing Networks/);
+      } finally {
+        await client.end();
+      }
+    });
+
     it('passes a Network root, which has no leader to compare against', async () => {
       const root = await createPerson(db, { firstName: 'Oriel', network: 'MENS' });
 

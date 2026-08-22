@@ -451,12 +451,21 @@ This is the rule Section 3 already applies to archiving a Person who leads a Cel
 
 It also removes the need for the correction itself to carry more than one reassignment. With no open downline edge left, the only edge the change must resolve is the person's own, which is the single atomic pair described above.
 
+**This one is a domain-layer rule and the database cannot hold it.** The same-Network trigger is `DEFERRABLE INITIALLY DEFERRED` and therefore sees only the state at commit, so a transaction that closes a disciple's edge, opens their replacement, and performs the correction all at once commits legally — the schema still permits exactly the combined operation this rule forbids. The refusal is a precondition on the state the request arrives in, which no constraint can observe. It is enforced in `networks`, tested at the API layer, and named here so that nobody reads the passing constraint as agreement.
+
 **The two sides would have taken different destinations, which is why doing them separately is also clearer.** The person being corrected moves to a leader in their **new** Network — they are the one whose Network is changing, and the trigger compares their replacement edge against the corrected value already in force. A disciple moves within their **own, unchanged** Network, because nothing about them has changed. Those are two different rules, applied by two different people at two different times, and running them through one endpoint invited applying one rule to both.
 
-**A backdated correction reaches only as far as it can be made legal.** Where `records.backdate_effective_date` (Section 7) is used to give the correction an effective date in the past, that date may not precede the latest of:
+**A backdated correction reaches only as far as it can be made legal.** Where `records.backdate_effective_date` (Section 7) is used to give the correction an effective date in the past, that date must be **strictly later** than the latest of:
 
 - the `started_at` of the person's current pastoral assignment;
 - the `ended_at` of every already-closed assignment touching them, **in either direction**.
+
+**Strictly later, not "at or after", and the difference is a real failure rather than pedantry.** Both bounds break at exact equality, for the same underlying reason: at the instant a row starts or ends, the corrected Network is already the one in force, so a comparison made at that instant sees the new value on one end of an edge and the unchanged value on the other.
+
+- At `eff` equal to the current assignment's `started_at`, the atomic pair closes that assignment at its own start. The resulting zero-length row is re-validated on the closing write and compared at that timestamp, where the person already resolves to the corrected Network while their old leader does not. The assignment was cross-Network for the whole of its life under the corrected value, so there is no instant at which it can honestly be closed.
+- At `eff` equal to the `ended_at` of a zero-length closed edge, the same happens on the Network side. The edge is selected and compared at its own timestamp, where the person resolves to the corrected Network. Being closed, it cannot be reassigned.
+
+One instant later, both pass: the old row still covers the comparison instant, both ends resolve to the old Network, and the edge was legal for every moment it existed.
 
 The reason there is a limit at all is that the remedy runs out. The check reaches forward from the effective date, so a correction backdated into a period the person has since left strands an assignment that closed before today: it must be reassigned to satisfy Section 5, and it cannot be, because a period that has already ended cannot be given a different leader without rewriting a closed row — which Principle 12 and Section 5 both forbid. There is no legal write that resolves it, so permitting the attempt would mean permitting a failure with no remedy to offer.
 
@@ -464,9 +473,11 @@ The reason there is a limit at all is that the remedy runs out. The check reache
 
 Open downline edges need no term of their own, because the rule above has already refused the change while any exists. That is deliberate: a floor carrying a term that can never bind reads as though it were doing work.
 
+The case that term used to cover is worth keeping, because it is why the refusal has to be unconditional rather than date-aware. An open edge on which the person is the leader and which **began after** the effective date cannot be resolved at all: closing it at the effective date is impossible, since that precedes its own `started_at`, and closing it at its own start leaves it beginning after the effective date, so it is still selected and still compared. The refusal therefore reaches every open leader-side assignment whatever its dates, and a narrower rule that only refused edges overlapping the effective date would let this one through.
+
 Each term is a maximum over rows that may be empty, and an empty term contributes nothing. A Person encoded but not yet assigned has no rows at all, so their floor is unbounded and a correction may be backdated freely — there are no edges to strand.
 
-The floor is written over **rows with a leader**, so it does not depend on how a root is represented. Section 5 describes a root both as having no active assignment and as having one with a null `leader_id`, and the two readings disagree about whether a row exists; that ambiguity is recorded as open in `CLAUDE.md`. It does not reach this rule either way, because a row with a null `leader_id` is passed without comparison by the same-Network trigger and can never be an edge the correction has to strand.
+The floor's second term is written over **edges**, which are rows with a leader, so that term does not depend on how a root is represented. Section 5 describes a root both as having no active assignment and as having one with a null `leader_id`, and the two readings disagree about whether a row exists; that ambiguity is recorded as open in `CLAUDE.md`. It does not reach this rule either way, because a row with a null `leader_id` is passed without comparison by the same-Network trigger and can never be an edge the correction has to strand.
 
 The system therefore **rejects the correction and names the earliest date it can legally take**, rather than failing with a constraint violation the administrator cannot act on. The rejection is a rule about what can be recorded, not about the actor's authority, so it answers `INVARIANT_VIOLATION` (Section 22).
 
