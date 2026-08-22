@@ -822,17 +822,53 @@ no-delete ruling is annotated as partly superseded by the pruning ruling; and
 each migration's down commits in its own transaction and a guard firing at N
 does not undo the drops already made for N+1.
 
+### 2026-08-22 — A Network change is refused while the person leads anyone
+
+The last Stage 2 Stop Condition. A Network correction must reassign every edge
+it would strand, and the same-Network trigger validates edges in both
+directions, so correcting a leader with twelve disciples means twelve
+reassignments at one identical instant. Nothing said who chose those
+destinations.
+
+**Nobody does, inside the correction.** The change is refused while the person
+holds any open assignment as leader, naming the disciples to move first. Each is
+moved by an ordinary reassignment, separately authorized and separately audited,
+and the correction is retried once none remains. §3 already does exactly this
+for archiving a Person who leads a Cell, and §4 already says it in general:
+reject and require the conflict resolved rather than resolving it silently.
+
+Two alternatives were rejected. An administrator supplying twelve destinations
+inside one correction payload makes the most complex endpoint in Stage 2 out of
+a data-correction form, and puts twelve pastoral decisions in it. Moving each
+disciple automatically to the corrected person's own former leader is
+deterministic and pastorally plausible — the grandparent is by construction in
+the disciples' unchanged Network — but it decides a pastoral question in code
+and has no answer when the corrected person is a Network root.
+
+The refusal also simplifies what remains. With no open downline edge, the only
+edge the correction must resolve is the person's own, which is the single atomic
+pair §4 already describes. It removed a term from the backdate floor too: open
+downline edges no longer need one, because the change is refused while any
+exists, and a floor carrying a term that can never bind reads as though it were
+doing work.
+
+**The two directions would have taken opposite destinations**, which is the
+other reason to keep them apart. The person being corrected moves to a leader in
+their **new** Network; a disciple moves within their **own, unchanged** one. A
+first draft of §4 applied the disciple rule to both and so described the one
+write the trigger rejects.
+
+The accepted cost is stated in §4 rather than left to be met: moving a disciple
+closes their edge today, that `ended_at` becomes the floor immediately, and a
+correction for someone whose disciples have just been moved therefore cannot be
+backdated at all. Clearing the blockage does not unblock backdating; it fixes
+the effective date to today. Written to `SKILL.md` §4.
+
 ### Open — awaiting a ruling
 
-**Two items await a ruling and block a stage: one blocks Stage 2 and is live now, one blocks Stage 5. Seven other things are unsettled, none of them blocking. They are listed at the end, so this section is the whole of what is open.**
+**One item awaits a ruling and blocks Stage 5. Eight other things are unsettled, none of them blocking. They are listed at the end, so this section is the whole of what is open.**
 
-Six items that stood here on 2026-08-22 were settled that day and are recorded above. Four of them were Stop Conditions for Stage 2.
-
-**Who chooses the destination leaders when a Network correction forces disciple reassignments. This is a Stop Condition, and it blocks Stage 2.** §4 speaks of "the corresponding pastoral reassignment" in the singular, but the same-Network trigger validates every edge touching the person in either direction. So correcting the Network of a leader with twelve disciples requires twelve reassignments at one identical instant, each subject to all five §5 invariants, each needing a destination in the disciple's own unchanged Network.
-
-Nothing says who picks those destinations, under which capability, whether the actor needs `people.manage_pastoral_assignment` scope over every one of them, or what the system does when no same-Network candidate exists. `docs/ROADMAP.md` puts "Networks, effective-dated (§4)" in Stage 2 and §4 requires the change and its reassignments to be one atomic operation, so the endpoint cannot be built without the rule.
-
-It was first recorded here as non-blocking, on the reasoning that Stage 2 would settle it. That is backwards: a Stage 2 Stop Condition is settled *before* the Stage 2 code, which is the whole point of this branch. Corrected by the second `architecture-guardian` pass.
+Seven items that stood here on 2026-08-22 were settled that day and are recorded above. Five of them were Stop Conditions for Stage 2 — the fifth found by the second `architecture-guardian` pass, which is why it was opened and closed on the same day.
 
 **What an aggregate Cell attendance view offers in place of buckets.** Monthly-attendance buckets are a Cell-scope view only, because N belongs to a Cell and aggregating across different N inflates `Completed` for the Cells that recorded least (`SKILL.md` §12). At leader and Network scope the spec offers unique people, classification and coverage, and does not say whether anything should replace the buckets. Settle it in Stage 5 against real data.
 
