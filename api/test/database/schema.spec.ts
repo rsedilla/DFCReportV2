@@ -261,10 +261,18 @@ describe('the schema (SKILL.md sections 4, 5, 6 and 7)', () => {
     // Definition of Done requires it to exist as a constraint rather than as an
     // instruction to whoever writes the retention job.
     it.each(['refresh_tokens', 'account_tokens'])(
-      'guards %s with a delete trigger',
+      'guards %s with a delete trigger, before the row goes',
       async (table) => {
+        // The same five facts every other no-delete case asserts. Name and
+        // function alone would pass for a trigger recreated FOR EACH STATEMENT,
+        // where OLD does not exist and the floor can never be read, or for one
+        // left disabled by ALTER TABLE ... DISABLE TRIGGER.
         const trigger = await deleteTriggerFacts(db, `${table}_retention_floor`);
 
+        expect(trigger.fires_on_delete).toBe(true);
+        expect(trigger.timing).toBe('BEFORE');
+        expect(trigger.per_row).toBe(true);
+        expect(trigger.enabled).toBe(true);
         expect(trigger.table_name).toBe(table);
         expect(trigger.function_name).toBe('refuse_delete_before_retention_floor');
       },

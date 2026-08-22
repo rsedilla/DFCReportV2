@@ -97,13 +97,35 @@ describe('audit_log is append-only (SKILL.md section 21)', () => {
     expect(rows).toEqual([{ reason: 'original' }]);
   });
 
+  it('refuses a blank target, which NOT NULL alone would admit', async () => {
+    // `target_id` is text rather than uuid, so the type no longer refuses a blank
+    // implicitly. An entry naming nothing is what section 21's "Record actor,
+    // target, action, timestamp" exists to prevent.
+    const client = await openClient();
+    try {
+      await expect(
+        client.query('INSERT INTO audit_log (action, target_type, target_id) VALUES ($1, $2, $3)', [
+          'person.created',
+          'person',
+          '   ',
+        ]),
+      ).rejects.toThrow(/audit_log_target_id_not_blank/);
+    } finally {
+      await client.end();
+    }
+  });
+
   it('refuses an action that is not a dotted identifier', async () => {
     const client = await openClient();
     try {
       await expect(
-        client.query('INSERT INTO audit_log (action, target_type) VALUES ($1, $2)', [
+        // `target_id` is supplied because it is NOT NULL: without it the insert
+        // fails on the null before it reaches the constraint under test, and the
+        // case would pass for the wrong reason.
+        client.query('INSERT INTO audit_log (action, target_type, target_id) VALUES ($1, $2, $3)', [
           'Person Created',
           'person',
+          'a-target',
         ]),
       ).rejects.toThrow(/audit_log_action_shape/);
     } finally {
@@ -335,6 +357,29 @@ describe('the token retention floor (SKILL.md section 6, Retention)', () => {
     expect(await db.selectFrom('refresh_tokens').select('id').execute()).toHaveLength(0);
   });
 
+  it('retains a row sitting exactly on the thirty-day boundary', async () => {
+    // Section 6 permits a delete only once expires_at is *more than* 30 days
+    // past, so the boundary instant itself is still retained. A `>` comparison
+    // in the trigger would let this one go.
+    const accountId = await account(db, 'Mark');
+
+    await db
+      .insertInto('refresh_tokens')
+      .values({
+        account_id: accountId,
+        token_hash: 'hash-of-a-token-on-the-boundary',
+        issued_at: daysFromNow(-60),
+        // A shade inside 30 days, so the row is unambiguously retained whatever
+        // few milliseconds pass between this statement and the delete below.
+        expires_at: minutesAfter(daysFromNow(-30), 1),
+      })
+      .execute();
+
+    await expect(db.deleteFrom('refresh_tokens').execute()).rejects.toThrow(
+      /retained until 30 days past expires_at/,
+    );
+  });
+
   it('holds the same floor on account_tokens', async () => {
     // A much shorter clock -- a reset token lives 30 minutes -- and the same
     // retention, so a replay is refused as used rather than as unknown.
@@ -346,6 +391,10 @@ describe('the token retention floor (SKILL.md section 6, Retention)', () => {
         account_id: accountId,
         purpose: 'PASSWORD_RESET',
         token_hash: 'hash-of-a-spent-reset-token',
+        // `created_at` defaults to now() and the row must satisfy
+        // `expires_at > created_at`, so a row that expired in the past has to say
+        // when it was made. A reset token lives 30 minutes (section 6).
+        created_at: minutesBefore(daysFromNow(-1), 30),
         expires_at: daysFromNow(-1),
         used_at: daysFromNow(-1),
       })
@@ -380,6 +429,14 @@ function hoursFromNow(hours: number): Date {
 
 function daysFromNow(days: number): Date {
   return new Date(Date.now() + days * 24 * 60 * 60 * 1000);
+}
+
+function minutesBefore(at: Date, minutes: number): Date {
+  return new Date(at.getTime() - minutes * 60 * 1000);
+}
+
+function minutesAfter(at: Date, minutes: number): Date {
+  return new Date(at.getTime() + minutes * 60 * 1000);
 }
 
 async function openClient(): Promise<Client> {

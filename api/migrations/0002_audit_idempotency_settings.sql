@@ -72,6 +72,11 @@ CREATE TABLE audit_log (
   occurred_at timestamptz NOT NULL DEFAULT now(),
   CONSTRAINT audit_log_action_shape CHECK (action ~ '^[a-z][a-z0-9_]*(\.[a-z0-9_]+)+$'),
   CONSTRAINT audit_log_target_type_not_blank CHECK (btrim(target_type) <> ''),
+  -- Parity with the column beside it. While `target_id` was `uuid` the type
+  -- refused a blank implicitly; `text` does not, and NOT NULL alone would
+  -- admit '' -- an entry naming nothing, which is what section 21's
+  -- "Record actor, target, action, timestamp" exists to prevent.
+  CONSTRAINT audit_log_target_id_not_blank CHECK (btrim(target_id) <> ''),
   CONSTRAINT audit_log_reason_not_blank CHECK (reason IS NULL OR btrim(reason) <> '')
 );
 
@@ -244,7 +249,9 @@ INSERT INTO settings (key, value, updated_by) VALUES
 CREATE FUNCTION refuse_delete_before_retention_floor() RETURNS trigger
 LANGUAGE plpgsql AS $$
 BEGIN
-  IF OLD.expires_at > now() - interval '30 days' THEN
+  -- `>=`, not `>`. Section 6 permits a delete only once expires_at is *more
+  -- than* 30 days past, so the instant exactly 30 days past is still retained.
+  IF OLD.expires_at >= now() - interval '30 days' THEN
     RAISE EXCEPTION
       'rows of %.% are retained until 30 days past expires_at; this row expires at % (SKILL.md section 6, Retention)',
       TG_TABLE_SCHEMA, TG_TABLE_NAME, OLD.expires_at
@@ -280,6 +287,15 @@ CREATE TRIGGER account_tokens_retention_floor
 -- a database where somebody has changed a setting is a database with an audit
 -- entry, and the guard above already refuses. The seeded defaults are the only
 -- state that can exist without one, and they are this file's own output.
+--
+-- The section 6 retention floor is dropped from `refresh_tokens` and
+-- `account_tokens`, which 0001's own guard does name, and those tables are
+-- deliberately not added to this migration's guard. Naming them would refuse
+-- every down on any database anybody has signed into, which is the failure
+-- described just above. The accepted cost is stated rather than left to be
+-- discovered: reverting 0002 on a live database removes a control section 6
+-- calls a security control, and leaves the tables it guarded in place. An
+-- operator reverting 0002 has to re-apply it before any retention job runs.
 --
 -- `idempotency_keys` is deliberately not named either. It holds no history and no
 -- decision -- section 22 keeps a key for 24 hours and permits dropping it after --
