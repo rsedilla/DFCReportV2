@@ -14,6 +14,7 @@ import { ALL_SCOPE_TYPES } from '../../src/auth/authorization/scopes';
 describe('the capability enumeration (SKILL.md section 7)', () => {
   const SPECIFIED = [
     'people.view_subtree',
+    'people.create',
     'people.edit_basic',
     'people.manage_lifecycle',
     'people.manage_pastoral_assignment',
@@ -40,7 +41,7 @@ describe('the capability enumeration (SKILL.md section 7)', () => {
     'audit.view',
   ];
 
-  it('is exactly the twenty-five the specification names', () => {
+  it('is exactly the twenty-six the specification names', () => {
     expect([...ALL_CAPABILITIES]).toEqual(SPECIFIED);
   });
 
@@ -48,7 +49,7 @@ describe('the capability enumeration (SKILL.md section 7)', () => {
     expect(new Set(ALL_CAPABILITIES).size).toBe(ALL_CAPABILITIES.length);
   });
 
-  it('divides into five reads and twenty writes', () => {
+  it('divides into five reads and twenty-one writes', () => {
     expect([...READ_CAPABILITIES]).toEqual([
       'people.view_subtree',
       'dcc.view_subtree',
@@ -58,7 +59,7 @@ describe('the capability enumeration (SKILL.md section 7)', () => {
     ]);
 
     const writes = ALL_CAPABILITIES.filter((capability) => !isReadCapability(capability));
-    expect(writes).toHaveLength(20);
+    expect(writes).toHaveLength(21);
   });
 });
 

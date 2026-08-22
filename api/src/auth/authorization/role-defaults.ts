@@ -28,6 +28,7 @@ export type RoleDefaults = Partial<Record<Capability, ScopeType>>;
 
 const SENIOR_PASTOR: RoleDefaults = {
   [Capability.PeopleViewSubtree]: ScopeType.WholeChurch,
+  [Capability.PeopleCreate]: ScopeType.WholeChurch,
   [Capability.PeopleEditBasic]: ScopeType.WholeChurch,
   [Capability.PeopleManageLifecycle]: ScopeType.WholeChurch,
   [Capability.PeopleManagePastoralAssignment]: ScopeType.WholeChurch,
@@ -51,6 +52,7 @@ const SENIOR_PASTOR: RoleDefaults = {
 
 const ADMIN: RoleDefaults = {
   [Capability.PeopleViewSubtree]: ScopeType.WholeChurch,
+  [Capability.PeopleCreate]: ScopeType.WholeChurch,
   [Capability.PeopleEditBasic]: ScopeType.WholeChurch,
   [Capability.PeopleManageLifecycle]: ScopeType.WholeChurch,
   [Capability.PeopleManagePastoralAssignment]: ScopeType.WholeChurch,
@@ -82,6 +84,7 @@ const ADMIN: RoleDefaults = {
 
 const LEADER: RoleDefaults = {
   [Capability.PeopleViewSubtree]: ScopeType.OwnSubtree,
+  [Capability.PeopleCreate]: ScopeType.OwnSubtree,
   [Capability.PeopleEditBasic]: ScopeType.OwnSubtree,
   [Capability.PeopleManagePastoralAssignment]: ScopeType.OwnSubtree,
   [Capability.DccTakeAttendance]: ScopeType.OwnSubtree,

@@ -13,6 +13,7 @@ import { DatabaseModule } from './database/database.module';
 import { HealthController } from './health/health.controller';
 import { HierarchyModule } from './hierarchy/hierarchy.module';
 import { NetworksModule } from './networks/networks.module';
+import { PeopleModule } from './people/people.module';
 
 /**
  * A modular monolith (SKILL.md section 1, principle 13). Modules are named in
@@ -36,6 +37,7 @@ import { NetworksModule } from './networks/networks.module';
     AuthModule,
     HierarchyModule,
     NetworksModule,
+    PeopleModule,
   ],
   controllers: [HealthController],
   providers: [

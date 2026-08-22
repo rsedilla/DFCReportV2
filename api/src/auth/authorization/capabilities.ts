@@ -9,6 +9,7 @@
 
 export const Capability = {
   PeopleViewSubtree: 'people.view_subtree',
+  PeopleCreate: 'people.create',
   PeopleEditBasic: 'people.edit_basic',
   PeopleManageLifecycle: 'people.manage_lifecycle',
   PeopleManagePastoralAssignment: 'people.manage_pastoral_assignment',

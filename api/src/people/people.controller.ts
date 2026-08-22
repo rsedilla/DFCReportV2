@@ -1,0 +1,275 @@
+import { Body, Controller, Get, Param, Patch, Post, Query } from '@nestjs/common';
+
+import { CurrentActor } from '../auth/current-actor.decorator';
+import { RequiresCapability } from '../auth/authorization/authorization.decorators';
+import { Capability } from '../auth/authorization/capabilities';
+import { AuthorizationService, type Actor } from '../auth/authorization/authorization.service';
+import { NotFoundError } from '../common/errors/api-error';
+import {
+  CurrentIdempotency,
+  type CurrentClaim,
+} from '../common/idempotency/current-idempotency.decorator';
+import { HierarchyService } from '../hierarchy/hierarchy.service';
+
+import { CreatePersonDto, EditPersonDto, SearchPeopleDto } from './dto/people.dto';
+import { PeopleService, type PersonRecord, type SearchCursor } from './people.service';
+
+/**
+ * `/api/v1/people` (SKILL.md section 22).
+ *
+ * The interesting rule here is section 8, not section 7. A leader may search the
+ * church-wide directory — that is what makes duplicate prevention possible at all
+ * — but for a person outside their pastoral scope they see only enough to
+ * recognise an existing record. Everything else is withheld, and the withholding
+ * is done in one place so that adding a field to the full profile does not
+ * silently widen what the church can see.
+ */
+@Controller('people')
+export class PeopleController {
+  constructor(
+    private readonly people: PeopleService,
+    private readonly hierarchy: HierarchyService,
+    private readonly authorization: AuthorizationService,
+  ) {}
+
+  /**
+   * Section 9 requires the pastoral leader at registration, and the guard's scope
+   * resolves against them: a leader may place a new Person under themselves or
+   * under someone in their subtree, and nowhere else.
+   *
+   * That also settles what a subtree-scoped actor cannot do — create a Person
+   * under nobody. Section 5 permits an unassigned Person, but only the import
+   * creates one, and the import runs as Admin at Whole Church through the service
+   * rather than through this endpoint (section 2, Initial data load).
+   */
+  @Post()
+  @RequiresCapability(Capability.PeopleCreate, {
+    kind: 'person',
+    from: 'body.pastoral_leader_id',
+  })
+  async create(
+    @Body() body: CreatePersonDto,
+    @CurrentActor() actor: Actor,
+    @CurrentIdempotency() claim: CurrentClaim,
+  ): Promise<Record<string, unknown>> {
+    const person = await this.people.create(
+      {
+        firstName: body.first_name,
+        middleName: body.middle_name ?? null,
+        lastName: body.last_name,
+        birthDate: body.birth_date,
+        sex: body.sex,
+        civilStatus: body.civil_status,
+        mobileNumber: body.mobile_number ?? null,
+        pastoralLeaderId: body.pastoral_leader_id,
+        acknowledgedDuplicateIds: body.acknowledged_duplicate_ids ?? [],
+      },
+      actor,
+      claim,
+    );
+
+    return person as unknown as Record<string, unknown>;
+  }
+
+  @Get(':id')
+  @RequiresCapability(Capability.PeopleViewSubtree, { kind: 'person', from: 'params.id' })
+  async findOne(@Param('id') id: string): Promise<Record<string, unknown>> {
+    const person = await this.people.findById(id);
+    if (!person) {
+      throw new NotFoundError('No such person.');
+    }
+
+    // The guard has already established this person is within the actor's scope,
+    // so the full profile is what section 8 authorizes.
+    return fullProfile(person);
+  }
+
+  /**
+   * Church-wide search, by name (section 8).
+   *
+   * **Deliberately not guarded by a subtree scope on the result.** Section 8 says
+   * a leader may search the whole directory precisely so that duplicate
+   * prevention works, and narrowing the search to their own subtree would defeat
+   * it — they would create a second record for somebody another leader already
+   * has. What is scoped is the *fields*, not the rows.
+   */
+  @Get()
+  @RequiresCapability(Capability.PeopleViewSubtree, { kind: 'actor' })
+  async search(
+    @Query() query: SearchPeopleDto,
+    @CurrentActor() actor: Actor,
+  ): Promise<{ data: Record<string, unknown>[]; next_cursor: string | null }> {
+    const { rows, nextCursor } = await this.people.searchByName(
+      query.q,
+      query.limit ?? 50,
+      decodeCursor(query.cursor),
+    );
+
+    const data = await Promise.all(
+      rows.map(async (person) => {
+        if (await this.isWithinScope(actor, person.id)) {
+          return fullProfile(person);
+        }
+
+        return this.minimalIdentity(person);
+      }),
+    );
+
+    return { data, next_cursor: encodeCursor(nextCursor) };
+  }
+
+  @Patch(':id')
+  @RequiresCapability(Capability.PeopleEditBasic, { kind: 'person', from: 'params.id' })
+  async editBasic(
+    @Param('id') id: string,
+    @Body() body: EditPersonDto,
+    @CurrentActor() actor: Actor,
+    @CurrentIdempotency() claim: CurrentClaim,
+  ): Promise<Record<string, unknown>> {
+    const person = await this.people.editBasic(
+      id,
+      {
+        firstName: body.first_name,
+        middleName: body.middle_name,
+        lastName: body.last_name,
+        birthDate: body.birth_date,
+        civilStatus: body.civil_status,
+        mobileNumber: body.mobile_number,
+      },
+      actor,
+      claim,
+    );
+
+    return fullProfile(person);
+  }
+
+  /**
+   * Whether the actor may see this person's full profile.
+   *
+   * Asked of the authorization service rather than reimplemented, so that a
+   * Senior Pastor's Whole Church scope and an Admin-issued wider grant both reach
+   * the same answer here as they do in the guard. A leader's own subtree is the
+   * ordinary case and resolves through the tree.
+   */
+  private async isWithinScope(actor: Actor, personId: string): Promise<boolean> {
+    const grants = (await this.authorization.grantsFor(actor.accountId)).filter(
+      (grant) => grant.capability === Capability.PeopleViewSubtree,
+    );
+
+    for (const grant of grants) {
+      if (grant.scope.type === 'WHOLE_CHURCH') {
+        return true;
+      }
+
+      if (grant.scope.type === 'OWN_SUBTREE' || grant.scope.type === 'SUBTREE_EXCL_SELF') {
+        if (
+          await this.hierarchy.isWithinSubtree(actor.personId, personId, {
+            includeSelf: grant.scope.type === 'OWN_SUBTREE',
+          })
+        ) {
+          return true;
+        }
+      }
+
+      if (grant.scope.type === 'NETWORK' && grant.scope.network !== null) {
+        if ((await this.people.currentNetworkOf(personId)) === grant.scope.network) {
+          return true;
+        }
+      }
+    }
+
+    return false;
+  }
+
+  /**
+   * Exactly the five fields section 8 permits for a person outside the viewer's
+   * pastoral scope: Member ID, full name, sex, current Network, and the name of
+   * their current direct leader.
+   *
+   * Written as a list of what is *included* rather than as a list of what is
+   * removed. A redaction that deletes named fields lets the next field added to
+   * the profile through by default, which is the wrong direction for a rule about
+   * what the church may see.
+   */
+  private async minimalIdentity(person: PersonRecord): Promise<Record<string, unknown>> {
+    const [network, leader] = await Promise.all([
+      this.people.currentNetworkOf(person.id),
+      this.people.directLeaderNameOf(person.id),
+    ]);
+
+    return {
+      id: person.id,
+      member_id: person.member_id,
+      full_name: composeName(person),
+      sex: person.sex,
+      network,
+      direct_leader_name: leader,
+      // Named, so a client can tell a withheld profile from an empty one and say
+      // so, rather than rendering a person who looks like they have no details.
+      scope: 'IDENTITY_ONLY',
+    };
+  }
+}
+
+/**
+ * The cursor is opaque: clients pass it back unmodified and never construct one
+ * (section 22). Base64 of the keyset, so its shape can change without a client
+ * having learned to read it.
+ *
+ * A cursor that does not decode is treated as absent rather than as an error. It
+ * cannot be forged into anything dangerous — the worst a tampered value does is
+ * start the page somewhere else in a directory section 8 already makes readable
+ * church-wide — and refusing it would strand a client with no way back.
+ */
+function decodeCursor(value: string | undefined): SearchCursor | null {
+  if (value === undefined || value === '') {
+    return null;
+  }
+
+  try {
+    const parsed: unknown = JSON.parse(Buffer.from(value, 'base64url').toString('utf8'));
+
+    if (
+      typeof parsed === 'object' &&
+      parsed !== null &&
+      typeof (parsed as SearchCursor).lastName === 'string' &&
+      typeof (parsed as SearchCursor).firstName === 'string' &&
+      typeof (parsed as SearchCursor).id === 'string'
+    ) {
+      return parsed as SearchCursor;
+    }
+  } catch {
+    // Falls through to null.
+  }
+
+  return null;
+}
+
+function encodeCursor(cursor: SearchCursor | null): string | null {
+  return cursor === null ? null : Buffer.from(JSON.stringify(cursor), 'utf8').toString('base64url');
+}
+
+function fullProfile(person: PersonRecord): Record<string, unknown> {
+  return {
+    id: person.id,
+    member_id: person.member_id,
+    first_name: person.first_name,
+    middle_name: person.middle_name,
+    last_name: person.last_name,
+    full_name: composeName(person),
+    // Section 3: age is derived, never persisted as authoritative data. It is not
+    // returned at all — a client that needs it computes it from the birthday,
+    // which is the one value that cannot go stale.
+    birth_date: person.birth_date,
+    sex: person.sex,
+    civil_status: person.civil_status,
+    mobile_number: person.mobile_number,
+    scope: 'FULL',
+  };
+}
+
+function composeName(person: PersonRecord): string {
+  return [person.first_name, person.middle_name, person.last_name]
+    .filter((part): part is string => part !== null && part.trim() !== '')
+    .join(' ');
+}

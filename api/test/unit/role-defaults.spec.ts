@@ -17,6 +17,11 @@ const TABLE: Record<Capability, Record<AccountRole, string | null>> = {
     ADMIN: 'WHOLE_CHURCH',
     LEADER: 'OWN_SUBTREE',
   },
+  'people.create': {
+    SENIOR_PASTOR: 'WHOLE_CHURCH',
+    ADMIN: 'WHOLE_CHURCH',
+    LEADER: 'OWN_SUBTREE',
+  },
   'people.edit_basic': {
     SENIOR_PASTOR: 'WHOLE_CHURCH',
     ADMIN: 'WHOLE_CHURCH',

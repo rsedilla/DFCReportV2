@@ -937,6 +937,7 @@ Do not equate hierarchy position with software permissions.
 The capabilities are exactly:
 
 - `people.view_subtree`
+- `people.create`
 - `people.edit_basic`
 - `people.manage_lifecycle`
 - `people.manage_pastoral_assignment`
@@ -992,6 +993,7 @@ Three roles exist. Each carries the default capabilities and scopes below. Anyth
 | Capability | Senior Pastor | Admin | Leader |
 | --- | --- | --- | --- |
 | `people.view_subtree` | Whole Church | Whole Church | own/subtree |
+| `people.create` | Whole Church | Whole Church | own/subtree |
 | `people.edit_basic` | Whole Church | Whole Church | own/subtree |
 | `people.manage_lifecycle` | Whole Church | Whole Church | — |
 | `people.manage_pastoral_assignment` | Whole Church | Whole Church | own/subtree |
@@ -1147,7 +1149,7 @@ Those conditions are enforced in the owning module's domain layer — `hierarchy
 
 A grant is revoked by setting `revoked_at`, never by deleting the row. The history of who could do what, and when, is part of the audit record.
 
-**`read_only` is valid only on a read capability.** The twenty-five divide cleanly:
+**`read_only` is valid only on a read capability.** The twenty-six divide cleanly:
 
 - **Read:** `people.view_subtree`, `dcc.view_subtree`, `cell.view_subtree`, `reports.view_subtree`, `audit.view`
 - **Write:** every other capability in the list
@@ -2706,6 +2708,7 @@ One envelope, always:
 | `IDEMPOTENCY_KEY_REUSED` | 409 | The key was already used for a different request. Never retry |
 | `REQUEST_IN_FLIGHT` | 409 | The original request with this key has not finished. Retry after a short delay |
 | `INVARIANT_VIOLATION` | 409 | A domain rule rejects the write — cycle, cross-Network edge, two active assignments |
+| `DUPLICATE_ACKNOWLEDGEMENT_REQUIRED` | 409 | A Tier 1 duplicate candidate must be acknowledged before the Person is created (Section 3). The candidates are in `details` |
 | `NOT_FOUND` | 404 | No such record, or its existence must not be disclosed |
 
 `CAPABILITY_DENIED` and `SCOPE_DENIED` are deliberately distinct, because capability and scope are independent grants (Section 7) and an administrator diagnosing a permission problem needs to know which one failed.
