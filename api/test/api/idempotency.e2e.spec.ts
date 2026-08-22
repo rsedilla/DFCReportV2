@@ -416,32 +416,36 @@ describe('idempotency (SKILL.md section 22)', () => {
     // A slow request whose lease expires loses the key to whoever takes it over.
     // Without a claim identity its completion would land on the new holder's
     // claim -- storing its own response against another request's work, and
-    // silently discarding that request's own completion.
+    // discarding that request's own completion in silence.
+    //
+    // The takeover is performed through `claim` itself rather than simulated with
+    // an UPDATE, because minting a new identity is exactly the part under test: a
+    // hand-written takeover that forgot to mint one would make this pass while
+    // the real path stayed broken.
+    const service = app.get(IdempotencyService);
     const key = randomUUID();
     const accountId = account.id;
+    const fingerprint = service.fingerprint('PUT', '/probe', { value: 'a' });
 
-    const first = await post('write', account).set('Idempotency-Key', key).send({ value: 'a' });
-    expect(first.status).toBe(201);
+    const first = await service.claim({ key, accountId, fingerprint });
+    expect(first.outcome).toBe('claimed');
+    const stale = first.outcome === 'claimed' ? first.claimId : '';
 
-    const claim = await db
-      .selectFrom('idempotency_keys')
-      .select('claim_id')
-      .where('key', '=', key)
-      .executeTakeFirstOrThrow();
-
-    // The claim that request held, before another request takes the key over.
-    const stale = claim.claim_id;
-
-    // Simulate the takeover the lease permits: a new claim on the same key.
+    // Age the claim past its lease, which is what lets another request take it.
     await db
       .updateTable('idempotency_keys')
-      .set({ state: 'IN_FLIGHT', response_status: null, response_body: null })
+      .set({ claimed_at: new Date(Date.now() - 10 * 60 * 1000) })
       .where('key', '=', key)
       .execute();
 
-    const service = app.get(IdempotencyService);
+    const second = await service.claim({ key, accountId, fingerprint });
+    expect(second.outcome).toBe('claimed');
+    const current = second.outcome === 'claimed' ? second.claimId : '';
 
-    // The stale holder tries to finish. It must change nothing.
+    // A takeover is a new claim, so it carries a new identity.
+    expect(current).not.toBe(stale);
+
+    // The request that lost the key finishes late. It must change nothing.
     await service.complete({
       key,
       accountId,
@@ -450,18 +454,34 @@ describe('idempotency (SKILL.md section 22)', () => {
       body: { from: 'the stale claim' },
     });
 
-    const after = await db
+    const afterStale = await db
       .selectFrom('idempotency_keys')
       .select(['state', 'response_body'])
       .where('key', '=', key)
       .executeTakeFirstOrThrow();
+    expect(afterStale.state).toBe('IN_FLIGHT');
+    expect(afterStale.response_body).toBeNull();
 
-    expect(after.state).toBe('IN_FLIGHT');
-    expect(after.response_body).toBeNull();
-
-    // And it releases nothing either.
+    // And it releases nothing either, so the holder's claim survives.
     await service.release({ key, accountId, claimId: stale });
     expect(await db.selectFrom('idempotency_keys').select('key').execute()).toHaveLength(1);
+
+    // The request that does hold the key completes normally.
+    await service.complete({
+      key,
+      accountId,
+      claimId: current,
+      status: 201,
+      body: { from: 'the holder' },
+    });
+
+    const afterHolder = await db
+      .selectFrom('idempotency_keys')
+      .select(['state', 'response_body'])
+      .where('key', '=', key)
+      .executeTakeFirstOrThrow();
+    expect(afterHolder.state).toBe('COMPLETED');
+    expect(afterHolder.response_body).toEqual({ from: 'the holder' });
   });
 
   it('leaves a completion the handler recorded in its own transaction', async () => {
