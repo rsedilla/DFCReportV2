@@ -637,11 +637,13 @@ describe('people (SKILL.md sections 3, 7 and 8)', () => {
     // says must never happen and which is worse than the duplicate it guards
     // against. `UUID().uuidString` on iOS is uppercase by default (section 2).
     it('accepts a duplicate acknowledgement whose ids are uppercase', async () => {
+      // Same Network as the leader they are placed under: a cross-Network edge is
+      // refused before any of this is reached, and `personBody` defaults to MALE
+      // while Manuel leads in the Men's Network.
       const twin = personBody({
-        first_name: 'Maria',
+        first_name: 'Mario',
         last_name: 'Delacruz',
         birth_date: '1991-07-19',
-        sex: 'FEMALE',
         pastoral_leader_id: manuel.id,
       });
 
