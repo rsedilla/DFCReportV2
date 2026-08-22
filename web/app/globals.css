@@ -28,6 +28,17 @@
  * `line` does not. Reaching for `line` on a form field is the mistake this pair
  * exists to prevent.
  *
+ * `field-invalid` is the one token named for a state, and SKILL.md section 23
+ * settles both halves of why it is allowed to exist and why it is called this.
+ * It marks an input the system cannot yet accept -- a statement about a field,
+ * made to the person who just typed in it. It is not a judgement about a person,
+ * a Cell, or any figure derived from them, and `field-` is a prefix that does not
+ * travel: a Cell is not a field and a leader is not a field. It is never used on
+ * a meeting status, a coverage figure or a leader, whatever it would seem to fit,
+ * and it is never the only indicator of an error -- a field in error carries text
+ * saying what is wrong, because colour alone fails WCAG 1.4.1 and a leader
+ * reading a phone in a hall may not see it at all.
+ *
  * `scripts/check-contrast.mjs` runs in lint and checks the pairs it lists: text
  * against its backgrounds both ways round, and `edge` against its backgrounds. It
  * does not check `line`, which is decorative and exempt, and it cannot see a
@@ -43,6 +54,7 @@
   --color-line: var(--line);
   --color-edge: var(--edge);
   --color-accent: var(--accent);
+  --color-field-invalid: var(--field-invalid);
 
   --font-sans:
     system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
@@ -58,6 +70,7 @@
   --line: #e2e6ea;
   --edge: #767f8a;
   --accent: #1f4f8b;
+  --field-invalid: #a4262c;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -69,6 +82,7 @@
     --line: #2a2f36;
     --edge: #6b7480;
     --accent: #8ab4e8;
+    --field-invalid: #f29d9a;
   }
 }
 

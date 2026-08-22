@@ -155,29 +155,83 @@ describe('the migration parser (CLAUDE.md, migration policy)', () => {
     });
   });
 
+  /**
+   * Tables a down section may drop without guarding, each with the reason it is
+   * not history. Everything else a migration drops must be named in its
+   * `refuse-if-populated` directive.
+   *
+   * This list is the deliberate edit. Adding a table here is how an author says
+   * "this one holds no history", in a file a reviewer reads, rather than by
+   * quietly omitting it from a directive where the omission looks like a typo.
+   * The original form of the check required every dropped table to be guarded,
+   * which was true of 0001 because every table in it held history.
+   */
+  const UNGUARDED = new Map([
+    [
+      'idempotency_keys',
+      // Section 22 keeps a key for 24 hours and permits dropping it after, so it
+      // holds neither history nor a decision. Refusing a down over a row that
+      // expires by itself tomorrow would make the guard mean less everywhere.
+      'operational state with its own expiry (SKILL.md section 22)',
+    ],
+    [
+      'settings',
+      // The guard counts rows and 0002 seeds two, so naming it would refuse every
+      // down from the moment the up finished -- a guard that always fires teaches
+      // an operator to reach for --force. A real decision is covered by
+      // `audit_log` being guarded: section 7 requires every settings change to be
+      // audit logged, so a changed setting implies an audit entry.
+      'seeded by its own migration; a change to it is covered by audit_log',
+    ],
+  ]);
+
+  describe.each([['0001_foundations.sql'], ['0002_audit_idempotency_settings.sql']])(
+    'the migration this repository actually ships: %s',
+    (fileName) => {
+      // Everything above runs on string fixtures. CI cannot catch a regression
+      // here either: it reverts against empty tables, where the guard is a no-op
+      // by construction. So the real files are parsed, and what they yield is
+      // asserted.
+      const sql = readFileSync(join(__dirname, '..', '..', 'migrations', fileName), 'utf8');
+      const migration = parse(fileName, sql);
+
+      it('guards every table its down section drops, or exempts it deliberately', () => {
+        // Matched over the down section alone, and without requiring IF EXISTS: a
+        // bare `DROP TABLE cell_memberships;` would otherwise match nothing, leave
+        // both sides equal, and pass while dropping an unguarded history table.
+        const dropped = [
+          ...(migration.down ?? '').matchAll(/DROP TABLE\s+(?:IF EXISTS\s+)?([a-z_]+)/g),
+        ].map((match) => match[1]);
+
+        expect(dropped.length).toBeGreaterThan(0);
+
+        const expected = dropped.filter((table) => !UNGUARDED.has(table)).sort();
+        expect([...migration.refuseIfPopulated].sort()).toEqual(expected);
+      });
+
+      it('guards nothing its down section does not drop', () => {
+        // A guard naming a table this migration never drops reads as protection
+        // and is none, and it would refuse the down for a table whose data the
+        // down would have left alone.
+        const dropped = new Set(
+          [...(migration.down ?? '').matchAll(/DROP TABLE\s+(?:IF EXISTS\s+)?([a-z_]+)/g)].map(
+            (match) => match[1],
+          ),
+        );
+
+        for (const guarded of migration.refuseIfPopulated) {
+          expect([...dropped]).toContain(guarded);
+        }
+      });
+    },
+  );
+
   describe('the migration this repository actually ships', () => {
-    // Everything above runs on string fixtures. CI cannot catch a regression here
-    // either: it reverts against empty tables, where the guard is a no-op by
-    // construction. So the real file is parsed, and what it yields is asserted.
     const sql = readFileSync(
       join(__dirname, '..', '..', 'migrations', '0001_foundations.sql'),
       'utf8',
     );
     const migration = parse('0001_foundations.sql', sql);
-
-    it('guards every table its down section drops', () => {
-      // Matched over the down section alone, and without requiring IF EXISTS: a
-      // bare `DROP TABLE cell_memberships;` would otherwise match nothing, leave
-      // both sides equal, and pass while dropping an unguarded history table.
-      const dropped = [
-        ...(migration.down ?? '').matchAll(/DROP TABLE\s+(?:IF EXISTS\s+)?([a-z_]+)/g),
-      ]
-        .map((match) => match[1])
-        .sort();
-
-      expect(dropped.length).toBeGreaterThan(0);
-      expect([...migration.refuseIfPopulated].sort()).toEqual(dropped);
-    });
 
     it('names the tables SKILL.md guarantees history for', () => {
       expect(migration.refuseIfPopulated).toEqual(

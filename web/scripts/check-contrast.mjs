@@ -66,6 +66,12 @@ const TEXT_PAIRS = [
 const NON_TEXT_PAIRS = [
   ['edge', 'surface'],
   ['edge', 'raised'],
+  // The invalid state of a form field is exactly the "visible state of a
+  // component" 1.4.11 names, so it is checked here rather than as body text
+  // (SKILL.md section 23). It clears 4.5:1 as well, so the message beside the
+  // field may carry it, but the rule it has to meet is this one.
+  ['field-invalid', 'surface'],
+  ['field-invalid', 'raised'],
 ];
 
 const TEXT_MINIMUM = 4.5;

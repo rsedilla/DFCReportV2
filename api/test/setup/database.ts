@@ -20,10 +20,22 @@ export function createTestDb(): Kysely<Database> {
   });
 }
 
-/** Every table this stage created, in one statement. */
+/**
+ * Every table holding test data, in one statement, plus the reset of the one
+ * table that holds seeded data instead.
+ *
+ * `settings` is deliberately not truncated. Its two rows are seeded by migration
+ * 0002 with the defaults SKILL.md names -- three months for the attention
+ * threshold (section 15), and the initial-encoding phase open (section 2) -- so
+ * truncating it would leave every later test running against a table the
+ * application expects to be populated. It is restored to those defaults instead,
+ * which also undoes a test that changed one.
+ */
 export async function truncateAll(db: Kysely<Database>): Promise<void> {
   await sql`
     TRUNCATE TABLE
+      idempotency_keys,
+      audit_log,
       refresh_tokens,
       account_tokens,
       capability_grants,
@@ -34,5 +46,20 @@ export async function truncateAll(db: Kysely<Database>): Promise<void> {
       person_lifecycle,
       persons
     RESTART IDENTITY CASCADE
+  `.execute(db);
+
+  // `updated_by` goes back to null, which is what the seed means: nobody has
+  // changed this yet (SKILL.md section 7).
+  await sql`
+    UPDATE settings
+       SET value = defaults.value,
+           updated_by = NULL,
+           updated_at = now()
+      FROM (VALUES
+             ('cell_attention_months', '3'::jsonb),
+             ('initial_encoding_open', 'true'::jsonb)
+           ) AS defaults (key, value)
+     WHERE settings.key = defaults.key
+       AND (settings.value <> defaults.value OR settings.updated_by IS NOT NULL)
   `.execute(db);
 }

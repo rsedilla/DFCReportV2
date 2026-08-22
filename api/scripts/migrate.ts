@@ -27,6 +27,7 @@
  * Usage:
  *   npm run migrate:up
  *   npm run migrate:down        (reverts the most recently applied migration)
+ *   npm run migrate:down -- --all   (reverts every applied migration, newest first)
  *   npm run migrate:status
  */
 import { createHash } from 'node:crypto';
@@ -329,14 +330,40 @@ async function up(client: Client): Promise<void> {
   process.stdout.write(ran === 0 ? 'nothing to apply\n' : `applied ${ran} migration(s)\n`);
 }
 
+/**
+ * Reverts the most recently applied migration, or every one of them with
+ * `--all`.
+ *
+ * `--all` exists for the round trip CI runs on an empty database. Reverting only
+ * the newest migration checks only the newest down section, and every stage that
+ * adds a file quietly shrinks what that step covers -- by Stage 4 it would be
+ * asserting that the most recent migration is reversible while saying nothing at
+ * all about the eight below it.
+ *
+ * It is not a way to empty a database. Every `refuse-if-populated` guard is
+ * evaluated for each migration on the way down, so the first one holding data
+ * stops the whole descent, and `--force` still has to be asked for by name.
+ */
 async function down(client: Client): Promise<void> {
+  const all = process.argv.includes('--all');
+
+  for (;;) {
+    const reverted = await revertLast(client);
+    if (!reverted || !all) {
+      return;
+    }
+  }
+}
+
+/** Whether a migration was reverted. False means nothing was applied. */
+async function revertLast(client: Client): Promise<boolean> {
   const migrations = await load();
   const history = await applied(client);
   const last = [...history.values()].sort((a, b) => a.version.localeCompare(b.version)).pop();
 
   if (!last) {
     process.stdout.write('nothing to revert\n');
-    return;
+    return false;
   }
 
   const migration = migrations.find((m) => m.version === last.version);
@@ -365,6 +392,8 @@ async function down(client: Client): Promise<void> {
     await client.query('ROLLBACK');
     throw error;
   }
+
+  return true;
 }
 
 /**

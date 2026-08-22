@@ -80,9 +80,12 @@ jobs:
       - name: Apply migrations
         run: npm run migrate:up
 
+      # `--all`, not a single down. Reverting only the newest migration checks
+      # only the newest down section, so every stage that adds a file would
+      # quietly shrink what this step covers.
       - name: Revert and re-apply migrations
         run: |
-          npm run migrate:down
+          npm run migrate:down -- --all
           npm run migrate:up
 
       - name: Test

@@ -204,6 +204,23 @@ CREATE TRIGGER accounts_set_updated_at
 
 -- ---------------------------------------------------------------------------
 -- person_lifecycle (SKILL.md section 3, Person Lifecycle)
+--
+-- `period_ordered` on every effective-dated table permits `ended_at = started_at`
+-- (section 5, "A row entered in error is closed at zero length"). Section 5
+-- prescribes correcting a bad row by closing it and opening the right one, and a
+-- strict `>` allowed only closing it a moment later -- which records a non-zero
+-- period during which a fact that was never true was in force.
+--
+-- A zero-length row is inert rather than merely tolerated. No as-of lookup can
+-- return it: `network_as_of` below asks for `started_at <= t AND ended_at > t`,
+-- and no `t` satisfies both. It occupies no one-open-row index, because every one
+-- of those is partial over `ended_at IS NULL`. And the same-Network check on a
+-- Network change considers edges open at the effective date or beginning after
+-- it, so it neither validates such a row nor is broken by one.
+--
+-- `refresh_tokens` and `account_tokens` keep the strict `>`. Their check bounds a
+-- validity window rather than an effective-dated fact, and a token that expires
+-- at the instant it is issued is a defect rather than a correction.
 -- ---------------------------------------------------------------------------
 
 CREATE TABLE person_lifecycle (
@@ -216,7 +233,7 @@ CREATE TABLE person_lifecycle (
   started_at timestamptz NOT NULL,
   ended_at timestamptz,
   CONSTRAINT person_lifecycle_period_ordered
-    CHECK (ended_at IS NULL OR ended_at > started_at),
+    CHECK (ended_at IS NULL OR ended_at >= started_at),
   -- A reason belongs to an archive. Restoring to CURRENT carries no archive reason.
   CONSTRAINT person_lifecycle_reason_only_on_archive
     CHECK (state = 'ARCHIVED' OR reason IS NULL),
@@ -244,7 +261,7 @@ CREATE TABLE network_assignments (
   started_at timestamptz NOT NULL,
   ended_at timestamptz,
   CONSTRAINT network_assignments_period_ordered
-    CHECK (ended_at IS NULL OR ended_at > started_at)
+    CHECK (ended_at IS NULL OR ended_at >= started_at)
 );
 
 CREATE UNIQUE INDEX network_assignments_one_open
@@ -274,7 +291,7 @@ CREATE TABLE pastoral_assignments (
   ended_at timestamptz,
   CONSTRAINT pastoral_assignments_no_self CHECK (person_id <> leader_id),
   CONSTRAINT pastoral_assignments_period_ordered
-    CHECK (ended_at IS NULL OR ended_at > started_at)
+    CHECK (ended_at IS NULL OR ended_at >= started_at)
 );
 
 -- Invariant 3: at most one active assignment. The partial index permits zero rows
