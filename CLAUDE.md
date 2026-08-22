@@ -1238,18 +1238,33 @@ what §8 already publishes** — the names and sex. Membership is then a functio
 nothing §8 protects, which is the property the first two attempts were reaching
 for and neither expressed.
 
-The rule that fired records whether it read a protected field, rather than the
-caller re-listing which rules are safe. A list re-derived at the call site drifts
-the moment a rule is added, and drifts silently: the new rule is surfaced
-church-wide and nobody is told.
+**The test is whether a publishable rule *would* have matched, not which rule
+actually won**, and getting that backwards cost a CI round. The matcher runs
+twice: once on the subject as given, and once on a subject stripped of everything
+§8 protects. The second run decides membership out of scope.
 
-**Two consequences, both accepted in writing.** A duplicate the viewer may not be
-shown cannot gate creation — every Tier 1 rule reads a protected field, so
-refusing on an invisible candidate would answer "acknowledge this" with nothing
-to acknowledge and make that Person impossible to create. And a cross-branch
-duplicate resting on a birthday is no longer caught for a leader outside that
-branch; it is still caught by the leader who holds them, and by Admin, which is
-where §3 authorizes a merge from anyway.
+Keying it on the winning rule instead — a flag the rule sets when it reads a
+protected field — hid anyone matching on *both* their names and their birthday,
+because the stronger rule wins and the stronger rule reads the birthday. Their
+presence was already explained by the names, so hiding them protected nothing and
+lost a real candidate. The failing test said so before the reasoning did.
+
+Both runs happen inside one service method used by every surface, so a third one
+cannot be added that runs the matcher once and leaks.
+
+**Two consequences, both accepted in writing.**
+
+Only a candidate the viewer can be shown in full may gate creation. Refusing on
+an invisible one would answer "acknowledge this" with nothing to acknowledge —
+and, less obviously, **the refusal is itself a channel**: every Tier 1 rule reads
+a protected field, so gating on an out-of-scope candidate would make the response
+vary, refused against created, with a value §8 protects. That is the same
+disclosure one field further out, and it is why the gate is in-scope-only rather
+than merely why the message would be unhelpful.
+
+And a cross-branch duplicate resting on a birthday is no longer caught for a
+leader outside that branch; it is still caught by the leader who holds them, and
+by Admin, which is where §3 authorizes a merge from anyway.
 
 Two alternatives were rejected. Amending §8 to permit the channel, with a rate
 limit and an audit entry per lookup, trades prevention for detection on the

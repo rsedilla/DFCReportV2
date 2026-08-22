@@ -187,20 +187,33 @@ export class PeopleService {
     // So an invisible duplicate does not gate. The cost is stated in section 3:
     // a cross-branch duplicate resting on a protected field is not caught for a
     // leader outside that branch, and is caught by the leader who holds them.
-    const gating: Match[] = [];
+    let gated = false;
     for (const match of matches) {
       if (match.tier !== 1 || acknowledged.has(match.candidate.id)) {
         continue;
       }
 
       if (await canSeeReasons(match.candidate.id)) {
-        gating.push(match);
+        gated = true;
+        break;
       }
     }
 
-    if (gating.length > 0) {
+    // **In-scope candidates only, and the status code is why.**
+    //
+    // Two reasons, and the second is the one that is easy to miss. An
+    // out-of-scope Tier 1 candidate cannot be shown in full, so refusing on one
+    // would answer "acknowledge this" with nothing to acknowledge and leave that
+    // Person impossible to create.
+    //
+    // And 409-against-201 is itself a channel. Every Tier 1 rule reads a birthday
+    // or a mobile number, so gating on an out-of-scope candidate would make the
+    // status vary with a value section 8 protects — the same oracle as the
+    // candidate list, one field further out. The status now varies only with what
+    // the actor is already allowed to know.
+    if (gated) {
       throw new DuplicateAcknowledgementRequiredError(
-        await visibleCandidates(gating, canSeeReasons),
+        await this.visibleDuplicatesFor(subject, canSeeReasons),
       );
     }
 
@@ -438,6 +451,40 @@ export class PeopleService {
    * That is a small set in a church of this size (section 2, Scale) and keeps
    * every rule in one readable place.
    */
+  /**
+   * The candidates a viewer may be shown, membership and fields both redacted.
+   *
+   * Runs the matcher twice: once on the subject as given, and once on a subject
+   * stripped of everything section 8 protects. The second run decides which
+   * out-of-scope candidates may appear at all — see `visibleCandidates`.
+   *
+   * Here rather than at the call sites so that the pre-flight lookup and the
+   * creation refusal cannot answer differently, and so that a third surface
+   * cannot be added that runs the matcher once and leaks.
+   */
+  async visibleDuplicatesFor(
+    subject: Subject,
+    inScope: (personId: string) => Promise<boolean>,
+  ): Promise<Record<string, unknown>[]> {
+    const [matches, publishable] = await Promise.all([
+      this.findDuplicates(subject),
+      this.findDuplicates({
+        firstName: subject.firstName,
+        middleName: subject.middleName,
+        lastName: subject.lastName,
+        sex: subject.sex,
+        birthDate: null,
+        mobileNumberNormalized: null,
+      }),
+    ]);
+
+    return visibleCandidates(
+      matches,
+      new Set(publishable.map((match) => match.candidate.id)),
+      inScope,
+    );
+  }
+
   async findDuplicates(subject: Subject): Promise<Match[]> {
     // The same guard the search path got, for the same reason and one function
     // away. `normalizeName` drops suffix tokens, so `last_name=Jr` normalizes to
@@ -786,13 +833,23 @@ export function isCalendarDate(value: string): boolean {
  * **Two separate redactions, and the first is the one that took three attempts.**
  *
  * *Which candidates appear.* A candidate outside the viewer's pastoral scope is
- * surfaced only where the rule that matched rests on what section 8 already
- * publishes church-wide — the names and sex. Where it rests on a birthday or a
- * mobile number, the candidate is not returned at all, because **membership of
- * the list is itself the disclosure**: with a first name that matches nothing,
- * "this person is in the result" is exactly "their birthday equals the value I
- * submitted", answered 200 every time and writing nothing. Redacting fields on a
- * returned candidate cannot close that, which is what the first two attempts did.
+ * surfaced only if they would **still** have matched a subject carrying nothing
+ * section 8 protects — no birthday, no mobile number. `publishableIds` is that
+ * second run of the matcher, and membership out of scope is therefore a function
+ * of the names and sex alone.
+ *
+ * This is why **membership is itself the disclosure**: with a first name that
+ * matches nothing, "this person is in the result" is exactly "their birthday
+ * equals the value I submitted", answered 200 either way and writing nothing.
+ * Redacting fields on a returned candidate cannot close that, which is what the
+ * first two attempts did.
+ *
+ * It is a second run rather than a flag on the rule that fired, and that
+ * distinction cost a CI round. A candidate matching on *both* the names and the
+ * birthday is classified by the stronger rule, which reads a protected field — so
+ * a flag hid people whose presence the names alone already explain, which is
+ * backwards. What matters is not which rule won, but whether a publishable rule
+ * would have matched at all.
  *
  * *What each candidate carries.* In scope, the tier and the reasons. Out of
  * scope, neither — the reasons name the field that matched, and the tier is
@@ -808,6 +865,7 @@ export function isCalendarDate(value: string): boolean {
  */
 export async function visibleCandidates(
   matches: readonly Match[],
+  publishableIds: ReadonlySet<string>,
   inScope: (personId: string) => Promise<boolean>,
 ): Promise<Record<string, unknown>[]> {
   const visible: Record<string, unknown>[] = [];
@@ -815,7 +873,7 @@ export async function visibleCandidates(
   for (const match of matches) {
     const withinScope = await inScope(match.candidate.id);
 
-    if (!withinScope && match.restsOnProtectedField) {
+    if (!withinScope && !publishableIds.has(match.candidate.id)) {
       continue;
     }
 

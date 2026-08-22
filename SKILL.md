@@ -309,7 +309,9 @@ Whitespace normalization carries unusual weight here. `Dela Cruz`, `DelaCruz`, a
 
 That lookup reads the whole directory, as Section 8's church-wide search does and for the same reason. What it may say about a candidate depends on whether that candidate is inside the viewer's pastoral scope, and the rule has two parts — of which the first is the one that is easy to get wrong.
 
-**Which candidates appear.** A candidate outside the viewer's scope is surfaced only where the rule that matched them rests on what Section 8 already publishes church-wide: the names and sex. Where it rests on a birthday or a mobile number, that candidate is not returned at all.
+**Which candidates appear.** A candidate outside the viewer's scope is surfaced only if they would **still** have matched a subject carrying nothing Section 8 protects — no birthday, no mobile number. Membership out of scope is therefore a function of the names and sex alone.
+
+The test is whether a publishable rule *would* have matched, not which rule actually won. Someone matching on both their names and their birthday is classified by the stronger rule, which reads the birthday — but their presence is already explained by the names, so hiding them protects nothing and loses a real candidate.
 
 This is not a refinement of the field rule below, it is the load-bearing half. **Membership of the list is itself a disclosure**: submit a first name that matches nobody and a surname Section 8 already makes readable, and the only rule that can fire is the one comparing birthdays — so "this person is in the result" *is* "their birthday equals the value I submitted", answered identically every time and writing nothing. No redaction of the returned object reaches that, because the object is not where the answer is.
 
@@ -317,7 +319,11 @@ This is not a refinement of the field rule below, it is the load-bearing half. *
 
 Both parts apply wherever candidates are returned, including the refusal that asks for a Tier 1 acknowledgement.
 
-**A duplicate the viewer may not be shown does not gate creation.** Every Tier 1 rule rests on a birthday or a mobile number, so an out-of-scope Tier 1 candidate is one this section does not permit surfacing — and refusing on it would answer "acknowledge this" with nothing to acknowledge, leaving that Person impossible to create at all. That is a worse failure than the duplicate, and it is what this section means by never blocking creation.
+**Only a candidate the viewer can be shown in full may gate creation**, which means one inside their pastoral scope. Two reasons, and the second is the one that is easy to miss.
+
+An out-of-scope Tier 1 candidate cannot be shown with its tier or reasons, so refusing on one would answer "acknowledge this" with nothing to acknowledge, leaving that Person impossible to create at all — a worse failure than the duplicate, and what this section means by never blocking creation.
+
+And the refusal itself is a channel. Every Tier 1 rule reads a birthday or a mobile number, so gating on an out-of-scope candidate would make the response vary — refused against created — with a value Section 8 protects. That is the same disclosure as the candidate list, one field further out.
 
 **The cost is real and is accepted here rather than discovered later.** A cross-branch duplicate whose match rests on a birthday — the woman whose surname changed on marriage is the case this section names — is no longer surfaced to a leader outside her branch. It is still surfaced to the leader who holds her, and to Admin and the Senior Pastors at Whole Church scope, which is where a merge is authorized from in any case (Section 3, Person Merge).
 

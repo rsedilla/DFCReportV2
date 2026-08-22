@@ -288,6 +288,29 @@ describe('people (SKILL.md sections 3, 7 and 8)', () => {
       expect(candidates.every((candidate) => candidate.tier === 2)).toBe(true);
     });
 
+    it('surfaces an out-of-scope candidate whose names alone explain the match', async () => {
+      // Juan matches on names and on birthday. Membership is decided by whether a
+      // subject carrying nothing section 8 protects would still have matched him
+      // -- and the names alone do -- so he appears, without the tier or the
+      // reasons that would say the birthday matched too.
+      //
+      // An earlier attempt keyed this on which rule won, and hid him: the
+      // strongest rule read the birthday. That hid people whose presence the names
+      // already explained, which is backwards.
+      const response = await request(app.getHttpServer())
+        .get('/api/v1/people/duplicate-candidates')
+        .query({ first_name: 'Juan', last_name: 'Testfixture', birth_date: '1985-06-15' })
+        .set('Authorization', `Bearer ${raymondAccount.accessToken}`);
+
+      const found = (response.body.data as Record<string, unknown>[]).find(
+        (candidate) => candidate.id === juan.id,
+      );
+
+      expect(found).toMatchObject({ possible_match: true });
+      expect(found).not.toHaveProperty('tier');
+      expect(found).not.toHaveProperty('reasons');
+    });
+
     it('withholds the match reasons for a candidate outside the actor scope', async () => {
       // A reason reading "same birthday" asserts that an out-of-scope person's
       // birthday equals the value just submitted, which section 8 forbids

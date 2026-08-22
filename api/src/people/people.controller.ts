@@ -23,7 +23,6 @@ import {
   fullProfile,
   normalizeMobile,
   PeopleService,
-  visibleCandidates,
   type PersonRecord,
   type SearchCursor,
 } from './people.service';
@@ -120,18 +119,18 @@ export class PeopleController {
   ): Promise<{ data: Record<string, unknown>[]; next_cursor: string | null }> {
     const limit = query.limit ?? 50;
 
-    const matches = await this.people.findDuplicates({
-      firstName: query.first_name,
-      lastName: query.last_name,
-      birthDate: query.birth_date ?? null,
-      sex: query.sex,
-      mobileNumberNormalized: normalizeMobile(query.mobile_number),
-    });
-
-    // Membership and fields are both redacted, in one place shared with the
-    // creation refusal so the two surfaces cannot answer differently.
-    const visible = await visibleCandidates(matches, (personId) =>
-      this.isWithinScope(actor, personId),
+    // Membership and fields are both redacted inside the service, in one place
+    // shared with the creation refusal so the two surfaces cannot answer
+    // differently.
+    const visible = await this.people.visibleDuplicatesFor(
+      {
+        firstName: query.first_name,
+        lastName: query.last_name,
+        birthDate: query.birth_date ?? null,
+        sex: query.sex,
+        mobileNumberNormalized: normalizeMobile(query.mobile_number),
+      },
+      (personId) => this.isWithinScope(actor, personId),
     );
 
     return { data: visible.slice(0, limit), next_cursor: null };
