@@ -369,7 +369,10 @@ describe('sex correction (SKILL.md sections 4, 5, 7, 21, 22)', () => {
       });
 
       expect(now.status).toBe(200);
-      expect(manilaDayOf(new Date(now.body.effective_at))).toBe(manilaDayOf(movedAt));
+      // Compared as instants rather than as Manila days: the assertion is that it
+      // took effect now, and a day comparison would flake on a run straddling
+      // midnight without testing anything more.
+      expect(new Date(now.body.effective_at).getTime()).toBeGreaterThanOrEqual(movedAt.getTime());
     });
 
     it('reaches a closed edge on which the person was the subordinate', async () => {
@@ -762,6 +765,79 @@ describe('sex correction (SKILL.md sections 4, 5, 7, 21, 22)', () => {
       // Not the disciple refusal, which a root would otherwise always hit first
       // and which would report the wrong reason.
       expect(response.body.error.message).toMatch(/Network root/);
+    });
+
+    it('refuses a Network root named with a new leader, for the root reason', async () => {
+      // A root holds an open row whose `leader_id` is null, so the "no open
+      // pastoral assignment, and no leader to name" refusal would state something
+      // false about the record and would fire first. Section 4 requires a root to
+      // be refused for the reason that actually applies.
+      const response = await correct(geraldine.id, {
+        sex: 'MALE',
+        reason: 'Sex entered in error at encoding.',
+        pastoral_leader_id: manuel.id,
+      });
+
+      expect(response.status).toBe(409);
+      expect(response.body.error.code).toBe('INVARIANT_VIOLATION');
+      expect(response.body.error.message).toMatch(/Network root/);
+    });
+
+    it('names one earliest date, not one the next refusal would reject', async () => {
+      // The two bounds resolved together. This person's floor — a closed edge that
+      // ended in April — lies *below* the start of the Network row they are in
+      // now, which a later correction opened in June. Refusing on the floor alone
+      // would name 2026-04-02, which the Network-row bound then refuses naming
+      // 2026-06-02: two round trips, the second answer contradicting the first.
+      const closedFrom = new Date('2026-03-01T10:00:00+08:00');
+      const closedTo = new Date('2026-04-01T10:00:00+08:00');
+      const networkChangedAt = new Date('2026-06-01T10:00:00+08:00');
+
+      const person = await createPerson(db, { firstName: 'Nena', network: 'MENS' });
+
+      // A closed edge, and no open assignment: section 4 says such a correction may
+      // be backdated freely, which is what leaves the floor below the row start.
+      await db
+        .insertInto('pastoral_assignments')
+        .values({
+          person_id: person.id,
+          leader_id: manuel.id,
+          started_at: closedFrom,
+          ended_at: closedTo,
+        })
+        .execute();
+
+      // Their Network row now begins later than that floor.
+      await db
+        .updateTable('network_assignments')
+        .set({ ended_at: networkChangedAt })
+        .where('person_id', '=', person.id)
+        .where('ended_at', 'is', null)
+        .execute();
+      await db
+        .insertInto('network_assignments')
+        .values({ person_id: person.id, network: 'MENS', started_at: networkChangedAt })
+        .execute();
+
+      const refused = await correct(person.id, {
+        sex: 'FEMALE',
+        reason: 'Sex entered in error at encoding.',
+        effective_date: '2026-03-15',
+      });
+
+      expect(refused.status).toBe(409);
+      // The later of the two bounds, named once.
+      expect(refused.body.error.details.earliest_effective_date).toBe('2026-06-02');
+
+      // And submitting it succeeds, which is what makes the date the *earliest*
+      // rather than merely a later one.
+      const accepted = await correct(person.id, {
+        sex: 'FEMALE',
+        reason: 'Sex entered in error at encoding.',
+        effective_date: '2026-06-02',
+      });
+
+      expect(accepted.status).toBe(200);
     });
 
     it('refuses an effective date at the instant the Network row itself began', async () => {

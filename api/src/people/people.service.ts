@@ -824,6 +824,13 @@ export class PeopleService {
       // ambiguity is recorded as open in CLAUDE.md.
       const requiresReassignment = assignment !== null && assignment.leaderId !== null;
 
+      // A root holds an open row with no leader, so it satisfies neither branch
+      // below honestly: the "no open pastoral assignment" refusal would state
+      // something false about the record, and it would fire before `changeWithin`
+      // could refuse the root for the reason section 4 gives. Left to fall through,
+      // so the answer comes from the rule that applies.
+      const isRoot = assignment !== null && assignment.leaderId === null;
+
       if (requiresReassignment && input.pastoralLeaderId === undefined) {
         throw new ValidationFailedError(
           'This person has a pastoral leader in their current Network, so the correction must name the leader they move to in the new one.',
@@ -831,7 +838,7 @@ export class PeopleService {
         );
       }
 
-      if (!requiresReassignment && input.pastoralLeaderId !== undefined) {
+      if (!requiresReassignment && !isRoot && input.pastoralLeaderId !== undefined) {
         // Refused rather than ignored. A client naming a leader expects a
         // reassignment, and silently dropping it would leave them believing one
         // happened.

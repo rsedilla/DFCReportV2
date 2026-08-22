@@ -16,11 +16,16 @@ import type { Database } from '../../src/database/schema';
  * there is *no legal write*. So each case performs the four-row atomic operation
  * by hand and asserts what `COMMIT` does with it.
  *
- * The rule under test is a property of two firings of
- * `assert_network_change_keeps_edges`, and the second is the one that produces
- * both of section 4's strictness bounds: on the `UPDATE` that closes the old
- * Network row, the trigger's bound is *that row's* `started_at` rather than the
- * effective date, so it reaches nearly every edge the person has held.
+ * The rule under test is a property of **two** firings of
+ * `assert_network_change_keeps_edges`, and the terms come from different ones.
+ *
+ * The first is the `UPDATE` closing the old Network row — first because the close
+ * must precede the open, and a deferred trigger's events fire at commit in the
+ * order they were queued. Its bound is *that row's* `started_at` rather than the
+ * effective date, so it reaches nearly every edge the person has held. Term (a),
+ * and term (b) at exact equality with a zero-length edge, both fail there. The
+ * second is the `INSERT` of the new row, bounded by the effective date, and term
+ * (b)'s ordinary case fails there.
  *
  * Fixture names and dates are invented (CLAUDE.md, Secrets).
  */
@@ -121,7 +126,7 @@ describe('the backdate floor is a property of the schema (section 4)', () => {
         });
 
         // At the assignment's own start the correction closes it at zero length.
-        // That row is selected by the second firing and compared at its own
+        // That row is selected by the `UPDATE` firing and compared at its own
         // timestamp, where the person already resolves to the corrected Network
         // and their old leader does not — so the edge was cross-Network for the
         // whole of its life and there is no instant at which it can be closed.
@@ -140,8 +145,10 @@ describe('the backdate floor is a property of the schema (section 4)', () => {
   describe('term (b): the ended_at of an already-closed edge, in either direction', () => {
     it('refuses at the shared timestamp of a zero-length closed leader-side edge', async () => {
       // Section 4's second bullet, and the case that makes the bound *strictly*
-      // later rather than at-or-after. A zero-length row is inert as an answer and
-      // is still examined, which section 5 states and which nothing else pins.
+      // later rather than at-or-after. It fails in the `UPDATE` firing: the
+      // `INSERT` firing does not select an edge whose `ended_at` equals the
+      // effective date. A zero-length row is inert as an answer and is still
+      // examined, which section 5 states and which nothing else pins.
       const closedAt = new Date('2026-05-10T14:00:00+08:00');
 
       const mensLeader = await createPerson(db, { firstName: 'Manuel', network: 'MENS' });

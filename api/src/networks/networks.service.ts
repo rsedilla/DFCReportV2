@@ -189,36 +189,35 @@ export class NetworksService {
 
     const floor = await this.hierarchy.backdateFloorFor(transaction, change.personId);
 
-    // **Checked whether or not the caller backdated.** Section 4 states the floor
-    // for a backdated correction, and a correction taking effect now clears it in
-    // every ordinary case — but not in every case: a Person encoded and corrected
-    // within the same millisecond has a current assignment whose `started_at`
-    // equals the effective instant, which is the first term exactly. Checking only
-    // when backdating would leave that one to surface as a constraint violation.
-    if (floor !== null && change.effectiveAt.getTime() <= floor.getTime()) {
-      throw this.floorBreach(change, floor, 'edges');
-    }
+    // **Two bounds, resolved to whichever binds, and refused once.**
+    //
+    // Section 4's floor bounds the pastoral edges the correction would strand. The
+    // second bound is the Network row's own `started_at`: at or before it the
+    // `UPDATE` below would close the live row at its own start, and section 5
+    // makes such a row inert, so the period the person spent in their former
+    // Network would vanish from every as-of query.
+    //
+    // They are taken together rather than in sequence because section 4 requires
+    // the refusal to name "the earliest date it can legally take". Refusing on the
+    // floor first and naming the day after *it* hands back a date the second bound
+    // then refuses, naming a later one — two round trips, and the second answer
+    // contradicting the first, which is the failure that sentence exists to
+    // prevent. It is reachable: a Person whose closed edge ended before their
+    // current Network row began has a floor below that row's start.
+    //
+    // **Checked whether or not the caller backdated.** A correction taking effect
+    // now clears both bounds in every ordinary case, but not in every case: a
+    // Person encoded and corrected within the same millisecond has a current
+    // assignment, and a Network row, whose timestamps equal the effective instant.
+    // Checking only when backdating would leave that to surface as a constraint
+    // violation.
+    const bound =
+      floor !== null && floor.getTime() >= open.started_at.getTime()
+        ? ({ at: floor, kind: 'edges' } as const)
+        : ({ at: open.started_at, kind: 'network-row' } as const);
 
-    // **At or before, not merely before.** At exact equality the `UPDATE` below
-    // would close the live Network row at its own `started_at`, and section 5
-    // makes such a row **inert**: no instant resolves to it, so the period the
-    // person spent in their former Network disappears from every as-of query and
-    // every past-period Network-scoped report for them moves. Section 5 names that
-    // failure directly and reserves a zero-length close for a row entered in
-    // error, written by a path that says it is correcting — which this is not. A
-    // correction is effective-dated, and section 4 accepts in writing that closed
-    // periods keep the Network recorded for them, including where it is now known
-    // to be wrong.
-    //
-    // Strictly below equality the schema would refuse it anyway, through
-    // `CHECK (ended_at >= started_at)`; this turns both into an answer rather than
-    // a constraint violation an administrator cannot act on.
-    //
-    // Section 4's floor does not bound this. It is reachable wherever the floor is
-    // empty — most ordinarily a Person with no pastoral assignment at all, whom
-    // section 4 says may be backdated freely because there are no edges to strand.
-    if (change.effectiveAt.getTime() <= open.started_at.getTime()) {
-      throw this.floorBreach(change, open.started_at, 'network-row');
+    if (change.effectiveAt.getTime() <= bound.at.getTime()) {
+      throw this.floorBreach(change, bound.at, bound.kind);
     }
 
     // The close before the open: `network_assignments_one_open` is a partial

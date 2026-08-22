@@ -249,26 +249,34 @@ export class HierarchyService {
    * Two terms, and they are written against the `WHERE` clause of
    * `assert_network_change_keeps_edges` rather than against what that trigger is
    * for. That distinction is the reason this method exists rather than a date
-   * comparison at the call site — the trigger fires **twice** during a correction
-   * and the second firing is the one both terms come from.
+   * comparison at the call site: the trigger fires **twice** during a correction,
+   * and the two terms come from different firings.
    *
-   * On the `UPDATE` that closes the old Network row, the trigger's bound is that
-   * row's own `started_at`, not the effective date, so it selects nearly every
-   * edge the person has held and compares each at `GREATEST(edge.started_at,
-   * old_row.started_at)`. That comparison passes only while the instant is still
-   * covered by the old Network row — that is, while the edge began strictly before
-   * the effective date. Hence:
+   * The **first** firing is the `UPDATE` that closes the old Network row — first
+   * because `network_assignments_one_open` forces the close to precede the open,
+   * and a deferred constraint trigger's events fire at commit in the order they
+   * were queued. Its bound is that row's own `started_at`, not the effective date,
+   * so it selects nearly every edge the person has held and compares each at
+   * `GREATEST(edge.started_at, old_row.started_at)` — passing only while that
+   * instant is still covered by the old Network row, that is, while the edge began
+   * strictly before the effective date.
    *
-   *   - **The person's current assignment.** At an effective date equal to its
-   *     `started_at`, the atomic pair closes it at its own start; the zero-length
-   *     row is then selected and compared at that instant, where the person
-   *     already resolves to the corrected Network and their old leader does not.
-   *     There is no instant at which it can honestly be closed.
-   *   - **The `ended_at` of every already-closed edge touching them, in either
-   *     direction.** The `INSERT` of the new Network row selects anything with
-   *     `ended_at > eff` and fails it; and at exact equality a *zero-length* closed
-   *     edge is still caught by the second firing, compared at its own timestamp.
-   *     Being closed, it cannot be reassigned to resolve what it reports.
+   * The **second** is the `INSERT` of the new Network row, whose bound is the
+   * effective date itself.
+   *
+   *   - **Term (a), the person's current assignment: the `UPDATE` firing.** At an
+   *     effective date equal to its `started_at`, the atomic pair closes it at its
+   *     own start; the zero-length row is selected there and compared at that
+   *     instant, where the person already resolves to the corrected Network and
+   *     their old leader does not. There is no instant at which it can honestly be
+   *     closed.
+   *   - **Term (b), the `ended_at` of every already-closed edge touching them, in
+   *     either direction: both firings, different cases.** The ordinary case — an
+   *     effective date below the edge's `ended_at` — comes from the `INSERT`
+   *     firing, which selects anything with `ended_at > eff`. At exact equality
+   *     only a *zero-length* closed edge still fails, and it fails in the `UPDATE`
+   *     firing, compared at its own timestamp. Being closed, it cannot be
+   *     reassigned to resolve what it reports.
    *
    * The strict form is uniform, which is conservative by one instant for an
    * ordinary closed edge whose `ended_at` genuinely would pass. Section 4 fixes it
