@@ -172,24 +172,28 @@ describe('what never matches on its own (SKILL.md section 3)', () => {
   });
 });
 
-describe('signals that weaken without excluding', () => {
-  it('lowers a sex mismatch a tier rather than dropping the candidate', () => {
-    // Section 3: sex "is a frequently mis-keyed field", so a mismatch lowers
-    // confidence and never excludes.
+describe('signals that annotate without excluding or demoting', () => {
+  it('keeps a sex mismatch at Tier 1 and says so in the reasons', () => {
+    // Section 3's Tier 1 conditions carry no sex term, and it calls sex "a
+    // frequently mis-keyed field". Demoting on a mismatch would take the
+    // acknowledgement gate off exactly the candidates most likely to be the same
+    // person with a typo: same name, same birthday, sex entered wrong.
     const matches = findCandidates(subject({ sex: 'FEMALE' }), [BASE]);
 
     expect(matches).toHaveLength(1);
-    expect(matches[0].tier).toBe(2);
+    expect(matches[0].tier).toBe(1);
     expect(matches[0].reasons.join(' ')).toMatch(/sex differs/);
   });
 
-  it('lowers a suffix mismatch a tier rather than dropping the candidate', () => {
+  it('keeps a suffix mismatch at Tier 1 and says so in the reasons', () => {
+    // Jr against Sr is a real distinction, but a suffix is also frequently
+    // omitted or mistyped. The person deciding weighs it; a tier boundary cannot.
     const matches = findCandidates(subject({ firstName: 'Juan Jr' }), [
       { ...BASE, firstName: 'Juan Sr' },
     ]);
 
     expect(matches).toHaveLength(1);
-    expect(matches[0].tier).toBe(2);
+    expect(matches[0].tier).toBe(1);
     expect(matches[0].reasons.join(' ')).toMatch(/suffixes differ/);
   });
 

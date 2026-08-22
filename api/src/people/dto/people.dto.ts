@@ -116,6 +116,38 @@ export class EditPersonDto {
   mobile_number?: string | null;
 }
 
+/**
+ * The pre-flight duplicate check (SKILL.md section 3; section 9, step 1: "Search
+ * existing People first").
+ *
+ * Everything is optional except the names, because this is asked *before* a
+ * Person exists and an encoder may not yet have a birthday or a number. Section 3
+ * is explicit that a missing middle name or birthday never counts against a
+ * match.
+ */
+export class DuplicateCandidatesDto {
+  @IsString()
+  @Length(1, 100)
+  first_name!: string;
+
+  @IsString()
+  @Length(1, 100)
+  last_name!: string;
+
+  @IsOptional()
+  @IsDateString({ strict: true })
+  birth_date?: string;
+
+  @IsOptional()
+  @IsIn(SEXES)
+  sex?: Sex;
+
+  @IsOptional()
+  @IsString()
+  @Length(0, 40)
+  mobile_number?: string;
+}
+
 export class SearchPeopleDto {
   @IsString()
   @Length(2, 100)

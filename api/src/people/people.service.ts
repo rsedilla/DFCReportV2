@@ -584,6 +584,24 @@ export class PeopleService {
       );
     }
 
+    // An archived Person acquiring a new disciple would leave a live pastoral
+    // edge under someone who is not a current Person -- the same corruption
+    // section 3 refuses when archiving a Person who leads a Cell. Restore them
+    // first, which is an explicit and separately audited decision.
+    const lifecycle = await this.db
+      .selectFrom('person_lifecycle')
+      .select('state')
+      .where('person_id', '=', leaderId)
+      .where('ended_at', 'is', null)
+      .executeTakeFirst();
+
+    if (lifecycle?.state === 'ARCHIVED') {
+      throw new InvariantViolationError(
+        'That leader is archived. Restore them first, or choose another leader.',
+        { pastoral_leader_id: leaderId },
+      );
+    }
+
     const leaderNetwork = await this.networks.currentNetwork(leaderId);
     if (leaderNetwork !== network) {
       throw new InvariantViolationError(
@@ -690,7 +708,7 @@ export function isCalendarDate(value: string): boolean {
   );
 }
 
-function describeCandidate(match: Match): Record<string, unknown> {
+export function describeCandidate(match: Match): Record<string, unknown> {
   return {
     id: match.candidate.id,
     member_id: match.candidate.memberId,

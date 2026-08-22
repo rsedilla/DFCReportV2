@@ -212,6 +212,35 @@ describe('people (SKILL.md sections 3, 7 and 8)', () => {
       expect(await db.selectFrom('persons').select('id').execute()).toHaveLength(7);
     });
 
+    it('refuses an archived Person as the pastoral leader', async () => {
+      // An archived Person acquiring a disciple leaves a live pastoral edge under
+      // someone who is not a current Person -- the corruption section 3 refuses
+      // when archiving a Person who leads a Cell.
+      await db
+        .updateTable('person_lifecycle')
+        .set({ ended_at: new Date() })
+        .where('person_id', '=', manuel.id)
+        .where('ended_at', 'is', null)
+        .execute();
+      await db
+        .insertInto('person_lifecycle')
+        .values({
+          person_id: manuel.id,
+          state: 'ARCHIVED',
+          reason: 'NO_LONGER_IN_CURRENT_NETWORK',
+          started_at: new Date(),
+        })
+        .execute();
+
+      const response = await post(raymondAccount, randomUUID()).send(
+        personBody({ pastoral_leader_id: manuel.id }),
+      );
+
+      expect(response.status).toBe(409);
+      expect(response.body.error.code).toBe('INVARIANT_VIOLATION');
+      expect(await db.selectFrom('persons').select('id').execute()).toHaveLength(7);
+    });
+
     it('refuses a request with no idempotency key', async () => {
       const response = await request(app.getHttpServer())
         .post('/api/v1/people')
@@ -220,6 +249,57 @@ describe('people (SKILL.md sections 3, 7 and 8)', () => {
 
       expect(response.status).toBe(422);
       expect(await db.selectFrom('persons').select('id').execute()).toHaveLength(7);
+    });
+  });
+
+  describe('the pre-flight duplicate check (SKILL.md section 3)', () => {
+    it('surfaces Tier 2 candidates, which creation alone never shows', () => {
+      // Creation can only refuse on Tier 1, so without this endpoint every Tier 2
+      // match would be computed and discarded -- and section 3 says they are
+      // "presented in a candidate list".
+      return request(app.getHttpServer())
+        .get('/api/v1/people/duplicate-candidates')
+        .query({ first_name: 'Pedro', last_name: 'Testfixture', birth_date: '1985-06-15' })
+        .set('Authorization', `Bearer ${raymondAccount.accessToken}`)
+        .expect(200)
+        .expect((response: { body: { candidates: { tier: number }[] } }) => {
+          expect(response.body.candidates.length).toBeGreaterThan(0);
+          expect(response.body.candidates.every((c) => c.tier === 2)).toBe(true);
+        });
+    });
+
+    it('withholds the match reasons for a candidate outside the actor scope', async () => {
+      // A reason reading "same birthday" asserts that an out-of-scope person's
+      // birthday equals the value just submitted, which section 8 forbids
+      // disclosing. On a read endpoint that would be a silent oracle.
+      const response = await request(app.getHttpServer())
+        .get('/api/v1/people/duplicate-candidates')
+        .query({ first_name: 'Juan', last_name: 'Testfixture', birth_date: '1985-06-15' })
+        .set('Authorization', `Bearer ${raymondAccount.accessToken}`);
+
+      expect(response.status).toBe(200);
+
+      const outOfScope = (response.body.candidates as Record<string, unknown>[]).find(
+        (candidate) => candidate.id === juan.id,
+      );
+
+      expect(outOfScope).toBeDefined();
+      // Still identified, and still tiered -- the encoder needs both.
+      expect(outOfScope).toMatchObject({ member_id: expect.any(String), tier: expect.any(Number) });
+      expect(outOfScope).not.toHaveProperty('reasons');
+    });
+
+    it('keeps the reasons for a candidate the actor oversees', async () => {
+      const response = await request(app.getHttpServer())
+        .get('/api/v1/people/duplicate-candidates')
+        .query({ first_name: 'Manuel', last_name: 'Testfixture', birth_date: '1985-06-15' })
+        .set('Authorization', `Bearer ${raymondAccount.accessToken}`);
+
+      const inScope = (response.body.candidates as Record<string, unknown>[]).find(
+        (candidate) => candidate.id === manuel.id,
+      );
+
+      expect(inScope).toHaveProperty('reasons');
     });
   });
 

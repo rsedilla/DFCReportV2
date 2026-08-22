@@ -297,11 +297,17 @@ Whitespace normalization carries unusual weight here. `Dela Cruz`, `DelaCruz`, a
 
 **Never a match on its own:** a common surname alone, a first name alone, or sex alone. Sex is a supporting signal: a mismatch lowers confidence but never excludes a candidate, because it is a frequently mis-keyed field.
 
+**A sex mismatch annotates a candidate; it does not lower its tier.** The Tier 1 conditions above carry no sex term, and demoting on a mismatch would take the acknowledgement requirement off exactly the candidates most likely to be one person recorded twice — same name, same birthday, sex entered wrong. The discrepancy travels with the candidate so that the person deciding sees it and weighs it. A differing suffix is treated the same way, and for the same reason.
+
 **A matching mobile number is a strong signal, but never sufficient alone.** Households share numbers, and a minor is commonly recorded with a parent's number, so two different people legitimately holding the same number is normal rather than exceptional. Treat a matching number with an equal last name as Tier 2, and with equal first and last names as Tier 1. Never treat a number alone as a match, and never block creation on one.
 
 **Middle name absence never counts against a match.** It is optional (above) and is frequently left blank.
 
 **A woman's last name may change on marriage.** Where last names differ, birthday together with first name remains a Tier 2 signal on its own. Do not require surname equality.
+
+**Tier 2 candidates need somewhere to appear.** A creation workflow can only ever refuse on Tier 1, so if candidates were surfaced only at the moment of creation, every Tier 2 match would be computed and discarded. They are presented before creation instead, by a pre-flight lookup the encoder makes with the details they have so far — which is also what Section 9 asks for as the first step of registering a VIP: search existing People first.
+
+That lookup reads the whole directory, as Section 8's church-wide search does and for the same reason. It returns the identifying fields Section 8 permits, and the tier. It does **not** return the reasons a candidate matched where that candidate is outside the viewer's pastoral scope: a reason reading "same birthday" asserts that their birthday equals a value the caller just submitted, which is a disclosure Section 8 forbids, and a read endpoint would make it a silent one.
 
 Thresholds and edit distances must be calibrated against real data rather than fixed here. Log the candidates shown and what the user chose, and revisit the rules once there is enough history to see what the matcher is missing and what it is over-reporting.
 
@@ -718,6 +724,8 @@ Any query that walks the pastoral tree must carry cycle detection. A subtree que
 An archived Person (Section 3) must not be reassigned. Restore them to `CURRENT` first — an explicit, authorized decision — and then reassign. Keeping the two operations separately authorized and separately audited prevents an archived record from re-entering a leader's current totals through a side door.
 
 A Person absorbed into another by Merge (Section 3) must never be reassigned. The surviving Person is the only valid target.
+
+**An archived Person may not be given a new disciple either.** They may not be reassigned, and they may not be the *destination* of someone else's assignment: a live pastoral edge under a Person who is not `CURRENT` corrupts every subtree total that walks through them, which is the same corruption Section 3 refuses when archiving a Person who leads a Cell. Restore them first — an explicit, separately authorized decision — or choose another leader. The refusal answers `INVARIANT_VIOLATION`: it is a rule about what may be recorded, whoever submits it.
 
 Every reassignment is audit logged as a pastoral leader transfer with actor, target, previous leader, new leader, and timestamp (Section 21), and must be explainable in Network Summary as a pastoral transfer (Section 16).
 
@@ -2629,6 +2637,7 @@ GET  /api/v1/auth/me
 
 GET  /api/v1/people/{id}
 GET  /api/v1/people/search
+GET  /api/v1/people/duplicate-candidates
 GET  /api/v1/people/{id}/pastoral-path
 
 GET  /api/v1/network/my-tree

@@ -12,10 +12,17 @@ import {
 import { HierarchyService } from '../hierarchy/hierarchy.service';
 import { NetworksService } from '../networks/networks.service';
 
-import { CreatePersonDto, EditPersonDto, SearchPeopleDto } from './dto/people.dto';
+import {
+  CreatePersonDto,
+  DuplicateCandidatesDto,
+  EditPersonDto,
+  SearchPeopleDto,
+} from './dto/people.dto';
 import {
   composeName,
+  describeCandidate,
   fullProfile,
+  normalizeMobile,
   PeopleService,
   type PersonRecord,
   type SearchCursor,
@@ -75,6 +82,61 @@ export class PeopleController {
       actor,
       claim,
     );
+  }
+
+  /**
+   * Candidates who may already be the person about to be encoded (section 3).
+   *
+   * **This is where Tier 2 surfaces.** Section 3 says a Tier 1 candidate is
+   * acknowledged before creation and a Tier 2 candidate is "presented in a
+   * candidate list" — and creation can only ever refuse on Tier 1, so without a
+   * pre-flight surface every Tier 2 match would be computed and discarded. Section
+   * 9 makes this the first step of the VIP workflow: search existing People first.
+   *
+   * A read, so it takes no idempotency key and writes nothing. It is guarded by
+   * `people.view_subtree` against the actor themselves, for the same reason the
+   * church-wide search is: section 8 makes the directory searchable by everyone
+   * precisely so that duplicates can be prevented, and scoping the rows here would
+   * defeat the endpoint's only purpose.
+   */
+  @Get('duplicate-candidates')
+  @RequiresCapability(Capability.PeopleViewSubtree, { kind: 'actor' })
+  async duplicateCandidates(
+    @Query() query: DuplicateCandidatesDto,
+    @CurrentActor() actor: Actor,
+  ): Promise<{ candidates: Record<string, unknown>[] }> {
+    const matches = await this.people.findDuplicates({
+      firstName: query.first_name,
+      lastName: query.last_name,
+      birthDate: query.birth_date ?? null,
+      sex: query.sex,
+      mobileNumberNormalized: normalizeMobile(query.mobile_number),
+    });
+
+    const candidates = await Promise.all(
+      matches.map(async (match) => {
+        const described = describeCandidate(match);
+
+        if (await this.isWithinScope(actor, match.candidate.id)) {
+          return described;
+        }
+
+        // **Reasons are withheld for a candidate outside the actor's scope.**
+        //
+        // Section 8 forbids exposing an out-of-scope person's birthday or mobile
+        // number, and a reason reading "same birthday" asserts that theirs equals
+        // a value the caller just submitted — which discloses it. Creation can
+        // leak the same fact, but only by creating a record on each probe, which
+        // is loud. A read endpoint would make it a silent oracle.
+        //
+        // The tier still travels, because the encoder needs to know how strong
+        // the match is. What they lose is which field produced it.
+        delete described.reasons;
+        return described;
+      }),
+    );
+
+    return { candidates };
   }
 
   @Get(':id')

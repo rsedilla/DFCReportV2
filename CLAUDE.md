@@ -1136,6 +1136,43 @@ as a field error. That is the argument §22 already makes for
 
 Written to `SKILL.md` §7 and §22.
 
+### 2026-08-22 — Three rulings the `people` module needed, all found by review
+
+**A sex mismatch annotates a duplicate candidate; it does not demote it.** §3's
+Tier 1 conditions carry no sex term, and §3 separately calls sex "a frequently
+mis-keyed field". The first implementation demoted a Tier 1 candidate to Tier 2 on
+a mismatch — which quietly removed the acknowledgement requirement from precisely
+the candidates most likely to be one person recorded twice: same name, same
+birthday, sex entered wrong. The discrepancy is carried in the candidate's reasons
+instead, where the person deciding sees it. A differing suffix follows the same
+rule.
+
+**An archived Person may not be the destination leader of a new assignment.** §5
+refuses to *reassign* an archived Person and says nothing about them acquiring a
+disciple, so the first implementation allowed it. A live pastoral edge under a
+Person who is not `CURRENT` corrupts every subtree total walking through them —
+the corruption §3 refuses when archiving a Person who leads a Cell. Written to §5
+beside the merged-Person prohibition, answering `INVARIANT_VIOLATION`.
+
+**Tier 2 candidates surface through a pre-flight lookup, not through creation.**
+§3 says a Tier 2 candidate is "presented in a candidate list" and §22 sketched no
+route for one, so they were computed and discarded: creation can only ever refuse
+on Tier 1. `GET /api/v1/people/duplicate-candidates` is that list, and §9 already
+asks for it as the first step of registering a VIP.
+
+Returning them on the create response was rejected: it puts a duplicate-review
+payload on every successful creation, and acts after the record exists rather than
+before. Deferring was rejected because §3 says the matcher earns its keep during
+the initial encoding effort, which is this stage's own step 11.
+
+**The ruling had a consequence worth closing in the same change.** Match reasons
+name the field that matched, so "same birthday" asserts that an out-of-scope
+person's birthday equals a value the caller submitted — a disclosure §8 forbids.
+Creation could already leak it, but only by creating a record on every probe,
+which is loud. A read endpoint would have made it silent. Reasons are therefore
+withheld for a candidate outside the viewer's scope; the tier still travels,
+because the encoder needs to know how strong the match is.
+
 ### Open — awaiting a ruling
 
 **One item awaits a ruling and blocks Stage 5. Eight other things are unsettled, none of them blocking. They are listed at the end, so this section is the whole of what is open.**

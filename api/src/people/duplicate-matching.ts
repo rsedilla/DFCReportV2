@@ -288,20 +288,25 @@ export function findCandidates(
 
     // Sex is a supporting signal: a mismatch lowers confidence and never
     // excludes, because it is a frequently mis-keyed field (section 3).
+    //
+    // **It annotates and does not demote.** Section 3's Tier 1 conditions carry
+    // no sex term, and demoting on a mismatch would remove the acknowledgement
+    // gate from exactly the candidates most likely to be the same person with a
+    // typo -- someone with the same name and the same birthday whose sex was
+    // mis-keyed. The reason travels with the candidate so the person deciding
+    // sees the discrepancy and weighs it.
     if (subject.sex !== undefined && subject.sex !== candidate.sex) {
       reasons.push('sex differs, which lowers confidence but does not exclude');
-      if (tier === 1) {
-        tier = 2;
-      }
     }
 
-    // A suffix is a weak distinguishing signal, compared separately.
+    // A suffix is a weak distinguishing signal, compared separately (section 3).
+    // Annotated rather than demoted, for the same reason as sex: `Jr` against
+    // `Sr` is a real distinction, but a suffix is also frequently omitted or
+    // mistyped, and the person deciding is better placed to weigh it than a tier
+    // boundary is.
     const candidateSuffix = suffixOf(candidate.firstName) ?? suffixOf(candidate.lastName);
     if (suffix !== null && candidateSuffix !== null && suffix !== candidateSuffix) {
       reasons.push(`suffixes differ (${suffix} against ${candidateSuffix})`);
-      if (tier === 1) {
-        tier = 2;
-      }
     }
 
     matches.push({ candidate, tier, reasons });
