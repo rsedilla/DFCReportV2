@@ -20,10 +20,10 @@ import {
 } from './dto/people.dto';
 import {
   composeName,
-  describeCandidate,
   fullProfile,
   normalizeMobile,
   PeopleService,
+  visibleCandidates,
   type PersonRecord,
   type SearchCursor,
 } from './people.service';
@@ -128,20 +128,13 @@ export class PeopleController {
       mobileNumberNormalized: normalizeMobile(query.mobile_number),
     });
 
-    // A candidate outside the actor's scope carries neither the tier nor the
-    // reasons, only that they are a possible match. Both disclose which field
-    // matched — the tier because it is derived from the rule that fired, so with
-    // an equal name Tier 1 means the birthday matched and Tier 2 means it did
-    // not. Section 8 forbids that, and on a read endpoint it is a silent oracle.
-    const data = await Promise.all(
-      matches
-        .slice(0, limit)
-        .map(async (match) =>
-          describeCandidate(match, await this.isWithinScope(actor, match.candidate.id)),
-        ),
+    // Membership and fields are both redacted, in one place shared with the
+    // creation refusal so the two surfaces cannot answer differently.
+    const visible = await visibleCandidates(matches, (personId) =>
+      this.isWithinScope(actor, personId),
     );
 
-    return { data, next_cursor: null };
+    return { data: visible.slice(0, limit), next_cursor: null };
   }
 
   @Get(':id')

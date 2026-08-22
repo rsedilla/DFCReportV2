@@ -171,23 +171,36 @@ export class PeopleService {
       mobileNumberNormalized: normalizeMobile(input.mobileNumber),
     };
 
-    const unacknowledged = (await this.findDuplicates(subject)).filter(
-      (match) =>
-        match.tier === 1 && !(input.acknowledgedDuplicateIds ?? []).includes(match.candidate.id),
-    );
+    const acknowledged = new Set(input.acknowledgedDuplicateIds ?? []);
+    const matches = await this.findDuplicates(subject);
 
-    if (unacknowledged.length > 0) {
-      // Scoped exactly as the pre-flight lookup is: an out-of-scope candidate
-      // carries neither tier nor reasons. The reasoning first recorded for
-      // leaving this open -- that a probe here creates a record and is therefore
-      // loud -- was false: the throw happens before the transaction is opened, so
-      // nothing is written, and the branch's own test asserts it.
+    // **The gate applies only to candidates the actor may see.**
+    //
+    // Every Tier 1 rule rests on a birthday or a mobile number, so an
+    // out-of-scope Tier 1 candidate is one section 8 does not permit surfacing
+    // (`visibleCandidates`). Refusing on one anyway would answer "acknowledge
+    // this" with nothing to acknowledge, and the encoder could never create that
+    // Person at all -- a permanent block, which is worse than the duplicate it
+    // was guarding against and is what section 3 means by never blocking
+    // creation.
+    //
+    // So an invisible duplicate does not gate. The cost is stated in section 3:
+    // a cross-branch duplicate resting on a protected field is not caught for a
+    // leader outside that branch, and is caught by the leader who holds them.
+    const gating: Match[] = [];
+    for (const match of matches) {
+      if (match.tier !== 1 || acknowledged.has(match.candidate.id)) {
+        continue;
+      }
+
+      if (await canSeeReasons(match.candidate.id)) {
+        gating.push(match);
+      }
+    }
+
+    if (gating.length > 0) {
       throw new DuplicateAcknowledgementRequiredError(
-        await Promise.all(
-          unacknowledged.map(async (match) =>
-            describeCandidate(match, await canSeeReasons(match.candidate.id)),
-          ),
-        ),
+        await visibleCandidates(gating, canSeeReasons),
       );
     }
 
@@ -426,6 +439,14 @@ export class PeopleService {
    * every rule in one readable place.
    */
   async findDuplicates(subject: Subject): Promise<Match[]> {
+    // The same guard the search path got, for the same reason and one function
+    // away. `normalizeName` drops suffix tokens, so `last_name=Jr` normalizes to
+    // empty and the surname-initial branch below becomes LIKE '%' -- which
+    // selects the whole directory into memory to be scored, on every request.
+    if (normalizeName(subject.lastName) === '' && normalizeName(subject.firstName) === '') {
+      return [];
+    }
+
     const mobile = subject.mobileNumberNormalized ?? normalizeMobile(null);
 
     let query = this.db
@@ -455,7 +476,17 @@ export class PeopleService {
         ...(subject.birthDate === null || subject.birthDate === undefined
           ? []
           : [eb('birth_date', '=', subject.birthDate)]),
-        eb(normalizedLastName, 'like', `${escapeLike(normalizedFirstLetter(subject.lastName))}%`),
+        // Omitted entirely rather than degenerating to LIKE '%' when the surname
+        // normalizes away.
+        ...(normalizedFirstLetter(subject.lastName) === ''
+          ? []
+          : [
+              eb(
+                normalizedLastName,
+                'like',
+                `${escapeLike(normalizedFirstLetter(subject.lastName))}%`,
+              ),
+            ]),
         // The surname-change case: a woman's last name may change on marriage, so
         // a shared first name has to be able to reach her earlier record on its
         // own (section 3).
@@ -750,9 +781,59 @@ export function isCalendarDate(value: string): boolean {
 }
 
 /**
+ * The candidates a caller may be shown, membership included.
+ *
+ * **Two separate redactions, and the first is the one that took three attempts.**
+ *
+ * *Which candidates appear.* A candidate outside the viewer's pastoral scope is
+ * surfaced only where the rule that matched rests on what section 8 already
+ * publishes church-wide — the names and sex. Where it rests on a birthday or a
+ * mobile number, the candidate is not returned at all, because **membership of
+ * the list is itself the disclosure**: with a first name that matches nothing,
+ * "this person is in the result" is exactly "their birthday equals the value I
+ * submitted", answered 200 every time and writing nothing. Redacting fields on a
+ * returned candidate cannot close that, which is what the first two attempts did.
+ *
+ * *What each candidate carries.* In scope, the tier and the reasons. Out of
+ * scope, neither — the reasons name the field that matched, and the tier is
+ * derived from which rule fired, so with an equal name Tier 1 means the birthday
+ * matched and Tier 2 means it did not.
+ *
+ * The cost is real and is accepted (`SKILL.md` section 3): a cross-branch
+ * duplicate whose surname changed on marriage is no longer surfaced to a leader
+ * outside that branch, because that rule reads a birthday.
+ *
+ * One function, used by every surface that returns candidates, so the pre-flight
+ * lookup and the creation refusal cannot answer differently.
+ */
+export async function visibleCandidates(
+  matches: readonly Match[],
+  inScope: (personId: string) => Promise<boolean>,
+): Promise<Record<string, unknown>[]> {
+  const visible: Record<string, unknown>[] = [];
+
+  for (const match of matches) {
+    const withinScope = await inScope(match.candidate.id);
+
+    if (!withinScope && match.restsOnProtectedField) {
+      continue;
+    }
+
+    visible.push(describeCandidate(match, withinScope));
+  }
+
+  return visible;
+}
+
+/**
  * A candidate as the caller may see it.
  *
- * `inScope` is false for a candidate outside the viewer's pastoral scope, and
+ * `inScope` is required rather than defaulting to true. A default that discloses
+ * means a call site which forgets it leaks and still compiles — the wrong
+ * direction for a rule about what the church may see, and the same argument this
+ * project made for `completeWithin` taking a transaction rather than the pool.
+ *
+ * It is false for a candidate outside the viewer's pastoral scope, and
  * then **neither the tier nor the reasons travel**.
  *
  * Withholding only the reasons was not enough, and the reason it was not is worth
@@ -767,7 +848,7 @@ export function isCalendarDate(value: string): boolean {
  * be recorded, ask the leader who holds them. It is not what a caller can binary
  * search on.
  */
-export function describeCandidate(match: Match, inScope = true): Record<string, unknown> {
+export function describeCandidate(match: Match, inScope: boolean): Record<string, unknown> {
   const identity = {
     id: match.candidate.id,
     member_id: match.candidate.memberId,

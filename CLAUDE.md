@@ -1172,12 +1172,21 @@ Reasons are therefore withheld for a candidate outside the viewer's scope; the
 tier still travels, because the encoder needs to know how strong the match is.
 
 *The first version of this entry said the same leak on **creation** was tolerable
-"because a probe there creates a record every time, which is loud". That is
-false.* A Tier 1 refusal throws before the transaction is opened, so a probe
-writes nothing — the branch's own test asserts the Person count is unchanged. The
-creation refusal is exactly as silent as the read, and it now applies the same
-scope filter. Recorded rather than deleted: a false justification in this log is
-worse than none, because the next reader takes it as settled.
+"because a probe there creates a record every time, which is loud", and the
+second version called that false. Both were wrong, in opposite directions.*
+
+A probe that **hits** throws before the transaction opens and writes nothing. A
+probe that **misses** falls through and creates a Person — a Member ID off the
+sequence, a Network row, a lifecycle row, an assignment, an audit entry. So
+enumerating a birthday through creation writes tens of thousands of records,
+which is what "loud" meant and is very nearly right; a single confirmatory probe
+against a value already suspected is quiet, which is what the correction was
+reaching for. Scoping the refusal identically is the right remedy either way, and
+it stands.
+
+Recorded rather than tidied, because this entry has now carried a wrong reason
+twice — in the entry written to warn that a wrong reason here is worse than
+none.
 
 ### 2026-08-22 — A duplicate candidate outside the viewer's scope carries no tier
 
@@ -1208,6 +1217,52 @@ church-wide for that reason.
 
 Written to `SKILL.md` §3, which now states the redaction rather than sanctioning
 the leak, and applies it to the Tier 1 refusal as well.
+
+### 2026-08-22 — Membership of a candidate list is itself a disclosure
+
+Three attempts at one redaction, and the first two failed the same way: each
+removed a field from the returned object while the answer stayed in the response
+by construction.
+
+First the reasons were withheld out of scope, because they name the field that
+matched. Then the tier, because a tier is derived from which rule fired and so
+carries the same fact one step removed. Neither touched **which candidates were
+returned** — and with a first name matching nobody, the only rule that can fire
+is the one comparing birthdays, so presence in the list *is* the predicate "this
+person's birthday equals the value I submitted". One bit per request, 200 either
+way, nothing written. Substituting a mobile number confirms a suspected number in
+a single request.
+
+**An out-of-scope candidate is surfaced only where the rule that matched rests on
+what §8 already publishes** — the names and sex. Membership is then a function of
+nothing §8 protects, which is the property the first two attempts were reaching
+for and neither expressed.
+
+The rule that fired records whether it read a protected field, rather than the
+caller re-listing which rules are safe. A list re-derived at the call site drifts
+the moment a rule is added, and drifts silently: the new rule is surfaced
+church-wide and nobody is told.
+
+**Two consequences, both accepted in writing.** A duplicate the viewer may not be
+shown cannot gate creation — every Tier 1 rule reads a protected field, so
+refusing on an invisible candidate would answer "acknowledge this" with nothing
+to acknowledge and make that Person impossible to create. And a cross-branch
+duplicate resting on a birthday is no longer caught for a leader outside that
+branch; it is still caught by the leader who holds them, and by Admin, which is
+where §3 authorizes a merge from anyway.
+
+Two alternatives were rejected. Amending §8 to permit the channel, with a rate
+limit and an audit entry per lookup, trades prevention for detection on the
+section that exists to prevent exactly this. Scoping the rows to the viewer's
+subtree closes it and defeats the endpoint, since a cross-branch duplicate is
+what §3 says the matcher is for.
+
+*Recorded at length because the failure repeated.* Both earlier attempts were
+reasoned about in terms of what the response contained rather than what the
+response was a function of, and both were written into `SKILL.md` as settled
+before they were. That is the same fault as the backdate floor, the zero-length
+row and the Nest status ordering — a mechanism described from the part of it that
+was being looked at.
 
 ### Open — awaiting a ruling
 

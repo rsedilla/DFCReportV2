@@ -315,6 +315,30 @@ describe('people (SKILL.md sections 3, 7 and 8)', () => {
       expect(outOfScope).not.toHaveProperty('reasons');
     });
 
+    it('does not surface an out-of-scope candidate whose match needs a protected field', async () => {
+      // **Membership is the disclosure**, and this is the case the first two
+      // attempts at this redaction missed. With a first name matching nothing, the
+      // only rule that could fire is "same birthday and last name equal" -- so if
+      // presence varied with the birthday, the response would be a yes/no oracle
+      // over a value section 8 protects: one bit per request, 200 either way, and
+      // nothing written.
+      const hit = await request(app.getHttpServer())
+        .get('/api/v1/people/duplicate-candidates')
+        .query({ first_name: 'Zzzznomatch', last_name: 'Testfixture', birth_date: '1985-06-15' })
+        .set('Authorization', `Bearer ${raymondAccount.accessToken}`);
+
+      const miss = await request(app.getHttpServer())
+        .get('/api/v1/people/duplicate-candidates')
+        .query({ first_name: 'Zzzznomatch', last_name: 'Testfixture', birth_date: '1970-01-01' })
+        .set('Authorization', `Bearer ${raymondAccount.accessToken}`);
+
+      const juanAppearances = (response: { body: { data: { id: string }[] } }) =>
+        response.body.data.filter((candidate) => candidate.id === juan.id);
+
+      expect(juanAppearances(hit)).toEqual([]);
+      expect(juanAppearances(hit)).toEqual(juanAppearances(miss));
+    });
+
     it('gives no tier that could be binary-searched for a birthday', async () => {
       // The disclosure this closes: with an equal first and last name, Tier 1
       // means the submitted birthday matched and Tier 2 means it did not. Two
@@ -333,14 +357,26 @@ describe('people (SKILL.md sections 3, 7 and 8)', () => {
       const juanIn = (response: { body: { data: Record<string, unknown>[] } }) =>
         response.body.data.find((candidate) => candidate.id === juan.id);
 
+      // Asserted present first. `.find()` returns undefined when the candidate is
+      // absent, and `expect(undefined).toEqual(undefined)` passes -- so without
+      // this the case goes green for any regression that empties the list, which
+      // is the very channel the redaction does not cover.
+      expect(juanIn(withRightBirthday)).toBeDefined();
+      expect(juanIn(withWrongBirthday)).toBeDefined();
       expect(juanIn(withRightBirthday)).toEqual(juanIn(withWrongBirthday));
     });
 
-    it('withholds the reasons on a creation refusal too, for the same reason', async () => {
-      // The refusal happens before the transaction is opened, so a probe here
-      // writes nothing -- it is exactly as silent as the read endpoint, and the
-      // reasoning first recorded for leaving it open said otherwise.
-      const refused = await post(raymondAccount, randomUUID()).send(
+    it('does not gate creation on a duplicate the actor may not see', async () => {
+      // Every Tier 1 rule rests on a birthday or a mobile number, so an
+      // out-of-scope Tier 1 candidate is one section 8 does not permit surfacing.
+      // Refusing on it anyway would answer "acknowledge this" with nothing to
+      // acknowledge, and that Person could never be created at all — a permanent
+      // block, which is worse than the duplicate it guards against.
+      //
+      // Juan is a Tier 1 match here and sits outside Raymond's subtree. The 201
+      // is also what keeps the refusal from being an oracle: it does not vary
+      // with a birthday the actor may not learn.
+      const created = await post(raymondAccount, randomUUID()).send(
         personBody({
           pastoral_leader_id: manuel.id,
           first_name: 'Juan',
@@ -349,13 +385,25 @@ describe('people (SKILL.md sections 3, 7 and 8)', () => {
         }),
       );
 
-      expect(refused.status).toBe(409);
-      const candidates = refused.body.error.details.candidates as Record<string, unknown>[];
-      const outOfScope = candidates.find((candidate) => candidate.id === juan.id);
+      expect(created.status).toBe(201);
+    });
 
-      expect(outOfScope).toBeDefined();
-      expect(outOfScope).not.toHaveProperty('reasons');
-      expect(outOfScope).not.toHaveProperty('tier');
+    it('still gates on a duplicate the actor does oversee', async () => {
+      // The gate is not weakened for a candidate section 8 permits showing.
+      const refused = await post(raymondAccount, randomUUID()).send(
+        personBody({
+          pastoral_leader_id: manuel.id,
+          first_name: 'Manuel',
+          last_name: 'Testfixture',
+          birth_date: '1985-06-15',
+        }),
+      );
+
+      expect(refused.status).toBe(409);
+      expect(refused.body.error.code).toBe('DUPLICATE_ACKNOWLEDGEMENT_REQUIRED');
+
+      const candidates = refused.body.error.details.candidates as Record<string, unknown>[];
+      expect(candidates).toEqual([expect.objectContaining({ id: manuel.id, tier: 1 })]);
     });
 
     it('keeps the reasons for a candidate the actor oversees', async () => {

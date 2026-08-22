@@ -39,6 +39,17 @@ export interface Match {
   tier: Tier;
   /** Why this candidate surfaced, for the log section 3 asks be kept. */
   reasons: string[];
+  /**
+   * Whether the rule that fired read a field section 8 protects — a birthday or a
+   * mobile number — rather than resting only on what section 8 already publishes
+   * church-wide.
+   *
+   * **This decides whether an out-of-scope candidate may be surfaced at all.** It
+   * is recorded by the rule that fired rather than re-derived by the caller: a
+   * caller re-listing which rules are safe drifts the moment a rule is added, and
+   * the drift is silent — the new rule is surfaced church-wide and nobody is told.
+   */
+  restsOnProtectedField: boolean;
 }
 
 /**
@@ -235,13 +246,16 @@ export function findCandidates(
 
     const reasons: string[] = [];
     let tier: Tier | null = null;
+    let restsOnProtectedField = false;
 
     // --- Tier 1 -----------------------------------------------------------
     if (sameBirth && sameLast && sameFirst) {
       tier = 1;
+      restsOnProtectedField = true;
       reasons.push('same birthday, and first and last names equal');
     } else if (sameBirth && sameLast && (nickname || closeFirst)) {
       tier = 1;
+      restsOnProtectedField = true;
       reasons.push(
         nickname
           ? 'same birthday, last name equal, first name a known nickname variant'
@@ -250,6 +264,7 @@ export function findCandidates(
     } else if (sameMobile && sameFirst && sameLast) {
       // A number is a strong signal and never sufficient alone (section 3).
       tier = 1;
+      restsOnProtectedField = true;
       reasons.push('same mobile number, and first and last names equal');
     }
 
@@ -257,6 +272,7 @@ export function findCandidates(
     if (tier === null) {
       if (sameBirth && sameLast) {
         tier = 2;
+        restsOnProtectedField = true;
         reasons.push('same birthday and last name equal');
       } else if (sameFirst && sameLast) {
         // Birthday differs or is absent. Section 3 lists this as Tier 2 rather
@@ -270,14 +286,17 @@ export function findCandidates(
         similarity(whole, cWhole) >= thresholds.wholeNameSimilarity
       ) {
         tier = 2;
+        restsOnProtectedField = true;
         reasons.push('names closely similar, birthdays differing by a transposition of digits');
       } else if (sameBirth && sameFirst) {
         // "A woman's last name may change on marriage… Do not require surname
         // equality" (section 3).
         tier = 2;
+        restsOnProtectedField = true;
         reasons.push('same birthday and first name equal, last name differs');
       } else if (sameMobile && sameLast) {
         tier = 2;
+        restsOnProtectedField = true;
         reasons.push('same mobile number and last name equal');
       }
     }
@@ -309,7 +328,7 @@ export function findCandidates(
       reasons.push(`suffixes differ (${suffix} against ${candidateSuffix})`);
     }
 
-    matches.push({ candidate, tier, reasons });
+    matches.push({ candidate, tier, reasons, restsOnProtectedField });
   }
 
   return matches.sort((a, b) => a.tier - b.tier);

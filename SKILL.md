@@ -307,13 +307,19 @@ Whitespace normalization carries unusual weight here. `Dela Cruz`, `DelaCruz`, a
 
 **Tier 2 candidates need somewhere to appear.** A creation workflow can only ever refuse on Tier 1, so if candidates were surfaced only at the moment of creation, every Tier 2 match would be computed and discarded. They are presented before creation instead, by a pre-flight lookup the encoder makes with the details they have so far — which is also what Section 9 asks for as the first step of registering a VIP: search existing People first.
 
-That lookup reads the whole directory, as Section 8's church-wide search does and for the same reason. It returns the identifying fields Section 8 permits — and for a candidate **inside** the viewer's pastoral scope, the tier and the reasons they matched.
+That lookup reads the whole directory, as Section 8's church-wide search does and for the same reason. What it may say about a candidate depends on whether that candidate is inside the viewer's pastoral scope, and the rule has two parts — of which the first is the one that is easy to get wrong.
 
-For a candidate **outside** it, neither travels. All the viewer learns is that this person is a possible match, which is what they need in order to stop and ask the leader who holds them.
+**Which candidates appear.** A candidate outside the viewer's scope is surfaced only where the rule that matched them rests on what Section 8 already publishes church-wide: the names and sex. Where it rests on a birthday or a mobile number, that candidate is not returned at all.
 
-The reasons are withheld because they name the field: "same birthday" asserts that this person's birthday equals a value the caller just submitted, which Section 8 forbids disclosing. **The tier is withheld for the same reason, and this is the part that is easy to miss** — a tier is derived from the rule that fired, so with an equal first and last name, Tier 1 means the birthday matched and Tier 2 means it did not. Returning it church-wide is a yes/no birthday oracle over a name Section 8 already makes visible: enumerable, answered identically every time, and writing nothing. Hiding the wording while keeping the tier hides nothing.
+This is not a refinement of the field rule below, it is the load-bearing half. **Membership of the list is itself a disclosure**: submit a first name that matches nobody and a surname Section 8 already makes readable, and the only rule that can fire is the one comparing birthdays — so "this person is in the result" *is* "their birthday equals the value I submitted", answered identically every time and writing nothing. No redaction of the returned object reaches that, because the object is not where the answer is.
 
-The same redaction applies wherever candidates are returned, including the refusal that asks for a Tier 1 acknowledgement. That refusal happens before anything is written, so it is exactly as quiet a probe as the lookup.
+**What an appearing candidate carries.** In scope, the tier and the reasons it matched. Out of scope, neither. The reasons name the field, and the tier is derived from which rule fired — with an equal first and last name, Tier 1 means the birthday matched and Tier 2 means it did not, so returning the tier church-wide is the same oracle one step removed.
+
+Both parts apply wherever candidates are returned, including the refusal that asks for a Tier 1 acknowledgement.
+
+**A duplicate the viewer may not be shown does not gate creation.** Every Tier 1 rule rests on a birthday or a mobile number, so an out-of-scope Tier 1 candidate is one this section does not permit surfacing — and refusing on it would answer "acknowledge this" with nothing to acknowledge, leaving that Person impossible to create at all. That is a worse failure than the duplicate, and it is what this section means by never blocking creation.
+
+**The cost is real and is accepted here rather than discovered later.** A cross-branch duplicate whose match rests on a birthday — the woman whose surname changed on marriage is the case this section names — is no longer surfaced to a leader outside her branch. It is still surfaced to the leader who holds her, and to Admin and the Senior Pastors at Whole Church scope, which is where a merge is authorized from in any case (Section 3, Person Merge).
 
 Thresholds and edit distances must be calibrated against real data rather than fixed here. Log the candidates shown and what the user chose, and revisit the rules once there is enough history to see what the matcher is missing and what it is over-reporting.
 
