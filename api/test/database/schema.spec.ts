@@ -242,6 +242,33 @@ describe('the schema (SKILL.md sections 4, 5, 6 and 7)', () => {
       const constraint = await constraintDefinition(db, 'audit_log_action_shape');
       expect(constraint).toMatch(/CHECK/i);
     });
+
+    it('makes audit_log.target_id required text, because not every target is a UUID', async () => {
+      // Section 21 lists "System setting changed" as auditable and section 7 keys
+      // `settings` by `key`, so a uuid column here cannot record the one auditable
+      // action migration 0002 introduces -- and leaves section 7's rule that an
+      // audit entry resolves scope through its target with nothing to resolve.
+      const facts = await columnFacts(db, 'audit_log', 'target_id');
+
+      expect(facts.data_type).toBe('text');
+      expect(facts.not_null).toBe(true);
+    });
+  });
+
+  describe('the token retention floor of section 6', () => {
+    // The floor is a security control rather than housekeeping: the obvious
+    // prune deletes exactly the rows still carrying the reuse signal, so the
+    // Definition of Done requires it to exist as a constraint rather than as an
+    // instruction to whoever writes the retention job.
+    it.each(['refresh_tokens', 'account_tokens'])(
+      'guards %s with a delete trigger',
+      async (table) => {
+        const trigger = await deleteTriggerFacts(db, `${table}_retention_floor`);
+
+        expect(trigger.table_name).toBe(table);
+        expect(trigger.function_name).toBe('refuse_delete_before_retention_floor');
+      },
+    );
   });
 
   describe('the closed enumerations of section 7', () => {
@@ -309,15 +336,20 @@ async function columnFacts(
   db: Kysely<Database>,
   table: string,
   column: string,
-): Promise<{ not_null: boolean; default_expression: string | null }> {
+): Promise<{ not_null: boolean; default_expression: string | null; data_type: string }> {
   // Read from the catalog rather than information_schema.columns, whose
   // column_default is null both for a column with no default and for one whose
   // default the caller may not see -- and a test of an absence cannot use a
   // source that reports absence for two different reasons. Throwing when the
   // column is missing keeps a rename from reading as a passing absence.
-  const result = await sql<{ not_null: boolean; default_expression: string | null }>`
+  const result = await sql<{
+    not_null: boolean;
+    default_expression: string | null;
+    data_type: string;
+  }>`
     SELECT a.attnotnull                        AS not_null,
-           pg_get_expr(d.adbin, d.adrelid)     AS default_expression
+           pg_get_expr(d.adbin, d.adrelid)     AS default_expression,
+           format_type(a.atttypid, a.atttypmod) AS data_type
       FROM pg_attribute a
       JOIN pg_class c ON c.oid = a.attrelid
       LEFT JOIN pg_attrdef d ON d.adrelid = a.attrelid AND d.adnum = a.attnum

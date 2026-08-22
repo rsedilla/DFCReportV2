@@ -445,11 +445,24 @@ This is not a tidiness preference. The old edge is legal for every moment up to 
 
 So the schema permits the atomic operation at one instant and at no other. Stated here because the failure mode of leaving it unwritten is specific and bad: an implementer meets a constraint violation, reads it as the timestamps being too close together, and separates them — which does not fix the write, and if the check were ever loosened to admit it would open the gap this rule exists to close.
 
-**A backdated correction reaches only as far as it can be made legal.** Where `records.backdate_effective_date` (Section 7) is used to give a Network correction an effective date in the past, that date may not precede the start of the person's current pastoral assignment.
+**A backdated correction reaches only as far as it can be made legal.** Where `records.backdate_effective_date` (Section 7) is used to give a Network correction an effective date in the past, that date may not precede the person's **most recent pastoral event**, in either direction of the tree. That is the latest of:
+
+- the `started_at` of their current pastoral assignment;
+- the `started_at` of every assignment on which they are the **leader**, open or closed;
+- the `ended_at` of every already-closed assignment touching them, in either direction.
 
 The reason there is a limit at all is that the remedy runs out. The check reaches forward from the effective date, so a correction backdated into a period the person has since left strands an assignment that closed before today: it must be reassigned to satisfy Section 5, and it cannot be, because a period that has already ended cannot be given a different leader without rewriting a closed row — which Principle 12 and Section 5 both forbid. There is no legal write that resolves it, so permitting the attempt would mean permitting a failure with no remedy to offer.
 
-A correction reaching no further back than the current assignment always has one. That assignment is open, so the reassignment Section 4 requires can be made for it, and the pair commits at one instant as above.
+**The limit covers both directions because the check does.** The same-Network check on a Network change considers every edge touching the person as a person *and* as a leader (Section 5, Database enforcement), so a floor bounding only their own assignment leaves their disciples' edges unbounded — and those have exactly the same problem. Two cases have no remedy at all, and neither involves the person's own row:
+
+- an edge on which they are the leader that **closed after** the effective date. It cannot be reassigned, for the reason above, and it cannot be deleted;
+- an open edge on which they are the leader that **began after** the effective date. Closing it at the effective date is impossible, because that precedes its own `started_at`; closing it at its own start leaves it beginning after the effective date, so it is still compared, against the corrected Network on one end and the unchanged Network on the other.
+
+Where a person has no current pastoral assignment the first term simply does not contribute, and the floor is whatever the remaining two give. That is the ordinary case for a Network root (Section 5, Network roots), who holds downline edges and no up-edge, and for a Person encoded but not yet assigned, whose floor is then unbounded because they have no edges at all.
+
+At or above the floor every selected edge can be resolved. Each open edge began at or before the effective date, so it can be closed at that instant and its person reassigned within their own unchanged Network, and an edge closed at exactly the effective date is no longer selected. This is the same one-instant operation as above, performed for the person's own assignment and for each disciple they lead.
+
+Correcting the Network of a leader with disciples therefore requires reassigning each of them, at one identical instant, each subject to every Section 5 invariant. Who chooses those destination leaders, and what happens where no candidate exists, is **not settled here** and is recorded as open in `CLAUDE.md`.
 
 The system therefore **rejects the correction and names the earliest date it can legally take**, rather than failing with a constraint violation the administrator cannot act on. The rejection is a rule about what can be recorded, not about the actor's authority, so it answers `INVARIANT_VIOLATION` (Section 22).
 
@@ -610,7 +623,11 @@ A zero-length row is inert by construction rather than by convention, which is w
 
 - **It resolves to nothing as of any instant.** An as-of lookup asks for `started_at <= t` and `ended_at > t`, and at `t` equal to the shared timestamp the second test fails, while above it the first does. There is no `t` at which the row is the answer.
 - **It occupies no open-row constraint.** Every uniqueness constraint in this section is partial over `ended_at IS NULL`, and a zero-length row has `ended_at` set. Closing one in error therefore never blocks opening the correct row in its place.
-- **It is validated by nothing and invalidates nothing.** The same-Network check on a Network change considers edges open at, or beginning after, the effective date. A zero-length row is neither, and is correctly ignored: it never governed an edge.
+- **It is invisible to an as-of comparison, which is what the same-Network checks make.** Both compare `network_as_of` at an instant, and by the point above no instant resolves to a zero-length row.
+
+That last point is narrower than it looks, and the difference matters. A zero-length row is inert as an *answer*; it is not thereby excluded from being *examined*. The same-Network check on a Network change selects edges open at, or beginning after, the effective date, and a zero-length assignment row whose shared timestamp falls after that date **is** one beginning after it. It is selected and compared, at its own timestamp, against the corrected Network — and being closed, it cannot then be reassigned to resolve what it reports.
+
+So a zero-length row on `pastoral_assignments` is not free. It is inert for every query that asks who someone's leader was, and it still participates in the check that guards Network changes. Writing one is a correction of a row entered in error, never a way to record that an edge briefly existed, and the backdate floor in Section 4 counts its timestamp exactly as it counts any other.
 
 The cost is that an inert row is also an invisible one, so a defect that closes a live row at its own start date removes it from every query with nothing raised. That is a domain-layer discipline, not a schema one: a zero-length close is written deliberately, by a correction path that says it is correcting, and never as the ordinary way to end a relationship.
 
@@ -1031,7 +1048,7 @@ A setting is not a place to record domain rules. Anything that changes what a fi
 settings
 - key                 a fixed identifier, e.g. cell_attention_months
 - value
-- updated_by
+- updated_by          null only for the system action that seeds the defaults
 - updated_at
 ```
 
@@ -2544,7 +2561,7 @@ audit_log
 - actor_id            nullable only for a system action
 - action              an identifier from the list above
 - target_type
-- target_id
+- target_id           required; text, because not every target is keyed by a UUID
 - before              nullable
 - after               nullable
 - reason              nullable, required where the action demands one
@@ -2553,6 +2570,8 @@ audit_log
 ```
 
 Record actor, target, action, timestamp, and relevant before/after values.
+
+`target_id` is text rather than a UUID, and is required. Almost every target above is identified by a UUID, but not all: a setting is keyed by its `key` (Section 7), and a setting change is on the list. It carries no foreign key, because this log is append-only and an entry outlives the row it describes — a constraint that could refuse or cascade would make the trail depend on the survival of what it exists to remember.
 
 The audit log is append-only. Nothing updates or deletes a row, and it is never a source for as-of state — a report answering "who was `CURRENT` in March" reads the effective-dated table, not this (Section 3).
 
@@ -2705,7 +2724,7 @@ Idempotency-Key: 6f2b1c94-8b6a-4a1e-9a1e-2c9f4d5b7e01
 
 ```text
 idempotency_keys
-- key                 the client-generated UUID
+- key                 the client-generated UUID; unique per account, not globally
 - account_id
 - request_fingerprint a hash of method, path and body
 - state               IN_FLIGHT | COMPLETED
@@ -2715,6 +2734,7 @@ idempotency_keys
 - expires_at
 ```
 
+- **A key is unique to the account that presented it**, never globally. A row is identified by the account and the key together, so two accounts may hold the same key without either seeing the other's stored response, and every rule below means "for this account". Global uniqueness would let a client that reused a key it had observed receive somebody else's response, or deny that person their own retry — and clients generate these values themselves, so a key is not a secret.
 - The server stores the key with the response it produced, for at least 24 hours.
 - A repeat of the same key with the same body returns the stored response and does not execute again.
 - The same key with a **different body** returns `IDEMPOTENCY_KEY_REUSED`. This is permanent and the client must never retry it. It is a conflict rather than malformed input, so `VALIDATION_FAILED` would be wrong — a client branching on that code would show a field error for a replay.

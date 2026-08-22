@@ -340,9 +340,16 @@ async function up(client: Client): Promise<void> {
  * asserting that the most recent migration is reversible while saying nothing at
  * all about the eight below it.
  *
- * It is not a way to empty a database. Every `refuse-if-populated` guard is
- * evaluated for each migration on the way down, so the first one holding data
- * stops the whole descent, and `--force` still has to be asked for by name.
+ * It is not a way to empty a database, and it is not atomic across migrations.
+ * Each migration's down runs in its own transaction, so a `refuse-if-populated`
+ * guard firing at migration N stops the descent there and does **not** undo the
+ * drops already committed for N+1 and above. On a database holding Persons but
+ * an empty `audit_log`, `--all` drops what 0002 created and then refuses 0001.
+ *
+ * That state is recoverable with `migrate:up`, and it is still not what an
+ * operator reading "stops the descent" would expect at three in the morning. The
+ * guards bound how far down a descent reaches; they do not make it all-or-
+ * nothing. `--force` still has to be asked for by name.
  */
 async function down(client: Client): Promise<void> {
   const all = process.argv.includes('--all');

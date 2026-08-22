@@ -48,7 +48,12 @@ describe('audit_log is append-only (SKILL.md section 21)', () => {
   it('refuses an UPDATE', async () => {
     await db
       .insertInto('audit_log')
-      .values({ actor_id: null, action: 'person.created', target_type: 'person', target_id: null })
+      .values({
+        actor_id: null,
+        action: 'person.created',
+        target_type: 'person',
+        target_id: 'a-target',
+      })
       .execute();
 
     await expect(
@@ -59,7 +64,12 @@ describe('audit_log is append-only (SKILL.md section 21)', () => {
   it('refuses a DELETE', async () => {
     await db
       .insertInto('audit_log')
-      .values({ actor_id: null, action: 'person.created', target_type: 'person', target_id: null })
+      .values({
+        actor_id: null,
+        action: 'person.created',
+        target_type: 'person',
+        target_id: 'a-target',
+      })
       .execute();
 
     await expect(db.deleteFrom('audit_log').execute()).rejects.toThrow(/append-only/);
@@ -74,7 +84,7 @@ describe('audit_log is append-only (SKILL.md section 21)', () => {
         actor_id: null,
         action: 'person.created',
         target_type: 'person',
-        target_id: null,
+        target_id: 'a-target',
         reason: 'original',
       })
       .execute();
@@ -267,6 +277,86 @@ describe('settings (SKILL.md section 7)', () => {
   });
 });
 
+describe('the token retention floor (SKILL.md section 6, Retention)', () => {
+  let db: Kysely<Database>;
+
+  beforeAll(() => {
+    db = createTestDb();
+  });
+
+  beforeEach(async () => {
+    await truncateAll(db);
+  });
+
+  afterAll(async () => {
+    await db.destroy();
+  });
+
+  it('refuses to delete a refresh token that is still presentable', async () => {
+    // This is the query somebody actually writes -- DELETE ... WHERE expires_at <
+    // now() -- and it takes exactly the rows that still carry the reuse signal.
+    // A rotated row is revoked and carries replaced_by_id, and that pair is the
+    // whole difference between a stolen token and one this system never issued.
+    const accountId = await account(db, 'Mark');
+
+    await db
+      .insertInto('refresh_tokens')
+      .values({
+        account_id: accountId,
+        token_hash: 'hash-of-a-token-that-expired-yesterday',
+        issued_at: daysFromNow(-31),
+        expires_at: daysFromNow(-1),
+        revoked_at: daysFromNow(-2),
+      })
+      .execute();
+
+    await expect(db.deleteFrom('refresh_tokens').execute()).rejects.toThrow(
+      /retained until 30 days past expires_at/,
+    );
+
+    const rows = await db.selectFrom('refresh_tokens').select('id').execute();
+    expect(rows).toHaveLength(1);
+  });
+
+  it('permits deleting a refresh token more than thirty days past expiry', async () => {
+    const accountId = await account(db, 'Mark');
+
+    await db
+      .insertInto('refresh_tokens')
+      .values({
+        account_id: accountId,
+        token_hash: 'hash-of-a-long-dead-token',
+        issued_at: daysFromNow(-91),
+        expires_at: daysFromNow(-31),
+      })
+      .execute();
+
+    await expect(db.deleteFrom('refresh_tokens').execute()).resolves.toBeDefined();
+    expect(await db.selectFrom('refresh_tokens').select('id').execute()).toHaveLength(0);
+  });
+
+  it('holds the same floor on account_tokens', async () => {
+    // A much shorter clock -- a reset token lives 30 minutes -- and the same
+    // retention, so a replay is refused as used rather than as unknown.
+    const accountId = await account(db, 'Mark');
+
+    await db
+      .insertInto('account_tokens')
+      .values({
+        account_id: accountId,
+        purpose: 'PASSWORD_RESET',
+        token_hash: 'hash-of-a-spent-reset-token',
+        expires_at: daysFromNow(-1),
+        used_at: daysFromNow(-1),
+      })
+      .execute();
+
+    await expect(db.deleteFrom('account_tokens').execute()).rejects.toThrow(
+      /retained until 30 days past expires_at/,
+    );
+  });
+});
+
 async function account(db: Kysely<Database>, firstName: string): Promise<string> {
   const person = await createPerson(db, { firstName, network: 'MENS' });
   const row = await db
@@ -286,6 +376,10 @@ async function account(db: Kysely<Database>, firstName: string): Promise<string>
 
 function hoursFromNow(hours: number): Date {
   return new Date(Date.now() + hours * 60 * 60 * 1000);
+}
+
+function daysFromNow(days: number): Date {
+  return new Date(Date.now() + days * 24 * 60 * 60 * 1000);
 }
 
 async function openClient(): Promise<Client> {

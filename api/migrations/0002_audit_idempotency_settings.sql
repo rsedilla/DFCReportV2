@@ -42,7 +42,19 @@ CREATE TABLE audit_log (
   -- declines to close.
   action text NOT NULL,
   target_type text NOT NULL,
-  target_id uuid,
+  -- `text`, not `uuid`, and required. Almost every target in section 21's list is
+  -- identified by a UUID, but not every one: `settings` is keyed by `key`
+  -- (section 7), and "System setting changed, with previous and new values" is on
+  -- that list. A `uuid` column cannot record it, which would leave the one
+  -- auditable action this migration's own table introduces unable to name its
+  -- target -- and would leave section 7's scope rule, that an audit entry
+  -- resolves through its target, with nothing to resolve.
+  --
+  -- No foreign key, deliberately. This column points at whichever table
+  -- `target_type` names, and an audit entry outlives what it describes: section
+  -- 21 makes this log append-only, so a constraint that could refuse or cascade
+  -- would make the trail depend on the survival of the row it exists to remember.
+  target_id text NOT NULL,
   before jsonb,
   after jsonb,
   reason text,
@@ -207,6 +219,50 @@ INSERT INTO settings (key, value, updated_by) VALUES
   ('cell_attention_months', '3'::jsonb, NULL),
   ('initial_encoding_open', 'true'::jsonb, NULL);
 
+-- ---------------------------------------------------------------------------
+-- The token retention floor (SKILL.md section 6, Retention)
+--
+-- `refresh_tokens` and `account_tokens` are the one exception to section 5's
+-- no-deletion rule, and section 6 sets the floor: a row may be deleted only once
+-- its `expires_at` is more than 30 days past.
+--
+-- This exists as a trigger because the floor is a security control, not a
+-- housekeeping preference, and the Definition of Done requires an invariant that
+-- can be expressed as a database constraint to exist as one. The obvious
+-- retention query somebody will actually write --
+--
+--   DELETE FROM refresh_tokens WHERE expires_at < now()
+--
+-- -- deletes precisely the rows that are still presentable and still carry the
+-- reuse signal. A rotated row is revoked and carries `replaced_by_id`, and that
+-- pair is the whole difference between a stolen token and one this system never
+-- issued; prune it and a presented copy resolves to nothing, is refused as
+-- unknown, and no account-wide revocation fires.
+--
+-- The rule is a floor rather than a schedule. Nothing here requires a retention
+-- job to exist; this bounds what one may touch if it is written.
+CREATE FUNCTION refuse_delete_before_retention_floor() RETURNS trigger
+LANGUAGE plpgsql AS $$
+BEGIN
+  IF OLD.expires_at > now() - interval '30 days' THEN
+    RAISE EXCEPTION
+      'rows of %.% are retained until 30 days past expires_at; this row expires at % (SKILL.md section 6, Retention)',
+      TG_TABLE_SCHEMA, TG_TABLE_NAME, OLD.expires_at
+      USING ERRCODE = 'restrict_violation';
+  END IF;
+
+  RETURN OLD;
+END;
+$$;
+
+CREATE TRIGGER refresh_tokens_retention_floor
+  BEFORE DELETE ON refresh_tokens
+  FOR EACH ROW EXECUTE FUNCTION refuse_delete_before_retention_floor();
+
+CREATE TRIGGER account_tokens_retention_floor
+  BEFORE DELETE ON account_tokens
+  FOR EACH ROW EXECUTE FUNCTION refuse_delete_before_retention_floor();
+
 -- migrate:down:refuse-if-populated audit_log
 
 -- This down drops what it created. `audit_log` is named above because section 21
@@ -229,6 +285,10 @@ INSERT INTO settings (key, value, updated_by) VALUES
 -- decision -- section 22 keeps a key for 24 hours and permits dropping it after --
 -- so refusing a down over a row that expires by itself tomorrow would make the
 -- guard mean less everywhere it is used.
+
+DROP TRIGGER IF EXISTS account_tokens_retention_floor ON account_tokens;
+DROP TRIGGER IF EXISTS refresh_tokens_retention_floor ON refresh_tokens;
+DROP FUNCTION IF EXISTS refuse_delete_before_retention_floor();
 
 DROP TRIGGER IF EXISTS settings_no_delete ON settings;
 DROP TABLE IF EXISTS settings;

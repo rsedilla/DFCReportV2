@@ -211,12 +211,19 @@ CREATE TRIGGER accounts_set_updated_at
 -- strict `>` allowed only closing it a moment later -- which records a non-zero
 -- period during which a fact that was never true was in force.
 --
--- A zero-length row is inert rather than merely tolerated. No as-of lookup can
--- return it: `network_as_of` below asks for `started_at <= t AND ended_at > t`,
--- and no `t` satisfies both. It occupies no one-open-row index, because every one
--- of those is partial over `ended_at IS NULL`. And the same-Network check on a
--- Network change considers edges open at the effective date or beginning after
--- it, so it neither validates such a row nor is broken by one.
+-- A zero-length row is inert as an answer. No as-of lookup can return it:
+-- `network_as_of` below asks for `started_at <= t AND ended_at > t`, and no `t`
+-- satisfies both. It occupies no one-open-row index, because every one of those
+-- is partial over `ended_at IS NULL`.
+--
+-- Inert as an answer is not the same as excluded from examination, and on
+-- `pastoral_assignments` the difference is load-bearing. The same-Network check
+-- on a Network change selects edges open at the effective date **or beginning
+-- after it**, and a zero-length row whose shared timestamp falls after that date
+-- is one beginning after it: `ended_at > v_row.started_at` holds, so it is
+-- selected and compared at its own timestamp. Being closed, it cannot then be
+-- reassigned to resolve what it reports. Section 4's backdate floor counts its
+-- timestamp for exactly that reason.
 --
 -- `refresh_tokens` and `account_tokens` keep the strict `>`. Their check bounds a
 -- validity window rather than an effective-dated fact, and a token that expires

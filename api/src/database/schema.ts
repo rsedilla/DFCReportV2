@@ -166,7 +166,12 @@ export interface AuditLogTable {
   actor_id: string | null;
   action: AuditAction;
   target_type: string;
-  target_id: string | null;
+  /**
+   * `text` rather than `uuid`, and required. Not every target is identified by a
+   * UUID: `settings` is keyed by `key` (SKILL.md section 7), and a setting change
+   * is on section 21's list of auditable actions.
+   */
+  target_id: string;
   before: Json | null;
   after: Json | null;
   reason: string | null;

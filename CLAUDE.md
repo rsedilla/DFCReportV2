@@ -606,6 +606,7 @@ This replaces a constraint trigger that counted active rows. The count was made 
 The reason first recorded for refusing the column, that §7's shape has no slot, was the wrong test. A shape is amended when a rule needs a column, deliberately and in the same change, which is what this is. Written to `SKILL.md` §7.
 
 ### 2026-08-21 — A row of an effective-dated table is never deleted
+**Partly superseded** the following day by "Seven Stage 2 rulings" below. The closing sentence, that whether `refresh_tokens` and `account_tokens` may be pruned is open, was settled: they may be, thirty days past expiry, and a trigger now enforces the floor. The exclusion itself stands and so does everything else here.
 `person_lifecycle`, `network_assignments`, `pastoral_assignments`, and every table that follows their shape. A row entered in error is corrected by closing it and opening the right one, which is what effective dating is for. Enforced by a `BEFORE DELETE` trigger on each, not by convention.
 
 Principle 12 said history is preserved and §5 said a row is never overwritten in place; neither addressed `DELETE`, and the schema permitted it. That made it the one write passing none of the same-Network checks, since both triggers fire on insert and update: removing a person's current Network row turns every open edge beneath them cross-Network, with nothing raised and nothing to revisit it.
@@ -659,13 +660,27 @@ a row entered in error and opening the right one, and the strict form made
 that impossible to perform honestly: the only close it permitted recorded a
 non-zero period during which a fact that was never true was in force.
 
-Both safety properties were verified against the SQL before the ruling, not
-after. A zero-length row is invisible to an as-of lookup, because
+Two safety properties were verified against the SQL before the ruling, and
+both hold. A zero-length row is invisible to an as-of lookup, because
 `network_as_of` asks for `started_at <= t AND ended_at > t` and no `t`
 satisfies both. It occupies no one-open-row index, because every one of those
-is partial over `ended_at IS NULL`. And the same-Network check on a Network
-change considers edges open at the effective date or beginning after it, so
-it neither validates a zero-length row nor is broken by one.
+is partial over `ended_at IS NULL` — checked against every effective-dated
+table, not only `network_assignments`.
+
+**A third claim was asserted and was false, and is corrected here.** The
+ruling as first written said the same-Network check on a Network change
+"neither validates a zero-length row nor is broken by one", on the reasoning
+that such a row is neither open at the effective date nor beginning after it.
+It can be the second. A zero-length row whose shared timestamp falls after the
+effective date satisfies `ended_at > v_row.started_at`, so it is selected and
+compared at its own timestamp — and being closed, it cannot then be reassigned
+to resolve what it reports.
+
+Found by `architecture-guardian` on this branch, which is the point of running
+it: the two properties that were checked held, and the one that was reasoned
+about did not. `SKILL.md` §5 now says a zero-length row is inert as an
+*answer* and is not thereby excluded from being *examined*, and §4's backdate
+floor counts its timestamp like any other.
 
 The cost is that an inert row is also an invisible one, so a defect closing a
 live row at its own start date removes it from every query silently. That is
@@ -677,11 +692,30 @@ afterwards. Nothing is deployed, so there is no history for a checksum to
 disagree with, and beginning Stage 2 on a first migration known to make a
 prescribed correction impossible is the alternative. Written to `SKILL.md` §5.
 
-**A backdated Network correction reaches only to the start of the person's
-current pastoral assignment.** Further back there is no legal write that
-resolves it: the reassignment §4 demands cannot be made for a period that has
-already ended, and rewriting a closed row is forbidden by Principle 12 and
-§5. Permitting the attempt would mean permitting a failure with no remedy.
+**A backdated Network correction reaches only to the person's most recent
+pastoral event, in either direction of the tree.** That is the latest of: the
+start of their current assignment, the start of every assignment on which they
+are the leader, and the end of every already-closed assignment touching them
+either way. Further back there is no legal write that resolves it: the
+reassignment §4 demands cannot be made for a period that has already ended,
+and rewriting a closed row is forbidden by Principle 12 and §5. Permitting the
+attempt would mean permitting a failure with no remedy.
+
+**The first version of this ruling bounded only the person's own assignment,
+and that was wrong.** The same-Network trigger selects edges where the person
+is the `person_id` *or* the `leader_id`, so a floor covering one side leaves
+the other unbounded — and two downline cases have no remedy at all: an edge on
+which they are the leader that closed after the effective date, and an open
+one that began after it, which can be closed neither at the effective date
+(that precedes its own start) nor at its own start (it is then still selected).
+A correction backdated inside a leader's own assignment could therefore still
+fail with nothing the administrator could do, which is the exact failure this
+ruling exists to prevent.
+
+Found by `architecture-guardian`, and worth recording as a pattern rather than
+a one-off: the rule was written by reasoning about the trigger's *purpose* and
+not by reading its `WHERE` clause. Both defects corrected on this branch came
+from that same shortcut.
 
 The system rejects with the earliest date the correction can legally take,
 answering `INVARIANT_VIOLATION` — it is a rule about what can be recorded,
@@ -748,9 +782,49 @@ exact failure the 2026-08-20 ruling on closing the phase was written to
 prevent. It lands in migration 0002 beside `audit_log` and `idempotency_keys`.
 `docs/ROADMAP.md` named only those two and is corrected in the same change.
 
+### 2026-08-22 — Four enforcement gaps found reviewing the Stage 2 rulings
+
+Grouped because each is the same shape as the two ruling defects above: a rule
+stated in prose with nothing able to fail on it.
+
+**The §6 retention floor is a trigger, not a convention.** `refresh_tokens` and
+`account_tokens` gain a `BEFORE DELETE` trigger refusing any row whose
+`expires_at` is not yet thirty days past. The ruling permitting the prune is a
+security control — the obvious retention query, `DELETE ... WHERE expires_at <
+now()`, deletes exactly the rows still carrying the reuse signal — and the
+Definition of Done requires an invariant expressible as a constraint to exist as
+one. It lands in 0002 as additive DDL on 0001's tables.
+
+**`audit_log.target_id` is `text NOT NULL`, not `uuid`.** §21 lists "System
+setting changed" as auditable and §7 keys `settings` by `key`, so a `uuid`
+column left the one auditable action migration 0002 introduces unable to name
+its target, and §7's rule that an audit entry resolves scope through its target
+with nothing to resolve. No foreign key: an append-only entry outlives the row
+it describes. §21's shape is amended in the same change.
+
+**`settings.updated_by` is nullable, and §7 now says so.** It is null for the
+system action that seeds the defaults, mirroring `account_roles.granted_by`.
+The 2026-08-21 slot ruling settled that a shape is amended when a rule needs a
+column, deliberately and in the same change; leaving the migration more
+permissive than the shape is the same drift by the other route.
+
+**The idempotency key is unique per account, and that is in §22 rather than in
+a migration comment.** Two accounts may present the same key. It is
+client-generated and therefore not a secret, so global uniqueness would let a
+client that reused an observed key receive another account's stored response,
+or deny that person their own retry. `IDEMPOTENCY_KEY_REUSED` means "already
+used by this account for a different request".
+
+Also corrected: `error` was added to the web palette's forbidden token names,
+which §23 rejects by name but the check could not fail on; the 2026-08-21
+no-delete ruling is annotated as partly superseded by the pruning ruling; and
+`migrate:down --all` no longer claims a guard "stops the whole descent", since
+each migration's down commits in its own transaction and a guard firing at N
+does not undo the drops already made for N+1.
+
 ### Open — awaiting a ruling
 
-**One item awaits a ruling and blocks Stage 5. Five other things are unsettled, none of them blocking. They are listed at the end, so this section is the whole of what is open.**
+**One item awaits a ruling and blocks Stage 5. Eight other things are unsettled, none of them blocking. They are listed at the end, so this section is the whole of what is open.**
 
 Six items that stood here on 2026-08-22 were settled that day and are recorded above. Four of them were Stop Conditions for Stage 2.
 
@@ -766,3 +840,6 @@ Two related questions have defined behaviour and are recorded in `SKILL.md` §12
 - **The native client framework.** `SKILL.md` §2 settles the web stack and says nothing about Android and iOS. Deferred since the specification was written; indexed here because two rules now point at it as open.
 - **What the native clients owe on accessibility.** `SKILL.md` §23 binds the web application to WCAG 2.2 AA and says the equivalent obligation for a native client is the platform accessibility API rather than WCAG. Which platform guarantees, and what would fail a build, is a ruling to make when the client is.
 
+- **Who chooses the destination leaders when a Network correction forces a disciple reassignment.** §4 speaks of "the corresponding pastoral reassignment" in the singular, but the same-Network trigger validates every edge touching the person in either direction, so correcting the Network of a leader with twelve disciples requires twelve reassignments at one identical instant, each subject to all five §5 invariants and each needing a destination in the disciple's own unchanged Network. Nothing says who picks them, under which capability, or what happens where no candidate exists. Stage 2 builds this endpoint, so it is settled there.
+- **The `audit_log.action` identifier vocabulary has no home in `SKILL.md`.** §21 gives prose descriptions and says `action` is "an identifier from the list above"; the identifiers themselves are minted in `api/src/database/schema.ts` and shaped by a regex in the migration. The next module to write an entry has nothing to consult, so `pastoral_assignment.transferred` and `pastoral.transfer` are equally defensible. §21 deliberately does not close its list, so this is a naming convention to record rather than an enumeration to fix.
+- **Whether `audit_log`'s append-only guarantee tolerates `TRUNCATE`.** §5 records the exemption for history tables and leans it on a least-privilege role that does not exist, which is already open above. §21 says nothing at all, and the test suite truncates `audit_log` before every test. Same answer as the `TRUNCATE` question above, most likely, but it is not written down for the one table whose whole purpose is that nothing removes a row.
