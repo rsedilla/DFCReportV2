@@ -71,6 +71,7 @@ Three tables Stage 1 did not create arrive here rather than later. §5 requires 
 - Membership, with single-transaction moves
 - The creation workflow: request, approve, decline (§10, Creating a Cell)
 - Cell leadership assignments (§11)
+- **The Cell half of a Network change** (§4, last paragraph). A Network change must not leave a person holding Cell relationships the homogeneous-network rule no longer permits. Stage 2's sex-correction route enforces the pastoral half and cannot enforce this one, because neither table exists; the precondition in `networks` grows a second half here.
 
 **Done when:** a Cell can be requested, approved, and closed; membership moves atomically without leaving two open rows; and a schedule change preserves history so a past month's coverage figure does not move.
 

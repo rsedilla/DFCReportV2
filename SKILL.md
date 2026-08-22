@@ -461,6 +461,12 @@ A person's recorded sex may be corrected — most often an ordinary data-entry f
 
 Correcting sex is an explicit, authorized, audited operation, governed by `people.correct_sex` (Section 7). It is Admin-only at Whole Church scope, and no other role holds it. Where the correction changes the person's Network, it is carried out as a Network change: the current Network assignment is closed and a new one opened, effective-dated, preserving history exactly as any other Network change does. Never re-derive Network silently from the new sex value.
 
+**A correction always carries a reason.** The `reason` column on `network_assignments` is nullable because an initial assignment has nothing to explain; a correction is the case it exists for. The reason is required by the operation, is written to the Network row, and appears in the audit entries the correction produces (Section 21).
+
+**A correction that changes nothing is refused as malformed input.** Sex has two values and the Network mapping is total, so a submitted sex equal to the recorded one is the only way for a correction to change neither. It answers `VALIDATION_FAILED` (Section 22) rather than succeeding silently: the operation demands a reason and writes an audit trail, and an audited correction that corrected nothing is a record that misleads whoever reads it later. A client that lost the response to a real correction recovers it by retrying with the same `Idempotency-Key`, which is what that header is for — not by resubmitting a value that is already in force.
+
+**An archived Person's sex may be corrected only where no reassignment is forced.** Section 5 forbids reassigning an archived Person, and the atomic pair below *is* a reassignment, so a correction for an archived Person who still holds an open pastoral edge is refused: restore them first, which is an explicit and separately audited decision. Where they hold no open edge — the ordinary state after archival — nothing is stranded and the Network change stands alone, so the correction proceeds. A data correction on an archived record is legitimate; re-parenting one is not.
+
 A Network change must never leave a person under a pastoral leader in their former Network. If the person has an active pastoral assignment that the change would render cross-Network, the Network change and the corresponding pastoral reassignment must be performed together as a single atomic operation — neither can validly precede the other, since each alone leaves the tree in an invalid state. The system must reject a Network change submitted without the reassignment it requires, and must never silently drop the person's pastoral assignment to resolve the conflict.
 
 **The two carry one effective instant, and it is the same instant.** The closing of the old Network row, the opening of the new one, the closing of the old pastoral assignment and the opening of the new one all take an identical timestamp, stamped once by the API and written to all four rows.
@@ -504,6 +510,10 @@ Each term is a maximum over rows that may be empty, and an empty term contribute
 The floor's second term is written over **edges**, which are rows with a leader, so that term does not depend on how a root is represented. Section 5 describes a root both as having no active assignment and as having one with a null `leader_id`, and the two readings disagree about whether a row exists; that ambiguity is recorded as open in `CLAUDE.md`. It does not reach this rule either way, because a row with a null `leader_id` is passed without comparison by the same-Network trigger and can never be an edge the correction has to strand.
 
 The system therefore **rejects the correction and names the earliest date it can legally take**, rather than failing with a constraint violation the administrator cannot act on. The rejection is a rule about what can be recorded, not about the actor's authority, so it answers `INVARIANT_VIOLATION` (Section 22).
+
+**The floor is an instant and the effective date is a day, so the answer is the day after the floor's day.** An effective date is a date-only field (Section 22) resolved to the start of that day in Asia/Manila (Section 20), while the floor above is a timestamp taken from rows written at whatever moment they were written. The earliest legal date is therefore the Manila calendar day *following* the day the floor falls in, and that holds however the floor sits within its day: the start of the floor's own day is never strictly later than the floor, and the start of the next day always is. A correction with no effective date takes the instant it is recorded and has no floor to clear, since every bound above lies in the past.
+
+This is why the refusal names a **date** rather than echoing the floor. An administrator handed a timestamp would have to work out which day to submit, and the day containing that timestamp is the one day that will be refused again.
 
 **One consequence is sharp, and follows from the two rules together rather than from either alone.** Moving a disciple out of the way closes their edge as of today, and that `ended_at` becomes the floor immediately. So a correction for someone who has just had disciples moved cannot be backdated at all: it takes effect from today forward, and the months in which they led those disciples keep the Network recorded for them. Anyone reading only the refusal rule would expect clearing the disciples to unblock a backdated correction, and it does the opposite.
 
@@ -1183,6 +1193,8 @@ A grant is revoked by setting `revoked_at`, never by deleting the row. The histo
 A grant of a read capability may set `read_only` true or false; true is the default and the normal case, and false is meaningless there but harmless. A grant of a **write** capability with `read_only` true is **rejected at creation**, not stored and silently ineffective. Without that rejection an Admin granting a management capability and leaving the flag at its default creates a row that grants nothing, with nothing to indicate why the holder is being denied.
 
 The flag exists because a scope widened beyond a leader's normal management scope is a reporting grant unless something says otherwise (above). It is the visible difference between letting someone see a Network and letting them change it.
+
+**`people.correct_sex` exists at Whole Church and at no narrower scope.** The catalog above gives it one scope, and the rule is stated here because the guard alone would not hold it: the guard asks whether the actor's grant covers the target, so a grant issued at `OWN_SUBTREE` would pass for anyone inside that subtree. Held at a subtree scope it becomes exactly the escalation route this capability is Admin-only to close — moving a person between Networks, and re-parenting them in the process, without ever holding `people.manage_pastoral_assignment` (Section 4). A grant of it at any narrower scope therefore covers nothing, and the operation refuses with `SCOPE_DENIED`, in the same spirit as the `read_only` rejection above: a row that cannot mean what it appears to mean is refused rather than honoured in part.
 
 `read_only` belongs to `capability_grants` and to nothing else. **A role default carries no such flag**, and none is to be derived for one: a role's authority is exactly what the catalog above says it is. Anywhere an account's effective authority is presented — `/api/v1/auth/me` is the case that exists — authority carried by a role reports no `read_only` value rather than an invented one, because a client branching on a value this specification never defined is branching on a rule that does not exist.
 
@@ -2482,6 +2494,8 @@ All dates and reporting periods are computed in **Asia/Manila**, the church's lo
 
 Store timestamps in UTC. Convert to Asia/Manila whenever deriving a date, a week, or a month.
 
+**The conversion runs the other way too, and it is fixed here rather than per endpoint.** A date-only field that has to become an instant — an effective date on any effective-dated relationship (Sections 4, 5, 10, 11) is the case that arises first — resolves to **00:00:00 on that day in Asia/Manila**. The day is the unit a person submitted, so the instant that represents it is the moment the day begins; anything else would place a record on a day nobody named. Both directions use the named zone, never a literal `+08:00`.
+
 Never bucket a report directly by a raw UTC timestamp. A Cell meeting at 16:00 Saturday in Manila is 08:00 Saturday UTC and buckets correctly by accident, but a record written at 07:00 Monday in Manila is 23:00 Sunday UTC, and a report grouped in UTC places it in the wrong week and, at a month boundary, the wrong month. Historical reports would then disagree with what leaders actually recorded.
 
 Asia/Manila observes no daylight saving time, so the offset is a constant +08:00. Do not hard-code `+8`. Use the named zone, so the system stays correct if that ever changes.
@@ -2622,6 +2636,12 @@ audit_log
 
 Record actor, target, action, timestamp, and relevant before/after values.
 
+**`action` is `<noun>.<past-tense verb>`**, lower snake case on both halves: `person.created`, `network.changed`, `pastoral_assignment.transferred`, `effective_date.backdated`, `setting.changed`. The noun is the thing the action happened to, which is usually the table or the relationship rather than the module performing it. The list above stays open — it opens with "including" — so this is a naming convention rather than an enumeration, and it is written down because without it `pastoral_assignment.transferred` and `pastoral.transfer` are equally defensible and a log that mixes them cannot be queried.
+
+**One operation writes one entry per action it performed, not one entry per request.** The list above names several actions that occur together: a sex correction is a sex correction *and* the Network change it causes *and*, where one is forced, a pastoral leader transfer *and*, where the date was set in the past, a backdated effective date. Each is separately listed, so each is separately recorded, in the same transaction as the write. They are related by carrying the same actor, the same target and the same `occurred_at`; `batch_id` is not used for this, because it means one bulk import (Section 2) and overloading it would make an import indistinguishable from a compound correction.
+
+The alternative — one entry describing everything — was rejected because the entries answer different questions and are read by different searches. Section 5 requires every reassignment to be logged as a pastoral leader transfer with its previous and new leader; a reader looking for transfers must find that one whether it arose from a reassignment or from a correction.
+
 `target_id` is text rather than a UUID, and is required. Almost every target above is identified by a UUID, but not all: a setting is keyed by its `key` (Section 7), and a setting change is on the list. It carries no foreign key, because this log is append-only and an entry outlives the row it describes — a constraint that could refuse or cascade would make the trail depend on the survival of what it exists to remember.
 
 The audit log is append-only. Nothing updates or deletes a row, and it is never a source for as-of state — a report answering "who was `CURRENT` in March" reads the effective-dated table, not this (Section 3).
@@ -2657,6 +2677,7 @@ GET  /api/v1/people                       search, church-wide (Section 8)
 GET  /api/v1/people/duplicate-candidates  declared before /{id}, or it is one
 GET  /api/v1/people/{id}
 GET  /api/v1/people/{id}/pastoral-path
+PUT  /api/v1/people/{id}/sex             the audited correction of Section 4
 
 GET  /api/v1/network/my-tree
 GET  /api/v1/leaders/{id}/children

@@ -1279,11 +1279,124 @@ before they were. That is the same fault as the backdate floor, the zero-length
 row and the Nest status ordering — a mechanism described from the part of it that
 was being looked at.
 
+### 2026-08-23 — Six rulings the sex-correction route needed, settled before the code
+
+Section 4 describes the correction in detail and left six things undefined that an
+endpoint cannot avoid answering. Each is amended into `SKILL.md` in the same change.
+
+**An effective date is a day; the backdate floor is an instant; the refusal names
+the day after the floor's day.** Section 22 makes an effective date a date-only
+`YYYY-MM-DD` Asia/Manila field and section 4 states the floor at timestamp
+precision, and nothing said how one becomes the other. A date-only field resolving
+to an instant takes 00:00:00 of that day in the named zone — written to section 20,
+which is the single authority for period boundaries, rather than to the one section
+that happened to need it first.
+
+The consequence is arithmetic and holds unconditionally, which is why the refusal
+can name a date rather than echoing a timestamp: the start of the floor's own day is
+never strictly later than the floor, and the start of the next day always is. An
+administrator handed the raw floor would have to work out which day to submit, and
+the day containing it is the one day guaranteed to be refused again.
+
+**A correction always carries a reason.** `network_assignments.reason` is nullable
+because an initial assignment has nothing to explain. A correction is what the
+column exists for, and every one of them is a correction.
+
+**A correction that changes nothing is `VALIDATION_FAILED`.** With two sexes and a
+total mapping this is reachable only by submitting the recorded value. Refused
+rather than accepted silently: the operation demands a reason and writes an audit
+trail, and an audited correction that corrected nothing misleads whoever reads it.
+The retry case it might otherwise have served is already served by
+`Idempotency-Key`.
+
+**An archived Person's sex may be corrected only where no reassignment is forced.**
+Section 5 forbids reassigning an archived Person and the atomic pair is a
+reassignment, so the correction is refused while they hold an open pastoral edge —
+restore first. Where they hold none, which is the ordinary state after archival,
+nothing is stranded and the Network change stands alone. Refusing outright was
+rejected: a data correction on an archived record is legitimate, and it is
+re-parenting one that section 5 objects to.
+
+**`people.correct_sex` covers nothing at a scope narrower than Whole Church.**
+Section 7 gives it one scope and the guard alone cannot hold that, because the guard
+asks whether a grant covers the target — so a grant issued at `OWN_SUBTREE` would
+pass for everyone inside that subtree. Held there it is precisely the escalation the
+capability is Admin-only to close: moving a person between Networks, re-parenting
+them on the way, without ever holding `people.manage_pastoral_assignment`. The
+operation refuses with `SCOPE_DENIED`, on the same reasoning as the `read_only`
+rejection — a row that cannot mean what it appears to mean is refused rather than
+honoured in part.
+
+**One operation writes one audit entry per action it performed**, and `action` is
+`<noun>.<past-tense verb>`. This closes the vocabulary item this log has carried as
+open. Section 21's list is open — it opens with "including" — so what is settled is
+the convention, not an enumeration; without it `pastoral_assignment.transferred` and
+`pastoral.transfer` are equally defensible and the log cannot be queried.
+
+A correction therefore writes up to four entries in its own transaction:
+`sex.corrected`, `network.changed`, `pastoral_assignment.transferred` where one was
+forced, and `effective_date.backdated` where the date was set in the past. Section 21
+lists each separately and section 5 independently requires the transfer entry to
+carry its previous and new leader. One entry describing everything was rejected
+because a reader searching for transfers must find that entry whether it arose from
+a reassignment or from a correction. They are related by sharing an actor, a target
+and an `occurred_at`; `batch_id` is not borrowed for it, because it means one bulk
+import and overloading it would make an import indistinguishable from a compound
+correction.
+
+### 2026-08-23 — Reading the Network-change trigger fired twice, which is what the section 4 floor is about
+
+Recorded as a mechanism rather than as a decision, because the floor in section 4 is
+stated as a rule and is impossible to check against the schema without it — and
+because on this project every rule written about this trigger by reasoning from its
+purpose rather than its `WHERE` clause has been wrong.
+
+`assert_network_change_keeps_edges` fires **twice** in one correction, and the two
+firings select different edges:
+
+- **On the `INSERT` of the new Network row**, the bound is the effective date. Edges
+  with `ended_at > eff` are selected, and the old edge closed at exactly `eff` is
+  not — which is what makes the one-instant rule in section 4 work at all.
+- **On the `UPDATE` closing the old Network row**, the bound is the *old row's*
+  `started_at`, not the effective date. That selects nearly every edge the person
+  has ever held, each compared at `GREATEST(edge.started_at, old_row.started_at)`,
+  and it passes only while that instant is still covered by the old Network row —
+  that is, while the edge began strictly before `eff`.
+
+Both of section 4's strictness rules are properties of the **second** firing, which
+is the one an implementer is least likely to look at:
+
+- `eff` equal to the current assignment's `started_at` closes it at its own start.
+  The resulting zero-length row is selected by the second firing and compared at
+  `eff`, where the person already resolves to the corrected Network. Hence term (a),
+  strictly later.
+- `eff` equal to the `ended_at` of a **zero-length** closed edge does the same thing.
+  Hence term (b), strictly later.
+
+**Section 4's uniform strict form is conservative by one instant on term (b), and
+that is followed rather than optimised.** For an ordinary closed edge with
+`started_at < ended_at`, `eff` equal to its `ended_at` in fact passes both firings.
+The strict form refuses it. Narrowing the rule to zero-length rows alone would make
+the implementation disagree with the specification to gain one instant, on the part
+of this system where reasoning from purpose has already been wrong four times.
+
+**One corner where section 4 and the schema disagree, recorded rather than fixed.**
+Where a person's open assignment began *before* their open Network row, section 4's
+floor can permit an `eff` that `CHECK (ended_at >= started_at)` on
+`network_assignments` rejects. It is unreachable for any edge with a leader — the
+same-Network trigger refuses an edge opened before the person has a Network at all —
+so it is reachable only for a null-`leader_id` root row written by an import. It is
+translated into `INVARIANT_VIOLATION` with a message rather than left to surface as a
+constraint violation, and no third floor term is added, because a term that binds
+only in an unreachable corner reads as though it were doing work.
+
 ### Open — awaiting a ruling
 
-**One item awaits a ruling and blocks Stage 5. Eight other things are unsettled, none of them blocking. They are listed at the end, so this section is the whole of what is open.**
+**One item awaits a ruling and blocks Stage 5. Seven other things are unsettled, none of them blocking. They are listed at the end, so this section is the whole of what is open.**
 
 Nine items that stood here on 2026-08-22 were settled that day and are recorded above. Seven were Stop Conditions for Stage 2, and the last two were opened and closed the same day by `architecture-guardian` passes.
+
+The `audit_log.action` vocabulary left this list on 2026-08-23, settled by the ruling above: the convention is `<noun>.<past-tense verb>`, and section 21's list stays open.
 
 **What an aggregate Cell attendance view offers in place of buckets.** Monthly-attendance buckets are a Cell-scope view only, because N belongs to a Cell and aggregating across different N inflates `Completed` for the Cells that recorded least (`SKILL.md` §12). At leader and Network scope the spec offers unique people, classification and coverage, and does not say whether anything should replace the buckets. Settle it in Stage 5 against real data.
 
@@ -1298,5 +1411,4 @@ Two related questions have defined behaviour and are recorded in `SKILL.md` §12
 - **What the native clients owe on accessibility.** `SKILL.md` §23 binds the web application to WCAG 2.2 AA and says the equivalent obligation for a native client is the platform accessibility API rather than WCAG. Which platform guarantees, and what would fail a build, is a ruling to make when the client is.
 
 - **The root's representation.** §5 says both that a root leader has "no active pastoral assignment" and that "A root leader has a null `leader_id`", and invariant 3 lists zero assignments as legitimate for a root. Those disagree about whether a row exists. The schema permits either, the test fixtures insert a row, and the same-Network trigger passes a null-`leader_id` row without comparison, so nothing currently depends on the answer — §4's backdate floor was deliberately written over edges with a leader so that it does not. Settle it before anything queries "is this person a root", which is a different question under each reading.
-- **The `audit_log.action` identifier vocabulary has no home in `SKILL.md`.** §21 gives prose descriptions and says `action` is "an identifier from the list above"; the identifiers themselves are minted in `api/src/database/schema.ts` and shaped by a regex in the migration. The next module to write an entry has nothing to consult, so `pastoral_assignment.transferred` and `pastoral.transfer` are equally defensible. §21 deliberately does not close its list, so this is a naming convention to record rather than an enumeration to fix.
 - **Whether `audit_log`'s append-only guarantee tolerates `TRUNCATE`.** §5 records the exemption for history tables and leans it on a least-privilege role that does not exist, which is already open above. §21 says nothing at all, and the test suite truncates `audit_log` before every test. Same answer as the `TRUNCATE` question above, most likely, but it is not written down for the one table whose whole purpose is that nothing removes a row.
