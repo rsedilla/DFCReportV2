@@ -926,11 +926,27 @@ the mistake two review passes have already caught on this project. §22's
 sentence is unconditional, and a retried sign-out returning the first answer is
 better behaviour than a second revocation attempt.
 
-**Nest applies a handler's status after the interceptor chain resolves**, so the
-status cannot be read off the response inside the interceptor. It is derived the
-way Nest derives it, from `@HttpCode` or the method. Reading `res.statusCode`
-there yields Express's default, which would store a POST as 200 and make every
-replay answer 200 where the original answered 201.
+**Nest applies a handler's status *before* the interceptor chain runs**, so
+`res.statusCode` inside the interceptor is already the handler's — 201 for a
+POST, whatever `@HttpCode` declares where one is present. That is what the
+stored status is read from, and it is also what makes the replay path work: the
+interceptor's own `.status()` call comes later and therefore wins.
+
+*The first version of this entry said the opposite, and was wrong.* It claimed
+the status was applied after the chain and had to be re-derived from
+`@HttpCode` or the method. That reading came from `responseController.apply(result,
+res, httpStatusCode)` late in `router-execution-context.js` — but `setStatus`
+runs earlier, before the guards' own call site, and `apply`'s third argument is
+`undefined` there because `createHandleResponseFn` is invoked with three
+arguments and takes four. The re-derivation computed the same numbers, so
+nothing broke; the recorded *reason* was false, and it asserted the framework
+behaved in the way that would break the replay path in the same file. Corrected
+after `architecture-guardian` checked it against the installed Nest.
+
+Worth keeping as a pattern rather than a footnote: this is the third time on
+this project that a rule was written by reading part of a mechanism and
+reasoning about the rest. The other two were the backdate floor and the
+zero-length row.
 
 **A 4xx is stored and a 5xx releases the key.** A domain refusal is this
 request's outcome, decided by the rules, and a repeat of the same body is

@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
-import { Body, Controller, Get, Post, type INestApplication } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Post, type INestApplication } from '@nestjs/common';
 import request from 'supertest';
 
 import { AuthenticatedOnly, Public } from '../../src/auth/authorization/authorization.decorators';
@@ -58,6 +58,20 @@ class IdempotencyProbeController {
       releaseSlow = resolve;
     });
     return { done: true };
+  }
+
+  @Post('no-content')
+  @HttpCode(204)
+  @AuthenticatedOnly('Probe for a 204, which is the shape logout and logout-all produce.')
+  noContent(): void {
+    executions += 1;
+  }
+
+  @Post('array-body')
+  @AuthenticatedOnly('Probe for a top-level array, which jsonb accepts and the driver would not.')
+  arrayBody(): number[] {
+    executions += 1;
+    return [1, 2, 3];
   }
 
   @Get('read')
@@ -249,6 +263,69 @@ describe('idempotency (SKILL.md section 22)', () => {
 
     const rows = await db.selectFrom('idempotency_keys').select('key').execute();
     expect(rows).toHaveLength(0);
+  });
+
+  it('replays a 204 with its status and no body', async () => {
+    // The shape logout and logout-all produce, which this ruling newly covers. A
+    // replay answering 201 with an empty body would look like a success of a
+    // different kind.
+    const key = randomUUID();
+
+    const first = await post('no-content', account).set('Idempotency-Key', key).send({});
+    expect(first.status).toBe(204);
+
+    const repeat = await post('no-content', account).set('Idempotency-Key', key).send({});
+
+    expect(repeat.status).toBe(204);
+    expect(executions).toBe(1);
+  });
+
+  it('stores a top-level array, which the driver would not have stored as JSON', async () => {
+    // `response_body` is jsonb and the Json type permits an array, but no JSON
+    // plugin is installed -- so handing the driver a JavaScript array renders a
+    // PostgreSQL array literal, which does not parse as jsonb. The value is
+    // serialized and cast instead.
+    const key = randomUUID();
+
+    const first = await post('array-body', account).set('Idempotency-Key', key).send({});
+    expect(first.status).toBe(201);
+    expect(first.body).toEqual([1, 2, 3]);
+
+    const repeat = await post('array-body', account).set('Idempotency-Key', key).send({});
+
+    expect(repeat.status).toBe(201);
+    expect(repeat.body).toEqual([1, 2, 3]);
+    expect(executions).toBe(1);
+  });
+
+  it('lets exactly one of two simultaneous claims execute', async () => {
+    // Sequential retries pass against a read-then-write implementation with no
+    // primary key involved, which is the trap CLAUDE.md records for authorization
+    // case 7. These two are dispatched together, so the claim itself is what is
+    // under test rather than the ordering.
+    const key = randomUUID();
+
+    const [a, b] = await Promise.all([
+      post('write', account).set('Idempotency-Key', key).send({ value: 'a' }),
+      post('write', account).set('Idempotency-Key', key).send({ value: 'a' }),
+    ]);
+
+    // One executed. The other either replayed its stored response or was told to
+    // retry shortly, and never ran the handler.
+    expect(executions).toBe(1);
+
+    const statuses = [a.status, b.status].sort();
+    expect(statuses[0]).toBe(201);
+    expect([201, 409]).toContain(statuses[1]);
+
+    for (const response of [a, b]) {
+      if (response.status === 409) {
+        expect(response.body.error.code).toBe('REQUEST_IN_FLIGHT');
+      }
+    }
+
+    const rows = await db.selectFrom('idempotency_keys').select('key').execute();
+    expect(rows).toHaveLength(1);
   });
 
   it('leaves reads alone', async () => {

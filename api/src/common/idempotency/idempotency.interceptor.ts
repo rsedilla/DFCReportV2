@@ -4,12 +4,17 @@ import {
   type ExecutionContext,
   type NestInterceptor,
 } from '@nestjs/common';
-import { HTTP_CODE_METADATA } from '@nestjs/common/constants';
 import { Reflector } from '@nestjs/core';
 import { catchError, from, mergeMap, of, throwError } from 'rxjs';
 
 import { PUBLIC_METADATA } from '../../auth/authorization/authorization.decorators';
-import { ApiError, ApiErrorCode, ValidationFailedError } from '../errors/api-error';
+import {
+  ApiError,
+  ApiErrorCode,
+  UnauthenticatedError,
+  ValidationFailedError,
+} from '../errors/api-error';
+import { describeFailure } from '../errors/api-exception.filter';
 
 import { IdempotencyService } from './idempotency.service';
 
@@ -46,29 +51,6 @@ export class IdempotencyInterceptor implements NestInterceptor {
     private readonly idempotency: IdempotencyService,
   ) {}
 
-  /**
-   * The status this handler will produce, derived the way Nest derives it.
-   *
-   * It cannot be read off the response. Nest applies the status *after* the
-   * interceptor chain resolves, so `response.statusCode` here is still Express's
-   * default rather than the handler's -- a POST would be stored as 200, and every
-   * replay of it would answer 200 where the original answered 201.
-   */
-  private successStatus(context: ExecutionContext): number {
-    const declared = this.reflector.get<number | undefined>(
-      HTTP_CODE_METADATA,
-      context.getHandler(),
-    );
-
-    if (typeof declared === 'number') {
-      return declared;
-    }
-
-    return context.switchToHttp().getRequest<AuthenticatedRequest>().method.toUpperCase() === 'POST'
-      ? 201
-      : 200;
-  }
-
   intercept(context: ExecutionContext, next: CallHandler): Observable<unknown> {
     if (context.getType() !== 'http') {
       return next.handle();
@@ -88,9 +70,18 @@ export class IdempotencyInterceptor implements NestInterceptor {
       context.getClass(),
     ]);
 
-    const actor = request.actor;
-    if (isPublic || !actor) {
+    if (isPublic) {
       return next.handle();
+    }
+
+    const actor = request.actor;
+    if (!actor) {
+      // Not an exemption. Section 22 makes the exempt set exactly section 7's
+      // closed unauthenticated list, and a non-public request arriving here with
+      // no actor is not on it -- it means the guard order changed. Passing it
+      // through would be a second exemption, open-ended and silent, which is the
+      // shape section 7 refuses for capabilities.
+      throw new UnauthenticatedError();
     }
 
     const key = headerValue(request.headers['idempotency-key']);
@@ -111,10 +102,7 @@ export class IdempotencyInterceptor implements NestInterceptor {
     const accountId = actor.accountId;
     const fingerprint = this.idempotency.fingerprint(
       request.method,
-      // The routed path rather than the raw URL, so that a query string a client
-      // reorders is not a different request. Section 22's filters are named
-      // parameters, and the values are in the body for a write.
-      request.originalUrl.split('?')[0],
+      requestPath(request),
       request.body,
     );
 
@@ -145,32 +133,35 @@ export class IdempotencyInterceptor implements NestInterceptor {
             );
 
           case 'replay': {
-            // Nest applies the handler's status after this observable resolves,
-            // so setting it here is what makes the replay carry the status the
-            // original produced rather than the framework default.
+            // Nest sets the handler's status *before* the interceptor chain runs,
+            // so this call overrides it. Without it a replayed 409 would go out
+            // carrying the status the route itself declares rather than the one
+            // the original request produced.
             context.switchToHttp().getResponse<Response>().status(claim.status);
             return of(claim.body);
           }
 
           case 'claimed':
             return next.handle().pipe(
-              mergeMap((body: unknown) =>
-                from(
-                  this.idempotency.complete({
-                    key,
-                    accountId,
-                    status: this.successStatus(context),
-                    body: (body ?? null) as Json | null,
-                  }),
-                ).pipe(mergeMap(() => of(body))),
-              ),
+              // **On the handler alone, and deliberately before the store call
+              // below.** Piped after it, this would also catch a failure of
+              // `complete` -- which runs once the handler has already committed --
+              // classify it as a server error, release the key, and let the next
+              // retry execute a committed write a second time. That is the one
+              // outcome sections 22 and 23 exist to prevent.
               catchError((error: unknown) => {
-                const status = error instanceof ApiError ? error.status : 500;
+                // Classified by the same function the exception filter renders
+                // with, so the two cannot disagree about whether a response is a
+                // 4xx. Deciding it here independently would mean a NotFoundException
+                // rendered to the client as a 404 while the key was dropped as a
+                // server error.
+                const failure = describeFailure(error);
+                const status = failure?.status ?? 500;
 
                 // A 5xx carries no decision and rolls back, so the claim is
                 // released and the client may retry. A 4xx is this request's
-                // outcome and is stored, so a repeat of the same body is given
-                // the same answer rather than executing again.
+                // outcome and is stored, so a repeat of the same body is given the
+                // same answer rather than executing again.
                 const settle =
                   status >= 500
                     ? this.idempotency.release({ key, accountId })
@@ -178,18 +169,60 @@ export class IdempotencyInterceptor implements NestInterceptor {
                         key,
                         accountId,
                         status,
-                        body: (error instanceof ApiError
-                          ? error.toBody()
-                          : null) as unknown as Json | null,
+                        body: (failure?.body ?? null) as unknown as Json | null,
                       });
 
                 return from(settle).pipe(mergeMap(() => throwError(() => error)));
               }),
+              mergeMap((body: unknown) =>
+                from(
+                  this.idempotency.complete({
+                    key,
+                    accountId,
+                    // Already the handler's status: Nest calls setStatus before
+                    // the interceptor chain, so this is 201 for a POST and
+                    // whatever @HttpCode declares wherever one is present.
+                    status: context.switchToHttp().getResponse<Response>().statusCode,
+                    body: (body ?? null) as Json | null,
+                  }),
+                ).pipe(mergeMap(() => of(body))),
+              ),
             );
         }
       }),
     );
   }
+}
+
+/**
+ * The request path, with the query string sorted rather than dropped.
+ *
+ * Section 22 defines the fingerprint over "method, path and body". The query is
+ * kept because two writes differing only in a query parameter are two different
+ * requests, and hashing them alike would answer the second with the first's
+ * stored response. It is sorted because a client reordering its own parameters on
+ * a retry would otherwise be told `IDEMPOTENCY_KEY_REUSED` -- permanent, by
+ * section 22 -- which is the dead end canonicalizing the body exists to avoid. A
+ * trailing slash is normalized away for the same reason.
+ */
+function requestPath(request: AuthenticatedRequest): string {
+  const [rawPath, rawQuery] = request.originalUrl.split('?');
+  const path = rawPath.length > 1 ? rawPath.replace(/\/+$/, '') : rawPath;
+
+  if (!rawQuery) {
+    return path;
+  }
+
+  const sorted = [...new URLSearchParams(rawQuery).entries()]
+    .sort((a, b) => (a[0] === b[0] ? compare(a[1], b[1]) : compare(a[0], b[0])))
+    .map(([name, value]) => `${name}=${value}`)
+    .join('&');
+
+  return `${path}?${sorted}`;
+}
+
+function compare(a: string, b: string): number {
+  return a < b ? -1 : a > b ? 1 : 0;
 }
 
 function headerValue(raw: string | string[] | undefined): string | null {

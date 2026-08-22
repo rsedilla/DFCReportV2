@@ -78,6 +78,52 @@ describe('VERSION_CONFLICT (SKILL.md sections 14 and 22)', () => {
     ).toThrow(/complete "current" side/);
   });
 
+  it('never lets a side omit its values', () => {
+    // The thrown message names values, recorded_at and actor. It used to check
+    // only two of the three, so a side with no values rendered as a conflict
+    // carrying timestamps and actors and no figures to choose between.
+    expect(
+      () =>
+        new VersionConflictError({
+          submittedVersion: 3,
+          currentVersion: 4,
+          // @ts-expect-error `values` is required.
+          submitted: {
+            recordedAt: '2026-10-17T18:02:11+08:00',
+            actor: { id: 'a1', name: 'Manuel' },
+          },
+          current: {
+            values: { present: 8 },
+            recordedAt: '2026-10-17T18:15:40+08:00',
+            actor: { id: 'a2', name: 'Raymond' },
+          },
+        }),
+    ).toThrow(/complete "submitted" side/);
+  });
+
+  it('refuses a record value that would collide with the envelope', () => {
+    // `recorded_at` and `actor` are the envelope's own names. A record field
+    // carrying one would be silently replaced, and the person resolving the
+    // conflict would read the envelope's value as though it were the record's.
+    expect(
+      () =>
+        new VersionConflictError({
+          submittedVersion: 3,
+          currentVersion: 4,
+          submitted: {
+            values: { present: 9, actor: 'someone else' },
+            recordedAt: '2026-10-17T18:02:11+08:00',
+            actor: { id: 'a1', name: 'Manuel' },
+          },
+          current: {
+            values: { present: 8 },
+            recordedAt: '2026-10-17T18:15:40+08:00',
+            actor: { id: 'a2', name: 'Raymond' },
+          },
+        }),
+    ).toThrow(/may not carry a value named "actor"/);
+  });
+
   it('never lets a side omit its actor', () => {
     // Both actors are what let a person tell whose record is whose. A side
     // carrying values and a timestamp but no actor is the omission section 22

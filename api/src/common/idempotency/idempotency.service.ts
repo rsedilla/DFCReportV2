@@ -144,17 +144,24 @@ export class IdempotencyService {
     status: number;
     body: Json | null;
   }): Promise<void> {
-    await this.db
-      .updateTable('idempotency_keys')
-      .set({
-        state: 'COMPLETED',
-        response_status: params.status,
-        response_body: params.body,
-      })
-      .where('account_id', '=', params.accountId)
-      .where('key', '=', params.key)
-      .where('state', '=', 'IN_FLIGHT')
-      .execute();
+    await sql`
+      UPDATE idempotency_keys
+         SET state = 'COMPLETED',
+             response_status = ${params.status},
+             -- Serialized here and cast, rather than handed to the driver as a
+             -- value. No JSON plugin is installed, so node-pg would render a
+             -- JavaScript array as a PostgreSQL array literal ({1,2}) and a bare
+             -- string unquoted -- neither of which parses as jsonb. The column
+             -- type permits any JSON value and a handler may return one.
+             response_body = ${params.body === null ? null : JSON.stringify(params.body)}::jsonb,
+             -- Section 22 retains the response "for at least 24 hours". Measured
+             -- from the response rather than from the claim, so a slow request
+             -- does not shorten the window its own answer is kept for.
+             expires_at = now() + ${`${RETENTION_HOURS} hours`}::interval
+       WHERE account_id = ${params.accountId}::uuid
+         AND key = ${params.key}::uuid
+         AND state = 'IN_FLIGHT'
+    `.execute(this.db);
   }
 
   /**

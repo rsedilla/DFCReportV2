@@ -66,12 +66,26 @@ export class VersionConflictError extends ApiError {
  * omission still fails, but as a TypeError from a property access, which reads as
  * a bug in this file rather than as a caller that owes a complete conflict.
  */
+const RESERVED = ['recorded_at', 'actor'];
+
 function render(side: ConflictSide, which: 'submitted' | 'current'): Record<string, unknown> {
-  if (!side || !side.actor || !side.recordedAt) {
+  if (!side || !side.values || !side.actor || !side.recordedAt) {
     throw new Error(
       `A VERSION_CONFLICT needs a complete "${which}" side: values, recorded_at and actor. ` +
         'SKILL.md section 22 -- a conflict response omitting any of them cannot satisfy section 14, ' +
         'because the person resolving it cannot tell which record to keep.',
+    );
+  }
+
+  // A record field named `recorded_at` or `actor` would be silently overwritten
+  // by the envelope's, and the person resolving the conflict would be shown the
+  // envelope's value as though it were the record's. Refused rather than
+  // clobbered: the two would be indistinguishable in the response.
+  const collision = RESERVED.find((name) => name in side.values);
+  if (collision) {
+    throw new Error(
+      `A VERSION_CONFLICT side may not carry a value named "${collision}": the envelope uses ` +
+        'that name, and one would silently replace the other in the response.',
     );
   }
 
