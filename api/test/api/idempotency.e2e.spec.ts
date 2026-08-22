@@ -177,7 +177,15 @@ describe('idempotency (SKILL.md section 22)', () => {
 
     // Started but not awaited: the handler blocks until the test releases it, so
     // the key is genuinely claimed and unfinished while the retry arrives.
-    const slow = post('slow', account).set('Idempotency-Key', key).send({});
+    //
+    // The `.then()` is what dispatches it. A supertest `Test` is a thenable that
+    // sends nothing until something subscribes, so holding the object alone
+    // leaves the request unsent and the wait below times out against a handler
+    // that was never entered.
+    const slow = post('slow', account)
+      .set('Idempotency-Key', key)
+      .send({})
+      .then((response) => response);
 
     // Waiting for the handler to be inside the endpoint proves the request is in
     // flight rather than assuming a sleep was long enough.
