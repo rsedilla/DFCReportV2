@@ -50,14 +50,31 @@ export class VersionConflictError extends ApiError {
       {
         submitted_version: params.submittedVersion,
         current_version: params.currentVersion,
-        submitted: render(params.submitted),
-        current: render(params.current),
+        submitted: render(params.submitted, 'submitted'),
+        current: render(params.current, 'current'),
       },
     );
   }
 }
 
-function render(side: ConflictSide): Record<string, unknown> {
+/**
+ * Renders one side, refusing an incomplete one.
+ *
+ * The type already forbids this and that is the primary guard; this is the
+ * backstop for a caller the compiler does not see -- JavaScript, a cast, a body
+ * parsed from elsewhere. It is deliberate rather than incidental: without it the
+ * omission still fails, but as a TypeError from a property access, which reads as
+ * a bug in this file rather than as a caller that owes a complete conflict.
+ */
+function render(side: ConflictSide, which: 'submitted' | 'current'): Record<string, unknown> {
+  if (!side || !side.actor || !side.recordedAt) {
+    throw new Error(
+      `A VERSION_CONFLICT needs a complete "${which}" side: values, recorded_at and actor. ` +
+        'SKILL.md section 22 -- a conflict response omitting any of them cannot satisfy section 14, ' +
+        'because the person resolving it cannot tell which record to keep.',
+    );
+  }
+
   return {
     ...side.values,
     recorded_at: side.recordedAt,

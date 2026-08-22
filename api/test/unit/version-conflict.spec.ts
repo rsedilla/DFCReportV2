@@ -72,14 +72,10 @@ describe('VERSION_CONFLICT (SKILL.md sections 14 and 22)', () => {
       },
     };
 
-    // @ts-expect-error `current` is required, and omitting it must not compile.
-    const built = new VersionConflictError(underSpecified);
-
-    // The compile-time guard is the real mechanism; this shows what it is
-    // protecting against. At runtime the omission is silent -- the body renders
-    // with `current: undefined`, which is precisely the response section 22 says
-    // cannot satisfy section 14, sent with a 409 and looking well-formed.
-    expect(built.toBody().error.details.current).toBeUndefined();
+    expect(
+      // @ts-expect-error `current` is required, and omitting it must not compile.
+      () => new VersionConflictError(underSpecified),
+    ).toThrow(/complete "current" side/);
   });
 
   it('never lets a side omit its actor', () => {
@@ -91,21 +87,19 @@ describe('VERSION_CONFLICT (SKILL.md sections 14 and 22)', () => {
       recordedAt: '2026-10-17T18:02:11+08:00',
     };
 
-    const built = new VersionConflictError({
-      submittedVersion: 3,
-      currentVersion: 4,
-      // @ts-expect-error a side without an actor must not compile.
-      submitted: sideWithoutActor,
-      current: {
-        values: { present: 8 },
-        recordedAt: '2026-10-17T18:15:40+08:00',
-        actor: { id: 'a2', name: 'Raymond' },
-      },
-    });
-
-    // Again: silent at runtime, and a person shown this dialog cannot tell whose
-    // figure is whose. That is why the type refuses it.
-    const submitted = built.toBody().error.details.submitted as Record<string, unknown>;
-    expect(submitted.actor).toEqual({ id: undefined, name: undefined });
+    expect(
+      () =>
+        new VersionConflictError({
+          submittedVersion: 3,
+          currentVersion: 4,
+          // @ts-expect-error a side without an actor must not compile.
+          submitted: sideWithoutActor,
+          current: {
+            values: { present: 8 },
+            recordedAt: '2026-10-17T18:15:40+08:00',
+            actor: { id: 'a2', name: 'Raymond' },
+          },
+        }),
+    ).toThrow(/complete "submitted" side/);
   });
 });
