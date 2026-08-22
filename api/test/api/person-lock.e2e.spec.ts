@@ -122,6 +122,53 @@ describe('the person lock is taken by every path that can strand an edge', () =>
     }
   }
 
+  it('gives up after the lock timeout, and releases the idempotency key', async () => {
+    // **The second assertion is the one that matters**, and it is why the code is a
+    // 5xx rather than a 409. Section 22 stores a 4xx against the key and releases
+    // it on a 5xx, because the first is a decision and the second is not.
+    // Contention reached no decision, so storing it would answer every later retry
+    // of that key with the same transient failure for the whole retention — the
+    // dead end the release rule exists to prevent.
+    const holder = new Client({ connectionString: process.env.DATABASE_URL });
+    await holder.connect();
+
+    const key = randomUUID();
+    const body = {
+      sex: 'FEMALE',
+      reason: 'Sex entered in error at encoding.',
+      pastoral_leader_id: grace.id,
+    };
+
+    try {
+      await holder.query('BEGIN');
+      await holder.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [mark.id]);
+
+      const refused = await request(app.getHttpServer())
+        .put(`/api/v1/people/${mark.id}/sex`)
+        .set('Authorization', `Bearer ${admin.accessToken}`)
+        .set('Idempotency-Key', key)
+        .send(body);
+
+      expect(refused.status).toBe(503);
+      expect(refused.body.error.code).toBe('RESOURCE_BUSY');
+
+      await holder.query('ROLLBACK');
+
+      // The same key again. If the failure had been stored, this replays the 503
+      // forever; released, it executes and succeeds.
+      const retried = await request(app.getHttpServer())
+        .put(`/api/v1/people/${mark.id}/sex`)
+        .set('Authorization', `Bearer ${admin.accessToken}`)
+        .set('Idempotency-Key', key)
+        .send(body);
+
+      expect(retried.status).toBe(200);
+      expect(retried.body.network).toBe('WOMENS');
+    } finally {
+      await holder.end();
+    }
+  });
+
   it('networks.changeWithin locks the person whose Network is changing', async () => {
     const networks = app.get(NetworksService);
     const database = app.get<Db>(DATABASE);

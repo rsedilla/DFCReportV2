@@ -754,6 +754,10 @@ Every path that opens a pastoral edge takes a transaction-scoped advisory lock o
 
 An advisory lock rather than a row lock on `persons`: the two paths belong to different modules and `persons` belongs to neither of them alone (Section 2), so a row lock would mean reading a table to coordinate rather than to read data. This is coordination, and it is transaction-scoped, so no path can leak it by failing.
 
+**The wait is bounded, and the bound is a requirement rather than a tuning choice.** An advisory lock waits indefinitely and the connection pool is bounded (Section 24), so an unbounded wait lets one client left idle in a transaction consume every connection — and the liveness probe shares that pool, so a healthy process is then read as dead and restarted, losing the transactions that were making progress. A request that cannot take the lock within a few seconds gives up and answers `RESOURCE_BUSY` (Section 22).
+
+**That answer is a 5xx deliberately.** Section 22 stores a 4xx against the idempotency key and releases the key on a 5xx, because the first is a decision the rules reached and the second carries none. Contention reached no decision, so storing it would answer every later retry of that key with the same transient failure for the whole retention period — the dead end the release rule exists to prevent. Falling on the 5xx side of that split makes the correct behaviour structural rather than a special case in the interceptor that each new code has to remember.
+
 No cycles — a cycle spans many rows and cannot be expressed as a row-level constraint. Reject it in the domain layer before writing, and make every recursive subtree query cycle-safe so that a cycle introduced by any other means surfaces as an error rather than an unbounded query:
 
 ```sql
@@ -2784,6 +2788,7 @@ One envelope, always:
 | `INVARIANT_VIOLATION` | 409 | A domain rule rejects the write — cycle, cross-Network edge, two active assignments |
 | `DUPLICATE_ACKNOWLEDGEMENT_REQUIRED` | 409 | A Tier 1 duplicate candidate must be acknowledged before the Person is created (Section 3). The candidates are in `details` |
 | `NOT_FOUND` | 404 | No such record, or its existence must not be disclosed |
+| `RESOURCE_BUSY` | 503 | Another operation holds the record this write must serialize against, and the wait timed out (Section 5). Transient: retry after a short delay |
 
 `CAPABILITY_DENIED` and `SCOPE_DENIED` are deliberately distinct, because capability and scope are independent grants (Section 7) and an administrator diagnosing a permission problem needs to know which one failed.
 

@@ -1,7 +1,24 @@
 import { sql } from 'kysely';
 
+import { ResourceBusyError } from '../common/errors/api-error';
+
 import type { Database } from './schema';
 import type { Transaction } from 'kysely';
+
+/**
+ * How long a request may wait for a person's lock before giving up.
+ *
+ * `pg_advisory_xact_lock` waits forever, and the connection pool is bounded
+ * (SKILL.md section 24) — so an unbounded wait lets one client left idle in a
+ * transaction consume every connection and take the liveness probe down with it,
+ * which shares the pool. Three seconds is longer than any transaction that takes
+ * this lock legitimately, all of which are a handful of statements, and short
+ * enough that the queue drains rather than accumulating.
+ */
+const LOCK_TIMEOUT = '3s';
+
+/** `lock_not_available`: the wait above elapsed. */
+const LOCK_NOT_AVAILABLE = '55P03';
 
 /**
  * Serializes the writes that decide whether a pastoral edge crosses Networks
@@ -51,6 +68,12 @@ export async function lockPersonsWithin(
     return;
   }
 
+  // `SET LOCAL`, so it reverts when this transaction ends and never leaks onto the
+  // pooled connection's next occupant. Interpolated rather than parameterized
+  // because `SET` takes no parameters; the value is a constant in this file and
+  // never comes from a request.
+  await sql`SET LOCAL lock_timeout = ${sql.raw(`'${LOCK_TIMEOUT}'`)}`.execute(transaction);
+
   const keys = await sql<{ key: string }>`
     SELECT DISTINCT hashtextextended(id, 0) AS key
       FROM unnest(${sql.val([...personIds])}::text[]) AS id
@@ -58,6 +81,26 @@ export async function lockPersonsWithin(
   `.execute(transaction);
 
   for (const { key } of keys.rows) {
-    await sql`SELECT pg_advisory_xact_lock(${key}::bigint)`.execute(transaction);
+    try {
+      await sql`SELECT pg_advisory_xact_lock(${key}::bigint)`.execute(transaction);
+    } catch (error) {
+      if (isLockTimeout(error)) {
+        // Transient, and carrying no decision: the caller's transaction rolls back
+        // having written nothing, and the client retries. `ResourceBusyError` says
+        // there why it is a 5xx.
+        throw new ResourceBusyError({ person_ids: [...personIds] });
+      }
+
+      throw error;
+    }
   }
+}
+
+function isLockTimeout(error: unknown): boolean {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    (error as { code?: unknown }).code === LOCK_NOT_AVAILABLE
+  );
 }
