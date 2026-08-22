@@ -1,4 +1,4 @@
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import {
   ArrayMaxSize,
   IsArray,
@@ -13,6 +13,8 @@ import {
   Max,
   Min,
 } from 'class-validator';
+
+import { canonicalId } from '../../common/identifiers';
 
 import type { CivilStatus, Sex } from '../../database/schema';
 
@@ -38,6 +40,25 @@ const SEXES: Sex[] = ['MALE', 'FEMALE'];
  */
 const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
 const CIVIL_STATUSES: CivilStatus[] = ['SINGLE', 'MARRIED', 'WIDOWED'];
+
+/**
+ * Identifiers arrive canonical, so that nothing downstream has to remember that a
+ * `uuid` column compares case-insensitively while TypeScript does not
+ * (`common/identifiers.ts` gives the two defects this has already caused).
+ *
+ * Typed rather than inlined, because `TransformFnParams.value` is `any` and an
+ * inline arrow returns it as `any` into a `string` field — which is how a
+ * transform that silently did nothing would look exactly like one that worked.
+ */
+function toCanonicalId({ value }: { value: unknown }): unknown {
+  return typeof value === 'string' ? canonicalId(value) : value;
+}
+
+function toCanonicalIds({ value }: { value: unknown }): unknown {
+  return Array.isArray(value)
+    ? (value as unknown[]).map((item) => toCanonicalId({ value: item }))
+    : value;
+}
 
 /**
  * Validation supports legitimate names containing spaces, hyphens, apostrophes
@@ -84,12 +105,19 @@ export class CreatePersonDto {
    * Required here, though the service permits null. Section 9 captures the leader
    * at registration, and the guard resolves this endpoint's scope against them —
    * so a request without one has no target to authorize against.
+   *
+   * Canonicalized on the way in, like every identifier a client supplies: a `uuid`
+   * column compares case-insensitively and TypeScript does not, so an id spelled in
+   * uppercase is one record to the database and a different string to any
+   * comparison written here (`common/identifiers.ts`).
    */
+  @Transform(toCanonicalId)
   @IsUUID()
   pastoral_leader_id!: string;
 
   /** Tier 1 candidates the actor has seen and passed over (section 3). */
   @IsOptional()
+  @Transform(toCanonicalIds)
   @IsArray()
   @IsUUID('4', { each: true })
   @ArrayMaxSize(50)
@@ -164,6 +192,7 @@ export class CorrectSexDto {
    * naming a leader is never quietly ignored.
    */
   @IsOptional()
+  @Transform(toCanonicalId)
   @IsUUID()
   pastoral_leader_id?: string;
 

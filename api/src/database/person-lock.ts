@@ -1,6 +1,7 @@
 import { sql } from 'kysely';
 
 import { ResourceBusyError } from '../common/errors/api-error';
+import { isLockTimeout } from '../common/errors/postgres-errors';
 
 import type { Database } from './schema';
 import type { Transaction } from 'kysely';
@@ -16,19 +17,6 @@ import type { Transaction } from 'kysely';
  * enough that the queue drains rather than accumulating.
  */
 const LOCK_TIMEOUT = '3s';
-
-/** `lock_not_available`: a lock wait elapsed. */
-export const LOCK_NOT_AVAILABLE = '55P03';
-
-/** Whether a thrown value is PostgreSQL reporting an elapsed lock wait. */
-export function isLockTimeout(error: unknown): boolean {
-  return (
-    typeof error === 'object' &&
-    error !== null &&
-    'code' in error &&
-    (error as { code?: unknown }).code === LOCK_NOT_AVAILABLE
-  );
-}
 
 /**
  * Serializes the writes that decide whether a pastoral edge crosses Networks

@@ -2,6 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { sql } from 'kysely';
 
 import { InvariantViolationError, ScopeDeniedError } from '../common/errors/api-error';
+import { sameId } from '../common/identifiers';
 import { DATABASE, type Db } from '../database/database.module';
 import { lockPersonsWithin } from '../database/person-lock';
 
@@ -200,7 +201,12 @@ export class HierarchyService {
       return;
     }
 
-    if (personId === actor.personId) {
+    // Compared canonically, and not because a pipe might be missing upstream: a
+    // check that fails **open** must not depend on one. An identifier spelled in
+    // uppercase is the same record to every `uuid` comparison in the database and
+    // a different string to this one, so a raw `===` here answers "this is not
+    // you" to somebody correcting their own record.
+    if (sameId(personId, actor.personId)) {
       throw new ScopeDeniedError(
         'You may not change your own pastoral assignment. Only an Admin or a Senior Pastor may.',
         { person_id: personId },
@@ -211,7 +217,7 @@ export class HierarchyService {
     // rule is written in. Their own subtree is not the question.
     const ancestors = await this.ancestorsOf(actor.personId);
 
-    if (ancestors.includes(personId)) {
+    if (ancestors.some((ancestorId) => sameId(ancestorId, personId))) {
       throw new ScopeDeniedError(
         'You may not change the pastoral assignment of anyone upline of you. Only an Admin or a Senior Pastor may.',
         { person_id: personId },
@@ -392,7 +398,7 @@ export class HierarchyService {
     personId: string,
     options: { includeSelf: boolean },
   ): Promise<boolean> {
-    if (rootPersonId === personId) {
+    if (sameId(rootPersonId, personId)) {
       return options.includeSelf;
     }
 

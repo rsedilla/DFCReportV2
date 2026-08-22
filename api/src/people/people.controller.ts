@@ -5,6 +5,7 @@ import { RequiresCapability } from '../auth/authorization/authorization.decorato
 import { Capability } from '../auth/authorization/capabilities';
 import { AuthorizationService, type Actor } from '../auth/authorization/authorization.service';
 import { NotFoundError } from '../common/errors/api-error';
+import { CanonicalUuidPipe } from '../common/identifiers';
 import {
   CurrentIdempotency,
   type CurrentClaim,
@@ -139,7 +140,7 @@ export class PeopleController {
 
   @Get(':id')
   @RequiresCapability(Capability.PeopleViewSubtree, { kind: 'person', from: 'params.id' })
-  async findOne(@Param('id') id: string): Promise<Record<string, unknown>> {
+  async findOne(@Param('id', CanonicalUuidPipe) id: string): Promise<Record<string, unknown>> {
     const person = await this.people.findById(id);
     if (!person) {
       throw new NotFoundError('No such person.');
@@ -187,7 +188,7 @@ export class PeopleController {
   @Patch(':id')
   @RequiresCapability(Capability.PeopleEditBasic, { kind: 'person', from: 'params.id' })
   async editBasic(
-    @Param('id') id: string,
+    @Param('id', CanonicalUuidPipe) id: string,
     @Body() body: EditPersonDto,
     @CurrentActor() actor: Actor,
     @CurrentIdempotency() claim: CurrentClaim,
@@ -227,7 +228,7 @@ export class PeopleController {
   @Put(':id/sex')
   @RequiresCapability(Capability.PeopleCorrectSex, { kind: 'person', from: 'params.id' })
   async correctSex(
-    @Param('id') id: string,
+    @Param('id', CanonicalUuidPipe) id: string,
     @Body() body: CorrectSexDto,
     @CurrentActor() actor: Actor,
     @CurrentIdempotency() claim: CurrentClaim,

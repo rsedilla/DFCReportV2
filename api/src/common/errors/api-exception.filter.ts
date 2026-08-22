@@ -9,9 +9,8 @@ import {
 import { ThrottlerException } from '@nestjs/throttler';
 import type { Request, Response } from 'express';
 
-import { isLockTimeout } from '../../database/person-lock';
-
 import { ApiError, ApiErrorCode, ResourceBusyError, type ApiErrorBody } from './api-error';
+import { isLockTimeout } from './postgres-errors';
 
 /**
  * Every failure leaves this API as the one envelope of SKILL.md section 22.

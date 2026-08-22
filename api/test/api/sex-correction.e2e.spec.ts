@@ -678,6 +678,51 @@ describe('sex correction (SKILL.md sections 4, 5, 7, 21, 22)', () => {
       expect(response.body.error.message).toMatch(/upline/);
     });
 
+    it('refuses a Leader correcting their own record spelled in uppercase', async () => {
+      // **The check is two string comparisons, and a `uuid` column is not.** An id
+      // in uppercase is the same record to the guard, to the lock and to every
+      // read on this path — and was a different string to invariant 4, which is
+      // the one place on the path that fails *open*. The actor this protects
+      // against is the only one it protects against, so a bypass here is the whole
+      // of the escalation section 7 keeps this capability Admin-only to prevent.
+      await grantCorrectSexChurchWide(raymondAccount);
+
+      const response = await correct(
+        raymond.id.toUpperCase(),
+        {
+          sex: 'FEMALE',
+          reason: 'Sex entered in error at encoding.',
+          pastoral_leader_id: grace.id,
+        },
+        raymondAccount,
+      );
+
+      expect(response.status).toBe(403);
+      expect(response.body.error.code).toBe('SCOPE_DENIED');
+      expect(response.body.error.message).toMatch(/your own pastoral assignment/);
+
+      const person = await db
+        .selectFrom('persons')
+        .select('sex')
+        .where('id', '=', raymond.id)
+        .executeTakeFirstOrThrow();
+
+      expect(person.sex).toBe('MALE');
+    });
+
+    it('refuses an upline spelled in uppercase', async () => {
+      await grantCorrectSexChurchWide(raymondAccount);
+
+      const response = await correct(
+        oriel.id.toUpperCase(),
+        { sex: 'FEMALE', reason: 'Sex entered in error at encoding.' },
+        raymondAccount,
+      );
+
+      expect(response.status).toBe(403);
+      expect(response.body.error.message).toMatch(/upline/);
+    });
+
     it('exempts Admin, which is what section 5 says', async () => {
       // Without this the rule is satisfied by refusing everyone, and the two cases
       // above would pass against an implementation that never lets anybody through.

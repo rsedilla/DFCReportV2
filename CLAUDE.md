@@ -1648,6 +1648,51 @@ is a deadlock with a PostgreSQL-chosen victim. It is pinned now by holding the
 *higher* of two keys and asserting the caller is **holding** the lower one while it
 waits, which is true only if the helper sorted.
 
+### 2026-08-23 — An identifier is compared canonically, and the class was wider than the instance
+
+Fifth `architecture-guardian` pass, and the only finding was the one that mattered
+most on the branch: **§5 invariant 4 was bypassable by spelling the target's
+identifier in uppercase.**
+
+Both halves of the check are JavaScript string comparisons — the target against the
+actor, and the target against the actor's ancestors — between a client-supplied path
+parameter and identifiers that came out of `uuid` columns. Everything else on that
+path normalizes for free, because everything else ends in a SQL comparison: the
+capability guard, the reads, and (since the previous batch) the lock key. Invariant 4
+does not, and it is the only check on the path that fails **open**. Admin and Senior
+Pastor return early, so those two comparisons are the entire protection against the
+one actor class the rule exists for, and a mis-spelled identifier removed it.
+
+`UUID().uuidString` on iOS is uppercase by default and §2 names iOS as a client, so
+this is reachable input rather than a contrivance.
+
+**The batch before this one fixed exactly this defect in the lock key and did not
+look for the rest of the class.** That is the lesson worth keeping. The recorded
+rationale for the lock fix — a `uuid` column compares case-insensitively and
+TypeScript does not — applies verbatim to every identifier comparison in the
+application, and there were three more:
+
+- **Invariant 4**, above. Fails open; a security defect.
+- **The duplicate-acknowledgement gate** (§3), where a client echoing candidate ids
+  back in uppercase never satisfies it — so the refusal is permanent and that Person
+  can never be created. That is the block §3 says must never happen, and it is worse
+  than the duplicate it guards against. Introduced before this branch and fixed here
+  because one change closes both and because leaving it would recreate the defect the
+  moment somebody read the lock fix as complete.
+- **`isWithinSubtree`'s self-check**, which fails closed and merely denies.
+
+**Fixed in two places deliberately.** A pipe normalizes path parameters and a
+transform normalizes the identifier fields of every DTO, so nothing downstream has to
+remember; and the authority check normalizes again, because a check that fails open
+must not depend on a caller having wired a pipe. Written to `SKILL.md` §7, beside
+invariant 4's own rule, because the consequence is an authorization one.
+
+**Also in this batch, found without the review:** the lock-timeout predicate had been
+put in `database/person-lock.ts` and imported by the exception filter, which points
+`common` at a module. It moved to `common/errors/postgres-errors.ts`, so both arrows
+point the same way. Behaviourally identical; it is about which direction the
+dependency runs.
+
 ### Open — awaiting a ruling
 
 **One item awaits a ruling and blocks Stage 5. Seven other things are unsettled, none of them blocking. They are listed at the end, so this section is the whole of what is open.**

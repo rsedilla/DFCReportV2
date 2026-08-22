@@ -15,6 +15,7 @@ import {
   ValidationFailedError,
 } from '../common/errors/api-error';
 import { IdempotencyService } from '../common/idempotency/idempotency.service';
+import { canonicalId, sameId } from '../common/identifiers';
 import { manilaDayOf, startOfManilaDay } from '../common/time/manila';
 import { DATABASE, type Db } from '../database/database.module';
 import { lockPersonsWithin } from '../database/person-lock';
@@ -175,7 +176,14 @@ export class PeopleService {
       mobileNumberNormalized: normalizeMobile(input.mobileNumber),
     };
 
-    const acknowledged = new Set(input.acknowledgedDuplicateIds ?? []);
+    // Canonical, because these are client-supplied identifiers matched against
+    // ids that came out of the database. Compared raw, a client echoing the
+    // candidate ids back in uppercase never satisfies the gate — and section 3's
+    // refusal is then permanent, which is the block section 3 says must never
+    // happen and is worse than the duplicate it guards against.
+    const acknowledged = new Set(
+      (input.acknowledgedDuplicateIds ?? []).map((candidateId) => canonicalId(candidateId)),
+    );
     const matches = await this.findDuplicates(subject);
 
     // **The gate applies only to candidates the actor may see.**
@@ -193,7 +201,7 @@ export class PeopleService {
     // leader outside that branch, and is caught by the leader who holds them.
     let gated = false;
     for (const match of matches) {
-      if (match.tier !== 1 || acknowledged.has(match.candidate.id)) {
+      if (match.tier !== 1 || acknowledged.has(canonicalId(match.candidate.id))) {
         continue;
       }
 
@@ -220,7 +228,7 @@ export class PeopleService {
         await this.visibleDuplicatesFor(
           subject,
           canSeeReasons,
-          (match) => match.tier === 1 && !acknowledged.has(match.candidate.id),
+          (match) => match.tier === 1 && !acknowledged.has(canonicalId(match.candidate.id)),
         ),
       );
     }
@@ -867,7 +875,7 @@ export class PeopleService {
         );
       }
 
-      if (input.pastoralLeaderId === personId) {
+      if (input.pastoralLeaderId !== undefined && sameId(input.pastoralLeaderId, personId)) {
         // Section 5 invariant 2. With no open downline edge — which section 4 has
         // already required — this person's subtree is themselves alone, so a
         // one-node cycle is the only one reachable here. The `no_self` check
