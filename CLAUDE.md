@@ -73,9 +73,12 @@ the three that concern the completion are invisible in a passing test suite.
   matches nothing; that exception is not caught and the transaction is rolled
   back. Swallowing it commits a write nothing recorded.
 
-`api/test/api/idempotency.e2e.spec.ts` carries a worked exemplar of all four,
-`records-its-own-completion`, and one deliberate counter-example beside it
-labelled as instrumentation.
+`api/test/api/idempotency.e2e.spec.ts` carries the exemplar to copy,
+`records-its-own-completion`, and three probes that exist to break one rule each
+so a test can catch it: `divergent-completion` records a body it does not return,
+`rolls-back` fails after recording itself, and `slow-write` holds its transaction
+open until its claim is taken. Each is labelled where it is written; none is the
+shape to copy.
 
 ### Accessibility
 

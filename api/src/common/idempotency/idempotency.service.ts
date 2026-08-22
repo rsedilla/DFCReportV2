@@ -235,9 +235,15 @@ export class IdempotencyService {
       // recording it, and the retry that follows would perform it again. That is
       // the failure this whole mechanism exists to prevent, and it would be
       // silent.
+      // The message does not name a cause, because this cannot tell one. Zero
+      // rows means the claim is not this request's *or* the row is already
+      // completed -- and the second is reachable by an endpoint that records
+      // twice, or records in one transaction and opens another, which is the
+      // case section 22 newly forbids. Asserting "lost its claim" there would
+      // state the opposite of what happened.
       throw new ApiError(
         ApiErrorCode.REQUEST_IN_FLIGHT,
-        'This request lost its idempotency claim to a retry. Nothing was recorded. Retry shortly.',
+        'This request no longer holds its idempotency claim, so nothing was recorded. Retry shortly.',
         { header: 'Idempotency-Key' },
       );
     }

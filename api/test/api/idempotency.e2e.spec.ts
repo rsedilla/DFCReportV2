@@ -40,6 +40,8 @@ import type { TestAccount } from '../setup/fixtures';
 let executions = 0;
 /** Held open by the slow endpoint, to exercise the in-flight branch deterministically. */
 let releaseSlow: (() => void) | null = null;
+/** Held open *inside* a write's transaction, so a takeover can happen underneath it. */
+let releaseSlowWrite: (() => void) | null = null;
 
 /**
  * A real effect for the transactional cases to carry, so "the write reverted with
@@ -141,6 +143,28 @@ class IdempotencyProbeController {
     throw new Error('unreachable');
   }
 
+  @Post('slow-write')
+  @AuthenticatedOnly('Probe whose transaction stays open until the test releases it.')
+  async slowWrite(@CurrentIdempotency() claim: CurrentClaim): Promise<{ recorded: true }> {
+    executions += 1;
+
+    const response = { recorded: true } as const;
+
+    await this.db.transaction().execute(async (trx) => {
+      await probeWrite(trx);
+
+      // Held here so the test can let another request take the key over while
+      // this transaction is still open.
+      await new Promise<void>((resolve) => {
+        releaseSlowWrite = resolve;
+      });
+
+      await this.idempotency.completeWithin(trx, { ...claim, status: 201, body: response });
+    });
+
+    return response;
+  }
+
   @Post('write')
   @AuthenticatedOnly('Probe. Acts on nothing; the interceptor is what is under test.')
   write(@Body() body: Record<string, unknown>): { executions: number; echoed: unknown } {
@@ -214,6 +238,7 @@ describe('idempotency (SKILL.md section 22)', () => {
     await truncateAll(db);
     executions = 0;
     releaseSlow = null;
+    releaseSlowWrite = null;
 
     account = await createAccount(app, db, {
       person: await createPerson(db, { firstName: 'Mark', network: 'MENS' }),
@@ -572,46 +597,89 @@ describe('idempotency (SKILL.md section 22)', () => {
     expect(await db.selectFrom('audit_log').select('id').execute()).toHaveLength(1);
   });
 
-  it('aborts a write whose claim was taken over mid-flight', async () => {
-    // The half the claim identity alone did not close. If `completeWithin`
-    // returned quietly when it matched nothing, the handler would commit its
-    // write with no record of it, and the next retry would perform it again --
-    // silently, which is worse than the response-mixing the identity fixed.
+  it('reverts the record with the write when the transaction rolls back', async () => {
+    // **The half that proves `completeWithin` runs inside the caller's
+    // transaction.** Handed the pooled connection instead, the row would commit
+    // COMPLETED here while the write reverted -- and a retry would be replayed a
+    // success for a record that does not exist, which is worse than the gap this
+    // whole mechanism closes.
     //
-    // Section 22: the write and the record of it are either both there or
-    // neither. With no record possible, the write must not commit.
+    // This case was deleted by an earlier fix batch and its probe left orphaned,
+    // which removed the only guard on section 22's headline rule. Restored.
+    const key = randomUUID();
+
+    const failed = await post('rolls-back', account).set('Idempotency-Key', key).send({});
+    expect(failed.status).toBe(500);
+    expect(executions).toBe(1);
+
+    // The effect reverted.
+    expect(await db.selectFrom('audit_log').select('id').execute()).toHaveLength(0);
+
+    // And so did the record of it. A 5xx then releases the claim, so the key is
+    // gone and the client may retry.
+    expect(await db.selectFrom('idempotency_keys').select('key').execute()).toHaveLength(0);
+
+    // A retry therefore executes rather than replaying a success that never was.
+    const retry = await post('rolls-back', account).set('Idempotency-Key', key).send({});
+    expect(retry.status).toBe(500);
+    expect(executions).toBe(2);
+  });
+
+  it('aborts a write whose claim was taken over mid-flight, and leaves the holder alone', async () => {
+    // Through an endpoint, not through the service, because the interesting part
+    // is the composition: the abort throws REQUEST_IN_FLIGHT, which is a 4xx, so
+    // the interceptor tries to *store* it -- against a claim that no longer
+    // exists. The holder's row must come through untouched.
+    //
+    // Without that, a change storing 4xx unconditionally would hand the holder's
+    // client somebody else's failure, which is the cross-request leak the claim
+    // identity exists to prevent.
     const service = app.get(IdempotencyService);
     const key = randomUUID();
-    const accountId = account.id;
-    const fingerprint = service.fingerprint('POST', '/probe', {});
 
-    const mine = await service.claim({ key, accountId, fingerprint });
-    const staleClaimId = mine.outcome === 'claimed' ? mine.claimId : '';
+    const losing = post('slow-write', account)
+      .set('Idempotency-Key', key)
+      .send({})
+      .then((response) => response);
 
-    // Another request takes the key over.
+    await waitFor(() => releaseSlowWrite !== null);
+
+    // Another request takes the key over while that transaction is still open.
     await db
       .updateTable('idempotency_keys')
       .set({ claimed_at: new Date(Date.now() - 10 * 60 * 1000) })
       .where('key', '=', key)
       .execute();
-    await service.claim({ key, accountId, fingerprint });
 
-    // The losing request finishes its write and tries to record it.
-    await expect(
-      db.transaction().execute(async (trx) => {
-        await probeWrite(trx);
-        await service.completeWithin(trx, {
-          key,
-          accountId,
-          claimId: staleClaimId,
-          status: 201,
-          body: { recorded: true },
-        });
-      }),
-    ).rejects.toThrow(/lost its idempotency claim/);
+    const takeover = await service.claim({
+      key,
+      accountId: account.id,
+      fingerprint: service.fingerprint('POST', '/api/v1/__idempotency-probe/slow-write', {}),
+    });
+    expect(takeover.outcome).toBe('claimed');
+    const holder = takeover.outcome === 'claimed' ? takeover.claimId : '';
 
-    // The write went with it. Nothing committed, so nothing needs undoing.
+    releaseSlowWrite?.();
+
+    const refused = await losing;
+    expect(refused.status).toBe(409);
+    expect(refused.body.error.code).toBe('REQUEST_IN_FLIGHT');
+
+    // The write went with the transaction.
     expect(await db.selectFrom('audit_log').select('id').execute()).toHaveLength(0);
+
+    // And the holder's claim is exactly as it was: still in flight, still theirs,
+    // carrying none of the losing request's answer.
+    const row = await db
+      .selectFrom('idempotency_keys')
+      .select(['state', 'claim_id', 'response_status', 'response_body'])
+      .where('key', '=', key)
+      .executeTakeFirstOrThrow();
+
+    expect(row.state).toBe('IN_FLIGHT');
+    expect(row.claim_id).toBe(holder);
+    expect(row.response_status).toBeNull();
+    expect(row.response_body).toBeNull();
   });
 
   it('leaves reads alone', async () => {
