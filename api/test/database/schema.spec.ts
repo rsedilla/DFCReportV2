@@ -162,10 +162,125 @@ describe('the schema (SKILL.md sections 4, 5, 6 and 7)', () => {
       expect(trigger.table_name).toBe(table);
       expect(trigger.function_name).toBe('refuse_delete_of_history');
     });
+
+    it.each([
+      ['person_lifecycle', 'person_lifecycle_period_ordered'],
+      ['network_assignments', 'network_assignments_period_ordered'],
+      ['pastoral_assignments', 'pastoral_assignments_period_ordered'],
+    ])('%s permits a zero-length row, which is how an error is corrected', async (_t, name) => {
+      // Section 5 prescribes closing the wrong row and opening the right one, and
+      // a strict `>` allowed only closing it a moment later -- recording a
+      // non-zero period of a fact that was never true. The behavioural proof is
+      // in invariants.spec.ts; this holds the boundary so a rewrite of the
+      // constraint cannot quietly put it back.
+      const constraint = await constraintDefinition(db, name);
+
+      expect(constraint).toMatch(/ended_at >= started_at/i);
+      expect(constraint).not.toMatch(/ended_at > started_at/i);
+    });
+  });
+
+  describe('the tables migration 0002 adds', () => {
+    it('makes audit_log append-only, against both writes', async () => {
+      // Section 21: "Nothing updates or deletes a row". A trigger on DELETE alone
+      // would leave the way an audit trail is actually tampered with wide open.
+      const trigger = await deleteTriggerFacts(db, 'audit_log_append_only');
+
+      expect(trigger.fires_on_delete).toBe(true);
+      expect(trigger.fires_on_update).toBe(true);
+      expect(trigger.timing).toBe('BEFORE');
+      expect(trigger.per_row).toBe(true);
+      expect(trigger.enabled).toBe(true);
+      expect(trigger.table_name).toBe('audit_log');
+      expect(trigger.function_name).toBe('refuse_change_to_audit_log');
+    });
+
+    it('refuses a DELETE on settings, with its own message', async () => {
+      const trigger = await deleteTriggerFacts(db, 'settings_no_delete');
+
+      expect(trigger.fires_on_delete).toBe(true);
+      expect(trigger.timing).toBe('BEFORE');
+      expect(trigger.per_row).toBe(true);
+      expect(trigger.enabled).toBe(true);
+      expect(trigger.table_name).toBe('settings');
+      // Not refuse_delete_of_history(), whose message tells the caller to close
+      // the row and open a new one. `settings` holds one row per key and is
+      // corrected by writing a value.
+      expect(trigger.function_name).toBe('refuse_delete_of_setting');
+    });
+
+    it('holds the settings key set closed, as section 7 says it is', async () => {
+      const constraint = await constraintDefinition(db, 'settings_key_is_known');
+
+      expect(constraint).toMatch(/CHECK/i);
+      expect(constraint).toMatch(/cell_attention_months/);
+      expect(constraint).toMatch(/initial_encoding_open/);
+    });
+
+    it('keys idempotency by account and key together, never by key alone', async () => {
+      // A global key would let one account claim another's (SKILL.md section 22,
+      // and the reasoning in the migration).
+      const constraint = await constraintDefinition(db, 'idempotency_keys_pkey');
+
+      expect(constraint).toMatch(/PRIMARY KEY/i);
+      expect(constraint).toMatch(/account_id/);
+      expect(constraint).toMatch(/key/);
+    });
+
+    it('stores the two idempotency states section 22 names', async () => {
+      expect(await enumLabels(db, 'idempotency_state')).toEqual(['IN_FLIGHT', 'COMPLETED']);
+    });
+
+    it('leaves audit_log.action as text, because section 21 does not close its list', async () => {
+      // The one closed-enumeration decision in this schema that goes the other
+      // way. Section 7 says its capability list is closed and that adding one is
+      // an amendment; section 21 opens its list with "including", and a migration
+      // may not turn that into a closure.
+      const facts = await columnFacts(db, 'audit_log', 'action');
+      expect(facts.not_null).toBe(true);
+
+      const constraint = await constraintDefinition(db, 'audit_log_action_shape');
+      expect(constraint).toMatch(/CHECK/i);
+    });
+
+    it('makes audit_log.target_id required text, because not every target is a UUID', async () => {
+      // Section 21 lists "System setting changed" as auditable and section 7 keys
+      // `settings` by `key`, so a uuid column here cannot record the one auditable
+      // action migration 0002 introduces -- and leaves section 7's rule that an
+      // audit entry resolves scope through its target with nothing to resolve.
+      const facts = await columnFacts(db, 'audit_log', 'target_id');
+
+      expect(facts.data_type).toBe('text');
+      expect(facts.not_null).toBe(true);
+    });
+  });
+
+  describe('the token retention floor of section 6', () => {
+    // The floor is a security control rather than housekeeping: the obvious
+    // prune deletes exactly the rows still carrying the reuse signal, so the
+    // Definition of Done requires it to exist as a constraint rather than as an
+    // instruction to whoever writes the retention job.
+    it.each(['refresh_tokens', 'account_tokens'])(
+      'guards %s with a delete trigger, before the row goes',
+      async (table) => {
+        // The same five facts every other no-delete case asserts. Name and
+        // function alone would pass for a trigger recreated FOR EACH STATEMENT,
+        // where OLD does not exist and the floor can never be read, or for one
+        // left disabled by ALTER TABLE ... DISABLE TRIGGER.
+        const trigger = await deleteTriggerFacts(db, `${table}_retention_floor`);
+
+        expect(trigger.fires_on_delete).toBe(true);
+        expect(trigger.timing).toBe('BEFORE');
+        expect(trigger.per_row).toBe(true);
+        expect(trigger.enabled).toBe(true);
+        expect(trigger.table_name).toBe(table);
+        expect(trigger.function_name).toBe('refuse_delete_before_retention_floor');
+      },
+    );
   });
 
   describe('the closed enumerations of section 7', () => {
-    it('stores exactly the twenty-four capabilities', async () => {
+    it('stores exactly the twenty-five capabilities', async () => {
       expect(await enumLabels(db, 'capability')).toEqual([...ALL_CAPABILITIES]);
     });
 
@@ -229,15 +344,20 @@ async function columnFacts(
   db: Kysely<Database>,
   table: string,
   column: string,
-): Promise<{ not_null: boolean; default_expression: string | null }> {
+): Promise<{ not_null: boolean; default_expression: string | null; data_type: string }> {
   // Read from the catalog rather than information_schema.columns, whose
   // column_default is null both for a column with no default and for one whose
   // default the caller may not see -- and a test of an absence cannot use a
   // source that reports absence for two different reasons. Throwing when the
   // column is missing keeps a rename from reading as a passing absence.
-  const result = await sql<{ not_null: boolean; default_expression: string | null }>`
+  const result = await sql<{
+    not_null: boolean;
+    default_expression: string | null;
+    data_type: string;
+  }>`
     SELECT a.attnotnull                        AS not_null,
-           pg_get_expr(d.adbin, d.adrelid)     AS default_expression
+           pg_get_expr(d.adbin, d.adrelid)     AS default_expression,
+           format_type(a.atttypid, a.atttypmod) AS data_type
       FROM pg_attribute a
       JOIN pg_class c ON c.oid = a.attrelid
       LEFT JOIN pg_attrdef d ON d.adrelid = a.attrelid AND d.adnum = a.attnum
@@ -283,6 +403,7 @@ async function deleteTriggerFacts(
   name: string,
 ): Promise<{
   fires_on_delete: boolean;
+  fires_on_update: boolean;
   timing: string;
   function_name: string;
   per_row: boolean;
@@ -294,6 +415,7 @@ async function deleteTriggerFacts(
   // and for one left disabled by ALTER TABLE ... DISABLE TRIGGER.
   const result = await sql<{
     fires_on_delete: boolean;
+    fires_on_update: boolean;
     timing: string;
     function_name: string;
     per_row: boolean;
@@ -301,6 +423,7 @@ async function deleteTriggerFacts(
     table_name: string;
   }>`
     SELECT (t.tgtype & 8) <> 0   AS fires_on_delete,
+           (t.tgtype & 16) <> 0  AS fires_on_update,
            (t.tgtype & 1) <> 0   AS per_row,
            CASE WHEN (t.tgtype & 2) <> 0 THEN 'BEFORE' ELSE 'AFTER' END AS timing,
            t.tgenabled IN ('O', 'A') AS enabled,

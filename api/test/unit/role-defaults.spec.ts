@@ -7,7 +7,7 @@ import type { AccountRole } from '../../src/database/schema';
 /**
  * The role catalog of SKILL.md section 7, transcribed a second time, cell by cell.
  *
- * A dash in the specification's table is an absence here. The four deliberate
+ * A dash in the specification's table is an absence here. The five deliberate
  * absences have their own cases below, because each of them looks like an
  * oversight, each would be convenient to widen, and each is load-bearing.
  */
@@ -28,6 +28,7 @@ const TABLE: Record<Capability, Record<AccountRole, string | null>> = {
     ADMIN: 'WHOLE_CHURCH',
     LEADER: 'OWN_SUBTREE',
   },
+  'people.correct_sex': { SENIOR_PASTOR: null, ADMIN: 'WHOLE_CHURCH', LEADER: null },
   'dcc.take_attendance': {
     SENIOR_PASTOR: 'WHOLE_CHURCH',
     ADMIN: 'WHOLE_CHURCH',
@@ -119,7 +120,7 @@ describe('the role catalog (SKILL.md section 7)', () => {
     expect(Object.keys(TABLE).sort()).toEqual([...ALL_CAPABILITIES].sort());
   });
 
-  describe('the four deliberate absences', () => {
+  describe('the five deliberate absences', () => {
     it('keeps grant-making away from the Senior Pastors', () => {
       // The two highest-visibility accounts in the church cannot escalate their
       // own authority, and every permission change involves a second party.
@@ -137,6 +138,16 @@ describe('the role catalog (SKILL.md section 7)', () => {
       // A merge is irreversible, crosses both Networks, and can lower totals for
       // periods already reported.
       expect(ROLE_DEFAULTS.SENIOR_PASTOR['people.merge']).toBeUndefined();
+    });
+
+    it('keeps the sex correction with Admin alone', () => {
+      // It moves a Person between Networks, which can change totals for periods
+      // already reported, and it forces the pastoral reassignment of section 4.
+      // A leader holding it could move people between Networks without ever
+      // invoking people.manage_pastoral_assignment.
+      expect(ROLE_DEFAULTS.ADMIN['people.correct_sex']).toBe('WHOLE_CHURCH');
+      expect(ROLE_DEFAULTS.SENIOR_PASTOR['people.correct_sex']).toBeUndefined();
+      expect(ROLE_DEFAULTS.LEADER['people.correct_sex']).toBeUndefined();
     });
 
     it('keeps archival away from Leaders', () => {

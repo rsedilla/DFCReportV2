@@ -21,6 +21,12 @@ export type ScopeTypeValue = 'OWN_SUBTREE' | 'SUBTREE_EXCL_SELF' | 'NETWORK' | '
 /** Written by the database default, never sent by the application. */
 type ServerTimestamp = ColumnType<Date, Date | string | undefined, Date | string>;
 
+/**
+ * A `jsonb` column's value. Null is not a member: a nullable jsonb column is
+ * written `Json | null`, so the type says which columns may be absent.
+ */
+export type Json = string | number | boolean | Json[] | { [key: string]: Json | null };
+
 export interface PersonsTable {
   id: Generated<string>;
   member_id: Generated<string>;
@@ -138,6 +144,69 @@ export interface AccountTokensTable {
   created_at: ServerTimestamp;
 }
 
+/**
+ * SKILL.md section 21 opens its list of auditable actions with "including", so
+ * unlike the capability list in section 7 it is not a closed enumeration and is
+ * deliberately not modelled as one. The column is `text` with a shape check; this
+ * type carries the identifiers that exist today, so a typo is a compile error
+ * while an addition stays a one-line change rather than an amendment.
+ */
+export type AuditAction =
+  | 'person.created'
+  | 'person.updated'
+  | 'pastoral_assignment.transferred'
+  | 'network.changed'
+  | 'sex.corrected'
+  | 'effective_date.backdated'
+  | 'setting.changed';
+
+export interface AuditLogTable {
+  id: Generated<string>;
+  /** Null only for a system action (SKILL.md section 21). */
+  actor_id: string | null;
+  action: AuditAction;
+  target_type: string;
+  /**
+   * `text` rather than `uuid`, and required. Not every target is identified by a
+   * UUID: `settings` is keyed by `key` (SKILL.md section 7), and a setting change
+   * is on section 21's list of auditable actions.
+   */
+  target_id: string;
+  before: Json | null;
+  after: Json | null;
+  reason: string | null;
+  /** Groups the per-record entries of one bulk import (SKILL.md section 2). */
+  batch_id: string | null;
+  occurred_at: ServerTimestamp;
+}
+
+export type IdempotencyState = 'IN_FLIGHT' | 'COMPLETED';
+
+export interface IdempotencyKeysTable {
+  key: string;
+  account_id: string;
+  request_fingerprint: string;
+  state: IdempotencyState;
+  response_status: number | null;
+  response_body: Json | null;
+  created_at: ServerTimestamp;
+  expires_at: ColumnType<Date, Date | string, Date | string>;
+}
+
+/**
+ * The key set is fixed by SKILL.md section 7, not open. A check constraint holds
+ * the same two names in the database.
+ */
+export type SettingKey = 'cell_attention_months' | 'initial_encoding_open';
+
+export interface SettingsTable {
+  key: SettingKey;
+  value: Json;
+  /** Null only for the system action that seeds the defaults (section 7). */
+  updated_by: string | null;
+  updated_at: ServerTimestamp;
+}
+
 export interface Database {
   persons: PersonsTable;
   person_lifecycle: PersonLifecycleTable;
@@ -148,4 +217,7 @@ export interface Database {
   capability_grants: CapabilityGrantsTable;
   refresh_tokens: RefreshTokensTable;
   account_tokens: AccountTokensTable;
+  audit_log: AuditLogTable;
+  idempotency_keys: IdempotencyKeysTable;
+  settings: SettingsTable;
 }

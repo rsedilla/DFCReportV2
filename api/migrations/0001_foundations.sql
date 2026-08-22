@@ -56,7 +56,7 @@ CREATE TYPE account_role AS ENUM ('SENIOR_PASTOR', 'ADMIN', 'LEADER');
 
 CREATE TYPE account_token_purpose AS ENUM ('PASSWORD_RESET', 'ACTIVATION');
 
--- The twenty-four capabilities of SKILL.md section 7, in the order the
+-- The twenty-five capabilities of SKILL.md section 7, in the order the
 -- specification lists them. Adding one is an amendment to the specification and a
 -- migration, never a runtime action.
 CREATE TYPE capability AS ENUM (
@@ -64,6 +64,7 @@ CREATE TYPE capability AS ENUM (
   'people.edit_basic',
   'people.manage_lifecycle',
   'people.manage_pastoral_assignment',
+  'people.correct_sex',
   'dcc.take_attendance',
   'dcc.view_subtree',
   'dcc.submit_on_behalf',
@@ -204,6 +205,30 @@ CREATE TRIGGER accounts_set_updated_at
 
 -- ---------------------------------------------------------------------------
 -- person_lifecycle (SKILL.md section 3, Person Lifecycle)
+--
+-- `period_ordered` on every effective-dated table permits `ended_at = started_at`
+-- (section 5, "A row entered in error is closed at zero length"). Section 5
+-- prescribes correcting a bad row by closing it and opening the right one, and a
+-- strict `>` allowed only closing it a moment later -- which records a non-zero
+-- period during which a fact that was never true was in force.
+--
+-- A zero-length row is inert as an answer. No as-of lookup can return it:
+-- `network_as_of` below asks for `started_at <= t AND ended_at > t`, and no `t`
+-- satisfies both. It occupies no one-open-row index, because every one of those
+-- is partial over `ended_at IS NULL`.
+--
+-- Inert as an answer is not the same as excluded from examination, and on
+-- `pastoral_assignments` the difference is load-bearing. The same-Network check
+-- on a Network change selects edges open at the effective date **or beginning
+-- after it**, and a zero-length row whose shared timestamp falls after that date
+-- is one beginning after it: `ended_at > v_row.started_at` holds, so it is
+-- selected and compared at its own timestamp. Being closed, it cannot then be
+-- reassigned to resolve what it reports. Section 4's backdate floor counts its
+-- timestamp for exactly that reason.
+--
+-- `refresh_tokens` and `account_tokens` keep the strict `>`. Their check bounds a
+-- validity window rather than an effective-dated fact, and a token that expires
+-- at the instant it is issued is a defect rather than a correction.
 -- ---------------------------------------------------------------------------
 
 CREATE TABLE person_lifecycle (
@@ -216,7 +241,7 @@ CREATE TABLE person_lifecycle (
   started_at timestamptz NOT NULL,
   ended_at timestamptz,
   CONSTRAINT person_lifecycle_period_ordered
-    CHECK (ended_at IS NULL OR ended_at > started_at),
+    CHECK (ended_at IS NULL OR ended_at >= started_at),
   -- A reason belongs to an archive. Restoring to CURRENT carries no archive reason.
   CONSTRAINT person_lifecycle_reason_only_on_archive
     CHECK (state = 'ARCHIVED' OR reason IS NULL),
@@ -244,7 +269,7 @@ CREATE TABLE network_assignments (
   started_at timestamptz NOT NULL,
   ended_at timestamptz,
   CONSTRAINT network_assignments_period_ordered
-    CHECK (ended_at IS NULL OR ended_at > started_at)
+    CHECK (ended_at IS NULL OR ended_at >= started_at)
 );
 
 CREATE UNIQUE INDEX network_assignments_one_open
@@ -274,7 +299,7 @@ CREATE TABLE pastoral_assignments (
   ended_at timestamptz,
   CONSTRAINT pastoral_assignments_no_self CHECK (person_id <> leader_id),
   CONSTRAINT pastoral_assignments_period_ordered
-    CHECK (ended_at IS NULL OR ended_at > started_at)
+    CHECK (ended_at IS NULL OR ended_at >= started_at)
 );
 
 -- Invariant 3: at most one active assignment. The partial index permits zero rows

@@ -304,10 +304,196 @@ describe('the database enforces the section 5 invariants', () => {
       }
     });
 
+    it('refuses a Network change that strands the person own disciples', async () => {
+      // The leader_id half of the trigger's WHERE clause, which had no test at
+      // all until now -- every other case here puts the corrected person on the
+      // person_id side. That is the half whose absence from SKILL.md produced the
+      // original backdate-floor defect, so it is pinned rather than described.
+      //
+      // Nothing about the disciple changes. The leader's Network is corrected,
+      // and the edge beneath them becomes cross-Network with no row of the
+      // disciple's own being written -- which is exactly why the check has to
+      // reach downward as well as upward.
+      const leader = await createPerson(db, { firstName: 'Manuel', network: 'MENS' });
+      const disciple = await createPerson(db, { firstName: 'Mark', network: 'MENS' });
+      await assignTo(db, disciple.id, leader.id);
+
+      const changedAt = new Date('2026-03-01T00:00:00+08:00');
+      const client = await openClient();
+
+      try {
+        await client.query('BEGIN');
+        await client.query('UPDATE network_assignments SET ended_at = $1 WHERE person_id = $2', [
+          changedAt,
+          leader.id,
+        ]);
+        await client.query(
+          'INSERT INTO network_assignments (person_id, network, started_at) VALUES ($1, $2, $3)',
+          [leader.id, 'WOMENS', changedAt],
+        );
+
+        await expect(client.query('COMMIT')).rejects.toThrow(/crossing Networks/);
+      } finally {
+        await client.end();
+      }
+    });
+
     it('passes a Network root, which has no leader to compare against', async () => {
       const root = await createPerson(db, { firstName: 'Oriel', network: 'MENS' });
 
       await expect(assignTo(db, root.id, null)).resolves.toBeDefined();
+    });
+
+    it('refuses a Network change whose reassignment lands a moment later', async () => {
+      // Section 4: the two carry one effective instant, and it is the same
+      // instant. Separating them by a microsecond leaves the old edge open at the
+      // effective date, where it is compared with the corrected Network in force
+      // on one end and the old one on the other -- which is what it genuinely was
+      // for that microsecond.
+      //
+      // This is the case an implementer meets as a constraint violation and is
+      // tempted to "fix" by moving the timestamps further apart. Pinned so the
+      // fix has to be the other one.
+      const mensLeader = await createPerson(db, { firstName: 'Manuel', network: 'MENS' });
+      const womensLeader = await createPerson(db, { firstName: 'Geraldine', network: 'WOMENS' });
+      const person = await createPerson(db, { firstName: 'Mark', network: 'MENS' });
+      await assignTo(db, person.id, mensLeader.id);
+
+      const changedAt = new Date('2026-03-01T00:00:00+08:00');
+      const aMomentLater = new Date(changedAt.getTime() + 1);
+      const client = await openClient();
+
+      try {
+        await client.query('BEGIN');
+        await client.query('UPDATE network_assignments SET ended_at = $1 WHERE person_id = $2', [
+          changedAt,
+          person.id,
+        ]);
+        await client.query(
+          'INSERT INTO network_assignments (person_id, network, started_at) VALUES ($1, $2, $3)',
+          [person.id, 'WOMENS', changedAt],
+        );
+        await client.query(
+          'UPDATE pastoral_assignments SET ended_at = $1 WHERE person_id = $2 AND ended_at IS NULL',
+          [aMomentLater, person.id],
+        );
+        await client.query(
+          'INSERT INTO pastoral_assignments (person_id, leader_id, started_at) VALUES ($1, $2, $3)',
+          [person.id, womensLeader.id, aMomentLater],
+        );
+
+        await expect(client.query('COMMIT')).rejects.toThrow(/crossing Networks/);
+      } finally {
+        await client.end();
+      }
+    });
+  });
+
+  describe('a row entered in error is closed at zero length (section 5)', () => {
+    it('permits ended_at equal to started_at on every effective-dated table', async () => {
+      const person = await createPerson(db, { firstName: 'Mark', network: 'MENS' });
+      const leader = await createPerson(db, { firstName: 'Manuel', network: 'MENS' });
+
+      // The correction section 5 prescribes: close the wrong row, open the right
+      // one. The strict `>` this replaced allowed only closing it a moment later,
+      // which records a non-zero period of a fact that was never true.
+      await expect(
+        db
+          .updateTable('person_lifecycle')
+          .set({ ended_at: EPOCH })
+          .where('person_id', '=', person.id)
+          .where('ended_at', 'is', null)
+          .execute(),
+      ).resolves.toBeDefined();
+
+      await expect(
+        db
+          .updateTable('network_assignments')
+          .set({ ended_at: EPOCH })
+          .where('person_id', '=', person.id)
+          .where('ended_at', 'is', null)
+          .execute(),
+      ).resolves.toBeDefined();
+
+      const assignmentId = await assignTo(db, leader.id, null);
+      await expect(
+        db
+          .updateTable('pastoral_assignments')
+          .set({ ended_at: EPOCH })
+          .where('id', '=', assignmentId)
+          .execute(),
+      ).resolves.toBeDefined();
+    });
+
+    it('still refuses a row that ends before it starts', async () => {
+      // `>=` relaxes the boundary, not the ordering. A row ending before it began
+      // is a defect at any width.
+      const person = await createPerson(db, { firstName: 'Mark', network: 'MENS' });
+
+      await expect(
+        db
+          .updateTable('network_assignments')
+          .set({ ended_at: new Date(EPOCH.getTime() - 1) })
+          .where('person_id', '=', person.id)
+          .where('ended_at', 'is', null)
+          .execute(),
+      ).rejects.toThrow(/network_assignments_period_ordered/);
+    });
+
+    it('leaves a zero-length row invisible to network_as_of, at its own instant and after', async () => {
+      // The property the ruling rests on. An as-of lookup asks for
+      // `started_at <= t AND ended_at > t`, and no `t` satisfies both.
+      const person = await createPerson(db, { firstName: 'Mark', network: 'MENS' });
+
+      await db
+        .updateTable('network_assignments')
+        .set({ ended_at: EPOCH })
+        .where('person_id', '=', person.id)
+        .where('ended_at', 'is', null)
+        .execute();
+
+      const client = await openClient();
+      try {
+        for (const at of [EPOCH, new Date(EPOCH.getTime() + 1), new Date()]) {
+          const { rows } = await client.query<{ network: string | null }>(
+            'SELECT network_as_of($1, $2) AS network',
+            [person.id, at],
+          );
+          expect(rows[0].network).toBeNull();
+        }
+      } finally {
+        await client.end();
+      }
+    });
+
+    it('leaves the one-open-row index free, so the corrected row can be opened', async () => {
+      // A zero-length row has `ended_at` set, and every one of those indexes is
+      // partial over `ended_at IS NULL`. Closing a row in error therefore never
+      // blocks opening the right one in its place.
+      const person = await createPerson(db, { firstName: 'Mark', network: 'MENS' });
+
+      await db
+        .updateTable('network_assignments')
+        .set({ ended_at: EPOCH })
+        .where('person_id', '=', person.id)
+        .where('ended_at', 'is', null)
+        .execute();
+
+      await expect(
+        db
+          .insertInto('network_assignments')
+          .values({ person_id: person.id, network: 'WOMENS', started_at: EPOCH })
+          .execute(),
+      ).resolves.toBeDefined();
+
+      const open = await db
+        .selectFrom('network_assignments')
+        .select('network')
+        .where('person_id', '=', person.id)
+        .where('ended_at', 'is', null)
+        .execute();
+
+      expect(open).toEqual([{ network: 'WOMENS' }]);
     });
   });
 });

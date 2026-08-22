@@ -66,6 +66,12 @@ const TEXT_PAIRS = [
 const NON_TEXT_PAIRS = [
   ['edge', 'surface'],
   ['edge', 'raised'],
+  // The invalid state of a form field is exactly the "visible state of a
+  // component" 1.4.11 names, so it is checked here rather than as body text
+  // (SKILL.md section 23). It clears 4.5:1 as well, so the message beside the
+  // field may carry it, but the rule it has to meet is this one.
+  ['field-invalid', 'surface'],
+  ['field-invalid', 'raised'],
 ];
 
 const TEXT_MINIMUM = 4.5;
@@ -143,13 +149,19 @@ function readThemes(css) {
  * and none to be added. A palette that acquires one has settled the question
  * sections 13, 17 and 19 exist to keep open, and the name is what spreads.
  *
- * Exactly the three the rule names. An earlier version of this list added seven
- * more of its own — `error`, `critical`, `severity` and the like — which refused
- * names no rule refuses: whether a form field failing validation may carry a
- * colour is open (CLAUDE.md), and a lint script is not where it gets decided.
- * Section 23 warns in terms against reading the prohibition wider than it is.
+ * `error` is refused too, and by §23 rather than by this script's own judgement.
+ * The validation-colour question that was open when this list last shrank is now
+ * settled: the token is `field-invalid`, and §23 records that `error` and
+ * `danger` were rejected for it by name, because "a token called `error` will
+ * eventually colour a Cell that reported `NOT_HELD`". The 2026-08-21 UI ruling's
+ * argument is that a naming rule review will not catch has to be checked rather
+ * than remembered, so the name §23 rejects is one this script can fail on.
+ *
+ * The list stays exactly the names a rule names. `critical`, `severity` and the
+ * like are still absent: they were removed once for being this script's own
+ * invention, and nothing has settled them since.
  */
-const FORBIDDEN_TOKEN_NAMES = ['success', 'danger', 'warning'];
+const FORBIDDEN_TOKEN_NAMES = ['success', 'danger', 'warning', 'error'];
 
 const css = await readFile(CSS, 'utf8');
 const { names, ...themes } = readThemes(css);

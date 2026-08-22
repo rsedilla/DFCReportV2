@@ -435,9 +435,55 @@ For Version 1, a person's initial network assignment becomes effective on the da
 
 A person's recorded sex may be corrected — most often an ordinary data-entry fix. Because sex determines Network, this is never an ordinary field edit and is explicitly outside `people.edit_basic` (Section 7).
 
-Correcting sex is an explicit, authorized, audited operation. Where the correction changes the person's Network, it is carried out as a Network change: the current Network assignment is closed and a new one opened, effective-dated, preserving history exactly as any other Network change does. Never re-derive Network silently from the new sex value.
+Correcting sex is an explicit, authorized, audited operation, governed by `people.correct_sex` (Section 7). It is Admin-only at Whole Church scope, and no other role holds it. Where the correction changes the person's Network, it is carried out as a Network change: the current Network assignment is closed and a new one opened, effective-dated, preserving history exactly as any other Network change does. Never re-derive Network silently from the new sex value.
 
 A Network change must never leave a person under a pastoral leader in their former Network. If the person has an active pastoral assignment that the change would render cross-Network, the Network change and the corresponding pastoral reassignment must be performed together as a single atomic operation — neither can validly precede the other, since each alone leaves the tree in an invalid state. The system must reject a Network change submitted without the reassignment it requires, and must never silently drop the person's pastoral assignment to resolve the conflict.
+
+**The two carry one effective instant, and it is the same instant.** The closing of the old Network row, the opening of the new one, the closing of the old pastoral assignment and the opening of the new one all take an identical timestamp, stamped once by the API and written to all four rows.
+
+This is not a tidiness preference. The old edge is legal for every moment up to the change and illegal from the change onward, so the only moment at which it can be closed without ever having been invalid is the exact instant the new Network takes force. The same-Network check on a Network change looks at edges open at the effective date or beginning after it (Section 5, Database enforcement); an edge closed at exactly that instant is neither, and passes. An edge closed a microsecond later is open at it, is compared with the corrected Network already in force on one end and the old one on the other, and is rejected — which is correct, because for that microsecond it genuinely was a cross-Network edge.
+
+So the schema permits the atomic operation at one instant and at no other. Stated here because the failure mode of leaving it unwritten is specific and bad: an implementer meets a constraint violation, reads it as the timestamps being too close together, and separates them — which does not fix the write, and if the check were ever loosened to admit it would open the gap this rule exists to close.
+
+**A Network change is refused while the person leads anyone.** If the person holds any open pastoral assignment as the **leader**, the change is rejected, naming the disciples that must be moved first. Each is then moved by an ordinary, separately authorized, separately audited reassignment (Section 5), and the Network change is attempted again once none remains.
+
+This is the rule Section 3 already applies to archiving a Person who leads a Cell, and the one this section states for a Network change that would orphan a pastoral edge: reject and require the conflict to be resolved, rather than resolving it silently. Where a leader's twelve disciples must each find a new leader, that is twelve pastoral decisions, and the alternatives were to have an administrator supply twelve destinations inside one correction payload or to have the system choose them by rule. Both put a pastoral judgement inside a data-correction form.
+
+It also removes the need for the correction itself to carry more than one reassignment. With no open downline edge left, the only edge the change must resolve is the person's own, which is the single atomic pair described above.
+
+**This one is a domain-layer rule and the database cannot hold it.** The same-Network trigger is `DEFERRABLE INITIALLY DEFERRED` and therefore sees only the state at commit, so a transaction that closes a disciple's edge, opens their replacement, and performs the correction all at once commits legally — the schema still permits exactly the combined operation this rule forbids. The refusal is a precondition on the state the request arrives in, which no constraint can observe. It is enforced in `networks`, tested at the API layer, and named here so that nobody reads the passing constraint as agreement.
+
+**The two sides would have taken different destinations, which is why doing them separately is also clearer.** The person being corrected moves to a leader in their **new** Network — they are the one whose Network is changing, and the trigger compares their replacement edge against the corrected value already in force. A disciple moves within their **own, unchanged** Network, because nothing about them has changed. Those are two different rules, applied by two different people at two different times, and running them through one endpoint invited applying one rule to both.
+
+**A backdated correction reaches only as far as it can be made legal.** Where `records.backdate_effective_date` (Section 7) is used to give the correction an effective date in the past, that date must be **strictly later** than the latest of:
+
+- the `started_at` of the person's current pastoral assignment;
+- the `ended_at` of every already-closed assignment touching them, **in either direction**.
+
+**Strictly later, not "at or after", and the difference is a real failure rather than pedantry.** Both bounds break at exact equality, for the same underlying reason: at the instant a row starts or ends, the corrected Network is already the one in force, so a comparison made at that instant sees the new value on one end of an edge and the unchanged value on the other.
+
+- At `eff` equal to the current assignment's `started_at`, the atomic pair closes that assignment at its own start. The resulting zero-length row is re-validated on the closing write and compared at that timestamp, where the person already resolves to the corrected Network while their old leader does not. The assignment was cross-Network for the whole of its life under the corrected value, so there is no instant at which it can honestly be closed.
+- At `eff` equal to the `ended_at` of a zero-length closed edge, the same happens on the Network side. The edge is selected and compared at its own timestamp, where the person resolves to the corrected Network. Being closed, it cannot be reassigned.
+
+One instant later, both pass: the old row still covers the comparison instant, both ends resolve to the old Network, and the edge was legal for every moment it existed.
+
+The reason there is a limit at all is that the remedy runs out. The check reaches forward from the effective date, so a correction backdated into a period the person has since left strands an assignment that closed before today: it must be reassigned to satisfy Section 5, and it cannot be, because a period that has already ended cannot be given a different leader without rewriting a closed row — which Principle 12 and Section 5 both forbid. There is no legal write that resolves it, so permitting the attempt would mean permitting a failure with no remedy to offer.
+
+**The limit covers both directions because the check does.** The same-Network check on a Network change considers every edge touching the person as a person *and* as a leader (Section 5, Database enforcement). A closed edge on which they were the leader, ended after the effective date, has exactly the problem above and involves no row of their own — so a floor bounding only their own assignment would leave it unreachable.
+
+Open downline edges need no term of their own, because the rule above has already refused the change while any exists. That is deliberate: a floor carrying a term that can never bind reads as though it were doing work.
+
+The case that term used to cover is worth keeping, because it is why the refusal has to be unconditional rather than date-aware. An open edge on which the person is the leader and which **began after** the effective date cannot be resolved at all: closing it at the effective date is impossible, since that precedes its own `started_at`, and closing it at its own start leaves it beginning after the effective date, so it is still selected and still compared. The refusal therefore reaches every open leader-side assignment whatever its dates, and a narrower rule that only refused edges overlapping the effective date would let this one through.
+
+Each term is a maximum over rows that may be empty, and an empty term contributes nothing. A Person encoded but not yet assigned has no rows at all, so their floor is unbounded and a correction may be backdated freely — there are no edges to strand.
+
+The floor's second term is written over **edges**, which are rows with a leader, so that term does not depend on how a root is represented. Section 5 describes a root both as having no active assignment and as having one with a null `leader_id`, and the two readings disagree about whether a row exists; that ambiguity is recorded as open in `CLAUDE.md`. It does not reach this rule either way, because a row with a null `leader_id` is passed without comparison by the same-Network trigger and can never be an edge the correction has to strand.
+
+The system therefore **rejects the correction and names the earliest date it can legally take**, rather than failing with a constraint violation the administrator cannot act on. The rejection is a rule about what can be recorded, not about the actor's authority, so it answers `INVARIANT_VIOLATION` (Section 22).
+
+**One consequence is sharp, and follows from the two rules together rather than from either alone.** Moving a disciple out of the way closes their edge as of today, and that `ended_at` becomes the floor immediately. So a correction for someone who has just had disciples moved cannot be backdated at all: it takes effect from today forward, and the months in which they led those disciples keep the Network recorded for them. Anyone reading only the refusal rule would expect clearing the disciples to unblock a backdated correction, and it does the opposite.
+
+The cost is real and is accepted: closed periods keep the Network that was recorded for them, including where it is now known to be wrong. Two things make that the better failure. Those periods have already been reported, and Section 3 guarantees a re-run reproduces what was reported — a correction reaching into them would move totals for months a leader may be holding on paper. And a person's Network is derived from sex, which the correction is fixing; the reported figures for a closed month reflected the church's understanding at the time, which is what a historical report is for. Where the true history genuinely matters, it belongs in the audit entry the correction already writes (Section 21), not in a rewritten relationship row.
 
 The same applies to Cell membership and Cell leadership: a Network change must not leave the person holding relationships that the homogeneous-network rule no longer permits. Where resolving this requires choosing between legitimately different facts, flag it for authorized human resolution rather than guessing (Section 3, Person Merge).
 
@@ -582,7 +628,27 @@ The same rule governs every other effective-dated relationship: Network assignme
 
 A row of an effective-dated table is never removed: `person_lifecycle`, `network_assignments` and `pastoral_assignments` here, and `account_roles` and `capability_grants`, whose revocation history Section 7 calls audit material. A table added later that carries the same shape is covered by the same rule and gets the same trigger in the migration that creates it — the rule is not satisfied by being written here. A row entered in error is corrected by closing it and opening the right one, which is what effective dating is for. This is Principle 12 stated as an operation rather than as an aspiration, and it is enforced by the database.
 
-`refresh_tokens` and `account_tokens` are deliberately not named. They carry operational state rather than history, and whether they may be pruned is an open question rather than a settled rule — see `CLAUDE.md`.
+**A row entered in error is closed at zero length.** Correcting one means closing it and opening the right one, and the correction is not a change of fact at a later date — it is the assertion that the closed row was never true. Its `ended_at` therefore equals its `started_at`, and every effective-dated table permits that:
+
+```sql
+CHECK (ended_at IS NULL OR ended_at >= started_at)
+```
+
+The strict `>` this replaced made the prescribed correction impossible to perform honestly. Closing the row a microsecond later is the only thing it allowed, and that records a non-zero period during which a fact that was never true was in force — small enough to look harmless and permanent enough to be read back later as history.
+
+A zero-length row is inert by construction rather than by convention, which is what makes this safe:
+
+- **It resolves to nothing as of any instant.** An as-of lookup asks for `started_at <= t` and `ended_at > t`, and at `t` equal to the shared timestamp the second test fails, while above it the first does. There is no `t` at which the row is the answer.
+- **It occupies no open-row constraint.** Every uniqueness constraint in this section is partial over `ended_at IS NULL`, and a zero-length row has `ended_at` set. Closing one in error therefore never blocks opening the correct row in its place.
+- **It is invisible to an as-of comparison, which is what the same-Network checks make.** Both compare `network_as_of` at an instant, and by the point above no instant resolves to a zero-length row.
+
+That last point is narrower than it looks, and the difference matters. A zero-length row is inert as an *answer*; it is not thereby excluded from being *examined*. The same-Network check on a Network change selects edges open at, or beginning after, the effective date, and a zero-length assignment row whose shared timestamp falls after that date **is** one beginning after it. It is selected and compared, at its own timestamp, against the corrected Network — and being closed, it cannot then be reassigned to resolve what it reports.
+
+So a zero-length row on `pastoral_assignments` is not free. It is inert for every query that asks who someone's leader was, and it still participates in the check that guards Network changes. Writing one is a correction of a row entered in error, never a way to record that an edge briefly existed, and the backdate floor in Section 4 counts its timestamp exactly as it counts any other.
+
+The cost is that an inert row is also an invisible one, so a defect that closes a live row at its own start date removes it from every query with nothing raised. That is a domain-layer discipline, not a schema one: a zero-length close is written deliberately, by a correction path that says it is correcting, and never as the ordinary way to end a relationship.
+
+`refresh_tokens` and `account_tokens` are deliberately not named, and are the one exception. They carry operational state rather than history, and they may be pruned under the retention rule in Section 6 — which is a floor rather than a licence, because deleting the wrong row destroys a security signal rather than a historical fact.
 
 The reason is narrower than "history is valuable". Every same-Network check in this section fires on insert and update, so a `DELETE` is the one write that passes none of them: removing a person's current Network row makes their Network resolve to an older one, or to none, and every open pastoral edge beneath them becomes cross-Network with nothing raised and nothing to revisit it. The first data-fix script written straight against the database is exactly where that arrives.
 
@@ -626,9 +692,11 @@ The two firing paths need **different** comparison dates, and one rule cannot se
 
 **On a write to `pastoral_assignments`**, compare the Networks in force as of the assignment's `started_at`. An edge must have been legal when it was created, and where Admin backdates one under `records.backdate_effective_date` that differs from today — validating against now would reject a correction that was true at the time.
 
-**On a Network change**, compare against every assignment that is **open at the change's effective date or begins after it**, each one as of the later of the two dates — the moment from which the corrected Network governs that edge. Using the assignment's `started_at` here makes the check a no-op: a person assigned in January under a same-Network leader, whose Network is corrected in August, is compared against January's Networks, which matched, so the change commits and leaves them under a leader in their former Network — exactly what Section 4 requires the system to reject.
+**On a Network change**, compare against every assignment **touching the person in either direction** — those where they are the subordinate *and* those where they are the leader — that is **open at the change's effective date or begins after it**, each one as of the later of the two dates — the moment from which the corrected Network governs that edge. Using the assignment's `started_at` here makes the check a no-op: a person assigned in January under a same-Network leader, whose Network is corrected in August, is compared against January's Networks, which matched, so the change commits and leaves them under a leader in their former Network — exactly what Section 4 requires the system to reject.
 
 "Or begins after it" is not a refinement, it closes a hole. `records.backdate_effective_date` allows Admin to set the effective date in the past, so an assignment can begin *after* the date a Network correction takes effect and therefore not be open at it. A correction backdated to April, with an assignment opened in June that was legal when it was made, would commit while leaving a permanent cross-Network edge — and nothing revisits it, because no row of `pastoral_assignments` is written and the other trigger never fires. Section 4's guarantee is absolute, so this check has to reach forward from the effective date rather than stopping at it.
+
+**"In either direction" is not decoration either.** A person's Network governs every edge they sit on, and they sit on two kinds: the one above them and one for each disciple below. Checking only the first leaves a leader's whole downline cross-Network the moment their own Network is corrected — the same permanent, unrevisited breach the paragraph above describes, differing only in which end of the edge moved. It is also what bounds how far a correction may be backdated (Section 4): the floor is computed over edges in both directions precisely because this check considers both.
 
 A root leader has a null `leader_id` (Network roots, above) and the trigger passes such a row without comparison — there is no leader to compare against.
 
@@ -724,6 +792,23 @@ That is the intended answer rather than an accident of lock modes. Revocation en
 Reuse is a presentation of a token **after** it has been used, which is the case above: the token already reads as revoked, and it carries a replacement. Two requests arriving together is what an ordinary mobile client does when two calls hit 401 at once, and treating it as theft would sign a leader out of every device for behaving normally — on clients that cannot be force-updated (Section 2).
 
 The cost is accepted deliberately and stated so it is not mistaken for an oversight: an attacker racing a stolen token within the same instant is not detected at that moment. They are detected on the next presentation, because the token they hold is by then revoked and replaced.
+
+**Retention: a token row outlives what can still be presented.** `refresh_tokens` and `account_tokens` are the one exception to the no-deletion rule (Section 5), because they hold operational state rather than history. They may be pruned, and the floor is not their expiry.
+
+A row may be deleted only once its `expires_at` is **more than 30 days past**. Retention is therefore always longer than the life of the token the row describes.
+
+The floor is set by the reuse signal rather than by the token's validity. A rotated row is what makes a replay readable: it is revoked and carries a `replaced_by_id`, and that pair is the whole difference between a stolen token and a token this system never issued. Prune the row and a presented copy resolves to nothing, so it is refused as unknown and **no account-wide revocation fires** — the theft is not merely undetected, it is indistinguishable from a typo. Any retention rule that reaches a row a client could still present has removed a security control, not a dead record.
+
+Thirty days beyond expiry is chosen because that is the window in which revoking still helps. A live theft is a presentation inside the stolen token's own 30-day life, and that is the case the signal exists to catch. Past it the token is refused on its own expiry whatever the row says, and the attacker's danger is the live descendant token further down the chain, which no retention policy reaches in either direction.
+
+Two consequences are accepted rather than glossed:
+
+- **A long-expired stolen token no longer raises the alarm.** Today a replay is checked for reuse before it is checked for expiry, so an expired rotated token still revokes the account. After pruning it will not. That is a deliberate narrowing, and the check order is left as it is so the signal holds for every row still retained.
+- **Rows are deleted oldest first.** `replaced_by_id` references `refresh_tokens` with no cascade, so a row is still referenced by the one it replaced until that one goes. Deleting forward along the chain satisfies the constraint; deleting an arbitrary row does not, and a prune that fails halfway is worse than one that never ran.
+
+`account_tokens` follows the same rule and the same reasoning, on a much shorter clock: a reset token lives 30 minutes (Password reset security, below), and a redeemed or expired row is retained the same 30 days past `expires_at` so that a replay is refused as used rather than as unknown.
+
+Nothing in this specification requires a retention job to exist. It permits one, and fixes what it may not touch if it is written.
 
 **Immediate revocation and a stateless API are in tension, and the resolution is explicit.** A bearer token verified by signature alone cannot be revoked before it expires, so Section 6's requirement that revocation take effect immediately, on all devices, is not satisfiable by a short lifetime alone.
 
@@ -855,6 +940,7 @@ The capabilities are exactly:
 - `people.edit_basic`
 - `people.manage_lifecycle`
 - `people.manage_pastoral_assignment`
+- `people.correct_sex`
 - `dcc.take_attendance`
 - `dcc.view_subtree`
 - `dcc.submit_on_behalf`
@@ -895,7 +981,7 @@ Admins may have system-wide operational permissions even if they are not pastora
 
 `people.edit_basic` covers corrections to a person's own descriptive fields only: first name, middle name, last name, birthday, civil status, and mobile number.
 
-It does not cover sex, Network, pastoral assignment, Cell membership, Cell leadership, lifecycle state, or account state. Each of those is governed by its own capability.
+It does not cover sex, Network, pastoral assignment, Cell membership, Cell leadership, lifecycle state, or account state. Each of those is governed by its own capability — sex and the Network change it forces by `people.correct_sex`.
 
 Sex is excluded deliberately. Sex determines Network under the homogeneous-network rule (Section 4), and Network determines which pastoral edges are legal (Section 5). If sex could be changed as an ordinary field edit, an actor could flip a person's Network and create a cross-Network pastoral edge without ever invoking `people.manage_pastoral_assignment`, bypassing the invariants in Section 5 entirely. Correcting a person's sex is handled as a Network-affecting correction (Section 4).
 
@@ -909,6 +995,7 @@ Three roles exist. Each carries the default capabilities and scopes below. Anyth
 | `people.edit_basic` | Whole Church | Whole Church | own/subtree |
 | `people.manage_lifecycle` | Whole Church | Whole Church | — |
 | `people.manage_pastoral_assignment` | Whole Church | Whole Church | own/subtree |
+| `people.correct_sex` | — | Whole Church | — |
 | `dcc.take_attendance` | Whole Church | Whole Church | own/subtree |
 | `dcc.view_subtree` | Whole Church | Whole Church | own/subtree |
 | `dcc.submit_on_behalf` | Whole Church | Whole Church | own/subtree |
@@ -930,13 +1017,15 @@ Three roles exist. Each carries the default capabilities and scopes below. Anyth
 | `roles.manage` | — | Whole Church | — |
 | `people.merge` | — | Whole Church | — |
 
-Four of these defaults are deliberate and must not be widened for convenience.
+Five of these defaults are deliberate and must not be widened for convenience.
 
 **Senior Pastors do not hold `roles.manage` or `accounts.manage`.** Granting permissions and administering accounts is Admin's operational responsibility; Senior Pastor and Admin are different responsibilities even where their visibility overlaps (Section 19). Keeping grant-making out of the Senior Pastor role means the two highest-visibility accounts in the church cannot escalate their own authority, and every permission change has a second party involved.
 
 **Senior Pastors do not hold `records.backdate_effective_date`.** Backdating rewrites totals for periods already reported (Section 3) and is a data-correction operation, not a pastoral one.
 
 **Senior Pastors do not hold `people.merge`.** Section 3 places it at Whole Church scope as an Admin capability. A merge is irreversible, crosses both Networks, and can lower totals for periods already reported, so it stays with the role whose job is data correction.
+
+**`people.correct_sex` is Admin-only, and Senior Pastors do not hold it.** Correcting a person's sex moves them between Networks, which can change totals for periods that have already been reported — the same property that keeps `people.merge` and `records.backdate_effective_date` with the role whose job is data correction. It also forces the pastoral reassignment in Section 4, so granting it to a leader would be a route to moving people between Networks without ever invoking `people.manage_pastoral_assignment`.
 
 **Leaders do not hold `people.manage_lifecycle`.** Archiving reduces a leader's own People count, which is precisely the incentive Person Lifecycle guards against (Section 3). Archival is requested by a leader and performed by Admin or a Senior Pastor.
 
@@ -982,7 +1071,7 @@ A setting is not a place to record domain rules. Anything that changes what a fi
 settings
 - key                 a fixed identifier, e.g. cell_attention_months
 - value
-- updated_by
+- updated_by          null only for the system action that seeds the defaults
 - updated_at
 ```
 
@@ -1058,7 +1147,7 @@ Those conditions are enforced in the owning module's domain layer — `hierarchy
 
 A grant is revoked by setting `revoked_at`, never by deleting the row. The history of who could do what, and when, is part of the audit record.
 
-**`read_only` is valid only on a read capability.** The twenty-four divide cleanly:
+**`read_only` is valid only on a read capability.** The twenty-five divide cleanly:
 
 - **Read:** `people.view_subtree`, `dcc.view_subtree`, `cell.view_subtree`, `reports.view_subtree`, `audit.view`
 - **Write:** every other capability in the list
@@ -2495,7 +2584,7 @@ audit_log
 - actor_id            nullable only for a system action
 - action              an identifier from the list above
 - target_type
-- target_id
+- target_id           required; text, because not every target is keyed by a UUID
 - before              nullable
 - after               nullable
 - reason              nullable, required where the action demands one
@@ -2504,6 +2593,8 @@ audit_log
 ```
 
 Record actor, target, action, timestamp, and relevant before/after values.
+
+`target_id` is text rather than a UUID, and is required. Almost every target above is identified by a UUID, but not all: a setting is keyed by its `key` (Section 7), and a setting change is on the list. It carries no foreign key, because this log is append-only and an entry outlives the row it describes — a constraint that could refuse or cascade would make the trail depend on the survival of what it exists to remember.
 
 The audit log is append-only. Nothing updates or deletes a row, and it is never a source for as-of state — a report answering "who was `CURRENT` in March" reads the effective-dated table, not this (Section 3).
 
@@ -2656,7 +2747,7 @@ Idempotency-Key: 6f2b1c94-8b6a-4a1e-9a1e-2c9f4d5b7e01
 
 ```text
 idempotency_keys
-- key                 the client-generated UUID
+- key                 the client-generated UUID; unique per account, not globally
 - account_id
 - request_fingerprint a hash of method, path and body
 - state               IN_FLIGHT | COMPLETED
@@ -2666,6 +2757,7 @@ idempotency_keys
 - expires_at
 ```
 
+- **A key is unique to the account that presented it**, never globally. A row is identified by the account and the key together, so two accounts may hold the same key without either seeing the other's stored response, and every rule below means "for this account". Global uniqueness would let a client that reused a key it had observed receive somebody else's response, or deny that person their own retry — and clients generate these values themselves, so a key is not a secret.
 - The server stores the key with the response it produced, for at least 24 hours.
 - A repeat of the same key with the same body returns the stored response and does not execute again.
 - The same key with a **different body** returns `IDEMPOTENCY_KEY_REUSED`. This is permanent and the client must never retry it. It is a conflict rather than malformed input, so `VALIDATION_FAILED` would be wrong — a client branching on that code would show a field error for a replay.
@@ -2729,7 +2821,18 @@ Conformance is about whether a person can perceive and operate the interface. It
 
 **No palette token is named for a judgement about a person, a Cell, or a figure derived from them.** There is no `success`, `danger` or `warning` token, and none is to be added. A palette that acquires one has settled the question those sections exist to keep open, before any screen is designed, and the name is what spreads: a token is used by whoever writes the next screen, on whatever it seems to fit.
 
-This reaches names, not colour. Colour for structure, hierarchy and legibility is expected (Section 2). Whether a form field failing validation may carry a colour of its own, and what it would be called, is **not settled here** and is recorded as open in `CLAUDE.md` — it is a different question from judging a leader, and answering it by extending this rule would be reading the rule wider than it is.
+This reaches names, not colour. Colour for structure, hierarchy and legibility is expected (Section 2).
+
+**A form field failing validation may carry a colour, and the token is named `field-invalid`.** It is one token, and it is the only one of its kind.
+
+The name is the whole ruling. `field-invalid` describes the state of an input — this field does not yet hold something the system can accept — and says nothing about the person filling it in or about any figure. `error` and `danger` were rejected for the reason the paragraph above gives: a token is used by whoever writes the next screen, on whatever it seems to fit, and a token called `error` will eventually colour a Cell that reported `NOT_HELD`. `field-` is a prefix that does not travel, because a Cell is not a field.
+
+This is a different question from judging a leader, and it is settled narrowly on purpose. Validation is a statement about an input, made to the person who just typed it, and resolved by them in the next few seconds. Sections 13, 17 and 19 are about durable judgements rendered about other people, and nothing here touches them: no meeting status, no coverage figure, and no leader is ever rendered in `field-invalid`, whatever it would seem to fit.
+
+Two constraints come with it, and both are conformance rather than taste:
+
+- It meets **3:1 against the surface behind it** (1.4.11), because the invalid state of a control is exactly the "visible state of a component" that criterion names.
+- It is **never the only indicator**. A field in error carries text saying what is wrong, and is associated with that text programmatically. Colour alone fails 1.4.1, and a leader recording attendance in a hall may not see it at all.
 
 The native clients are not covered here. Their framework is not chosen (Section 2), and the equivalent obligation for them is the platform's own accessibility API rather than WCAG. That is a ruling to make when the client is, and it is indexed as open in `CLAUDE.md`.
 

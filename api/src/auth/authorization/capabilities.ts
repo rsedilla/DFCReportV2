@@ -12,6 +12,7 @@ export const Capability = {
   PeopleEditBasic: 'people.edit_basic',
   PeopleManageLifecycle: 'people.manage_lifecycle',
   PeopleManagePastoralAssignment: 'people.manage_pastoral_assignment',
+  PeopleCorrectSex: 'people.correct_sex',
   DccTakeAttendance: 'dcc.take_attendance',
   DccViewSubtree: 'dcc.view_subtree',
   DccSubmitOnBehalf: 'dcc.submit_on_behalf',
