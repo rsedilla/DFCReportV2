@@ -2753,12 +2753,16 @@ idempotency_keys
 - state               IN_FLIGHT | COMPLETED
 - response_status     nullable until completed
 - response_body       nullable until completed
+- claimed_at          when this attempt was claimed; bounds the claim, not the answer
 - created_at
-- expires_at
+- expires_at          how long the response is retained
 ```
 
 - **The rule reaches every authenticated state-changing request**, and only those. An unauthenticated one has no account to key a row by, so the store cannot hold it, and the exempt set is exactly **Section 7's closed unauthenticated list** — which makes this exemption closed too, and widening it an amendment to that list rather than a decision taken in a controller. The list is not restated here: it is named in one place on purpose, and the last two attempts to repeat it both left something out. Everything else that changes state carries a key, including an endpoint acting only on the caller's own session — signing out is state-changing, and a retried sign-out should return the answer the first one produced rather than run again.
 - **A key is unique to the account that presented it**, never globally. A row is identified by the account and the key together, so two accounts may hold the same key without either seeing the other's stored response, and every rule below means "for this account". Global uniqueness would let a client that reused a key it had observed receive somebody else's response, or deny that person their own retry — and clients generate these values themselves, so a key is not a secret.
+- **A claim and a response are bounded separately.** `expires_at` retains the answer; `claimed_at` bounds the attempt. A request whose process dies leaves its row `IN_FLIGHT`, and another request may take the claim over once it is older than a short lease — a minute, longer than any request this API should serve. Without the second bound the row sat unfinished for the whole retention, and every retry was told `REQUEST_IN_FLIGHT`, which this section defines as "retry after a short delay". A day is not a short delay, and the caller never learned the outcome.
+- **A request missing the header is `VALIDATION_FAILED`.** A required header that is absent is malformed input, which is what that code means. It is named here rather than left to a controller, because three clients branch on it.
+- **A replay reproduces the status and the body, and nothing else.** Headers are not stored and are not reproduced, so **no state-changing endpoint may put meaning in a response header** — a `Location` or an `ETag` that a client needs would not survive a retry. Stated as a constraint on endpoints rather than as a limitation of the store, because that is the direction it binds.
 - The server stores the key with the response it produced, for at least 24 hours.
 - A repeat of the same key with the same body returns the stored response and does not execute again.
 - The same key with a **different body** returns `IDEMPOTENCY_KEY_REUSED`. This is permanent and the client must never retry it. It is a conflict rather than malformed input, so `VALIDATION_FAILED` would be wrong — a client branching on that code would show a field error for a replay.

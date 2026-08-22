@@ -298,34 +298,41 @@ describe('idempotency (SKILL.md section 22)', () => {
     expect(executions).toBe(1);
   });
 
-  it('lets exactly one of two simultaneous claims execute', async () => {
-    // Sequential retries pass against a read-then-write implementation with no
-    // primary key involved, which is the trap CLAUDE.md records for authorization
-    // case 7. These two are dispatched together, so the claim itself is what is
-    // under test rather than the ordering.
+  it('lets exactly one of two claims execute, with the loser refused', async () => {
+    // `Promise.all` over two ordinary writes is not enough on its own: if the two
+    // happen to serialize, both return 201, `executions` is still 1, and the case
+    // passes against a read-then-write claim with no primary key involved. That is
+    // the trap CLAUDE.md records for authorization case 7.
+    //
+    // The first claim is therefore held open inside the handler, so the second
+    // arrives while the row is unambiguously IN_FLIGHT and the only thing that can
+    // refuse it is the claim itself.
     const key = randomUUID();
 
-    const [a, b] = await Promise.all([
-      post('write', account).set('Idempotency-Key', key).send({ value: 'a' }),
-      post('write', account).set('Idempotency-Key', key).send({ value: 'a' }),
-    ]);
+    const first = post('slow', account)
+      .set('Idempotency-Key', key)
+      .send({})
+      .then((response) => response);
 
-    // One executed. The other either replayed its stored response or was told to
-    // retry shortly, and never ran the handler.
+    await waitFor(() => releaseSlow !== null);
+
+    const second = await post('slow', account).set('Idempotency-Key', key).send({});
+
+    // The loser is refused rather than executed, and is told to retry rather than
+    // told never to.
+    expect(second.status).toBe(409);
+    expect(second.body.error.code).toBe('REQUEST_IN_FLIGHT');
     expect(executions).toBe(1);
 
-    const statuses = [a.status, b.status].sort();
-    expect(statuses[0]).toBe(201);
-    expect([201, 409]).toContain(statuses[1]);
+    releaseSlow?.();
+    expect((await first).status).toBe(201);
 
-    for (const response of [a, b]) {
-      if (response.status === 409) {
-        expect(response.body.error.code).toBe('REQUEST_IN_FLIGHT');
-      }
-    }
-
-    const rows = await db.selectFrom('idempotency_keys').select('key').execute();
-    expect(rows).toHaveLength(1);
+    // One row, and it holds the winner's response.
+    const rows = await db
+      .selectFrom('idempotency_keys')
+      .select(['state', 'response_status'])
+      .execute();
+    expect(rows).toEqual([{ state: 'COMPLETED', response_status: 201 }]);
   });
 
   it('leaves reads alone', async () => {

@@ -57,6 +57,9 @@ export class VersionConflictError extends ApiError {
   }
 }
 
+/** The envelope's own field names, which a record's values may not shadow. */
+const RESERVED = ['recorded_at', 'actor'];
+
 /**
  * Renders one side, refusing an incomplete one.
  *
@@ -66,10 +69,12 @@ export class VersionConflictError extends ApiError {
  * omission still fails, but as a TypeError from a property access, which reads as
  * a bug in this file rather than as a caller that owes a complete conflict.
  */
-const RESERVED = ['recorded_at', 'actor'];
-
 function render(side: ConflictSide, which: 'submitted' | 'current'): Record<string, unknown> {
-  if (!side || !side.values || !side.actor || !side.recordedAt) {
+  // `Object.keys(...).length` and not merely a truthiness test: `{}` is truthy,
+  // and a side carrying no values renders as a timestamp and an actor with no
+  // figures to choose between -- which is the whole of what section 22 says makes
+  // a conflict response useless to the person resolving it.
+  if (!side || !side.actor || !side.recordedAt || Object.keys(side.values ?? {}).length === 0) {
     throw new Error(
       `A VERSION_CONFLICT needs a complete "${which}" side: values, recorded_at and actor. ` +
         'SKILL.md section 22 -- a conflict response omitting any of them cannot satisfy section 14, ' +

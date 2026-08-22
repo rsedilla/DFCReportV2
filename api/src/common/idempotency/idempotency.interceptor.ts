@@ -39,10 +39,10 @@ const STATE_CHANGING = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
  *
  * **Unauthenticated writes are outside it, and that follows from section 22's own
  * shape.** `idempotency_keys` is keyed by account, so a request with no account
- * has nothing to key a row by. The endpoints this exempts are exactly section 7's
- * closed unauthenticated list -- sign-in, token refresh, password reset,
- * activation -- so the exemption is closed too, and widening it means amending
- * that list rather than deciding it in a controller.
+ * has nothing to key a row by. What this exempts is exactly section 7's closed
+ * unauthenticated list, which is not restated here: section 22 stopped restating
+ * it because two attempts to copy it both left a member out, and a third copy in
+ * the file doing the exempting would be the same mistake in the same week.
  */
 @Injectable()
 export class IdempotencyInterceptor implements NestInterceptor {
@@ -213,12 +213,18 @@ function requestPath(request: AuthenticatedRequest): string {
     return path;
   }
 
-  const sorted = [...new URLSearchParams(rawQuery).entries()]
-    .sort((a, b) => (a[0] === b[0] ? compare(a[1], b[1]) : compare(a[0], b[0])))
-    .map(([name, value]) => `${name}=${value}`)
-    .join('&');
+  // Serialized as structure, not as a string. `URLSearchParams` percent-decodes
+  // each half, so re-joining with `=` and `&` loses the distinction between one
+  // parameter whose value contains those characters and two parameters that do
+  // not: `?a=b%26c%3Dd` and `?a=b&c=d` both flatten to `a=b&c=d`. Two different
+  // requests would then share a fingerprint, and the second would be answered
+  // with the first's stored response -- the exact outcome keeping the query is
+  // meant to prevent.
+  const sorted = [...new URLSearchParams(rawQuery).entries()].sort((a, b) =>
+    a[0] === b[0] ? compare(a[1], b[1]) : compare(a[0], b[0]),
+  );
 
-  return `${path}?${sorted}`;
+  return `${path}?${JSON.stringify(sorted)}`;
 }
 
 function compare(a: string, b: string): number {

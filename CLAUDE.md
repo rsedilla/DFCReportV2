@@ -936,12 +936,21 @@ interceptor's own `.status()` call comes later and therefore wins.
 the status was applied after the chain and had to be re-derived from
 `@HttpCode` or the method. That reading came from `responseController.apply(result,
 res, httpStatusCode)` late in `router-execution-context.js` — but `setStatus`
-runs earlier, before the guards' own call site, and `apply`'s third argument is
-`undefined` there because `createHandleResponseFn` is invoked with three
-arguments and takes four. The re-derivation computed the same numbers, so
-nothing broke; the recorded *reason* was false, and it asserted the framework
-behaved in the way that would break the replay path in the same file. Corrected
-after `architecture-guardian` checked it against the installed Nest.
+runs earlier: after the guards and before the interceptor chain. `apply`'s third
+argument is `undefined` there, because `createHandleResponseFn` is invoked with
+three arguments and declared with four. The re-derivation computed the same
+numbers, so nothing broke; the recorded *reason* was false, and it asserted the
+framework behaved in the way that would break the replay path in the same file.
+
+*The first correction got the mechanism wrong too*, saying `setStatus` runs
+"before the guards' own call site" when it runs after them. Both errors are the
+same one: describing an ordering from a partial read. It is only worth recording
+because the entry it appears in exists to warn against exactly that.
+
+The replay path depends on `apply`'s third argument being `undefined`, which is
+an arity accident rather than a documented guarantee. It is pinned by the case
+asserting a replayed 409 on a route whose declared status is 201, which fails if
+Nest ever starts passing it.
 
 Worth keeping as a pattern rather than a footnote: this is the third time on
 this project that a rule was written by reading part of a mechanism and
@@ -962,9 +971,43 @@ end. Arrays keep their order, because order is meaning in an array.
 
 Written to `SKILL.md` §22.
 
+### 2026-08-22 — A claim and a response are bounded separately
+
+`expires_at` was doing two jobs of different lengths: retaining the response for
+§22's "at least 24 hours", and bounding how long a claim may sit unfinished. A
+request whose process died left its row `IN_FLIGHT` for the full day, and every
+retry was answered `REQUEST_IN_FLIGHT` — which §22 defines as "retry after a
+short delay". A day is not a short delay, and the caller never learned the
+outcome.
+
+`claimed_at` bounds the attempt; `expires_at` keeps the answer. A claim older
+than a one-minute lease may be taken over. Migration 0003 adds the column and
+§22's shape is amended in the same change, per the rule that a shape is amended
+when a rule needs a column.
+
+Two smaller items settled with it, both client-visible and neither derivable:
+a request **missing** the header is `VALIDATION_FAILED` — a required header that
+is absent is malformed input; and a replay reproduces **the status and the body
+and nothing else**, which is written into §22 as a constraint on endpoints rather
+than a limitation of the store: no state-changing endpoint may put meaning in a
+response header, because a `Location` or an `ETag` would not survive a retry.
+
+**What the lease does not close, and is recorded as open below.** It bounds an
+abandoned attempt, and it cannot distinguish one abandoned *before* the write
+committed from one abandoned *after*. For the second, taking the claim over
+means executing a committed write again — sooner than before, not never. That
+window is narrow and real, and closing it needs the completion to share the
+write's transaction rather than follow it.
+
 ### Open — awaiting a ruling
 
-**One item awaits a ruling and blocks Stage 5. Eight other things are unsettled, none of them blocking. They are listed at the end, so this section is the whole of what is open.**
+**Two items await a ruling and block a stage: one blocks the first write endpoint, one blocks Stage 5. Eight other things are unsettled, none of them blocking. They are listed at the end, so this section is the whole of what is open.**
+
+**What the system owes when the idempotency store fails after the handler has committed. This blocks the first write endpoint.** §22 defines `IN_FLIGHT` and `COMPLETED` and nothing else, and says nothing about a write that succeeded and was not recorded. The claim is taken before the handler and completed after it, so a failure in between — a dropped connection, a killed process, a statement timeout — leaves a committed write with an unfinished claim, and the lease then lets a retry run it again.
+
+The fix that actually closes it is for the completion to share the write's transaction, so the write and the record of it commit together or not at all. That shapes how every write endpoint is built, which is why it is settled before the first one rather than after. The alternative — a terminal state meaning "committed, outcome unknown" — is honest but hands a leader on a phone a decision they cannot make.
+
+Recorded rather than assumed, because the current behaviour is a consequence of operator ordering rather than anything anybody chose, which is the same shape as the sign-in-inside-a-revocation window settled on 2026-08-22.
 
 Eight items that stood here on 2026-08-22 were settled that day and are recorded above. Six of them were Stop Conditions for Stage 2, and the last two were found by the second and third `architecture-guardian` passes — which is why they were opened and closed on the same day.
 

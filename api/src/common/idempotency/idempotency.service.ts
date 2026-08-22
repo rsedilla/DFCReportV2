@@ -23,6 +23,20 @@ import type { Json } from '../../database/schema';
 /** Section 22: the response is stored "for at least 24 hours". */
 const RETENTION_HOURS = 24;
 
+/**
+ * How long a claim may sit unfinished before another request may take it.
+ *
+ * Separate from the retention above because it answers a different question.
+ * Retention keeps an *answer*; the lease bounds an *attempt*. Using one duration
+ * for both left a request whose process died holding its key for a day, with
+ * every retry told `REQUEST_IN_FLIGHT` — which section 22 defines as "retry after
+ * a short delay".
+ *
+ * Sixty seconds is longer than any request this API should serve and short enough
+ * that a client retrying on a normal backoff gets past it.
+ */
+const CLAIM_LEASE_SECONDS = 60;
+
 export type ClaimResult =
   /** This request owns the key and should execute. */
   | { outcome: 'claimed' }
@@ -72,24 +86,37 @@ export class IdempotencyService {
     accountId: string;
     fingerprint: string;
   }): Promise<ClaimResult> {
-    const interval = `${RETENTION_HOURS} hours`;
+    const retention = `${RETENTION_HOURS} hours`;
+    const lease = `${CLAIM_LEASE_SECONDS} seconds`;
 
     const claimed = await sql<{ key: string }>`
-      INSERT INTO idempotency_keys (key, account_id, request_fingerprint, state, expires_at)
+      INSERT INTO idempotency_keys (
+        key, account_id, request_fingerprint, state, claimed_at, expires_at
+      )
       VALUES (
         ${params.key}::uuid,
         ${params.accountId}::uuid,
         ${params.fingerprint},
         'IN_FLIGHT',
-        now() + ${interval}::interval
+        now(),
+        now() + ${retention}::interval
       )
       ON CONFLICT (account_id, key) DO UPDATE
         SET request_fingerprint = excluded.request_fingerprint,
             state = 'IN_FLIGHT',
             response_status = NULL,
             response_body = NULL,
+            claimed_at = now(),
             expires_at = excluded.expires_at
+        -- Two ways a row may be taken over, and they are different questions.
+        -- A retained *answer* is past its retention and may be replaced. An
+        -- unfinished *claim* is past its lease, which means the request holding
+        -- it is not coming back.
         WHERE idempotency_keys.expires_at <= now()
+           OR (
+             idempotency_keys.state = 'IN_FLIGHT'
+             AND idempotency_keys.claimed_at <= now() - ${lease}::interval
+           )
       RETURNING key
     `.execute(this.db);
 
