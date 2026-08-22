@@ -1,6 +1,8 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { sql } from 'kysely';
 
+import { HierarchyService } from '../hierarchy/hierarchy.service';
+import { NetworksService } from '../networks/networks.service';
 import {
   DuplicateAcknowledgementRequiredError,
   InvariantViolationError,
@@ -58,6 +60,49 @@ export interface SearchCursor {
   id: string;
 }
 
+/**
+ * The body a Person endpoint returns, composed here rather than in the
+ * controller.
+ *
+ * Section 22 requires a write endpoint to record **the response it returns**, and
+ * the recording happens inside the transaction, in this service. If the
+ * controller reshaped the record afterwards, the stored body and the sent body
+ * would differ and every replay would answer something the original never sent —
+ * which is exactly the defect that shape produced on the first edit endpoint
+ * written here.
+ *
+ * So the composition lives beside the recording. A controller that wants a
+ * different shape has to change this, where the consequence is visible.
+ */
+export function fullProfile(person: PersonRecord): Record<string, unknown> {
+  return {
+    id: person.id,
+    member_id: person.member_id,
+    first_name: person.first_name,
+    middle_name: person.middle_name,
+    last_name: person.last_name,
+    full_name: composeName(person),
+    // Section 3: age is derived, never persisted as authoritative data. It is not
+    // returned at all — a client that needs it computes it from the birthday,
+    // which is the one value that cannot go stale.
+    birth_date: person.birth_date,
+    sex: person.sex,
+    civil_status: person.civil_status,
+    mobile_number: person.mobile_number,
+    scope: 'FULL',
+  };
+}
+
+export function composeName(person: {
+  first_name: string;
+  middle_name: string | null;
+  last_name: string;
+}): string {
+  return [person.first_name, person.middle_name, person.last_name]
+    .filter((part): part is string => part !== null && part.trim() !== '')
+    .join(' ');
+}
+
 export interface PersonRecord {
   id: string;
   member_id: string;
@@ -74,6 +119,8 @@ export interface PersonRecord {
 export class PeopleService {
   constructor(
     @Inject(DATABASE) private readonly db: Db,
+    private readonly hierarchy: HierarchyService,
+    private readonly networks: NetworksService,
     private readonly idempotency: IdempotencyService,
   ) {}
 
@@ -92,8 +139,8 @@ export class PeopleService {
     input: CreatePersonInput,
     actor: { accountId: string; personId: string },
     claim: CurrentClaim,
-  ): Promise<PersonRecord> {
-    const network = networkFor(input.sex);
+  ): Promise<Record<string, unknown>> {
+    const network = this.networks.networkForSex(input.sex);
 
     if (input.pastoralLeaderId !== null) {
       await this.assertLeaderIsAssignable(input.pastoralLeaderId, network);
@@ -101,7 +148,21 @@ export class PeopleService {
 
     // Section 3: never merges automatically, never blocks creation. A Tier 1
     // candidate the actor has not acknowledged is asked about, not refused.
-    const unacknowledged = (await this.findDuplicates(input)).filter(
+    // Built explicitly rather than passing `input` through. `Subject` declares
+    // `mobileNumberNormalized` and `CreatePersonInput` carries `mobileNumber`, so
+    // a structural pass compiles, leaves the field undefined, and silently turns
+    // off every mobile-number rule in section 3 -- which is how those rules came
+    // to pass their own unit tests while never once firing on a real request.
+    const subject: Subject = {
+      firstName: input.firstName,
+      middleName: input.middleName ?? null,
+      lastName: input.lastName,
+      birthDate: input.birthDate,
+      sex: input.sex,
+      mobileNumberNormalized: normalizeMobile(input.mobileNumber),
+    };
+
+    const unacknowledged = (await this.findDuplicates(subject)).filter(
       (match) =>
         match.tier === 1 && !(input.acknowledgedDuplicateIds ?? []).includes(match.candidate.id),
     );
@@ -140,15 +201,12 @@ export class PeopleService {
       // Nothing is backdated and no legacy history is invented.
       const encodedAt = new Date();
 
-      await trx
-        .insertInto('network_assignments')
-        .values({
-          person_id: person.id,
-          network,
-          actor_id: actor.accountId,
-          started_at: encodedAt,
-        })
-        .execute();
+      await this.networks.assignWithin(trx, {
+        personId: person.id,
+        network,
+        actorId: actor.accountId,
+        startedAt: encodedAt,
+      });
 
       await trx
         .insertInto('person_lifecycle')
@@ -161,14 +219,11 @@ export class PeopleService {
         .execute();
 
       if (input.pastoralLeaderId !== null) {
-        await trx
-          .insertInto('pastoral_assignments')
-          .values({
-            person_id: person.id,
-            leader_id: input.pastoralLeaderId,
-            started_at: encodedAt,
-          })
-          .execute();
+        await this.hierarchy.openAssignmentWithin(trx, {
+          personId: person.id,
+          leaderId: input.pastoralLeaderId,
+          startedAt: encodedAt,
+        });
       }
 
       await trx
@@ -178,8 +233,10 @@ export class PeopleService {
           action: 'person.created',
           target_type: 'person',
           target_id: person.id,
+          // Section 21 wants the values, not merely that it happened. An entry
+          // recording only the identifiers cannot answer what was created.
           after: {
-            member_id: person.member_id,
+            ...(person as unknown as Record<string, Json>),
             network,
             pastoral_leader_id: input.pastoralLeaderId,
             acknowledged_duplicate_ids: [...(input.acknowledgedDuplicateIds ?? [])],
@@ -187,14 +244,16 @@ export class PeopleService {
         })
         .execute();
 
+      const response = fullProfile(person);
+
       // Last, and recording exactly what the endpoint returns.
       await this.idempotency.completeWithin(trx, {
         ...claim,
         status: 201,
-        body: person,
+        body: response as Json,
       });
 
-      return person;
+      return response;
     });
   }
 
@@ -220,6 +279,11 @@ export class PeopleService {
         'mobile_number',
       ])
       .where('id', '=', personId)
+      // Consistent with the other read paths. A Person absorbed by a merge is not
+      // a valid target of any later write; the survivor carries the identity
+      // (section 3, Person Merge). Merge is Stage 3, so this filters nothing
+      // today -- which is exactly when the inconsistency is cheap to remove.
+      .where('merged_into_id', 'is', null)
       .executeTakeFirst();
 
     return row ?? null;
@@ -240,7 +304,15 @@ export class PeopleService {
     limit: number,
     cursor: SearchCursor | null = null,
   ): Promise<{ rows: PersonRecord[]; nextCursor: SearchCursor | null }> {
-    const pattern = `%${normalizeName(term).replace(/\s+/g, '%')}%`;
+    // Both sides normalized. Normalizing only the term meant `Nuñez` was searched
+    // for as `nunez` against a raw stored `Nuñez` and never found -- and section 8
+    // makes this search the mechanism section 3's duplicate prevention depends on,
+    // so a miss here creates the duplicate.
+    //
+    // `%` and `_` are escaped: unescaped, `q=%%` pages out the whole directory.
+    const pattern = `%${escapeLike(normalizeName(term)).replace(/\s+/g, '%')}%`;
+    const normalizedFirst = sql<string>`lower(translate(first_name, ${ACCENTED}, ${UNACCENTED}))`;
+    const normalizedLast = sql<string>`lower(translate(last_name, ${ACCENTED}, ${UNACCENTED}))`;
 
     let query = this.db
       .selectFrom('persons')
@@ -260,9 +332,13 @@ export class PeopleService {
       .where('merged_into_id', 'is', null)
       .where((eb) =>
         eb.or([
-          eb(eb.fn('lower', ['first_name']), 'like', pattern),
-          eb(eb.fn('lower', ['last_name']), 'like', pattern),
-          eb(sql<string>`lower(first_name || ' ' || last_name)`, 'like', pattern),
+          eb(normalizedFirst, 'like', pattern),
+          eb(normalizedLast, 'like', pattern),
+          eb(
+            sql<string>`lower(translate(first_name || ' ' || last_name, ${ACCENTED}, ${UNACCENTED}))`,
+            'like',
+            pattern,
+          ),
         ]),
       )
       .orderBy('last_name')
@@ -302,12 +378,23 @@ export class PeopleService {
   /**
    * Candidates that may already be the person described (section 3).
    *
-   * The population is narrowed in SQL and scored in TypeScript. Narrowing on
-   * birthday, last name or mobile number would miss the surname-change case
-   * section 3 names, so the fetch is deliberately wider than the scoring: any row
-   * sharing a birthday, a normalized mobile number, or the first letter of either
-   * name. That is a small set in a church of this size (section 2, Scale) and
-   * keeps every rule in one readable place.
+   * The population is narrowed in SQL and scored in TypeScript, and **the
+   * narrowing is the part that can silently defeat a rule**: a candidate the SQL
+   * excludes is never scored, however well the tiers are written.
+   *
+   * So it is deliberately loose. A row qualifies on a shared birthday, a shared
+   * normalized mobile number, or a surname whose *normalized* first letter
+   * matches — normalized, because section 3 requires diacritics stripped for
+   * comparison and `Ángeles` against `Angeles` would otherwise be excluded before
+   * the matcher ever saw it.
+   *
+   * Two rules depend on more than the surname initial and are given their own
+   * branch rather than left to it: a shared first name, which is what carries the
+   * surname-change case section 3 names, and a birthday that is a digit
+   * transposition away, which by construction is not an equal birthday.
+   *
+   * That is a small set in a church of this size (section 2, Scale) and keeps
+   * every rule in one readable place.
    */
   async findDuplicates(subject: Subject): Promise<Match[]> {
     const mobile = subject.mobileNumberNormalized ?? normalizeMobile(null);
@@ -328,11 +415,28 @@ export class PeopleService {
       // only valid target of any later write (section 3, Person Merge).
       .where('merged_into_id', 'is', null);
 
+    // Compared against the normalized stored value, not the raw one. `unaccent`
+    // is an extension this schema does not install, so the normalization is done
+    // with `translate` over the characters that actually occur in these names.
+    const normalizedLastName = sql<string>`lower(translate(last_name, ${ACCENTED}, ${UNACCENTED}))`;
+    const normalizedFirstName = sql<string>`lower(translate(first_name, ${ACCENTED}, ${UNACCENTED}))`;
+
     query = query.where((eb) =>
       eb.or([
-        eb('birth_date', '=', subject.birthDate ?? '0001-01-01'),
-        eb(eb.fn('lower', ['last_name']), 'like', `${firstLetter(subject.lastName)}%`),
+        ...(subject.birthDate === null || subject.birthDate === undefined
+          ? []
+          : [eb('birth_date', '=', subject.birthDate)]),
+        eb(normalizedLastName, 'like', `${normalizedFirstLetter(subject.lastName)}%`),
+        // The surname-change case: a woman's last name may change on marriage, so
+        // a shared first name has to be able to reach her earlier record on its
+        // own (section 3).
+        eb(normalizedFirstName, '=', comparisonForm(subject.firstName)),
         ...(mobile === null ? [] : [eb('mobile_number_normalized', '=', mobile)]),
+        // A birthday one digit-transposition away is not an equal birthday, so it
+        // needs its own reach. Same length, same digits, different order.
+        ...(subject.birthDate === null || subject.birthDate === undefined
+          ? []
+          : [eb('birth_date', 'in', transpositionsOf(subject.birthDate))]),
       ]),
     );
 
@@ -373,13 +477,32 @@ export class PeopleService {
     },
     actor: { accountId: string },
     claim: CurrentClaim,
-  ): Promise<PersonRecord> {
-    const before = await this.findById(personId);
-    if (!before) {
-      throw new NotFoundError('No such person.');
-    }
-
+  ): Promise<Record<string, unknown>> {
     return this.db.transaction().execute(async (trx) => {
+      // Read inside the transaction. Outside it, a concurrent edit landing
+      // between the read and the update makes this `before` a value that was
+      // never immediately prior -- an audit entry that describes a change nobody
+      // made (section 21).
+      const before = await trx
+        .selectFrom('persons')
+        .select([
+          'id',
+          'member_id',
+          'first_name',
+          'middle_name',
+          'last_name',
+          'birth_date',
+          'sex',
+          'civil_status',
+          'mobile_number',
+        ])
+        .where('id', '=', personId)
+        .executeTakeFirst();
+
+      if (before === undefined) {
+        throw new NotFoundError('No such person.');
+      }
+
       const person = await trx
         .updateTable('persons')
         .set({
@@ -423,39 +546,16 @@ export class PeopleService {
         })
         .execute();
 
+      const response = fullProfile(person);
+
       await this.idempotency.completeWithin(trx, {
         ...claim,
         status: 200,
-        body: person,
+        body: response as Json,
       });
 
-      return person;
+      return response;
     });
-  }
-
-  /** The person's Network as it stands, for the identity fields section 8 permits. */
-  async currentNetworkOf(personId: string): Promise<NetworkName | null> {
-    const row = await this.db
-      .selectFrom('network_assignments')
-      .select('network')
-      .where('person_id', '=', personId)
-      .where('ended_at', 'is', null)
-      .executeTakeFirst();
-
-    return row?.network ?? null;
-  }
-
-  /** The name of the person's current direct leader, which section 8 permits church-wide. */
-  async directLeaderNameOf(personId: string): Promise<string | null> {
-    const row = await this.db
-      .selectFrom('pastoral_assignments as pa')
-      .innerJoin('persons as leader', 'leader.id', 'pa.leader_id')
-      .select(['leader.first_name', 'leader.last_name'])
-      .where('pa.person_id', '=', personId)
-      .where('pa.ended_at', 'is', null)
-      .executeTakeFirst();
-
-    return row ? `${row.first_name} ${row.last_name}` : null;
   }
 
   /**
@@ -484,7 +584,7 @@ export class PeopleService {
       );
     }
 
-    const leaderNetwork = await this.currentNetworkOf(leaderId);
+    const leaderNetwork = await this.networks.currentNetwork(leaderId);
     if (leaderNetwork !== network) {
       throw new InvariantViolationError(
         'A pastoral assignment may not cross Networks. This person belongs to the other Network from that leader.',
@@ -492,15 +592,6 @@ export class PeopleService {
       );
     }
   }
-}
-
-/**
- * Network follows from sex under the homogeneous-network rule, and is assigned
- * rather than proposed (SKILL.md section 4). The mapping is total, so a
- * confirmation step would ask the encoder to approve a tautology.
- */
-export function networkFor(sex: Sex): NetworkName {
-  return sex === 'MALE' ? 'MENS' : 'WOMENS';
 }
 
 /**
@@ -519,8 +610,59 @@ export function normalizeMobile(value: string | null | undefined): string | null
   return digits === '' ? null : digits;
 }
 
-function firstLetter(value: string): string {
-  return (value.trim()[0] ?? '').toLowerCase();
+/**
+ * The accented characters that occur in the names this church records, and their
+ * plain equivalents. Used by the narrowing so that the SQL strips diacritics the
+ * same way `normalizeName` does — section 3 requires it for comparison, and a
+ * narrowing that does not strip them excludes rows the matcher would have scored.
+ */
+const ACCENTED = 'áàâäãåéèêëíìîïóòôöõúùûüñçÁÀÂÄÃÅÉÈÊËÍÌÎÏÓÒÔÖÕÚÙÛÜÑÇ';
+const UNACCENTED = 'aaaaaaeeeeiiiiooooouuuuncAAAAAAEEEEIIIIOOOOOUUUUNC';
+
+/**
+ * `%` and `_` are LIKE wildcards; a search term is data, not a pattern.
+ *
+ * Unescaped, `q=%%` pages out the whole directory — and section 8 makes that
+ * directory church-wide by design, so the wildcard is the difference between a
+ * name search and a bulk export.
+ *
+ * A backslash is escaped too, and first, or escaping the wildcards would turn a
+ * literal backslash in a name into an escape for whatever followed it.
+ * PostgreSQL's LIKE takes backslash as its escape character by default.
+ */
+function escapeLike(value: string): string {
+  return value.replace(/[\\%_]/g, (match) => `\\${match}`);
+}
+
+function normalizedFirstLetter(value: string): string {
+  return (normalizeName(value)[0] ?? '').toLowerCase();
+}
+
+function comparisonForm(value: string): string {
+  return normalizeName(value);
+}
+
+/**
+ * Every birthday one adjacent-digit transposition away from this one.
+ *
+ * Section 3 lists "birthdays differing by a transposition of digits" as a Tier 2
+ * signal. The scoring implements it; without this the narrowing would never fetch
+ * such a row unless the surname happened to share an initial, which is not what
+ * the rule says.
+ */
+function transpositionsOf(date: string): string[] {
+  const swaps = new Set<string>();
+
+  for (let i = 0; i < date.length - 1; i += 1) {
+    if (!/\d/.test(date[i]) || !/\d/.test(date[i + 1]) || date[i] === date[i + 1]) {
+      continue;
+    }
+
+    swaps.add(`${date.slice(0, i)}${date[i + 1]}${date[i]}${date.slice(i + 2)}`);
+  }
+
+  // `in ()` is not valid SQL, so an empty set needs a value that matches nothing.
+  return swaps.size === 0 ? ['0001-01-01'] : [...swaps];
 }
 
 function describeCandidate(match: Match): Record<string, unknown> {

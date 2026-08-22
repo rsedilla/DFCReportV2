@@ -89,8 +89,13 @@ const NICKNAMES: readonly (readonly string[])[] = [
   ['elizabeth', 'beth', 'liza'],
 ];
 
-/** Suffixes section 3 says to ignore when comparing, and weigh separately. */
-const SUFFIXES = new Set(['jr', 'sr', 'ii', 'iii', 'iv']);
+/**
+ * The suffixes section 3 names, and only those: "Ignore the suffixes Jr, Sr, II,
+ * III when comparing, and compare them separately as a weak distinguishing
+ * signal." `IV` was here and is not on that list — a closed list in the
+ * specification is not a starting point to extend.
+ */
+const SUFFIXES = new Set(['jr', 'sr', 'ii', 'iii']);
 
 /**
  * **Normalize for comparison only. Never alter the stored values** (section 3).

@@ -106,10 +106,16 @@ describe('Tier 2 — possible', () => {
   });
 
   it('surfaces a birthday differing by a transposition of digits', () => {
-    // 1985-06-15 against 1985-06-51.
-    expect(
-      tiersFor(subject({ birthDate: '1985-06-51' }), [{ ...BASE, birthDate: '1985-06-15' }]),
-    ).toEqual([2]);
+    // The names must be similar but *unequal*. With equal names the earlier rule
+    // -- "first and last names equal, birthday differs or is absent" -- fires
+    // first and returns tier 2 on its own, so the case would pass with the
+    // transposition rule deleted entirely. It did, until this was rewritten.
+    const matches = findCandidates(subject({ firstName: 'Jaun', birthDate: '1985-06-51' }), [
+      { ...BASE, firstName: 'Juan', birthDate: '1985-06-15' },
+    ]);
+
+    expect(matches.map((match) => match.tier)).toEqual([2]);
+    expect(matches[0].reasons.join(' ')).toMatch(/transposition of digits/);
   });
 
   it('keeps birthday and first name as a signal when the surname changed', () => {

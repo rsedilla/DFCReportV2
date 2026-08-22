@@ -319,6 +319,39 @@ describe('people (SKILL.md sections 3, 7 and 8)', () => {
       expect(audit.after).toMatchObject({ civil_status: 'MARRIED' });
     });
 
+    it('records the body it returns, so a replay is the same answer', async () => {
+      // The obligation this endpoint broke when it was first written: the service
+      // recorded the raw record while the controller returned a composed profile,
+      // so a retry answered without `full_name` or `scope` and two identical
+      // requests got two different bodies (section 22).
+      const key = randomUUID();
+
+      const first = await request(app.getHttpServer())
+        .patch(`/api/v1/people/${manuel.id}`)
+        .set('Authorization', `Bearer ${raymondAccount.accessToken}`)
+        .set('Idempotency-Key', key)
+        .send({ civil_status: 'MARRIED' });
+
+      expect(first.status).toBe(200);
+      expect(first.body).toHaveProperty('full_name');
+
+      const stored = await db
+        .selectFrom('idempotency_keys')
+        .select('response_body')
+        .where('key', '=', key)
+        .executeTakeFirstOrThrow();
+      expect(stored.response_body).toEqual(first.body);
+
+      const retry = await request(app.getHttpServer())
+        .patch(`/api/v1/people/${manuel.id}`)
+        .set('Authorization', `Bearer ${raymondAccount.accessToken}`)
+        .set('Idempotency-Key', key)
+        .send({ civil_status: 'MARRIED' });
+
+      expect(retry.status).toBe(200);
+      expect(retry.body).toEqual(first.body);
+    });
+
     it('refuses to change sex through the basic edit', async () => {
       // Sex determines Network, which determines which pastoral edges are legal.
       // If it were an ordinary field edit, an actor could flip someone's Network

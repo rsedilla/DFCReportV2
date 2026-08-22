@@ -2,7 +2,8 @@ import { Inject, Injectable } from '@nestjs/common';
 
 import { DATABASE, type Db } from '../database/database.module';
 
-import type { NetworkName } from '../database/schema';
+import type { Database, NetworkName, Sex } from '../database/schema';
+import type { Transaction } from 'kysely';
 
 /**
  * The `networks` module: Network assignment and its history.
@@ -33,6 +34,49 @@ export class NetworksService {
       .executeTakeFirst();
 
     return row?.network ?? null;
+  }
+
+  /**
+   * Opens a Network assignment inside a caller's transaction.
+   *
+   * Here rather than in `people` because `networks` owns this table (section 2,
+   * Modules) and because the same-Network rules in sections 4 and 5 are checked
+   * against it. One writer is what keeps that checkable.
+   *
+   * Section 4: a person's initial Network takes effect on the date they are
+   * encoded. Nothing is backdated and no legacy history is invented.
+   */
+  async assignWithin(
+    transaction: Transaction<Database>,
+    assignment: {
+      personId: string;
+      network: NetworkName;
+      actorId: string | null;
+      startedAt: Date;
+      reason?: string | null;
+    },
+  ): Promise<void> {
+    await transaction
+      .insertInto('network_assignments')
+      .values({
+        person_id: assignment.personId,
+        network: assignment.network,
+        actor_id: assignment.actorId,
+        reason: assignment.reason ?? null,
+        started_at: assignment.startedAt,
+      })
+      .execute();
+  }
+
+  /**
+   * Network follows from sex under the homogeneous-network rule (section 4).
+   *
+   * Assigned rather than proposed: the mapping is total, so a confirmation step
+   * asks the encoder to approve a tautology, and confirmations of tautologies are
+   * clicked without being read. The field that can genuinely be wrong is sex.
+   */
+  networkForSex(sex: Sex): NetworkName {
+    return sex === 'MALE' ? 'MENS' : 'WOMENS';
   }
 
   /** The person's Network as it stands now. */

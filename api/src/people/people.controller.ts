@@ -10,9 +10,16 @@ import {
   type CurrentClaim,
 } from '../common/idempotency/current-idempotency.decorator';
 import { HierarchyService } from '../hierarchy/hierarchy.service';
+import { NetworksService } from '../networks/networks.service';
 
 import { CreatePersonDto, EditPersonDto, SearchPeopleDto } from './dto/people.dto';
-import { PeopleService, type PersonRecord, type SearchCursor } from './people.service';
+import {
+  composeName,
+  fullProfile,
+  PeopleService,
+  type PersonRecord,
+  type SearchCursor,
+} from './people.service';
 
 /**
  * `/api/v1/people` (SKILL.md section 22).
@@ -29,6 +36,7 @@ export class PeopleController {
   constructor(
     private readonly people: PeopleService,
     private readonly hierarchy: HierarchyService,
+    private readonly networks: NetworksService,
     private readonly authorization: AuthorizationService,
   ) {}
 
@@ -52,7 +60,7 @@ export class PeopleController {
     @CurrentActor() actor: Actor,
     @CurrentIdempotency() claim: CurrentClaim,
   ): Promise<Record<string, unknown>> {
-    const person = await this.people.create(
+    return this.people.create(
       {
         firstName: body.first_name,
         middleName: body.middle_name ?? null,
@@ -67,8 +75,6 @@ export class PeopleController {
       actor,
       claim,
     );
-
-    return person as unknown as Record<string, unknown>;
   }
 
   @Get(':id')
@@ -126,7 +132,10 @@ export class PeopleController {
     @CurrentActor() actor: Actor,
     @CurrentIdempotency() claim: CurrentClaim,
   ): Promise<Record<string, unknown>> {
-    const person = await this.people.editBasic(
+    // Returned unchanged. The service composed this body and recorded it inside
+    // the write's transaction, and reshaping it here would make the sent response
+    // differ from the stored one (section 22).
+    return this.people.editBasic(
       id,
       {
         firstName: body.first_name,
@@ -139,8 +148,6 @@ export class PeopleController {
       actor,
       claim,
     );
-
-    return fullProfile(person);
   }
 
   /**
@@ -172,7 +179,7 @@ export class PeopleController {
       }
 
       if (grant.scope.type === 'NETWORK' && grant.scope.network !== null) {
-        if ((await this.people.currentNetworkOf(personId)) === grant.scope.network) {
+        if ((await this.networks.currentNetwork(personId)) === grant.scope.network) {
           return true;
         }
       }
@@ -182,9 +189,15 @@ export class PeopleController {
   }
 
   /**
-   * Exactly the five fields section 8 permits for a person outside the viewer's
-   * pastoral scope: Member ID, full name, sex, current Network, and the name of
-   * their current direct leader.
+   * The five fields section 8 permits for a person outside the viewer's pastoral
+   * scope — Member ID, full name, sex, current Network and the name of their
+   * current direct leader — plus two that are not about them.
+   *
+   * `id` is the handle the duplicate-acknowledgement flow needs to name a
+   * candidate back to the server, and `scope` tells a client it is looking at a
+   * withheld profile rather than an empty one. Section 8's list is about a
+   * person's *details*, and neither of these is one; they are named here rather
+   * than left for a reader to notice the count does not match.
    *
    * Written as a list of what is *included* rather than as a list of what is
    * removed. A redaction that deletes named fields lets the next field added to
@@ -193,8 +206,8 @@ export class PeopleController {
    */
   private async minimalIdentity(person: PersonRecord): Promise<Record<string, unknown>> {
     const [network, leader] = await Promise.all([
-      this.people.currentNetworkOf(person.id),
-      this.people.directLeaderNameOf(person.id),
+      this.networks.currentNetwork(person.id),
+      this.hierarchy.directLeaderNameOf(person.id),
     ]);
 
     return {
@@ -247,29 +260,4 @@ function decodeCursor(value: string | undefined): SearchCursor | null {
 
 function encodeCursor(cursor: SearchCursor | null): string | null {
   return cursor === null ? null : Buffer.from(JSON.stringify(cursor), 'utf8').toString('base64url');
-}
-
-function fullProfile(person: PersonRecord): Record<string, unknown> {
-  return {
-    id: person.id,
-    member_id: person.member_id,
-    first_name: person.first_name,
-    middle_name: person.middle_name,
-    last_name: person.last_name,
-    full_name: composeName(person),
-    // Section 3: age is derived, never persisted as authoritative data. It is not
-    // returned at all — a client that needs it computes it from the birthday,
-    // which is the one value that cannot go stale.
-    birth_date: person.birth_date,
-    sex: person.sex,
-    civil_status: person.civil_status,
-    mobile_number: person.mobile_number,
-    scope: 'FULL',
-  };
-}
-
-function composeName(person: PersonRecord): string {
-  return [person.first_name, person.middle_name, person.last_name]
-    .filter((part): part is string => part !== null && part.trim() !== '')
-    .join(' ');
 }
