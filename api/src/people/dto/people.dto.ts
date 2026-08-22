@@ -1,0 +1,196 @@
+import { Type } from 'class-transformer';
+import {
+  ArrayMaxSize,
+  IsArray,
+  IsDateString,
+  IsIn,
+  IsInt,
+  IsOptional,
+  IsString,
+  IsUUID,
+  Length,
+  Matches,
+  Max,
+  Min,
+} from 'class-validator';
+
+import type { CivilStatus, Sex } from '../../database/schema';
+
+/**
+ * Section 25, rules 5 and 6: never add a civil-status or sex value beyond these
+ * unless the requirements explicitly change. The database holds the same two
+ * enumerations; this is the outer of the two checks, not the only one.
+ */
+const SEXES: Sex[] = ['MALE', 'FEMALE'];
+
+/**
+ * A date-only field is `YYYY-MM-DD` and nothing else (SKILL.md section 22:
+ * "Never send a date-only field as a timestamp; the conversion is where months
+ * silently shift").
+ *
+ * `@IsDateString({ strict: true })` alone is not enough — it accepts a full ISO
+ * timestamp. One arriving here would be stored, compared as a raw string against
+ * stored `YYYY-MM-DD` values, and match nothing: every Tier 1 birthday rule and
+ * the whole transposition rule would go quiet, and creation would proceed without
+ * the acknowledgement section 3 requires, with nothing reporting a problem. The
+ * shape check is what refuses it; `IsDateString` still does the work of refusing
+ * a date that does not exist.
+ */
+const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
+const CIVIL_STATUSES: CivilStatus[] = ['SINGLE', 'MARRIED', 'WIDOWED'];
+
+/**
+ * Validation supports legitimate names containing spaces, hyphens, apostrophes
+ * and Unicode (SKILL.md section 3, Name handling). There is deliberately no
+ * "letters only" rule: it rejects real names and teaches encoders to invent
+ * spellings, which is how duplicates get made.
+ */
+export class CreatePersonDto {
+  @IsString()
+  @Length(1, 100)
+  first_name!: string;
+
+  @IsOptional()
+  @IsString()
+  @Length(0, 100)
+  middle_name?: string | null;
+
+  @IsString()
+  @Length(1, 100)
+  last_name!: string;
+
+  /** A plain `YYYY-MM-DD` Asia/Manila date, never a timestamp (section 22). */
+  @Matches(DATE_ONLY, { message: 'must be a plain YYYY-MM-DD date, not a timestamp' })
+  @IsDateString({ strict: true })
+  birth_date!: string;
+
+  @IsIn(SEXES)
+  sex!: Sex;
+
+  @IsIn(CIVIL_STATUSES)
+  civil_status!: CivilStatus;
+
+  /**
+   * Optional, and loosely validated (section 3). A required contact field gets
+   * filled with fictions, and family abroad, visitors and landlines all produce
+   * numbers no local mobile pattern accepts.
+   */
+  @IsOptional()
+  @IsString()
+  @Length(0, 40)
+  mobile_number?: string | null;
+
+  /**
+   * Required here, though the service permits null. Section 9 captures the leader
+   * at registration, and the guard resolves this endpoint's scope against them —
+   * so a request without one has no target to authorize against.
+   */
+  @IsUUID()
+  pastoral_leader_id!: string;
+
+  /** Tier 1 candidates the actor has seen and passed over (section 3). */
+  @IsOptional()
+  @IsArray()
+  @IsUUID('4', { each: true })
+  @ArrayMaxSize(50)
+  acknowledged_duplicate_ids?: string[];
+}
+
+/**
+ * `people.edit_basic` covers a person's own descriptive fields and nothing else
+ * (section 7). Sex is absent deliberately: it determines Network, which
+ * determines which pastoral edges are legal, so it has its own capability and its
+ * own audited path. `whitelist` and `forbidNonWhitelisted` are on globally, so a
+ * request carrying `sex` is refused rather than quietly ignored.
+ */
+export class EditPersonDto {
+  @IsOptional()
+  @IsString()
+  @Length(1, 100)
+  first_name?: string;
+
+  @IsOptional()
+  @IsString()
+  @Length(0, 100)
+  middle_name?: string | null;
+
+  @IsOptional()
+  @IsString()
+  @Length(1, 100)
+  last_name?: string;
+
+  @IsOptional()
+  @Matches(DATE_ONLY, { message: 'must be a plain YYYY-MM-DD date, not a timestamp' })
+  @IsDateString({ strict: true })
+  birth_date?: string;
+
+  @IsOptional()
+  @IsIn(CIVIL_STATUSES)
+  civil_status?: CivilStatus;
+
+  @IsOptional()
+  @IsString()
+  @Length(0, 40)
+  mobile_number?: string | null;
+}
+
+/**
+ * The pre-flight duplicate check (SKILL.md section 3; section 9, step 1: "Search
+ * existing People first").
+ *
+ * Everything is optional except the names, because this is asked *before* a
+ * Person exists and an encoder may not yet have a birthday or a number. Section 3
+ * is explicit that a missing middle name or birthday never counts against a
+ * match.
+ */
+export class DuplicateCandidatesDto {
+  @IsString()
+  @Length(1, 100)
+  first_name!: string;
+
+  @IsString()
+  @Length(1, 100)
+  last_name!: string;
+
+  @IsOptional()
+  @Matches(DATE_ONLY, { message: 'must be a plain YYYY-MM-DD date, not a timestamp' })
+  @IsDateString({ strict: true })
+  birth_date?: string;
+
+  @IsOptional()
+  @IsIn(SEXES)
+  sex?: Sex;
+
+  @IsOptional()
+  @IsString()
+  @Length(0, 40)
+  mobile_number?: string;
+
+  /** Section 22: defaults to 50, maximum 200. */
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(200)
+  limit?: number;
+}
+
+export class SearchPeopleDto {
+  @IsString()
+  @Length(2, 100)
+  q!: string;
+
+  /** Opaque, and passed back unmodified (section 22). */
+  @IsOptional()
+  @IsString()
+  @Length(1, 500)
+  cursor?: string;
+
+  /** Section 22: defaults to 50, maximum 200. */
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(200)
+  limit?: number;
+}

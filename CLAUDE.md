@@ -1101,6 +1101,184 @@ committed in the entry written to warn against it.
 
 Written to `SKILL.md` §22.
 
+### 2026-08-22 — `people.create`, and how a Tier 1 duplicate is refused
+
+Two rulings the `people` module could not be written without, both the same shape
+as `people.correct_sex`: §7 declares its capability list closed, and had nothing
+for either.
+
+**`people.create`, the twenty-sixth capability.** Leader at own/subtree, Admin and
+Senior Pastors at Whole Church — the scopes `people.edit_basic` carries, because
+§9 has ordinary leaders registering VIPs and that workflow creates most Person
+records. Routing them through Admin would stall it.
+
+Scope resolves against **the pastoral leader the new Person is placed under**,
+which §9 step 3 already requires the request to carry. That is what stops a leader
+placing someone into a branch they do not oversee, and it settles the case a
+subtree-scoped actor cannot reach: creating a Person under nobody. §5 permits an
+unassigned Person, but only the import creates one, and the import runs as Admin
+through the service rather than through this endpoint.
+
+Folding creation into `people.edit_basic` was rejected: §7 defines that capability
+as covering "corrections to a person's own descriptive fields", and the name would
+stop describing what it grants.
+
+**`DUPLICATE_ACKNOWLEDGEMENT_REQUIRED`, 409, carrying the candidates.** §3 requires
+a Tier 1 candidate to be acknowledged before a Person is created, and also says
+the system never blocks creation — so this is not a refusal, it is the request for
+that acknowledgement. The client shows the candidates and resubmits with them
+acknowledged.
+
+Deliberately not `VALIDATION_FAILED`. The input is well-formed and the answer is a
+human decision; a client branching on a validation code would render a duplicate
+as a field error. That is the argument §22 already makes for
+`IDEMPOTENCY_KEY_REUSED` not being one.
+
+Written to `SKILL.md` §7 and §22.
+
+### 2026-08-22 — Three rulings the `people` module needed, all found by review
+
+**A sex mismatch annotates a duplicate candidate; it does not demote it.** §3's
+Tier 1 conditions carry no sex term, and §3 separately calls sex "a frequently
+mis-keyed field". The first implementation demoted a Tier 1 candidate to Tier 2 on
+a mismatch — which quietly removed the acknowledgement requirement from precisely
+the candidates most likely to be one person recorded twice: same name, same
+birthday, sex entered wrong. The discrepancy is carried in the candidate's reasons
+instead, where the person deciding sees it. A differing suffix follows the same
+rule.
+
+**An archived Person may not be the destination leader of a new assignment.** §5
+refuses to *reassign* an archived Person and says nothing about them acquiring a
+disciple, so the first implementation allowed it. A live pastoral edge under a
+Person who is not `CURRENT` corrupts every subtree total walking through them —
+the corruption §3 refuses when archiving a Person who leads a Cell. Written to §5
+beside the merged-Person prohibition, answering `INVARIANT_VIOLATION`.
+
+**Tier 2 candidates surface through a pre-flight lookup, not through creation.**
+§3 says a Tier 2 candidate is "presented in a candidate list" and §22 sketched no
+route for one, so they were computed and discarded: creation can only ever refuse
+on Tier 1. `GET /api/v1/people/duplicate-candidates` is that list, and §9 already
+asks for it as the first step of registering a VIP.
+
+Returning them on the create response was rejected: it puts a duplicate-review
+payload on every successful creation, and acts after the record exists rather than
+before. Deferring was rejected because §3 says the matcher earns its keep during
+the initial encoding effort, which is this stage's own step 11.
+
+**The ruling had a consequence worth closing in the same change.** Match reasons
+name the field that matched, so "same birthday" asserts that an out-of-scope
+person's birthday equals a value the caller submitted — a disclosure §8 forbids.
+Reasons are therefore withheld for a candidate outside the viewer's scope; the
+tier still travels, because the encoder needs to know how strong the match is.
+
+*The first version of this entry said the same leak on **creation** was tolerable
+"because a probe there creates a record every time, which is loud", and the
+second version called that false. Both were wrong, in opposite directions.*
+
+A probe that **hits** throws before the transaction opens and writes nothing. A
+probe that **misses** falls through and creates a Person — a Member ID off the
+sequence, a Network row, a lifecycle row, an assignment, an audit entry. So
+enumerating a birthday through creation writes tens of thousands of records,
+which is what "loud" meant and is very nearly right; a single confirmatory probe
+against a value already suspected is quiet, which is what the correction was
+reaching for. Scoping the refusal identically is the right remedy either way, and
+it stands.
+
+Recorded rather than tidied, because this entry has now carried a wrong reason
+twice — in the entry written to warn that a wrong reason here is worse than
+none.
+
+### 2026-08-22 — A duplicate candidate outside the viewer's scope carries no tier
+
+§3 as first amended let the duplicate lookup return a candidate's tier
+church-wide, and §8 forbids disclosing an out-of-scope person's birthday or
+mobile number. Both could not stand, and the contradiction was introduced by the
+amendment rather than found in the specification.
+
+**The tier is withheld out of scope, along with the reasons.** What travels is
+that the person is a possible match — which is what §3 needs the encoder to know:
+somebody may already be recorded, so stop and ask the leader who holds them.
+
+The tier had to go because it *is* the disclosure. It is derived from which rule
+fired, so with an equal first and last name Tier 1 means the submitted birthday
+matched and Tier 2 means it did not. Returning it church-wide is a yes/no
+birthday oracle over a name §8 already makes visible — enumerable over a few
+thousand values, answered 200 every time, writing nothing. Withholding the
+reasons while keeping the tier hid the wording and kept the information, which is
+the shape of the two corrections above it in this log.
+
+Two alternatives were rejected. Amending §8 to permit the tier, with a rate limit
+and an audit entry per lookup, is honest but widens the section that exists to
+stop exactly this, for a convenience the encoder does not need — knowing someone
+is a possible match is enough to make them ask. Scoping the rows to the viewer's
+subtree closes it completely and defeats the endpoint: a cross-branch duplicate
+is the one §3 says the matcher exists to catch, and §8 makes the directory
+church-wide for that reason.
+
+Written to `SKILL.md` §3, which now states the redaction rather than sanctioning
+the leak, and applies it to the Tier 1 refusal as well.
+
+### 2026-08-22 — Membership of a candidate list is itself a disclosure
+
+Three attempts at one redaction, and the first two failed the same way: each
+removed a field from the returned object while the answer stayed in the response
+by construction.
+
+First the reasons were withheld out of scope, because they name the field that
+matched. Then the tier, because a tier is derived from which rule fired and so
+carries the same fact one step removed. Neither touched **which candidates were
+returned** — and with a first name matching nobody, the only rule that can fire
+is the one comparing birthdays, so presence in the list *is* the predicate "this
+person's birthday equals the value I submitted". One bit per request, 200 either
+way, nothing written. Substituting a mobile number confirms a suspected number in
+a single request.
+
+**An out-of-scope candidate is surfaced only where the rule that matched rests on
+what §8 already publishes** — the names and sex. Membership is then a function of
+nothing §8 protects, which is the property the first two attempts were reaching
+for and neither expressed.
+
+**The test is whether a publishable rule *would* have matched, not which rule
+actually won**, and getting that backwards cost a CI round. The matcher runs
+twice: once on the subject as given, and once on a subject stripped of everything
+§8 protects. The second run decides membership out of scope.
+
+Keying it on the winning rule instead — a flag the rule sets when it reads a
+protected field — hid anyone matching on *both* their names and their birthday,
+because the stronger rule wins and the stronger rule reads the birthday. Their
+presence was already explained by the names, so hiding them protected nothing and
+lost a real candidate. The failing test said so before the reasoning did.
+
+Both runs happen inside one service method used by every surface, so a third one
+cannot be added that runs the matcher once and leaks.
+
+**Two consequences, both accepted in writing.**
+
+Only a candidate the viewer can be shown in full may gate creation. Refusing on
+an invisible one would answer "acknowledge this" with nothing to acknowledge —
+and, less obviously, **the refusal is itself a channel**: every Tier 1 rule reads
+a protected field, so gating on an out-of-scope candidate would make the response
+vary, refused against created, with a value §8 protects. That is the same
+disclosure one field further out, and it is why the gate is in-scope-only rather
+than merely why the message would be unhelpful.
+
+And a cross-branch duplicate resting on a birthday is no longer caught for a
+leader outside that branch; it is still caught by the leader who holds them, and
+by Admin, which is where §3 authorizes a merge from anyway.
+
+Two alternatives were rejected. Amending §8 to permit the channel, with a rate
+limit and an audit entry per lookup, trades prevention for detection on the
+section that exists to prevent exactly this. Scoping the rows to the viewer's
+subtree closes it and defeats the endpoint, since a cross-branch duplicate is
+what §3 says the matcher is for.
+
+*Recorded at length because the failure repeated.* Both earlier attempts were
+reasoned about in terms of what the response contained rather than what the
+response was a function of, and both were written into `SKILL.md` as settled
+before they were. That is the same fault as the backdate floor, the zero-length
+row and the Nest status ordering — a mechanism described from the part of it that
+was being looked at.
+
 ### Open — awaiting a ruling
 
 **One item awaits a ruling and blocks Stage 5. Eight other things are unsettled, none of them blocking. They are listed at the end, so this section is the whole of what is open.**

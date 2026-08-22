@@ -297,11 +297,35 @@ Whitespace normalization carries unusual weight here. `Dela Cruz`, `DelaCruz`, a
 
 **Never a match on its own:** a common surname alone, a first name alone, or sex alone. Sex is a supporting signal: a mismatch lowers confidence but never excludes a candidate, because it is a frequently mis-keyed field.
 
+**A sex mismatch annotates a candidate; it does not lower its tier.** The Tier 1 conditions above carry no sex term, and demoting on a mismatch would take the acknowledgement requirement off exactly the candidates most likely to be one person recorded twice — same name, same birthday, sex entered wrong. The discrepancy travels with the candidate so that the person deciding sees it and weighs it. A differing suffix is treated the same way, and for the same reason.
+
 **A matching mobile number is a strong signal, but never sufficient alone.** Households share numbers, and a minor is commonly recorded with a parent's number, so two different people legitimately holding the same number is normal rather than exceptional. Treat a matching number with an equal last name as Tier 2, and with equal first and last names as Tier 1. Never treat a number alone as a match, and never block creation on one.
 
 **Middle name absence never counts against a match.** It is optional (above) and is frequently left blank.
 
 **A woman's last name may change on marriage.** Where last names differ, birthday together with first name remains a Tier 2 signal on its own. Do not require surname equality.
+
+**Tier 2 candidates need somewhere to appear.** A creation workflow can only ever refuse on Tier 1, so if candidates were surfaced only at the moment of creation, every Tier 2 match would be computed and discarded. They are presented before creation instead, by a pre-flight lookup the encoder makes with the details they have so far — which is also what Section 9 asks for as the first step of registering a VIP: search existing People first.
+
+That lookup reads the whole directory, as Section 8's church-wide search does and for the same reason. What it may say about a candidate depends on whether that candidate is inside the viewer's pastoral scope, and the rule has two parts — of which the first is the one that is easy to get wrong.
+
+**Which candidates appear.** A candidate outside the viewer's scope is surfaced only if they would **still** have matched a subject carrying nothing Section 8 protects — no birthday, no mobile number. Membership out of scope is therefore a function of the names and sex alone.
+
+The test is whether a publishable rule *would* have matched, not which rule actually won. Someone matching on both their names and their birthday is classified by the stronger rule, which reads the birthday — but their presence is already explained by the names, so hiding them protects nothing and loses a real candidate.
+
+This is not a refinement of the field rule below, it is the load-bearing half. **Membership of the list is itself a disclosure**: submit a first name that matches nobody and a surname Section 8 already makes readable, and the only rule that can fire is the one comparing birthdays — so "this person is in the result" *is* "their birthday equals the value I submitted", answered identically every time and writing nothing. No redaction of the returned object reaches that, because the object is not where the answer is.
+
+**What an appearing candidate carries.** In scope, the tier and the reasons it matched. Out of scope, neither. The reasons name the field, and the tier is derived from which rule fired — with an equal first and last name, Tier 1 means the birthday matched and Tier 2 means it did not, so returning the tier church-wide is the same oracle one step removed.
+
+Both parts apply wherever candidates are returned, including the refusal that asks for a Tier 1 acknowledgement.
+
+**Only a candidate the viewer can be shown in full may gate creation**, which means one inside their pastoral scope. Two reasons, and the second is the one that is easy to miss.
+
+An out-of-scope Tier 1 candidate cannot be shown with its tier or reasons, so refusing on one would answer "acknowledge this" with nothing to acknowledge, leaving that Person impossible to create at all — a worse failure than the duplicate, and what this section means by never blocking creation.
+
+And the refusal itself is a channel. Every Tier 1 rule reads a birthday or a mobile number, so gating on an out-of-scope candidate would make the response vary — refused against created — with a value Section 8 protects. That is the same disclosure as the candidate list, one field further out.
+
+**The cost is real and is accepted here rather than discovered later.** A cross-branch duplicate whose match rests on a birthday — the woman whose surname changed on marriage is the case this section names — is no longer surfaced to a leader outside her branch. It is still surfaced to the leader who holds her, and to Admin and the Senior Pastors at Whole Church scope, which is where a merge is authorized from in any case (Section 3, Person Merge).
 
 Thresholds and edit distances must be calibrated against real data rather than fixed here. Log the candidates shown and what the user chose, and revisit the rules once there is enough history to see what the matcher is missing and what it is over-reporting.
 
@@ -719,6 +743,8 @@ An archived Person (Section 3) must not be reassigned. Restore them to `CURRENT`
 
 A Person absorbed into another by Merge (Section 3) must never be reassigned. The surviving Person is the only valid target.
 
+**An archived Person may not be given a new disciple either.** They may not be reassigned, and they may not be the *destination* of someone else's assignment: a live pastoral edge under a Person who is not `CURRENT` corrupts every subtree total that walks through them, which is the same corruption Section 3 refuses when archiving a Person who leads a Cell. Restore them first — an explicit, separately authorized decision — or choose another leader. The refusal answers `INVARIANT_VIOLATION`: it is a rule about what may be recorded, whoever submits it.
+
 Every reassignment is audit logged as a pastoral leader transfer with actor, target, previous leader, new leader, and timestamp (Section 21), and must be explainable in Network Summary as a pastoral transfer (Section 16).
 
 ---
@@ -937,6 +963,7 @@ Do not equate hierarchy position with software permissions.
 The capabilities are exactly:
 
 - `people.view_subtree`
+- `people.create`
 - `people.edit_basic`
 - `people.manage_lifecycle`
 - `people.manage_pastoral_assignment`
@@ -992,6 +1019,7 @@ Three roles exist. Each carries the default capabilities and scopes below. Anyth
 | Capability | Senior Pastor | Admin | Leader |
 | --- | --- | --- | --- |
 | `people.view_subtree` | Whole Church | Whole Church | own/subtree |
+| `people.create` | Whole Church | Whole Church | own/subtree |
 | `people.edit_basic` | Whole Church | Whole Church | own/subtree |
 | `people.manage_lifecycle` | Whole Church | Whole Church | — |
 | `people.manage_pastoral_assignment` | Whole Church | Whole Church | own/subtree |
@@ -1147,7 +1175,7 @@ Those conditions are enforced in the owning module's domain layer — `hierarchy
 
 A grant is revoked by setting `revoked_at`, never by deleting the row. The history of who could do what, and when, is part of the audit record.
 
-**`read_only` is valid only on a read capability.** The twenty-five divide cleanly:
+**`read_only` is valid only on a read capability.** The twenty-six divide cleanly:
 
 - **Read:** `people.view_subtree`, `dcc.view_subtree`, `cell.view_subtree`, `reports.view_subtree`, `audit.view`
 - **Write:** every other capability in the list
@@ -2625,8 +2653,9 @@ POST /api/v1/auth/forgot-password
 POST /api/v1/auth/reset-password
 GET  /api/v1/auth/me
 
+GET  /api/v1/people                       search, church-wide (Section 8)
+GET  /api/v1/people/duplicate-candidates  declared before /{id}, or it is one
 GET  /api/v1/people/{id}
-GET  /api/v1/people/search
 GET  /api/v1/people/{id}/pastoral-path
 
 GET  /api/v1/network/my-tree
@@ -2664,7 +2693,7 @@ Timestamps are ISO 8601 with an offset. Date-only fields — an attendance date,
 Cursor-based, on every collection endpoint:
 
 ```text
-GET /api/v1/people/search?q=dela+cruz&limit=50
+GET /api/v1/people?q=dela+cruz&limit=50
 {
   "data": [ ... ],
   "next_cursor": "b3BhcXVlLWN1cnNvcg"
@@ -2706,6 +2735,7 @@ One envelope, always:
 | `IDEMPOTENCY_KEY_REUSED` | 409 | The key was already used for a different request. Never retry |
 | `REQUEST_IN_FLIGHT` | 409 | The original request with this key has not finished. Retry after a short delay |
 | `INVARIANT_VIOLATION` | 409 | A domain rule rejects the write — cycle, cross-Network edge, two active assignments |
+| `DUPLICATE_ACKNOWLEDGEMENT_REQUIRED` | 409 | A Tier 1 duplicate candidate must be acknowledged before the Person is created (Section 3). The candidates are in `details` |
 | `NOT_FOUND` | 404 | No such record, or its existence must not be disclosed |
 
 `CAPABILITY_DENIED` and `SCOPE_DENIED` are deliberately distinct, because capability and scope are independent grants (Section 7) and an administrator diagnosing a permission problem needs to know which one failed.

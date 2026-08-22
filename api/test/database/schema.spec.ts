@@ -280,7 +280,7 @@ describe('the schema (SKILL.md sections 4, 5, 6 and 7)', () => {
   });
 
   describe('the closed enumerations of section 7', () => {
-    it('stores exactly the twenty-five capabilities', async () => {
+    it('stores exactly the twenty-six capabilities', async () => {
       expect(await enumLabels(db, 'capability')).toEqual([...ALL_CAPABILITIES]);
     });
 

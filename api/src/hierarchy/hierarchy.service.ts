@@ -4,6 +4,9 @@ import { sql } from 'kysely';
 import { InvariantViolationError } from '../common/errors/api-error';
 import { DATABASE, type Db } from '../database/database.module';
 
+import type { Database } from '../database/schema';
+import type { Transaction } from 'kysely';
+
 /**
  * The `hierarchy` module: pastoral assignments, subtree resolution, and the
  * section 5 invariants. It is the only writer of `pastoral_assignments`, which is
@@ -71,6 +74,52 @@ export class HierarchyService {
     this.rejectCycle(result.rows, personId);
 
     return result.rows.map((row) => row.person_id);
+  }
+
+  /**
+   * Opens a pastoral assignment inside a caller's transaction.
+   *
+   * Here rather than in the calling module because `hierarchy` is the only writer
+   * of `pastoral_assignments`, and SKILL.md section 2 gives the reason: the five
+   * section 5 invariants "have exactly one place to live" only while that stays
+   * true. Where four modules write a table, an invariant needs checking in four
+   * places and the fourth is the one somebody forgets.
+   *
+   * The transaction is the caller's because the assignment is part of a larger
+   * atomic operation — creating a Person opens their Network, their lifecycle and
+   * this row together, and none of it may commit without the rest.
+   */
+  async openAssignmentWithin(
+    transaction: Transaction<Database>,
+    assignment: { personId: string; leaderId: string | null; startedAt: Date },
+  ): Promise<void> {
+    await transaction
+      .insertInto('pastoral_assignments')
+      .values({
+        person_id: assignment.personId,
+        leader_id: assignment.leaderId,
+        started_at: assignment.startedAt,
+      })
+      .execute();
+  }
+
+  /**
+   * The name of the person's current direct leader, or null.
+   *
+   * Section 8 permits this church-wide, for a person outside the viewer's own
+   * scope, as one of the five fields that let an encoder recognise an existing
+   * record.
+   */
+  async directLeaderNameOf(personId: string): Promise<string | null> {
+    const row = await this.db
+      .selectFrom('pastoral_assignments as pa')
+      .innerJoin('persons as leader', 'leader.id', 'pa.leader_id')
+      .select(['leader.first_name', 'leader.last_name'])
+      .where('pa.person_id', '=', personId)
+      .where('pa.ended_at', 'is', null)
+      .executeTakeFirst();
+
+    return row === undefined ? null : `${row.first_name} ${row.last_name}`;
   }
 
   /** The immediate children of a leader, whether or not they qualify as leaders. */

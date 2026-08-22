@@ -25,6 +25,12 @@ export const ApiErrorCode = {
   REQUEST_IN_FLIGHT: 'REQUEST_IN_FLIGHT',
   /** A domain rule rejects the write: cycle, cross-Network edge, two active assignments. */
   INVARIANT_VIOLATION: 'INVARIANT_VIOLATION',
+  /**
+   * A Tier 1 duplicate candidate must be acknowledged before the Person is
+   * created (section 3). The candidates are in `details`; the client shows them
+   * and resubmits with an acknowledgement.
+   */
+  DUPLICATE_ACKNOWLEDGEMENT_REQUIRED: 'DUPLICATE_ACKNOWLEDGEMENT_REQUIRED',
   /** No such record, or its existence must not be disclosed. */
   NOT_FOUND: 'NOT_FOUND',
 
@@ -47,6 +53,7 @@ const STATUS_BY_CODE: Record<ApiErrorCode, number> = {
   IDEMPOTENCY_KEY_REUSED: 409,
   REQUEST_IN_FLIGHT: 409,
   INVARIANT_VIOLATION: 409,
+  DUPLICATE_ACKNOWLEDGEMENT_REQUIRED: 409,
   NOT_FOUND: 404,
   RATE_LIMITED: 429,
   INTERNAL_ERROR: 500,
@@ -99,6 +106,27 @@ export class ScopeDeniedError extends ApiError {
 export class InvariantViolationError extends ApiError {
   constructor(message: string, details: Record<string, unknown> = {}) {
     super(ApiErrorCode.INVARIANT_VIOLATION, message, details);
+  }
+}
+
+/**
+ * Section 3: the system never merges automatically and never blocks creation. It
+ * surfaces candidates and a person decides -- so this is not a refusal to create,
+ * it is a request for the acknowledgement section 3 requires before a Tier 1
+ * candidate is passed over.
+ *
+ * Deliberately not `VALIDATION_FAILED`. The input is well-formed and the answer
+ * is a human decision; a client branching on a validation code would render this
+ * as a field error, which is the same argument section 22 makes for
+ * `IDEMPOTENCY_KEY_REUSED`.
+ */
+export class DuplicateAcknowledgementRequiredError extends ApiError {
+  constructor(candidates: readonly unknown[]) {
+    super(
+      ApiErrorCode.DUPLICATE_ACKNOWLEDGEMENT_REQUIRED,
+      'This may be someone already recorded. Review the candidates, then resubmit acknowledging them.',
+      { candidates },
+    );
   }
 }
 
