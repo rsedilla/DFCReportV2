@@ -186,7 +186,12 @@ describe('people (SKILL.md sections 3, 7 and 8)', () => {
 
     it('refuses a leader in the other Network', async () => {
       // A pastoral assignment never crosses Networks (section 5, invariant 5).
-      const response = await post(raymondAccount, randomUUID()).send(
+      //
+      // Admin, deliberately. A Leader cannot reach a Women's Network root at all,
+      // so the guard would answer SCOPE_DENIED first and the case would pass
+      // without the invariant ever being consulted -- proving the guard works,
+      // which another case already does, rather than the rule under test.
+      const response = await post(adminAccount, randomUUID()).send(
         personBody({ pastoral_leader_id: geraldine.id }),
       );
 
