@@ -33,6 +33,20 @@ export const ApiErrorCode = {
   DUPLICATE_ACKNOWLEDGEMENT_REQUIRED: 'DUPLICATE_ACKNOWLEDGEMENT_REQUIRED',
   /** No such record, or its existence must not be disclosed. */
   NOT_FOUND: 'NOT_FOUND',
+  /**
+   * Another operation holds the record this write must serialize against, and the
+   * wait timed out (section 5, Database enforcement). Transient: retry shortly.
+   *
+   * **A 5xx deliberately, and that is not cosmetic.** Section 22 stores a 4xx
+   * against the idempotency key and releases the key on a 5xx, because the first
+   * is a decision the rules reached and the second carries no decision at all.
+   * Contention reached no decision, so storing it would pin a transient failure to
+   * that key for the whole retention and leave the client with no way past it —
+   * which is the failure the release rule exists to prevent. Falling on the 5xx
+   * side of that split makes the right thing happen structurally, rather than by a
+   * special case in the interceptor that somebody has to remember.
+   */
+  RESOURCE_BUSY: 'RESOURCE_BUSY',
 
   // The table in section 22 is a minimum. These two carry no domain meaning and
   // exist so that every response, including a failure nobody anticipated, is one
@@ -55,6 +69,7 @@ const STATUS_BY_CODE: Record<ApiErrorCode, number> = {
   INVARIANT_VIOLATION: 409,
   DUPLICATE_ACKNOWLEDGEMENT_REQUIRED: 409,
   NOT_FOUND: 404,
+  RESOURCE_BUSY: 503,
   RATE_LIMITED: 429,
   INTERNAL_ERROR: 500,
 };
@@ -133,6 +148,16 @@ export class DuplicateAcknowledgementRequiredError extends ApiError {
 export class NotFoundError extends ApiError {
   constructor(message = 'Not found.', details: Record<string, unknown> = {}) {
     super(ApiErrorCode.NOT_FOUND, message, details);
+  }
+}
+
+export class ResourceBusyError extends ApiError {
+  constructor(details: Record<string, unknown> = {}) {
+    super(
+      ApiErrorCode.RESOURCE_BUSY,
+      'Another change to this record is in progress. Retry in a moment.',
+      details,
+    );
   }
 }
 

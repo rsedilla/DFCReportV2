@@ -1,4 +1,4 @@
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import {
   ArrayMaxSize,
   IsArray,
@@ -13,6 +13,8 @@ import {
   Max,
   Min,
 } from 'class-validator';
+
+import { canonicalId } from '../../common/identifiers';
 
 import type { CivilStatus, Sex } from '../../database/schema';
 
@@ -38,6 +40,25 @@ const SEXES: Sex[] = ['MALE', 'FEMALE'];
  */
 const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
 const CIVIL_STATUSES: CivilStatus[] = ['SINGLE', 'MARRIED', 'WIDOWED'];
+
+/**
+ * Identifiers arrive canonical, so that nothing downstream has to remember that a
+ * `uuid` column compares case-insensitively while TypeScript does not
+ * (`common/identifiers.ts` gives the two defects this has already caused).
+ *
+ * Typed rather than inlined, because `TransformFnParams.value` is `any` and an
+ * inline arrow returns it as `any` into a `string` field — which is how a
+ * transform that silently did nothing would look exactly like one that worked.
+ */
+function toCanonicalId({ value }: { value: unknown }): unknown {
+  return typeof value === 'string' ? canonicalId(value) : value;
+}
+
+function toCanonicalIds({ value }: { value: unknown }): unknown {
+  return Array.isArray(value)
+    ? (value as unknown[]).map((item) => toCanonicalId({ value: item }))
+    : value;
+}
 
 /**
  * Validation supports legitimate names containing spaces, hyphens, apostrophes
@@ -84,12 +105,19 @@ export class CreatePersonDto {
    * Required here, though the service permits null. Section 9 captures the leader
    * at registration, and the guard resolves this endpoint's scope against them —
    * so a request without one has no target to authorize against.
+   *
+   * Canonicalized on the way in, like every identifier a client supplies: a `uuid`
+   * column compares case-insensitively and TypeScript does not, so an id spelled in
+   * uppercase is one record to the database and a different string to any
+   * comparison written here (`common/identifiers.ts`).
    */
+  @Transform(toCanonicalId)
   @IsUUID()
   pastoral_leader_id!: string;
 
   /** Tier 1 candidates the actor has seen and passed over (section 3). */
   @IsOptional()
+  @Transform(toCanonicalIds)
   @IsArray()
   @IsUUID('4', { each: true })
   @ArrayMaxSize(50)
@@ -132,6 +160,54 @@ export class EditPersonDto {
   @IsString()
   @Length(0, 40)
   mobile_number?: string | null;
+}
+
+/**
+ * The audited sex correction of SKILL.md section 4.
+ *
+ * Not part of `EditPersonDto` and never will be: sex determines Network, which
+ * determines which pastoral edges are legal, so it carries its own capability
+ * (`people.correct_sex`, Admin-only at Whole Church) and forces a Network change
+ * and the reassignment that goes with it.
+ */
+export class CorrectSexDto {
+  @IsIn(SEXES)
+  sex!: Sex;
+
+  /**
+   * Required. Section 4: every use of this endpoint is a correction, and
+   * `network_assignments.reason` is nullable only because an initial assignment
+   * has nothing to explain.
+   */
+  @IsString()
+  @Length(1, 500)
+  reason!: string;
+
+  /**
+   * The leader the person moves to, in their **new** Network.
+   *
+   * Required exactly when the person holds an open pastoral edge, because section
+   * 4 makes the change and the reassignment one atomic operation and neither may
+   * validly precede the other. Rejected when they hold none, so that a client
+   * naming a leader is never quietly ignored.
+   */
+  @IsOptional()
+  @Transform(toCanonicalId)
+  @IsUUID()
+  pastoral_leader_id?: string;
+
+  /**
+   * A plain `YYYY-MM-DD` Asia/Manila date, never a timestamp (section 22),
+   * resolved to the start of that day in that zone (section 20).
+   *
+   * Its presence is what makes this a backdated correction, which additionally
+   * requires `records.backdate_effective_date` (section 5) and is bounded by the
+   * floor in section 4. Absent, the correction takes effect when it is recorded.
+   */
+  @IsOptional()
+  @Matches(DATE_ONLY, { message: 'must be a plain YYYY-MM-DD date, not a timestamp' })
+  @IsDateString({ strict: true })
+  effective_date?: string;
 }
 
 /**

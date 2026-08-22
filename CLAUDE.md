@@ -229,6 +229,7 @@ Bishop Oriel Ballano and Pastora Geraldine Ballano hold `people.manage_pastoral_
 The actor crosses Networks; the edge never does. The resulting leader-to-disciple edge must still be same-Network, which makes that check — rather than the shape of the tree — the only thing preventing a cross-Network edge. Written to `SKILL.md` §5 and §7, and surfaced by name in Network Summary per §16.
 
 ### 2026-08-19 — Network roots
+**Partly superseded** on 2026-08-23 by "The root is a row" below. "With no pastoral assignment" is the reading that was dropped: a root holds an active assignment row whose `leader_id` is null. Everything else here stands — exactly one root per Network, and no one may reassign them.
 Each Network has exactly one root leader with no pastoral assignment, and a root cannot be reassigned by anyone. Written to `SKILL.md` §5 (Network roots).
 
 ### 2026-08-19 — Agent roster reduced to two
@@ -998,7 +999,13 @@ that as a different body answers `IDEMPOTENCY_KEY_REUSED` — which §22 makes
 permanent and says must never be retried, turning an ordinary retry into a dead
 end. Arrays keep their order, because order is meaning in an array.
 
-Written to `SKILL.md` §22.
+Written to `SKILL.md` §22 — **except that these last two were not, and reached §22
+only on 2026-08-23**: the 4xx/5xx split and the canonicalized fingerprint were
+implemented, recorded here, and claimed as specified. The gap surfaced when a later
+ruling cited §22 for the store/release rule four times over and
+`architecture-guardian` went looking for it. "A decision that lives only in a chat
+session does not exist" applies equally to one that lives only in this log and in
+the code, and nothing checks a "Written to §22" claim.
 
 ### 2026-08-22 — A claim and a response are bounded separately
 
@@ -1279,11 +1286,420 @@ before they were. That is the same fault as the backdate floor, the zero-length
 row and the Nest status ordering — a mechanism described from the part of it that
 was being looked at.
 
+### 2026-08-23 — Six rulings the sex-correction route needed, settled before the code
+
+Section 4 describes the correction in detail and left six things undefined that an
+endpoint cannot avoid answering. Each is amended into `SKILL.md` in the same change.
+
+**An effective date is a day; the backdate floor is an instant; the refusal names
+the day after the floor's day.** Section 22 makes an effective date a date-only
+`YYYY-MM-DD` Asia/Manila field and section 4 states the floor at timestamp
+precision, and nothing said how one becomes the other. A date-only field resolving
+to an instant takes 00:00:00 of that day in the named zone — written to section 20,
+which is the single authority for period boundaries, rather than to the one section
+that happened to need it first.
+
+The consequence is arithmetic and holds unconditionally, which is why the refusal
+can name a date rather than echoing a timestamp: the start of the floor's own day is
+never strictly later than the floor, and the start of the next day always is. An
+administrator handed the raw floor would have to work out which day to submit, and
+the day containing it is the one day guaranteed to be refused again.
+
+**A correction always carries a reason.** `network_assignments.reason` is nullable
+because an initial assignment has nothing to explain. A correction is what the
+column exists for, and every one of them is a correction.
+
+**A correction that changes nothing is `VALIDATION_FAILED`.** With two sexes and a
+total mapping this is reachable only by submitting the recorded value. Refused
+rather than accepted silently: the operation demands a reason and writes an audit
+trail, and an audited correction that corrected nothing misleads whoever reads it.
+The retry case it might otherwise have served is already served by
+`Idempotency-Key`.
+
+**An archived Person's sex may be corrected only where no reassignment is forced.**
+Section 5 forbids reassigning an archived Person and the atomic pair is a
+reassignment, so the correction is refused while they hold an open pastoral edge —
+restore first. Where they hold none, which is the ordinary state after archival,
+nothing is stranded and the Network change stands alone. Refusing outright was
+rejected: a data correction on an archived record is legitimate, and it is
+re-parenting one that section 5 objects to.
+
+**`people.correct_sex` covers nothing at a scope narrower than Whole Church.**
+Section 7 gives it one scope and the guard alone cannot hold that, because the guard
+asks whether a grant covers the target — so a grant issued at `OWN_SUBTREE` would
+pass for everyone inside that subtree. Held there it is precisely the escalation the
+capability is Admin-only to close: moving a person between Networks, re-parenting
+them on the way, without ever holding `people.manage_pastoral_assignment`. The
+operation refuses with `SCOPE_DENIED`, on the same reasoning as the `read_only`
+rejection — a row that cannot mean what it appears to mean is refused rather than
+honoured in part.
+
+**One operation writes one audit entry per action it performed**, and `action` is
+`<noun>.<past-tense verb>`. This closes the vocabulary item this log has carried as
+open. Section 21's list is open — it opens with "including" — so what is settled is
+the convention, not an enumeration; without it `pastoral_assignment.transferred` and
+`pastoral.transfer` are equally defensible and the log cannot be queried.
+
+A correction therefore writes up to four entries in its own transaction:
+`sex.corrected`, `network.changed`, `pastoral_assignment.transferred` where one was
+forced, and `effective_date.backdated` where the date was set in the past. Section 21
+lists each separately and section 5 independently requires the transfer entry to
+carry its previous and new leader. One entry describing everything was rejected
+because a reader searching for transfers must find that entry whether it arose from
+a reassignment or from a correction. They are related by sharing an actor, a target
+and an `occurred_at`; `batch_id` is not borrowed for it, because it means one bulk
+import and overloading it would make an import indistinguishable from a compound
+correction.
+
+### 2026-08-23 — Reading the Network-change trigger fired twice, which is what the section 4 floor is about
+
+Recorded as a mechanism rather than as a decision, because the floor in section 4 is
+stated as a rule and is impossible to check against the schema without it — and
+because on this project every rule written about this trigger by reasoning from its
+purpose rather than its `WHERE` clause has been wrong.
+
+`assert_network_change_keeps_edges` fires **twice** in one correction, and the two
+firings select different edges:
+
+- **On the `UPDATE` closing the old Network row**, the bound is the *old row's*
+  `started_at`, not the effective date. That selects nearly every edge the person
+  has ever held, each compared at `GREATEST(edge.started_at, old_row.started_at)`,
+  and it passes only while that instant is still covered by the old Network row —
+  that is, while the edge began strictly before `eff`.
+- **On the `INSERT` of the new Network row**, the bound is the effective date. Edges
+  with `ended_at > eff` are selected, and the old edge closed at exactly `eff` is
+  not — which is what makes the one-instant rule in section 4 work at all.
+
+They are listed in that order because that is the order they fire in. The partial
+unique index `network_assignments_one_open` forces the close to precede the open, a
+deferred constraint trigger's events fire at commit in the order they were queued,
+so the `UPDATE` firing is the **first**.
+
+**An earlier version of this entry said the `UPDATE` firing was the second, and
+said both strictness rules were properties of it. Both halves were wrong**, and the
+second contradicted this entry's own bullets four lines further down. Corrected in
+place rather than deleted, because this is the entry written to warn against
+describing a mechanism from the part of it being looked at, and it did exactly
+that. Found by `architecture-guardian` reading the SQL.
+
+The terms divide between the firings rather than coming from one:
+
+- **Term (a)** comes from the `UPDATE` firing. `eff` equal to the current
+  assignment's `started_at` closes it at its own start; the resulting zero-length
+  row is selected there and compared at `eff`, where the person already resolves to
+  the corrected Network. Hence strictly later.
+- **Term (b) at exact equality with a zero-length closed edge** comes from the same
+  firing, for the same reason.
+- **Term (b) in its ordinary case** — an effective date below a closed edge's
+  `ended_at` — comes from the `INSERT` firing, which selects anything with
+  `ended_at > eff`. This is the half the earlier wording denied while its own
+  bullet asserted it.
+
+**Section 4's uniform strict form is conservative by one instant on term (b), and
+that is followed rather than optimised.** For an ordinary closed edge with
+`started_at < ended_at`, `eff` equal to its `ended_at` in fact passes both firings.
+The strict form refuses it. Narrowing the rule to zero-length rows alone would make
+the implementation disagree with the specification to gain one instant, on the part
+of this system where reasoning from purpose has already been wrong four times.
+
+**A second bound, on the Network row rather than on the edges.** An effective date
+at or before the moment the open Network row began is refused, separately from the
+floor.
+
+**The first version of this entry got this wrong in two ways, and both are
+corrected here rather than deleted.** It bounded only dates strictly *below* the
+row's `started_at`, treating the case as a translation of `CHECK (ended_at >=
+started_at)` into a readable message. Equality is the case that matters: it closes
+the live Network row at its own start, and section 5 makes such a row inert, so the
+person's former Network silently disappears from every as-of query and every
+past-period report for them moves. And it claimed the branch was "reachable only
+for a null-`leader_id` root row written by an import". That is false. It is reached
+by any Person with no pastoral assignment at all — both floor subqueries are empty,
+section 4 says such a correction may be backdated freely, and an effective date
+before their Network row's start lands there with no root row in the picture.
+
+Both found by `architecture-guardian`. The ruling built on the false claim — that
+no further bound was needed because the corner was unreachable — does not survive
+it, so the bound is now stated in `SKILL.md` section 4 as a rule rather than
+excused as a corner.
+
+### 2026-08-23 — Three rulings the review of the sex correction forced, and one gap it found
+
+`architecture-guardian` returned six findings on the first pass. Two were live
+defects, three were false statements in the files written to record the mechanism,
+and one was a test that survived deleting half the rule it was checking. The three
+that needed rulings are below; the two false statements are corrected in place in
+the entries above, which is where they were made.
+
+**Section 5 invariant 4 binds every operation that reassigns, not only the
+reassignment endpoint.** The sex correction performs a reassignment and checked no
+part of it. The Whole Church rule settled earlier the same day does not cover it and
+cannot: that one asks how far a grant reaches, this one asks who the actor is
+relative to the target, and a holder of an explicit Whole Church grant passes the
+first while needing to fail the second.
+
+The gap was reachable and this branch's own test built the precondition for it: a
+`LEADER` account granted `people.correct_sex` at Whole Church, correcting its own
+record and naming any leader in the other Network, detaches itself from its own
+upline. That is the escalation section 7 gives as the *reason* the capability is
+Admin-only — reached without ever holding `people.manage_pastoral_assignment` — and
+section 5 calls it privilege escalation through the org chart.
+
+It now lives in `hierarchy`, because `PUT /people/{id}/pastoral-leader` owes it too
+and would otherwise reinvent it. It is the one authorization rule in the system
+decided by **role** rather than by capability, which is how section 5 states it: the
+point is that Admin and the Senior Pastors sit outside the pastoral incentive, not
+that they were granted something extra.
+
+**Recorded because the reasoning failed the same way twice in one day.** The
+position this replaces was "the capability is Admin-only, so the role catalog
+satisfies invariant 4" — a rule enforced by a table nothing checks, which is the
+argument this project rejects everywhere else and which was accepted here without
+being written down.
+
+**A correction may not be dated at or before the moment the Network it corrects took
+effect.** Separate from the floor and not a term of it: it bounds the Network row
+rather than the pastoral edges. At exact equality the live row is closed at its own
+`started_at`, and section 5 makes such a row inert — so the period the person spent
+in their former Network vanishes from every as-of query and every past-period report
+for them moves, with nothing raised. Section 5 reserves a zero-length close for a row
+entered in error; a correction is effective-dated, and section 4 already accepts in
+writing that closed periods keep the Network recorded for them. Erasing the period is
+the opposite of that bargain rather than a stronger form of it.
+
+Reachable wherever the floor is empty, which is most ordinarily a Person with no
+pastoral assignment — the case section 4 says may be backdated "freely". Freely means
+as far back as the record goes, not before the record begins.
+
+**Where no date can clear the floor, the refusal names none.** The floor falls on the
+current day whenever a disciple has just been moved aside, which section 4 calls the
+*ordinary* outcome — and the day after today is tomorrow, which no correction may
+take. The refusal was therefore naming the one answer guaranteed to be refused again,
+which is precisely what section 4 requires the system not to do. It now says the
+correction cannot be backdated and will take effect now if submitted without an
+effective date, which always succeeds: every bound is read from a row already
+written, so it lies in the past.
+
+**A Network root is not moved between Networks by a data correction.** Derived rather
+than invented: section 5 gives each Network exactly one root and says changing who
+holds a root position is a Network-level decision, so moving one here would leave one
+Network rootless and the other with two. Refused before the disciple refusal, so a
+root — who by construction leads people — is refused for the reason that applies.
+
+The guard detects the representation the schema carries, an open row with a null
+`leader_id`. Section 5 also describes a root as having no active assignment at all,
+and under that reading this does not fire. That ambiguity is the root-representation
+item this log has carried as open since 2026-08-22; this is a fail-closed guard on
+the representation in use, not an answer to "is this person a root", and it is the
+first code that would benefit from settling it.
+
+**The sixth finding needed no ruling and is worth recording as a test lesson.**
+Term (b)'s `person_id` disjunct could be deleted from the floor query with the whole
+suite still green: every floor case bound on term (a) or on the leader side, and the
+subordinate side was covered only against the *trigger*, never against the code that
+computes the floor. The failure it would have allowed is the one the floor exists to
+prevent — a raw `check_violation` at `COMMIT`, a 500 instead of a date the
+administrator can act on. "What mutation would this fail against" is the question
+that finds these, and it has to be asked per rule rather than per test.
+
+### 2026-08-23 — The root is a row, and a person lock serializes the same-Network rule
+
+Two Stop Conditions escalated by the second `architecture-guardian` pass, both
+ruled on rather than guarded around.
+
+**A Network root is an active pastoral assignment whose `leader_id` is null.**
+Section 5 asserted both that a root has "no active pastoral assignment" and that
+"A root leader has a null `leader_id`", which are different claims about whether a
+row exists. The row-based reading is settled, and the contradictory sentence is
+gone.
+
+Two things decide it. It is the only reading under which "is this person a root"
+is a question the database can answer, and section 4's refusal to move a root
+between Networks needs exactly that — a root must be refused where somebody merely
+unassigned must not be. And the alternative needs a durable record of who the
+roots are, which section 7 declined to create because it would put the church's two
+most consequential positions behind a row somebody could edit.
+
+Invariant 3's "zero is legitimate in exactly three situations" becomes two: a
+Person not yet assigned, and an archived Person. A root is no longer one of them.
+
+The evidence that this was the reading already in use is a test whose name and body
+disagreed. `permits zero open assignments, which is legitimate for a Network root`
+asserted a row with a null `leader_id` in its body. The schema, the fixtures and
+every existing test already did it this way; only the prose was undecided.
+
+**An advisory lock on the person serializes a Network change against a concurrent
+edge write.** The deferred triggers each see only their own transaction's
+commit-time state, which leaves a window neither closes: an edge opened under the
+person, dated just before the change's effective instant and committing just after
+it, is invisible to the change's comparison and legal by its own. The result is a
+permanent cross-Network edge, against a rule section 5 calls hard on every write.
+
+Reachable today through `POST /api/v1/people`, which is why this was not deferred to
+the reassignment endpoint. The first version of the open item claimed the other path
+did not exist yet; it does.
+
+An advisory lock rather than `SELECT ... FOR UPDATE` on `persons`, because the two
+paths live in different modules and `persons` belongs to `people` — a row lock would
+mean `networks` reading a table it does not own in order to coordinate rather than to
+read. Advisory locks are coordination primitives belonging to no table, and being
+transaction-scoped they cannot be leaked by a failing path.
+
+**The ordering rule is the part that will be got wrong**, so the helper sorts rather
+than trusting its callers: two corrections moving people under each other, each
+locking its own person first, deadlock, and PostgreSQL rather than we choose the
+victim. Locks are issued one statement per key, because `FOR UPDATE` with `ORDER BY`
+does not guarantee rows are locked in sorted order and the same caution applies to
+batching.
+
+The test holds the lock and asserts the correction does **not** proceed, then
+releases it and asserts it does. Firing two requests concurrently and hoping to
+observe the race would pass against no lock at all nearly every run, which is the
+test-that-passes-for-the-wrong-reason this log keeps recording.
+
+### 2026-08-23 — `RESOURCE_BUSY`, and why its status carries the rule
+
+The person lock introduced the first unbounded intra-request wait in the system.
+`pg_advisory_xact_lock` waits forever, §24 bounds the pool at ten with no
+acquisition timeout, and nothing sets a statement or lock timeout anywhere. One
+client left idle in a transaction blocks every request touching that person, each
+blocked request holds a connection, and at ten of them the liveness probe cannot
+obtain one either — it runs `SELECT 1` on the same pool, so a healthy process is
+read as dead and restarted, losing the transactions that were making progress.
+
+**A three-second `lock_timeout`, and a new §22 code answered on the way out.**
+`RESOURCE_BUSY`. Three seconds is longer than any transaction that legitimately
+takes this lock — each is a handful of statements — and short enough that the
+queue drains rather than accumulating.
+
+**The status is 503, and choosing it was the whole of the decision.** §22 stores a
+4xx against the idempotency key and releases the key on a 5xx, and the reason is
+that the first is a decision the rules reached and the second carries none.
+Contention reaches no decision. A 409 — which is where every other conflict-shaped
+code in §22 sits, and the obvious choice — would have been *stored*, so every later
+retry of that key would replay the transient failure for the full retention. That
+is precisely the dead end §22's release rule exists to prevent, and it would have
+been introduced by the change that was fixing a different unbounded-wait problem.
+
+Recorded because the alternative was worse in an instructive way: keeping 409 and
+teaching the interceptor to release this one code. That works and is one more thing
+somebody must remember for every code added afterwards. Putting the code on the
+correct side of a split that already exists makes the behaviour structural, which is
+the same argument §2 makes for the capability guard and §22 for `completeWithin`'s
+transaction parameter.
+
+The test asserts the retry, not the refusal. A case checking only that a blocked
+write answers 503 would pass equally against the stored-forever version.
+
+### 2026-08-23 — Three corrections to the lock, and two rules that were never written down
+
+Fourth `architecture-guardian` pass. Two behavioural defects, and two rules this
+log had recorded as specified while `SKILL.md` did not contain them.
+
+**The lock key is computed from the identity, not from its spelling.**
+`hashtextextended` is case-sensitive; a `uuid` column comparison is not, and
+`@IsUUID()` accepts either case. So the same leader named in uppercase and in
+lowercase compared equal everywhere in the system except in the lock, where they
+took two different keys and serialized against nothing — reopening the window the
+lock had just been built to close. `UUID().uuidString` on iOS is uppercase by
+default and §2 names iOS as a client, so this was not hypothetical. The key is now
+taken over `id::uuid::text`.
+
+**`SET LOCAL lock_timeout` bounds the whole transaction, not the acquisition.** The
+comment said it reverts for the pooled connection's next occupant, which is true,
+and stopped there — so nothing said it also stays in force for the row locks the
+caller takes afterwards, including the idempotency key's in `completeWithin`. Those
+raise `55P03` at call sites that know nothing about locks, where it was neither
+caught nor recognised: an unhandled 500, logged as a defect, for ordinary
+contention.
+
+Kept rather than narrowed, because those waits are unbounded otherwise and an
+unbounded wait inside a transaction holding a pooled connection is the same hazard
+the timeout was added for. What it required was classifying an elapsed wait as
+`RESOURCE_BUSY` **wherever it is raised**, which `ApiExceptionFilter` now does. §5
+says both halves.
+
+*This is the fifth time on this project that a mechanism was described from the
+part of it being looked at.* The others are the backdate floor, the zero-length
+row, the Nest status ordering, and the §8 redaction.
+
+**The sort key changed and `SKILL.md` did not.** Ordering by lock key rather than by
+person id was right — a collision can otherwise give two callers opposite
+acquisition orders, which is a cycle rather than mere over-serialization — but §5
+was left stating the old rule in two places, in a commit that edited the paragraph
+directly beneath it. Both now say ascending lock key.
+
+**Two rules were cited to §22 and were not in §22.** The 4xx-stored / 5xx-released
+split, and the canonicalized fingerprint. The 2026-08-22 ruling says both were
+written there; neither was, and the first had by then become the entire
+justification for `RESOURCE_BUSY` being a 503. §22 now carries both, and that entry
+is annotated.
+
+**§24 gained the pool and the probe**, for the same reason: §5 cited §24 for a
+bounded pool and a liveness probe sharing it, and §24 contained neither. Whether the
+probe should keep sharing the pool is an operational decision, recorded as open
+rather than settled.
+
+**Two tests were named for more than they pinned.** The `POST /people` case claimed
+to pin lock-before-check and would have passed under either order; it now names an
+**archived** leader, so a request that validated first would refuse without ever
+waiting. And nothing pinned §5's ordering rule at all — the property whose absence
+is a deadlock with a PostgreSQL-chosen victim. It is pinned now by holding the
+*higher* of two keys and asserting the caller is **holding** the lower one while it
+waits, which is true only if the helper sorted.
+
+### 2026-08-23 — An identifier is compared canonically, and the class was wider than the instance
+
+Fifth `architecture-guardian` pass, and the only finding was the one that mattered
+most on the branch: **§5 invariant 4 was bypassable by spelling the target's
+identifier in uppercase.**
+
+Both halves of the check are JavaScript string comparisons — the target against the
+actor, and the target against the actor's ancestors — between a client-supplied path
+parameter and identifiers that came out of `uuid` columns. Everything else on that
+path normalizes for free, because everything else ends in a SQL comparison: the
+capability guard, the reads, and (since the previous batch) the lock key. Invariant 4
+does not, and it is the only check on the path that fails **open**. Admin and Senior
+Pastor return early, so those two comparisons are the entire protection against the
+one actor class the rule exists for, and a mis-spelled identifier removed it.
+
+`UUID().uuidString` on iOS is uppercase by default and §2 names iOS as a client, so
+this is reachable input rather than a contrivance.
+
+**The batch before this one fixed exactly this defect in the lock key and did not
+look for the rest of the class.** That is the lesson worth keeping. The recorded
+rationale for the lock fix — a `uuid` column compares case-insensitively and
+TypeScript does not — applies verbatim to every identifier comparison in the
+application, and there were three more:
+
+- **Invariant 4**, above. Fails open; a security defect.
+- **The duplicate-acknowledgement gate** (§3), where a client echoing candidate ids
+  back in uppercase never satisfies it — so the refusal is permanent and that Person
+  can never be created. That is the block §3 says must never happen, and it is worse
+  than the duplicate it guards against. Introduced before this branch and fixed here
+  because one change closes both and because leaving it would recreate the defect the
+  moment somebody read the lock fix as complete.
+- **`isWithinSubtree`'s self-check**, which fails closed and merely denies.
+
+**Fixed in two places deliberately.** A pipe normalizes path parameters and a
+transform normalizes the identifier fields of every DTO, so nothing downstream has to
+remember; and the authority check normalizes again, because a check that fails open
+must not depend on a caller having wired a pipe. Written to `SKILL.md` §7, beside
+invariant 4's own rule, because the consequence is an authorization one.
+
+**Also in this batch, found without the review:** the lock-timeout predicate had been
+put in `database/person-lock.ts` and imported by the exception filter, which points
+`common` at a module. It moved to `common/errors/postgres-errors.ts`, so both arrows
+point the same way. Behaviourally identical; it is about which direction the
+dependency runs.
+
 ### Open — awaiting a ruling
 
-**One item awaits a ruling and blocks Stage 5. Eight other things are unsettled, none of them blocking. They are listed at the end, so this section is the whole of what is open.**
+**One item awaits a ruling and blocks Stage 5. Seven other things are unsettled, none of them blocking. They are listed at the end, so this section is the whole of what is open.**
 
 Nine items that stood here on 2026-08-22 were settled that day and are recorded above. Seven were Stop Conditions for Stage 2, and the last two were opened and closed the same day by `architecture-guardian` passes.
+
+The `audit_log.action` vocabulary left this list on 2026-08-23, settled by the ruling above: the convention is `<noun>.<past-tense verb>`, and section 21's list stays open.
 
 **What an aggregate Cell attendance view offers in place of buckets.** Monthly-attendance buckets are a Cell-scope view only, because N belongs to a Cell and aggregating across different N inflates `Completed` for the Cells that recorded least (`SKILL.md` §12). At leader and Network scope the spec offers unique people, classification and coverage, and does not say whether anything should replace the buckets. Settle it in Stage 5 against real data.
 
@@ -1297,6 +1713,5 @@ Two related questions have defined behaviour and are recorded in `SKILL.md` §12
 - **The native client framework.** `SKILL.md` §2 settles the web stack and says nothing about Android and iOS. Deferred since the specification was written; indexed here because two rules now point at it as open.
 - **What the native clients owe on accessibility.** `SKILL.md` §23 binds the web application to WCAG 2.2 AA and says the equivalent obligation for a native client is the platform accessibility API rather than WCAG. Which platform guarantees, and what would fail a build, is a ruling to make when the client is.
 
-- **The root's representation.** §5 says both that a root leader has "no active pastoral assignment" and that "A root leader has a null `leader_id`", and invariant 3 lists zero assignments as legitimate for a root. Those disagree about whether a row exists. The schema permits either, the test fixtures insert a row, and the same-Network trigger passes a null-`leader_id` row without comparison, so nothing currently depends on the answer — §4's backdate floor was deliberately written over edges with a leader so that it does not. Settle it before anything queries "is this person a root", which is a different question under each reading.
-- **The `audit_log.action` identifier vocabulary has no home in `SKILL.md`.** §21 gives prose descriptions and says `action` is "an identifier from the list above"; the identifiers themselves are minted in `api/src/database/schema.ts` and shaped by a regex in the migration. The next module to write an entry has nothing to consult, so `pastoral_assignment.transferred` and `pastoral.transfer` are equally defensible. §21 deliberately does not close its list, so this is a naming convention to record rather than an enumeration to fix.
+- **Whether the liveness probe should share the application connection pool.** §24 now records that it does, and that pool exhaustion therefore presents to the platform as a dead process — so the response is a restart that discards the transactions still making progress. A separate connection, or a probe that does not reach the database, are both defensible and mean different things by "healthy". Deployment work with a ruling attached, alongside the database-role item above.
 - **Whether `audit_log`'s append-only guarantee tolerates `TRUNCATE`.** §5 records the exemption for history tables and leans it on a least-privilege role that does not exist, which is already open above. §21 says nothing at all, and the test suite truncates `audit_log` before every test. Same answer as the `TRUNCATE` question above, most likely, but it is not written down for the one table whose whole purpose is that nothing removes a row.
