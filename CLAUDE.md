@@ -51,6 +51,35 @@ A change is not complete until it is verified.
 - Authorization is tested at the API layer, not only the service layer, because the API is the sole authority for authorization (`SKILL.md` §7).
 - Invariants that can be expressed as database constraints are verified to exist as database constraints, not only as application code.
 
+### Write endpoints
+
+Four things a write endpoint owes, none of which anything detects. They are here
+rather than only in `SKILL.md` §22 because a reviewer needs a list, and because
+the three that concern the completion are invisible in a passing test suite.
+
+- **It records its idempotency completion inside the transaction that performs
+  the write** (`completeWithin`), never after it. Recording afterwards leaves a
+  window where the write has committed and the claim has not been closed, and the
+  claim lease then lets a retry perform the write again.
+- **What it records is the response it returns.** A replay reproduces what was
+  stored, not what was sent, so a divergence hands two identical requests two
+  different answers. It follows that an endpoint must not commit its completion
+  and then fail: the client would receive the failure while the store holds the
+  success every retry replays.
+- **The recording is the last statement in the transaction.** It takes the key's
+  row lock, and a concurrent retry waits on that lock rather than being answered
+  `REQUEST_IN_FLIGHT`.
+- **It lets a lost claim abort the write.** `completeWithin` throws when it
+  matches nothing; that exception is not caught and the transaction is rolled
+  back. Swallowing it commits a write nothing recorded.
+
+`api/test/api/idempotency.e2e.spec.ts` carries the exemplar to copy,
+`records-its-own-completion`, and three probes that exist to break one rule each
+so a test can catch it: `divergent-completion` records a body it does not return,
+`rolls-back` fails after recording itself, and `slow-write` holds its transaction
+open until its claim is taken. Each is labelled where it is written; none is the
+shape to copy.
+
 ### Accessibility
 
 `SKILL.md` §23 commits the web application to **WCAG 2.2 Level AA**. A conformance claim with nothing that can fail is a wish, so it is discharged in three parts.
@@ -999,17 +1028,84 @@ means executing a committed write again — sooner than before, not never. That
 window is narrow and real, and closing it needs the completion to share the
 write's transaction rather than follow it.
 
+### 2026-08-22 — A write endpoint records its idempotency completion in its own transaction
+
+The gap the claim lease narrowed and could not close. The claim is taken before
+the handler and, left to the interceptor, recorded after it — so a failure in
+between (a dropped connection, a killed process, a statement timeout) leaves a
+committed write with an unfinished claim. The lease then lets a retry perform
+that write again, sooner rather than never.
+
+**The completion joins the write's transaction.** The effect and the record of it
+commit together or not at all, which is the only arrangement that closes the
+window rather than shrinking it.
+
+The two paths compose without coordinating, which is what makes this cheap.
+`complete` carries `state = 'IN_FLIGHT'` in its predicate, so once a handler has
+set the row to `COMPLETED` inside its transaction, the interceptor's call
+afterwards matches nothing and leaves it alone. Nothing has to tell the
+interceptor that the handler already recorded itself, and an endpoint that writes
+nothing keeps the old path unchanged — there is nothing to perform twice.
+
+Two alternatives were rejected. Requiring every write endpoint to be safe to run
+twice puts the burden on each one forever, and §5's reassignment is not naturally
+re-runnable: a second run closes and reopens rows that were already correct.
+Accepting the window and documenting it is honest but wrong for this system —
+attendance exists nowhere else (§24), and a duplicated submission is exactly what
+§22 says the header exists to prevent.
+
+`completeWithin` takes the caller's transaction and is the mechanism. Its
+parameter is typed `Transaction<Database>` rather than the pooled connection, so
+the one mistake a write endpoint can make — recording outside the transaction it
+just wrote in, which reopens the whole window and reads as compliant at the call
+site — is a compile error rather than an invisible one. That is the standard §2
+sets for the capability guard and §22 sets for the interceptor.
+
+**The trade is recorded rather than glossed.** The record now commits *ahead of*
+the outcome: the handler names its own status and body inside the transaction,
+before the framework has produced a response. Anything that changes the response
+afterwards leaves the stored answer disagreeing with the sent one, and the
+interceptor cannot correct it, because its own call carries `state = 'IN_FLIGHT'`
+and the row is already `COMPLETED`. §22 therefore requires what is recorded to be
+the response the endpoint returns, and requires the recording to be the last
+statement in the transaction — it holds the key's row lock, and a concurrent
+retry waits on that lock instead of being answered `REQUEST_IN_FLIGHT`.
+
+**A claim gained an identity in the same change, closing a defect that was
+already on `main`.** The lease lets a request take a key over, and a takeover sets
+`state = 'IN_FLIGHT'` again — which was the only thing completion and release
+matched on. So a slow request whose lease expired could complete or release the
+claim that replaced it: storing its response against another request's work,
+discarding that request's completion silently, and, since a takeover also
+rewrites the fingerprint, leaving one request's response stored under another's.
+Migration 0004 adds `claim_id`, minted per claim including on takeover, and every
+write against the row carries the identity it was given.
+
+That defect shipped with the lease and was found only because this branch added a
+comment claiming it was handled. The comment was wrong, and being wrong in
+writing is what made it visible — which is an argument for stating a mechanism's
+guarantees explicitly even when nothing yet depends on them.
+
+*An earlier version of this entry claimed the composition depends on READ
+COMMITTED, and that under REPEATABLE READ the interceptor's statement would raise
+a serialization failure. That is wrong.* The interceptor's `complete` runs on the
+pooled connection with no explicit transaction, after the handler's has already
+committed, so it takes a fresh snapshot at statement start under any isolation
+level and simply matches nothing. There is no earlier snapshot to conflict with
+and no blocked statement. The composition does not depend on the isolation level
+at all.
+
+Recorded rather than deleted because it is the same fault the entry above
+describes — a guarantee asserted about a mechanism from a partial reading of it —
+committed in the entry written to warn against it.
+
+Written to `SKILL.md` §22.
+
 ### Open — awaiting a ruling
 
-**Two items await a ruling and block a stage: one blocks the first write endpoint, one blocks Stage 5. Eight other things are unsettled, none of them blocking. They are listed at the end, so this section is the whole of what is open.**
+**One item awaits a ruling and blocks Stage 5. Eight other things are unsettled, none of them blocking. They are listed at the end, so this section is the whole of what is open.**
 
-**What the system owes when the idempotency store fails after the handler has committed. This blocks the first write endpoint.** §22 defines `IN_FLIGHT` and `COMPLETED` and nothing else, and says nothing about a write that succeeded and was not recorded. The claim is taken before the handler and completed after it, so a failure in between — a dropped connection, a killed process, a statement timeout — leaves a committed write with an unfinished claim, and the lease then lets a retry run it again.
-
-The fix that actually closes it is for the completion to share the write's transaction, so the write and the record of it commit together or not at all. That shapes how every write endpoint is built, which is why it is settled before the first one rather than after. The alternative — a terminal state meaning "committed, outcome unknown" — is honest but hands a leader on a phone a decision they cannot make.
-
-Recorded rather than assumed, because the current behaviour is a consequence of operator ordering rather than anything anybody chose, which is the same shape as the sign-in-inside-a-revocation window settled on 2026-08-22.
-
-Eight items that stood here on 2026-08-22 were settled that day and are recorded above. Six of them were Stop Conditions for Stage 2, and the last two were found by the second and third `architecture-guardian` passes — which is why they were opened and closed on the same day.
+Nine items that stood here on 2026-08-22 were settled that day and are recorded above. Seven were Stop Conditions for Stage 2, and the last two were opened and closed the same day by `architecture-guardian` passes.
 
 **What an aggregate Cell attendance view offers in place of buckets.** Monthly-attendance buckets are a Cell-scope view only, because N belongs to a Cell and aggregating across different N inflates `Completed` for the Cells that recorded least (`SKILL.md` §12). At leader and Network scope the spec offers unique people, classification and coverage, and does not say whether anything should replace the buckets. Settle it in Stage 5 against real data.
 

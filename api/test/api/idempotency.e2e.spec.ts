@@ -1,14 +1,28 @@
 import { randomUUID } from 'node:crypto';
 
-import { Body, Controller, Get, HttpCode, Post, type INestApplication } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  Inject,
+  Post,
+  type INestApplication,
+} from '@nestjs/common';
 import request from 'supertest';
 
 import { AuthenticatedOnly, Public } from '../../src/auth/authorization/authorization.decorators';
+import {
+  CurrentIdempotency,
+  type CurrentClaim,
+} from '../../src/common/idempotency/current-idempotency.decorator';
 import { ApiError, ApiErrorCode } from '../../src/common/errors/api-error';
+import { IdempotencyService } from '../../src/common/idempotency/idempotency.service';
+import { DATABASE, type Db } from '../../src/database/database.module';
 import { createTestDb, truncateAll } from '../setup/database';
 import { createAccount, createPerson, createTestApp } from '../setup/fixtures';
 
-import type { Kysely } from 'kysely';
+import type { Kysely, Transaction } from 'kysely';
 import type { Database } from '../../src/database/schema';
 import type { TestAccount } from '../setup/fixtures';
 
@@ -26,9 +40,131 @@ import type { TestAccount } from '../setup/fixtures';
 let executions = 0;
 /** Held open by the slow endpoint, to exercise the in-flight branch deterministically. */
 let releaseSlow: (() => void) | null = null;
+/** Held open *inside* a write's transaction, so a takeover can happen underneath it. */
+let releaseSlowWrite: (() => void) | null = null;
+
+/**
+ * A real effect for the transactional cases to carry, so "the write reverted with
+ * its record" is an assertion rather than a description. `audit_log` is used
+ * because every write endpoint writes one anyway (SKILL.md section 21).
+ */
+async function probeWrite(trx: Transaction<Database>): Promise<void> {
+  await trx
+    .insertInto('audit_log')
+    .values({
+      actor_id: null,
+      action: 'person.created',
+      target_type: 'person',
+      target_id: 'the-probe-target',
+    })
+    .execute();
+}
 
 @Controller('__idempotency-probe')
 class IdempotencyProbeController {
+  constructor(
+    @Inject(DATABASE) private readonly db: Db,
+    private readonly idempotency: IdempotencyService,
+  ) {}
+
+  /**
+   * **The exemplar. This is the shape a real write endpoint copies.**
+   *
+   * The effect and the record of it commit together, and what is recorded is
+   * exactly what the handler returns, as SKILL.md section 22 requires. The
+   * completion is the last statement in the transaction, because it takes the
+   * key's row lock and a concurrent retry waits on it.
+   */
+  @Post('records-its-own-completion')
+  @AuthenticatedOnly('Probe for a write that records its completion transactionally.')
+  async recordsItsOwnCompletion(
+    @CurrentIdempotency() claim: CurrentClaim,
+  ): Promise<{ recorded: true }> {
+    executions += 1;
+
+    const response = { recorded: true } as const;
+
+    await this.db.transaction().execute(async (trx) => {
+      await probeWrite(trx);
+      await this.idempotency.completeWithin(trx, { ...claim, status: 201, body: response });
+    });
+
+    return response;
+  }
+
+  /**
+   * **Instrumentation, and deliberately not the shape to copy.**
+   *
+   * It records a body it does not return, which section 22 forbids: a replay
+   * reproduces what was stored rather than what was sent, so two identical
+   * requests would receive two different answers. It exists because that
+   * divergence is the only way to prove *which* code path wrote the row -- if the
+   * interceptor overwrote a handler's transactional completion, the stored body
+   * would read `the handler` instead of `the transaction`.
+   *
+   * A real endpoint records what it returns. This one is a microscope.
+   */
+  @Post('divergent-completion')
+  @AuthenticatedOnly('Instrumentation: records a body it does not return, to identify the writer.')
+  async divergentCompletion(
+    @CurrentIdempotency() claim: CurrentClaim,
+  ): Promise<{ recorded: true; from: string }> {
+    executions += 1;
+
+    await this.db.transaction().execute(async (trx) => {
+      await probeWrite(trx);
+      await this.idempotency.completeWithin(trx, {
+        ...claim,
+        status: 201,
+        body: { recorded: true, from: 'the transaction' },
+      });
+    });
+
+    return { recorded: true, from: 'the handler' };
+  }
+
+  @Post('rolls-back')
+  @AuthenticatedOnly('Probe for a write that completes its key and then fails.')
+  async rollsBack(@CurrentIdempotency() claim: CurrentClaim): Promise<never> {
+    executions += 1;
+
+    await this.db.transaction().execute(async (trx) => {
+      await probeWrite(trx);
+      await this.idempotency.completeWithin(trx, {
+        ...claim,
+        status: 201,
+        body: { recorded: true, from: 'the transaction' },
+      });
+
+      // Everything above reverts together: the effect and the record of it.
+      throw new Error('the write failed after recording itself');
+    });
+
+    throw new Error('unreachable');
+  }
+
+  @Post('slow-write')
+  @AuthenticatedOnly('Probe whose transaction stays open until the test releases it.')
+  async slowWrite(@CurrentIdempotency() claim: CurrentClaim): Promise<{ recorded: true }> {
+    executions += 1;
+
+    const response = { recorded: true } as const;
+
+    await this.db.transaction().execute(async (trx) => {
+      await probeWrite(trx);
+
+      // Held here so the test can let another request take the key over while
+      // this transaction is still open.
+      await new Promise<void>((resolve) => {
+        releaseSlowWrite = resolve;
+      });
+
+      await this.idempotency.completeWithin(trx, { ...claim, status: 201, body: response });
+    });
+
+    return response;
+  }
+
   @Post('write')
   @AuthenticatedOnly('Probe. Acts on nothing; the interceptor is what is under test.')
   write(@Body() body: Record<string, unknown>): { executions: number; echoed: unknown } {
@@ -102,6 +238,7 @@ describe('idempotency (SKILL.md section 22)', () => {
     await truncateAll(db);
     executions = 0;
     releaseSlow = null;
+    releaseSlowWrite = null;
 
     account = await createAccount(app, db, {
       person: await createPerson(db, { firstName: 'Mark', network: 'MENS' }),
@@ -333,6 +470,216 @@ describe('idempotency (SKILL.md section 22)', () => {
       .select(['state', 'response_status'])
       .execute();
     expect(rows).toEqual([{ state: 'COMPLETED', response_status: 201 }]);
+  });
+
+  it('completes only its own claim, not one that replaced it', async () => {
+    // A slow request whose lease expires loses the key to whoever takes it over.
+    // Without a claim identity its completion would land on the new holder's
+    // claim -- storing its own response against another request's work, and
+    // discarding that request's own completion in silence.
+    //
+    // The takeover is performed through `claim` itself rather than simulated with
+    // an UPDATE, because minting a new identity is exactly the part under test: a
+    // hand-written takeover that forgot to mint one would make this pass while
+    // the real path stayed broken.
+    const service = app.get(IdempotencyService);
+    const key = randomUUID();
+    const accountId = account.id;
+    const fingerprint = service.fingerprint('PUT', '/probe', { value: 'a' });
+
+    const first = await service.claim({ key, accountId, fingerprint });
+    expect(first.outcome).toBe('claimed');
+    const stale = first.outcome === 'claimed' ? first.claimId : '';
+
+    // Age the claim past its lease, which is what lets another request take it.
+    await db
+      .updateTable('idempotency_keys')
+      .set({ claimed_at: new Date(Date.now() - 10 * 60 * 1000) })
+      .where('key', '=', key)
+      .execute();
+
+    const second = await service.claim({ key, accountId, fingerprint });
+    expect(second.outcome).toBe('claimed');
+    const current = second.outcome === 'claimed' ? second.claimId : '';
+
+    // A takeover is a new claim, so it carries a new identity.
+    expect(current).not.toBe(stale);
+
+    // The request that lost the key finishes late. It must change nothing.
+    await service.complete({
+      key,
+      accountId,
+      claimId: stale,
+      status: 200,
+      body: { from: 'the stale claim' },
+    });
+
+    const afterStale = await db
+      .selectFrom('idempotency_keys')
+      .select(['state', 'response_body'])
+      .where('key', '=', key)
+      .executeTakeFirstOrThrow();
+    expect(afterStale.state).toBe('IN_FLIGHT');
+    expect(afterStale.response_body).toBeNull();
+
+    // And it releases nothing either, so the holder's claim survives.
+    await service.release({ key, accountId, claimId: stale });
+    expect(await db.selectFrom('idempotency_keys').select('key').execute()).toHaveLength(1);
+
+    // The request that does hold the key completes normally.
+    await service.complete({
+      key,
+      accountId,
+      claimId: current,
+      status: 201,
+      body: { from: 'the holder' },
+    });
+
+    const afterHolder = await db
+      .selectFrom('idempotency_keys')
+      .select(['state', 'response_body'])
+      .where('key', '=', key)
+      .executeTakeFirstOrThrow();
+    expect(afterHolder.state).toBe('COMPLETED');
+    expect(afterHolder.response_body).toEqual({ from: 'the holder' });
+  });
+
+  it('leaves a completion the handler recorded in its own transaction', async () => {
+    // The rule this pins: a write endpoint records its completion inside the
+    // transaction that performs the write, so the write and the record of it
+    // commit together. The interceptor's own call afterwards carries
+    // `state = 'IN_FLIGHT'` and therefore matches nothing.
+    //
+    // Run against the instrumented probe, whose recorded body deliberately
+    // differs from what it returns. That divergence is what makes the writer
+    // identifiable: if the interceptor overwrote the row, the stored body would
+    // read `the handler`.
+    const key = randomUUID();
+
+    const first = await post('divergent-completion', account).set('Idempotency-Key', key).send({});
+    expect(first.status).toBe(201);
+    expect(first.body).toEqual({ recorded: true, from: 'the handler' });
+
+    const stored = await db
+      .selectFrom('idempotency_keys')
+      .select(['state', 'response_status', 'response_body'])
+      .where('key', '=', key)
+      .executeTakeFirstOrThrow();
+
+    expect(stored.state).toBe('COMPLETED');
+    expect(stored.response_status).toBe(201);
+    // The transaction's body, not the handler's.
+    expect(stored.response_body).toEqual({ recorded: true, from: 'the transaction' });
+    expect(executions).toBe(1);
+  });
+
+  it('replays exactly what the exemplar endpoint returned', async () => {
+    // The shape a real endpoint copies: what is recorded is what is returned, so
+    // a replay and the original are the same answer. Section 22 requires it, and
+    // the instrumented probe above is the deliberate exception.
+    const key = randomUUID();
+
+    const first = await post('records-its-own-completion', account)
+      .set('Idempotency-Key', key)
+      .send({});
+    expect(first.status).toBe(201);
+    expect(first.body).toEqual({ recorded: true });
+
+    const repeat = await post('records-its-own-completion', account)
+      .set('Idempotency-Key', key)
+      .send({});
+
+    expect(repeat.status).toBe(first.status);
+    expect(repeat.body).toEqual(first.body);
+    expect(executions).toBe(1);
+
+    // And the effect happened once.
+    expect(await db.selectFrom('audit_log').select('id').execute()).toHaveLength(1);
+  });
+
+  it('reverts the record with the write when the transaction rolls back', async () => {
+    // **The half that proves `completeWithin` runs inside the caller's
+    // transaction.** Handed the pooled connection instead, the row would commit
+    // COMPLETED here while the write reverted -- and a retry would be replayed a
+    // success for a record that does not exist, which is worse than the gap this
+    // whole mechanism closes.
+    //
+    // This case was deleted by an earlier fix batch and its probe left orphaned,
+    // which removed the only guard on section 22's headline rule. Restored.
+    const key = randomUUID();
+
+    const failed = await post('rolls-back', account).set('Idempotency-Key', key).send({});
+    expect(failed.status).toBe(500);
+    expect(executions).toBe(1);
+
+    // The effect reverted.
+    expect(await db.selectFrom('audit_log').select('id').execute()).toHaveLength(0);
+
+    // And so did the record of it. A 5xx then releases the claim, so the key is
+    // gone and the client may retry.
+    expect(await db.selectFrom('idempotency_keys').select('key').execute()).toHaveLength(0);
+
+    // A retry therefore executes rather than replaying a success that never was.
+    const retry = await post('rolls-back', account).set('Idempotency-Key', key).send({});
+    expect(retry.status).toBe(500);
+    expect(executions).toBe(2);
+  });
+
+  it('aborts a write whose claim was taken over mid-flight, and leaves the holder alone', async () => {
+    // Through an endpoint, not through the service, because the interesting part
+    // is the composition: the abort throws REQUEST_IN_FLIGHT, which is a 4xx, so
+    // the interceptor tries to *store* it -- against a claim that no longer
+    // exists. The holder's row must come through untouched.
+    //
+    // Without that, a change storing 4xx unconditionally would hand the holder's
+    // client somebody else's failure, which is the cross-request leak the claim
+    // identity exists to prevent.
+    const service = app.get(IdempotencyService);
+    const key = randomUUID();
+
+    const losing = post('slow-write', account)
+      .set('Idempotency-Key', key)
+      .send({})
+      .then((response) => response);
+
+    await waitFor(() => releaseSlowWrite !== null);
+
+    // Another request takes the key over while that transaction is still open.
+    await db
+      .updateTable('idempotency_keys')
+      .set({ claimed_at: new Date(Date.now() - 10 * 60 * 1000) })
+      .where('key', '=', key)
+      .execute();
+
+    const takeover = await service.claim({
+      key,
+      accountId: account.id,
+      fingerprint: service.fingerprint('POST', '/api/v1/__idempotency-probe/slow-write', {}),
+    });
+    expect(takeover.outcome).toBe('claimed');
+    const holder = takeover.outcome === 'claimed' ? takeover.claimId : '';
+
+    releaseSlowWrite?.();
+
+    const refused = await losing;
+    expect(refused.status).toBe(409);
+    expect(refused.body.error.code).toBe('REQUEST_IN_FLIGHT');
+
+    // The write went with the transaction.
+    expect(await db.selectFrom('audit_log').select('id').execute()).toHaveLength(0);
+
+    // And the holder's claim is exactly as it was: still in flight, still theirs,
+    // carrying none of the losing request's answer.
+    const row = await db
+      .selectFrom('idempotency_keys')
+      .select(['state', 'claim_id', 'response_status', 'response_body'])
+      .where('key', '=', key)
+      .executeTakeFirstOrThrow();
+
+    expect(row.state).toBe('IN_FLIGHT');
+    expect(row.claim_id).toBe(holder);
+    expect(row.response_status).toBeNull();
+    expect(row.response_body).toBeNull();
   });
 
   it('leaves reads alone', async () => {

@@ -3,9 +3,12 @@ import { createHash } from 'node:crypto';
 import { Inject, Injectable } from '@nestjs/common';
 import { sql } from 'kysely';
 
+import { ApiError, ApiErrorCode } from '../errors/api-error';
+
 import { DATABASE, type Db } from '../../database/database.module';
 
-import type { Json } from '../../database/schema';
+import type { Database, Json } from '../../database/schema';
+import type { Transaction } from 'kysely';
 
 /**
  * The idempotency store of SKILL.md section 22.
@@ -38,8 +41,13 @@ const RETENTION_HOURS = 24;
 const CLAIM_LEASE_SECONDS = 60;
 
 export type ClaimResult =
-  /** This request owns the key and should execute. */
-  | { outcome: 'claimed' }
+  /**
+   * This request owns the key and should execute. `claimId` identifies *this*
+   * claim: every later write against the row carries it, so a request that has
+   * since lost the key under the lease matches nothing rather than acting on the
+   * claim that replaced it.
+   */
+  | { outcome: 'claimed'; claimId: string }
   /** The same key and the same body already completed; replay its response. */
   | { outcome: 'replay'; status: number; body: Json | null }
   /** The same key, a different body. Permanent; the client must never retry. */
@@ -89,15 +97,16 @@ export class IdempotencyService {
     const retention = `${RETENTION_HOURS} hours`;
     const lease = `${CLAIM_LEASE_SECONDS} seconds`;
 
-    const claimed = await sql<{ key: string }>`
+    const claimed = await sql<{ claim_id: string }>`
       INSERT INTO idempotency_keys (
-        key, account_id, request_fingerprint, state, claimed_at, expires_at
+        key, account_id, request_fingerprint, state, claim_id, claimed_at, expires_at
       )
       VALUES (
         ${params.key}::uuid,
         ${params.accountId}::uuid,
         ${params.fingerprint},
         'IN_FLIGHT',
+        gen_random_uuid(),
         now(),
         now() + ${retention}::interval
       )
@@ -106,6 +115,9 @@ export class IdempotencyService {
             state = 'IN_FLIGHT',
             response_status = NULL,
             response_body = NULL,
+            -- A new identity, because this is a new claim. The request that held
+            -- the row before carries the old one and now matches nothing.
+            claim_id = gen_random_uuid(),
             claimed_at = now(),
             expires_at = excluded.expires_at
         -- Two ways a row may be taken over, and they are different questions.
@@ -117,11 +129,11 @@ export class IdempotencyService {
              idempotency_keys.state = 'IN_FLIGHT'
              AND idempotency_keys.claimed_at <= now() - ${lease}::interval
            )
-      RETURNING key
+      RETURNING claim_id
     `.execute(this.db);
 
     if (claimed.rows.length > 0) {
-      return { outcome: 'claimed' };
+      return { outcome: 'claimed', claimId: claimed.rows[0].claim_id };
     }
 
     return this.inspect(params);
@@ -164,14 +176,90 @@ export class IdempotencyService {
     };
   }
 
-  /** Stores the response this request produced, so a repeat returns it. */
+  /**
+   * Stores the response this request produced, so a repeat returns it.
+   *
+   * Called by the interceptor after the handler, which is the right place for a
+   * request that wrote nothing. A request that **did** write calls
+   * `completeWithin` inside its own transaction instead — see there for why.
+   */
   async complete(params: {
     key: string;
     accountId: string;
+    claimId: string;
     status: number;
     body: Json | null;
   }): Promise<void> {
-    await sql`
+    // A zero row count is ordinary here and is not an error: it is what happens
+    // when the handler already recorded its own completion transactionally, which
+    // is the arrangement that makes the two paths compose.
+    await this.completeOn(this.db, params);
+  }
+
+  /**
+   * The same, inside a caller's transaction.
+   *
+   * **A write endpoint records its completion here, in the transaction that
+   * performs the write** (SKILL.md section 22). The claim is taken before the
+   * handler and, left to the interceptor, is recorded after it — so a failure in
+   * between leaves a committed write with an unfinished claim, and the claim
+   * lease then lets a retry perform that write a second time. Committing the
+   * record with the write closes it: either both are there or neither is.
+   *
+   * The two paths compose without coordinating. This sets the row to `COMPLETED`,
+   * and the interceptor's own call afterwards carries `state = 'IN_FLIGHT'` in its
+   * predicate, so it matches nothing and leaves this response untouched. Nothing
+   * needs to tell the interceptor that the handler already recorded its own
+   * completion.
+   */
+  async completeWithin(
+    transaction: Transaction<Database>,
+    params: {
+      key: string;
+      accountId: string;
+      claimId: string;
+      status: number;
+      body: Json | null;
+    },
+  ): Promise<void> {
+    const recorded = await this.completeOn(transaction, params);
+
+    if (recorded === 0n) {
+      // The claim is gone: this request passed its lease and another took the key
+      // over. Section 22 says the write and the record of it are "either both
+      // there or neither" -- so with no record possible, the write must not
+      // commit. Throwing aborts the caller's transaction, which is the only way
+      // to honour that from here.
+      //
+      // Returning quietly instead would leave the write on disk with nothing
+      // recording it, and the retry that follows would perform it again. That is
+      // the failure this whole mechanism exists to prevent, and it would be
+      // silent.
+      // The message does not name a cause, because this cannot tell one. Zero
+      // rows means the claim is not this request's *or* the row is already
+      // completed -- and the second is reachable by an endpoint that records
+      // twice, or records in one transaction and opens another, which is the
+      // case section 22 newly forbids. Asserting "lost its claim" there would
+      // state the opposite of what happened.
+      throw new ApiError(
+        ApiErrorCode.REQUEST_IN_FLIGHT,
+        'This request no longer holds its idempotency claim, so nothing was recorded. Retry shortly.',
+        { header: 'Idempotency-Key' },
+      );
+    }
+  }
+
+  private async completeOn(
+    executor: Db,
+    params: {
+      key: string;
+      accountId: string;
+      claimId: string;
+      status: number;
+      body: Json | null;
+    },
+  ): Promise<bigint> {
+    const result = await sql`
       UPDATE idempotency_keys
          SET state = 'COMPLETED',
              response_status = ${params.status},
@@ -187,8 +275,17 @@ export class IdempotencyService {
              expires_at = now() + ${`${RETENTION_HOURS} hours`}::interval
        WHERE account_id = ${params.accountId}::uuid
          AND key = ${params.key}::uuid
+         -- This request's own claim, and no other. Without it a request whose
+         -- lease expired mid-flight would complete whichever claim replaced it,
+         -- storing its own response against another request's work.
+         AND claim_id = ${params.claimId}::uuid
+         -- Stops a second write to a row already completed, which is what lets a
+         -- handler record its completion transactionally and leaves the
+         -- interceptor's later call inert.
          AND state = 'IN_FLIGHT'
-    `.execute(this.db);
+    `.execute(executor);
+
+    return result.numAffectedRows ?? 0n;
   }
 
   /**
@@ -202,11 +299,15 @@ export class IdempotencyService {
    * A 4xx is the opposite and is stored. It is this request's outcome, decided by
    * the rules, and a repeat of the same body is entitled to the same answer.
    */
-  async release(params: { key: string; accountId: string }): Promise<void> {
+  async release(params: { key: string; accountId: string; claimId: string }): Promise<void> {
     await this.db
       .deleteFrom('idempotency_keys')
       .where('account_id', '=', params.accountId)
       .where('key', '=', params.key)
+      // As above: a request that has lost its claim releases nothing. Without
+      // this it would delete the claim that replaced it, and that request's work
+      // would go unrecorded.
+      .where('claim_id', '=', params.claimId)
       .where('state', '=', 'IN_FLIGHT')
       .execute();
   }
