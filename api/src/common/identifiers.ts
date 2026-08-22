@@ -33,6 +33,20 @@ export function canonicalId(value: string): string {
   return value.toLowerCase();
 }
 
+/**
+ * The canonical form of a value that is a UUID, and the value unchanged where it
+ * is not.
+ *
+ * For the one place an identifier is **stored** as free text rather than compared:
+ * `audit_log.target_id`, which SKILL.md section 21 makes `text` precisely because
+ * not every target is keyed by a UUID — a setting is keyed by its `key`. Blanket
+ * lowercasing would canonicalize the UUIDs and quietly corrupt anything else, so
+ * this narrows to the shape it understands.
+ */
+export function canonicalIfUuid(value: string): string {
+  return UUID.test(value) ? canonicalId(value) : value;
+}
+
 /** Whether two identifiers name the same record, however each was spelled. */
 export function sameId(left: string, right: string): boolean {
   return canonicalId(left) === canonicalId(right);

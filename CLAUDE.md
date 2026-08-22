@@ -1670,7 +1670,8 @@ this is reachable input rather than a contrivance.
 look for the rest of the class.** That is the lesson worth keeping. The recorded
 rationale for the lock fix — a `uuid` column compares case-insensitively and
 TypeScript does not — applies verbatim to every identifier comparison in the
-application, and there were three more:
+application, and there were four more — *the entry as first written said three and
+listed three, having itself missed one, which is the same fault one layer in*:
 
 - **Invariant 4**, above. Fails open; a security defect.
 - **The duplicate-acknowledgement gate** (§3), where a client echoing candidate ids
@@ -1679,13 +1680,40 @@ application, and there were three more:
   than the duplicate it guards against. Introduced before this branch and fixed here
   because one change closes both and because leaving it would recreate the defect the
   moment somebody read the lock fix as complete.
-- **`isWithinSubtree`'s self-check**, which fails closed and merely denies.
+- **`isWithinSubtree`**, in *both* halves. Its self-check fails closed and merely
+  denies. Its ancestors comparison is the `OWN_SUBTREE` scope decision — and one of
+  its two callers is not a guard at all but the `canSeeReasons` predicate, where a
+  false answer *skips* the §3 acknowledgement gate rather than denying. So the two
+  halves of one function failed in opposite directions. The self-check was fixed in
+  the first attempt and the ancestors comparison was not, which the sixth review
+  found.
+- **The self-leader check in the correction**, which compares two *client-supplied*
+  values — the body's `pastoral_leader_id` against the path's `{id}`. Mis-cased, it
+  fell through to the `no_self` check constraint: a raw constraint violation
+  rendered `INTERNAL_ERROR`, which is the 500-instead-of-an-answer failure that
+  module exists to prevent.
 
 **Fixed in two places deliberately.** A pipe normalizes path parameters and a
 transform normalizes the identifier fields of every DTO, so nothing downstream has to
 remember; and the authority check normalizes again, because a check that fails open
 must not depend on a caller having wired a pipe. Written to `SKILL.md` §7, beside
 invariant 4's own rule, because the consequence is an authorization one.
+
+**`audit_log.target_id` is canonicalized too, and only where it is a UUID.** It is
+the one place a client-supplied identifier is *stored* as free text rather than
+compared, the comparison it will eventually face is case-sensitive `text`, and
+migration 0002 makes the row unrepairable — so a mis-cased target would be an entry
+permanently invisible to the lookup §7 resolves scope through. Narrowed to
+UUID-shaped values because §21 makes the column `text` precisely so a setting can be
+keyed by its `key`, and lowercasing every target would canonicalize the identifiers
+and corrupt anything else.
+
+**The two layers are pinned separately.** Every end-to-end case passes if *either*
+the boundary or the defensive comparison is present, so together they pin the
+disjunction and neither half. §7 requires both, and a rule with nothing that can
+fail on it is the thing this repository keeps refusing to ship — so the authority
+check and the acknowledgement gate are each called directly, with an uppercase
+identifier, bypassing the pipe and the DTO.
 
 **Also in this batch, found without the review:** the lock-timeout predicate had been
 put in `database/person-lock.ts` and imported by the exception filter, which points
@@ -1695,7 +1723,7 @@ dependency runs.
 
 ### Open — awaiting a ruling
 
-**One item awaits a ruling and blocks Stage 5. Seven other things are unsettled, none of them blocking. They are listed at the end, so this section is the whole of what is open.**
+**One item awaits a ruling and blocks Stage 5. Eight other things are unsettled, none of them blocking. They are listed at the end, so this section is the whole of what is open.**
 
 Nine items that stood here on 2026-08-22 were settled that day and are recorded above. Seven were Stop Conditions for Stage 2, and the last two were opened and closed the same day by `architecture-guardian` passes.
 
@@ -1713,5 +1741,6 @@ Two related questions have defined behaviour and are recorded in `SKILL.md` §12
 - **The native client framework.** `SKILL.md` §2 settles the web stack and says nothing about Android and iOS. Deferred since the specification was written; indexed here because two rules now point at it as open.
 - **What the native clients owe on accessibility.** `SKILL.md` §23 binds the web application to WCAG 2.2 AA and says the equivalent obligation for a native client is the platform accessibility API rather than WCAG. Which platform guarantees, and what would fail a build, is a ruling to make when the client is.
 
+- **Whether identifier normalization should be structural rather than per-parameter.** §7 requires a client-supplied identifier to be compared canonically, and the boundary half of that is currently a pipe wired onto each `@Param('id')` — so the next route written without it is silently outside the rule. That is verbatim the failure mode §2 gives as the reason the capability guard is declarative and fails closed. It is not a problem at three routes with the authority checks normalizing defensively; it will be one by the time there are forty. A global pipe or a `@PersonId()` decorator would close it. Settle it before Stage 3 adds routes.
 - **Whether the liveness probe should share the application connection pool.** §24 now records that it does, and that pool exhaustion therefore presents to the platform as a dead process — so the response is a restart that discards the transactions still making progress. A separate connection, or a probe that does not reach the database, are both defensible and mean different things by "healthy". Deployment work with a ruling attached, alongside the database-role item above.
 - **Whether `audit_log`'s append-only guarantee tolerates `TRUNCATE`.** §5 records the exemption for history tables and leans it on a least-privilege role that does not exist, which is already open above. §21 says nothing at all, and the test suite truncates `audit_log` before every test. Same answer as the `TRUNCATE` question above, most likely, but it is not written down for the one table whose whole purpose is that nothing removes a row.

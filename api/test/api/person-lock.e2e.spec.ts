@@ -9,6 +9,8 @@ import { DATABASE, type Db } from '../../src/database/database.module';
 import { lockPersonsWithin } from '../../src/database/person-lock';
 import { HierarchyService } from '../../src/hierarchy/hierarchy.service';
 import { NetworksService } from '../../src/networks/networks.service';
+import { IdempotencyService } from '../../src/common/idempotency/idempotency.service';
+import { PeopleService } from '../../src/people/people.service';
 import { createTestDb, truncateAll } from '../setup/database';
 import { assignTo, createAccount, createPerson, createTestApp, EPOCH } from '../setup/fixtures';
 
@@ -129,6 +131,86 @@ describe('the person lock is taken by every path that can strand an edge', () =>
       await holder.end();
     }
   }
+
+  it('normalizes identifiers in the authority check itself, not only at the boundary', async () => {
+    // **The two layers are pinned separately on purpose.** Every end-to-end case
+    // passes if *either* the pipe or `sameId` is present, so together they pin the
+    // disjunction and neither half alone. Section 7 requires both: "any comparison
+    // that decides authority normalizes again rather than trusting that they
+    // were." This calls the check directly, which is what a caller that forgot the
+    // pipe looks like — and what the reassignment endpoint will look like if it
+    // wires its own route differently.
+    const hierarchy = app.get(HierarchyService);
+
+    await expect(
+      hierarchy.assertMayReparent({ personId: mark.id, roles: ['LEADER'] }, mark.id.toUpperCase()),
+    ).rejects.toMatchObject({ code: 'SCOPE_DENIED' });
+
+    await expect(
+      hierarchy.assertMayReparent(
+        { personId: mark.id, roles: ['LEADER'] },
+        manuel.id.toUpperCase(),
+      ),
+    ).rejects.toMatchObject({ code: 'SCOPE_DENIED' });
+
+    // And it still permits what it should, so the case is not satisfied by a check
+    // that refuses everything.
+    await expect(
+      hierarchy.assertMayReparent({ personId: manuel.id, roles: ['LEADER'] }, mark.id),
+    ).resolves.toBeUndefined();
+  });
+
+  it('normalizes a duplicate acknowledgement in the service, not only in the DTO', async () => {
+    // The other half of the same rule, on the path where the failure is a
+    // permanent block rather than an escalation (section 3). Called through the
+    // service so the DTO transform is not in the way.
+    const people = app.get(PeopleService);
+    const idempotency = app.get(IdempotencyService);
+
+    // A real claim, because `completeWithin` throws when it matches no row — a
+    // fabricated one would fail this case for a reason that has nothing to do with
+    // identifiers.
+    async function mintClaim(): Promise<{ key: string; accountId: string; claimId: string }> {
+      const key = randomUUID();
+      const claimed = await idempotency.claim({
+        key,
+        accountId: admin.id,
+        fingerprint: randomUUID(),
+      });
+
+      if (claimed.outcome !== 'claimed') {
+        throw new Error(`Expected a fresh key to be claimable, got ${claimed.outcome}.`);
+      }
+
+      return { key, accountId: admin.id, claimId: claimed.claimId };
+    }
+
+    const input = {
+      firstName: 'Mario',
+      lastName: 'Delacruz',
+      birthDate: '1991-07-19',
+      sex: 'MALE' as const,
+      civilStatus: 'SINGLE' as const,
+      pastoralLeaderId: manuel.id,
+      acknowledgedDuplicateIds: [] as string[],
+    };
+
+    const actor = { accountId: admin.id, personId: manuel.id };
+
+    const first = await people.create(input, actor, await mintClaim(), () => Promise.resolve(true));
+
+    // Uppercase, as a client that round-tripped the candidate ids would send them.
+    // Compared raw, the gate is never satisfied and this Person can never be
+    // created at all (section 3).
+    await expect(
+      people.create(
+        { ...input, acknowledgedDuplicateIds: [String(first.id).toUpperCase()] },
+        actor,
+        await mintClaim(),
+        () => Promise.resolve(true),
+      ),
+    ).resolves.toMatchObject({ scope: 'FULL' });
+  });
 
   it('gives up after the lock timeout, and releases the idempotency key', async () => {
     // **The second assertion is the one that matters**, and it is why the code is a

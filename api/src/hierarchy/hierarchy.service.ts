@@ -403,7 +403,7 @@ export class HierarchyService {
     }
 
     const ancestors = await this.ancestorsOf(personId);
-    return ancestors.includes(rootPersonId);
+    return ancestors.some((ancestorId) => sameId(ancestorId, rootPersonId));
   }
 
   private rejectCycle(rows: readonly { is_cycle: boolean }[], personId: string): void {
