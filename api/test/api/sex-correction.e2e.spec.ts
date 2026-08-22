@@ -564,45 +564,44 @@ describe('sex correction (SKILL.md sections 4, 5, 7, 21, 22)', () => {
   });
 
   describe('serializing against a concurrent edge write (sections 4 and 5)', () => {
-    it('waits for the person lock instead of racing the deferred trigger', async () => {
-      // The window the lock closes: an edge opened under this person and
-      // committing just after the correction's commit-time comparison is seen by
-      // neither deferred trigger, leaving a permanent cross-Network edge.
+    it('answers RESOURCE_BUSY when the record is held by another change', async () => {
+      // **Rewritten from a timing assertion.** It used to sleep 500ms and assert
+      // the request had not settled, which the 3-second lock timeout turned into a
+      // 2.5-second margin — a slow runner would fail it with no diagnostic. This
+      // asserts the answer instead, which is deterministic and is what a client
+      // sees.
       //
-      // **What this pins, exactly.** The correction takes both of its keys up
-      // front, so this blocks in `correctSex` and would still pass with the lock
-      // deleted from `changeWithin` or from either `hierarchy` writer. Those sites
-      // are pinned individually in `person-lock.e2e.spec.ts`, which also uses a
-      // positive `pg_locks` probe rather than inferring a block from elapsed time.
-      // Kept here because the correction reaching the lock at all is this file's
-      // business.
+      // The lock sites themselves, and the release of the idempotency key on this
+      // failure, are pinned individually in `person-lock.e2e.spec.ts`.
       const holder = new Client({ connectionString: process.env.DATABASE_URL });
       await holder.connect();
 
       try {
         await holder.query('BEGIN');
-        await holder.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [mark.id]);
+        await holder.query('SELECT pg_advisory_xact_lock(hashtextextended($1::uuid::text, 0))', [
+          mark.id,
+        ]);
 
-        let settled = false;
-        const pending = correct(mark.id, {
+        const response = await correct(mark.id, {
           sex: 'FEMALE',
           reason: 'Sex entered in error at encoding.',
           pastoral_leader_id: grace.id,
-        }).then((response) => {
-          settled = true;
-          return response;
         });
 
-        await new Promise((resolve) => setTimeout(resolve, 500));
-        expect(settled).toBe(false);
+        expect(response.status).toBe(503);
+        expect(response.body.error.code).toBe('RESOURCE_BUSY');
 
-        // Releasing it lets the correction through, so the case is about waiting
-        // rather than about the request failing for some other reason.
-        await holder.query('ROLLBACK');
+        // Nothing was written: the correction rolled back rather than proceeding
+        // without the serialization the lock exists to give it.
+        const networks = await db
+          .selectFrom('network_assignments')
+          .selectAll()
+          .where('person_id', '=', mark.id)
+          .execute();
 
-        const response = await pending;
-        expect(response.status).toBe(200);
+        expect(networks).toHaveLength(1);
       } finally {
+        await holder.query('ROLLBACK').catch(() => undefined);
         await holder.end();
       }
     });

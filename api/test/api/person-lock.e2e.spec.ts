@@ -3,7 +3,10 @@ import { randomUUID } from 'node:crypto';
 import { Client } from 'pg';
 import request from 'supertest';
 
+import { sql } from 'kysely';
+
 import { DATABASE, type Db } from '../../src/database/database.module';
+import { lockPersonsWithin } from '../../src/database/person-lock';
 import { HierarchyService } from '../../src/hierarchy/hierarchy.service';
 import { NetworksService } from '../../src/networks/networks.service';
 import { createTestDb, truncateAll } from '../setup/database';
@@ -84,7 +87,9 @@ describe('the person lock is taken by every path that can strand an edge', () =>
 
     try {
       await holder.query('BEGIN');
-      await holder.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [personId]);
+      await holder.query('SELECT pg_advisory_xact_lock(hashtextextended($1::uuid::text, 0))', [
+        personId,
+      ]);
 
       const pending = attempt().then(
         () => undefined,
@@ -93,7 +98,10 @@ describe('the person lock is taken by every path that can strand an edge', () =>
       );
 
       let waiting = 0;
-      const deadline = Date.now() + 15_000;
+      // Shorter than the lock timeout the code under test sets, because past that
+      // the waiter is gone and no later poll can succeed. A deadline beyond it
+      // would spend the difference failing.
+      const deadline = Date.now() + 2_500;
 
       while (Date.now() < deadline && waiting === 0) {
         const found = await holder.query<{ waiting: string }>(
@@ -102,8 +110,8 @@ describe('the person lock is taken by every path that can strand an edge', () =>
             WHERE locktype = 'advisory'
               AND NOT granted
               AND objsubid = 1
-              AND classid::bigint = ((hashtextextended($1, 0) >> 32) & 4294967295)
-              AND objid::bigint = (hashtextextended($1, 0) & 4294967295)`,
+              AND classid::bigint = ((hashtextextended($1::uuid::text, 0) >> 32) & 4294967295)
+              AND objid::bigint = (hashtextextended($1::uuid::text, 0) & 4294967295)`,
           [personId],
         );
 
@@ -141,7 +149,9 @@ describe('the person lock is taken by every path that can strand an edge', () =>
 
     try {
       await holder.query('BEGIN');
-      await holder.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [mark.id]);
+      await holder.query('SELECT pg_advisory_xact_lock(hashtextextended($1::uuid::text, 0))', [
+        mark.id,
+      ]);
 
       const refused = await request(app.getHttpServer())
         .put(`/api/v1/people/${mark.id}/sex`)
@@ -221,11 +231,19 @@ describe('the person lock is taken by every path that can strand an edge', () =>
   });
 
   it('POST /people locks the pastoral leader before validating them', async () => {
-    // Through HTTP, because the ordering that matters on this path is lock before
-    // check: validating the leader's Network first and locking afterwards leaves
-    // the answer stale, and the write then fails at COMMIT as a constraint
-    // violation rendered INTERNAL_ERROR rather than as an answer.
-    await assertWaitsOnPersonKey(manuel.id, () =>
+    // **The leader is deliberately invalid**, which is what makes this about the
+    // ordering rather than about the lock. Validated before the lock — the shape
+    // this path used to have — the request refuses immediately on the archived
+    // leader and never waits. Validated after it, it blocks first, which is what
+    // the probe sees. A valid leader would produce a waiter under either order and
+    // pin nothing.
+    const archived = await createPerson(db, {
+      firstName: 'Rico',
+      network: 'MENS',
+      archived: true,
+    });
+
+    await assertWaitsOnPersonKey(archived.id, () =>
       request(app.getHttpServer())
         .post('/api/v1/people')
         .set('Authorization', `Bearer ${admin.accessToken}`)
@@ -236,15 +254,83 @@ describe('the person lock is taken by every path that can strand an edge', () =>
           birth_date: '1990-04-11',
           sex: 'FEMALE',
           civil_status: 'SINGLE',
-          pastoral_leader_id: manuel.id,
+          pastoral_leader_id: archived.id,
         }),
     );
   });
 
-  it('PUT /people/{id}/sex locks both persons, in one call', async () => {
-    // The correction takes both keys up front so the ordering guarantee holds
-    // across the pair. Held on the *destination leader* here rather than on the
-    // corrected person, so the case is not satisfied by the first key alone.
+  it('takes several keys in ascending key order, whatever order it was given them', async () => {
+    // The ordering rule of section 5, which nothing pinned: it is what stops two
+    // callers acquiring the same pair in opposite orders and deadlocking, with
+    // PostgreSQL rather than us choosing the victim.
+    //
+    // Asserted by holding the **higher** of the two keys. Ordered, the call takes
+    // the lower key first and is therefore *holding* it while it waits; unordered,
+    // an argument list beginning with the higher key blocks immediately and holds
+    // nothing. So the discriminating observation is a granted lock, not a waiting
+    // one.
+    const database = app.get<Db>(DATABASE);
+
+    const ordered = await sql<{ id: string; key: string }>`
+      SELECT id, hashtextextended(id::uuid::text, 0) AS key
+        FROM unnest(ARRAY[${sql.join([mark.id, grace.id])}]::text[]) AS id
+       ORDER BY key
+    `.execute(db);
+
+    const lower = ordered.rows[0];
+    const higher = ordered.rows[1];
+
+    const holder = new Client({ connectionString: process.env.DATABASE_URL });
+    await holder.connect();
+
+    try {
+      await holder.query('BEGIN');
+      await holder.query('SELECT pg_advisory_xact_lock($1::bigint)', [higher.key]);
+
+      // Given in the order that would be wrong if the helper trusted its caller.
+      const pending = database
+        .transaction()
+        .execute((trx) => lockPersonsWithin(trx, [higher.id, lower.id]))
+        .then(
+          () => undefined,
+          () => undefined,
+        );
+
+      let held = 0;
+      const deadline = Date.now() + 2_500;
+
+      while (Date.now() < deadline && held === 0) {
+        const found = await holder.query<{ held: string }>(
+          `SELECT count(*) AS held
+             FROM pg_locks
+            WHERE locktype = 'advisory'
+              AND granted
+              AND objsubid = 1
+              AND classid::bigint = (($1::bigint >> 32) & 4294967295)
+              AND objid::bigint = ($1::bigint & 4294967295)`,
+          [lower.key],
+        );
+
+        held = Number(found.rows[0].held);
+        if (held === 0) {
+          await new Promise((resolve) => setTimeout(resolve, 50));
+        }
+      }
+
+      expect(held).toBeGreaterThan(0);
+
+      await holder.query('ROLLBACK');
+      await pending;
+    } finally {
+      await holder.end();
+    }
+  });
+
+  it('PUT /people/{id}/sex reaches the destination leader key too', async () => {
+    // Named for what it pins and no more. `reassignWithin` takes the destination
+    // leader's key on its own, so this stays green with the correction's up-front
+    // two-key call removed — that call exists for the ordering guarantee, which is
+    // pinned by the case above rather than by this one.
     await assertWaitsOnPersonKey(grace.id, () =>
       request(app.getHttpServer())
         .put(`/api/v1/people/${mark.id}/sex`)

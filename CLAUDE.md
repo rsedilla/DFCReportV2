@@ -999,7 +999,13 @@ that as a different body answers `IDEMPOTENCY_KEY_REUSED` — which §22 makes
 permanent and says must never be retried, turning an ordinary retry into a dead
 end. Arrays keep their order, because order is meaning in an array.
 
-Written to `SKILL.md` §22.
+Written to `SKILL.md` §22 — **except that these last two were not, and reached §22
+only on 2026-08-23**: the 4xx/5xx split and the canonicalized fingerprint were
+implemented, recorded here, and claimed as specified. The gap surfaced when a later
+ruling cited §22 for the store/release rule four times over and
+`architecture-guardian` went looking for it. "A decision that lives only in a chat
+session does not exist" applies equally to one that lives only in this log and in
+the code, and nothing checks a "Written to §22" claim.
 
 ### 2026-08-22 — A claim and a response are bounded separately
 
@@ -1585,9 +1591,66 @@ transaction parameter.
 The test asserts the retry, not the refusal. A case checking only that a blocked
 write answers 503 would pass equally against the stored-forever version.
 
+### 2026-08-23 — Three corrections to the lock, and two rules that were never written down
+
+Fourth `architecture-guardian` pass. Two behavioural defects, and two rules this
+log had recorded as specified while `SKILL.md` did not contain them.
+
+**The lock key is computed from the identity, not from its spelling.**
+`hashtextextended` is case-sensitive; a `uuid` column comparison is not, and
+`@IsUUID()` accepts either case. So the same leader named in uppercase and in
+lowercase compared equal everywhere in the system except in the lock, where they
+took two different keys and serialized against nothing — reopening the window the
+lock had just been built to close. `UUID().uuidString` on iOS is uppercase by
+default and §2 names iOS as a client, so this was not hypothetical. The key is now
+taken over `id::uuid::text`.
+
+**`SET LOCAL lock_timeout` bounds the whole transaction, not the acquisition.** The
+comment said it reverts for the pooled connection's next occupant, which is true,
+and stopped there — so nothing said it also stays in force for the row locks the
+caller takes afterwards, including the idempotency key's in `completeWithin`. Those
+raise `55P03` at call sites that know nothing about locks, where it was neither
+caught nor recognised: an unhandled 500, logged as a defect, for ordinary
+contention.
+
+Kept rather than narrowed, because those waits are unbounded otherwise and an
+unbounded wait inside a transaction holding a pooled connection is the same hazard
+the timeout was added for. What it required was classifying an elapsed wait as
+`RESOURCE_BUSY` **wherever it is raised**, which `ApiExceptionFilter` now does. §5
+says both halves.
+
+*This is the fifth time on this project that a mechanism was described from the
+part of it being looked at.* The others are the backdate floor, the zero-length
+row, the Nest status ordering, and the §8 redaction.
+
+**The sort key changed and `SKILL.md` did not.** Ordering by lock key rather than by
+person id was right — a collision can otherwise give two callers opposite
+acquisition orders, which is a cycle rather than mere over-serialization — but §5
+was left stating the old rule in two places, in a commit that edited the paragraph
+directly beneath it. Both now say ascending lock key.
+
+**Two rules were cited to §22 and were not in §22.** The 4xx-stored / 5xx-released
+split, and the canonicalized fingerprint. The 2026-08-22 ruling says both were
+written there; neither was, and the first had by then become the entire
+justification for `RESOURCE_BUSY` being a 503. §22 now carries both, and that entry
+is annotated.
+
+**§24 gained the pool and the probe**, for the same reason: §5 cited §24 for a
+bounded pool and a liveness probe sharing it, and §24 contained neither. Whether the
+probe should keep sharing the pool is an operational decision, recorded as open
+rather than settled.
+
+**Two tests were named for more than they pinned.** The `POST /people` case claimed
+to pin lock-before-check and would have passed under either order; it now names an
+**archived** leader, so a request that validated first would refuse without ever
+waiting. And nothing pinned §5's ordering rule at all — the property whose absence
+is a deadlock with a PostgreSQL-chosen victim. It is pinned now by holding the
+*higher* of two keys and asserting the caller is **holding** the lower one while it
+waits, which is true only if the helper sorted.
+
 ### Open — awaiting a ruling
 
-**One item awaits a ruling and blocks Stage 5. Six other things are unsettled, none of them blocking. They are listed at the end, so this section is the whole of what is open.**
+**One item awaits a ruling and blocks Stage 5. Seven other things are unsettled, none of them blocking. They are listed at the end, so this section is the whole of what is open.**
 
 Nine items that stood here on 2026-08-22 were settled that day and are recorded above. Seven were Stop Conditions for Stage 2, and the last two were opened and closed the same day by `architecture-guardian` passes.
 
@@ -1605,4 +1668,5 @@ Two related questions have defined behaviour and are recorded in `SKILL.md` §12
 - **The native client framework.** `SKILL.md` §2 settles the web stack and says nothing about Android and iOS. Deferred since the specification was written; indexed here because two rules now point at it as open.
 - **What the native clients owe on accessibility.** `SKILL.md` §23 binds the web application to WCAG 2.2 AA and says the equivalent obligation for a native client is the platform accessibility API rather than WCAG. Which platform guarantees, and what would fail a build, is a ruling to make when the client is.
 
+- **Whether the liveness probe should share the application connection pool.** §24 now records that it does, and that pool exhaustion therefore presents to the platform as a dead process — so the response is a restart that discards the transactions still making progress. A separate connection, or a probe that does not reach the database, are both defensible and mean different things by "healthy". Deployment work with a ruling attached, alongside the database-role item above.
 - **Whether `audit_log`'s append-only guarantee tolerates `TRUNCATE`.** §5 records the exemption for history tables and leans it on a least-privilege role that does not exist, which is already open above. §21 says nothing at all, and the test suite truncates `audit_log` before every test. Same answer as the `TRUNCATE` question above, most likely, but it is not written down for the one table whose whole purpose is that nothing removes a row.

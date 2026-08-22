@@ -147,7 +147,10 @@ export class HierarchyService {
     // As above. A caller taking more than one of these — a reassignment alongside a
     // Network change is the case that exists — must still pre-acquire them together
     // in one `lockPersonsWithin` call, because the ordering guarantee is per call.
-    // Re-acquiring here is free: advisory locks are reference-counted per session.
+    // Re-acquiring here is free, because a session is always granted a lock it
+    // already holds. Not because transaction-level advisory locks are
+    // reference-counted: session-level ones are, and these are released only when
+    // the transaction ends.
     await lockPersonsWithin(transaction, [reassignment.leaderId]);
 
     const closed = await transaction

@@ -9,7 +9,9 @@ import {
 import { ThrottlerException } from '@nestjs/throttler';
 import type { Request, Response } from 'express';
 
-import { ApiError, ApiErrorCode, type ApiErrorBody } from './api-error';
+import { isLockTimeout } from '../../database/person-lock';
+
+import { ApiError, ApiErrorCode, ResourceBusyError, type ApiErrorBody } from './api-error';
 
 /**
  * Every failure leaves this API as the one envelope of SKILL.md section 22.
@@ -68,6 +70,19 @@ export class ApiExceptionFilter implements ExceptionFilter {
  * logged 500 and the interceptor treats as releasable.
  */
 export function describeFailure(exception: unknown): { status: number; body: ApiErrorBody } | null {
+  // An elapsed lock wait, wherever it was raised. `lockPersonsWithin` sets
+  // `lock_timeout` for the whole of its caller's transaction (SKILL.md section 5),
+  // so a row lock taken *after* it — the write's own, or the idempotency key's in
+  // `completeWithin` — can time out at a call site that knows nothing about locks.
+  // Unrecognised, that would be an unhandled 500 for what is ordinary contention,
+  // and section 22's release rule turns on the status: released at 5xx and stored
+  // otherwise, so misclassifying it as anything below 500 would pin a transient
+  // failure to the idempotency key.
+  if (isLockTimeout(exception)) {
+    const busy = new ResourceBusyError();
+    return { status: busy.status, body: busy.toBody() };
+  }
+
   if (exception instanceof ApiError) {
     return { status: exception.status, body: exception.toBody() };
   }

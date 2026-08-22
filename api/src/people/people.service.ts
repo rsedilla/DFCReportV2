@@ -780,9 +780,9 @@ export class PeopleService {
 
     return this.db.transaction().execute(async (trx) => {
       // Both persons whose Networks decide the new edge's legality, in one call so
-      // the ascending-id order is not left to the order that reads best here.
-      // `changeWithin` takes the first of these again, which an advisory lock
-      // permits — it is re-entrant within a transaction.
+      // the ordering is decided by the helper rather than by the order that reads
+      // best here. `changeWithin` and `reassignWithin` each take a subset again,
+      // which is free: a session is always granted a lock it already holds.
       await lockPersonsWithin(
         trx,
         input.pastoralLeaderId === undefined ? [personId] : [personId, input.pastoralLeaderId],
@@ -1056,9 +1056,10 @@ export class PeopleService {
    */
   private async assertLeaderIsAssignable(
     /**
-     * Whose view of `persons` and `person_lifecycle` to trust. Creation validates
-     * before it opens a transaction; the sex correction validates inside its own,
-     * where it must see rows the same transaction has already written.
+     * Whose view of `persons` and `person_lifecycle` to trust. Both callers now
+     * validate inside their own transaction and after taking the person lock —
+     * creation used to validate outside it, which left the answer stale by the time
+     * the edge was written.
      */
     executor: Db,
     leaderId: string,

@@ -17,8 +17,18 @@ import type { Transaction } from 'kysely';
  */
 const LOCK_TIMEOUT = '3s';
 
-/** `lock_not_available`: the wait above elapsed. */
-const LOCK_NOT_AVAILABLE = '55P03';
+/** `lock_not_available`: a lock wait elapsed. */
+export const LOCK_NOT_AVAILABLE = '55P03';
+
+/** Whether a thrown value is PostgreSQL reporting an elapsed lock wait. */
+export function isLockTimeout(error: unknown): boolean {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    (error as { code?: unknown }).code === LOCK_NOT_AVAILABLE
+  );
+}
 
 /**
  * Serializes the writes that decide whether a pastoral edge crosses Networks
@@ -72,10 +82,26 @@ export async function lockPersonsWithin(
   // pooled connection's next occupant. Interpolated rather than parameterized
   // because `SET` takes no parameters; the value is a constant in this file and
   // never comes from a request.
+  //
+  // **It is transaction-scoped, not statement-scoped**, so it stays in force for
+  // everything the caller does afterwards — the row locks its own writes take, and
+  // the key's row lock in `completeWithin`. That is deliberate and is written into
+  // section 5: those waits are unbounded otherwise, and an unbounded wait anywhere
+  // in a transaction holding a pooled connection is the same liveness hazard. What
+  // it requires is that a timeout raised *outside* this loop still answers
+  // `RESOURCE_BUSY` rather than an unhandled 500, which `ApiExceptionFilter` does.
   await sql`SET LOCAL lock_timeout = ${sql.raw(`'${LOCK_TIMEOUT}'`)}`.execute(transaction);
 
+  // **`::uuid::text` normalizes the spelling before hashing, and that is not
+  // cosmetic.** `hashtextextended` is case-sensitive; a `uuid` column comparison is
+  // not, and `@IsUUID()` accepts either case — so the same leader named in
+  // uppercase and in lowercase compares equal everywhere in the system except
+  // here, and would take two different locks that serialize against nothing.
+  // `UUID().uuidString` on iOS is uppercase by default, and section 2 names iOS as
+  // a client. The cast also refuses a value that is not a UUID rather than hashing
+  // it.
   const keys = await sql<{ key: string }>`
-    SELECT DISTINCT hashtextextended(id, 0) AS key
+    SELECT DISTINCT hashtextextended(id::uuid::text, 0) AS key
       FROM unnest(${sql.val([...personIds])}::text[]) AS id
      ORDER BY key
   `.execute(transaction);
@@ -94,13 +120,4 @@ export async function lockPersonsWithin(
       throw error;
     }
   }
-}
-
-function isLockTimeout(error: unknown): boolean {
-  return (
-    typeof error === 'object' &&
-    error !== null &&
-    'code' in error &&
-    (error as { code?: unknown }).code === LOCK_NOT_AVAILABLE
-  );
 }
