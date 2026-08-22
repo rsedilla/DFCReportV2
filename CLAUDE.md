@@ -900,6 +900,52 @@ list, the role catalog, the §4 text that now names it, the `capability` enum in
 `ALL_CAPABILITIES`, so the two cannot drift. `read_only` on it is rejected at
 creation, since it is a write.
 
+### 2026-08-22 — Idempotency covers the authenticated write surface, and applies by default
+
+§22 says "every state-changing request" carries an `Idempotency-Key`, and the
+`idempotency_keys` shape §22 itself gives is keyed by account. Those two cannot
+both be unconditional: an unauthenticated request has no account, so the store
+cannot hold a row for it.
+
+**The rule reaches every authenticated state-changing request.** The exempt set
+is exactly §7's closed unauthenticated list — sign-in, token refresh, password
+reset, activation, the probe — so the exemption is closed rather than a
+judgement anyone extends. Derived from §22's own shape rather than invented, but
+recorded because it is client-visible.
+
+**It applies by default, not per endpoint**, for the reason §2 gives for the
+capability guard: a convention remembered inside each handler is only as
+reliable as the least familiar developer writing the newest route. A new write
+endpoint is covered the moment it exists.
+
+That reaches `logout` and `logout-all`, which are authenticated and
+state-changing. Exempting them was considered and refused: §7 carves out
+session endpoints from the *capability* guard, and borrowing that carve-out for
+idempotency would be applying a rule to something it was not written about —
+the mistake two review passes have already caught on this project. §22's
+sentence is unconditional, and a retried sign-out returning the first answer is
+better behaviour than a second revocation attempt.
+
+**Nest applies a handler's status after the interceptor chain resolves**, so the
+status cannot be read off the response inside the interceptor. It is derived the
+way Nest derives it, from `@HttpCode` or the method. Reading `res.statusCode`
+there yields Express's default, which would store a POST as 200 and make every
+replay answer 200 where the original answered 201.
+
+**A 4xx is stored and a 5xx releases the key.** A domain refusal is this
+request's outcome, decided by the rules, and a repeat of the same body is
+entitled to the same answer. An unexpected failure carries no decision and rolls
+back, so nothing was recorded and a retry cannot double-apply; storing it would
+pin a transient failure to the key for a day with no way past it.
+
+**The fingerprint is taken over a canonicalized body.** Nothing forbids a client
+reordering object keys on a retry and several JSON libraries do, and treating
+that as a different body answers `IDEMPOTENCY_KEY_REUSED` — which §22 makes
+permanent and says must never be retried, turning an ordinary retry into a dead
+end. Arrays keep their order, because order is meaning in an array.
+
+Written to `SKILL.md` §22.
+
 ### Open — awaiting a ruling
 
 **One item awaits a ruling and blocks Stage 5. Eight other things are unsettled, none of them blocking. They are listed at the end, so this section is the whole of what is open.**

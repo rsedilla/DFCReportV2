@@ -2757,6 +2757,7 @@ idempotency_keys
 - expires_at
 ```
 
+- **The rule reaches every authenticated state-changing request**, and only those. An unauthenticated one has no account to key a row by, so the store cannot hold it: sign-in, token refresh, password reset and activation are outside this, and they are exactly Section 7's closed unauthenticated list, which makes this exemption closed too. Everything else that changes state carries a key, including an endpoint acting only on the caller's own session — signing out is state-changing, and a retried sign-out should return the answer the first one produced rather than run again.
 - **A key is unique to the account that presented it**, never globally. A row is identified by the account and the key together, so two accounts may hold the same key without either seeing the other's stored response, and every rule below means "for this account". Global uniqueness would let a client that reused a key it had observed receive somebody else's response, or deny that person their own retry — and clients generate these values themselves, so a key is not a secret.
 - The server stores the key with the response it produced, for at least 24 hours.
 - A repeat of the same key with the same body returns the stored response and does not execute again.
