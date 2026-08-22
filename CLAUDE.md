@@ -475,7 +475,7 @@ A grant's scope is evaluated against the request's primary target. Where a rule 
 Stated because a capability and a scope cannot express three objects with three different rules, and a developer who implements the guard and believes the rule is implemented has built half of it. `SUBTREE_EXCL_SELF` survives for `cell.request_creation` alone, where the only prohibited object is the target. Written to `SKILL.md` §7.
 
 ### 2026-08-20 — `read_only` is valid only on a read capability
-Five capabilities are reads: the four `view_subtree` variants and `audit.view`. The other nineteen are writes, and a grant of one with `read_only` true is rejected at creation rather than stored and silently ineffective — otherwise an Admin who leaves the flag at its default creates a row that grants nothing, with nothing to explain the denial. Written to `SKILL.md` §7.
+Five capabilities are reads: the four `view_subtree` variants and `audit.view`. The other nineteen are writes — *twenty since `people.correct_sex` was added on 2026-08-22; the rule is the split, not the count* — and a grant of one with `read_only` true is rejected at creation rather than stored and silently ineffective — otherwise an Admin who leaves the flag at its default creates a row that grants nothing, with nothing to explain the denial. Written to `SKILL.md` §7.
 
 ### 2026-08-20 — Migrations are hand-written SQL, and there is no ORM
 Migration files are plain SQL applied in order by a small runner in the repository. Data access is a typed query builder over the PostgreSQL driver.

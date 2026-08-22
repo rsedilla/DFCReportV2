@@ -17,6 +17,7 @@ describe('the capability enumeration (SKILL.md section 7)', () => {
     'people.edit_basic',
     'people.manage_lifecycle',
     'people.manage_pastoral_assignment',
+    'people.correct_sex',
     'dcc.take_attendance',
     'dcc.view_subtree',
     'dcc.submit_on_behalf',
@@ -47,7 +48,7 @@ describe('the capability enumeration (SKILL.md section 7)', () => {
     expect(new Set(ALL_CAPABILITIES).size).toBe(ALL_CAPABILITIES.length);
   });
 
-  it('divides into five reads and nineteen writes', () => {
+  it('divides into five reads and twenty writes', () => {
     expect([...READ_CAPABILITIES]).toEqual([
       'people.view_subtree',
       'dcc.view_subtree',
@@ -57,7 +58,7 @@ describe('the capability enumeration (SKILL.md section 7)', () => {
     ]);
 
     const writes = ALL_CAPABILITIES.filter((capability) => !isReadCapability(capability));
-    expect(writes).toHaveLength(19);
+    expect(writes).toHaveLength(20);
   });
 });
 
