@@ -1,7 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 
 import { InvariantViolationError } from '../common/errors/api-error';
-import { manilaDayAfter } from '../common/time/manila';
+import { manilaDayAfter, startOfManilaDay } from '../common/time/manila';
 import { DATABASE, type Db } from '../database/database.module';
 import { HierarchyService } from '../hierarchy/hierarchy.service';
 
@@ -27,9 +27,16 @@ export class NetworksService {
    * The person's Network as it stood at `at`, or null where none was recorded
    * then. Null is a real answer: the system is authoritative for Network history
    * only from a person's encoding date forward.
+   *
+   * The executor is required rather than defaulted, because the one caller that
+   * asks this from inside a transaction is the one that must not get it wrong.
+   * Reading it on the pooled connection while holding a transaction is also a
+   * liveness bug in its own right: a request holding one connection and waiting
+   * for a second from the same bounded pool starves once enough of them run at
+   * once (section 24 bounds the pool).
    */
-  async networkAsOf(personId: string, at: Date): Promise<NetworkName | null> {
-    const row = await this.db
+  async networkAsOf(executor: Db, personId: string, at: Date): Promise<NetworkName | null> {
+    const row = await executor
       .selectFrom('network_assignments')
       .select('network')
       .where('person_id', '=', personId)
@@ -133,6 +140,30 @@ export class NetworksService {
       });
     }
 
+    // **A Network root is not moved between Networks by a data correction.**
+    // Section 5: each Network has exactly one root, a root cannot be reassigned by
+    // anyone, Admin included, and changing who holds a root position is a
+    // deliberate Network-level decision rather than a pastoral one. Moving one
+    // here would leave one Network rootless and the other with two.
+    //
+    // Before the disciple refusal, because a root leads people and would otherwise
+    // always be refused with the wrong reason.
+    //
+    // **This detects the representation the schema actually carries** — an open
+    // row with a null `leader_id`. Section 5 also describes a root as having no
+    // active assignment at all, and the two readings disagree; that ambiguity is
+    // recorded as open in CLAUDE.md, and under the other reading this check does
+    // not fire. It is a fail-closed guard on the representation in use, not an
+    // answer to "is this person a root".
+    const assignment = await this.hierarchy.openAssignmentOf(transaction, change.personId);
+
+    if (assignment !== null && assignment.leaderId === null) {
+      throw new InvariantViolationError(
+        'That person is a Network root. Changing who holds a root position is a Network-level decision, not a data correction.',
+        { person_id: change.personId },
+      );
+    }
+
     // **First, and before the floor.** Section 4 refuses the change while the
     // person leads anyone, and moving a disciple closes their edge — which
     // immediately becomes a term in the floor below. Reporting a floor while open
@@ -165,36 +196,29 @@ export class NetworksService {
     // equals the effective instant, which is the first term exactly. Checking only
     // when backdating would leave that one to surface as a constraint violation.
     if (floor !== null && change.effectiveAt.getTime() <= floor.getTime()) {
-      throw new InvariantViolationError(
-        change.backdated
-          ? 'That effective date is too early: it would strand a pastoral assignment that cannot be corrected. Use the earliest date given here or later.'
-          : 'This change cannot take effect at this instant, because a pastoral record for this person was written at it. Retry in a moment.',
-        {
-          person_id: change.personId,
-          ...(change.backdated
-            ? // A date rather than the floor itself. The floor is an instant, an
-              // effective date is a day, and the day containing the floor is the
-              // one day that would be refused again (section 4, section 20).
-              { earliest_effective_date: manilaDayAfter(floor) }
-            : {}),
-        },
-      );
+      throw this.floorBreach(change, floor, 'edges');
     }
 
-    if (change.effectiveAt.getTime() < open.started_at.getTime()) {
-      // `CHECK (ended_at >= started_at)` would refuse this close. Section 4's floor
-      // does not bound it, because it is reachable only where an assignment was
-      // opened before the person had a Network at all — which the same-Network
-      // trigger refuses for any edge with a leader, leaving only a null-leader root
-      // row written by an import. Translated into an answer rather than left to
-      // surface as a constraint violation the administrator cannot act on.
-      throw new InvariantViolationError(
-        'That effective date is before the Network being corrected took effect, so there is no period for the correction to cover.',
-        {
-          person_id: change.personId,
-          earliest_effective_date: manilaDayAfter(open.started_at),
-        },
-      );
+    // **At or before, not merely before.** At exact equality the `UPDATE` below
+    // would close the live Network row at its own `started_at`, and section 5
+    // makes such a row **inert**: no instant resolves to it, so the period the
+    // person spent in their former Network disappears from every as-of query and
+    // every past-period Network-scoped report for them moves. Section 5 names that
+    // failure directly and reserves a zero-length close for a row entered in
+    // error, written by a path that says it is correcting — which this is not. A
+    // correction is effective-dated, and section 4 accepts in writing that closed
+    // periods keep the Network recorded for them, including where it is now known
+    // to be wrong.
+    //
+    // Strictly below equality the schema would refuse it anyway, through
+    // `CHECK (ended_at >= started_at)`; this turns both into an answer rather than
+    // a constraint violation an administrator cannot act on.
+    //
+    // Section 4's floor does not bound this. It is reachable wherever the floor is
+    // empty — most ordinarily a Person with no pastoral assignment at all, whom
+    // section 4 says may be backdated freely because there are no edges to strand.
+    if (change.effectiveAt.getTime() <= open.started_at.getTime()) {
+      throw this.floorBreach(change, open.started_at, 'network-row');
     }
 
     // The close before the open: `network_assignments_one_open` is a partial
@@ -221,6 +245,61 @@ export class NetworksService {
   }
 
   /**
+   * The refusal for an effective instant that is at or before a bound.
+   *
+   * **It names a date only where a date can legally be submitted**, and that is
+   * the whole reason this is a method rather than an inline throw. An effective
+   * date is a day resolved to its start in Asia/Manila (section 20), so where the
+   * bound falls on the current Manila day the day after it is *tomorrow* — and a
+   * correction cannot be dated in the future (section 5 knows "now" and "in the
+   * past", and nothing else). Naming it would hand the administrator the one
+   * answer guaranteed to be refused again, which is exactly what section 4
+   * requires the system not to do.
+   *
+   * In that case no date clears the bound and the correction can only take effect
+   * now, which always does: every bound is read from a row already written, so it
+   * lies in the past. So the refusal says that instead of naming a date.
+   */
+  private floorBreach(
+    change: { personId: string; backdated: boolean },
+    bound: Date,
+    /**
+     * What the bound is, which decides only the wording. The two are different
+     * facts — a pastoral edge that could not be corrected, and the Network row's
+     * own start — and one message covering both would tell an administrator with
+     * no pastoral assignment that they had stranded one.
+     */
+    kind: 'edges' | 'network-row',
+  ): InvariantViolationError {
+    const earliest = manilaDayAfter(bound);
+    const submittable = startOfManilaDay(earliest).getTime() <= Date.now();
+
+    if (!change.backdated) {
+      // Reached only where a record for this person was written at the same
+      // instant this correction is taking — a Person encoded and corrected within
+      // the same millisecond. There is no date to offer and none was asked for.
+      return new InvariantViolationError(
+        'This change cannot take effect at this instant, because a record for this person was written at it. Retry in a moment.',
+        { person_id: change.personId },
+      );
+    }
+
+    if (!submittable) {
+      return new InvariantViolationError(
+        'This correction cannot be backdated: the records it would have to reach past were written today. Submit it without an effective date, and it will take effect now.',
+        { person_id: change.personId },
+      );
+    }
+
+    return new InvariantViolationError(
+      kind === 'edges'
+        ? 'That effective date is too early: it would strand a pastoral assignment that cannot be corrected. Use the earliest date given here or later.'
+        : 'That effective date is at or before the moment the Network being corrected took effect, so the correction would erase that period rather than end it. Use the earliest date given here or later.',
+      { person_id: change.personId, earliest_effective_date: earliest },
+    );
+  }
+
+  /**
    * Network follows from sex under the homogeneous-network rule (section 4).
    *
    * Assigned rather than proposed: the mapping is total, so a confirmation step
@@ -233,6 +312,6 @@ export class NetworksService {
 
   /** The person's Network as it stands now. */
   async currentNetwork(personId: string): Promise<NetworkName | null> {
-    return this.networkAsOf(personId, new Date());
+    return this.networkAsOf(this.db, personId, new Date());
   }
 }

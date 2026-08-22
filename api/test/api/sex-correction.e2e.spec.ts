@@ -353,9 +353,69 @@ describe('sex correction (SKILL.md sections 4, 5, 7, 21, 22)', () => {
 
       expect(response.status).toBe(409);
       expect(response.body.error.code).toBe('INVARIANT_VIOLATION');
-      // Tomorrow, because the disciple's edge closed today. Compared against the
-      // floor rather than against a literal, since "today" moves.
-      expect(response.body.error.details.earliest_effective_date > manilaDayOf(movedAt)).toBe(true);
+
+      // **It names no date, and that is the assertion.** The floor is today, so
+      // the day after it is tomorrow — and a correction cannot be dated in the
+      // future. Naming it would hand back the one answer guaranteed to be refused
+      // again, which is what section 4 requires the system not to do.
+      expect(response.body.error.details).not.toHaveProperty('earliest_effective_date');
+      expect(response.body.error.message).toMatch(/without an effective date/);
+
+      // And the route it points at works, so the refusal is not a dead end.
+      const now = await correct(manuel.id, {
+        sex: 'FEMALE',
+        reason: 'Sex entered in error at encoding.',
+        pastoral_leader_id: grace.id,
+      });
+
+      expect(now.status).toBe(200);
+      expect(manilaDayOf(new Date(now.body.effective_at))).toBe(manilaDayOf(movedAt));
+    });
+
+    it('reaches a closed edge on which the person was the subordinate', async () => {
+      // Term (b)'s `person_id` disjunct, which no other case covers at this level:
+      // delete it from `backdateFloorFor` and every other floor case still passes,
+      // because they all bind on term (a) or on the leader side.
+      //
+      // The open assignment starts before the closed edge rather than after it, so
+      // term (a) cannot be what refuses this. A closed period overlapping an open
+      // one is what the partial unique index permits, and is all this needs.
+      const closedFrom = new Date('2026-04-01T10:00:00+08:00');
+      const closedTo = new Date('2026-06-01T10:00:00+08:00');
+
+      const person = await createPerson(db, { firstName: 'Nena', network: 'MENS' });
+      await assignTo(db, person.id, manuel.id, EPOCH);
+      await db
+        .insertInto('pastoral_assignments')
+        .values({
+          person_id: person.id,
+          leader_id: raymond.id,
+          started_at: closedFrom,
+          ended_at: closedTo,
+        })
+        .execute();
+
+      const refused = await correct(person.id, {
+        sex: 'FEMALE',
+        reason: 'Sex entered in error at encoding.',
+        pastoral_leader_id: grace.id,
+        effective_date: '2026-05-01',
+      });
+
+      expect(refused.status).toBe(409);
+      expect(refused.body.error.code).toBe('INVARIANT_VIOLATION');
+      expect(refused.body.error.details.earliest_effective_date).toBe('2026-06-02');
+
+      // Submitted back, as everywhere else here: without this the case passes
+      // against a floor that refuses everything.
+      const accepted = await correct(person.id, {
+        sex: 'FEMALE',
+        reason: 'Sex entered in error at encoding.',
+        pastoral_leader_id: grace.id,
+        effective_date: '2026-06-02',
+      });
+
+      expect(accepted.status).toBe(200);
     });
 
     it('writes a backdating audit entry carrying both dates', async () => {
@@ -378,6 +438,10 @@ describe('sex correction (SKILL.md sections 4, 5, 7, 21, 22)', () => {
       // well as its presence.
       const after = entry.after as Record<string, string>;
       expect(after.effective_date).toBe('2026-03-02');
+      // The literal instant, not a value recomputed with the same function the
+      // code used, which would agree with itself whatever it did. Manila midnight
+      // is 16:00 UTC the previous day.
+      expect(after.effective_at).toBe('2026-03-01T16:00:00.000Z');
       expect(after.recorded_at).toMatch(/^\d{4}-\d{2}-\d{2}T/);
       expect(after.effective_at).not.toBe(after.recorded_at);
       expect(entry.reason).toBe('Sex entered in error at encoding.');
@@ -495,6 +559,97 @@ describe('sex correction (SKILL.md sections 4, 5, 7, 21, 22)', () => {
     });
   });
 
+  describe('section 5 invariant 4: never oneself, never an upline', () => {
+    /**
+     * The gap the Whole Church check does not close. That one asks how far a grant
+     * reaches; this asks who the actor is relative to the target — and a non-Admin
+     * holding an explicit Whole Church grant passes the first and must not pass
+     * the second.
+     */
+    async function grantCorrectSexChurchWide(account: TestAccount): Promise<void> {
+      await db
+        .insertInto('capability_grants')
+        .values({
+          account_id: account.id,
+          capability: 'people.correct_sex',
+          scope_type: 'WHOLE_CHURCH',
+          scope_network: null,
+          read_only: false,
+          reason: 'Fixture: the grant section 7 reserves to Admin.',
+          granted_by: admin.id,
+        })
+        .execute();
+    }
+
+    it('refuses a Leader correcting their own record', async () => {
+      // The escalation section 7 names as the reason this capability is
+      // Admin-only: correcting their own sex re-parents them under a leader they
+      // choose in the other Network, detaching them from their own upline without
+      // ever holding people.manage_pastoral_assignment.
+      await grantCorrectSexChurchWide(raymondAccount);
+
+      const response = await correct(
+        raymond.id,
+        {
+          sex: 'FEMALE',
+          reason: 'Sex entered in error at encoding.',
+          pastoral_leader_id: grace.id,
+        },
+        raymondAccount,
+      );
+
+      expect(response.status).toBe(403);
+      expect(response.body.error.code).toBe('SCOPE_DENIED');
+      // Distinguished from the Whole Church refusal, which shares the code and
+      // would otherwise let this pass for the wrong reason.
+      expect(response.body.error.message).toMatch(/your own pastoral assignment/);
+
+      const person = await db
+        .selectFrom('persons')
+        .select('sex')
+        .where('id', '=', raymond.id)
+        .executeTakeFirstOrThrow();
+
+      expect(person.sex).toBe('MALE');
+    });
+
+    it('refuses a Leader correcting anyone upline of them', async () => {
+      await grantCorrectSexChurchWide(raymondAccount);
+
+      const response = await correct(
+        oriel.id,
+        {
+          sex: 'FEMALE',
+          reason: 'Sex entered in error at encoding.',
+        },
+        raymondAccount,
+      );
+
+      expect(response.status).toBe(403);
+      expect(response.body.error.code).toBe('SCOPE_DENIED');
+      expect(response.body.error.message).toMatch(/upline/);
+    });
+
+    it('exempts Admin, which is what section 5 says', async () => {
+      // Without this the rule is satisfied by refusing everyone, and the two cases
+      // above would pass against an implementation that never lets anybody through.
+      // Mark is a leaf, so nothing else refuses this.
+      const markAdmin = await createAccount(app, db, { person: mark, roles: ['ADMIN'] });
+
+      const response = await correct(
+        mark.id,
+        {
+          sex: 'FEMALE',
+          reason: 'Sex entered in error at encoding.',
+          pastoral_leader_id: grace.id,
+        },
+        markAdmin,
+      );
+
+      expect(response.status).toBe(200);
+    });
+  });
+
   describe('what the correction refuses to record', () => {
     it('refuses a correction that changes nothing', async () => {
       const response = await correct(mark.id, {
@@ -591,6 +746,58 @@ describe('sex correction (SKILL.md sections 4, 5, 7, 21, 22)', () => {
 
       expect(response.status).toBe(200);
       expect(response.body.network).toBe('WOMENS');
+    });
+
+    it('refuses a Network root', async () => {
+      // Section 5: each Network has exactly one root, and changing who holds a
+      // root position is a Network-level decision rather than a data correction.
+      // Moving one here would leave one Network rootless and the other with two.
+      const response = await correct(geraldine.id, {
+        sex: 'MALE',
+        reason: 'Sex entered in error at encoding.',
+      });
+
+      expect(response.status).toBe(409);
+      expect(response.body.error.code).toBe('INVARIANT_VIOLATION');
+      // Not the disciple refusal, which a root would otherwise always hit first
+      // and which would report the wrong reason.
+      expect(response.body.error.message).toMatch(/Network root/);
+    });
+
+    it('refuses an effective date at the instant the Network row itself began', async () => {
+      // It would close the live Network row at its own `started_at`, and section 5
+      // makes such a row inert: the period the person spent in their former
+      // Network would vanish from every as-of query with nothing raised.
+      //
+      // Reachable precisely because section 4 says a Person with no pastoral
+      // assignment has no floor and may be backdated freely. `EPOCH` is Manila
+      // midnight, which is what makes the instants line up exactly.
+      const unassigned = await createPerson(db, { firstName: 'Nena', network: 'MENS' });
+
+      const response = await correct(unassigned.id, {
+        sex: 'FEMALE',
+        reason: 'Sex entered in error at encoding.',
+        effective_date: manilaDayOf(EPOCH),
+      });
+
+      expect(response.status).toBe(409);
+      expect(response.body.error.code).toBe('INVARIANT_VIOLATION');
+      // The Network-row wording, not the stranded-edge one. This person holds no
+      // pastoral assignment at all, and telling them they had stranded one would
+      // be a message about somebody else's problem.
+      expect(response.body.error.message).toMatch(/erase that period/);
+      expect(response.body.error.details.earliest_effective_date).toBe('2020-01-02');
+
+      const networks = await db
+        .selectFrom('network_assignments')
+        .select(['network', 'started_at', 'ended_at'])
+        .where('person_id', '=', unassigned.id)
+        .execute();
+
+      // Still one open row covering a real period, rather than two rows of which
+      // the first is invisible.
+      expect(networks).toHaveLength(1);
+      expect(networks[0].ended_at).toBeNull();
     });
 
     it('refuses a person who does not exist', async () => {

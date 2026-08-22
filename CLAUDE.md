@@ -1354,24 +1354,39 @@ purpose rather than its `WHERE` clause has been wrong.
 `assert_network_change_keeps_edges` fires **twice** in one correction, and the two
 firings select different edges:
 
-- **On the `INSERT` of the new Network row**, the bound is the effective date. Edges
-  with `ended_at > eff` are selected, and the old edge closed at exactly `eff` is
-  not — which is what makes the one-instant rule in section 4 work at all.
 - **On the `UPDATE` closing the old Network row**, the bound is the *old row's*
   `started_at`, not the effective date. That selects nearly every edge the person
   has ever held, each compared at `GREATEST(edge.started_at, old_row.started_at)`,
   and it passes only while that instant is still covered by the old Network row —
   that is, while the edge began strictly before `eff`.
+- **On the `INSERT` of the new Network row**, the bound is the effective date. Edges
+  with `ended_at > eff` are selected, and the old edge closed at exactly `eff` is
+  not — which is what makes the one-instant rule in section 4 work at all.
 
-Both of section 4's strictness rules are properties of the **second** firing, which
-is the one an implementer is least likely to look at:
+They are listed in that order because that is the order they fire in. The partial
+unique index `network_assignments_one_open` forces the close to precede the open, a
+deferred constraint trigger's events fire at commit in the order they were queued,
+so the `UPDATE` firing is the **first**.
 
-- `eff` equal to the current assignment's `started_at` closes it at its own start.
-  The resulting zero-length row is selected by the second firing and compared at
-  `eff`, where the person already resolves to the corrected Network. Hence term (a),
-  strictly later.
-- `eff` equal to the `ended_at` of a **zero-length** closed edge does the same thing.
-  Hence term (b), strictly later.
+**An earlier version of this entry said the `UPDATE` firing was the second, and
+said both strictness rules were properties of it. Both halves were wrong**, and the
+second contradicted this entry's own bullets four lines further down. Corrected in
+place rather than deleted, because this is the entry written to warn against
+describing a mechanism from the part of it being looked at, and it did exactly
+that. Found by `architecture-guardian` reading the SQL.
+
+The terms divide between the firings rather than coming from one:
+
+- **Term (a)** comes from the `UPDATE` firing. `eff` equal to the current
+  assignment's `started_at` closes it at its own start; the resulting zero-length
+  row is selected there and compared at `eff`, where the person already resolves to
+  the corrected Network. Hence strictly later.
+- **Term (b) at exact equality with a zero-length closed edge** comes from the same
+  firing, for the same reason.
+- **Term (b) in its ordinary case** — an effective date below a closed edge's
+  `ended_at` — comes from the `INSERT` firing, which selects anything with
+  `ended_at > eff`. This is the half the earlier wording denied while its own
+  bullet asserted it.
 
 **Section 4's uniform strict form is conservative by one instant on term (b), and
 that is followed rather than optimised.** For an ordinary closed edge with
@@ -1380,19 +1395,109 @@ The strict form refuses it. Narrowing the rule to zero-length rows alone would m
 the implementation disagree with the specification to gain one instant, on the part
 of this system where reasoning from purpose has already been wrong four times.
 
-**One corner where section 4 and the schema disagree, recorded rather than fixed.**
-Where a person's open assignment began *before* their open Network row, section 4's
-floor can permit an `eff` that `CHECK (ended_at >= started_at)` on
-`network_assignments` rejects. It is unreachable for any edge with a leader — the
-same-Network trigger refuses an edge opened before the person has a Network at all —
-so it is reachable only for a null-`leader_id` root row written by an import. It is
-translated into `INVARIANT_VIOLATION` with a message rather than left to surface as a
-constraint violation, and no third floor term is added, because a term that binds
-only in an unreachable corner reads as though it were doing work.
+**A second bound, on the Network row rather than on the edges.** An effective date
+at or before the moment the open Network row began is refused, separately from the
+floor.
+
+**The first version of this entry got this wrong in two ways, and both are
+corrected here rather than deleted.** It bounded only dates strictly *below* the
+row's `started_at`, treating the case as a translation of `CHECK (ended_at >=
+started_at)` into a readable message. Equality is the case that matters: it closes
+the live Network row at its own start, and section 5 makes such a row inert, so the
+person's former Network silently disappears from every as-of query and every
+past-period report for them moves. And it claimed the branch was "reachable only
+for a null-`leader_id` root row written by an import". That is false. It is reached
+by any Person with no pastoral assignment at all — both floor subqueries are empty,
+section 4 says such a correction may be backdated freely, and an effective date
+before their Network row's start lands there with no root row in the picture.
+
+Both found by `architecture-guardian`. The ruling built on the false claim — that
+no further bound was needed because the corner was unreachable — does not survive
+it, so the bound is now stated in `SKILL.md` section 4 as a rule rather than
+excused as a corner.
+
+### 2026-08-23 — Three rulings the review of the sex correction forced, and one gap it found
+
+`architecture-guardian` returned six findings on the first pass. Two were live
+defects, three were false statements in the files written to record the mechanism,
+and one was a test that survived deleting half the rule it was checking. The three
+that needed rulings are below; the two false statements are corrected in place in
+the entries above, which is where they were made.
+
+**Section 5 invariant 4 binds every operation that reassigns, not only the
+reassignment endpoint.** The sex correction performs a reassignment and checked no
+part of it. The Whole Church rule settled earlier the same day does not cover it and
+cannot: that one asks how far a grant reaches, this one asks who the actor is
+relative to the target, and a holder of an explicit Whole Church grant passes the
+first while needing to fail the second.
+
+The gap was reachable and this branch's own test built the precondition for it: a
+`LEADER` account granted `people.correct_sex` at Whole Church, correcting its own
+record and naming any leader in the other Network, detaches itself from its own
+upline. That is the escalation section 7 gives as the *reason* the capability is
+Admin-only — reached without ever holding `people.manage_pastoral_assignment` — and
+section 5 calls it privilege escalation through the org chart.
+
+It now lives in `hierarchy`, because `PUT /people/{id}/pastoral-leader` owes it too
+and would otherwise reinvent it. It is the one authorization rule in the system
+decided by **role** rather than by capability, which is how section 5 states it: the
+point is that Admin and the Senior Pastors sit outside the pastoral incentive, not
+that they were granted something extra.
+
+**Recorded because the reasoning failed the same way twice in one day.** The
+position this replaces was "the capability is Admin-only, so the role catalog
+satisfies invariant 4" — a rule enforced by a table nothing checks, which is the
+argument this project rejects everywhere else and which was accepted here without
+being written down.
+
+**A correction may not be dated at or before the moment the Network it corrects took
+effect.** Separate from the floor and not a term of it: it bounds the Network row
+rather than the pastoral edges. At exact equality the live row is closed at its own
+`started_at`, and section 5 makes such a row inert — so the period the person spent
+in their former Network vanishes from every as-of query and every past-period report
+for them moves, with nothing raised. Section 5 reserves a zero-length close for a row
+entered in error; a correction is effective-dated, and section 4 already accepts in
+writing that closed periods keep the Network recorded for them. Erasing the period is
+the opposite of that bargain rather than a stronger form of it.
+
+Reachable wherever the floor is empty, which is most ordinarily a Person with no
+pastoral assignment — the case section 4 says may be backdated "freely". Freely means
+as far back as the record goes, not before the record begins.
+
+**Where no date can clear the floor, the refusal names none.** The floor falls on the
+current day whenever a disciple has just been moved aside, which section 4 calls the
+*ordinary* outcome — and the day after today is tomorrow, which no correction may
+take. The refusal was therefore naming the one answer guaranteed to be refused again,
+which is precisely what section 4 requires the system not to do. It now says the
+correction cannot be backdated and will take effect now if submitted without an
+effective date, which always succeeds: every bound is read from a row already
+written, so it lies in the past.
+
+**A Network root is not moved between Networks by a data correction.** Derived rather
+than invented: section 5 gives each Network exactly one root and says changing who
+holds a root position is a Network-level decision, so moving one here would leave one
+Network rootless and the other with two. Refused before the disciple refusal, so a
+root — who by construction leads people — is refused for the reason that applies.
+
+The guard detects the representation the schema carries, an open row with a null
+`leader_id`. Section 5 also describes a root as having no active assignment at all,
+and under that reading this does not fire. That ambiguity is the root-representation
+item this log has carried as open since 2026-08-22; this is a fail-closed guard on
+the representation in use, not an answer to "is this person a root", and it is the
+first code that would benefit from settling it.
+
+**The sixth finding needed no ruling and is worth recording as a test lesson.**
+Term (b)'s `person_id` disjunct could be deleted from the floor query with the whole
+suite still green: every floor case bound on term (a) or on the leader side, and the
+subordinate side was covered only against the *trigger*, never against the code that
+computes the floor. The failure it would have allowed is the one the floor exists to
+prevent — a raw `check_violation` at `COMMIT`, a 500 instead of a date the
+administrator can act on. "What mutation would this fail against" is the question
+that finds these, and it has to be asked per rule rather than per test.
 
 ### Open — awaiting a ruling
 
-**One item awaits a ruling and blocks Stage 5. Seven other things are unsettled, none of them blocking. They are listed at the end, so this section is the whole of what is open.**
+**One item awaits a ruling and blocks Stage 5. Eight other things are unsettled, none of them blocking. They are listed at the end, so this section is the whole of what is open.**
 
 Nine items that stood here on 2026-08-22 were settled that day and are recorded above. Seven were Stop Conditions for Stage 2, and the last two were opened and closed the same day by `architecture-guardian` passes.
 
@@ -1411,4 +1516,5 @@ Two related questions have defined behaviour and are recorded in `SKILL.md` §12
 - **What the native clients owe on accessibility.** `SKILL.md` §23 binds the web application to WCAG 2.2 AA and says the equivalent obligation for a native client is the platform accessibility API rather than WCAG. Which platform guarantees, and what would fail a build, is a ruling to make when the client is.
 
 - **The root's representation.** §5 says both that a root leader has "no active pastoral assignment" and that "A root leader has a null `leader_id`", and invariant 3 lists zero assignments as legitimate for a root. Those disagree about whether a row exists. The schema permits either, the test fixtures insert a row, and the same-Network trigger passes a null-`leader_id` row without comparison, so nothing currently depends on the answer — §4's backdate floor was deliberately written over edges with a leader so that it does not. Settle it before anything queries "is this person a root", which is a different question under each reading.
+- **The interleaving that section 4's disciple refusal cannot see.** The refusal reads open downline edges under READ COMMITTED, and both same-Network triggers are `DEFERRABLE INITIALLY DEFERRED`. A transaction opening an edge under the person, with a `started_at` just before the correction's effective instant and committing just after it, is seen by neither trigger's commit-time comparison: the correction's does not yet see the row, and the new edge's own trigger compares at its `started_at`, where the person's Network was still the old one. The result is a permanent cross-Network edge that nothing revisits. This is a property of `0001_foundations.sql` rather than of any one caller, and it is the same class as the Senior Pastor counting trigger closed on 2026-08-21. Closing it needs both paths to take the same row lock on the person, and the second path — `PUT /people/{id}/pastoral-leader` — does not exist yet, so it is recorded here to be settled with it rather than half-built now.
 - **Whether `audit_log`'s append-only guarantee tolerates `TRUNCATE`.** §5 records the exemption for history tables and leans it on a least-privilege role that does not exist, which is already open above. §21 says nothing at all, and the test suite truncates `audit_log` before every test. Same answer as the `TRUNCATE` question above, most likely, but it is not written down for the one table whose whole purpose is that nothing removes a row.

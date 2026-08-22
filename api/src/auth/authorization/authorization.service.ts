@@ -9,6 +9,8 @@ import { isCapability, isReadCapability, type Capability } from './capabilities'
 import { ROLE_DEFAULTS } from './role-defaults';
 import { ScopeType, type Scope, type Target } from './scopes';
 
+import type { AccountRole } from '../../database/schema';
+
 export interface Actor {
   accountId: string;
   personId: string;
@@ -52,6 +54,27 @@ export class AuthorizationService {
     private readonly hierarchy: HierarchyService,
     private readonly networks: NetworksService,
   ) {}
+
+  /**
+   * The roles the account currently holds.
+   *
+   * Authorization is decided by capability and scope, and this is the one rule
+   * that is not: SKILL.md section 5 invariant 4 names **roles** — "Only Admin or
+   * a Senior Pastor may do so" — because the rule is about who is outside the
+   * pastoral incentive rather than about what anyone was granted. It is exposed
+   * here rather than read from `account_roles` by the module that needs it,
+   * because `auth` owns that table (section 2, Modules).
+   */
+  async rolesFor(accountId: string): Promise<AccountRole[]> {
+    const rows = await this.db
+      .selectFrom('account_roles')
+      .select('role')
+      .where('account_id', '=', accountId)
+      .where('revoked_at', 'is', null)
+      .execute();
+
+    return rows.map((row) => row.role);
+  }
 
   async grantsFor(accountId: string): Promise<EffectiveGrant[]> {
     const [roles, grants] = await Promise.all([

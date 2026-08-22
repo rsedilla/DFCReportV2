@@ -1,10 +1,10 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { sql } from 'kysely';
 
-import { InvariantViolationError } from '../common/errors/api-error';
+import { InvariantViolationError, ScopeDeniedError } from '../common/errors/api-error';
 import { DATABASE, type Db } from '../database/database.module';
 
-import type { Database } from '../database/schema';
+import type { AccountRole, Database } from '../database/schema';
 import type { Transaction } from 'kysely';
 
 /**
@@ -153,6 +153,52 @@ export class HierarchyService {
       .execute();
 
     return { previousLeaderId: closed?.leader_id ?? null };
+  }
+
+  /**
+   * SKILL.md section 5 invariant 4: a leader may never change their own pastoral
+   * assignment, nor the assignment of anyone upline of them.
+   *
+   * **This is the only authorization rule in the system decided by role rather
+   * than by capability**, and section 5 states it that way on purpose: the point
+   * is that Admin and the Senior Pastors sit outside the pastoral incentive the
+   * rule guards against, not that they were granted something extra. Without it a
+   * leader can detach themselves from their own leader or re-attach themselves
+   * higher up — privilege escalation through the org chart, because authorized
+   * scope is derived from tree position.
+   *
+   * `SCOPE_DENIED`, per the 2026-08-20 ruling in CLAUDE.md: it is a statement
+   * about the actor's authority over a target, which is what that code means, even
+   * though it runs in the domain layer rather than in the guard.
+   *
+   * It lives here rather than in the calling module because every reassignment
+   * path owes it, and `PUT /people/{id}/pastoral-leader` is the second one.
+   */
+  async assertMayReparent(
+    actor: { personId: string; roles: readonly AccountRole[] },
+    personId: string,
+  ): Promise<void> {
+    if (actor.roles.includes('ADMIN') || actor.roles.includes('SENIOR_PASTOR')) {
+      return;
+    }
+
+    if (personId === actor.personId) {
+      throw new ScopeDeniedError(
+        'You may not change your own pastoral assignment. Only an Admin or a Senior Pastor may.',
+        { person_id: personId },
+      );
+    }
+
+    // Whether the target is upline of the **actor**, which is the direction the
+    // rule is written in. Their own subtree is not the question.
+    const ancestors = await this.ancestorsOf(actor.personId);
+
+    if (ancestors.includes(personId)) {
+      throw new ScopeDeniedError(
+        'You may not change the pastoral assignment of anyone upline of you. Only an Admin or a Senior Pastor may.',
+        { person_id: personId },
+      );
+    }
   }
 
   /**

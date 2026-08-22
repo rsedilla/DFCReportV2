@@ -723,6 +723,23 @@ export class PeopleService {
   ): Promise<Record<string, unknown>> {
     await this.assertCorrectSexIsHeldChurchWide(actor);
 
+    // Section 5 invariant 4, which the Whole Church check above does **not** cover:
+    // that one asks how far a grant reaches, this one asks who the actor is
+    // relative to the target. Without it a non-Admin holding an explicit
+    // Whole Church grant of `people.correct_sex` could correct their own record,
+    // name any leader in the other Network, and detach themselves from their own
+    // upline — the escalation section 7 gives as the reason this capability is
+    // Admin-only, reached without ever holding `people.manage_pastoral_assignment`.
+    //
+    // Applied whether or not this particular correction forces a reassignment. The
+    // capability moves a person between Networks either way, and a rule that
+    // switched itself off depending on whether the target currently holds an edge
+    // would be a rule nobody could reason about.
+    await this.hierarchy.assertMayReparent(
+      { personId: actor.personId, roles: await this.authorization.rolesFor(actor.accountId) },
+      personId,
+    );
+
     const recordedAt = new Date();
     const backdated = input.effectiveDate !== undefined;
     let effectiveAt = recordedAt;
@@ -1063,12 +1080,10 @@ export class PeopleService {
       );
     }
 
-    // Deliberately not read through `executor`. The leader's own Network rows are
-    // never written by the transaction that calls this, so the pooled read sees
-    // the same committed state; and the constraint trigger is the authority at
-    // commit in either case. This exists to turn the reachable refusals into the
-    // answers section 22 defines for them, not to replace it.
-    const leaderNetwork = await this.networks.networkAsOf(leaderId, at);
+    // Through `executor`, like every other read here. A pooled read taken while
+    // the caller holds a transaction needs a second connection from a bounded pool
+    // and starves once enough requests do it at once.
+    const leaderNetwork = await this.networks.networkAsOf(executor, leaderId, at);
     if (leaderNetwork !== network) {
       throw new InvariantViolationError(
         'A pastoral assignment may not cross Networks. This person belongs to the other Network from that leader.',
