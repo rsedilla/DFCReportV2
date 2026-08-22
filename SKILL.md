@@ -562,9 +562,11 @@ Because Senior Pastors may perform reassignments in either Network (Section 7), 
 
 Each Network has exactly one root leader: Bishop Oriel Ballano for the Men's Network, and Pastora Geraldine Ballano for the Women's Network (Section 4).
 
-A root leader has no pastoral leader and therefore no active pastoral assignment. This is the intended state, not missing data.
+A root leader has no pastoral leader above them, and that fact is **recorded as a row**: an active pastoral assignment whose `leader_id` is null. The row exists and is what makes them a root. This is the intended state, not missing data.
 
-A Person with no active assignment is a root only when they are a designated Network root. Any other Person without one is unassigned — surface them as such rather than silently rendering them as a second root of the tree.
+Earlier wording said a root had "no active pastoral assignment" *and* that a root leader has a null `leader_id`, which are different claims about whether a row exists. The row-based reading is the settled one, for two reasons. It is the only one under which "is this person a root" is a question the database can answer, and every rule that needs to distinguish a root from an unassigned Person depends on that — a Network change is refused for a root (Section 4) and must not be refused for someone merely unassigned. And the alternative needs a durable record of who the roots are, which Section 7 declined to create on the grounds that it would put the church's two most consequential positions behind a row somebody could edit.
+
+**A Person with no active assignment row at all is therefore never a root; they are unassigned** — surface them as such rather than silently rendering them as a second root of the tree.
 
 A root leader cannot be reassigned by anyone, Admin included, because there is no valid leader above them. Changing who holds a root position is a deliberate Network-level decision, not a pastoral reassignment.
 
@@ -632,7 +634,7 @@ Reject the operation before writing. Recursive subtree queries must additionally
 
 A person has at most one active pastoral assignment at any moment.
 
-Zero is legitimate in exactly three situations: a Person encoded but not yet assigned, an archived Person whose assignment has ended, and a Network root leader (above). Every other Person has exactly one.
+Zero is legitimate in exactly two situations: a Person encoded but not yet assigned, and an archived Person whose assignment has ended. Every other Person has exactly one, and a Network root leader is not an exception — their row exists and carries a null `leader_id` (Network roots, above).
 
 A reassignment closes the current assignment and opens the new one within a single transaction. It must never leave two open assignments, and must never leave a person who had a leader without one. Enforce with a uniqueness constraint over the person where `ended_at` is null — the constraint permits zero rows and forbids two.
 
@@ -743,6 +745,14 @@ The two firing paths need **different** comparison dates, and one rule cannot se
 **"In either direction" is not decoration either.** A person's Network governs every edge they sit on, and they sit on two kinds: the one above them and one for each disciple below. Checking only the first leaves a leader's whole downline cross-Network the moment their own Network is corrected — the same permanent, unrevisited breach the paragraph above describes, differing only in which end of the edge moved. It is also what bounds how far a correction may be backdated (Section 4): the floor is computed over edges in both directions precisely because this check considers both.
 
 A root leader has a null `leader_id` (Network roots, above) and the trigger passes such a row without comparison — there is no leader to compare against.
+
+**Serializing a Network change against a concurrent edge write — an advisory lock on the person, taken in ascending person id.**
+
+The same-Network triggers are `DEFERRABLE INITIALLY DEFERRED`, so each sees only what its own transaction can see at commit. That leaves a window neither closes: a transaction opening an edge under a person, with a `started_at` just before a Network change's effective instant and committing just after it, is invisible to the change's comparison, while its own trigger compares at its `started_at`, where that person's Network was still the old one. The edge is then permanently cross-Network and nothing revisits it — which contradicts this section's own requirement that the rule hold on every write.
+
+Every path that opens a pastoral edge takes a transaction-scoped advisory lock on the **leader** it is attaching to, and every path that changes a Network takes one on the person being changed, before reading anything it will rely on. A caller needing more than one takes them in ascending person id, so that two operations moving people under each other cannot deadlock.
+
+An advisory lock rather than a row lock on `persons`: the two paths belong to different modules and `persons` belongs to neither of them alone (Section 2), so a row lock would mean reading a table to coordinate rather than to read data. This is coordination, and it is transaction-scoped, so no path can leak it by failing.
 
 No cycles — a cycle spans many rows and cannot be expressed as a row-level constraint. Reject it in the domain layer before writing, and make every recursive subtree query cycle-safe so that a cycle introduced by any other means surfaces as an error rather than an unbounded query:
 

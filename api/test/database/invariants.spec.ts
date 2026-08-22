@@ -86,7 +86,11 @@ describe('the database enforces the section 5 invariants', () => {
       expect(open).toHaveLength(1);
     });
 
-    it('permits zero open assignments, which is legitimate for a Network root', async () => {
+    it('gives a Network root a row of its own, carrying a null leader', async () => {
+      // The name used to say "permits zero open assignments", which its own body
+      // contradicted — the row is right here. Section 5 settled the two readings
+      // on 2026-08-23: a root **is** a row with a null `leader_id`, and a Person
+      // with no row at all is unassigned rather than a second root.
       const root = await createPerson(db, { firstName: 'Oriel', network: 'MENS' });
       await assignTo(db, root.id, null);
 

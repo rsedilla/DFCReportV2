@@ -17,6 +17,7 @@ import {
 import { IdempotencyService } from '../common/idempotency/idempotency.service';
 import { manilaDayOf, startOfManilaDay } from '../common/time/manila';
 import { DATABASE, type Db } from '../database/database.module';
+import { lockPersonsWithin } from '../database/person-lock';
 
 import {
   findCandidates,
@@ -232,6 +233,14 @@ export class PeopleService {
     }
 
     return this.db.transaction().execute(async (trx) => {
+      if (input.pastoralLeaderId !== null) {
+        // The leader's Network decides whether the edge opened below is legal, and
+        // a correction to *their* Network can commit between the check above and
+        // this write without either deferred trigger seeing the overlap. Taken
+        // before the write, and before the check is relied on.
+        await lockPersonsWithin(trx, [input.pastoralLeaderId]);
+      }
+
       const person = await trx
         .insertInto('persons')
         .values({
@@ -769,6 +778,15 @@ export class PeopleService {
     }
 
     return this.db.transaction().execute(async (trx) => {
+      // Both persons whose Networks decide the new edge's legality, in one call so
+      // the ascending-id order is not left to the order that reads best here.
+      // `changeWithin` takes the first of these again, which an advisory lock
+      // permits — it is re-entrant within a transaction.
+      await lockPersonsWithin(
+        trx,
+        input.pastoralLeaderId === undefined ? [personId] : [personId, input.pastoralLeaderId],
+      );
+
       // Read inside the transaction, as the basic edit does: outside it, a
       // concurrent write landing between the read and the update makes this
       // `before` a value that was never immediately prior — an audit entry

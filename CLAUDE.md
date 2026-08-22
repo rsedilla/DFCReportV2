@@ -1495,9 +1495,64 @@ prevent — a raw `check_violation` at `COMMIT`, a 500 instead of a date the
 administrator can act on. "What mutation would this fail against" is the question
 that finds these, and it has to be asked per rule rather than per test.
 
+### 2026-08-23 — The root is a row, and a person lock serializes the same-Network rule
+
+Two Stop Conditions escalated by the second `architecture-guardian` pass, both
+ruled on rather than guarded around.
+
+**A Network root is an active pastoral assignment whose `leader_id` is null.**
+Section 5 asserted both that a root has "no active pastoral assignment" and that
+"A root leader has a null `leader_id`", which are different claims about whether a
+row exists. The row-based reading is settled, and the contradictory sentence is
+gone.
+
+Two things decide it. It is the only reading under which "is this person a root"
+is a question the database can answer, and section 4's refusal to move a root
+between Networks needs exactly that — a root must be refused where somebody merely
+unassigned must not be. And the alternative needs a durable record of who the
+roots are, which section 7 declined to create because it would put the church's two
+most consequential positions behind a row somebody could edit.
+
+Invariant 3's "zero is legitimate in exactly three situations" becomes two: a
+Person not yet assigned, and an archived Person. A root is no longer one of them.
+
+The evidence that this was the reading already in use is a test whose name and body
+disagreed. `permits zero open assignments, which is legitimate for a Network root`
+asserted a row with a null `leader_id` in its body. The schema, the fixtures and
+every existing test already did it this way; only the prose was undecided.
+
+**An advisory lock on the person serializes a Network change against a concurrent
+edge write.** The deferred triggers each see only their own transaction's
+commit-time state, which leaves a window neither closes: an edge opened under the
+person, dated just before the change's effective instant and committing just after
+it, is invisible to the change's comparison and legal by its own. The result is a
+permanent cross-Network edge, against a rule section 5 calls hard on every write.
+
+Reachable today through `POST /api/v1/people`, which is why this was not deferred to
+the reassignment endpoint. The first version of the open item claimed the other path
+did not exist yet; it does.
+
+An advisory lock rather than `SELECT ... FOR UPDATE` on `persons`, because the two
+paths live in different modules and `persons` belongs to `people` — a row lock would
+mean `networks` reading a table it does not own in order to coordinate rather than to
+read. Advisory locks are coordination primitives belonging to no table, and being
+transaction-scoped they cannot be leaked by a failing path.
+
+**The ordering rule is the part that will be got wrong**, so the helper sorts rather
+than trusting its callers: two corrections moving people under each other, each
+locking its own person first, deadlock, and PostgreSQL rather than we choose the
+victim. Locks are issued one statement per key, because `FOR UPDATE` with `ORDER BY`
+does not guarantee rows are locked in sorted order and the same caution applies to
+batching.
+
+The test holds the lock and asserts the correction does **not** proceed, then
+releases it and asserts it does. Firing two requests concurrently and hoping to
+observe the race would pass against no lock at all nearly every run, which is the
+test-that-passes-for-the-wrong-reason this log keeps recording.
+
 ### Open — awaiting a ruling
 
-**One item awaits a ruling and blocks Stage 5. Eight other things are unsettled, none of them blocking. They are listed at the end, so this section is the whole of what is open.**
+**One item awaits a ruling and blocks Stage 5. Six other things are unsettled, none of them blocking. They are listed at the end, so this section is the whole of what is open.**
 
 Nine items that stood here on 2026-08-22 were settled that day and are recorded above. Seven were Stop Conditions for Stage 2, and the last two were opened and closed the same day by `architecture-guardian` passes.
 
@@ -1515,10 +1570,4 @@ Two related questions have defined behaviour and are recorded in `SKILL.md` §12
 - **The native client framework.** `SKILL.md` §2 settles the web stack and says nothing about Android and iOS. Deferred since the specification was written; indexed here because two rules now point at it as open.
 - **What the native clients owe on accessibility.** `SKILL.md` §23 binds the web application to WCAG 2.2 AA and says the equivalent obligation for a native client is the platform accessibility API rather than WCAG. Which platform guarantees, and what would fail a build, is a ruling to make when the client is.
 
-- **The root's representation.** §5 says both that a root leader has "no active pastoral assignment" and that "A root leader has a null `leader_id`", and invariant 3 lists zero assignments as legitimate for a root. Those disagree about whether a row exists. The schema permits either, the test fixtures insert a row, and the same-Network trigger passes a null-`leader_id` row without comparison, so nothing currently depends on the answer — §4's backdate floor was deliberately written over edges with a leader so that it does not. Settle it before anything queries "is this person a root", which is a different question under each reading.
-- **The interleaving that section 4's disciple refusal cannot see.** The refusal reads open downline edges under READ COMMITTED, and both same-Network triggers are `DEFERRABLE INITIALLY DEFERRED`. A transaction opening an edge under the person, with a `started_at` just before the correction's effective instant and committing just after it, is seen by neither trigger's commit-time comparison: the correction's does not yet see the row, and the new edge's own trigger compares at its `started_at`, where the person's Network was still the old one. The result is a permanent cross-Network edge that nothing revisits. This is a property of `0001_foundations.sql` rather than of any one caller, and it is the same class as the Senior Pastor counting trigger closed on 2026-08-21.
-
-**The first version of this item said the other path "does not exist yet" and deferred it to `PUT /people/{id}/pastoral-leader`. That is false, and the exposure is live.** `POST /api/v1/people` opens a pastoral edge under an arbitrary leader today: it validates the leader's Network outside its transaction and writes the edge inside it, so a creation committing just after a correction's commit-time triggers have run strands exactly this edge. Found by `architecture-guardian` on the second pass — the reason given for deferring was wrong even though the mechanism described was right, which is the fault this log keeps recording.
-
-Closing it needs every path that writes a pastoral edge, and every path that changes a Network, to take the same row lock on the person. That is a ruling about serialization rather than a lock chosen inside one service, and it is escalated as a Stop Condition rather than deferred.
 - **Whether `audit_log`'s append-only guarantee tolerates `TRUNCATE`.** §5 records the exemption for history tables and leans it on a least-privilege role that does not exist, which is already open above. §21 says nothing at all, and the test suite truncates `audit_log` before every test. Same answer as the `TRUNCATE` question above, most likely, but it is not written down for the one table whose whole purpose is that nothing removes a row.

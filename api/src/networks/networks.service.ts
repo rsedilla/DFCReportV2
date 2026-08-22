@@ -3,6 +3,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { InvariantViolationError } from '../common/errors/api-error';
 import { manilaDayAfter, startOfManilaDay } from '../common/time/manila';
 import { DATABASE, type Db } from '../database/database.module';
+import { lockPersonsWithin } from '../database/person-lock';
 import { HierarchyService } from '../hierarchy/hierarchy.service';
 
 import type { Database, NetworkName, Sex } from '../database/schema';
@@ -116,6 +117,13 @@ export class NetworksService {
       reason: string;
     },
   ): Promise<{ from: NetworkName }> {
+    // **Before anything is read.** Every precondition below is a statement about
+    // pastoral edges, and the deferred triggers cannot see an edge opened
+    // concurrently and committed just after this transaction's own comparison. The
+    // lock is what makes the refusals mean something under concurrency; see
+    // `lockPersonsWithin`.
+    await lockPersonsWithin(transaction, [change.personId]);
+
     const open = await transaction
       .selectFrom('network_assignments')
       .select(['network', 'started_at'])

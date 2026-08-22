@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
+import { Client } from 'pg';
 import request from 'supertest';
 
 import { manilaDayOf } from '../../src/common/time/manila';
@@ -559,6 +560,48 @@ describe('sex correction (SKILL.md sections 4, 5, 7, 21, 22)', () => {
       expect(backdated.status).toBe(403);
       expect(backdated.body.error.code).toBe('CAPABILITY_DENIED');
       expect(backdated.body.error.details.capability).toBe('records.backdate_effective_date');
+    });
+  });
+
+  describe('serializing against a concurrent edge write (sections 4 and 5)', () => {
+    it('waits for the person lock instead of racing the deferred trigger', async () => {
+      // The window the lock closes: an edge opened under this person and
+      // committing just after the correction's commit-time comparison is seen by
+      // neither deferred trigger, leaving a permanent cross-Network edge.
+      //
+      // Asserted by holding the lock and watching the correction *not* proceed.
+      // Remove `lockPersonsWithin` from either path and the request settles
+      // immediately, which is what this fails on — a test that merely fired two
+      // requests at once would pass against no lock at all most of the time.
+      const holder = new Client({ connectionString: process.env.DATABASE_URL });
+      await holder.connect();
+
+      try {
+        await holder.query('BEGIN');
+        await holder.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [mark.id]);
+
+        let settled = false;
+        const pending = correct(mark.id, {
+          sex: 'FEMALE',
+          reason: 'Sex entered in error at encoding.',
+          pastoral_leader_id: grace.id,
+        }).then((response) => {
+          settled = true;
+          return response;
+        });
+
+        await new Promise((resolve) => setTimeout(resolve, 500));
+        expect(settled).toBe(false);
+
+        // Releasing it lets the correction through, so the case is about waiting
+        // rather than about the request failing for some other reason.
+        await holder.query('ROLLBACK');
+
+        const response = await pending;
+        expect(response.status).toBe(200);
+      } finally {
+        await holder.end();
+      }
     });
   });
 
