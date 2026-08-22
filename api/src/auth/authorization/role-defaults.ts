@@ -54,6 +54,10 @@ const ADMIN: RoleDefaults = {
   [Capability.PeopleEditBasic]: ScopeType.WholeChurch,
   [Capability.PeopleManageLifecycle]: ScopeType.WholeChurch,
   [Capability.PeopleManagePastoralAssignment]: ScopeType.WholeChurch,
+  // Admin alone. Section 7: correcting sex moves a Person between Networks and
+  // can change totals for periods already reported, which is the same reason
+  // people.merge and records.backdate_effective_date are Admin-only.
+  [Capability.PeopleCorrectSex]: ScopeType.WholeChurch,
   [Capability.DccTakeAttendance]: ScopeType.WholeChurch,
   [Capability.DccViewSubtree]: ScopeType.WholeChurch,
   [Capability.DccSubmitOnBehalf]: ScopeType.WholeChurch,

@@ -871,11 +871,40 @@ correction for someone whose disciples have just been moved therefore cannot be
 backdated at all. Clearing the blockage does not unblock backdating; it fixes
 the effective date to today. Written to `SKILL.md` §4.
 
+### 2026-08-22 — `people.correct_sex`, the twenty-fifth capability, Admin-only
+
+Found by the third `architecture-guardian` pass, and it predates this branch:
+§7 declares its capability list closed, §7 says sex "is governed by its own
+capability", and no such capability existed. §7 also rules that an endpoint
+declaring no capability is denied — so the Stage 2 sex-correction endpoint,
+whose behaviour this branch had just specified in detail, could not have
+declared a guard at all.
+
+**Admin alone, Whole Church.** Not Senior Pastors, not Leaders. Correcting a
+person's sex moves them between Networks and can change totals for periods
+already reported, which is the property that keeps `people.merge` and
+`records.backdate_effective_date` with the role whose job is data correction. It
+also forces the pastoral reassignment §4 requires, so a leader holding it would
+have a route to moving people between Networks without ever invoking
+`people.manage_pastoral_assignment` — the same escalation §7 closes by keeping
+sex out of `people.edit_basic`.
+
+Folding it into `people.manage_lifecycle` was rejected. It adds no name to a
+closed list, which is the only thing in its favour, and it would hand Senior
+Pastors the power to move people between Networks while bundling two unrelated
+rules under one grant.
+
+Landed in one change across the five places a closed enumeration lives: the §7
+list, the role catalog, the §4 text that now names it, the `capability` enum in
+0001, and `capabilities.ts`. The enum order is asserted against
+`ALL_CAPABILITIES`, so the two cannot drift. `read_only` on it is rejected at
+creation, since it is a write.
+
 ### Open — awaiting a ruling
 
 **One item awaits a ruling and blocks Stage 5. Eight other things are unsettled, none of them blocking. They are listed at the end, so this section is the whole of what is open.**
 
-Seven items that stood here on 2026-08-22 were settled that day and are recorded above. Five of them were Stop Conditions for Stage 2 — the fifth found by the second `architecture-guardian` pass, which is why it was opened and closed on the same day.
+Eight items that stood here on 2026-08-22 were settled that day and are recorded above. Six of them were Stop Conditions for Stage 2, and the last two were found by the second and third `architecture-guardian` passes — which is why they were opened and closed on the same day.
 
 **What an aggregate Cell attendance view offers in place of buckets.** Monthly-attendance buckets are a Cell-scope view only, because N belongs to a Cell and aggregating across different N inflates `Completed` for the Cells that recorded least (`SKILL.md` §12). At leader and Network scope the spec offers unique people, classification and coverage, and does not say whether anything should replace the buckets. Settle it in Stage 5 against real data.
 

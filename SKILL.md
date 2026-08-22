@@ -435,7 +435,7 @@ For Version 1, a person's initial network assignment becomes effective on the da
 
 A person's recorded sex may be corrected — most often an ordinary data-entry fix. Because sex determines Network, this is never an ordinary field edit and is explicitly outside `people.edit_basic` (Section 7).
 
-Correcting sex is an explicit, authorized, audited operation. Where the correction changes the person's Network, it is carried out as a Network change: the current Network assignment is closed and a new one opened, effective-dated, preserving history exactly as any other Network change does. Never re-derive Network silently from the new sex value.
+Correcting sex is an explicit, authorized, audited operation, governed by `people.correct_sex` (Section 7). It is Admin-only at Whole Church scope, and no other role holds it. Where the correction changes the person's Network, it is carried out as a Network change: the current Network assignment is closed and a new one opened, effective-dated, preserving history exactly as any other Network change does. Never re-derive Network silently from the new sex value.
 
 A Network change must never leave a person under a pastoral leader in their former Network. If the person has an active pastoral assignment that the change would render cross-Network, the Network change and the corresponding pastoral reassignment must be performed together as a single atomic operation — neither can validly precede the other, since each alone leaves the tree in an invalid state. The system must reject a Network change submitted without the reassignment it requires, and must never silently drop the person's pastoral assignment to resolve the conflict.
 
@@ -940,6 +940,7 @@ The capabilities are exactly:
 - `people.edit_basic`
 - `people.manage_lifecycle`
 - `people.manage_pastoral_assignment`
+- `people.correct_sex`
 - `dcc.take_attendance`
 - `dcc.view_subtree`
 - `dcc.submit_on_behalf`
@@ -980,7 +981,7 @@ Admins may have system-wide operational permissions even if they are not pastora
 
 `people.edit_basic` covers corrections to a person's own descriptive fields only: first name, middle name, last name, birthday, civil status, and mobile number.
 
-It does not cover sex, Network, pastoral assignment, Cell membership, Cell leadership, lifecycle state, or account state. Each of those is governed by its own capability.
+It does not cover sex, Network, pastoral assignment, Cell membership, Cell leadership, lifecycle state, or account state. Each of those is governed by its own capability — sex and the Network change it forces by `people.correct_sex`.
 
 Sex is excluded deliberately. Sex determines Network under the homogeneous-network rule (Section 4), and Network determines which pastoral edges are legal (Section 5). If sex could be changed as an ordinary field edit, an actor could flip a person's Network and create a cross-Network pastoral edge without ever invoking `people.manage_pastoral_assignment`, bypassing the invariants in Section 5 entirely. Correcting a person's sex is handled as a Network-affecting correction (Section 4).
 
@@ -994,6 +995,7 @@ Three roles exist. Each carries the default capabilities and scopes below. Anyth
 | `people.edit_basic` | Whole Church | Whole Church | own/subtree |
 | `people.manage_lifecycle` | Whole Church | Whole Church | — |
 | `people.manage_pastoral_assignment` | Whole Church | Whole Church | own/subtree |
+| `people.correct_sex` | — | Whole Church | — |
 | `dcc.take_attendance` | Whole Church | Whole Church | own/subtree |
 | `dcc.view_subtree` | Whole Church | Whole Church | own/subtree |
 | `dcc.submit_on_behalf` | Whole Church | Whole Church | own/subtree |
@@ -1015,13 +1017,15 @@ Three roles exist. Each carries the default capabilities and scopes below. Anyth
 | `roles.manage` | — | Whole Church | — |
 | `people.merge` | — | Whole Church | — |
 
-Four of these defaults are deliberate and must not be widened for convenience.
+Five of these defaults are deliberate and must not be widened for convenience.
 
 **Senior Pastors do not hold `roles.manage` or `accounts.manage`.** Granting permissions and administering accounts is Admin's operational responsibility; Senior Pastor and Admin are different responsibilities even where their visibility overlaps (Section 19). Keeping grant-making out of the Senior Pastor role means the two highest-visibility accounts in the church cannot escalate their own authority, and every permission change has a second party involved.
 
 **Senior Pastors do not hold `records.backdate_effective_date`.** Backdating rewrites totals for periods already reported (Section 3) and is a data-correction operation, not a pastoral one.
 
 **Senior Pastors do not hold `people.merge`.** Section 3 places it at Whole Church scope as an Admin capability. A merge is irreversible, crosses both Networks, and can lower totals for periods already reported, so it stays with the role whose job is data correction.
+
+**`people.correct_sex` is Admin-only, and Senior Pastors do not hold it.** Correcting a person's sex moves them between Networks, which can change totals for periods that have already been reported — the same property that keeps `people.merge` and `records.backdate_effective_date` with the role whose job is data correction. It also forces the pastoral reassignment in Section 4, so granting it to a leader would be a route to moving people between Networks without ever invoking `people.manage_pastoral_assignment`.
 
 **Leaders do not hold `people.manage_lifecycle`.** Archiving reduces a leader's own People count, which is precisely the incentive Person Lifecycle guards against (Section 3). Archival is requested by a leader and performed by Admin or a Senior Pastor.
 
@@ -1143,7 +1147,7 @@ Those conditions are enforced in the owning module's domain layer — `hierarchy
 
 A grant is revoked by setting `revoked_at`, never by deleting the row. The history of who could do what, and when, is part of the audit record.
 
-**`read_only` is valid only on a read capability.** The twenty-four divide cleanly:
+**`read_only` is valid only on a read capability.** The twenty-five divide cleanly:
 
 - **Read:** `people.view_subtree`, `dcc.view_subtree`, `cell.view_subtree`, `reports.view_subtree`, `audit.view`
 - **Write:** every other capability in the list

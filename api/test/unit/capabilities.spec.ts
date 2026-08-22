@@ -39,7 +39,7 @@ describe('the capability enumeration (SKILL.md section 7)', () => {
     'audit.view',
   ];
 
-  it('is exactly the twenty-four the specification names', () => {
+  it('is exactly the twenty-five the specification names', () => {
     expect([...ALL_CAPABILITIES]).toEqual(SPECIFIED);
   });
 

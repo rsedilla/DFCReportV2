@@ -56,7 +56,7 @@ CREATE TYPE account_role AS ENUM ('SENIOR_PASTOR', 'ADMIN', 'LEADER');
 
 CREATE TYPE account_token_purpose AS ENUM ('PASSWORD_RESET', 'ACTIVATION');
 
--- The twenty-four capabilities of SKILL.md section 7, in the order the
+-- The twenty-five capabilities of SKILL.md section 7, in the order the
 -- specification lists them. Adding one is an amendment to the specification and a
 -- migration, never a runtime action.
 CREATE TYPE capability AS ENUM (
@@ -64,6 +64,7 @@ CREATE TYPE capability AS ENUM (
   'people.edit_basic',
   'people.manage_lifecycle',
   'people.manage_pastoral_assignment',
+  'people.correct_sex',
   'dcc.take_attendance',
   'dcc.view_subtree',
   'dcc.submit_on_behalf',
