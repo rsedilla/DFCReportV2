@@ -4,7 +4,6 @@ import {
   Body,
   Controller,
   Get,
-  Headers,
   HttpCode,
   Inject,
   Post,
@@ -13,15 +12,17 @@ import {
 import request from 'supertest';
 
 import { AuthenticatedOnly, Public } from '../../src/auth/authorization/authorization.decorators';
-import { CurrentActor } from '../../src/auth/current-actor.decorator';
+import {
+  CurrentIdempotency,
+  type CurrentClaim,
+} from '../../src/common/idempotency/current-idempotency.decorator';
 import { ApiError, ApiErrorCode } from '../../src/common/errors/api-error';
 import { IdempotencyService } from '../../src/common/idempotency/idempotency.service';
 import { DATABASE, type Db } from '../../src/database/database.module';
 import { createTestDb, truncateAll } from '../setup/database';
 import { createAccount, createPerson, createTestApp } from '../setup/fixtures';
 
-import type { Actor } from '../../src/auth/authorization/authorization.service';
-import type { Kysely } from 'kysely';
+import type { Kysely, Transaction } from 'kysely';
 import type { Database } from '../../src/database/schema';
 import type { TestAccount } from '../setup/fixtures';
 
@@ -40,6 +41,23 @@ let executions = 0;
 /** Held open by the slow endpoint, to exercise the in-flight branch deterministically. */
 let releaseSlow: (() => void) | null = null;
 
+/**
+ * A real effect for the transactional cases to carry, so "the write reverted with
+ * its record" is an assertion rather than a description. `audit_log` is used
+ * because every write endpoint writes one anyway (SKILL.md section 21).
+ */
+async function probeWrite(trx: Transaction<Database>): Promise<void> {
+  await trx
+    .insertInto('audit_log')
+    .values({
+      actor_id: null,
+      action: 'person.created',
+      target_type: 'person',
+      target_id: 'the-probe-target',
+    })
+    .execute();
+}
+
 @Controller('__idempotency-probe')
 class IdempotencyProbeController {
   constructor(
@@ -50,24 +68,42 @@ class IdempotencyProbeController {
   @Post('records-its-own-completion')
   @AuthenticatedOnly('Probe for a write that records its completion transactionally.')
   async recordsItsOwnCompletion(
-    @CurrentActor() actor: Actor,
-    @Headers('idempotency-key') key: string,
+    @CurrentIdempotency() claim: CurrentClaim,
   ): Promise<{ recorded: true; from: string }> {
     executions += 1;
 
     // What a real write endpoint does under SKILL.md section 22: the effect and
-    // the record of it commit together. There is no effect to perform here, so
-    // the transaction carries the completion alone.
+    // the record of it commit together.
     await this.db.transaction().execute(async (trx) => {
+      await probeWrite(trx);
       await this.idempotency.completeWithin(trx, {
-        key,
-        accountId: actor.accountId,
+        ...claim,
         status: 201,
         body: { recorded: true, from: 'the transaction' },
       });
     });
 
     return { recorded: true, from: 'the handler' };
+  }
+
+  @Post('rolls-back')
+  @AuthenticatedOnly('Probe for a write that completes its key and then fails.')
+  async rollsBack(@CurrentIdempotency() claim: CurrentClaim): Promise<never> {
+    executions += 1;
+
+    await this.db.transaction().execute(async (trx) => {
+      await probeWrite(trx);
+      await this.idempotency.completeWithin(trx, {
+        ...claim,
+        status: 201,
+        body: { recorded: true, from: 'the transaction' },
+      });
+
+      // Everything above reverts together: the effect and the record of it.
+      throw new Error('the write failed after recording itself');
+    });
+
+    throw new Error('unreachable');
   }
 
   @Post('write')
@@ -376,6 +412,58 @@ describe('idempotency (SKILL.md section 22)', () => {
     expect(rows).toEqual([{ state: 'COMPLETED', response_status: 201 }]);
   });
 
+  it('completes only its own claim, not one that replaced it', async () => {
+    // A slow request whose lease expires loses the key to whoever takes it over.
+    // Without a claim identity its completion would land on the new holder's
+    // claim -- storing its own response against another request's work, and
+    // silently discarding that request's own completion.
+    const key = randomUUID();
+    const accountId = account.id;
+
+    const first = await post('write', account).set('Idempotency-Key', key).send({ value: 'a' });
+    expect(first.status).toBe(201);
+
+    const claim = await db
+      .selectFrom('idempotency_keys')
+      .select('claim_id')
+      .where('key', '=', key)
+      .executeTakeFirstOrThrow();
+
+    // The claim that request held, before another request takes the key over.
+    const stale = claim.claim_id;
+
+    // Simulate the takeover the lease permits: a new claim on the same key.
+    await db
+      .updateTable('idempotency_keys')
+      .set({ state: 'IN_FLIGHT', response_status: null, response_body: null })
+      .where('key', '=', key)
+      .execute();
+
+    const service = app.get(IdempotencyService);
+
+    // The stale holder tries to finish. It must change nothing.
+    await service.complete({
+      key,
+      accountId,
+      claimId: stale,
+      status: 200,
+      body: { from: 'the stale claim' },
+    });
+
+    const after = await db
+      .selectFrom('idempotency_keys')
+      .select(['state', 'response_body'])
+      .where('key', '=', key)
+      .executeTakeFirstOrThrow();
+
+    expect(after.state).toBe('IN_FLIGHT');
+    expect(after.response_body).toBeNull();
+
+    // And it releases nothing either.
+    await service.release({ key, accountId, claimId: stale });
+    expect(await db.selectFrom('idempotency_keys').select('key').execute()).toHaveLength(1);
+  });
+
   it('leaves a completion the handler recorded in its own transaction', async () => {
     // The rule this pins: a write endpoint records its completion inside the
     // transaction that performs the write, so the write and the record of it
@@ -411,6 +499,30 @@ describe('idempotency (SKILL.md section 22)', () => {
     expect(repeat.status).toBe(201);
     expect(repeat.body).toEqual({ recorded: true, from: 'the transaction' });
     expect(executions).toBe(1);
+  });
+
+  it('reverts the record with the write when the transaction rolls back', async () => {
+    // The half that proves `completeWithin` is genuinely inside the transaction.
+    // Passing the pooled connection instead would leave the row COMPLETED here
+    // while the write reverted -- a retry would then be replayed a success for a
+    // record that does not exist, which is worse than the gap this closes.
+    const key = randomUUID();
+
+    const failed = await post('rolls-back', account).set('Idempotency-Key', key).send({});
+    expect(failed.status).toBe(500);
+    expect(executions).toBe(1);
+
+    // The effect reverted.
+    expect(await db.selectFrom('audit_log').select('id').execute()).toHaveLength(0);
+
+    // And so did the record of it: a 5xx releases the claim, so the key is gone
+    // and the client may retry.
+    expect(await db.selectFrom('idempotency_keys').select('key').execute()).toHaveLength(0);
+
+    // A retry therefore executes rather than replaying a success that never was.
+    const retry = await post('rolls-back', account).set('Idempotency-Key', key).send({});
+    expect(retry.status).toBe(500);
+    expect(executions).toBe(2);
   });
 
   it('leaves reads alone', async () => {

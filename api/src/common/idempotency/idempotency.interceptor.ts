@@ -141,7 +141,14 @@ export class IdempotencyInterceptor implements NestInterceptor {
             return of(claim.body);
           }
 
-          case 'claimed':
+          case 'claimed': {
+            const claimId = claim.claimId;
+
+            // Handed to the handler so a write endpoint can record its own
+            // completion inside the transaction that performs the write
+            // (SKILL.md section 22). Read through `CurrentIdempotency`.
+            request.idempotency = { key, accountId, claimId };
+
             return next.handle().pipe(
               // **On the handler alone, and deliberately before the store call
               // below.** Piped after it, this would also catch a failure of
@@ -164,10 +171,11 @@ export class IdempotencyInterceptor implements NestInterceptor {
                 // same answer rather than executing again.
                 const settle =
                   status >= 500
-                    ? this.idempotency.release({ key, accountId })
+                    ? this.idempotency.release({ key, accountId, claimId })
                     : this.idempotency.complete({
                         key,
                         accountId,
+                        claimId,
                         status,
                         body: (failure?.body ?? null) as unknown as Json | null,
                       });
@@ -179,6 +187,7 @@ export class IdempotencyInterceptor implements NestInterceptor {
                   this.idempotency.complete({
                     key,
                     accountId,
+                    claimId,
                     // Already the handler's status: Nest calls setStatus before
                     // the interceptor chain, so this is 201 for a POST and
                     // whatever @HttpCode declares wherever one is present.
@@ -188,6 +197,7 @@ export class IdempotencyInterceptor implements NestInterceptor {
                 ).pipe(mergeMap(() => of(body))),
               ),
             );
+          }
         }
       }),
     );

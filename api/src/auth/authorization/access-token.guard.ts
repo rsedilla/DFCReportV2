@@ -8,10 +8,16 @@ import { TokensService } from '../tokens.service';
 
 import { PUBLIC_METADATA } from './authorization.decorators';
 
+import type { CurrentClaim } from '../../common/idempotency/current-idempotency.decorator';
 import type { Actor } from './authorization.service';
 
 export interface AuthenticatedRequest extends Request {
   actor?: Actor;
+  /**
+   * The claim `IdempotencyInterceptor` took for this request, where it took one.
+   * Read through `CurrentIdempotency` rather than directly (SKILL.md section 22).
+   */
+  idempotency?: CurrentClaim;
 }
 
 /**

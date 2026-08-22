@@ -190,6 +190,12 @@ export interface IdempotencyKeysTable {
   response_status: number | null;
   response_body: Json | null;
   /**
+   * Identifies one claim on this key. A takeover under the lease mints a new one,
+   * so a request that has lost the key matches nothing rather than acting on the
+   * claim that replaced it (SKILL.md section 22).
+   */
+  claim_id: Generated<string>;
+  /**
    * When this attempt was claimed, which bounds how long it may sit unfinished
    * (SKILL.md section 22). Distinct from `expires_at`, which is how long the
    * response is retained: one bounds an attempt, the other keeps an answer.

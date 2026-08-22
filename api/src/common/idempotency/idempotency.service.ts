@@ -5,7 +5,8 @@ import { sql } from 'kysely';
 
 import { DATABASE, type Db } from '../../database/database.module';
 
-import type { Json } from '../../database/schema';
+import type { Database, Json } from '../../database/schema';
+import type { Transaction } from 'kysely';
 
 /**
  * The idempotency store of SKILL.md section 22.
@@ -38,8 +39,13 @@ const RETENTION_HOURS = 24;
 const CLAIM_LEASE_SECONDS = 60;
 
 export type ClaimResult =
-  /** This request owns the key and should execute. */
-  | { outcome: 'claimed' }
+  /**
+   * This request owns the key and should execute. `claimId` identifies *this*
+   * claim: every later write against the row carries it, so a request that has
+   * since lost the key under the lease matches nothing rather than acting on the
+   * claim that replaced it.
+   */
+  | { outcome: 'claimed'; claimId: string }
   /** The same key and the same body already completed; replay its response. */
   | { outcome: 'replay'; status: number; body: Json | null }
   /** The same key, a different body. Permanent; the client must never retry. */
@@ -89,15 +95,16 @@ export class IdempotencyService {
     const retention = `${RETENTION_HOURS} hours`;
     const lease = `${CLAIM_LEASE_SECONDS} seconds`;
 
-    const claimed = await sql<{ key: string }>`
+    const claimed = await sql<{ claim_id: string }>`
       INSERT INTO idempotency_keys (
-        key, account_id, request_fingerprint, state, claimed_at, expires_at
+        key, account_id, request_fingerprint, state, claim_id, claimed_at, expires_at
       )
       VALUES (
         ${params.key}::uuid,
         ${params.accountId}::uuid,
         ${params.fingerprint},
         'IN_FLIGHT',
+        gen_random_uuid(),
         now(),
         now() + ${retention}::interval
       )
@@ -106,6 +113,9 @@ export class IdempotencyService {
             state = 'IN_FLIGHT',
             response_status = NULL,
             response_body = NULL,
+            -- A new identity, because this is a new claim. The request that held
+            -- the row before carries the old one and now matches nothing.
+            claim_id = gen_random_uuid(),
             claimed_at = now(),
             expires_at = excluded.expires_at
         -- Two ways a row may be taken over, and they are different questions.
@@ -117,11 +127,11 @@ export class IdempotencyService {
              idempotency_keys.state = 'IN_FLIGHT'
              AND idempotency_keys.claimed_at <= now() - ${lease}::interval
            )
-      RETURNING key
+      RETURNING claim_id
     `.execute(this.db);
 
     if (claimed.rows.length > 0) {
-      return { outcome: 'claimed' };
+      return { outcome: 'claimed', claimId: claimed.rows[0].claim_id };
     }
 
     return this.inspect(params);
@@ -174,10 +184,11 @@ export class IdempotencyService {
   async complete(params: {
     key: string;
     accountId: string;
+    claimId: string;
     status: number;
     body: Json | null;
   }): Promise<void> {
-    await this.completeWithin(this.db, params);
+    await this.completeOn(this.db, params);
   }
 
   /**
@@ -197,10 +208,24 @@ export class IdempotencyService {
    * completion.
    */
   async completeWithin(
+    transaction: Transaction<Database>,
+    params: {
+      key: string;
+      accountId: string;
+      claimId: string;
+      status: number;
+      body: Json | null;
+    },
+  ): Promise<void> {
+    await this.completeOn(transaction, params);
+  }
+
+  private async completeOn(
     executor: Db,
     params: {
       key: string;
       accountId: string;
+      claimId: string;
       status: number;
       body: Json | null;
     },
@@ -221,11 +246,13 @@ export class IdempotencyService {
              expires_at = now() + ${`${RETENTION_HOURS} hours`}::interval
        WHERE account_id = ${params.accountId}::uuid
          AND key = ${params.key}::uuid
-         -- Load-bearing twice. It stops a second write to a row already
-         -- completed, which is what lets a handler record its own completion
-         -- transactionally and leave the interceptor's later call inert. And it
-         -- stops a completion landing on a claim that has since been taken over
-         -- by another request under the lease.
+         -- This request's own claim, and no other. Without it a request whose
+         -- lease expired mid-flight would complete whichever claim replaced it,
+         -- storing its own response against another request's work.
+         AND claim_id = ${params.claimId}::uuid
+         -- Stops a second write to a row already completed, which is what lets a
+         -- handler record its completion transactionally and leaves the
+         -- interceptor's later call inert.
          AND state = 'IN_FLIGHT'
     `.execute(executor);
   }
@@ -241,11 +268,15 @@ export class IdempotencyService {
    * A 4xx is the opposite and is stored. It is this request's outcome, decided by
    * the rules, and a repeat of the same body is entitled to the same answer.
    */
-  async release(params: { key: string; accountId: string }): Promise<void> {
+  async release(params: { key: string; accountId: string; claimId: string }): Promise<void> {
     await this.db
       .deleteFrom('idempotency_keys')
       .where('account_id', '=', params.accountId)
       .where('key', '=', params.key)
+      // As above: a request that has lost its claim releases nothing. Without
+      // this it would delete the claim that replaced it, and that request's work
+      // would go unrecorded.
+      .where('claim_id', '=', params.claimId)
       .where('state', '=', 'IN_FLIGHT')
       .execute();
   }

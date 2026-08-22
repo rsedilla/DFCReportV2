@@ -1025,14 +1025,52 @@ Accepting the window and documenting it is honest but wrong for this system —
 attendance exists nowhere else (§24), and a duplicated submission is exactly what
 §22 says the header exists to prevent.
 
-`completeWithin` takes the caller's transaction and is the mechanism. It is
-recorded and available now, before the first write endpoint, because the ruling
-shapes how that endpoint is built rather than being something it can adopt later.
+`completeWithin` takes the caller's transaction and is the mechanism. Its
+parameter is typed `Transaction<Database>` rather than the pooled connection, so
+the one mistake a write endpoint can make — recording outside the transaction it
+just wrote in, which reopens the whole window and reads as compliant at the call
+site — is a compile error rather than an invisible one. That is the standard §2
+sets for the capability guard and §22 sets for the interceptor.
+
+**The trade is recorded rather than glossed.** The record now commits *ahead of*
+the outcome: the handler names its own status and body inside the transaction,
+before the framework has produced a response. Anything that changes the response
+afterwards leaves the stored answer disagreeing with the sent one, and the
+interceptor cannot correct it, because its own call carries `state = 'IN_FLIGHT'`
+and the row is already `COMPLETED`. §22 therefore requires what is recorded to be
+the response the endpoint returns, and requires the recording to be the last
+statement in the transaction — it holds the key's row lock, and a concurrent
+retry waits on that lock instead of being answered `REQUEST_IN_FLIGHT`.
+
+**A claim gained an identity in the same change, closing a defect that was
+already on `main`.** The lease lets a request take a key over, and a takeover sets
+`state = 'IN_FLIGHT'` again — which was the only thing completion and release
+matched on. So a slow request whose lease expired could complete or release the
+claim that replaced it: storing its response against another request's work,
+discarding that request's completion silently, and, since a takeover also
+rewrites the fingerprint, leaving one request's response stored under another's.
+Migration 0004 adds `claim_id`, minted per claim including on takeover, and every
+write against the row carries the identity it was given.
+
+That defect shipped with the lease and was found only because this branch added a
+comment claiming it was handled. The comment was wrong, and being wrong in
+writing is what made it visible — which is an argument for stating a mechanism's
+guarantees explicitly even when nothing yet depends on them.
+
+The composition property depends on READ COMMITTED, which is what this
+application uses and nothing pins. Under REPEATABLE READ the interceptor's
+blocked statement would raise a serialization failure rather than matching
+nothing; the row would still be correct and the replay clean, so it is a 500
+where a no-op belongs rather than a data defect. Recorded because it is a
+property of a database setting, not of this code.
+
 Written to `SKILL.md` §22.
 
 ### Open — awaiting a ruling
 
 **One item awaits a ruling and blocks Stage 5. Eight other things are unsettled, none of them blocking. They are listed at the end, so this section is the whole of what is open.**
+
+Ten items that stood here on 2026-08-22 were settled that day and are recorded above. Seven were Stop Conditions for Stage 2, and the last four were opened and closed the same day by `architecture-guardian` passes.
 
 **What an aggregate Cell attendance view offers in place of buckets.** Monthly-attendance buckets are a Cell-scope view only, because N belongs to a Cell and aggregating across different N inflates `Completed` for the Cells that recorded least (`SKILL.md` §12). At leader and Network scope the spec offers unique people, classification and coverage, and does not say whether anything should replace the buckets. Settle it in Stage 5 against real data.
 
