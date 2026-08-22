@@ -51,6 +51,32 @@ A change is not complete until it is verified.
 - Authorization is tested at the API layer, not only the service layer, because the API is the sole authority for authorization (`SKILL.md` §7).
 - Invariants that can be expressed as database constraints are verified to exist as database constraints, not only as application code.
 
+### Write endpoints
+
+Four things a write endpoint owes, none of which anything detects. They are here
+rather than only in `SKILL.md` §22 because a reviewer needs a list, and because
+the three that concern the completion are invisible in a passing test suite.
+
+- **It records its idempotency completion inside the transaction that performs
+  the write** (`completeWithin`), never after it. Recording afterwards leaves a
+  window where the write has committed and the claim has not been closed, and the
+  claim lease then lets a retry perform the write again.
+- **What it records is the response it returns.** A replay reproduces what was
+  stored, not what was sent, so a divergence hands two identical requests two
+  different answers. It follows that an endpoint must not commit its completion
+  and then fail: the client would receive the failure while the store holds the
+  success every retry replays.
+- **The recording is the last statement in the transaction.** It takes the key's
+  row lock, and a concurrent retry waits on that lock rather than being answered
+  `REQUEST_IN_FLIGHT`.
+- **It lets a lost claim abort the write.** `completeWithin` throws when it
+  matches nothing; that exception is not caught and the transaction is rolled
+  back. Swallowing it commits a write nothing recorded.
+
+`api/test/api/idempotency.e2e.spec.ts` carries a worked exemplar of all four,
+`records-its-own-completion`, and one deliberate counter-example beside it
+labelled as instrumentation.
+
 ### Accessibility
 
 `SKILL.md` §23 commits the web application to **WCAG 2.2 Level AA**. A conformance claim with nothing that can fail is a wish, so it is discharged in three parts.
@@ -1057,12 +1083,18 @@ comment claiming it was handled. The comment was wrong, and being wrong in
 writing is what made it visible — which is an argument for stating a mechanism's
 guarantees explicitly even when nothing yet depends on them.
 
-The composition property depends on READ COMMITTED, which is what this
-application uses and nothing pins. Under REPEATABLE READ the interceptor's
-blocked statement would raise a serialization failure rather than matching
-nothing; the row would still be correct and the replay clean, so it is a 500
-where a no-op belongs rather than a data defect. Recorded because it is a
-property of a database setting, not of this code.
+*An earlier version of this entry claimed the composition depends on READ
+COMMITTED, and that under REPEATABLE READ the interceptor's statement would raise
+a serialization failure. That is wrong.* The interceptor's `complete` runs on the
+pooled connection with no explicit transaction, after the handler's has already
+committed, so it takes a fresh snapshot at statement start under any isolation
+level and simply matches nothing. There is no earlier snapshot to conflict with
+and no blocked statement. The composition does not depend on the isolation level
+at all.
+
+Recorded rather than deleted because it is the same fault the entry above
+describes — a guarantee asserted about a mechanism from a partial reading of it —
+committed in the entry written to warn against it.
 
 Written to `SKILL.md` §22.
 
@@ -1070,7 +1102,7 @@ Written to `SKILL.md` §22.
 
 **One item awaits a ruling and blocks Stage 5. Eight other things are unsettled, none of them blocking. They are listed at the end, so this section is the whole of what is open.**
 
-Ten items that stood here on 2026-08-22 were settled that day and are recorded above. Seven were Stop Conditions for Stage 2, and the last four were opened and closed the same day by `architecture-guardian` passes.
+Nine items that stood here on 2026-08-22 were settled that day and are recorded above. Seven were Stop Conditions for Stage 2, and the last two were opened and closed the same day by `architecture-guardian` passes.
 
 **What an aggregate Cell attendance view offers in place of buckets.** Monthly-attendance buckets are a Cell-scope view only, because N belongs to a Cell and aggregating across different N inflates `Completed` for the Cells that recorded least (`SKILL.md` §12). At leader and Network scope the spec offers unique people, classification and coverage, and does not say whether anything should replace the buckets. Settle it in Stage 5 against real data.
 

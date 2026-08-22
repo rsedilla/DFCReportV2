@@ -2753,6 +2753,7 @@ idempotency_keys
 - state               IN_FLIGHT | COMPLETED
 - response_status     nullable until completed
 - response_body       nullable until completed
+- claim_id            identifies one claim; a takeover under the lease mints a new one
 - claimed_at          when this attempt was claimed; bounds the claim, not the answer
 - created_at
 - expires_at          how long the response is retained
@@ -2762,7 +2763,13 @@ idempotency_keys
 - **A key is unique to the account that presented it**, never globally. A row is identified by the account and the key together, so two accounts may hold the same key without either seeing the other's stored response, and every rule below means "for this account". Global uniqueness would let a client that reused a key it had observed receive somebody else's response, or deny that person their own retry — and clients generate these values themselves, so a key is not a secret.
 - **A write endpoint records its completion inside the transaction that performs the write.** The claim is taken before the handler; recording it *after* leaves a window in which the write has committed and the claim has not been closed, and the lease below then lets a retry perform that write a second time. Committing the record with the write closes it: either both are there or neither is. An endpoint that writes nothing may leave the recording to the surrounding machinery, since there is nothing to perform twice.
 
-  Two obligations come with it. The status and body recorded must be **the response the endpoint returns**, because a replay reproduces what was stored rather than what was sent, and nothing detects a divergence. And the recording is the **last** statement in the transaction: it takes the key's row lock, and a concurrent retry waits on that lock rather than being answered `REQUEST_IN_FLIGHT`, so holding it across the work turns a short delay into the length of the request.
+  Three obligations come with it, and nothing detects a breach of any of them.
+
+  The status and body recorded must be **the response the endpoint returns**: a replay reproduces what was stored rather than what was sent, so a divergence hands two identical requests two different answers. This reaches failure too — an endpoint must not commit its completion and then fail, because the client would receive the failure while the store holds the success that every retry replays.
+
+  The recording is the **last** statement in the transaction. It takes the key's row lock, and a concurrent retry waits on that lock rather than being answered `REQUEST_IN_FLIGHT`, so holding it across the work turns a short delay into the length of the request.
+
+  And **a recording that matches nothing aborts the write**. A request that has lost its claim cannot record anything, so by the rule above its write must not commit either; the transaction is rolled back and the client is told to retry. Returning quietly instead would leave the write on disk with nothing recording it, and the retry that follows would perform it again — silently, which is worse than the response-mixing the claim identity closed.
 - **A claim has an identity, and every write against it carries that identity.** A takeover under the lease mints a new one. Without it a request whose lease expired mid-flight would complete or release whichever claim replaced it — storing its own response against another request's work, discarding that request's own completion in silence, and, because a takeover also rewrites the fingerprint, leaving one request's response stored under another's. That is the cross-request leak the account-scoping rule above exists to prevent, arriving by a different door.
 - **A claim and a response are bounded separately.** `expires_at` retains the answer; `claimed_at` bounds the attempt. A request whose process dies leaves its row `IN_FLIGHT`, and another request may take the claim over once it is older than a short lease — a minute, longer than any request this API should serve. Without the second bound the row sat unfinished for the whole retention, and every retry was told `REQUEST_IN_FLIGHT`, which this section defines as "retry after a short delay". A day is not a short delay, and the caller never learned the outcome.
 - **A request missing the header is `VALIDATION_FAILED`.** A required header that is absent is malformed input, which is what that code means. It is named here rather than left to a controller, because three clients branch on it.

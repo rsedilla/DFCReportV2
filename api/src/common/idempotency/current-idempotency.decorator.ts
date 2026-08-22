@@ -1,7 +1,5 @@
 import { createParamDecorator, type ExecutionContext } from '@nestjs/common';
 
-import { ApiError, ApiErrorCode } from '../errors/api-error';
-
 import type { AuthenticatedRequest } from '../../auth/authorization/access-token.guard';
 
 /** The claim this request holds on its `Idempotency-Key`. */
@@ -31,11 +29,18 @@ export const CurrentIdempotency = createParamDecorator(
 
     if (!claim) {
       // Reaching here means the endpoint is not one the interceptor claimed for:
-      // a read, or an unauthenticated route. Both are programming errors at the
-      // call site rather than anything a client did, so this is not a 4xx.
-      throw new ApiError(
-        ApiErrorCode.INTERNAL_ERROR,
-        'This endpoint asked for its idempotency claim and does not have one.',
+      // a read, or an unauthenticated route. That is a programming error at the
+      // call site rather than anything a client did.
+      //
+      // A plain Error rather than an ApiError, deliberately. `describeFailure`
+      // recognises an ApiError and hands its message straight to the client
+      // *without logging it* -- so a misconfigured endpoint would explain itself
+      // to a user and to nobody else. Unrecognised, it takes the filter's
+      // unexpected-failure path: logged in full, reported without detail.
+      throw new Error(
+        'An endpoint asked for its idempotency claim and does not have one. It is either not a ' +
+          'state-changing route, or it is @Public, and in both cases the interceptor never took ' +
+          'a claim for it (SKILL.md section 22).',
       );
     }
 

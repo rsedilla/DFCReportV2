@@ -65,15 +65,50 @@ class IdempotencyProbeController {
     private readonly idempotency: IdempotencyService,
   ) {}
 
+  /**
+   * **The exemplar. This is the shape a real write endpoint copies.**
+   *
+   * The effect and the record of it commit together, and what is recorded is
+   * exactly what the handler returns, as SKILL.md section 22 requires. The
+   * completion is the last statement in the transaction, because it takes the
+   * key's row lock and a concurrent retry waits on it.
+   */
   @Post('records-its-own-completion')
   @AuthenticatedOnly('Probe for a write that records its completion transactionally.')
   async recordsItsOwnCompletion(
     @CurrentIdempotency() claim: CurrentClaim,
+  ): Promise<{ recorded: true }> {
+    executions += 1;
+
+    const response = { recorded: true } as const;
+
+    await this.db.transaction().execute(async (trx) => {
+      await probeWrite(trx);
+      await this.idempotency.completeWithin(trx, { ...claim, status: 201, body: response });
+    });
+
+    return response;
+  }
+
+  /**
+   * **Instrumentation, and deliberately not the shape to copy.**
+   *
+   * It records a body it does not return, which section 22 forbids: a replay
+   * reproduces what was stored rather than what was sent, so two identical
+   * requests would receive two different answers. It exists because that
+   * divergence is the only way to prove *which* code path wrote the row -- if the
+   * interceptor overwrote a handler's transactional completion, the stored body
+   * would read `the handler` instead of `the transaction`.
+   *
+   * A real endpoint records what it returns. This one is a microscope.
+   */
+  @Post('divergent-completion')
+  @AuthenticatedOnly('Instrumentation: records a body it does not return, to identify the writer.')
+  async divergentCompletion(
+    @CurrentIdempotency() claim: CurrentClaim,
   ): Promise<{ recorded: true; from: string }> {
     executions += 1;
 
-    // What a real write endpoint does under SKILL.md section 22: the effect and
-    // the record of it commit together.
     await this.db.transaction().execute(async (trx) => {
       await probeWrite(trx);
       await this.idempotency.completeWithin(trx, {
@@ -490,14 +525,13 @@ describe('idempotency (SKILL.md section 22)', () => {
     // commit together. The interceptor's own call afterwards carries
     // `state = 'IN_FLIGHT'` and therefore matches nothing.
     //
-    // If it did overwrite, the stored body would be the handler's return value
-    // rather than the one the transaction recorded -- and the composition the
-    // rule depends on would be silently absent.
+    // Run against the instrumented probe, whose recorded body deliberately
+    // differs from what it returns. That divergence is what makes the writer
+    // identifiable: if the interceptor overwrote the row, the stored body would
+    // read `the handler`.
     const key = randomUUID();
 
-    const first = await post('records-its-own-completion', account)
-      .set('Idempotency-Key', key)
-      .send({});
+    const first = await post('divergent-completion', account).set('Idempotency-Key', key).send({});
     expect(first.status).toBe(201);
     expect(first.body).toEqual({ recorded: true, from: 'the handler' });
 
@@ -511,38 +545,73 @@ describe('idempotency (SKILL.md section 22)', () => {
     expect(stored.response_status).toBe(201);
     // The transaction's body, not the handler's.
     expect(stored.response_body).toEqual({ recorded: true, from: 'the transaction' });
-
-    // And a retry replays what the transaction recorded.
-    const repeat = await post('records-its-own-completion', account)
-      .set('Idempotency-Key', key)
-      .send({});
-    expect(repeat.status).toBe(201);
-    expect(repeat.body).toEqual({ recorded: true, from: 'the transaction' });
     expect(executions).toBe(1);
   });
 
-  it('reverts the record with the write when the transaction rolls back', async () => {
-    // The half that proves `completeWithin` is genuinely inside the transaction.
-    // Passing the pooled connection instead would leave the row COMPLETED here
-    // while the write reverted -- a retry would then be replayed a success for a
-    // record that does not exist, which is worse than the gap this closes.
+  it('replays exactly what the exemplar endpoint returned', async () => {
+    // The shape a real endpoint copies: what is recorded is what is returned, so
+    // a replay and the original are the same answer. Section 22 requires it, and
+    // the instrumented probe above is the deliberate exception.
     const key = randomUUID();
 
-    const failed = await post('rolls-back', account).set('Idempotency-Key', key).send({});
-    expect(failed.status).toBe(500);
+    const first = await post('records-its-own-completion', account)
+      .set('Idempotency-Key', key)
+      .send({});
+    expect(first.status).toBe(201);
+    expect(first.body).toEqual({ recorded: true });
+
+    const repeat = await post('records-its-own-completion', account)
+      .set('Idempotency-Key', key)
+      .send({});
+
+    expect(repeat.status).toBe(first.status);
+    expect(repeat.body).toEqual(first.body);
     expect(executions).toBe(1);
 
-    // The effect reverted.
+    // And the effect happened once.
+    expect(await db.selectFrom('audit_log').select('id').execute()).toHaveLength(1);
+  });
+
+  it('aborts a write whose claim was taken over mid-flight', async () => {
+    // The half the claim identity alone did not close. If `completeWithin`
+    // returned quietly when it matched nothing, the handler would commit its
+    // write with no record of it, and the next retry would perform it again --
+    // silently, which is worse than the response-mixing the identity fixed.
+    //
+    // Section 22: the write and the record of it are either both there or
+    // neither. With no record possible, the write must not commit.
+    const service = app.get(IdempotencyService);
+    const key = randomUUID();
+    const accountId = account.id;
+    const fingerprint = service.fingerprint('POST', '/probe', {});
+
+    const mine = await service.claim({ key, accountId, fingerprint });
+    const staleClaimId = mine.outcome === 'claimed' ? mine.claimId : '';
+
+    // Another request takes the key over.
+    await db
+      .updateTable('idempotency_keys')
+      .set({ claimed_at: new Date(Date.now() - 10 * 60 * 1000) })
+      .where('key', '=', key)
+      .execute();
+    await service.claim({ key, accountId, fingerprint });
+
+    // The losing request finishes its write and tries to record it.
+    await expect(
+      db.transaction().execute(async (trx) => {
+        await probeWrite(trx);
+        await service.completeWithin(trx, {
+          key,
+          accountId,
+          claimId: staleClaimId,
+          status: 201,
+          body: { recorded: true },
+        });
+      }),
+    ).rejects.toThrow(/lost its idempotency claim/);
+
+    // The write went with it. Nothing committed, so nothing needs undoing.
     expect(await db.selectFrom('audit_log').select('id').execute()).toHaveLength(0);
-
-    // And so did the record of it: a 5xx releases the claim, so the key is gone
-    // and the client may retry.
-    expect(await db.selectFrom('idempotency_keys').select('key').execute()).toHaveLength(0);
-
-    // A retry therefore executes rather than replaying a success that never was.
-    const retry = await post('rolls-back', account).set('Idempotency-Key', key).send({});
-    expect(retry.status).toBe(500);
-    expect(executions).toBe(2);
   });
 
   it('leaves reads alone', async () => {

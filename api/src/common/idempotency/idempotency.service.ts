@@ -3,6 +3,8 @@ import { createHash } from 'node:crypto';
 import { Inject, Injectable } from '@nestjs/common';
 import { sql } from 'kysely';
 
+import { ApiError, ApiErrorCode } from '../errors/api-error';
+
 import { DATABASE, type Db } from '../../database/database.module';
 
 import type { Database, Json } from '../../database/schema';
@@ -188,6 +190,9 @@ export class IdempotencyService {
     status: number;
     body: Json | null;
   }): Promise<void> {
+    // A zero row count is ordinary here and is not an error: it is what happens
+    // when the handler already recorded its own completion transactionally, which
+    // is the arrangement that makes the two paths compose.
     await this.completeOn(this.db, params);
   }
 
@@ -217,7 +222,25 @@ export class IdempotencyService {
       body: Json | null;
     },
   ): Promise<void> {
-    await this.completeOn(transaction, params);
+    const recorded = await this.completeOn(transaction, params);
+
+    if (recorded === 0n) {
+      // The claim is gone: this request passed its lease and another took the key
+      // over. Section 22 says the write and the record of it are "either both
+      // there or neither" -- so with no record possible, the write must not
+      // commit. Throwing aborts the caller's transaction, which is the only way
+      // to honour that from here.
+      //
+      // Returning quietly instead would leave the write on disk with nothing
+      // recording it, and the retry that follows would perform it again. That is
+      // the failure this whole mechanism exists to prevent, and it would be
+      // silent.
+      throw new ApiError(
+        ApiErrorCode.REQUEST_IN_FLIGHT,
+        'This request lost its idempotency claim to a retry. Nothing was recorded. Retry shortly.',
+        { header: 'Idempotency-Key' },
+      );
+    }
   }
 
   private async completeOn(
@@ -229,8 +252,8 @@ export class IdempotencyService {
       status: number;
       body: Json | null;
     },
-  ): Promise<void> {
-    await sql`
+  ): Promise<bigint> {
+    const result = await sql`
       UPDATE idempotency_keys
          SET state = 'COMPLETED',
              response_status = ${params.status},
@@ -255,6 +278,8 @@ export class IdempotencyService {
          -- interceptor's later call inert.
          AND state = 'IN_FLIGHT'
     `.execute(executor);
+
+    return result.numAffectedRows ?? 0n;
   }
 
   /**
