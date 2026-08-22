@@ -177,10 +177,11 @@ export class PeopleService {
     );
 
     if (unacknowledged.length > 0) {
-      // Scoped exactly as the pre-flight lookup is. The reasoning first recorded
-      // for leaving this open -- that a probe here creates a record and is
-      // therefore loud -- was false: the throw happens before the transaction is
-      // opened, so nothing is written, and the branch's own test asserts it.
+      // Scoped exactly as the pre-flight lookup is: an out-of-scope candidate
+      // carries neither tier nor reasons. The reasoning first recorded for
+      // leaving this open -- that a probe here creates a record and is therefore
+      // loud -- was false: the throw happens before the transaction is opened, so
+      // nothing is written, and the branch's own test asserts it.
       throw new DuplicateAcknowledgementRequiredError(
         await Promise.all(
           unacknowledged.map(async (match) =>
@@ -751,28 +752,34 @@ export function isCalendarDate(value: string): boolean {
 /**
  * A candidate as the caller may see it.
  *
- * `withReasons` is false for a candidate outside the viewer's pastoral scope.
- * The reasons name the field that matched, so "same birthday" asserts that this
- * person's birthday equals a value the caller just submitted — a disclosure
- * section 8 forbids. What survives is section 8's own identifying fields, plus
- * the tier, so the encoder still knows how strong the match is.
+ * `inScope` is false for a candidate outside the viewer's pastoral scope, and
+ * then **neither the tier nor the reasons travel**.
+ *
+ * Withholding only the reasons was not enough, and the reason it was not is worth
+ * stating. The tier is derived from which rule matched: with the same first and
+ * last name, Tier 1 means the birthday was equal and Tier 2 means it was not. So
+ * a tier returned church-wide is a yes/no birthday oracle over a name section 8
+ * already makes visible — enumerable, answered 200 every time, writing nothing.
+ * The wording was hidden and the information kept.
+ *
+ * What an out-of-scope candidate carries instead is that they are a possible
+ * match. That is what section 3 needs the encoder to know: somebody may already
+ * be recorded, ask the leader who holds them. It is not what a caller can binary
+ * search on.
  */
-export function describeCandidate(match: Match, withReasons = true): Record<string, unknown> {
-  const described: Record<string, unknown> = {
+export function describeCandidate(match: Match, inScope = true): Record<string, unknown> {
+  const identity = {
     id: match.candidate.id,
     member_id: match.candidate.memberId,
     full_name: [match.candidate.firstName, match.candidate.middleName, match.candidate.lastName]
       .filter((part) => part !== null && part !== '')
       .join(' '),
     sex: match.candidate.sex,
-    tier: match.tier,
   };
 
-  if (withReasons) {
-    described.reasons = match.reasons;
-  }
-
-  return described;
+  return inScope
+    ? { ...identity, tier: match.tier, reasons: match.reasons }
+    : { ...identity, possible_match: true };
 }
 
 /** Kept for the import path, which writes through this service (section 2). */

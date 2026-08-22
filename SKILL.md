@@ -307,7 +307,13 @@ Whitespace normalization carries unusual weight here. `Dela Cruz`, `DelaCruz`, a
 
 **Tier 2 candidates need somewhere to appear.** A creation workflow can only ever refuse on Tier 1, so if candidates were surfaced only at the moment of creation, every Tier 2 match would be computed and discarded. They are presented before creation instead, by a pre-flight lookup the encoder makes with the details they have so far — which is also what Section 9 asks for as the first step of registering a VIP: search existing People first.
 
-That lookup reads the whole directory, as Section 8's church-wide search does and for the same reason. It returns the identifying fields Section 8 permits, and the tier. It does **not** return the reasons a candidate matched where that candidate is outside the viewer's pastoral scope: a reason reading "same birthday" asserts that their birthday equals a value the caller just submitted, which is a disclosure Section 8 forbids, and a read endpoint would make it a silent one.
+That lookup reads the whole directory, as Section 8's church-wide search does and for the same reason. It returns the identifying fields Section 8 permits — and for a candidate **inside** the viewer's pastoral scope, the tier and the reasons they matched.
+
+For a candidate **outside** it, neither travels. All the viewer learns is that this person is a possible match, which is what they need in order to stop and ask the leader who holds them.
+
+The reasons are withheld because they name the field: "same birthday" asserts that this person's birthday equals a value the caller just submitted, which Section 8 forbids disclosing. **The tier is withheld for the same reason, and this is the part that is easy to miss** — a tier is derived from the rule that fired, so with an equal first and last name, Tier 1 means the birthday matched and Tier 2 means it did not. Returning it church-wide is a yes/no birthday oracle over a name Section 8 already makes visible: enumerable, answered identically every time, and writing nothing. Hiding the wording while keeping the tier hides nothing.
+
+The same redaction applies wherever candidates are returned, including the refusal that asks for a Tier 1 acknowledgement. That refusal happens before anything is written, so it is exactly as quiet a probe as the lookup.
 
 Thresholds and edit distances must be calibrated against real data rather than fixed here. Log the candidates shown and what the user chose, and revisit the rules once there is enough history to see what the matcher is missing and what it is over-reporting.
 

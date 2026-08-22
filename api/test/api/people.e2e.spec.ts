@@ -266,19 +266,26 @@ describe('people (SKILL.md sections 3, 7 and 8)', () => {
   });
 
   describe('the pre-flight duplicate check (SKILL.md section 3)', () => {
-    it('surfaces Tier 2 candidates, which creation alone never shows', () => {
+    it('surfaces Tier 2 candidates, which creation alone never shows', async () => {
       // Creation can only refuse on Tier 1, so without this endpoint every Tier 2
       // match would be computed and discarded -- and section 3 says they are
       // "presented in a candidate list".
-      return request(app.getHttpServer())
+      //
+      // As Admin, so every candidate is in scope and the tier travels for all of
+      // them. Asked as a Leader, the out-of-scope ones would carry
+      // `possible_match` and no tier, and the case would be asserting the
+      // redaction rather than the tier.
+      const response = await request(app.getHttpServer())
         .get('/api/v1/people/duplicate-candidates')
         .query({ first_name: 'Pedro', last_name: 'Testfixture', birth_date: '1985-06-15' })
-        .set('Authorization', `Bearer ${raymondAccount.accessToken}`)
-        .expect(200)
-        .expect((response: { body: { data: { tier: number }[] } }) => {
-          expect(response.body.data.length).toBeGreaterThan(0);
-          expect(response.body.data.every((c) => c.tier === 2)).toBe(true);
-        });
+        .set('Authorization', `Bearer ${adminAccount.accessToken}`);
+
+      expect(response.status).toBe(200);
+
+      const candidates = response.body.data as { tier: number }[];
+      expect(candidates.length).toBeGreaterThan(0);
+      // Same birthday and last name, different first name: section 3's Tier 2.
+      expect(candidates.every((candidate) => candidate.tier === 2)).toBe(true);
     });
 
     it('withholds the match reasons for a candidate outside the actor scope', async () => {
@@ -297,9 +304,36 @@ describe('people (SKILL.md sections 3, 7 and 8)', () => {
       );
 
       expect(outOfScope).toBeDefined();
-      // Still identified, and still tiered -- the encoder needs both.
-      expect(outOfScope).toMatchObject({ member_id: expect.any(String), tier: expect.any(Number) });
+      // Identified, and flagged as possible -- which is what section 3 needs the
+      // encoder to know. Neither the tier nor the reasons travel: both name which
+      // field matched, and with an equal name a tier is a yes/no birthday oracle.
+      expect(outOfScope).toMatchObject({
+        member_id: expect.any(String),
+        possible_match: true,
+      });
+      expect(outOfScope).not.toHaveProperty('tier');
       expect(outOfScope).not.toHaveProperty('reasons');
+    });
+
+    it('gives no tier that could be binary-searched for a birthday', async () => {
+      // The disclosure this closes: with an equal first and last name, Tier 1
+      // means the submitted birthday matched and Tier 2 means it did not. Two
+      // probes differing only in the birthday must be indistinguishable for a
+      // person the actor does not oversee.
+      const withRightBirthday = await request(app.getHttpServer())
+        .get('/api/v1/people/duplicate-candidates')
+        .query({ first_name: 'Juan', last_name: 'Testfixture', birth_date: '1985-06-15' })
+        .set('Authorization', `Bearer ${raymondAccount.accessToken}`);
+
+      const withWrongBirthday = await request(app.getHttpServer())
+        .get('/api/v1/people/duplicate-candidates')
+        .query({ first_name: 'Juan', last_name: 'Testfixture', birth_date: '1970-01-01' })
+        .set('Authorization', `Bearer ${raymondAccount.accessToken}`);
+
+      const juanIn = (response: { body: { data: Record<string, unknown>[] } }) =>
+        response.body.data.find((candidate) => candidate.id === juan.id);
+
+      expect(juanIn(withRightBirthday)).toEqual(juanIn(withWrongBirthday));
     });
 
     it('withholds the reasons on a creation refusal too, for the same reason', async () => {
@@ -321,6 +355,7 @@ describe('people (SKILL.md sections 3, 7 and 8)', () => {
 
       expect(outOfScope).toBeDefined();
       expect(outOfScope).not.toHaveProperty('reasons');
+      expect(outOfScope).not.toHaveProperty('tier');
     });
 
     it('keeps the reasons for a candidate the actor oversees', async () => {
@@ -334,6 +369,7 @@ describe('people (SKILL.md sections 3, 7 and 8)', () => {
       );
 
       expect(inScope).toHaveProperty('reasons');
+      expect(inScope).toHaveProperty('tier');
     });
   });
 

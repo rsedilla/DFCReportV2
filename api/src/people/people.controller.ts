@@ -128,11 +128,11 @@ export class PeopleController {
       mobileNumberNormalized: normalizeMobile(query.mobile_number),
     });
 
-    // Reasons are withheld for a candidate outside the actor's scope: they name
-    // the field that matched, and "same birthday" asserts that this person's
-    // birthday equals a value the caller just submitted, which section 8 forbids
-    // disclosing. The tier still travels — the encoder needs to know how strong
-    // the match is.
+    // A candidate outside the actor's scope carries neither the tier nor the
+    // reasons, only that they are a possible match. Both disclose which field
+    // matched — the tier because it is derived from the rule that fired, so with
+    // an equal name Tier 1 means the birthday matched and Tier 2 means it did
+    // not. Section 8 forbids that, and on a read endpoint it is a silent oracle.
     const data = await Promise.all(
       matches
         .slice(0, limit)
