@@ -21,15 +21,25 @@ export function createTestDb(): Kysely<Database> {
 }
 
 /**
- * Every table holding test data, in one statement, plus the reset of the one
+ * Every table holding test data, in one statement, plus the re-seed of the one
  * table that holds seeded data instead.
  *
- * `settings` is deliberately not truncated. Its two rows are seeded by migration
- * 0002 with the defaults SKILL.md names -- three months for the attention
- * threshold (section 15), and the initial-encoding phase open (section 2) -- so
- * truncating it would leave every later test running against a table the
- * application expects to be populated. It is restored to those defaults instead,
- * which also undoes a test that changed one.
+ * **`settings` is truncated here whether or not it is named, and that is why it
+ * is re-seeded rather than repaired.** `settings.updated_by` references
+ * `accounts`, and `TRUNCATE ... CASCADE` extends to every table holding a foreign
+ * key into one it names -- so truncating `accounts` empties `settings` silently,
+ * and no trigger fires to say so, because TRUNCATE fires no row triggers
+ * (SKILL.md section 5). An UPDATE that puts the values back matches nothing once
+ * the rows are gone, and leaves every later test running against a table the
+ * application expects to be populated.
+ *
+ * The upsert restores the rows whether they were wiped by the cascade or merely
+ * changed by a test, which also makes this correct if a later migration adds
+ * another reference into the truncated set.
+ *
+ * The defaults are the ones SKILL.md names -- three months for the attention
+ * threshold (section 15), and the initial-encoding phase open (section 2) -- and
+ * they are the same values migration 0002 seeds.
  */
 export async function truncateAll(db: Kysely<Database>): Promise<void> {
   await sql`
@@ -51,15 +61,12 @@ export async function truncateAll(db: Kysely<Database>): Promise<void> {
   // `updated_by` goes back to null, which is what the seed means: nobody has
   // changed this yet (SKILL.md section 7).
   await sql`
-    UPDATE settings
-       SET value = defaults.value,
+    INSERT INTO settings (key, value, updated_by) VALUES
+      ('cell_attention_months', '3'::jsonb, NULL),
+      ('initial_encoding_open', 'true'::jsonb, NULL)
+    ON CONFLICT (key) DO UPDATE
+       SET value = excluded.value,
            updated_by = NULL,
            updated_at = now()
-      FROM (VALUES
-             ('cell_attention_months', '3'::jsonb),
-             ('initial_encoding_open', 'true'::jsonb)
-           ) AS defaults (key, value)
-     WHERE settings.key = defaults.key
-       AND (settings.value <> defaults.value OR settings.updated_by IS NOT NULL)
   `.execute(db);
 }

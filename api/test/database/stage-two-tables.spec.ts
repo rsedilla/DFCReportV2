@@ -210,9 +210,22 @@ describe('settings (SKILL.md section 7)', () => {
     await db.destroy();
   });
 
-  it('is seeded with the defaults the specification names', async () => {
+  it('holds the defaults the specification names, at the start of every test', async () => {
     // The application therefore never invents a default, which is what would put
     // the value in two places and let them disagree.
+    //
+    // **This does not prove the migration seeds them, and is not written as
+    // though it did.** `settings.updated_by` references `accounts`, so the
+    // TRUNCATE ... CASCADE in `truncateAll` empties this table before every test
+    // and the helper re-seeds it; an assertion made after that hook cannot tell
+    // the migration's INSERT from the helper's. What it does hold is the property
+    // every other test depends on -- that a test starts from the specified
+    // defaults -- and it would catch the helper drifting from section 15 or
+    // section 2.
+    //
+    // Verifying the migration's own seed needs a database no test has touched.
+    // That gap is real and is recorded in the pull request rather than papered
+    // over here.
     const rows = await db
       .selectFrom('settings')
       .select(['key', 'value', 'updated_by'])
