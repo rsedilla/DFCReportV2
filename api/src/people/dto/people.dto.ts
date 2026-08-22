@@ -9,6 +9,7 @@ import {
   IsString,
   IsUUID,
   Length,
+  Matches,
   Max,
   Min,
 } from 'class-validator';
@@ -21,6 +22,21 @@ import type { CivilStatus, Sex } from '../../database/schema';
  * enumerations; this is the outer of the two checks, not the only one.
  */
 const SEXES: Sex[] = ['MALE', 'FEMALE'];
+
+/**
+ * A date-only field is `YYYY-MM-DD` and nothing else (SKILL.md section 22:
+ * "Never send a date-only field as a timestamp; the conversion is where months
+ * silently shift").
+ *
+ * `@IsDateString({ strict: true })` alone is not enough — it accepts a full ISO
+ * timestamp. One arriving here would be stored, compared as a raw string against
+ * stored `YYYY-MM-DD` values, and match nothing: every Tier 1 birthday rule and
+ * the whole transposition rule would go quiet, and creation would proceed without
+ * the acknowledgement section 3 requires, with nothing reporting a problem. The
+ * shape check is what refuses it; `IsDateString` still does the work of refusing
+ * a date that does not exist.
+ */
+const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
 const CIVIL_STATUSES: CivilStatus[] = ['SINGLE', 'MARRIED', 'WIDOWED'];
 
 /**
@@ -44,6 +60,7 @@ export class CreatePersonDto {
   last_name!: string;
 
   /** A plain `YYYY-MM-DD` Asia/Manila date, never a timestamp (section 22). */
+  @Matches(DATE_ONLY, { message: 'must be a plain YYYY-MM-DD date, not a timestamp' })
   @IsDateString({ strict: true })
   birth_date!: string;
 
@@ -103,6 +120,7 @@ export class EditPersonDto {
   last_name?: string;
 
   @IsOptional()
+  @Matches(DATE_ONLY, { message: 'must be a plain YYYY-MM-DD date, not a timestamp' })
   @IsDateString({ strict: true })
   birth_date?: string;
 
@@ -135,6 +153,7 @@ export class DuplicateCandidatesDto {
   last_name!: string;
 
   @IsOptional()
+  @Matches(DATE_ONLY, { message: 'must be a plain YYYY-MM-DD date, not a timestamp' })
   @IsDateString({ strict: true })
   birth_date?: string;
 
@@ -146,6 +165,14 @@ export class DuplicateCandidatesDto {
   @IsString()
   @Length(0, 40)
   mobile_number?: string;
+
+  /** Section 22: defaults to 50, maximum 200. */
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(200)
+  limit?: number;
 }
 
 export class SearchPeopleDto {

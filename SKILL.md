@@ -2635,9 +2635,9 @@ POST /api/v1/auth/forgot-password
 POST /api/v1/auth/reset-password
 GET  /api/v1/auth/me
 
+GET  /api/v1/people                       search, church-wide (Section 8)
+GET  /api/v1/people/duplicate-candidates  declared before /{id}, or it is one
 GET  /api/v1/people/{id}
-GET  /api/v1/people/search
-GET  /api/v1/people/duplicate-candidates
 GET  /api/v1/people/{id}/pastoral-path
 
 GET  /api/v1/network/my-tree
@@ -2675,7 +2675,7 @@ Timestamps are ISO 8601 with an offset. Date-only fields — an attendance date,
 Cursor-based, on every collection endpoint:
 
 ```text
-GET /api/v1/people/search?q=dela+cruz&limit=50
+GET /api/v1/people?q=dela+cruz&limit=50
 {
   "data": [ ... ],
   "next_cursor": "b3BhcXVlLWN1cnNvcg"

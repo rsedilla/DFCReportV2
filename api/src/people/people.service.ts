@@ -1,6 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { sql } from 'kysely';
 
+import { AuditService } from '../audit/audit.service';
 import { HierarchyService } from '../hierarchy/hierarchy.service';
 import { NetworksService } from '../networks/networks.service';
 import {
@@ -119,6 +120,7 @@ export interface PersonRecord {
 export class PeopleService {
   constructor(
     @Inject(DATABASE) private readonly db: Db,
+    private readonly audit: AuditService,
     private readonly hierarchy: HierarchyService,
     private readonly networks: NetworksService,
     private readonly idempotency: IdempotencyService,
@@ -139,6 +141,13 @@ export class PeopleService {
     input: CreatePersonInput,
     actor: { accountId: string; personId: string },
     claim: CurrentClaim,
+    /**
+     * Whether the actor may see why a candidate matched. Section 8 forbids
+     * disclosing an out-of-scope person's birthday or mobile number, and a reason
+     * naming the field that matched asserts one — so the caller supplies the same
+     * scope test the read endpoint uses.
+     */
+    canSeeReasons: (personId: string) => Promise<boolean>,
   ): Promise<Record<string, unknown>> {
     const network = this.networks.networkForSex(input.sex);
 
@@ -168,7 +177,17 @@ export class PeopleService {
     );
 
     if (unacknowledged.length > 0) {
-      throw new DuplicateAcknowledgementRequiredError(unacknowledged.map(describeCandidate));
+      // Scoped exactly as the pre-flight lookup is. The reasoning first recorded
+      // for leaving this open -- that a probe here creates a record and is
+      // therefore loud -- was false: the throw happens before the transaction is
+      // opened, so nothing is written, and the branch's own test asserts it.
+      throw new DuplicateAcknowledgementRequiredError(
+        await Promise.all(
+          unacknowledged.map(async (match) =>
+            describeCandidate(match, await canSeeReasons(match.candidate.id)),
+          ),
+        ),
+      );
     }
 
     return this.db.transaction().execute(async (trx) => {
@@ -226,23 +245,20 @@ export class PeopleService {
         });
       }
 
-      await trx
-        .insertInto('audit_log')
-        .values({
-          actor_id: actor.accountId,
-          action: 'person.created',
-          target_type: 'person',
-          target_id: person.id,
-          // Section 21 wants the values, not merely that it happened. An entry
-          // recording only the identifiers cannot answer what was created.
-          after: {
-            ...(person as unknown as Record<string, Json>),
-            network,
-            pastoral_leader_id: input.pastoralLeaderId,
-            acknowledged_duplicate_ids: [...(input.acknowledgedDuplicateIds ?? [])],
-          },
-        })
-        .execute();
+      await this.audit.writeWithin(trx, {
+        actorId: actor.accountId,
+        action: 'person.created',
+        targetType: 'person',
+        targetId: person.id,
+        // Section 21 wants the values, not merely that it happened. An entry
+        // recording only the identifiers cannot answer what was created.
+        after: {
+          ...(person as unknown as Record<string, Json>),
+          network,
+          pastoral_leader_id: input.pastoralLeaderId,
+          acknowledged_duplicate_ids: [...(input.acknowledgedDuplicateIds ?? [])],
+        },
+      });
 
       const response = fullProfile(person);
 
@@ -310,7 +326,19 @@ export class PeopleService {
     // so a miss here creates the duplicate.
     //
     // `%` and `_` are escaped: unescaped, `q=%%` pages out the whole directory.
-    const pattern = `%${escapeLike(normalizeName(term)).replace(/\s+/g, '%')}%`;
+    const normalized = normalizeName(term);
+
+    // `normalizeName` drops suffix tokens and collapses separators, so a term
+    // that looked like two characters can arrive here empty: `Jr`, `II`, `--`,
+    // two spaces. An empty term builds the pattern `%%`, which matches every row
+    // -- the directory dump `escapeLike` was added to prevent, reached by a
+    // shorter route. Section 8 makes this search church-wide for identity
+    // resolution, not for bulk export.
+    if (normalized === '') {
+      return { rows: [], nextCursor: null };
+    }
+
+    const pattern = `%${escapeLike(normalized).replace(/\s+/g, '%')}%`;
     const normalizedFirst = sql<string>`lower(translate(first_name, ${ACCENTED}, ${UNACCENTED}))`;
     const normalizedLast = sql<string>`lower(translate(last_name, ${ACCENTED}, ${UNACCENTED}))`;
 
@@ -426,7 +454,7 @@ export class PeopleService {
         ...(subject.birthDate === null || subject.birthDate === undefined
           ? []
           : [eb('birth_date', '=', subject.birthDate)]),
-        eb(normalizedLastName, 'like', `${normalizedFirstLetter(subject.lastName)}%`),
+        eb(normalizedLastName, 'like', `${escapeLike(normalizedFirstLetter(subject.lastName))}%`),
         // The surname-change case: a woman's last name may change on marriage, so
         // a shared first name has to be able to reach her earlier record on its
         // own (section 3).
@@ -534,17 +562,14 @@ export class PeopleService {
         ])
         .executeTakeFirstOrThrow();
 
-      await trx
-        .insertInto('audit_log')
-        .values({
-          actor_id: actor.accountId,
-          action: 'person.updated',
-          target_type: 'person',
-          target_id: personId,
-          before: before as unknown as Json,
-          after: person as unknown as Json,
-        })
-        .execute();
+      await this.audit.writeWithin(trx, {
+        actorId: actor.accountId,
+        action: 'person.updated',
+        targetType: 'person',
+        targetId: personId,
+        before,
+        after: person,
+      });
 
       const response = fullProfile(person);
 
@@ -670,21 +695,36 @@ function comparisonForm(value: string): string {
  */
 export function transpositionsOf(date: string): string[] {
   const swaps = new Set<string>();
+  const digits = [...date.matchAll(/\d/g)].map((match) => match.index);
 
-  for (let i = 0; i < date.length - 1; i += 1) {
-    if (!/\d/.test(date[i]) || !/\d/.test(date[i + 1]) || date[i] === date[i + 1]) {
-      continue;
-    }
+  // **Any two digit positions, not only adjacent ones.** The scorer accepts any
+  // two-position swap, and the commonest date mis-key of all is month against day
+  // -- 1994-03-02 for 1994-02-03, which a US-format habit produces and which is
+  // not an adjacent swap. Generating only adjacent pairs meant the narrowing
+  // could not fetch the row the rule exists to catch, so the rule fired only when
+  // the surname initial happened to match.
+  for (let a = 0; a < digits.length; a += 1) {
+    for (let b = a + 1; b < digits.length; b += 1) {
+      const i = digits[a];
+      const j = digits[b];
 
-    const swapped = `${date.slice(0, i)}${date[i + 1]}${date[i]}${date.slice(i + 2)}`;
+      if (date[i] === date[j]) {
+        continue;
+      }
 
-    // Most swaps produce something that is not a date: `1994-03-02` swapped in
-    // the month is `1994-30-02`, and PostgreSQL refuses to compare against it —
-    // the whole statement errors rather than the value simply not matching. A
-    // mis-keyed birthday that is not a real date cannot be in the table anyway,
-    // so these are dropped rather than escaped.
-    if (isCalendarDate(swapped)) {
-      swaps.add(swapped);
+      const chars = [...date];
+      chars[i] = date[j];
+      chars[j] = date[i];
+      const swapped = chars.join('');
+
+      // Most swaps produce something that is not a date: `1994-03-02` swapped in
+      // the month is `1994-30-02`, and PostgreSQL refuses to compare against it —
+      // the whole statement errors rather than the value simply not matching. A
+      // mis-keyed birthday that is not a real date cannot be in the table anyway,
+      // so these are dropped rather than escaped.
+      if (isCalendarDate(swapped)) {
+        swaps.add(swapped);
+      }
     }
   }
 
@@ -708,8 +748,17 @@ export function isCalendarDate(value: string): boolean {
   );
 }
 
-export function describeCandidate(match: Match): Record<string, unknown> {
-  return {
+/**
+ * A candidate as the caller may see it.
+ *
+ * `withReasons` is false for a candidate outside the viewer's pastoral scope.
+ * The reasons name the field that matched, so "same birthday" asserts that this
+ * person's birthday equals a value the caller just submitted — a disclosure
+ * section 8 forbids. What survives is section 8's own identifying fields, plus
+ * the tier, so the encoder still knows how strong the match is.
+ */
+export function describeCandidate(match: Match, withReasons = true): Record<string, unknown> {
+  const described: Record<string, unknown> = {
     id: match.candidate.id,
     member_id: match.candidate.memberId,
     full_name: [match.candidate.firstName, match.candidate.middleName, match.candidate.lastName]
@@ -717,8 +766,13 @@ export function describeCandidate(match: Match): Record<string, unknown> {
       .join(' '),
     sex: match.candidate.sex,
     tier: match.tier,
-    reasons: match.reasons,
   };
+
+  if (withReasons) {
+    described.reasons = match.reasons;
+  }
+
+  return described;
 }
 
 /** Kept for the import path, which writes through this service (section 2). */

@@ -81,6 +81,12 @@ export class PeopleController {
       },
       actor,
       claim,
+      // The same scope test the pre-flight lookup uses, so a refusal cannot
+      // disclose what a read may not (section 8). Without it, a Tier 1 refusal
+      // names the field that matched for a person the actor has no scope over —
+      // and the refusal happens before the transaction opens, so probing costs
+      // nothing and writes nothing.
+      (candidateId) => this.isWithinScope(actor, candidateId),
     );
   }
 
@@ -98,13 +104,22 @@ export class PeopleController {
    * church-wide search is: section 8 makes the directory searchable by everyone
    * precisely so that duplicates can be prevented, and scoping the rows here would
    * defeat the endpoint's only purpose.
+   *
+   * It answers with section 22's collection envelope. `next_cursor` is always
+   * null: a candidate set is bounded by how many people share a name or a
+   * birthday, and paging past the strongest matches is not something an encoder
+   * does. The envelope is that shape regardless, because section 22 makes
+   * `/api/v1` additive-only — a collection shipped without one can never grow a
+   * cursor once a phone depends on it.
    */
   @Get('duplicate-candidates')
   @RequiresCapability(Capability.PeopleViewSubtree, { kind: 'actor' })
   async duplicateCandidates(
     @Query() query: DuplicateCandidatesDto,
     @CurrentActor() actor: Actor,
-  ): Promise<{ candidates: Record<string, unknown>[] }> {
+  ): Promise<{ data: Record<string, unknown>[]; next_cursor: string | null }> {
+    const limit = query.limit ?? 50;
+
     const matches = await this.people.findDuplicates({
       firstName: query.first_name,
       lastName: query.last_name,
@@ -113,30 +128,20 @@ export class PeopleController {
       mobileNumberNormalized: normalizeMobile(query.mobile_number),
     });
 
-    const candidates = await Promise.all(
-      matches.map(async (match) => {
-        const described = describeCandidate(match);
-
-        if (await this.isWithinScope(actor, match.candidate.id)) {
-          return described;
-        }
-
-        // **Reasons are withheld for a candidate outside the actor's scope.**
-        //
-        // Section 8 forbids exposing an out-of-scope person's birthday or mobile
-        // number, and a reason reading "same birthday" asserts that theirs equals
-        // a value the caller just submitted — which discloses it. Creation can
-        // leak the same fact, but only by creating a record on each probe, which
-        // is loud. A read endpoint would make it a silent oracle.
-        //
-        // The tier still travels, because the encoder needs to know how strong
-        // the match is. What they lose is which field produced it.
-        delete described.reasons;
-        return described;
-      }),
+    // Reasons are withheld for a candidate outside the actor's scope: they name
+    // the field that matched, and "same birthday" asserts that this person's
+    // birthday equals a value the caller just submitted, which section 8 forbids
+    // disclosing. The tier still travels — the encoder needs to know how strong
+    // the match is.
+    const data = await Promise.all(
+      matches
+        .slice(0, limit)
+        .map(async (match) =>
+          describeCandidate(match, await this.isWithinScope(actor, match.candidate.id)),
+        ),
     );
 
-    return { candidates };
+    return { data, next_cursor: null };
   }
 
   @Get(':id')

@@ -241,6 +241,19 @@ describe('people (SKILL.md sections 3, 7 and 8)', () => {
       expect(await db.selectFrom('persons').select('id').execute()).toHaveLength(7);
     });
 
+    it('refuses a birthday sent as a timestamp', async () => {
+      // Section 22: never send a date-only field as a timestamp. One accepted here
+      // would compare as a raw string against stored YYYY-MM-DD values and match
+      // nothing, so every Tier 1 birthday rule would go quiet and creation would
+      // proceed without the acknowledgement section 3 requires -- silently.
+      const response = await post(raymondAccount, randomUUID()).send(
+        personBody({ pastoral_leader_id: manuel.id, birth_date: '1994-03-02T00:00:00Z' }),
+      );
+
+      expect(response.status).toBe(422);
+      expect(await db.selectFrom('persons').select('id').execute()).toHaveLength(7);
+    });
+
     it('refuses a request with no idempotency key', async () => {
       const response = await request(app.getHttpServer())
         .post('/api/v1/people')
@@ -262,9 +275,9 @@ describe('people (SKILL.md sections 3, 7 and 8)', () => {
         .query({ first_name: 'Pedro', last_name: 'Testfixture', birth_date: '1985-06-15' })
         .set('Authorization', `Bearer ${raymondAccount.accessToken}`)
         .expect(200)
-        .expect((response: { body: { candidates: { tier: number }[] } }) => {
-          expect(response.body.candidates.length).toBeGreaterThan(0);
-          expect(response.body.candidates.every((c) => c.tier === 2)).toBe(true);
+        .expect((response: { body: { data: { tier: number }[] } }) => {
+          expect(response.body.data.length).toBeGreaterThan(0);
+          expect(response.body.data.every((c) => c.tier === 2)).toBe(true);
         });
     });
 
@@ -279,7 +292,7 @@ describe('people (SKILL.md sections 3, 7 and 8)', () => {
 
       expect(response.status).toBe(200);
 
-      const outOfScope = (response.body.candidates as Record<string, unknown>[]).find(
+      const outOfScope = (response.body.data as Record<string, unknown>[]).find(
         (candidate) => candidate.id === juan.id,
       );
 
@@ -289,13 +302,34 @@ describe('people (SKILL.md sections 3, 7 and 8)', () => {
       expect(outOfScope).not.toHaveProperty('reasons');
     });
 
+    it('withholds the reasons on a creation refusal too, for the same reason', async () => {
+      // The refusal happens before the transaction is opened, so a probe here
+      // writes nothing -- it is exactly as silent as the read endpoint, and the
+      // reasoning first recorded for leaving it open said otherwise.
+      const refused = await post(raymondAccount, randomUUID()).send(
+        personBody({
+          pastoral_leader_id: manuel.id,
+          first_name: 'Juan',
+          last_name: 'Testfixture',
+          birth_date: '1985-06-15',
+        }),
+      );
+
+      expect(refused.status).toBe(409);
+      const candidates = refused.body.error.details.candidates as Record<string, unknown>[];
+      const outOfScope = candidates.find((candidate) => candidate.id === juan.id);
+
+      expect(outOfScope).toBeDefined();
+      expect(outOfScope).not.toHaveProperty('reasons');
+    });
+
     it('keeps the reasons for a candidate the actor oversees', async () => {
       const response = await request(app.getHttpServer())
         .get('/api/v1/people/duplicate-candidates')
         .query({ first_name: 'Manuel', last_name: 'Testfixture', birth_date: '1985-06-15' })
         .set('Authorization', `Bearer ${raymondAccount.accessToken}`);
 
-      const inScope = (response.body.candidates as Record<string, unknown>[]).find(
+      const inScope = (response.body.data as Record<string, unknown>[]).find(
         (candidate) => candidate.id === manuel.id,
       );
 
@@ -352,6 +386,18 @@ describe('people (SKILL.md sections 3, 7 and 8)', () => {
       const response = await search(raymondAccount, 'Juan');
 
       expect((response.body.data as unknown[]).length).toBeGreaterThan(0);
+    });
+
+    it('does not page out the directory for a term that normalizes to nothing', async () => {
+      // `normalizeName` drops suffix tokens, so `Jr` arrives empty and would build
+      // the pattern `%%` -- the directory dump the LIKE escaping was added to
+      // prevent, reached by a shorter route.
+      for (const q of ['Jr', 'II', '  ']) {
+        const response = await search(raymondAccount, q);
+
+        expect(response.status).toBe(200);
+        expect(response.body.data).toEqual([]);
+      }
     });
 
     it('pages with an opaque cursor and no total', async () => {

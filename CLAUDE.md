@@ -1168,10 +1168,16 @@ the initial encoding effort, which is this stage's own step 11.
 **The ruling had a consequence worth closing in the same change.** Match reasons
 name the field that matched, so "same birthday" asserts that an out-of-scope
 person's birthday equals a value the caller submitted — a disclosure §8 forbids.
-Creation could already leak it, but only by creating a record on every probe,
-which is loud. A read endpoint would have made it silent. Reasons are therefore
-withheld for a candidate outside the viewer's scope; the tier still travels,
-because the encoder needs to know how strong the match is.
+Reasons are therefore withheld for a candidate outside the viewer's scope; the
+tier still travels, because the encoder needs to know how strong the match is.
+
+*The first version of this entry said the same leak on **creation** was tolerable
+"because a probe there creates a record every time, which is loud". That is
+false.* A Tier 1 refusal throws before the transaction is opened, so a probe
+writes nothing — the branch's own test asserts the Person count is unchanged. The
+creation refusal is exactly as silent as the read, and it now applies the same
+scope filter. Recorded rather than deleted: a false justification in this log is
+worse than none, because the next reader takes it as settled.
 
 ### Open — awaiting a ruling
 
