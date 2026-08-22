@@ -49,10 +49,12 @@ Four rulings were forced by building it, each recorded in `CLAUDE.md` and amende
 - Accounts: provisioning, activation, password reset (§6), and the email provider adapter behind it
 - **The domain half of the `SENIOR_PASTOR` rule** (§7): the database caps the count at two, and `auth` checks that the two are the Persons §4 names. The check had no owning stage until now
 - The first real screens, and with them the UI libraries recorded in `CLAUDE.md`, and axe-core in CI over every route (`SKILL.md` §23, WCAG 2.2 AA)
-- **`audit_log`** (§21) and **`idempotency_keys`** (§22), with the first write endpoint
+- **`audit_log`** (§21), **`idempotency_keys`** (§22) and **`settings`** (§7), with the first write endpoint
 - **Import the leadership tree**, through the dry-run, adjudicate, commit flow (`SKILL.md` §2, Initial data load)
 
-The two tables Stage 1 did not create arrive here rather than later. §5 requires every reassignment to be audit logged, and §22 requires an `Idempotency-Key` on every state-changing request "from the first write endpoint, not added later" — and reassignment *is* the first write endpoint, so neither can wait for the stage that merely makes heavy use of them.
+Three tables Stage 1 did not create arrive here rather than later. §5 requires every reassignment to be audit logged, and §22 requires an `Idempotency-Key` on every state-changing request "from the first write endpoint, not added later" — and reassignment *is* the first write endpoint, so neither can wait for the stage that merely makes heavy use of them.
+
+`settings` is the third, and it was missing from this list until 2026-08-22. §2 holds the initial-encoding phase flag under `settings.manage`, and the tree import at the end of this stage runs inside that phase. Without the table the relaxation has no way to end, which is the failure the ruling on closing the phase exists to prevent: a relaxation attached to a phase with no defined end is a permanent relaxation.
 
 **Done when:** all eleven authorization tests are **green**, including case 7 exercised concurrently, and the real leadership tree is loaded in a development database.
 

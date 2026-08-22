@@ -627,9 +627,132 @@ It is **not** rejected on the cost first recorded here, that it would put a lock
 
 Written to `SKILL.md` §6, which now carries three rules for immediate revocation rather than two.
 
+### 2026-08-22 — Seven Stage 2 rulings, settled before any Stage 2 code
+
+Stage 2 opened with four Stop Conditions and three confirmations outstanding.
+All seven are settled here, and each is amended into `SKILL.md` in the same
+change. Three of them close items this log has been carrying as open since
+2026-08-20; two close items opened by the Stage 1 verification.
+
+**Refresh and activation tokens may be pruned, thirty days past expiry.** This
+is the one exception to §5's no-deletion rule, and the floor is set by the
+reuse signal rather than by the token's validity.
+
+The catch was not previously written down anywhere. A rotated row is revoked
+and carries a `replaced_by_id`, and §6 makes that pair the whole difference
+between a stolen token and one the system never issued. Prune it and a
+presented copy resolves to nothing, so it is refused as unknown and no
+account-wide revocation fires — the theft is not merely undetected, it is
+indistinguishable from a typo. So any retention rule has to outlive what can
+still be presented, and thirty days beyond a thirty-day token is that.
+
+Two costs are accepted in writing rather than discovered: a long-expired
+stolen token stops raising the alarm, which today it does because the reuse
+check runs before the expiry check; and rows must be deleted oldest first,
+because `replaced_by_id` references `refresh_tokens` with no cascade and a
+row is still referenced by the one it replaced. Nothing requires a retention
+job to exist — the ruling permits one and bounds what it may touch. Written
+to `SKILL.md` §6 and §5.
+
+**`CHECK (ended_at > started_at)` is relaxed to `>=`.** §5 prescribes closing
+a row entered in error and opening the right one, and the strict form made
+that impossible to perform honestly: the only close it permitted recorded a
+non-zero period during which a fact that was never true was in force.
+
+Both safety properties were verified against the SQL before the ruling, not
+after. A zero-length row is invisible to an as-of lookup, because
+`network_as_of` asks for `started_at <= t AND ended_at > t` and no `t`
+satisfies both. It occupies no one-open-row index, because every one of those
+is partial over `ended_at IS NULL`. And the same-Network check on a Network
+change considers edges open at the effective date or beginning after it, so
+it neither validates a zero-length row nor is broken by one.
+
+The cost is that an inert row is also an invisible one, so a defect closing a
+live row at its own start date removes it from every query silently. That is
+domain-layer discipline, not a schema property, and is written as such.
+
+Landed by editing `0001_foundations.sql` in place, under the exception of the
+2026-08-21 ruling, alongside migration 0002 — not as a corrective migration
+afterwards. Nothing is deployed, so there is no history for a checksum to
+disagree with, and beginning Stage 2 on a first migration known to make a
+prescribed correction impossible is the alternative. Written to `SKILL.md` §5.
+
+**A backdated Network correction reaches only to the start of the person's
+current pastoral assignment.** Further back there is no legal write that
+resolves it: the reassignment §4 demands cannot be made for a period that has
+already ended, and rewriting a closed row is forbidden by Principle 12 and
+§5. Permitting the attempt would mean permitting a failure with no remedy.
+
+The system rejects with the earliest date the correction can legally take,
+answering `INVARIANT_VIOLATION` — it is a rule about what can be recorded,
+not about the actor's authority over a target, which is the distinction §22
+draws between that code and `SCOPE_DENIED`.
+
+Two alternatives were rejected. Permitting it and flagging the stranded edge
+would make §4's same-Network guarantee no longer absolute, which is a larger
+change than the problem warrants and would have to be said in §4 rather than
+here. Escalating each case as a Stop Condition is honest and leaves the Stage
+2 endpoint with no behaviour to implement.
+
+The accepted cost is that closed periods keep the Network recorded for them,
+including where it is now known to be wrong. §3's reproducibility guarantee
+already argues for that: those months have been reported, and a leader may be
+holding one on paper. Where the true history matters it belongs in the audit
+entry the correction already writes, not in a rewritten relationship row.
+Written to `SKILL.md` §4.
+
+**A Network change and the reassignment it forces share one exact effective
+instant.** The schema already required it and nothing said so. The old edge
+escapes validation only at exact equality, because the check considers edges
+open at the effective date or beginning after it; closed a microsecond later
+it is open at the date, is compared with the corrected Network in force on
+one end and the old one on the other, and is rejected — correctly, because
+for that microsecond it was genuinely a cross-Network edge.
+
+So this writes down what the schema enforces rather than changing anything.
+It is worth a ruling because the failure of leaving it implicit is specific:
+an implementer meets a constraint violation, reads it as two timestamps being
+too close together, and separates them — which does not fix the write, and
+which would open the gap if the check were ever loosened to admit it.
+Enforcing the equality with a second constraint was considered and rejected:
+it spans two tables on one logical operation and would need its own deferred
+constraint trigger, which is more machinery than the rule earns. Written to
+`SKILL.md` §4.
+
+**A form field failing validation carries `field-invalid`.** One token, and
+the only one of its kind, closing the question §23 explicitly left open and
+which an earlier version of the contrast check had quietly decided by
+refusing `error` and `critical`.
+
+The name is the ruling. `field-invalid` describes the state of an input, and
+`field-` is a prefix that does not travel — a Cell is not a field, and a
+leader is not a field. `error` and `danger` were refused on §23's own
+argument, that a token is used by whoever writes the next screen on whatever
+it seems to fit, and a token called `error` eventually colours a Cell that
+reported `NOT_HELD`. It carries 1.4.11's 3:1 against its surface, since the
+invalid state of a control is exactly the component state that criterion
+names, and it is never the sole indicator, which 1.4.1 requires and which
+matters for a leader reading a phone in a hall. Written to `SKILL.md` §23.
+
+**The client libraries are confirmed.** TanStack Query, TanStack Table,
+`lucide-react` and `next/font`, installed with the first real screen rather
+than now. A chart library is deferred to Stage 5, where the first chart is.
+This stays in this log and out of `SKILL.md`: §2 carries the rule — headless
+primitives, no framework with its own design system — and a vendor meeting
+that rule is not a rule.
+
+**`settings` is in Stage 2 scope.** §2 puts the initial-encoding phase flag
+under `settings.manage`, and Stage 2 runs the import inside that phase.
+Without the table the relaxation has no terminating condition, which is the
+exact failure the 2026-08-20 ruling on closing the phase was written to
+prevent. It lands in migration 0002 beside `audit_log` and `idempotency_keys`.
+`docs/ROADMAP.md` named only those two and is corrected in the same change.
+
 ### Open — awaiting a ruling
 
-**One item awaits a ruling and blocks Stage 5. Eleven other things are unsettled, five of them raised by the reviews of the rulings above and worth settling before Stage 2 builds. They are listed at the end, so this section is the whole of what is open.**
+**One item awaits a ruling and blocks Stage 5. Five other things are unsettled, none of them blocking. They are listed at the end, so this section is the whole of what is open.**
+
+Six items that stood here on 2026-08-22 were settled that day and are recorded above. Four of them were Stop Conditions for Stage 2.
 
 **What an aggregate Cell attendance view offers in place of buckets.** Monthly-attendance buckets are a Cell-scope view only, because N belongs to a Cell and aggregating across different N inflates `Completed` for the Cells that recorded least (`SKILL.md` §12). At leader and Network scope the spec offers unique people, classification and coverage, and does not say whether anything should replace the buckets. Settle it in Stage 5 against real data.
 
@@ -639,13 +762,7 @@ Two related questions have defined behaviour and are recorded in `SKILL.md` §12
 
 - **Whether the API runs as more than one instance, and what clock skew revocation may assume.** §6 says any instance can serve any request, and account-wide revocation compares two timestamps both stamped by an API process. On one instance that is one clock; on several it is not, and §24 now requires synchronised clocks without bounding the skew this comparison tolerates. The row lock added for the uncommitted-revocation window orders the two events in the database and does not depend on clocks, so this affects the comparison rather than the ordering. Settle it before the first multi-instance deployment.
 - **The application's database role.** §24 requires least-privilege credentials and none exist: the API connects as the owner of every table, so it holds `TRUNCATE`, which bypasses the no-delete triggers entirely, and `DROP`. The no-delete rule leans on this role to make its `TRUNCATE` exemption safe. Creating it is deployment work with no ruling attached, but until it happens §5's exemption is unprotected.
-- **Whether refresh tokens and activation tokens may be pruned.** §5 now says a row of an effective-dated table is never deleted, and deliberately does not name `refresh_tokens` or `account_tokens`. Both accumulate: a 30-day token per device per rotation. A retention job is ordinary and will be wanted, and it either violates a stated invariant or is blocked by a trigger nobody expected. Settle it before Stage 2 writes one.
 - **Whether a revocation may be undone in place.** Nothing addresses setting `revoked_at` back to `NULL`, and the schema permits it on `account_roles` and `capability_grants`. It erases a revocation exactly as a `DELETE` would, one column over — and the Senior Pastor cap depends on `revoked_at` being monotone for the count to mean anything over time.
-- **How a row entered in error is corrected within the same instant.** §5 answers "close it and open the right one", but `CHECK (ended_at > started_at)` makes a zero-length close impossible, so the prescribed correction always records a non-zero period of a fact that was never true. This bears on the already-open question about a Network change sharing one instant with its reassignment, and on the initial-encoding import, where a botched bulk load has no clean remedy.
-- **The client libraries beyond the component question** — TanStack Query, TanStack Table, a chart library, icons and fonts. Recorded as expectations in the UI direction entry above, deliberately not in `SKILL.md`, and confirmed against a real screen in Stage 2 rather than now. A list headed "This is settled, not a suggestion" is no place for a library nobody has used yet.
-- **What Admin should do when a backdated Network correction cannot be made.** The trigger validates assignments that closed after the effective date, so a correction backdated into a closed period can fail with no legal remedy: the reassignment §4 requires cannot be made for a period already ended, and rewriting a closed assignment row is forbidden by §5 and Principle 12. Stage 2 builds this endpoint.
-- **Whether a Network change and the reassignment it forces must share one effective instant.** The schema now requires it — the old edge escapes validation only because `ended_at > started_at` is false when the two are exactly equal, so closing one microsecond later makes the mandated atomic operation impossible. Defensible, but unwritten, and Stage 2 will implement against it either way.
 - **The native client framework.** `SKILL.md` §2 settles the web stack and says nothing about Android and iOS. Deferred since the specification was written; indexed here because two rules now point at it as open.
-- **Whether a form field failing validation may carry a colour of its own, and what it would be called.** `SKILL.md` §23 forbids a palette token named for a judgement about a person, a Cell, or a figure derived from them, and says in terms that this reaches names rather than colour. Validation is a different question: nothing in §13, §17 or §19 addresses it, and an earlier version of the lint check quietly decided it by refusing `error` and `critical` as well. Stage 2 builds sign-in and person forms, so settle it there — in `SKILL.md`, not in a script.
 - **What the native clients owe on accessibility.** `SKILL.md` §23 binds the web application to WCAG 2.2 AA and says the equivalent obligation for a native client is the platform accessibility API rather than WCAG. Which platform guarantees, and what would fail a build, is a ruling to make when the client is.
 
