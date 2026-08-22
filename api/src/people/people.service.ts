@@ -213,7 +213,11 @@ export class PeopleService {
     // the actor is already allowed to know.
     if (gated) {
       throw new DuplicateAcknowledgementRequiredError(
-        await this.visibleDuplicatesFor(subject, canSeeReasons),
+        await this.visibleDuplicatesFor(
+          subject,
+          canSeeReasons,
+          (match) => match.tier === 1 && !acknowledged.has(match.candidate.id),
+        ),
       );
     }
 
@@ -465,6 +469,17 @@ export class PeopleService {
   async visibleDuplicatesFor(
     subject: Subject,
     inScope: (personId: string) => Promise<boolean>,
+    /**
+     * Which matches to describe. The lookup describes all of them; the creation
+     * refusal describes only the ones it is refusing on, because section 3's
+     * refusal asks the actor to acknowledge *those* — a payload also carrying
+     * every Tier 2 near-miss is asking them to acknowledge something the refusal
+     * is not about.
+     *
+     * The redaction is the same either way, which is the point of the filter
+     * living here rather than at the call site.
+     */
+    only: (match: Match) => boolean = () => true,
   ): Promise<Record<string, unknown>[]> {
     const [matches, publishable] = await Promise.all([
       this.findDuplicates(subject),
@@ -479,7 +494,7 @@ export class PeopleService {
     ]);
 
     return visibleCandidates(
-      matches,
+      matches.filter(only),
       new Set(publishable.map((match) => match.candidate.id)),
       inScope,
     );
