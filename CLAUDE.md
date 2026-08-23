@@ -1720,7 +1720,7 @@ put in `database/person-lock.ts` and imported by the exception filter, which poi
 point the same way. Behaviourally identical; it is about which direction the
 dependency runs.
 
-### 2026-08-23 — A backdated reassignment carries the same two bounds as a backdated correction
+### 2026-08-23 — A backdated reassignment is bounded by §4's floor and one rule of its own
 
 Stage 2 step 6's only Stop Condition. §5 permits Admin to backdate a reassignment
 and states no bound at all, and two failures follow from that silence.
@@ -1739,8 +1739,10 @@ floor `hierarchy.backdateFloorFor` already computes, and the edge validated as o
 the effective date rather than as of now. The refusal names the earliest legal date,
 or names none where the bound falls on the current day.
 
-*The first version of this entry said "the same two bounds" and "same code", and
-both were false.* §4's second bound is on the Network row, which a reassignment does
+*The first version of this entry said "the same two bounds" and "same code" — in
+its heading as well as its body — and both were false.* The heading outlived the
+first correction by two commits, which is its own small lesson: a heading is what
+gets skimmed and quoted, so a stale one travels further than a stale paragraph. §4's second bound is on the Network row, which a reassignment does
 not write, so the pair is not the same pair; and the first implementation compared
 against the current assignment's `started_at` inline rather than calling the floor,
 so the code was parallel rather than shared. Found by `architecture-guardian`, and it
