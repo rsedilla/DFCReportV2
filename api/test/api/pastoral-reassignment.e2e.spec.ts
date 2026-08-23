@@ -219,6 +219,63 @@ describe('reassigning a pastoral leader: the record (sections 5, 21, 22)', () =>
       expect(accepted.status).toBe(200);
     });
 
+    it('does not bound a reassignment by a disciple the person used to lead', async () => {
+      // **The narrowing, and nothing else fails against reverting it.** Section 4's
+      // term (b) reaches closed edges in either direction because the trigger it
+      // guards selects them either way; this path fires a trigger that reads only
+      // the row being written, so a former disciple's closed edge cannot be
+      // stranded or overlapped by it.
+      //
+      // Manuel led Mark until today. Switch this call back to 'either-direction'
+      // and Manuel's own reassignment can no longer be backdated at all.
+      const movedAt = new Date();
+      await db
+        .updateTable('pastoral_assignments')
+        .set({ ended_at: movedAt })
+        .where('leader_id', '=', manuel.id)
+        .where('ended_at', 'is', null)
+        .execute();
+      await assignTo(db, mark.id, rico.id, movedAt);
+
+      const response = await reassign(manuel.id, {
+        leader_id: rico.id,
+        effective_date: '2026-06-01',
+        reason: 'Correcting a transfer recorded late.',
+      });
+
+      expect(response.status).toBe(200);
+      expect(response.body.effective_date).toBe('2026-06-01');
+    });
+
+    it('bounds a closed period that carried no leader at all', async () => {
+      // Section 5's term (b) deliberately does not exclude a null-`leader_id` row,
+      // where section 4's does: what it prevents is two rows valid at one instant,
+      // and a former root period overlaps exactly as any other does. Re-add the
+      // `leader_id IS NOT NULL` restriction unconditionally and this fails.
+      const formerRoot = await createPerson(db, { firstName: 'Nena', network: 'MENS' });
+      const rootFrom = new Date('2026-04-01T10:00:00+08:00');
+      const rootTo = new Date('2026-06-01T10:00:00+08:00');
+
+      await db
+        .insertInto('pastoral_assignments')
+        .values({
+          person_id: formerRoot.id,
+          leader_id: null,
+          started_at: rootFrom,
+          ended_at: rootTo,
+        })
+        .execute();
+
+      const response = await reassign(formerRoot.id, {
+        leader_id: rico.id,
+        effective_date: '2026-05-01',
+        reason: 'Recording a move that happened during the gap.',
+      });
+
+      expect(response.status).toBe(409);
+      expect(response.body.error.details.earliest_effective_date).toBe('2026-06-02');
+    });
+
     it('validates the edge as of the effective date, not as of now', async () => {
       // The reason the second bound exists. Nora is in the Women's Network today,
       // so an edge to her is refused — and it is refused *here*, with a date the
@@ -432,17 +489,17 @@ describe('reassigning a pastoral leader: the record (sections 5, 21, 22)', () =>
       // gets the only test that can fail against its absence.
       const people = app.get(PeopleService);
       const authorization = app.get(AuthorizationService);
-      const grants = await authorization.grantsFor(raymondAccount.id);
+      const authority = await authorization.authorityFor(raymondAccount.id);
 
       const actor = { accountId: raymondAccount.id, personId: raymond.id };
 
       await expect(
-        people.assertBothEndpointsInScope(db, actor, grants, rico.id, manuel.id),
+        people.assertBothEndpointsInScope(db, actor, authority, rico.id, manuel.id),
       ).rejects.toMatchObject({ code: 'SCOPE_DENIED', details: { field: 'current_leader' } });
 
       // And it permits what it should, so it is not satisfied by refusing everyone.
       await expect(
-        people.assertBothEndpointsInScope(db, actor, grants, manuel.id, raymond.id),
+        people.assertBothEndpointsInScope(db, actor, authority, manuel.id, raymond.id),
       ).resolves.toBeUndefined();
     });
   });
@@ -478,7 +535,9 @@ describe('reassigning a pastoral leader: the record (sections 5, 21, 22)', () =>
         // Wait for the request to be blocked on Mark's key, so the move below
         // genuinely lands between its authorization and its write.
         let waiting = 0;
-        const deadline = Date.now() + 2_500;
+        // Comfortably inside the 3s lock timeout, so a slow detect plus the two
+        // writes below cannot turn the expected 403 into a RESOURCE_BUSY.
+        const deadline = Date.now() + 1_500;
         while (Date.now() < deadline && waiting === 0) {
           const found = await holder.query<{ waiting: string }>(
             `SELECT count(*) AS waiting
@@ -516,6 +575,15 @@ describe('reassigning a pastoral leader: the record (sections 5, 21, 22)', () =>
 
         expect(response.status).toBe(403);
         expect(response.body.error.code).toBe('SCOPE_DENIED');
+
+        // **Which check refused, and this is the whole discrimination.** Moving the
+        // authorization calls back above the transaction still produces a 403 here
+        // — `assertBothEndpointsInScope` has always been inside, because it needs
+        // `current`, and it would refuse on the source leader with
+        // `field: 'current_leader'`. Only the person-scope re-check, which is the
+        // call this commit moved, refuses with no `field` at all.
+        expect(response.body.error.message).toMatch(/not over this person/);
+        expect(response.body.error.details).not.toHaveProperty('field');
 
         // And it wrote nothing: Mark is still where the concurrent move put him.
         const open = await db

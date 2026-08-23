@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Inject, Param, Patch, Post, Put, Query } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Put, Query } from '@nestjs/common';
 
 import { CurrentActor } from '../auth/current-actor.decorator';
 import { RequiresCapability } from '../auth/authorization/authorization.decorators';
@@ -6,7 +6,6 @@ import { Capability } from '../auth/authorization/capabilities';
 import { type Actor } from '../auth/authorization/authorization.service';
 import { NotFoundError } from '../common/errors/api-error';
 import { CanonicalUuidPipe } from '../common/identifiers';
-import { DATABASE, type Db } from '../database/database.module';
 import {
   CurrentIdempotency,
   type CurrentClaim,
@@ -34,15 +33,7 @@ import { fullProfile, normalizeMobile, PeopleService, type SearchCursor } from '
  */
 @Controller('people')
 export class PeopleController {
-  constructor(
-    private readonly people: PeopleService,
-    // The connection is here for one reason: section 8's scope test reads the
-    // tree, and the service method that performs it must be able to take a
-    // caller's transaction (section 24, the bounded pool). A controller holding a
-    // connection to hand on is the cost of that, and it does no data access of
-    // its own.
-    @Inject(DATABASE) private readonly db: Db,
-  ) {}
+  constructor(private readonly people: PeopleService) {}
 
   /**
    * Section 9 requires the pastoral leader at registration, and the guard's scope
@@ -83,7 +74,7 @@ export class PeopleController {
       // names the field that matched for a person the actor has no scope over —
       // and the refusal happens before the transaction opens, so probing costs
       // nothing and writes nothing.
-      (candidateId) => this.people.isWithinViewScope(this.db, actor, candidateId),
+      (candidateId) => this.people.isWithinViewScope(actor, candidateId),
     );
   }
 
@@ -128,7 +119,7 @@ export class PeopleController {
         sex: query.sex,
         mobileNumberNormalized: normalizeMobile(query.mobile_number),
       },
-      (personId) => this.people.isWithinViewScope(this.db, actor, personId),
+      (personId) => this.people.isWithinViewScope(actor, personId),
     );
 
     return { data: visible.slice(0, limit), next_cursor: null };
@@ -170,7 +161,7 @@ export class PeopleController {
 
     const data = await Promise.all(
       rows.map(async (person) => {
-        if (await this.people.isWithinViewScope(this.db, actor, person.id)) {
+        if (await this.people.isWithinViewScope(actor, person.id)) {
           return fullProfile(person);
         }
 

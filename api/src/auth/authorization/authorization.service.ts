@@ -16,6 +16,18 @@ export interface Actor {
   personId: string;
 }
 
+/**
+ * Everything about an account that decides authority, read once and passed on.
+ *
+ * It carries its own `accountId` so that it cannot be applied to a decision about
+ * a different actor.
+ */
+export interface ActorAuthority {
+  accountId: string;
+  roles: readonly AccountRole[];
+  grants: readonly EffectiveGrant[];
+}
+
 export interface EffectiveGrant {
   capability: Capability;
   scope: Scope;
@@ -186,19 +198,33 @@ export class AuthorizationService {
    * what a guard calls, because a guard that has to remember to throw is the
    * failure section 2 chose a fail-closed framework to avoid.
    */
-  async covers(
-    executor: Db,
-    actor: Actor,
-    capability: Capability,
-    target: Target,
-  ): Promise<boolean> {
+  async covers(actor: Actor, capability: Capability, target: Target): Promise<boolean> {
     return this.coversWith(
-      executor,
+      this.db,
       actor,
-      await this.grantsFor(actor.accountId),
+      await this.authorityFor(actor.accountId),
       capability,
       target,
     );
+  }
+
+  /**
+   * An account's roles and grants, read together.
+   *
+   * Returned as one value carrying the account it was read for, so that
+   * `coversWith` can refuse authority belonging to somebody else. That predicate
+   * is what SKILL.md section 5 invariant 1 rests on and it *answers* rather than
+   * throwing, so a caller handing it the wrong account's authority would get a
+   * quiet yes — the kind of mistake `completeWithin`'s transaction parameter is
+   * typed to make unrepresentable rather than merely absent.
+   */
+  async authorityFor(accountId: string): Promise<ActorAuthority> {
+    const [roles, grants] = await Promise.all([
+      this.rolesFor(accountId),
+      this.grantsFor(accountId),
+    ]);
+
+    return { accountId, roles, grants };
   }
 
   /**
@@ -214,15 +240,28 @@ export class AuthorizationService {
    * grants are a fact about the account and cannot change under a tree write, so
    * reading them before the transaction costs nothing in correctness; *scope* is a
    * fact about the tree, and that is the half that has to see the transaction.
+   *
+   * `covers` above deliberately takes **no** executor. It reads grants on the pool
+   * and so can never be honoured inside a transaction; a signature accepting one
+   * would invite exactly the call this method exists to make possible, and would
+   * silently fail to deliver it.
    */
   async coversWith(
     executor: Db,
     actor: Actor,
-    grants: readonly EffectiveGrant[],
+    authority: ActorAuthority,
     capability: Capability,
     target: Target,
   ): Promise<boolean> {
-    for (const grant of grants.filter((held) => held.capability === capability)) {
+    if (authority.accountId !== actor.accountId) {
+      // Unreachable through any call site, and checked because this predicate
+      // decides authority and answers rather than throws.
+      throw new Error(
+        `Authority for account ${authority.accountId} was offered for a decision about ${actor.accountId}.`,
+      );
+    }
+
+    for (const grant of authority.grants.filter((held) => held.capability === capability)) {
       if (await this.scopeCovers(executor, grant.scope, target, actor)) {
         return true;
       }

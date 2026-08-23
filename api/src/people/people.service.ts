@@ -5,7 +5,7 @@ import { AuditService } from '../audit/audit.service';
 import {
   AuthorizationService,
   type Actor,
-  type EffectiveGrant,
+  type ActorAuthority,
 } from '../auth/authorization/authorization.service';
 import { Capability } from '../auth/authorization/capabilities';
 import { ScopeType } from '../auth/authorization/scopes';
@@ -759,7 +759,7 @@ export class PeopleService {
     // capability moves a person between Networks either way, and a rule that
     // switched itself off depending on whether the target currently holds an edge
     // would be a rule nobody could reason about.
-    const roles = await this.authorization.rolesFor(actor.accountId);
+    const authority = await this.authorization.authorityFor(actor.accountId);
 
     const recordedAt = new Date();
     const backdated = input.effectiveDate !== undefined;
@@ -799,12 +799,20 @@ export class PeopleService {
         input.pastoralLeaderId === undefined ? [personId] : [personId, input.pastoralLeaderId],
       );
 
-      // Section 5 invariant 4, inside the transaction and after the lock, for the
-      // reason the reassignment path gives: the walk it makes is over the tree, and
-      // a decision taken before the lock is taken against a tree the winner of it
-      // may have changed. The roles it compares are read on the pool beforehand,
-      // because those are a fact about the actor's account.
-      await this.hierarchy.assertMayReparent(trx, { personId: actor.personId, roles }, personId);
+      // Section 5 invariant 4, inside the transaction, for the reason the
+      // reassignment path gives: the walk is over the tree, and a decision taken
+      // beforehand is taken against a tree a concurrent write may have changed.
+      //
+      // The lock does not close that window here and does not claim to. It covers
+      // this person and the destination leader, while the walk is over the
+      // **actor's** upline — so what would change the answer is a move of an
+      // intermediate node, which nothing holds. Inside is narrower than outside;
+      // it is not airtight.
+      await this.hierarchy.assertMayReparent(
+        trx,
+        { personId: actor.personId, roles: authority.roles },
+        personId,
+      );
 
       // Read inside the transaction, as the basic edit does: outside it, a
       // concurrent write landing between the read and the update makes this
@@ -1079,10 +1087,7 @@ export class PeopleService {
     // account rather than about the tree, so nothing a concurrent reassignment does
     // can change them — and reading them inside the transaction would be the
     // pooled-read-while-holding-one that section 24 forbids.
-    const [roles, grants] = await Promise.all([
-      this.authorization.rolesFor(actor.accountId),
-      this.authorization.grantsFor(actor.accountId),
-    ]);
+    const authority = await this.authorization.authorityFor(actor.accountId);
     const backdated = input.effectiveDate !== undefined;
 
     if (backdated) {
@@ -1120,9 +1125,13 @@ export class PeopleService {
       // upline, so these narrow the window rather than closing it. Closing it
       // entirely would mean locking every row a scope decision reads, which is the
       // whole tree above the actor.
-      await this.hierarchy.assertMayReparent(trx, { personId: actor.personId, roles }, personId);
+      await this.hierarchy.assertMayReparent(
+        trx,
+        { personId: actor.personId, roles: authority.roles },
+        personId,
+      );
 
-      if (!(await this.isWithinManageScope(trx, actor, grants, personId))) {
+      if (!(await this.isWithinManageScope(trx, actor, authority, personId))) {
         throw new ScopeDeniedError(
           'You hold people.manage_pastoral_assignment, but not over this person.',
           { capability: Capability.PeopleManagePastoralAssignment },
@@ -1178,7 +1187,7 @@ export class PeopleService {
       await this.assertBothEndpointsInScope(
         trx,
         actor,
-        grants,
+        authority,
         current?.leaderId ?? null,
         input.leaderId,
       );
@@ -1343,7 +1352,7 @@ export class PeopleService {
   async assertBothEndpointsInScope(
     executor: Db,
     actor: Actor,
-    grants: readonly EffectiveGrant[],
+    authority: ActorAuthority,
     sourceLeaderId: string | null,
     destinationLeaderId: string,
   ): Promise<void> {
@@ -1353,7 +1362,7 @@ export class PeopleService {
     ];
 
     for (const endpoint of endpoints) {
-      const covered = await this.isWithinManageScope(executor, actor, grants, endpoint.personId);
+      const covered = await this.isWithinManageScope(executor, actor, authority, endpoint.personId);
 
       if (!covered) {
         throw new ScopeDeniedError(
@@ -1368,13 +1377,13 @@ export class PeopleService {
   private async isWithinManageScope(
     executor: Db,
     actor: Actor,
-    grants: readonly EffectiveGrant[],
+    authority: ActorAuthority,
     personId: string,
   ): Promise<boolean> {
     return this.authorization.coversWith(
       executor,
       actor,
-      grants,
+      authority,
       Capability.PeopleManagePastoralAssignment,
       { kind: 'person', personId },
     );
@@ -1422,14 +1431,18 @@ export class PeopleService {
    * Pastor's Whole Church scope and an Admin-issued wider grant reach the same
    * answer here as they do in the guard.
    *
-   * Here rather than in the controller because it reads the tree and the Network,
-   * and a caller inside a transaction must be able to hand it that transaction —
-   * a pooled read taken while holding one needs a second connection from a bounded
-   * pool (section 24). The controller has no connection to give, which is the
-   * shape of the argument for it living beside the data access.
+   * **Pool-only, and it says so rather than taking an executor.** `covers` reads
+   * the account's grants before it evaluates any scope, so handing it a
+   * transaction would not honour one — and a signature that accepted one would
+   * promise otherwise. A caller that genuinely needs this decision inside a
+   * transaction reads the authority first and calls `coversWith`, which is what
+   * the reassignment path does.
+   *
+   * Here rather than in the controller because it is authorization over church
+   * data, which section 22 keeps in a service.
    */
-  async isWithinViewScope(executor: Db, actor: Actor, personId: string): Promise<boolean> {
-    return this.authorization.covers(executor, actor, Capability.PeopleViewSubtree, {
+  async isWithinViewScope(actor: Actor, personId: string): Promise<boolean> {
+    return this.authorization.covers(actor, Capability.PeopleViewSubtree, {
       kind: 'person',
       personId,
     });

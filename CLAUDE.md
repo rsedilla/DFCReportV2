@@ -1790,6 +1790,34 @@ whenever an effective date is given and not otherwise. An ordinary reassignment 
 audited without one — it records a decision taken today, and the entry already
 carries who took it.
 
+### 2026-08-23 — The application runs at READ COMMITTED, and that is now load-bearing
+
+Escalated by the third `architecture-guardian` pass on the reassignment endpoint.
+
+Section 5 has a write take an advisory lock on the person and *then* decide — scope,
+invariant 4, invariant 1's two endpoints, the backdate floor. That design is correct
+only under `READ COMMITTED`, where each statement after the lock takes a fresh
+snapshot and therefore sees whichever transaction held the lock first.
+
+Under `REPEATABLE READ` the snapshot is taken by the transaction's **first**
+statement, which is the key-hashing `SELECT` inside `lockPersonsWithin` and runs
+before the lock is held. Every check after it would then be decided on the state the
+request arrived with — precisely the staleness the lock exists to remove — and
+nothing would raise, because the reads all succeed. A deployment changing
+`default_transaction_isolation` would silently remove an authorization guarantee.
+
+It is PostgreSQL's default and nothing in this repository sets it, so this records a
+dependency rather than changing behaviour. Written to `SKILL.md` §24 beside the pool
+and the probe, and asserted by reading `SHOW transaction_isolation` **inside a
+transaction** — from the server rather than from configuration this repository
+controls, because the thing that can change it is not a file here.
+
+Recorded rather than left implicit because the failure is invisible: no test goes
+red, no constraint fires, and the endpoint keeps answering 200. `SET LOCAL` is a
+utility command and takes no snapshot, which is why the lock helper's first
+*snapshot-taking* statement is the one that matters — a detail worth writing down,
+since it is the kind of mechanism this log has recorded getting wrong seven times.
+
 ### Open — awaiting a ruling
 
 **One item awaits a ruling and blocks Stage 5. Eight other things are unsettled, none of them blocking. They are listed at the end, so this section is the whole of what is open.**

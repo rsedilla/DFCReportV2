@@ -1,3 +1,4 @@
+import { sql } from 'kysely';
 import { Client } from 'pg';
 
 import { createTestDb, truncateAll } from '../setup/database';
@@ -27,6 +28,32 @@ describe('the database enforces the section 5 invariants', () => {
 
   afterAll(async () => {
     await db.destroy();
+  });
+
+  describe('transaction isolation (section 24)', () => {
+    it('runs at READ COMMITTED, which the after-the-lock decisions depend on', async () => {
+      // Section 24 names it because correctness depends on it rather than merely
+      // tolerating it. A reassignment takes the person lock and *then* decides
+      // scope, invariant 4 and the floor; under READ COMMITTED each statement after
+      // the lock takes a fresh snapshot and sees the transaction that held it
+      // first. Under REPEATABLE READ the snapshot is taken by the transaction's
+      // first statement — the key hashing inside the lock helper, before the lock —
+      // and every check after it silently reverts to the state the request arrived
+      // with, with nothing raised.
+      //
+      // Asserted inside a transaction, because that is where it governs, and read
+      // from the server rather than from configuration this repository controls: a
+      // deployment can set `default_transaction_isolation` and remove the guarantee
+      // without touching any file here.
+      const level = await db
+        .transaction()
+        .execute(
+          async (trx) =>
+            await sql<{ transaction_isolation: string }>`SHOW transaction_isolation`.execute(trx),
+        );
+
+      expect(level.rows[0].transaction_isolation).toBe('read committed');
+    });
   });
 
   describe('invariant 3: at most one active pastoral assignment', () => {
