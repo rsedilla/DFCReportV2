@@ -105,8 +105,8 @@ const IDENTIFIER_KEY = /^ids?$|_ids?$/;
  * comment asserted one measured pair as though it were a constant — it was one
  * shape in one context, and both halves were wrong for every other. What is worth
  * recording is the cheapest case, because it decides whether a body limit helps:
- * a nested **array** reaches it in single-digit kilobytes, since each level costs
- * one byte.
+ * a nested **array** reaches it in single-digit kilobytes, since a level costs two
+ * bytes, one for each bracket.
  *
  * **Exceeding it is refused, not truncated.** An earlier version stopped
  * descending and returned the container unchanged, which is worse than it looks:

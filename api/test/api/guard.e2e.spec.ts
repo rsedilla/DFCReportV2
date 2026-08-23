@@ -210,14 +210,16 @@ describe('the capability guard (SKILL.md section 7)', () => {
 
       // **`reached`, not merely 200.** A status alone would still pass if the route
       // began validating its own `:id` and happened to answer 200, which is the
-      // opposite of what this case exists to say. The handler running is the fact.
+      // opposite of what this case exists to say. The handler running on a value
+      // no `uuid` comparison would accept is the fact, and this one request is the
+      // whole of the evidence.
+      //
+      // A companion request with a well-formed identifier was tried here and
+      // removed: it reaches the handler under both hypotheses \u2014 a guard that
+      // ignores `:id` and a guard that validates it \u2014 so it discriminates nothing,
+      // while its comment claimed it was what showed the guard never looked.
       expect(response.status).toBe(200);
       expect(response.body).toEqual({ reached: true });
-
-      // And the same route with a well-formed identifier answers identically,
-      // which is what shows the guard never looked at it either way.
-      const wellFormed = await get(`/__guard-probe/actor/${mark.id}`, adminAccount);
-      expect(wellFormed.body).toEqual({ reached: true });
     });
   });
 

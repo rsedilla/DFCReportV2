@@ -2804,9 +2804,22 @@ A field name that differs between two endpoints for one concept is a permanent c
 #### Request bodies are bounded in depth
 
 **A request whose JSON nests more than twenty levels is refused with
-`VALIDATION_FAILED`, carrying `max_depth` in `details`.** It applies to every
-route, authenticated or not, and it is a property of the request rather than of
-any endpoint, so no DTO describes it and no controller checks it.
+`VALIDATION_FAILED`, carrying `max_depth` in `details`.** No DTO describes it and no
+controller checks it: it is a property of the request, refused at the boundary.
+
+**What enforces it is a walk over a bound argument**, and that is worth stating
+because it is where the rule can be escaped rather than merely where it lives. The
+identifier boundary walks whatever a route binds, and the idempotency fingerprint
+walks the body of every authenticated state-changing request — so a route binding
+the whole body, a path parameter or a query is covered, and every route today is.
+A route that both bound a **sub-field** of the body, `@Body('token')` rather than
+`@Body()`, and was on the unauthenticated list would hand the boundary a string and
+be walked by neither.
+
+None exists, and one added later is outside the rule silently — the shape Sections 2
+and 7 refuse everywhere else, and the reason the boundary was made global rather than
+per route. A route of that shape either binds the whole body or the check moves
+somewhere a binding cannot escape.
 
 The bound exists because **`JSON.parse` accepts a depth that the code reading its
 result cannot**. V8 parses iteratively and has no practical limit — two hundred
@@ -2816,15 +2829,16 @@ fingerprint it for idempotency. A few thousand levels exhausts the stack, and an
 unhandled `RangeError` is an `INTERNAL_ERROR`: a 500, logged as a defect, produced
 by ordinary input, on every write endpoint at once.
 
-A body-size limit does not cover it. Depth is cheap: a nested array costs one byte
-per level, so the payload that overflows arrives in single-digit kilobytes, far
-inside any size limit worth setting.
+A body-size limit does not cover it. Depth is cheap: a nested array costs two bytes
+per level, one for each bracket, so the payload that overflows arrives in
+single-digit kilobytes — far inside any size limit worth setting.
 
-**Twenty, and the number is deliberately far from both edges.** The deepest
-structure this specification describes is an array of identifiers inside a body,
-which is three. Twenty leaves room for anything a future endpoint plausibly needs
-and is orders of magnitude short of a stack, so it never has to be tuned against
-either.
+**Twenty, and the number is deliberately far from both edges.** Levels are counted
+as containers, per the rule below, so the deepest structure this specification
+describes — an array of identifiers inside a body — is **two**: the body and the
+array. The string inside the array is a leaf and is not a level. Twenty leaves room
+for anything a future endpoint plausibly needs and is orders of magnitude short of a
+stack, so it never has to be tuned against either.
 
 **Refused, not truncated.** Accepting the request and declining to walk past the
 bound is the tempting reading of "bounded", and it is worse than refusing: the part
@@ -2836,10 +2850,14 @@ nobody looks at.
 `VALIDATION_FAILED` because a body no endpoint in this system describes is malformed
 input, which is what that code means. It is not one of the retryable conditions: the
 refusal is deterministic, so a client that retries the same body gets the same
-answer. Where the refusal happens before an idempotency claim is taken — which is
-the ordinary path, since the fingerprint walk is what meets the bound first — no key
-row is written and the store-a-4xx rule below never applies. Nothing depends on
-which of the two it is, and that is the point: the answer is the same either way.
+answer.
+
+On an authenticated write the refusal lands **before the idempotency key is
+claimed**, so no row is written and the store-a-4xx rule below never applies. That
+is a consequence of evaluation order rather than a rule: the identifier walk is
+passed to the fingerprint as an argument, so it runs first and throws first. Nothing
+should be built on it — the answer is the same either way, which is the property
+that matters.
 
 **Every walk over a client's body shares this one bound, and applies it at the same
 point** — immediately before descending into a container, never on a leaf. Sharing

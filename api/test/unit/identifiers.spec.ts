@@ -216,6 +216,16 @@ describe('canonicalizing identifiers (section 7)', () => {
       // whatever case the client sent, silently, and every comparison below became
       // a comparison on a spelling. It has to refuse, not truncate.
       //
+      // **A truncating implementation returns a value where this expects a
+      // refusal**, which is the whole difference and is what this line asserts. An
+      // earlier revision moved that assertion out into the boundary case above and
+      // left this name and this comment behind, so the case named for the mutation
+      // was green against it \u2014 the leaf is a string, and a string is handled before
+      // the truncation check is ever reached.
+      expect(refusal(() => canonicalizeIdentifiers(nest(MAX_IDENTIFIER_DEPTH + 1)))?.code).toBe(
+        ApiErrorCode.VALIDATION_FAILED,
+      );
+
       // And a body inside the bound is walked all the way down, so the refusal is
       // not simply "deep bodies fail".
       const shallow = canonicalizeIdentifiers(nest(MAX_IDENTIFIER_DEPTH));
@@ -254,8 +264,15 @@ describe('canonicalizing identifiers (section 7)', () => {
       // assert at the same point -- immediately before descending, never on a leaf.
       const idempotency = new IdempotencyService(null as unknown as Db);
 
+      // **A container leaf brings its own level**, so the wrap count has to drop by
+      // one for it to land on the boundary. Without that, `{ id: UPPER }` and `[]`
+      // ran at 21 and 22 and both walks refused every time \u2014 duplicating the
+      // refusal side and never touching the accept side, which is precisely where
+      // the disagreement this case exists for lived.
       for (const leaf of ['x', 5, null, true, { id: UPPER }, []]) {
-        for (const containers of [MAX_IDENTIFIER_DEPTH, MAX_IDENTIFIER_DEPTH + 1]) {
+        const own = typeof leaf === 'object' && leaf !== null ? 1 : 0;
+
+        for (const containers of [MAX_IDENTIFIER_DEPTH - own, MAX_IDENTIFIER_DEPTH + 1 - own]) {
           const body = nest(containers, leaf);
           const walk = refusal(() => canonicalizeIdentifiers(body)) !== undefined;
           const print =

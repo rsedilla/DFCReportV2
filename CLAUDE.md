@@ -2045,12 +2045,22 @@ for any signed-in leader. The earlier entry's claim that the walk was bounded wa
 true of the walk it named and false of the hazard.
 
 *This paragraph first asserted "around three thousand levels, eighteen kilobytes" as
-a measured pair. It is not one.* The threshold moves with the payload's shape and
-with stack headroom at the call site: measured here, `{"a":…}` overflows near 1,950
-and `{"nested":…}` near 6,250, and neither produces the quoted bytes. The figure that
-actually matters was in none of the four places it was written — the cheapest payload
-is a nested **array**, one byte per level, which overflows in single-digit
-kilobytes and is why a body-size limit does not cover this.
+a measured pair, then replaced it with a second pair that did not reproduce either.*
+Both are now withdrawn and **no threshold is quoted here at all**, which is what
+`identifiers.ts` already says and what this paragraph's own next sentence requires:
+the number moves with the payload's shape and with stack headroom at the call site,
+so any bare figure is a measurement of one harness presented as a property of the
+code. Three numeric claims in this entry could not be stood behind, which is enough
+to stop making them.
+
+What survives, because it is structural rather than measured: `JSON.parse` accepts
+depths these walks cannot, and the cheapest payload is a nested **array** at two
+bytes per level, one for each bracket — which is why a body-size limit does not cover
+this and a depth bound is needed.
+
+Worth recording against the original: its depth was wrong and its arithmetic was
+not. Three thousand levels of `{"a":…}` really is 18,001 bytes; that shape simply
+does not overflow at three thousand.
 
 Two decisions inside it, and the first is not the obvious one.
 
@@ -2117,11 +2127,17 @@ the part being looked at:
 - The identifier walk's docblock said "nothing is mutated — a fresh value is built",
   and this entry first "corrected" it to say the result **aliases** the input wherever
   nothing changed. *That correction was the false half.* Every array and every plain
-  object is rebuilt unconditionally, so nothing aliases but primitives; the reason
-  offered for it — that the guard reads the raw body first — is a property of
-  non-mutation, which is what the original sentence already said. The original stands
-  and the addition is withdrawn. Worth keeping visible: this is the one item in the
-  batch where a true statement was replaced with a false one.
+  object is rebuilt unconditionally; the reason offered for it — that the guard reads
+  the raw body first — is a property of non-mutation, which is what the original
+  sentence already said. The original stands and the addition is withdrawn.
+
+  *And the withdrawal, as first written, said "nothing aliases but primitives", which
+  is also wrong.* A non-plain object — a `Date`, a `Buffer`, a class instance — is
+  returned by reference, and the file's own case asserting a live `Date` survives
+  pins it. The docblock scopes the claim correctly ("for any array or plain object");
+  only this log did not. Three statements in sequence on one small fact, which is why
+  it is left visible rather than tidied: the code was right throughout and the prose
+  about it was wrong twice.
 - `api/test/unit/identifiers.spec.ts` justified its own existence with "these are
   pure functions and need no database". The shared harness throws without
   `DATABASE_URL` before any suite loads. They need no database *server*; a dummy URL
