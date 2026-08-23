@@ -52,8 +52,15 @@ export function sameId(left: string, right: string): boolean {
 }
 
 /**
- * Whether a key names an identifier: `id`, or anything ending `_id`, `_ids`, `Id`
- * or `Ids`.
+ * Whether a key names an identifier: `id` or `ids`, or anything ending `_id`,
+ * `_ids`, `Id` or `Ids`.
+ *
+ * The singular and plural forms are both accepted at every position, which reads
+ * like pedantry and is not: `^id$` without `^ids$` left a body field named `ids`
+ * outside the rule, which is the sort of gap that is invisible until the one
+ * request that carries it. Ordinary words ending in those letters — `valid`,
+ * `humid`, `candid` — are not matched, because every branch requires either the
+ * whole key, a preceding underscore, or a capital `I`.
  *
  * The field *name* is what decides, not the value's shape, and that is the whole
  * safety argument. A shape-only rule cannot tell an identifier from a password
@@ -61,7 +68,7 @@ export function sameId(left: string, right: string): boolean {
  * password — and lowercasing one silently locks an account out for good. Names are
  * decided by this codebase; the contents of a credential field are not.
  */
-const IDENTIFIER_KEY = /^id$|_id$|_ids$|Id$|Ids$/;
+const IDENTIFIER_KEY = /^ids?$|_ids?$|Ids?$/;
 
 /**
  * How deep the walk goes before it stops descending.

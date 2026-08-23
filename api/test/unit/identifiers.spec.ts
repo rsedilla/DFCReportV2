@@ -38,6 +38,19 @@ describe('canonicalizing identifiers (section 7)', () => {
       });
     });
 
+    it('accepts the singular and the plural at every position', () => {
+      // `^id$` without `^ids$` left a body field named plainly `ids` outside the
+      // rule — found by CI, because the probe's nested body used that key.
+      for (const key of ['id', 'ids', 'leader_id', 'duplicate_ids', 'meetingId', 'memberIds']) {
+        expect(canonicalizeIdentifiers({ [key]: UPPER })).toEqual({ [key]: LOWER });
+      }
+
+      // And ordinary words ending in those letters are not identifiers.
+      for (const key of ['valid', 'humid', 'candid']) {
+        expect(canonicalizeIdentifiers({ [key]: UPPER })).toEqual({ [key]: UPPER });
+      }
+    });
+
     it('takes the key from a named binding when handed a bare string', () => {
       // `@Param('id')` and `@Query('filter_id')` hand the pipe a string, and the
       // name the route asked for is the only key there is.
