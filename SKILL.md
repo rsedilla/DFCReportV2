@@ -668,6 +668,15 @@ A reassignment takes effect at the time it is recorded. Backdating `started_at` 
 
 Backdating is therefore a separate capability, `records.backdate_effective_date` (Section 7), held by Admin only. It requires an explicit reason, is audit logged with both the recorded date and the effective date (Section 21), and must surface in Network Summary as a correction (Section 16).
 
+**A backdated reassignment carries the same two bounds a backdated Network correction does** (Section 4), for the same reasons and with the same refusal.
+
+- **Strictly later than the `started_at` of the person's current assignment.** At that instant exactly, the reassignment closes the current row at its own start, and a zero-length row is inert (History is never deleted, below) — so the leader the person actually had for that whole period disappears from every as-of query and from every report that resolves through it, with nothing raised. Below it, the row cannot be closed at all. Neither is a correction; both are erasure.
+- **The resulting edge is validated as of the effective date, not as of now.** The same-Network trigger compares `network_as_of` on both ends at the assignment's `started_at`, so a reassignment backdated into a period when either person belonged to a different Network is rejected at commit. Validating against today's Networks would let the system answer that the edge is legal and then fail on it. Where either Network is unknown at that instant — the system is authoritative only from each person's encoding date forward (Section 4) — the reassignment is refused rather than attempted.
+
+The refusal names the earliest date the reassignment can legally take, and where the bound falls on the current day it names none and says the reassignment can only take effect now, exactly as Section 4 does. It answers `INVARIANT_VIOLATION`: it is a rule about what can be recorded, not about the actor's authority.
+
+The reason `records.backdate_effective_date` requires is required by the operation whenever an effective date is given, and is not required otherwise. An ordinary reassignment is audit logged without one, because it records a decision taken today and the audit entry already carries who made it.
+
 The same rule governs every other effective-dated relationship: Network assignment (Section 4), Cell membership (Section 10), and Cell leadership (Section 11). Ordinary users record changes as of now. Only Admin may set an effective date in the past, and only with a reason.
 
 **History is never deleted.**

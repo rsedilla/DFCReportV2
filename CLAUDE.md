@@ -1721,6 +1721,37 @@ put in `database/person-lock.ts` and imported by the exception filter, which poi
 point the same way. Behaviourally identical; it is about which direction the
 dependency runs.
 
+### 2026-08-23 — A backdated reassignment carries the same two bounds as a backdated correction
+
+Stage 2 step 6's only Stop Condition. §5 permits Admin to backdate a reassignment
+and states no bound at all, and two failures follow from that silence.
+
+At an effective date equal to the current assignment's `started_at`, the close is
+zero-length, which §5 makes **inert** — so the leader the person actually had for
+that whole period vanishes from every as-of query, with nothing raised. Below it the
+row cannot be closed at all. And because the same-Network trigger compares
+`network_as_of` on both ends at the assignment's `started_at`, a reassignment
+backdated into a period when either person belonged to a different Network is
+rejected at commit as a raw `check_violation` — a 500 rather than a date the
+administrator can act on.
+
+**The bounds mirror §4's**: strictly later than the current assignment's
+`started_at`, and the edge validated as of the effective date rather than as of now.
+The refusal names the earliest legal date, or names none where the bound falls on
+the current day. Same reasoning, same code, and the helpers already exist.
+
+The two alternatives were rejected for the reasons this project has already
+recorded once. Refusing anything before the person's current Network period is
+simpler and refuses legitimate corrections inside periods where nothing changed,
+which is most of them. Permitting anything and letting the constraint reject it is
+honest about where enforcement lives and hands the administrator the constraint
+message, which is precisely the failure §4's floor exists to prevent.
+
+Also settled without needing a ruling, because §5 states it: the reason is required
+whenever an effective date is given and not otherwise. An ordinary reassignment is
+audited without one — it records a decision taken today, and the entry already
+carries who took it.
+
 ### Open — awaiting a ruling
 
 **One item awaits a ruling and blocks Stage 5. Eight other things are unsettled, none of them blocking. They are listed at the end, so this section is the whole of what is open.**
