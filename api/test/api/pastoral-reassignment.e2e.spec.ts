@@ -601,6 +601,96 @@ describe('reassigning a pastoral leader: the record (sections 5, 21, 22)', () =>
     });
   });
 
+  describe('invariant 4 is decided after the lock too', () => {
+    it('denies a request whose target became the actor upline while it waited', async () => {
+      // The case above pins the *scope* re-check and not this one: with a subtree
+      // grant, `isWithinManageScope` refuses first and with the same message, so
+      // moving `assertMayReparent` alone back above the transaction changes
+      // nothing there.
+      //
+      // Here Raymond holds a Whole Church grant, so the scope checks all pass and
+      // invariant 4 is the only thing that can refuse. Rico is not in Raymond's
+      // upline when the request is authorized; while it waits, Raymond is moved
+      // under Rico, and Rico becomes exactly the upline invariant 4 protects.
+      await db
+        .insertInto('capability_grants')
+        .values({
+          account_id: raymondAccount.id,
+          capability: 'people.manage_pastoral_assignment',
+          scope_type: 'WHOLE_CHURCH',
+          scope_network: null,
+          read_only: false,
+          reason: 'Fixture: leaves invariant 4 as the only check that can refuse.',
+          granted_by: admin.id,
+        })
+        .execute();
+
+      const holder = new Client({ connectionString: process.env.DATABASE_URL });
+      await holder.connect();
+
+      try {
+        await holder.query('BEGIN');
+        await holder.query('SELECT pg_advisory_xact_lock(hashtextextended($1::uuid::text, 0))', [
+          rico.id,
+        ]);
+
+        const pending = reassign(rico.id, { leader_id: ben.id }, raymondAccount);
+
+        let waiting = 0;
+        const deadline = Date.now() + 1_500;
+        while (Date.now() < deadline && waiting === 0) {
+          const found = await holder.query<{ waiting: string }>(
+            `SELECT count(*) AS waiting
+               FROM pg_locks
+              WHERE locktype = 'advisory'
+                AND NOT granted
+                AND objsubid = 1
+                AND classid::bigint = ((hashtextextended($1::uuid::text, 0) >> 32) & 4294967295)
+                AND objid::bigint = (hashtextextended($1::uuid::text, 0) & 4294967295)`,
+            [rico.id],
+          );
+          waiting = Number(found.rows[0].waiting);
+          if (waiting === 0) {
+            await new Promise((resolve) => setTimeout(resolve, 50));
+          }
+        }
+
+        expect(waiting).toBeGreaterThan(0);
+
+        // Raymond moves under Rico. No cycle: Rico is not below Raymond.
+        const movedAt = new Date();
+        await db
+          .updateTable('pastoral_assignments')
+          .set({ ended_at: movedAt })
+          .where('person_id', '=', raymond.id)
+          .where('ended_at', 'is', null)
+          .execute();
+        await assignTo(db, raymond.id, rico.id, movedAt);
+
+        await holder.query('ROLLBACK');
+
+        const response = await pending;
+
+        expect(response.status).toBe(403);
+        expect(response.body.error.code).toBe('SCOPE_DENIED');
+        expect(response.body.error.message).toMatch(/upline/);
+
+        // Rico is untouched: the request wrote nothing.
+        const open = await db
+          .selectFrom('pastoral_assignments')
+          .select('leader_id')
+          .where('person_id', '=', rico.id)
+          .where('ended_at', 'is', null)
+          .executeTakeFirstOrThrow();
+
+        expect(open.leader_id).toBe(oriel.id);
+      } finally {
+        await holder.query('ROLLBACK').catch(() => undefined);
+        await holder.end();
+      }
+    });
+  });
+
   describe('a Person with no assignment at all', () => {
     it('opens one, since section 5 permits an unassigned Person', async () => {
       const unassigned = await createPerson(db, { firstName: 'Nena', network: 'MENS' });

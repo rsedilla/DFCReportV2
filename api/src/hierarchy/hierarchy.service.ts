@@ -311,10 +311,11 @@ export class HierarchyService {
    * times.
    *
    * The first term is over the person's current assignment whatever its
-   * `leader_id`; the second is over **edges**, rows with a leader, which is what
-   * keeps it independent of how a Network root is represented. Open edges where
-   * the person is the *leader* need no term, because section 4 refuses the change
-   * outright while any exists.
+   * `leader_id`. **What the second term ranges over depends on the mode** — see
+   * `closedRows` below, which is the whole of the difference between the two
+   * callers; do not read either shape as the method's. Open edges where the person
+   * is the *leader* need no term in either, because section 4 refuses a Network
+   * change outright while any exists and a reassignment cannot strand one.
    *
    * `GREATEST` ignores nulls in PostgreSQL and is null only when every argument
    * is, which is exactly section 4's "each term is a maximum over rows that may be

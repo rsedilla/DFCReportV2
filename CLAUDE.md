@@ -1802,9 +1802,17 @@ snapshot and therefore sees whichever transaction held the lock first.
 Under `REPEATABLE READ` the snapshot is taken by the transaction's **first**
 statement, which is the key-hashing `SELECT` inside `lockPersonsWithin` and runs
 before the lock is held. Every check after it would then be decided on the state the
-request arrived with — precisely the staleness the lock exists to remove — and
-nothing would raise, because the reads all succeed. A deployment changing
-`default_transaction_isolation` would silently remove an authorization guarantee.
+request arrived with — precisely the staleness the lock exists to remove.
+
+*An earlier version of this entry said "nothing would raise, because the reads all
+succeed", and that is true of the reads and not of the request.* Where the loser's
+own assignment row moved, its own update would meet a version committed after its
+snapshot and raise a serialization failure. The silent case is narrower and is the
+one that matters: a concurrent move of an **intermediate ancestor** changes the
+actor's scope while leaving every row this request writes untouched, so it commits a
+write the actor was no longer authorized to make. A deployment changing
+`default_transaction_isolation` would remove an authorization guarantee, and that
+case would remove it quietly.
 
 It is PostgreSQL's default and nothing in this repository sets it, so this records a
 dependency rather than changing behaviour. Written to `SKILL.md` §24 beside the pool

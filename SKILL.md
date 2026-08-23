@@ -668,9 +668,9 @@ A reassignment takes effect at the time it is recorded. Backdating `started_at` 
 
 Backdating is therefore a separate capability, `records.backdate_effective_date` (Section 7), held by Admin only. It requires an explicit reason, is audit logged with both the recorded date and the effective date (Section 21), and must surface in Network Summary as a correction (Section 16).
 
-**A backdated reassignment carries two bounds of its own**, computed by the same code as Section 4's floor and deliberately not identical to it. It shares Section 4's first term exactly; its second term is narrower; and Section 4's separate bound on the Network row does not apply at all, because a reassignment does not write one.
+**A backdated reassignment carries two bounds of its own**, computed by the same code as Section 4's floor and deliberately not identical to it. It shares Section 4's first term exactly. Its second term differs in both directions — it reaches only the rows on which this person is the subordinate, and unlike Section 4's it does not require the row to carry a leader. And Section 4's separate bound on the Network row does not apply at all, because a reassignment does not write one.
 
-- **Strictly later than the latest of** the `started_at` of the person's current assignment and the `ended_at` of every already-closed assignment on which **this person is the subordinate**. Computed by the same code as Section 4's floor, with the second term deliberately narrower — see below.
+- **Strictly later than the latest of** the `started_at` of the person's current assignment and the `ended_at` of every already-closed assignment on which **this person is the subordinate**. Computed by the same code as Section 4's floor, with the second term deliberately different — see below.
 
   The first term: at that instant exactly the reassignment closes the current row at its own start, and a zero-length row is inert (History is never deleted, below) — so the leader the person actually had for that whole period disappears from every as-of query and from every report that resolves through it, with nothing raised. Below it, the row cannot be closed at all. Neither is a correction; both are erasure.
 
@@ -3030,7 +3030,9 @@ The bound has a consequence that reaches beyond this section, and it is recorded
 
 The application runs at **`READ COMMITTED`**, PostgreSQL's default. It is named here because correctness now depends on it rather than merely tolerating it.
 
-Section 5 requires a Network change and a reassignment to take an advisory lock on the person and then decide — scope, invariant 4, invariant 1, the backdate floor — against what the lock reveals. Under `READ COMMITTED` each statement after the lock takes a fresh snapshot and therefore sees the transaction that held the lock before it. Under `REPEATABLE READ` the snapshot is taken by the transaction's *first* statement, which is the key hashing inside the lock helper and runs before the lock is held: every check after it would then be decided on the state the request arrived with, which is exactly the staleness the lock exists to remove — and nothing would raise, because the reads all succeed.
+Section 5 requires a Network change and a reassignment to take an advisory lock on the person and then decide — scope, invariant 4, invariant 1, the backdate floor — against what the lock reveals. Under `READ COMMITTED` each statement after the lock takes a fresh snapshot and therefore sees the transaction that held the lock before it. Under `REPEATABLE READ` the snapshot is taken by the transaction's *first* statement, which is the key hashing inside the lock helper and runs before the lock is held: every check after it would then be decided on the state the request arrived with, which is exactly the staleness the lock exists to remove.
+
+Some of those cases would fail loudly rather than silently — where the loser's own assignment row was the one that moved, its update would meet a version committed after its snapshot and raise a serialization failure. The dangerous ones are the cases where nothing the loser writes has changed and only the *decision* is stale: a concurrent move of an intermediate ancestor leaves the actor's scope different and every row this request touches untouched, so it commits, and it commits a write the actor was no longer authorized to make.
 
 A deployment that changes `default_transaction_isolation` therefore silently removes an authorization guarantee. That is checked rather than assumed.
 
