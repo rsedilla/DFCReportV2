@@ -1,8 +1,8 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 
 import { InvariantViolationError } from '../common/errors/api-error';
 import { manilaDayAfter, startOfManilaDay } from '../common/time/manila';
-import { DATABASE, type Db } from '../database/database.module';
+import { type Db } from '../database/database.module';
 import { lockPersonsWithin } from '../database/person-lock';
 import { HierarchyService } from '../hierarchy/hierarchy.service';
 
@@ -19,10 +19,7 @@ import type { Transaction } from 'kysely';
  */
 @Injectable()
 export class NetworksService {
-  constructor(
-    @Inject(DATABASE) private readonly db: Db,
-    private readonly hierarchy: HierarchyService,
-  ) {}
+  constructor(private readonly hierarchy: HierarchyService) {}
 
   /**
    * The person's Network as it stood at `at`, or null where none was recorded
@@ -195,7 +192,13 @@ export class NetworksService {
       );
     }
 
-    const floor = await this.hierarchy.backdateFloorFor(transaction, change.personId);
+    const floor = await this.hierarchy.backdateFloorFor(
+      transaction,
+      change.personId,
+      // Section 4: the same-Network trigger on a Network change selects edges in
+      // both directions, so the limit covers both.
+      'either-direction',
+    );
 
     // **Two bounds, resolved to whichever binds, and refused once.**
     //
@@ -318,7 +321,7 @@ export class NetworksService {
   }
 
   /** The person's Network as it stands now. */
-  async currentNetwork(personId: string): Promise<NetworkName | null> {
-    return this.networkAsOf(this.db, personId, new Date());
+  async currentNetwork(executor: Db, personId: string): Promise<NetworkName | null> {
+    return this.networkAsOf(executor, personId, new Date());
   }
 }

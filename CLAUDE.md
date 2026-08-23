@@ -195,8 +195,7 @@ npm run dev                          # http://localhost:3000
 | `npm run lint` | `api`, `web` | ESLint. In `web` it also fails on an API route or a server action |
 | `npm run typecheck` | `api`, `web` | `tsc --noEmit` |
 | `npm run format:check` | `api` | Prettier |
-| `npm test` | `api` | The suite that must stay green. Needs a migrated database |
-| `npm run test:authorization` | `api` | The eleven authorization cases. **Fails until Stage 2** |
+| `npm test` | `api` | The suite that must stay green, the eleven authorization cases included. Needs a migrated database |
 | `npm run migrate:up` / `:down` / `:status` | `api` | Applies, reverts one, or lists migrations |
 | `npm run build` | `api`, `web` | Production build |
 
@@ -1720,6 +1719,112 @@ put in `database/person-lock.ts` and imported by the exception filter, which poi
 `common` at a module. It moved to `common/errors/postgres-errors.ts`, so both arrows
 point the same way. Behaviourally identical; it is about which direction the
 dependency runs.
+
+### 2026-08-23 — A backdated reassignment carries the same two bounds as a backdated correction
+
+Stage 2 step 6's only Stop Condition. §5 permits Admin to backdate a reassignment
+and states no bound at all, and two failures follow from that silence.
+
+At an effective date equal to the current assignment's `started_at`, the close is
+zero-length, which §5 makes **inert** — so the leader the person actually had for
+that whole period vanishes from every as-of query, with nothing raised. Below it the
+row cannot be closed at all. And because the same-Network trigger compares
+`network_as_of` on both ends at the assignment's `started_at`, a reassignment
+backdated into a period when either person belonged to a different Network is
+rejected at commit as a raw `check_violation` — a 500 rather than a date the
+administrator can act on.
+
+**The bounds are §4's floor, plus one rule of its own**: strictly later than the
+floor `hierarchy.backdateFloorFor` already computes, and the edge validated as of
+the effective date rather than as of now. The refusal names the earliest legal date,
+or names none where the bound falls on the current day.
+
+*The first version of this entry said "the same two bounds" and "same code", and
+both were false.* §4's second bound is on the Network row, which a reassignment does
+not write, so the pair is not the same pair; and the first implementation compared
+against the current assignment's `started_at` inline rather than calling the floor,
+so the code was parallel rather than shared. Found by `architecture-guardian`, and it
+is the sixth instance on this project of a rule written by describing part of a
+mechanism — committed, this time, in the entry created to settle that mechanism.
+
+Both are now true: the floor is the shared call, which also settles the Stop
+Condition below.
+
+**A person with no open assignment is bounded by a term (b) of its own.** Nothing else
+bounds them — the one-active index is partial over `ended_at IS NULL`, so an
+effective date inside an already-closed period is permitted by the schema and leaves
+two rows valid at one instant, with "who led this person on date D" having two
+answers. Not reachable in Stage 2, because nothing yet closes an assignment without
+opening one; ruled now because the rule reads as complete without it and the term
+already exists.
+
+**It reaches only the subordinate side, and the first attempt reached both.** I
+recommended "the same term §4's floor already carries, for the same reason", and
+the reason does not carry: §4 needs both directions because
+`assert_network_change_keeps_edges` selects edges either way, while a reassignment
+fires `assert_assignment_same_network`, which reads only the row being written. Both
+directions therefore refused a legitimate Admin correction for every leader who had
+ever had a disciple moved — which §4 makes the *ordinary* precondition of a Network
+correction. The shared method now takes which disjuncts apply, and §5 states its own
+reason instead of borrowing one.
+
+Recorded because the fault is a specific one and this is the second time in two
+batches it has appeared here: a rule adopted from a neighbouring section by its
+*shape* rather than by re-deriving why it has that shape.
+
+**A reassignment to the leader the person already has is refused**, matching what §4
+does for a sex correction that changes nothing, on the same reasoning: the operation
+is audited, and a transfer whose before and after name the same leader misleads
+whoever reads the log — and it puts a boundary in the assignment history where
+nothing happened, so "how long under this leader" answers wrongly ever after.
+
+The two alternatives were rejected for the reasons this project has already
+recorded once. Refusing anything before the person's current Network period is
+simpler and refuses legitimate corrections inside periods where nothing changed,
+which is most of them. Permitting anything and letting the constraint reject it is
+honest about where enforcement lives and hands the administrator the constraint
+message, which is precisely the failure §4's floor exists to prevent.
+
+Also settled without needing a ruling, because §5 states it: the reason is required
+whenever an effective date is given and not otherwise. An ordinary reassignment is
+audited without one — it records a decision taken today, and the entry already
+carries who took it.
+
+### 2026-08-23 — The application runs at READ COMMITTED, and that is now load-bearing
+
+Escalated by the third `architecture-guardian` pass on the reassignment endpoint.
+
+Section 5 has a write take an advisory lock on the person and *then* decide — scope,
+invariant 4, invariant 1's two endpoints, the backdate floor. That design is correct
+only under `READ COMMITTED`, where each statement after the lock takes a fresh
+snapshot and therefore sees whichever transaction held the lock first.
+
+Under `REPEATABLE READ` the snapshot is taken by the transaction's **first**
+statement, which is the key-hashing `SELECT` inside `lockPersonsWithin` and runs
+before the lock is held. Every check after it would then be decided on the state the
+request arrived with — precisely the staleness the lock exists to remove.
+
+*An earlier version of this entry said "nothing would raise, because the reads all
+succeed", and that is true of the reads and not of the request.* Where the loser's
+own assignment row moved, its own update would meet a version committed after its
+snapshot and raise a serialization failure. The silent case is narrower and is the
+one that matters: a concurrent move of an **intermediate ancestor** changes the
+actor's scope while leaving every row this request writes untouched, so it commits a
+write the actor was no longer authorized to make. A deployment changing
+`default_transaction_isolation` would remove an authorization guarantee, and that
+case would remove it quietly.
+
+It is PostgreSQL's default and nothing in this repository sets it, so this records a
+dependency rather than changing behaviour. Written to `SKILL.md` §24 beside the pool
+and the probe, and asserted by reading `SHOW transaction_isolation` **inside a
+transaction** — from the server rather than from configuration this repository
+controls, because the thing that can change it is not a file here.
+
+Recorded rather than left implicit because the failure is invisible: no test goes
+red, no constraint fires, and the endpoint keeps answering 200. `SET LOCAL` is a
+utility command and takes no snapshot, which is why the lock helper's first
+*snapshot-taking* statement is the one that matters — a detail worth writing down,
+since it is the kind of mechanism this log has recorded getting wrong seven times.
 
 ### Open — awaiting a ruling
 

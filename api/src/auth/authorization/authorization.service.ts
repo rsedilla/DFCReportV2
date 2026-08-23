@@ -16,6 +16,18 @@ export interface Actor {
   personId: string;
 }
 
+/**
+ * Everything about an account that decides authority, read once and passed on.
+ *
+ * It carries its own `accountId` so that it cannot be applied to a decision about
+ * a different actor.
+ */
+export interface ActorAuthority {
+  accountId: string;
+  roles: readonly AccountRole[];
+  grants: readonly EffectiveGrant[];
+}
+
 export interface EffectiveGrant {
   capability: Capability;
   scope: Scope;
@@ -159,7 +171,10 @@ export class AuthorizationService {
     }
 
     for (const grant of grants) {
-      if (await this.scopeCovers(grant.scope, target, actor)) {
+      // The guard runs outside any transaction, so the pooled connection is the
+      // right reader here. A caller re-checking scope *inside* a transaction —
+      // section 5 invariant 1 after taking the person lock — passes its own.
+      if (await this.scopeCovers(this.db, grant.scope, target, actor)) {
         return;
       }
     }
@@ -170,7 +185,97 @@ export class AuthorizationService {
     });
   }
 
-  private async scopeCovers(scope: Scope, target: Target, actor: Actor): Promise<boolean> {
+  /**
+   * Whether the actor holds `capability` over `target` — the same question
+   * `authorize` asks, answered rather than thrown.
+   *
+   * SKILL.md section 5 invariant 1 needs it: a reassignment has a source and a
+   * destination and the actor must be authorized for **both**, which is two
+   * objects and one grant. The guard evaluates the request's primary target and
+   * the owning module checks the rest (section 7), and the rest needs a predicate.
+   *
+   * Deliberately not a second way to authorize an endpoint. `authorize` remains
+   * what a guard calls, because a guard that has to remember to throw is the
+   * failure section 2 chose a fail-closed framework to avoid.
+   */
+  async covers(actor: Actor, capability: Capability, target: Target): Promise<boolean> {
+    return this.coversWith(
+      this.db,
+      actor,
+      await this.authorityFor(actor.accountId),
+      capability,
+      target,
+    );
+  }
+
+  /**
+   * An account's roles and grants, read together.
+   *
+   * Returned as one value carrying the account it was read for, so that
+   * `coversWith` can refuse authority belonging to somebody else. That predicate
+   * is what SKILL.md section 5 invariant 1 rests on and it *answers* rather than
+   * throwing, so a caller handing it the wrong account's authority would get a
+   * quiet yes — the kind of mistake `completeWithin`'s transaction parameter is
+   * typed to make unrepresentable rather than merely absent.
+   */
+  async authorityFor(accountId: string): Promise<ActorAuthority> {
+    const [roles, grants] = await Promise.all([
+      this.rolesFor(accountId),
+      this.grantsFor(accountId),
+    ]);
+
+    return { accountId, roles, grants };
+  }
+
+  /**
+   * The same question, against grants the caller has already read.
+   *
+   * **This exists so that a caller inside a transaction touches the pool exactly
+   * never.** `grantsFor` reads two tables on the pooled connection, and a pooled
+   * read taken while holding a transaction asks a bounded pool for a second
+   * connection — which SKILL.md section 24 names as a liveness hazard, because the
+   * wait is unbounded and every waiter is holding a connection of its own.
+   *
+   * The split is along the right seam rather than a convenient one. An account's
+   * grants are a fact about the account and cannot change under a tree write, so
+   * reading them before the transaction costs nothing in correctness; *scope* is a
+   * fact about the tree, and that is the half that has to see the transaction.
+   *
+   * `covers` above deliberately takes **no** executor. It reads grants on the pool
+   * and so can never be honoured inside a transaction; a signature accepting one
+   * would invite exactly the call this method exists to make possible, and would
+   * silently fail to deliver it.
+   */
+  async coversWith(
+    executor: Db,
+    actor: Actor,
+    authority: ActorAuthority,
+    capability: Capability,
+    target: Target,
+  ): Promise<boolean> {
+    if (authority.accountId !== actor.accountId) {
+      // Unreachable through any call site, and checked because this predicate
+      // decides authority and answers rather than throws.
+      throw new Error(
+        `Authority for account ${authority.accountId} was offered for a decision about ${actor.accountId}.`,
+      );
+    }
+
+    for (const grant of authority.grants.filter((held) => held.capability === capability)) {
+      if (await this.scopeCovers(executor, grant.scope, target, actor)) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  private async scopeCovers(
+    executor: Db,
+    scope: Scope,
+    target: Target,
+    actor: Actor,
+  ): Promise<boolean> {
     if (scope.type === ScopeType.WholeChurch) {
       return true;
     }
@@ -181,35 +286,42 @@ export class AuthorizationService {
       return false;
     }
 
-    const personId = await this.personBehind(target);
+    const personId = await this.personBehind(executor, target);
     if (personId === null) {
       return false;
     }
 
     switch (scope.type) {
       case ScopeType.OwnSubtree:
-        return this.hierarchy.isWithinSubtree(actor.personId, personId, { includeSelf: true });
+        return this.hierarchy.isWithinSubtree(executor, actor.personId, personId, {
+          includeSelf: true,
+        });
       case ScopeType.SubtreeExclSelf:
-        return this.hierarchy.isWithinSubtree(actor.personId, personId, { includeSelf: false });
+        return this.hierarchy.isWithinSubtree(executor, actor.personId, personId, {
+          includeSelf: false,
+        });
       case ScopeType.Network: {
         if (scope.network === null) {
           // The database requires a Network to be named on a NETWORK grant. An
           // unnamed one covers nothing rather than covering everything.
           return false;
         }
-        const network = await this.networks.currentNetwork(personId);
+        const network = await this.networks.currentNetwork(executor, personId);
         return network !== null && network === scope.network;
       }
     }
   }
 
   /** An Account resolves through its Person; a Person is already one (section 7). */
-  private async personBehind(target: Exclude<Target, { kind: 'church' }>): Promise<string | null> {
+  private async personBehind(
+    executor: Db,
+    target: Exclude<Target, { kind: 'church' }>,
+  ): Promise<string | null> {
     if (target.kind === 'person') {
       return target.personId;
     }
 
-    const account = await this.db
+    const account = await executor
       .selectFrom('accounts')
       .select('person_id')
       .where('id', '=', target.accountId)

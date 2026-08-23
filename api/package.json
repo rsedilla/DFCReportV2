@@ -21,7 +21,6 @@
     "migrate:status": "tsx scripts/migrate.ts status",
     "test": "jest --runInBand",
     "test:watch": "jest --watch",
-    "test:authorization": "jest --config jest.authorization.config.ts --runInBand",
     "format:check": "prettier --check \"src/**/*.ts\" \"test/**/*.ts\" \"scripts/**/*.ts\" \"*.ts\""
   },
   "dependencies": {

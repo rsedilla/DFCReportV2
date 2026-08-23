@@ -31,7 +31,7 @@ export class HierarchyService {
    * they have no leader above them, and that is the intended state rather than
    * missing data (section 5, Network roots).
    */
-  async ancestorsOf(personId: string): Promise<string[]> {
+  async ancestorsOf(executor: Db, personId: string): Promise<string[]> {
     const result = await sql<{ leader_id: string | null; depth: number; is_cycle: boolean }>`
       WITH RECURSIVE upline AS (
         SELECT pa.person_id, pa.leader_id, 1 AS depth
@@ -45,7 +45,7 @@ export class HierarchyService {
          WHERE pa.ended_at IS NULL
       ) CYCLE person_id SET is_cycle USING path
       SELECT leader_id, depth, is_cycle FROM upline ORDER BY depth
-    `.execute(this.db);
+    `.execute(executor);
 
     this.rejectCycle(result.rows, personId);
 
@@ -60,7 +60,7 @@ export class HierarchyService {
    * Direct leaders and descendants are different things and are never conflated
    * (section 5, Direct leaders vs descendants); this is the second of the two.
    */
-  async subtreeOf(personId: string): Promise<string[]> {
+  async subtreeOf(executor: Db, personId: string): Promise<string[]> {
     const result = await sql<{ person_id: string; depth: number; is_cycle: boolean }>`
       WITH RECURSIVE subtree AS (
         SELECT ${personId}::uuid AS person_id, 0 AS depth
@@ -71,7 +71,7 @@ export class HierarchyService {
          WHERE pa.ended_at IS NULL
       ) CYCLE person_id SET is_cycle USING path
       SELECT person_id, depth, is_cycle FROM subtree ORDER BY depth
-    `.execute(this.db);
+    `.execute(executor);
 
     this.rejectCycle(result.rows, personId);
 
@@ -194,6 +194,7 @@ export class HierarchyService {
    * path owes it, and `PUT /people/{id}/pastoral-leader` is the second one.
    */
   async assertMayReparent(
+    executor: Db,
     actor: { personId: string; roles: readonly AccountRole[] },
     personId: string,
   ): Promise<void> {
@@ -215,7 +216,7 @@ export class HierarchyService {
 
     // Whether the target is upline of the **actor**, which is the direction the
     // rule is written in. Their own subtree is not the question.
-    const ancestors = await this.ancestorsOf(actor.personId);
+    const ancestors = await this.ancestorsOf(executor, actor.personId);
 
     if (ancestors.some((ancestorId) => sameId(ancestorId, personId))) {
       throw new ScopeDeniedError(
@@ -310,16 +311,46 @@ export class HierarchyService {
    * times.
    *
    * The first term is over the person's current assignment whatever its
-   * `leader_id`; the second is over **edges**, rows with a leader, which is what
-   * keeps it independent of how a Network root is represented. Open edges where
-   * the person is the *leader* need no term, because section 4 refuses the change
-   * outright while any exists.
+   * `leader_id`. **What the second term ranges over depends on the mode** — see
+   * `closedRows` below, which is the whole of the difference between the two
+   * callers; do not read either shape as the method's. Open edges where the person
+   * is the *leader* need no term in either, because section 4 refuses a Network
+   * change outright while any exists and a reassignment cannot strand one.
    *
    * `GREATEST` ignores nulls in PostgreSQL and is null only when every argument
    * is, which is exactly section 4's "each term is a maximum over rows that may be
    * empty, and an empty term contributes nothing".
    */
-  async backdateFloorFor(executor: Db, personId: string): Promise<Date | null> {
+  async backdateFloorFor(
+    executor: Db,
+    personId: string,
+    /**
+     * Which closed rows term (b) ranges over, and the two callers need different
+     * answers because they fire different triggers.
+     *
+     * `either-direction` is section 4's, for a **Network change**:
+     * `assert_network_change_keeps_edges` selects edges where the person is the
+     * subordinate *or* the leader, so a correction can strand either — "the limit
+     * covers both directions because the check does". Restricted to rows with a
+     * leader, because a null-`leader_id` row is passed without comparison and can
+     * never be a stranded edge.
+     *
+     * `as-subordinate` is section 5's, for a **reassignment**:
+     * `assert_assignment_same_network` reads only the row being written, so a
+     * former disciple's closed edge cannot be stranded by it and has no business
+     * bounding this. What the term prevents here is different — an effective date
+     * inside a period already recorded *for this person*, which would leave two
+     * rows valid at one instant. That concern does not care whether the closed row
+     * carried a leader, so this one does not exclude a root row.
+     *
+     * Borrowing section 4's shape wholesale over-refused: any leader who had ever
+     * had a disciple moved carried that disciple's `ended_at` as their own floor,
+     * for no invariant's sake.
+     */
+    closedRows: 'either-direction' | 'as-subordinate',
+  ): Promise<Date | null> {
+    const eitherDirection = closedRows === 'either-direction';
+
     const result = await sql<{ floor: Date | null }>`
       SELECT GREATEST(
         (SELECT max(pa.started_at)
@@ -328,9 +359,10 @@ export class HierarchyService {
             AND pa.ended_at IS NULL),
         (SELECT max(pa.ended_at)
            FROM pastoral_assignments pa
-          WHERE pa.leader_id IS NOT NULL
-            AND pa.ended_at IS NOT NULL
-            AND (pa.person_id = ${personId}::uuid OR pa.leader_id = ${personId}::uuid))
+          WHERE pa.ended_at IS NOT NULL
+            AND (${eitherDirection}::boolean IS FALSE OR pa.leader_id IS NOT NULL)
+            AND (pa.person_id = ${personId}::uuid
+                 OR (${eitherDirection}::boolean AND pa.leader_id = ${personId}::uuid)))
       ) AS floor
     `.execute(executor);
 
@@ -394,6 +426,7 @@ export class HierarchyService {
    * than by the size of a branch.
    */
   async isWithinSubtree(
+    executor: Db,
     rootPersonId: string,
     personId: string,
     options: { includeSelf: boolean },
@@ -402,7 +435,7 @@ export class HierarchyService {
       return options.includeSelf;
     }
 
-    const ancestors = await this.ancestorsOf(personId);
+    const ancestors = await this.ancestorsOf(executor, personId);
     return ancestors.some((ancestorId) => sameId(ancestorId, rootPersonId));
   }
 

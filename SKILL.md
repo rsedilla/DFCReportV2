@@ -668,6 +668,25 @@ A reassignment takes effect at the time it is recorded. Backdating `started_at` 
 
 Backdating is therefore a separate capability, `records.backdate_effective_date` (Section 7), held by Admin only. It requires an explicit reason, is audit logged with both the recorded date and the effective date (Section 21), and must surface in Network Summary as a correction (Section 16).
 
+**A backdated reassignment carries two bounds of its own**, computed by the same code as Section 4's floor and deliberately not identical to it. It shares Section 4's first term exactly. Its second term differs in both directions — it reaches only the rows on which this person is the subordinate, and unlike Section 4's it does not require the row to carry a leader. And Section 4's separate bound on the Network row does not apply at all, because a reassignment does not write one.
+
+- **Strictly later than the latest of** the `started_at` of the person's current assignment and the `ended_at` of every already-closed assignment on which **this person is the subordinate**. Computed by the same code as Section 4's floor, with the second term deliberately different — see below.
+
+  The first term: at that instant exactly the reassignment closes the current row at its own start, and a zero-length row is inert (History is never deleted, below) — so the leader the person actually had for that whole period disappears from every as-of query and from every report that resolves through it, with nothing raised. Below it, the row cannot be closed at all. Neither is a correction; both are erasure.
+
+  The second term matters for a Person with **no** open assignment, whom the first does not bound at all. The one-active constraint is partial over `ended_at IS NULL`, so an effective date inside an already-closed period is permitted by the schema and leaves two rows valid at one instant — and "who was this person's leader on date D" then has two answers, which Section 20's reproducibility and Section 9's responsible leader both depend on not happening.
+
+  It also reaches a closed row that carried **no** leader — a period during which the person was a Network root. Section 4's term excludes those, because a row with no leader is not an edge and cannot be stranded; this one includes them, because what it prevents is two rows valid at one instant and a former root period overlaps exactly as any other does.
+
+  **It reaches only the rows on which this person is the subordinate, and Section 4's reaches both directions.** The difference is not an inconsistency: the two rules guard different triggers. A Network change is validated against every edge touching the person in either direction, so a correction can strand either and the limit covers both. A reassignment writes one person's own row and is validated against that row alone, so a former disciple's closed edge can neither be stranded by it nor overlap it. Borrowing the wider term would refuse a legitimate Admin correction for every leader who has ever had a disciple moved — which Section 4 makes the *ordinary* precondition of a Network correction — for no invariant's sake.
+- **The resulting edge is validated as of the effective date, not as of now.** The same-Network trigger compares `network_as_of` on both ends at the assignment's `started_at`, so a reassignment backdated into a period when either person belonged to a different Network is rejected at commit. Validating against today's Networks would let the system answer that the edge is legal and then fail on it. Where either Network is unknown at that instant — the system is authoritative only from each person's encoding date forward (Section 4) — the reassignment is refused rather than attempted.
+
+The refusal names the earliest date the reassignment can legally take, and where the bound falls on the current day it names none and says the reassignment can only take effect now, exactly as Section 4 does. It answers `INVARIANT_VIOLATION`: it is a rule about what can be recorded, not about the actor's authority.
+
+**A reassignment naming the leader the person already has is refused**, as `VALIDATION_FAILED`, for the reason Section 4 gives for refusing a sex correction that changes nothing: the operation is audited, and a transfer whose previous and new leader are the same misleads whoever reads the log. It would also place a boundary in the assignment history where nothing happened, so a report asking how long the person has been under that leader answers wrongly ever after. A client that lost the response retries with the same `Idempotency-Key`, which is what that header is for.
+
+The reason `records.backdate_effective_date` requires is required by the operation whenever an effective date is given, and is not required otherwise. An ordinary reassignment is audit logged without one, because it records a decision taken today and the audit entry already carries who made it.
+
 The same rule governs every other effective-dated relationship: Network assignment (Section 4), Cell membership (Section 10), and Cell leadership (Section 11). Ordinary users record changes as of now. Only Admin may set an effective date in the past, and only with a reason.
 
 **History is never deleted.**
@@ -3006,6 +3025,16 @@ Do not expose the entire church dataset to the browser and filter it client-side
 The application connects through a **bounded** connection pool. A bound is required rather than optional: an unbounded pool turns a slow database into an unbounded number of backends, and the failure arrives as the database refusing connections to everything at once.
 
 The bound has a consequence that reaches beyond this section, and it is recorded here because this is where the bound lives. **Any unbounded wait inside a transaction is a liveness hazard**, not merely a slow request: each waiting request holds a connection, and once they exhaust the pool nothing else can obtain one. That is why the person lock in Section 5 is bounded by a timeout, and why any lock wait introduced later must be too.
+
+### Transaction isolation
+
+The application runs at **`READ COMMITTED`**, PostgreSQL's default. It is named here because correctness now depends on it rather than merely tolerating it.
+
+Section 5 requires a Network change and a reassignment to take an advisory lock on the person and then decide — scope, invariant 4, invariant 1, the backdate floor — against what the lock reveals. Under `READ COMMITTED` each statement after the lock takes a fresh snapshot and therefore sees the transaction that held the lock before it. Under `REPEATABLE READ` the snapshot is taken by the transaction's *first* statement, which is the key hashing inside the lock helper and runs before the lock is held: every check after it would then be decided on the state the request arrived with, which is exactly the staleness the lock exists to remove.
+
+Some of those cases would fail loudly rather than silently — where the loser's own assignment row was the one that moved, its update would meet a version committed after its snapshot and raise a serialization failure. The dangerous ones are the cases where nothing the loser writes has changed and only the *decision* is stale: a concurrent move of an intermediate ancestor leaves the actor's scope different and every row this request touches untouched, so it commits, and it commits a write the actor was no longer authorized to make.
+
+A deployment that changes `default_transaction_isolation` therefore silently removes an authorization guarantee. That is checked rather than assumed.
 
 **The liveness probe currently shares that pool**, and answers by reaching the database. So pool exhaustion presents to the platform as a dead process, and the response is a restart that discards the transactions still making progress — turning contention into lost work. Whether the probe should keep sharing the pool, and whether "healthy" should mean "can reach the database", is an operational decision recorded as open in `CLAUDE.md` rather than settled here.
 

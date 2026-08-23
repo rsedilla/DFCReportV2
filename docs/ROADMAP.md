@@ -31,7 +31,7 @@ Pull request #4 merged on 2026-08-21, after `architecture-guardian` review and a
 
 **Done when:** CI is green on an application with no features, the guard denies by default, and the eleven tests fail for the right reason.
 
-All three hold. The eleven fail on `PUT /api/v1/people/{id}/pastoral-leader` returning 404, because Stage 2 builds it; they run as their own CI job, reported and not required, so the `api` job is honestly green.
+All three held. The eleven failed on `PUT /api/v1/people/{id}/pastoral-leader` returning 404, because Stage 2 builds it; they ran as their own CI job, reported and not required, so the `api` job was honestly green. Stage 2 built that endpoint and they are green now, folded into the `api` job and gating `main`.
 
 Four rulings were forced by building it, each recorded in `CLAUDE.md` and amended into `SKILL.md`: hand-written SQL migrations with no ORM, an endpoint declaring no capability is denied, §5's invariant 4 answers `SCOPE_DENIED`, and the eleven ship failing rather than skipped. Two further corrections came out of the architecture review and are recorded there too.
 
