@@ -2808,28 +2808,37 @@ A field name that differs between two endpoints for one concept is a permanent c
 reads that body.** No DTO describes it and no controller checks it: it is a property
 of the request, refused at the boundary.
 
-**The qualifier is exact rather than cautious, and the two halves of it are worth
-separating.** The hazard is a recursive walk, so a body nothing walks cannot produce
-one; the *rule* is therefore never violated by a route that does not read its body,
-only unenforced there. Two routes are in that position today — the liveness probe
-and `GET /api/v1/auth/me`, which bind nothing a client sent — and a 25-deep body
-posted to either is answered normally rather than refused. That is stated because
+**The qualifier is exact rather than cautious.** The hazard is a recursive walk, so
+a body nothing walks cannot produce one; the *rule* is therefore never violated by a
+route that does not read its body, only unenforced there. That is stated because
 three clients branch on this section and would otherwise read the rule as absolute.
 
 **What enforces it is a walk over a bound argument**, which is where the rule can be
 escaped. The identifier boundary walks whatever a route binds; the idempotency
-fingerprint walks the body of every authenticated state-changing request. The
-escaping shape is therefore any route where **the body is not among the bound
-arguments and the request is not an authenticated state-changing one** — a handler
-binding nothing, or binding only a value this application constructed, or binding a
-**sub-field**, `@Body('token')` rather than `@Body()`.
+fingerprint walks the body of every authenticated state-changing request. A route
+therefore escapes exactly where **the body is not among the bound arguments and the
+request is not an authenticated state-changing one**. Both halves are needed:
+`POST /api/v1/auth/logout-all` binds nothing a client sent and is still covered,
+because the fingerprint reaches its body regardless of what the handler bound.
 
-The first two exist and are harmless, because nothing reads those bodies. The third
-does not exist and would matter, because a sub-field binding can coexist with a route
-that goes on to read the whole body by other means. One added later is outside the
-rule silently — the shape Sections 2 and 7 refuse everywhere else, and the reason
-the boundary was made global rather than per route. Such a route either binds the
-whole body, or the check moves somewhere a binding cannot escape.
+Five routes are in that position today, in three shapes, and all are harmless because
+nothing reads those bodies:
+
+- binding **nothing at all** — the liveness probe;
+- binding only a value **this application constructed** — `GET /api/v1/auth/me`,
+  which takes the authenticated actor;
+- binding a client-sent **path parameter or query, and no body** — the three `GET`
+  routes under `/api/v1/people`.
+
+A request carrying a 25-deep body to any of them is answered normally rather than
+refused.
+
+A fourth shape does not exist and would matter: a handler binding a **sub-field**,
+`@Body('token')` rather than `@Body()`. That one can coexist with a route which goes
+on to read the whole body by other means, and nothing prevents it. One added later is
+outside the rule silently — the shape Sections 2 and 7 refuse everywhere else, and
+the reason the boundary was made global rather than per route. Such a route either
+binds the whole body, or the check moves somewhere a binding cannot escape.
 
 The bound exists because **`JSON.parse` accepts a depth that the code reading its
 result cannot**. V8 parses iteratively and has no practical limit — two hundred
