@@ -31,7 +31,7 @@ export class HierarchyService {
    * they have no leader above them, and that is the intended state rather than
    * missing data (section 5, Network roots).
    */
-  async ancestorsOf(personId: string): Promise<string[]> {
+  async ancestorsOf(executor: Db, personId: string): Promise<string[]> {
     const result = await sql<{ leader_id: string | null; depth: number; is_cycle: boolean }>`
       WITH RECURSIVE upline AS (
         SELECT pa.person_id, pa.leader_id, 1 AS depth
@@ -45,7 +45,7 @@ export class HierarchyService {
          WHERE pa.ended_at IS NULL
       ) CYCLE person_id SET is_cycle USING path
       SELECT leader_id, depth, is_cycle FROM upline ORDER BY depth
-    `.execute(this.db);
+    `.execute(executor);
 
     this.rejectCycle(result.rows, personId);
 
@@ -194,6 +194,7 @@ export class HierarchyService {
    * path owes it, and `PUT /people/{id}/pastoral-leader` is the second one.
    */
   async assertMayReparent(
+    executor: Db,
     actor: { personId: string; roles: readonly AccountRole[] },
     personId: string,
   ): Promise<void> {
@@ -215,7 +216,7 @@ export class HierarchyService {
 
     // Whether the target is upline of the **actor**, which is the direction the
     // rule is written in. Their own subtree is not the question.
-    const ancestors = await this.ancestorsOf(actor.personId);
+    const ancestors = await this.ancestorsOf(executor, actor.personId);
 
     if (ancestors.some((ancestorId) => sameId(ancestorId, personId))) {
       throw new ScopeDeniedError(
@@ -394,6 +395,7 @@ export class HierarchyService {
    * than by the size of a branch.
    */
   async isWithinSubtree(
+    executor: Db,
     rootPersonId: string,
     personId: string,
     options: { includeSelf: boolean },
@@ -402,7 +404,7 @@ export class HierarchyService {
       return options.includeSelf;
     }
 
-    const ancestors = await this.ancestorsOf(personId);
+    const ancestors = await this.ancestorsOf(executor, personId);
     return ancestors.some((ancestorId) => sameId(ancestorId, rootPersonId));
   }
 

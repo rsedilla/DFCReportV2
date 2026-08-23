@@ -159,7 +159,10 @@ export class AuthorizationService {
     }
 
     for (const grant of grants) {
-      if (await this.scopeCovers(grant.scope, target, actor)) {
+      // The guard runs outside any transaction, so the pooled connection is the
+      // right reader here. A caller re-checking scope *inside* a transaction —
+      // section 5 invariant 1 after taking the person lock — passes its own.
+      if (await this.scopeCovers(this.db, grant.scope, target, actor)) {
         return;
       }
     }
@@ -183,13 +186,18 @@ export class AuthorizationService {
    * what a guard calls, because a guard that has to remember to throw is the
    * failure section 2 chose a fail-closed framework to avoid.
    */
-  async covers(actor: Actor, capability: Capability, target: Target): Promise<boolean> {
+  async covers(
+    executor: Db,
+    actor: Actor,
+    capability: Capability,
+    target: Target,
+  ): Promise<boolean> {
     const grants = (await this.grantsFor(actor.accountId)).filter(
       (grant) => grant.capability === capability,
     );
 
     for (const grant of grants) {
-      if (await this.scopeCovers(grant.scope, target, actor)) {
+      if (await this.scopeCovers(executor, grant.scope, target, actor)) {
         return true;
       }
     }
@@ -197,7 +205,12 @@ export class AuthorizationService {
     return false;
   }
 
-  private async scopeCovers(scope: Scope, target: Target, actor: Actor): Promise<boolean> {
+  private async scopeCovers(
+    executor: Db,
+    scope: Scope,
+    target: Target,
+    actor: Actor,
+  ): Promise<boolean> {
     if (scope.type === ScopeType.WholeChurch) {
       return true;
     }
@@ -208,35 +221,42 @@ export class AuthorizationService {
       return false;
     }
 
-    const personId = await this.personBehind(target);
+    const personId = await this.personBehind(executor, target);
     if (personId === null) {
       return false;
     }
 
     switch (scope.type) {
       case ScopeType.OwnSubtree:
-        return this.hierarchy.isWithinSubtree(actor.personId, personId, { includeSelf: true });
+        return this.hierarchy.isWithinSubtree(executor, actor.personId, personId, {
+          includeSelf: true,
+        });
       case ScopeType.SubtreeExclSelf:
-        return this.hierarchy.isWithinSubtree(actor.personId, personId, { includeSelf: false });
+        return this.hierarchy.isWithinSubtree(executor, actor.personId, personId, {
+          includeSelf: false,
+        });
       case ScopeType.Network: {
         if (scope.network === null) {
           // The database requires a Network to be named on a NETWORK grant. An
           // unnamed one covers nothing rather than covering everything.
           return false;
         }
-        const network = await this.networks.currentNetwork(personId);
+        const network = await this.networks.currentNetwork(executor, personId);
         return network !== null && network === scope.network;
       }
     }
   }
 
   /** An Account resolves through its Person; a Person is already one (section 7). */
-  private async personBehind(target: Exclude<Target, { kind: 'church' }>): Promise<string | null> {
+  private async personBehind(
+    executor: Db,
+    target: Exclude<Target, { kind: 'church' }>,
+  ): Promise<string | null> {
     if (target.kind === 'person') {
       return target.personId;
     }
 
-    const account = await this.db
+    const account = await executor
       .selectFrom('accounts')
       .select('person_id')
       .where('id', '=', target.accountId)

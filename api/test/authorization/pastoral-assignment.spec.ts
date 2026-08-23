@@ -13,22 +13,31 @@ import type { TestAccount, TestPerson } from '../setup/fixtures';
 /**
  * The eleven authorization cases of CLAUDE.md, Authorization test suite.
  *
- * **These fail today, and that is the deliverable.** Pastoral assignment is the
- * highest-risk authorization surface in the system, the cases are derived entirely
- * from SKILL.md section 5 and need no implementation to exist, and writing them
- * first makes guard behaviour the thing the API is built toward rather than
- * something verified afterwards, when it is expensive to change (docs/ROADMAP.md,
- * Stage 1). Stage 2 is done when every one of them is green.
+ * **These were written before the endpoint, and failed until it existed.** Pastoral
+ * assignment is the highest-risk authorization surface in the system, the cases are
+ * derived entirely from SKILL.md section 5 and needed no implementation to exist,
+ * and writing them first made guard behaviour the thing the API was built toward
+ * rather than something verified afterwards, when it is expensive to change
+ * (docs/ROADMAP.md, Stage 1). Nothing here was ever skipped, marked pending, or
+ * inverted -- a test that passes because it expects failure stops being a test the
+ * moment the feature arrives.
  *
- * They fail on the endpoint being absent: `PUT /api/v1/people/{id}/pastoral-leader`
- * returns 404 because nothing serves it yet. Nothing here is skipped, marked
- * pending, or inverted -- a test that passes because it expects failure stops
- * being a test the moment the feature arrives.
+ * They are green now and run in the main suite, so they gate `main` rather than
+ * being reported beside it.
+ *
+ * **Three of them are weaker than their names suggest, and that is recorded rather
+ * than hidden.** Cases 1 and 4, and the leader half of the root case, are denied by
+ * the capability guard before the domain layer runs, because the guard's target is
+ * the person and in each of those the person is outside the actor's subtree. They
+ * prove the guard twice. What they claim to prove -- invariant 1's endpoint checks
+ * and invariant 4's ancestors branch -- is pinned in
+ * `test/api/pastoral-reassignment.e2e.spec.ts`, by an actor holding an explicit
+ * Whole Church grant, which is the actor class those rules exist for and which no
+ * fixture here has.
  *
  * ---
  *
- * **The contract these cases pin.** Stage 2 implements this shape, or changes
- * these tests deliberately and says why.
+ * **The contract these cases pin.**
  *
  *   PUT /api/v1/people/{id}/pastoral-leader
  *   Idempotency-Key: <client-generated UUID>

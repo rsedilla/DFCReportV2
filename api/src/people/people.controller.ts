@@ -1,17 +1,16 @@
-import { Body, Controller, Get, Param, Patch, Post, Put, Query } from '@nestjs/common';
+import { Body, Controller, Get, Inject, Param, Patch, Post, Put, Query } from '@nestjs/common';
 
 import { CurrentActor } from '../auth/current-actor.decorator';
 import { RequiresCapability } from '../auth/authorization/authorization.decorators';
 import { Capability } from '../auth/authorization/capabilities';
-import { AuthorizationService, type Actor } from '../auth/authorization/authorization.service';
+import { type Actor } from '../auth/authorization/authorization.service';
 import { NotFoundError } from '../common/errors/api-error';
 import { CanonicalUuidPipe } from '../common/identifiers';
+import { DATABASE, type Db } from '../database/database.module';
 import {
   CurrentIdempotency,
   type CurrentClaim,
 } from '../common/idempotency/current-idempotency.decorator';
-import { HierarchyService } from '../hierarchy/hierarchy.service';
-import { NetworksService } from '../networks/networks.service';
 
 import {
   CorrectSexDto,
@@ -21,14 +20,7 @@ import {
   EditPersonDto,
   SearchPeopleDto,
 } from './dto/people.dto';
-import {
-  composeName,
-  fullProfile,
-  normalizeMobile,
-  PeopleService,
-  type PersonRecord,
-  type SearchCursor,
-} from './people.service';
+import { fullProfile, normalizeMobile, PeopleService, type SearchCursor } from './people.service';
 
 /**
  * `/api/v1/people` (SKILL.md section 22).
@@ -44,9 +36,12 @@ import {
 export class PeopleController {
   constructor(
     private readonly people: PeopleService,
-    private readonly hierarchy: HierarchyService,
-    private readonly networks: NetworksService,
-    private readonly authorization: AuthorizationService,
+    // The connection is here for one reason: section 8's scope test reads the
+    // tree, and the service method that performs it must be able to take a
+    // caller's transaction (section 24, the bounded pool). A controller holding a
+    // connection to hand on is the cost of that, and it does no data access of
+    // its own.
+    @Inject(DATABASE) private readonly db: Db,
   ) {}
 
   /**
@@ -88,7 +83,7 @@ export class PeopleController {
       // names the field that matched for a person the actor has no scope over —
       // and the refusal happens before the transaction opens, so probing costs
       // nothing and writes nothing.
-      (candidateId) => this.isWithinScope(actor, candidateId),
+      (candidateId) => this.people.isWithinViewScope(this.db, actor, candidateId),
     );
   }
 
@@ -133,7 +128,7 @@ export class PeopleController {
         sex: query.sex,
         mobileNumberNormalized: normalizeMobile(query.mobile_number),
       },
-      (personId) => this.isWithinScope(actor, personId),
+      (personId) => this.people.isWithinViewScope(this.db, actor, personId),
     );
 
     return { data: visible.slice(0, limit), next_cursor: null };
@@ -175,11 +170,11 @@ export class PeopleController {
 
     const data = await Promise.all(
       rows.map(async (person) => {
-        if (await this.isWithinScope(actor, person.id)) {
+        if (await this.people.isWithinViewScope(this.db, actor, person.id)) {
           return fullProfile(person);
         }
 
-        return this.minimalIdentity(person);
+        return this.people.minimalIdentity(person);
       }),
     );
 
@@ -285,79 +280,6 @@ export class PeopleController {
       actor,
       claim,
     );
-  }
-
-  /**
-   * Whether the actor may see this person's full profile.
-   *
-   * Asked of the authorization service rather than reimplemented, so that a
-   * Senior Pastor's Whole Church scope and an Admin-issued wider grant both reach
-   * the same answer here as they do in the guard. A leader's own subtree is the
-   * ordinary case and resolves through the tree.
-   */
-  private async isWithinScope(actor: Actor, personId: string): Promise<boolean> {
-    const grants = (await this.authorization.grantsFor(actor.accountId)).filter(
-      (grant) => grant.capability === Capability.PeopleViewSubtree,
-    );
-
-    for (const grant of grants) {
-      if (grant.scope.type === 'WHOLE_CHURCH') {
-        return true;
-      }
-
-      if (grant.scope.type === 'OWN_SUBTREE' || grant.scope.type === 'SUBTREE_EXCL_SELF') {
-        if (
-          await this.hierarchy.isWithinSubtree(actor.personId, personId, {
-            includeSelf: grant.scope.type === 'OWN_SUBTREE',
-          })
-        ) {
-          return true;
-        }
-      }
-
-      if (grant.scope.type === 'NETWORK' && grant.scope.network !== null) {
-        if ((await this.networks.currentNetwork(personId)) === grant.scope.network) {
-          return true;
-        }
-      }
-    }
-
-    return false;
-  }
-
-  /**
-   * The five fields section 8 permits for a person outside the viewer's pastoral
-   * scope — Member ID, full name, sex, current Network and the name of their
-   * current direct leader — plus two that are not about them.
-   *
-   * `id` is the handle the duplicate-acknowledgement flow needs to name a
-   * candidate back to the server, and `scope` tells a client it is looking at a
-   * withheld profile rather than an empty one. Section 8's list is about a
-   * person's *details*, and neither of these is one; they are named here rather
-   * than left for a reader to notice the count does not match.
-   *
-   * Written as a list of what is *included* rather than as a list of what is
-   * removed. A redaction that deletes named fields lets the next field added to
-   * the profile through by default, which is the wrong direction for a rule about
-   * what the church may see.
-   */
-  private async minimalIdentity(person: PersonRecord): Promise<Record<string, unknown>> {
-    const [network, leader] = await Promise.all([
-      this.networks.currentNetwork(person.id),
-      this.hierarchy.directLeaderNameOf(person.id),
-    ]);
-
-    return {
-      id: person.id,
-      member_id: person.member_id,
-      full_name: composeName(person),
-      sex: person.sex,
-      network,
-      direct_leader_name: leader,
-      // Named, so a client can tell a withheld profile from an empty one and say
-      // so, rather than rendering a person who looks like they have no details.
-      scope: 'IDENTITY_ONLY',
-    };
   }
 }
 

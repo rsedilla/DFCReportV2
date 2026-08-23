@@ -8,9 +8,11 @@ import { ScopeType } from '../auth/authorization/scopes';
 import { HierarchyService } from '../hierarchy/hierarchy.service';
 import { NetworksService } from '../networks/networks.service';
 import {
+  ApiError,
   DuplicateAcknowledgementRequiredError,
   InvariantViolationError,
   NotFoundError,
+  ResourceBusyError,
   ScopeDeniedError,
   ValidationFailedError,
 } from '../common/errors/api-error';
@@ -754,6 +756,7 @@ export class PeopleService {
     // switched itself off depending on whether the target currently holds an edge
     // would be a rule nobody could reason about.
     await this.hierarchy.assertMayReparent(
+      this.db,
       { personId: actor.personId, roles: await this.authorization.rolesFor(actor.accountId) },
       personId,
     );
@@ -1054,22 +1057,12 @@ export class PeopleService {
     claim: CurrentClaim,
   ): Promise<Record<string, unknown>> {
     const roles = await this.authorization.rolesFor(actor.accountId);
-
-    // Invariant 4, before anything else: a leader may never change their own
-    // assignment nor an upline's, and only Admin or a Senior Pastor may.
-    await this.hierarchy.assertMayReparent({ personId: actor.personId, roles }, personId);
-
-    // Invariant 1, the half the guard cannot express. Read on the pool, before the
-    // transaction, because this is an authorization decision and is evaluated
-    // exactly as the guard's is.
-    const currentBefore = await this.hierarchy.openAssignmentOf(this.db, personId);
-    await this.assertBothEndpointsInScope(actor, currentBefore?.leaderId ?? null, input.leaderId);
-
-    const recordedAt = new Date();
     const backdated = input.effectiveDate !== undefined;
-    let effectiveAt = recordedAt;
 
-    if (input.effectiveDate !== undefined) {
+    if (backdated) {
+      // The second capability, which the guard does not check (section 5). Asked
+      // before the transaction because it is a fact about the actor's grants and
+      // nothing in the tree can change the answer.
       await this.authorization.authorize(actor, Capability.RecordsBackdateEffectiveDate, {
         kind: 'person',
         personId,
@@ -1081,15 +1074,6 @@ export class PeopleService {
           field: 'reason',
         });
       }
-
-      effectiveAt = startOfManilaDay(input.effectiveDate);
-
-      if (effectiveAt.getTime() > recordedAt.getTime()) {
-        throw new ValidationFailedError(
-          'An effective date is a correction to the past. It cannot be in the future.',
-          { field: 'effective_date', value: input.effectiveDate },
-        );
-      }
     }
 
     return this.db.transaction().execute(async (trx) => {
@@ -1099,6 +1083,42 @@ export class PeopleService {
       // reassignments of one person serialize rather than collide on the partial
       // unique index (section 5, Database enforcement).
       await lockPersonsWithin(trx, [personId, input.leaderId]);
+
+      // **Every authorization decision is taken here, after the lock, and against
+      // this transaction.** Taken before it, they are decided on a snapshot that
+      // another reassignment of the same person can invalidate while this one
+      // waits — and the whole point of the lock is that the two overlap exactly
+      // then. The guard's own decision about the person is re-made for the same
+      // reason: a concurrent move can carry them out of the actor's subtree
+      // between the guard and the write.
+      //
+      // This is why the scope predicates take an executor at all. Reading them on
+      // the pooled connection while holding a transaction needs a second
+      // connection from a bounded pool (section 24), so the choice was never
+      // "pool or transaction" — it was "stale or transaction-capable".
+      await this.hierarchy.assertMayReparent(trx, { personId: actor.personId, roles }, personId);
+
+      if (!(await this.isWithinManageScope(trx, actor, personId))) {
+        throw new ScopeDeniedError(
+          'You hold people.manage_pastoral_assignment, but not over this person.',
+          { capability: Capability.PeopleManagePastoralAssignment },
+        );
+      }
+
+      const recordedAt = new Date();
+      // Read after the lock, deliberately. Stamped before it, a request that waited
+      // carries an instant earlier than the winner's `started_at` and is refused as
+      // too early — a refusal caused purely by contention, and one section 22 would
+      // store against the idempotency key and replay for the whole retention.
+      const effectiveAt =
+        input.effectiveDate === undefined ? recordedAt : startOfManilaDay(input.effectiveDate);
+
+      if (effectiveAt.getTime() > recordedAt.getTime()) {
+        throw new ValidationFailedError(
+          'An effective date is a correction to the past. It cannot be in the future.',
+          { field: 'effective_date', value: input.effectiveDate },
+        );
+      }
 
       const person = await trx
         .selectFrom('persons')
@@ -1129,6 +1149,9 @@ export class PeopleService {
       }
 
       const current = await this.hierarchy.openAssignmentOf(trx, personId);
+
+      // Invariant 1, against the state this transaction will actually write over.
+      await this.assertBothEndpointsInScope(trx, actor, current?.leaderId ?? null, input.leaderId);
 
       if (current !== null && current.leaderId === null) {
         // Section 5, Network roots: a root cannot be reassigned by anyone, Admin
@@ -1163,6 +1186,24 @@ export class PeopleService {
         });
       }
 
+      if (
+        current !== null &&
+        current.leaderId !== null &&
+        sameId(current.leaderId, input.leaderId)
+      ) {
+        // Section 4 refuses the exact analogue for a sex correction, on reasoning
+        // that applies unchanged: this operation is audited, and a transfer whose
+        // before and after name the same leader misleads whoever reads the log.
+        // It would also put a boundary in the assignment history where nothing
+        // happened, so "how long has this person been under this leader" answers
+        // wrongly ever after. A client that lost the response retries with the
+        // same `Idempotency-Key`, which is what that header is for.
+        throw new ValidationFailedError('That person is already under that leader.', {
+          field: 'leader_id',
+          value: input.leaderId,
+        });
+      }
+
       // Invariant 2. Rejected before writing, and the recursive queries carry their
       // own cycle detection as the backstop for a cycle arriving by any other route.
       const subtree = await this.hierarchy.subtreeOf(trx, personId);
@@ -1186,11 +1227,19 @@ export class PeopleService {
 
       await this.assertLeaderIsAssignable(trx, input.leaderId, personNetwork, effectiveAt);
 
-      if (current !== null && effectiveAt.getTime() <= current.startedAt.getTime()) {
-        // Section 5: at that instant the close is zero-length and therefore inert,
-        // so the leader this person actually had for the whole period disappears
-        // from every as-of query. Below it the row cannot be closed at all.
-        throw this.reassignmentTooEarly(personId, current.startedAt, backdated);
+      // **The same floor the Network correction uses, from the same method.**
+      // Term (a) is the current assignment's `started_at`: at that instant the
+      // close is zero-length and therefore inert, so the leader this person
+      // actually had for the whole period disappears from every as-of query, and
+      // below it the row cannot be closed at all. Term (b) is the `ended_at` of
+      // every already-closed assignment touching them, which bounds the case a
+      // person with no open assignment would otherwise leave unbounded — an
+      // effective date inside a closed period, leaving two rows valid at one
+      // instant and "who led them on date D" with two answers.
+      const floor = await this.hierarchy.backdateFloorFor(trx, personId);
+
+      if (floor !== null && effectiveAt.getTime() <= floor.getTime()) {
+        throw this.reassignmentTooEarly(personId, floor, backdated);
       }
 
       const { previousLeaderId } = await this.hierarchy.reassignWithin(trx, {
@@ -1257,6 +1306,7 @@ export class PeopleService {
    * endpoint to authorize, and section 5 permits an unassigned Person.
    */
   private async assertBothEndpointsInScope(
+    executor: Db,
     actor: Actor,
     sourceLeaderId: string | null,
     destinationLeaderId: string,
@@ -1267,11 +1317,7 @@ export class PeopleService {
     ];
 
     for (const endpoint of endpoints) {
-      const covered = await this.authorization.covers(
-        actor,
-        Capability.PeopleManagePastoralAssignment,
-        { kind: 'person', personId: endpoint.personId },
-      );
+      const covered = await this.isWithinManageScope(executor, actor, endpoint.personId);
 
       if (!covered) {
         throw new ScopeDeniedError(
@@ -1282,6 +1328,18 @@ export class PeopleService {
     }
   }
 
+  /** Whether the actor holds `people.manage_pastoral_assignment` over this person. */
+  private async isWithinManageScope(
+    executor: Db,
+    actor: Actor,
+    personId: string,
+  ): Promise<boolean> {
+    return this.authorization.covers(executor, actor, Capability.PeopleManagePastoralAssignment, {
+      kind: 'person',
+      personId,
+    });
+  }
+
   /**
    * The refusal for an effective date at or before the current assignment's start.
    *
@@ -1290,31 +1348,86 @@ export class PeopleService {
    * in Asia/Manila, so where the bound falls on the current day the day after it is
    * tomorrow, which no reassignment may take.
    */
-  private reassignmentTooEarly(
-    personId: string,
-    startedAt: Date,
-    backdated: boolean,
-  ): InvariantViolationError {
+  private reassignmentTooEarly(personId: string, floor: Date, backdated: boolean): ApiError {
     if (!backdated) {
-      return new InvariantViolationError(
-        'This reassignment cannot take effect at this instant, because the current assignment was recorded at it. Retry in a moment.',
-        { person_id: personId },
-      );
+      // Reached only where a record for this person carries the very instant this
+      // reassignment is taking — the clock is read after the lock, so a request
+      // that merely waited is not refused here. `RESOURCE_BUSY` rather than a 409:
+      // contention reaches no decision, and section 22 stores a 4xx against the
+      // idempotency key while releasing a 5xx, so a 409 here would replay this
+      // transient failure for the whole retention and the advice to retry would be
+      // advice to do the one thing that cannot work.
+      return new ResourceBusyError({ person_id: personId });
     }
 
-    const earliest = manilaDayAfter(startedAt);
+    const earliest = manilaDayAfter(floor);
 
     if (startOfManilaDay(earliest).getTime() > Date.now()) {
       return new InvariantViolationError(
-        'This reassignment cannot be backdated: the current assignment began today. Submit it without an effective date, and it will take effect now.',
+        'This reassignment cannot be backdated: the records it would have to reach past were written today. Submit it without an effective date, and it will take effect now.',
         { person_id: personId },
       );
     }
 
     return new InvariantViolationError(
-      'That effective date is at or before the moment the current assignment began, so the reassignment would erase the period rather than end it. Use the earliest date given here or later.',
+      'That effective date is too early: it would erase or overlap a period already recorded for this person. Use the earliest date given here or later.',
       { person_id: personId, earliest_effective_date: earliest },
     );
+  }
+
+  /**
+   * Whether the actor may see this person's full profile (SKILL.md section 8).
+   *
+   * Asked of the authorization service rather than reimplemented, so that a Senior
+   * Pastor's Whole Church scope and an Admin-issued wider grant reach the same
+   * answer here as they do in the guard.
+   *
+   * Here rather than in the controller because it reads the tree and the Network,
+   * and a caller inside a transaction must be able to hand it that transaction —
+   * a pooled read taken while holding one needs a second connection from a bounded
+   * pool (section 24). The controller has no connection to give, which is the
+   * shape of the argument for it living beside the data access.
+   */
+  async isWithinViewScope(executor: Db, actor: Actor, personId: string): Promise<boolean> {
+    return this.authorization.covers(executor, actor, Capability.PeopleViewSubtree, {
+      kind: 'person',
+      personId,
+    });
+  }
+
+  /**
+   * The five fields section 8 permits for a person outside the viewer's pastoral
+   * scope — Member ID, full name, sex, current Network and the name of their
+   * current direct leader — plus two that are not about them.
+   *
+   * `id` is the handle the duplicate-acknowledgement flow needs to name a candidate
+   * back to the server, and `scope` tells a client it is looking at a withheld
+   * profile rather than an empty one. Section 8's list is about a person's
+   * *details*, and neither of these is one; they are named here rather than left
+   * for a reader to notice the count does not match.
+   *
+   * Written as a list of what is *included* rather than as a list of what is
+   * removed. A redaction that deletes named fields lets the next field added to
+   * the profile through by default, which is the wrong direction for a rule about
+   * what the church may see.
+   */
+  async minimalIdentity(person: PersonRecord): Promise<Record<string, unknown>> {
+    const [network, leader] = await Promise.all([
+      this.networks.currentNetwork(this.db, person.id),
+      this.hierarchy.directLeaderNameOf(person.id),
+    ]);
+
+    return {
+      id: person.id,
+      member_id: person.member_id,
+      full_name: composeName(person),
+      sex: person.sex,
+      network,
+      direct_leader_name: leader,
+      // Named, so a client can tell a withheld profile from an empty one and say
+      // so, rather than rendering a person who looks like they have no details.
+      scope: 'IDENTITY_ONLY',
+    };
   }
 
   /**

@@ -143,11 +143,16 @@ describe('the person lock is taken by every path that can strand an edge', () =>
     const hierarchy = app.get(HierarchyService);
 
     await expect(
-      hierarchy.assertMayReparent({ personId: mark.id, roles: ['LEADER'] }, mark.id.toUpperCase()),
+      hierarchy.assertMayReparent(
+        db,
+        { personId: mark.id, roles: ['LEADER'] },
+        mark.id.toUpperCase(),
+      ),
     ).rejects.toMatchObject({ code: 'SCOPE_DENIED' });
 
     await expect(
       hierarchy.assertMayReparent(
+        db,
         { personId: mark.id, roles: ['LEADER'] },
         manuel.id.toUpperCase(),
       ),
@@ -156,7 +161,7 @@ describe('the person lock is taken by every path that can strand an edge', () =>
     // And it still permits what it should, so the case is not satisfied by a check
     // that refuses everything.
     await expect(
-      hierarchy.assertMayReparent({ personId: manuel.id, roles: ['LEADER'] }, mark.id),
+      hierarchy.assertMayReparent(db, { personId: manuel.id, roles: ['LEADER'] }, mark.id),
     ).resolves.toBeUndefined();
   });
 

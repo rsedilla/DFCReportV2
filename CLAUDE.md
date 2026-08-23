@@ -1734,10 +1734,35 @@ backdated into a period when either person belonged to a different Network is
 rejected at commit as a raw `check_violation` — a 500 rather than a date the
 administrator can act on.
 
-**The bounds mirror §4's**: strictly later than the current assignment's
-`started_at`, and the edge validated as of the effective date rather than as of now.
-The refusal names the earliest legal date, or names none where the bound falls on
-the current day. Same reasoning, same code, and the helpers already exist.
+**The bounds are §4's floor, plus one rule of its own**: strictly later than the
+floor `hierarchy.backdateFloorFor` already computes, and the edge validated as of
+the effective date rather than as of now. The refusal names the earliest legal date,
+or names none where the bound falls on the current day.
+
+*The first version of this entry said "the same two bounds" and "same code", and
+both were false.* §4's second bound is on the Network row, which a reassignment does
+not write, so the pair is not the same pair; and the first implementation compared
+against the current assignment's `started_at` inline rather than calling the floor,
+so the code was parallel rather than shared. Found by `architecture-guardian`, and it
+is the sixth instance on this project of a rule written by describing part of a
+mechanism — committed, this time, in the entry created to settle that mechanism.
+
+Both are now true: the floor is the shared call, which also settles the Stop
+Condition below.
+
+**A person with no open assignment is bounded by §4's term (b).** Nothing else
+bounds them — the one-active index is partial over `ended_at IS NULL`, so an
+effective date inside an already-closed period is permitted by the schema and leaves
+two rows valid at one instant, with "who led this person on date D" having two
+answers. Not reachable in Stage 2, because nothing yet closes an assignment without
+opening one; ruled now because the rule reads as complete without it and the term
+already exists.
+
+**A reassignment to the leader the person already has is refused**, matching what §4
+does for a sex correction that changes nothing, on the same reasoning: the operation
+is audited, and a transfer whose before and after name the same leader misleads
+whoever reads the log — and it puts a boundary in the assignment history where
+nothing happened, so "how long under this leader" answers wrongly ever after.
 
 The two alternatives were rejected for the reasons this project has already
 recorded once. Refusing anything before the person's current Network period is
