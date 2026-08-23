@@ -634,7 +634,15 @@ describe('reassigning a pastoral leader: the record (sections 5, 21, 22)', () =>
           rico.id,
         ]);
 
-        const pending = reassign(rico.id, { leader_id: ben.id }, raymondAccount);
+        // `.then` is what dispatches it. A supertest `Test` is lazy — held without
+        // one, the request is not sent until it is awaited, which here would be
+        // after the lock was released, and the probe below would correctly report
+        // no waiter. This repository has made that exact mistake once before
+        // (`fix(test): dispatch the in-flight probe, which supertest had never
+        // sent`), and CI caught it again here.
+        const pending = reassign(rico.id, { leader_id: ben.id }, raymondAccount).then(
+          (response) => response,
+        );
 
         let waiting = 0;
         const deadline = Date.now() + 1_500;
