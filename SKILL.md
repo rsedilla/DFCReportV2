@@ -461,6 +461,12 @@ A person's recorded sex may be corrected — most often an ordinary data-entry f
 
 Correcting sex is an explicit, authorized, audited operation, governed by `people.correct_sex` (Section 7). It is Admin-only at Whole Church scope, and no other role holds it. Where the correction changes the person's Network, it is carried out as a Network change: the current Network assignment is closed and a new one opened, effective-dated, preserving history exactly as any other Network change does. Never re-derive Network silently from the new sex value.
 
+**A correction always carries a reason.** The `reason` column on `network_assignments` is nullable because an initial assignment has nothing to explain; a correction is the case it exists for. The reason is required by the operation, is written to the Network row, and appears in the audit entries the correction produces (Section 21).
+
+**A correction that changes nothing is refused as malformed input.** Sex has two values and the Network mapping is total, so a submitted sex equal to the recorded one is the only way for a correction to change neither. It answers `VALIDATION_FAILED` (Section 22) rather than succeeding silently: the operation demands a reason and writes an audit trail, and an audited correction that corrected nothing is a record that misleads whoever reads it later. A client that lost the response to a real correction recovers it by retrying with the same `Idempotency-Key`, which is what that header is for — not by resubmitting a value that is already in force.
+
+**An archived Person's sex may be corrected only where no reassignment is forced.** Section 5 forbids reassigning an archived Person, and the atomic pair below *is* a reassignment, so a correction for an archived Person who still holds an open pastoral edge is refused: restore them first, which is an explicit and separately audited decision. Where they hold no open edge — the ordinary state after archival — nothing is stranded and the Network change stands alone, so the correction proceeds. A data correction on an archived record is legitimate; re-parenting one is not.
+
 A Network change must never leave a person under a pastoral leader in their former Network. If the person has an active pastoral assignment that the change would render cross-Network, the Network change and the corresponding pastoral reassignment must be performed together as a single atomic operation — neither can validly precede the other, since each alone leaves the tree in an invalid state. The system must reject a Network change submitted without the reassignment it requires, and must never silently drop the person's pastoral assignment to resolve the conflict.
 
 **The two carry one effective instant, and it is the same instant.** The closing of the old Network row, the opening of the new one, the closing of the old pastoral assignment and the opening of the new one all take an identical timestamp, stamped once by the API and written to all four rows.
@@ -468,6 +474,8 @@ A Network change must never leave a person under a pastoral leader in their form
 This is not a tidiness preference. The old edge is legal for every moment up to the change and illegal from the change onward, so the only moment at which it can be closed without ever having been invalid is the exact instant the new Network takes force. The same-Network check on a Network change looks at edges open at the effective date or beginning after it (Section 5, Database enforcement); an edge closed at exactly that instant is neither, and passes. An edge closed a microsecond later is open at it, is compared with the corrected Network already in force on one end and the old one on the other, and is rejected — which is correct, because for that microsecond it genuinely was a cross-Network edge.
 
 So the schema permits the atomic operation at one instant and at no other. Stated here because the failure mode of leaving it unwritten is specific and bad: an implementer meets a constraint violation, reads it as the timestamps being too close together, and separates them — which does not fix the write, and if the check were ever loosened to admit it would open the gap this rule exists to close.
+
+**A Network root's sex is not corrected through this path.** Section 5 gives each Network exactly one root, says a root cannot be reassigned by anyone including Admin, and calls changing who holds a root position a deliberate Network-level decision rather than a pastoral one. Moving a root between Networks here would leave one Network with no root and the other with two, which no rule permits and nothing else would refuse. The correction is rejected before the disciple refusal below, so that a root — who by construction leads people — is refused for the reason that actually applies.
 
 **A Network change is refused while the person leads anyone.** If the person holds any open pastoral assignment as the **leader**, the change is rejected, naming the disciples that must be moved first. Each is then moved by an ordinary, separately authorized, separately audited reassignment (Section 5), and the Network change is attempted again once none remains.
 
@@ -501,9 +509,21 @@ The case that term used to cover is worth keeping, because it is why the refusal
 
 Each term is a maximum over rows that may be empty, and an empty term contributes nothing. A Person encoded but not yet assigned has no rows at all, so their floor is unbounded and a correction may be backdated freely — there are no edges to strand.
 
-The floor's second term is written over **edges**, which are rows with a leader, so that term does not depend on how a root is represented. Section 5 describes a root both as having no active assignment and as having one with a null `leader_id`, and the two readings disagree about whether a row exists; that ambiguity is recorded as open in `CLAUDE.md`. It does not reach this rule either way, because a row with a null `leader_id` is passed without comparison by the same-Network trigger and can never be an edge the correction has to strand.
+The floor's second term is written over **edges**, which are rows with a leader, so a Network root's own row never enters it: a row with a null `leader_id` is passed without comparison by the same-Network trigger and can never be an edge the correction has to strand.
+
+**A correction may not be dated at or before the moment the Network it corrects took effect.** This is separate from the floor above and is not one of its terms: it bounds the Network row rather than the pastoral edges. At that instant the correction would close the live Network row at its own `started_at`, and Section 5 makes such a row inert — no instant resolves to it — so the period the person spent in their former Network would disappear from every as-of query, and every past-period Network-scoped report for them would move, with nothing raised.
+
+Section 5 reserves a zero-length close for a row entered in error, written deliberately by a path that says it is correcting. A sex correction is not that. It is effective-dated, and this section already accepts in writing that closed periods keep the Network recorded for them, including where it is now known to be wrong — erasing the period outright is the opposite of that bargain, not a stronger form of it.
+
+It is reachable wherever the floor is empty, which is most ordinarily a Person with no pastoral assignment at all, whose correction this section says may be backdated freely. "Freely" means as far back as the record goes, not before the record begins. The refusal names the day after the Network row began.
 
 The system therefore **rejects the correction and names the earliest date it can legally take**, rather than failing with a constraint violation the administrator cannot act on. The rejection is a rule about what can be recorded, not about the actor's authority, so it answers `INVARIANT_VIOLATION` (Section 22).
+
+**Where no date can clear the floor, the refusal names none.** The floor can fall on the current day — moving a disciple aside closes their edge as of today, which the paragraph below makes the *ordinary* outcome — and the day after today is tomorrow, which no correction may take because an effective date is a correction to the past. Naming it would hand the administrator the one answer guaranteed to be refused again, which is the failure this rule exists to prevent. The system instead says that the correction cannot be backdated at all and will take effect now if submitted without an effective date. That always succeeds: every bound is read from a row already written, so it lies in the past.
+
+**The floor is an instant and the effective date is a day, so the answer is the day after the floor's day.** An effective date is a date-only field (Section 22) resolved to the start of that day in Asia/Manila (Section 20), while the floor above is a timestamp taken from rows written at whatever moment they were written. The earliest legal date is therefore the Manila calendar day *following* the day the floor falls in, and that holds however the floor sits within its day: the start of the floor's own day is never strictly later than the floor, and the start of the next day always is. A correction with no effective date takes the instant it is recorded and has no floor to clear, since every bound above lies in the past.
+
+This is why the refusal names a **date** rather than echoing the floor. An administrator handed a timestamp would have to work out which day to submit, and the day containing that timestamp is the one day that will be refused again.
 
 **One consequence is sharp, and follows from the two rules together rather than from either alone.** Moving a disciple out of the way closes their edge as of today, and that `ended_at` becomes the floor immediately. So a correction for someone who has just had disciples moved cannot be backdated at all: it takes effect from today forward, and the months in which they led those disciples keep the Network recorded for them. Anyone reading only the refusal rule would expect clearing the disciples to unblock a backdated correction, and it does the opposite.
 
@@ -542,9 +562,11 @@ Because Senior Pastors may perform reassignments in either Network (Section 7), 
 
 Each Network has exactly one root leader: Bishop Oriel Ballano for the Men's Network, and Pastora Geraldine Ballano for the Women's Network (Section 4).
 
-A root leader has no pastoral leader and therefore no active pastoral assignment. This is the intended state, not missing data.
+A root leader has no pastoral leader above them, and that fact is **recorded as a row**: an active pastoral assignment whose `leader_id` is null. The row exists and is what makes them a root. This is the intended state, not missing data.
 
-A Person with no active assignment is a root only when they are a designated Network root. Any other Person without one is unassigned — surface them as such rather than silently rendering them as a second root of the tree.
+Earlier wording said a root had "no active pastoral assignment" *and* that a root leader has a null `leader_id`, which are different claims about whether a row exists. The row-based reading is the settled one, for two reasons. It is the only one under which "is this person a root" is a question the database can answer, and every rule that needs to distinguish a root from an unassigned Person depends on that — a Network change is refused for a root (Section 4) and must not be refused for someone merely unassigned. And the alternative needs a durable record of who the roots are, which Section 7 declined to create on the grounds that it would put the church's two most consequential positions behind a row somebody could edit.
+
+**A Person with no active assignment row at all is therefore never a root; they are unassigned** — surface them as such rather than silently rendering them as a second root of the tree.
 
 A root leader cannot be reassigned by anyone, Admin included, because there is no valid leader above them. Changing who holds a root position is a deliberate Network-level decision, not a pastoral reassignment.
 
@@ -612,7 +634,7 @@ Reject the operation before writing. Recursive subtree queries must additionally
 
 A person has at most one active pastoral assignment at any moment.
 
-Zero is legitimate in exactly three situations: a Person encoded but not yet assigned, an archived Person whose assignment has ended, and a Network root leader (above). Every other Person has exactly one.
+Zero is legitimate in exactly two situations: a Person encoded but not yet assigned, and an archived Person whose assignment has ended. Every other Person has exactly one, and a Network root leader is not an exception — their row exists and carries a null `leader_id` (Network roots, above).
 
 A reassignment closes the current assignment and opens the new one within a single transaction. It must never leave two open assignments, and must never leave a person who had a leader without one. Enforce with a uniqueness constraint over the person where `ended_at` is null — the constraint permits zero rows and forbids two.
 
@@ -723,6 +745,22 @@ The two firing paths need **different** comparison dates, and one rule cannot se
 **"In either direction" is not decoration either.** A person's Network governs every edge they sit on, and they sit on two kinds: the one above them and one for each disciple below. Checking only the first leaves a leader's whole downline cross-Network the moment their own Network is corrected — the same permanent, unrevisited breach the paragraph above describes, differing only in which end of the edge moved. It is also what bounds how far a correction may be backdated (Section 4): the floor is computed over edges in both directions precisely because this check considers both.
 
 A root leader has a null `leader_id` (Network roots, above) and the trigger passes such a row without comparison — there is no leader to compare against.
+
+**Serializing a Network change against a concurrent edge write — an advisory lock on the person, taken in ascending lock key.**
+
+The same-Network triggers are `DEFERRABLE INITIALLY DEFERRED`, so each sees only what its own transaction can see at commit. That leaves a window neither closes: a transaction opening an edge under a person, with a `started_at` just before a Network change's effective instant and committing just after it, is invisible to the change's comparison, while its own trigger compares at its `started_at`, where that person's Network was still the old one. The edge is then permanently cross-Network and nothing revisits it — which contradicts this section's own requirement that the rule hold on every write.
+
+Every path that opens a pastoral edge takes a transaction-scoped advisory lock on the **leader** it is attaching to, and every path that changes a Network takes one on the person being changed, before reading anything it will rely on. A caller needing more than one takes them in ascending **lock key**, so that two operations moving people under each other cannot deadlock.
+
+Ordered by the key rather than by the person id, because the key is what is actually taken: two ids that collided on one key could otherwise be acquired in opposite orders by two callers, which is a real cycle rather than the mere over-serialization a collision is otherwise. The key is computed from the identity and not from its spelling — a UUID is compared case-insensitively everywhere else in the system, so a key derived from the raw text would let the same person named in two cases take two locks that serialize against nothing.
+
+An advisory lock rather than a row lock on `persons`: the two paths belong to different modules and `persons` belongs to neither of them alone (Section 2), so a row lock would mean reading a table to coordinate rather than to read data. This is coordination, and it is transaction-scoped, so no path can leak it by failing.
+
+**The wait is bounded, and the bound is a requirement rather than a tuning choice.** An advisory lock waits indefinitely and the connection pool is bounded (Section 24), so an unbounded wait lets one client left idle in a transaction consume every connection — and the liveness probe shares that pool, so a healthy process is then read as dead and restarted, losing the transactions that were making progress. A request that cannot take the lock within a few seconds gives up and answers `RESOURCE_BUSY` (Section 22).
+
+**The bound covers the whole transaction, not only the advisory acquisition.** It is set once, before the locks are taken, and stays in force for the row locks the caller's own writes take afterwards — including the idempotency key's. That is deliberate: those waits are unbounded otherwise, and an unbounded wait anywhere inside a transaction holding a pooled connection is the same hazard. It follows that an elapsed wait must answer `RESOURCE_BUSY` **wherever it is raised**, including at a call site that knows nothing about locks; classified as an unexpected failure it would be a 500 for ordinary contention.
+
+**That answer is a 5xx deliberately.** Section 22 stores a 4xx against the idempotency key and releases the key on a 5xx, because the first is a decision the rules reached and the second carries none. Contention reached no decision, so storing it would answer every later retry of that key with the same transient failure for the whole retention period — the dead end the release rule exists to prevent. Falling on the 5xx side of that split makes the correct behaviour structural rather than a special case in the interceptor that each new code has to remember.
 
 No cycles — a cycle spans many rows and cannot be expressed as a row-level constraint. Reject it in the domain layer before writing, and make every recursive subtree query cycle-safe so that a cycle introduced by any other means surfaces as an error rather than an unbounded query:
 
@@ -1184,6 +1222,18 @@ A grant of a read capability may set `read_only` true or false; true is the defa
 
 The flag exists because a scope widened beyond a leader's normal management scope is a reporting grant unless something says otherwise (above). It is the visible difference between letting someone see a Network and letting them change it.
 
+**An identifier supplied by a client is compared canonically, always.** A `uuid` column compares case-insensitively and application code does not, so a person named with their identifier in uppercase is one record to every query and a different string to every comparison written in the application. Identifiers are therefore normalized at the request boundary, and any comparison that decides authority normalizes again rather than trusting that they were.
+
+This is stated in Section 7 because the consequence is an authorization one. Invariant 4 below is two identifier comparisons and is the only check on its path that fails **open**; against the one actor class it exists to stop, a comparison that answers "this is not you" is the whole of the escalation. The same defect has also appeared where it merely fails closed — a duplicate acknowledgement that could never be satisfied, blocking a Person from being created at all (Section 3), and a lock that took two keys for one person and serialized nothing (Section 5).
+
+**Invariant 4 of Section 5 binds every operation that can reassign, not only the reassignment endpoint.** A sex correction can perform a reassignment (Section 4), so it refuses a target that is the actor's own Person or anyone upline of them unless the actor holds Admin or Senior Pastor. The Whole Church rule below does not cover it and cannot: that one asks how far a grant reaches, and this one asks who the actor is relative to the target. A holder of an explicit Whole Church grant passes the first and must not pass the second, or the capability becomes the escalation route it is Admin-only to close.
+
+It is refused whether or not the particular correction turns out to force a reassignment. The capability moves a person between Networks either way, and a rule that switched itself off depending on whether the target currently holds an edge would be one nobody could reason about — including the actor, who cannot see that state before submitting.
+
+This is the one authorization rule in the system decided by **role** rather than by capability, and Section 5 states it that way deliberately: what matters is that Admin and the Senior Pastors sit outside the pastoral incentive the rule guards against, not that they hold something extra.
+
+**`people.correct_sex` exists at Whole Church and at no narrower scope.** The catalog above gives it one scope, and the rule is stated here because the guard alone would not hold it: the guard asks whether the actor's grant covers the target, so a grant issued at `OWN_SUBTREE` would pass for anyone inside that subtree. Held at a subtree scope it becomes exactly the escalation route this capability is Admin-only to close — moving a person between Networks, and re-parenting them in the process, without ever holding `people.manage_pastoral_assignment` (Section 4). A grant of it at any narrower scope therefore covers nothing, and the operation refuses with `SCOPE_DENIED`, in the same spirit as the `read_only` rejection above: a row that cannot mean what it appears to mean is refused rather than honoured in part.
+
 `read_only` belongs to `capability_grants` and to nothing else. **A role default carries no such flag**, and none is to be derived for one: a role's authority is exactly what the catalog above says it is. Anywhere an account's effective authority is presented — `/api/v1/auth/me` is the case that exists — authority carried by a role reports no `read_only` value rather than an invented one, because a client branching on a value this specification never defined is branching on a rule that does not exist.
 
 The backend/API is the sole authority for authorization. Web and mobile UI filtering is never sufficient security on its own (Section 1, Principle 4).
@@ -1373,9 +1423,9 @@ The Person becomes available to other authorized modules, but participation rema
 
 ### A DCC attendance record requires a pastoral leader
 
-Every DCC attendance record carries a responsible leader, and that is the person's direct pastoral leader (below). A Person with no active pastoral assignment therefore has no responsible leader, and their attendance cannot be recorded — **with one exception, the Network roots.**
+Every DCC attendance record carries a responsible leader, and that is the person's direct pastoral leader (below). **The rule is written over the edge, not over the row.** A Person whose open pastoral assignment carries a null `leader_id` has no leader above them, and a Person with no open assignment row at all has no assignment to resolve one from; the two are different states and only the first is a Network root (Section 5, Network roots).
 
-A root leader's absent assignment is the intended state rather than missing data (Section 5, Network roots). Their attendance is recorded by Admin, their record carries no responsible leader, and they are excluded from coverage denominators. They remain in every unique-people total; nothing here removes the two Senior Pastors from the figures they appear in.
+A Person with no open assignment row cannot have DCC attendance recorded, because there is no responsible leader to record it against. A Network root has an open row and no leader above them, which is the intended state rather than missing data: their attendance is recorded by Admin, their record carries no responsible leader, and they are excluded from coverage denominators. They remain in every unique-people total; nothing here removes the two Senior Pastors from the figures they appear in.
 
 This is why step 3 above captures the leader at creation rather than leaving it for later. In practice the answer is already known outside the system: someone brings a visitor, and the leader they are being placed under is settled by that relationship before anyone opens the application. The workflow records a decision the church has already made.
 
@@ -2482,6 +2532,8 @@ All dates and reporting periods are computed in **Asia/Manila**, the church's lo
 
 Store timestamps in UTC. Convert to Asia/Manila whenever deriving a date, a week, or a month.
 
+**The conversion runs the other way too, and it is fixed here rather than per endpoint.** A date-only field that has to become an instant — an effective date on any effective-dated relationship (Sections 4, 5, 10, 11) is the case that arises first — resolves to **00:00:00 on that day in Asia/Manila**. The day is the unit a person submitted, so the instant that represents it is the moment the day begins; anything else would place a record on a day nobody named. Both directions use the named zone, never a literal `+08:00`.
+
 Never bucket a report directly by a raw UTC timestamp. A Cell meeting at 16:00 Saturday in Manila is 08:00 Saturday UTC and buckets correctly by accident, but a record written at 07:00 Monday in Manila is 23:00 Sunday UTC, and a report grouped in UTC places it in the wrong week and, at a month boundary, the wrong month. Historical reports would then disagree with what leaders actually recorded.
 
 Asia/Manila observes no daylight saving time, so the offset is a constant +08:00. Do not hard-code `+8`. Use the named zone, so the system stays correct if that ever changes.
@@ -2622,6 +2674,12 @@ audit_log
 
 Record actor, target, action, timestamp, and relevant before/after values.
 
+**`action` is `<noun>.<past-tense verb>`**, lower snake case on both halves: `person.created`, `network.changed`, `pastoral_assignment.transferred`, `effective_date.backdated`, `setting.changed`. The noun is the thing the action happened to, which is usually the table or the relationship rather than the module performing it. The list above stays open — it opens with "including" — so this is a naming convention rather than an enumeration, and it is written down because without it `pastoral_assignment.transferred` and `pastoral.transfer` are equally defensible and a log that mixes them cannot be queried.
+
+**One operation writes one entry per action it performed, not one entry per request.** The list above names several actions that occur together: a sex correction is a sex correction *and* the Network change it causes *and*, where one is forced, a pastoral leader transfer *and*, where the date was set in the past, a backdated effective date. Each is separately listed, so each is separately recorded, in the same transaction as the write. They are related by carrying the same actor, the same target and the same `occurred_at`; `batch_id` is not used for this, because it means one bulk import (Section 2) and overloading it would make an import indistinguishable from a compound correction.
+
+The alternative — one entry describing everything — was rejected because the entries answer different questions and are read by different searches. Section 5 requires every reassignment to be logged as a pastoral leader transfer with its previous and new leader; a reader looking for transfers must find that one whether it arose from a reassignment or from a correction.
+
 `target_id` is text rather than a UUID, and is required. Almost every target above is identified by a UUID, but not all: a setting is keyed by its `key` (Section 7), and a setting change is on the list. It carries no foreign key, because this log is append-only and an entry outlives the row it describes — a constraint that could refuse or cascade would make the trail depend on the survival of what it exists to remember.
 
 The audit log is append-only. Nothing updates or deletes a row, and it is never a source for as-of state — a report answering "who was `CURRENT` in March" reads the effective-dated table, not this (Section 3).
@@ -2657,6 +2715,7 @@ GET  /api/v1/people                       search, church-wide (Section 8)
 GET  /api/v1/people/duplicate-candidates  declared before /{id}, or it is one
 GET  /api/v1/people/{id}
 GET  /api/v1/people/{id}/pastoral-path
+PUT  /api/v1/people/{id}/sex             the audited correction of Section 4
 
 GET  /api/v1/network/my-tree
 GET  /api/v1/leaders/{id}/children
@@ -2737,6 +2796,7 @@ One envelope, always:
 | `INVARIANT_VIOLATION` | 409 | A domain rule rejects the write — cycle, cross-Network edge, two active assignments |
 | `DUPLICATE_ACKNOWLEDGEMENT_REQUIRED` | 409 | A Tier 1 duplicate candidate must be acknowledged before the Person is created (Section 3). The candidates are in `details` |
 | `NOT_FOUND` | 404 | No such record, or its existence must not be disclosed |
+| `RESOURCE_BUSY` | 503 | Another operation holds the record this write must serialize against, and the wait timed out (Section 5). Transient: retry after a short delay |
 
 `CAPABILITY_DENIED` and `SCOPE_DENIED` are deliberately distinct, because capability and scope are independent grants (Section 7) and an administrator diagnosing a permission problem needs to know which one failed.
 
@@ -2802,6 +2862,10 @@ idempotency_keys
   And **a recording that matches nothing aborts the write**. A request that has lost its claim cannot record anything, so by the rule above its write must not commit either; the transaction is rolled back and the client is told to retry. Returning quietly instead would leave the write on disk with nothing recording it, and the retry that follows would perform it again — silently, which is worse than the response-mixing the claim identity closed.
 - **A claim has an identity, and every write against it carries that identity.** A takeover under the lease mints a new one. Without it a request whose lease expired mid-flight would complete or release whichever claim replaced it — storing its own response against another request's work, discarding that request's own completion in silence, and, because a takeover also rewrites the fingerprint, leaving one request's response stored under another's. That is the cross-request leak the account-scoping rule above exists to prevent, arriving by a different door.
 - **A claim and a response are bounded separately.** `expires_at` retains the answer; `claimed_at` bounds the attempt. A request whose process dies leaves its row `IN_FLIGHT`, and another request may take the claim over once it is older than a short lease — a minute, longer than any request this API should serve. Without the second bound the row sat unfinished for the whole retention, and every retry was told `REQUEST_IN_FLIGHT`, which this section defines as "retry after a short delay". A day is not a short delay, and the caller never learned the outcome.
+- **A 4xx is stored against the key; a 5xx releases it.** A domain refusal is this request's outcome, decided by the rules, and a repeat of the same body is entitled to the same answer. An unexpected failure carries no decision and rolls back, so nothing was recorded and a retry cannot double-apply, while storing it would pin a transient failure to the key for the whole retention with no way past it.
+
+  **The status is therefore load-bearing, and a new code is placed by which side of that split it belongs on.** A transient condition that reached no decision — contention on a lock, in `RESOURCE_BUSY` (Section 5) — must be a 5xx, or every later retry of that key replays it. Adding a retryable condition below 500 would require the store/release rule to grow an exception, and an exception each new code has to remember is exactly what this section avoids elsewhere.
+- **The fingerprint is taken over a canonicalized body**: object keys sorted, arrays left in order, because order is meaning in an array. Nothing forbids a client reordering object keys on a retry and several JSON libraries do, and treating that as a different body answers `IDEMPOTENCY_KEY_REUSED` — which this section makes permanent and says must never be retried, turning an ordinary retry into a dead end.
 - **A request missing the header is `VALIDATION_FAILED`.** A required header that is absent is malformed input, which is what that code means. It is named here rather than left to a controller, because three clients branch on it.
 - **A replay reproduces the status and the body, and nothing else.** Headers are not stored and are not reproduced, so **no state-changing endpoint may put meaning in a response header** — a `Location` or an `ETag` that a client needs would not survive a retry. Stated as a constraint on endpoints rather than as a limitation of the store, because that is the direction it binds.
 - The server stores the key with the response it produced, for at least 24 hours.
@@ -2936,6 +3000,14 @@ A backup that has never been restored is an assumption. Test one before go-live 
 This is distinct from the per-migration snapshot required before touching relationship tables (Definition of Done, migration policy). Routine backups cover accidents; migration snapshots cover deliberate schema changes. Both are required.
 
 Do not expose the entire church dataset to the browser and filter it client-side.
+
+### The connection pool, and what shares it
+
+The application connects through a **bounded** connection pool. A bound is required rather than optional: an unbounded pool turns a slow database into an unbounded number of backends, and the failure arrives as the database refusing connections to everything at once.
+
+The bound has a consequence that reaches beyond this section, and it is recorded here because this is where the bound lives. **Any unbounded wait inside a transaction is a liveness hazard**, not merely a slow request: each waiting request holds a connection, and once they exhaust the pool nothing else can obtain one. That is why the person lock in Section 5 is bounded by a timeout, and why any lock wait introduced later must be too.
+
+**The liveness probe currently shares that pool**, and answers by reaching the database. So pool exhaustion presents to the platform as a dead process, and the response is a restart that discards the transactions still making progress — turning contention into lost work. Whether the probe should keep sharing the pool, and whether "healthy" should mean "can reach the database", is an operational decision recorded as open in `CLAUDE.md` rather than settled here.
 
 ---
 

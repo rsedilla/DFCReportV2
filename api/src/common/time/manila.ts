@@ -1,0 +1,132 @@
+/**
+ * Dates and instants, in the church's time zone (SKILL.md section 20).
+ *
+ * Section 20 is the single authority for every period boundary in the system, and
+ * it names the zone rather than the offset: Asia/Manila observes no daylight
+ * saving today, and hard-coding `+08:00` would be a silent defect on the day that
+ * stops being true. Everything here goes through `Intl` with the named zone, so
+ * nothing in this file knows what the offset is.
+ *
+ * These are pure functions with no database access, which is why they can be
+ * exercised without one.
+ */
+
+const ZONE = 'Asia/Manila';
+
+const PARTS = new Intl.DateTimeFormat('en-US', {
+  timeZone: ZONE,
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+  hour: '2-digit',
+  minute: '2-digit',
+  second: '2-digit',
+  // `h23` rather than `hour12: false`. The latter renders midnight as hour 24 in
+  // some ICU versions, which would put the start of a day at the end of the
+  // previous one -- the exact class of defect section 20 exists to prevent.
+  hourCycle: 'h23',
+});
+
+interface WallClock {
+  year: number;
+  month: number;
+  day: number;
+  hour: number;
+  minute: number;
+  second: number;
+}
+
+function wallClockAt(instant: Date): WallClock {
+  const parts = PARTS.formatToParts(instant);
+  const read = (type: Intl.DateTimeFormatPartTypes): number => {
+    const part = parts.find((candidate) => candidate.type === type);
+    if (part === undefined) {
+      throw new Error(`Intl did not render a ${type} for ${ZONE}.`);
+    }
+    return Number(part.value);
+  };
+
+  return {
+    year: read('year'),
+    month: read('month'),
+    day: read('day'),
+    hour: read('hour'),
+    minute: read('minute'),
+    second: read('second'),
+  };
+}
+
+/** How far the zone's wall clock runs ahead of UTC at this instant. */
+function offsetMsAt(instant: Date): number {
+  const wall = wallClockAt(instant);
+  const asIfUtc = Date.UTC(
+    wall.year,
+    wall.month - 1,
+    wall.day,
+    wall.hour,
+    wall.minute,
+    wall.second,
+  );
+
+  // The instant's own sub-second part is not in the formatted output and is not
+  // part of an offset, so it is removed before the comparison.
+  return asIfUtc - Math.floor(instant.getTime() / 1000) * 1000;
+}
+
+/** The Asia/Manila calendar day an instant falls in, as `YYYY-MM-DD`. */
+export function manilaDayOf(instant: Date): string {
+  const wall = wallClockAt(instant);
+  return `${pad(wall.year, 4)}-${pad(wall.month, 2)}-${pad(wall.day, 2)}`;
+}
+
+/**
+ * The instant at which an Asia/Manila calendar day begins.
+ *
+ * A date-only field that has to become an instant takes 00:00:00 of that day in
+ * this zone (SKILL.md section 20). An effective date is the case that arises
+ * first: section 4 requires a Network change and the reassignment it forces to
+ * share one exact instant, and a day cannot be that on its own.
+ *
+ * Two passes, because the offset is a function of the instant and the instant is
+ * what is being solved for. The first pass reads the offset near the answer and
+ * the second confirms it; they differ only where a zone transition falls inside
+ * the day, which Asia/Manila has not had since 1978 and which this does not
+ * assume.
+ */
+export function startOfManilaDay(day: string): Date {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(day);
+  if (match === null) {
+    throw new Error(`"${day}" is not a YYYY-MM-DD date.`);
+  }
+
+  const asIfUtc = Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+
+  const firstPass = asIfUtc - offsetMsAt(new Date(asIfUtc));
+  const secondPass = asIfUtc - offsetMsAt(new Date(firstPass));
+
+  return new Date(secondPass);
+}
+
+/**
+ * The Asia/Manila day after the day this instant falls in.
+ *
+ * This is the arithmetic behind section 4's backdate floor. The floor is an
+ * instant and an effective date is a day, so the earliest date that clears the
+ * floor is the day after the floor's own day — always, and without a comparison:
+ * the start of the floor's day is never strictly later than the floor, and the
+ * start of the next day always is.
+ */
+export function manilaDayAfter(instant: Date): string {
+  const wall = wallClockAt(instant);
+
+  // Plain calendar arithmetic on the rendered day, which needs no zone: adding a
+  // day to a date is the same operation everywhere. `Date.UTC` is the vehicle for
+  // the month and year rollover, not a statement about the zone.
+  const next = new Date(Date.UTC(wall.year, wall.month - 1, wall.day + 1));
+
+  return `${pad(next.getUTCFullYear(), 4)}-${pad(next.getUTCMonth() + 1, 2)}-${pad(next.getUTCDate(), 2)}`;
+}
+
+function pad(value: number, width: number): string {
+  return String(value).padStart(width, '0');
+}

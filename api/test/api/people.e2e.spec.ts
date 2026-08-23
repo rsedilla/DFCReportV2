@@ -629,6 +629,57 @@ describe('people (SKILL.md sections 3, 7 and 8)', () => {
     return post(actor, randomUUID()).send(personBody(overrides));
   }
 
+  describe('an identifier names the same record however it is spelled', () => {
+    // A `uuid` column compares case-insensitively and TypeScript does not, and
+    // `@IsUUID()` accepts either case. Compared raw, a client echoing candidate ids
+    // back in uppercase never satisfies the Tier 1 gate — so the refusal becomes
+    // permanent and that Person can never be created, which is the block section 3
+    // says must never happen and which is worse than the duplicate it guards
+    // against. `UUID().uuidString` on iOS is uppercase by default (section 2).
+    it('accepts a duplicate acknowledgement whose ids are uppercase', async () => {
+      // Same Network as the leader they are placed under: a cross-Network edge is
+      // refused before any of this is reached, and `personBody` defaults to MALE
+      // while Manuel leads in the Men's Network.
+      const twin = personBody({
+        first_name: 'Mario',
+        last_name: 'Delacruz',
+        birth_date: '1991-07-19',
+        pastoral_leader_id: manuel.id,
+      });
+
+      const first = await request(app.getHttpServer())
+        .post('/api/v1/people')
+        .set('Authorization', `Bearer ${adminAccount.accessToken}`)
+        .set('Idempotency-Key', randomUUID())
+        .send(twin);
+
+      expect(first.status).toBe(201);
+
+      const gated = await request(app.getHttpServer())
+        .post('/api/v1/people')
+        .set('Authorization', `Bearer ${adminAccount.accessToken}`)
+        .set('Idempotency-Key', randomUUID())
+        .send(twin);
+
+      expect(gated.status).toBe(409);
+      expect(gated.body.error.code).toBe('DUPLICATE_ACKNOWLEDGEMENT_REQUIRED');
+
+      const candidateIds: string[] = gated.body.error.details.candidates.map(
+        (candidate: { id: string }) => candidate.id.toUpperCase(),
+      );
+      expect(candidateIds.length).toBeGreaterThan(0);
+
+      const acknowledged = await request(app.getHttpServer())
+        .post('/api/v1/people')
+        .set('Authorization', `Bearer ${adminAccount.accessToken}`)
+        .set('Idempotency-Key', randomUUID())
+        .send({ ...twin, acknowledged_duplicate_ids: candidateIds });
+
+      // Compared raw, this is 409 forever and the Person can never be created.
+      expect(acknowledged.status).toBe(201);
+    });
+  });
+
   function search(actor: TestAccount, q: string, limit?: number) {
     return request(app.getHttpServer())
       .get('/api/v1/people')

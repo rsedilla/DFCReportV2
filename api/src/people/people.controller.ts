@@ -1,10 +1,11 @@
-import { Body, Controller, Get, Param, Patch, Post, Query } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Put, Query } from '@nestjs/common';
 
 import { CurrentActor } from '../auth/current-actor.decorator';
 import { RequiresCapability } from '../auth/authorization/authorization.decorators';
 import { Capability } from '../auth/authorization/capabilities';
 import { AuthorizationService, type Actor } from '../auth/authorization/authorization.service';
 import { NotFoundError } from '../common/errors/api-error';
+import { CanonicalUuidPipe } from '../common/identifiers';
 import {
   CurrentIdempotency,
   type CurrentClaim,
@@ -13,6 +14,7 @@ import { HierarchyService } from '../hierarchy/hierarchy.service';
 import { NetworksService } from '../networks/networks.service';
 
 import {
+  CorrectSexDto,
   CreatePersonDto,
   DuplicateCandidatesDto,
   EditPersonDto,
@@ -138,7 +140,7 @@ export class PeopleController {
 
   @Get(':id')
   @RequiresCapability(Capability.PeopleViewSubtree, { kind: 'person', from: 'params.id' })
-  async findOne(@Param('id') id: string): Promise<Record<string, unknown>> {
+  async findOne(@Param('id', CanonicalUuidPipe) id: string): Promise<Record<string, unknown>> {
     const person = await this.people.findById(id);
     if (!person) {
       throw new NotFoundError('No such person.');
@@ -186,7 +188,7 @@ export class PeopleController {
   @Patch(':id')
   @RequiresCapability(Capability.PeopleEditBasic, { kind: 'person', from: 'params.id' })
   async editBasic(
-    @Param('id') id: string,
+    @Param('id', CanonicalUuidPipe) id: string,
     @Body() body: EditPersonDto,
     @CurrentActor() actor: Actor,
     @CurrentIdempotency() claim: CurrentClaim,
@@ -203,6 +205,45 @@ export class PeopleController {
         birthDate: body.birth_date,
         civilStatus: body.civil_status,
         mobileNumber: body.mobile_number,
+      },
+      actor,
+      claim,
+    );
+  }
+
+  /**
+   * The audited sex correction of SKILL.md section 4.
+   *
+   * `PUT /{id}/<attribute>`, matching the pastoral-leader route section 22 lists,
+   * because that is what this is: a change to one governed attribute of a Person,
+   * not a general edit.
+   *
+   * The guard checks `people.correct_sex` against the person. It is one half of
+   * the authorization — section 7's guard evaluates one capability against one
+   * target, and this operation carries two further checks that a capability and a
+   * scope cannot express: that the grant is Whole Church, and that backdating
+   * additionally requires `records.backdate_effective_date` (section 5). Both live
+   * in the service, so they hold for every caller rather than for this route only.
+   */
+  @Put(':id/sex')
+  @RequiresCapability(Capability.PeopleCorrectSex, { kind: 'person', from: 'params.id' })
+  async correctSex(
+    @Param('id', CanonicalUuidPipe) id: string,
+    @Body() body: CorrectSexDto,
+    @CurrentActor() actor: Actor,
+    @CurrentIdempotency() claim: CurrentClaim,
+  ): Promise<Record<string, unknown>> {
+    // Returned unchanged, for the reason the basic edit gives: the service
+    // composed this body and recorded it inside the write's transaction, and
+    // reshaping it here would make the sent response differ from the stored one
+    // (section 22).
+    return this.people.correctSex(
+      id,
+      {
+        sex: body.sex,
+        reason: body.reason,
+        pastoralLeaderId: body.pastoral_leader_id,
+        effectiveDate: body.effective_date,
       },
       actor,
       claim,

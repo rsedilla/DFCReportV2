@@ -1,5 +1,7 @@
 import { Injectable } from '@nestjs/common';
 
+import { canonicalIfUuid } from '../common/identifiers';
+
 import type { AuditAction, Database, Json } from '../database/schema';
 import type { Transaction } from 'kysely';
 
@@ -50,7 +52,18 @@ export class AuditService {
         actor_id: entry.actorId,
         action: entry.action,
         target_type: entry.targetType,
-        target_id: entry.targetId,
+        // Canonical, because this is the one place a client-supplied identifier is
+        // **stored** rather than compared. The column is `text` (section 21: not
+        // every target is keyed by a UUID), so the lookup it will eventually face
+        // is case-sensitive — and migration 0002 makes an audit row unrepairable,
+        // so a mis-cased target would be an entry permanently invisible to the
+        // search section 7 resolves scope through. Closed here rather than left to
+        // every caller having wired a pipe.
+        //
+        // Narrowed to values that are UUIDs: a setting's key is a target too, and
+        // lowercasing every target would canonicalize the identifiers and corrupt
+        // anything else that is case-sensitive.
+        target_id: canonicalIfUuid(entry.targetId),
         before: entry.before ?? null,
         after: entry.after ?? null,
         reason: entry.reason ?? null,
