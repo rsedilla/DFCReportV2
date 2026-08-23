@@ -1,5 +1,7 @@
 import { Injectable, type ArgumentMetadata, type PipeTransform } from '@nestjs/common';
 
+import { ValidationFailedError } from './errors/api-error';
+
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
@@ -52,15 +54,26 @@ export function sameId(left: string, right: string): boolean {
 }
 
 /**
- * Whether a key names an identifier: `id` or `ids`, or anything ending `_id`,
- * `_ids`, `Id` or `Ids`.
+ * Whether a key names an identifier, per SKILL.md section 22's field-naming
+ * convention: a bare `id` or `ids`, or anything ending `_id` or `_ids`.
  *
- * The singular and plural forms are both accepted at every position, which reads
- * like pedantry and is not: `^id$` without `^ids$` left a body field named `ids`
- * outside the rule, which is the sort of gap that is invisible until the one
- * request that carries it. Ordinary words ending in those letters — `valid`,
- * `humid`, `candid` — are not matched, because every branch requires either the
- * whole key, a preceding underscore, or a capital `I`.
+ * **The bare forms are the load-bearing half.** A path parameter binds under the
+ * name its route declared, so `@Param('id')` hands this the key `id` — and a
+ * pattern admitting only the suffixed forms would put every path parameter in the
+ * API outside the rule, which is the case the boundary was written for. The plural
+ * is admitted alongside it at both positions, so `ids` and
+ * `acknowledged_duplicate_ids` are one rule rather than two.
+ *
+ * **`camelCase` is deliberately not matched.** Section 22 makes the API surface
+ * `snake_case`, so a `meetingId` arriving from a client is a naming defect to fix
+ * at the route rather than a spelling for this to absorb. An earlier version
+ * accepted `Id`/`Ids` as defence in depth, which is a shape kept without its
+ * reason holding (section 25, rule 19): nothing in this API can produce such a
+ * key, and `forbidNonWhitelisted` rejects one that arrives.
+ *
+ * Ordinary words ending in those letters — `valid`, `humid`, `candid` — are not
+ * matched, because every branch requires either the whole key or a preceding
+ * underscore.
  *
  * The field *name* is what decides, not the value's shape, and that is the whole
  * safety argument. A shape-only rule cannot tell an identifier from a password
@@ -68,17 +81,39 @@ export function sameId(left: string, right: string): boolean {
  * password — and lowercasing one silently locks an account out for good. Names are
  * decided by this codebase; the contents of a credential field are not.
  */
-const IDENTIFIER_KEY = /^ids?$|_ids?$|Ids?$/;
+const IDENTIFIER_KEY = /^ids?$|_ids?$/;
 
 /**
- * How deep the walk goes before it stops descending.
+ * How deep a client's JSON may nest before the request is refused.
  *
  * A body is JSON that arrived from a client, so its nesting is chosen by whoever
- * sent it. Without a bound, a payload well inside the 100 KB body limit overflows
- * the stack and answers `INTERNAL_ERROR` — a 500 logged as a defect, for input.
- * Twenty is far beyond any DTO in this system and far short of a stack.
+ * sent it. `JSON.parse` is iterative in V8 and accepts any depth; every walk over
+ * the result in this application is recursive and does not. Around three thousand
+ * levels — **eighteen kilobytes**, far inside any body limit — overflows the
+ * stack, and an unhandled `RangeError` renders as `INTERNAL_ERROR`: a 500 logged
+ * as a defect, produced by input, on every authenticated write endpoint.
+ *
+ * **Exceeding it is refused, not truncated.** An earlier version stopped
+ * descending and returned the container unchanged, which is worse than it looks:
+ * a request nested past the bound kept its identifiers in whatever case the client
+ * sent them, silently, and every comparison below became a comparison on a
+ * spelling. Refusing makes it `VALIDATION_FAILED` — a decision the rules reached,
+ * which is what section 22 stores against an idempotency key rather than
+ * releasing.
+ *
+ * Twenty is far beyond any DTO in this system — the deepest is an array of
+ * identifiers inside a body, at three — and far short of a stack.
  */
-const MAX_DEPTH = 20;
+export const MAX_IDENTIFIER_DEPTH = 20;
+
+/** Refuses a payload nested past {@link MAX_IDENTIFIER_DEPTH}. */
+export function assertWithinDepth(depth: number): void {
+  if (depth >= MAX_IDENTIFIER_DEPTH) {
+    throw new ValidationFailedError('That request body is nested too deeply.', {
+      max_depth: MAX_IDENTIFIER_DEPTH,
+    });
+  }
+}
 
 /**
  * The same value with identifier fields canonicalized.
@@ -102,15 +137,18 @@ const MAX_DEPTH = 20;
  * against `Object.prototype` alone silently skips every object-bound query and
  * path parameter — which is exactly the "silently outside the rule" failure this
  * exists to remove. A `Date`, a `Buffer` or a class instance is still excluded.
+ *
+ * Nothing is mutated, and the returned structure **aliases** the input wherever
+ * nothing changed: a value this declines to rewrite is the same reference, not a
+ * copy. That is what matters at the call sites — the capability guard reads the
+ * raw body before this runs, and must go on seeing what the client sent.
  */
 export function canonicalizeIdentifiers(value: unknown, key?: string, depth = 0): unknown {
   if (typeof value === 'string') {
     return key !== undefined && IDENTIFIER_KEY.test(key) ? canonicalIfUuid(value) : value;
   }
 
-  if (depth >= MAX_DEPTH) {
-    return value;
-  }
+  assertWithinDepth(depth);
 
   if (Array.isArray(value)) {
     return value.map((item) => canonicalizeIdentifiers(item, key, depth + 1));

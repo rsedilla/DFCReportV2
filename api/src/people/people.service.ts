@@ -1249,7 +1249,7 @@ export class PeopleService {
       if (subtree.some((descendantId) => sameId(descendantId, input.leaderId))) {
         throw new InvariantViolationError(
           'That leader is below this person in the tree, so the assignment would create a cycle.',
-          { person_id: personId, leader_id: input.leaderId },
+          { person_id: personId, pastoral_leader_id: input.leaderId },
         );
       }
 

@@ -153,6 +153,47 @@ describe('reassigning a pastoral leader: the record (sections 5, 21, 22)', () =>
 
       expect(rows).toHaveLength(2);
     });
+
+    it('replays a retry that spelled its identifiers in a different case', async () => {
+      // **The fingerprint is the second place identifiers have to be canonical,
+      // and it is reached before the first.** Interceptors run ahead of pipes, so
+      // the body and path the fingerprint is taken over are exactly as the client
+      // spelled them — the global boundary has not run yet.
+      //
+      // Left raw, one retry differing only in case hashes differently and is
+      // answered `IDEMPOTENCY_KEY_REUSED`, which section 22 makes **permanent** and
+      // says must never be retried. An ordinary retry from a phone on a bad
+      // connection becomes a dead end, and the write it is retrying has already
+      // happened. `UUID().uuidString` is uppercase on iOS by default (section 2).
+      //
+      // **The mutation this fails against** is deleting either canonicalization in
+      // `requestPath` or the `canonicalizeIdentifiers(request.body)` argument
+      // beside it. Both could be removed with the rest of the suite green, because
+      // nothing else sends one key twice in two spellings.
+      const key = randomUUID();
+
+      const first = await reassign(mark.id, { pastoral_leader_id: rico.id }, admin, key);
+      expect(first.status).toBe(200);
+
+      const retry = await reassign(
+        mark.id.toUpperCase(),
+        { pastoral_leader_id: rico.id.toUpperCase() },
+        admin,
+        key,
+      );
+
+      // The stored response, not a 409 — and not a second reassignment either.
+      expect(retry.status).toBe(200);
+      expect(retry.body).toEqual(first.body);
+
+      const rows = await db
+        .selectFrom('pastoral_assignments')
+        .selectAll()
+        .where('person_id', '=', mark.id)
+        .execute();
+
+      expect(rows).toHaveLength(2);
+    });
   });
 
   describe('the backdate bounds (section 5)', () => {

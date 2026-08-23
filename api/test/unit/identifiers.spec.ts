@@ -1,18 +1,29 @@
+import { ApiErrorCode } from '../../src/common/errors/api-error';
+import { IdempotencyService } from '../../src/common/idempotency/idempotency.service';
 import {
+  MAX_IDENTIFIER_DEPTH,
   canonicalId,
   canonicalIfUuid,
   canonicalizeIdentifiers,
   sameId,
 } from '../../src/common/identifiers';
 
+import type { Db } from '../../src/database/database.module';
+
 /**
  * The identifier boundary (SKILL.md section 7).
  *
- * These are pure functions and need no database, which matters twice over: the
- * walk runs over **every request body in the system**, and two of its three
- * safety properties are things no end-to-end case can see. A prototype check that
- * silently skips `req.query`, a credential quietly lowercased, and a stack
- * overflow on a legal payload all look identical to a passing suite.
+ * These are pure functions, and they are unit-tested because the walk runs over
+ * **every request body in the system** while three of its safety properties are
+ * things no end-to-end case can see. A prototype check that silently skips
+ * `req.query`, a credential quietly lowercased, and a stack overflow on a legal
+ * payload all look identical to a passing suite.
+ *
+ * They do still run under the shared harness, which requires `DATABASE_URL` to be
+ * set before any suite loads (`test/setup/env.ts`). An earlier version of this
+ * comment claimed they needed no database at all, which was the justification for
+ * the file and was not true of the harness — they need no database *server*, and a
+ * dummy URL is enough.
  *
  * The e2e probe pins that the boundary is global. This pins what it does once it
  * gets there.
@@ -27,7 +38,6 @@ describe('canonicalizing identifiers (section 7)', () => {
         pastoral_leader_id: LOWER,
       });
       expect(canonicalizeIdentifiers({ id: UPPER })).toEqual({ id: LOWER });
-      expect(canonicalizeIdentifiers({ meetingId: UPPER })).toEqual({ meetingId: LOWER });
     });
 
     it('reaches identifiers inside an array under such a key', () => {
@@ -38,10 +48,14 @@ describe('canonicalizing identifiers (section 7)', () => {
       });
     });
 
-    it('accepts the singular and the plural at every position', () => {
-      // `^id$` without `^ids$` left a body field named plainly `ids` outside the
-      // rule — found by CI, because the probe's nested body used that key.
-      for (const key of ['id', 'ids', 'leader_id', 'duplicate_ids', 'meetingId', 'memberIds']) {
+    it('accepts the singular and the plural, bare and suffixed', () => {
+      // **The bare forms are the load-bearing half.** A path parameter binds under
+      // the name its route declared, so `@Param('id')` arrives here as the key
+      // `id` — a pattern admitting only `_id`/`_ids` would put every path
+      // parameter in the API outside the rule, which is the case the boundary was
+      // written for. `^id$` without `^ids$` separately left a body field named
+      // plainly `ids` outside it, found by CI because the probe's body used it.
+      for (const key of ['id', 'ids', 'leader_id', 'duplicate_ids']) {
         expect(canonicalizeIdentifiers({ [key]: UPPER })).toEqual({ [key]: LOWER });
       }
 
@@ -77,6 +91,18 @@ describe('canonicalizing identifiers (section 7)', () => {
       expect(canonicalizeIdentifiers({ member_id: 'M-000123' })).toEqual({
         member_id: 'M-000123',
       });
+    });
+
+    it('leaves a camelCase key alone, because section 22 makes the surface snake_case', () => {
+      // **This is a narrowing, and it is deliberate.** An earlier version matched
+      // `Id`/`Ids` as defence in depth. Nothing in this API can produce such a key
+      // — section 22 fixes the surface as snake_case and `forbidNonWhitelisted`
+      // rejects an undeclared one — so it was a shape kept without its reason
+      // holding, which section 25 rule 19 exists to stop. A `meetingId` arriving
+      // from a client is a naming defect to fix at the route, and the boundary
+      // silently absorbing it is what would hide that.
+      expect(canonicalizeIdentifiers({ meetingId: UPPER })).toEqual({ meetingId: UPPER });
+      expect(canonicalizeIdentifiers({ memberIds: [UPPER] })).toEqual({ memberIds: [UPPER] });
     });
 
     it('leaves ordinary fields alone', () => {
@@ -123,17 +149,66 @@ describe('canonicalizing identifiers (section 7)', () => {
       expect(body.ids[0]).toBe(UPPER);
       expect(result).not.toBe(body);
     });
+  });
 
-    it('stops descending rather than overflowing the stack', () => {
-      // A body is JSON chosen by whoever sent it. Unbounded, a payload well inside
-      // the 100 KB limit throws a RangeError, which renders as INTERNAL_ERROR — a
-      // 500 logged as a defect, for input, on a route reachable before sign-in.
+  describe('a body nested past the bound is refused, not truncated', () => {
+    /** `{nested:{nested:{…{id:UPPER}}}}`, `levels` deep. */
+    function nest(levels: number): unknown {
       let deep: unknown = { id: UPPER };
-      for (let level = 0; level < 5_000; level += 1) {
+      for (let level = 0; level < levels; level += 1) {
         deep = { nested: deep };
       }
+      return deep;
+    }
 
-      expect(() => canonicalizeIdentifiers(deep)).not.toThrow();
+    it('answers VALIDATION_FAILED rather than overflowing the stack', () => {
+      // **A body is JSON chosen by whoever sent it.** `JSON.parse` is iterative in
+      // V8 and accepts any depth; every walk over the result here is recursive and
+      // does not. Around three thousand levels — eighteen kilobytes, well inside
+      // any body limit — overflows, and an unhandled RangeError renders as
+      // INTERNAL_ERROR: a 500 logged as a defect, produced by input.
+      let thrown: unknown;
+      try {
+        canonicalizeIdentifiers(nest(5_000));
+      } catch (error) {
+        thrown = error;
+      }
+
+      expect(thrown).toBeDefined();
+      expect((thrown as { code?: string }).code).toBe(ApiErrorCode.VALIDATION_FAILED);
+      expect(thrown).not.toBeInstanceOf(RangeError);
+    });
+
+    it('refuses rather than returning the container unwalked', () => {
+      // **The mutation this fails against is the version that shipped**, which
+      // stopped descending and returned the container unchanged. That is worse
+      // than it looks: a request nested past the bound kept its identifiers in
+      // whatever case the client sent, silently, and every comparison below became
+      // a comparison on a spelling. It has to refuse, not truncate.
+      expect(() => canonicalizeIdentifiers(nest(MAX_IDENTIFIER_DEPTH + 1))).toThrow();
+
+      // And a body inside the bound is walked all the way down, so the refusal is
+      // not simply "deep bodies fail".
+      const shallow = canonicalizeIdentifiers(nest(MAX_IDENTIFIER_DEPTH - 3));
+      expect(JSON.stringify(shallow)).toContain(LOWER);
+      expect(JSON.stringify(shallow)).not.toContain(UPPER);
+    });
+
+    it('bounds the fingerprint walk too, at the same depth', () => {
+      // **The second recursive walk over the same body, and the one that was
+      // unbounded.** The interceptor calls `canonicalizeIdentifiers` first, so in
+      // practice that refuses before this is entered — but `fingerprint` is a
+      // public method and the ordering of its callers is not a property it can
+      // rely on, which is how the unbounded version was reached at all.
+      //
+      // Sharing one constant is the point: two walks over one body with two bounds
+      // would let the shallower refuse a request the deeper had already rewritten.
+      const idempotency = new IdempotencyService(null as unknown as Db);
+
+      expect(() => idempotency.fingerprint('POST', '/api/v1/people', nest(5_000))).toThrow();
+      expect(() =>
+        idempotency.fingerprint('POST', '/api/v1/people', nest(MAX_IDENTIFIER_DEPTH - 3)),
+      ).not.toThrow();
     });
   });
 
@@ -144,8 +219,11 @@ describe('canonicalizing identifiers (section 7)', () => {
     });
 
     it('canonicalIfUuid narrows to the shape, for the one place with no key', () => {
-      // The idempotency fingerprint's path segments: a URL path carries
-      // identifiers and nothing else, so shape is the whole test there.
+      // The idempotency fingerprint's path segments, which have no key to read.
+      // What makes shape safe *there* is reachability rather than any property of
+      // paths: the credentials that travel in a URL-shaped position are the
+      // activation and reset tokens, and those routes are unauthenticated, so the
+      // interceptor returns before a path is ever canonicalized for them.
       expect(canonicalIfUuid(UPPER)).toBe(LOWER);
       expect(canonicalIfUuid('cell_attention_months')).toBe('cell_attention_months');
       expect(canonicalId(UPPER)).toBe(LOWER);

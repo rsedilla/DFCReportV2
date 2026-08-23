@@ -231,10 +231,19 @@ function requestPath(request: AuthenticatedRequest): string {
   // **Segment by segment, not over the whole string.** An identifier reaches this
   // as one segment of a path, and a path is never itself UUID-shaped — so handing
   // the whole thing to `canonicalizeIdentifiers` would do nothing at all, quietly.
-  // **Segment by segment, and by shape rather than by name**, because a path
-  // segment has no key. That is safe here in a way it is not for a body: a URL
-  // path carries identifiers and nothing else -- no credential is ever a path
-  // segment -- so a UUID-shaped segment is an identifier by construction.
+  //
+  // **By shape rather than by name, because a path segment has no key**, which
+  // is the one place this application still keys on shape. What makes that safe
+  // is not that a path "carries identifiers and nothing else" -- that was the
+  // reason first written here, and it is an assertion nothing enforces, of
+  // exactly the kind section 25 rule 19 exists to stop. What makes it safe is
+  // reachability: the credentials that travel in a URL-shaped position are the
+  // activation and reset tokens, those routes are on section 7's unauthenticated
+  // list, and this interceptor returns above before `requestPath` is reached for
+  // any of them.
+  //
+  // So what would break it is a credential added to a path on an *authenticated*
+  // route -- not a UUID-shaped password in a body, which never arrives here.
   const path = trimmed
     .split('/')
     .map((segment) => canonicalIfUuid(segment))
