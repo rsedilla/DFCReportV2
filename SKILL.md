@@ -2804,22 +2804,32 @@ A field name that differs between two endpoints for one concept is a permanent c
 #### Request bodies are bounded in depth
 
 **A request whose JSON nests more than twenty levels is refused with
-`VALIDATION_FAILED`, carrying `max_depth` in `details`.** No DTO describes it and no
-controller checks it: it is a property of the request, refused at the boundary.
+`VALIDATION_FAILED`, carrying `max_depth` in `details`, wherever anything in this API
+reads that body.** No DTO describes it and no controller checks it: it is a property
+of the request, refused at the boundary.
 
-**What enforces it is a walk over a bound argument**, and that is worth stating
-because it is where the rule can be escaped rather than merely where it lives. The
-identifier boundary walks whatever a route binds, and the idempotency fingerprint
-walks the body of every authenticated state-changing request — so a route binding
-the whole body, a path parameter or a query is covered, and every route today is.
-A route that both bound a **sub-field** of the body, `@Body('token')` rather than
-`@Body()`, and was on the unauthenticated list would hand the boundary a string and
-be walked by neither.
+**The qualifier is exact rather than cautious, and the two halves of it are worth
+separating.** The hazard is a recursive walk, so a body nothing walks cannot produce
+one; the *rule* is therefore never violated by a route that does not read its body,
+only unenforced there. Two routes are in that position today — the liveness probe
+and `GET /api/v1/auth/me`, which bind nothing a client sent — and a 25-deep body
+posted to either is answered normally rather than refused. That is stated because
+three clients branch on this section and would otherwise read the rule as absolute.
 
-None exists, and one added later is outside the rule silently — the shape Sections 2
-and 7 refuse everywhere else, and the reason the boundary was made global rather than
-per route. A route of that shape either binds the whole body or the check moves
-somewhere a binding cannot escape.
+**What enforces it is a walk over a bound argument**, which is where the rule can be
+escaped. The identifier boundary walks whatever a route binds; the idempotency
+fingerprint walks the body of every authenticated state-changing request. The
+escaping shape is therefore any route where **the body is not among the bound
+arguments and the request is not an authenticated state-changing one** — a handler
+binding nothing, or binding only a value this application constructed, or binding a
+**sub-field**, `@Body('token')` rather than `@Body()`.
+
+The first two exist and are harmless, because nothing reads those bodies. The third
+does not exist and would matter, because a sub-field binding can coexist with a route
+that goes on to read the whole body by other means. One added later is outside the
+rule silently — the shape Sections 2 and 7 refuse everywhere else, and the reason
+the boundary was made global rather than per route. Such a route either binds the
+whole body, or the check moves somewhere a binding cannot escape.
 
 The bound exists because **`JSON.parse` accepts a depth that the code reading its
 result cannot**. V8 parses iteratively and has no practical limit — two hundred

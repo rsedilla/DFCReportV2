@@ -2133,11 +2133,13 @@ the part being looked at:
 
   *And the withdrawal, as first written, said "nothing aliases but primitives", which
   is also wrong.* A non-plain object — a `Date`, a `Buffer`, a class instance — is
-  returned by reference, and the file's own case asserting a live `Date` survives
-  pins it. The docblock scopes the claim correctly ("for any array or plain object");
-  only this log did not. Three statements in sequence on one small fact, which is why
-  it is left visible rather than tidied: the code was right throughout and the prose
-  about it was wrong twice.
+  returned by reference. Nothing pins that: the file's case asserting a live `Date`
+  survives checks `instanceof` and `getTime()`, both of which a *cloning*
+  implementation would satisfy too, so it pins survival-as-a-`Date` and not identity.
+  The docblock scopes the claim correctly ("for any array or plain object"); only this
+  log did not. Three statements in sequence on one small fact — four counting the
+  overclaim in this sentence's own first draft — which is why it is left visible
+  rather than tidied: the code was right throughout and the prose about it was not.
 - `api/test/unit/identifiers.spec.ts` justified its own existence with "these are
   pure functions and need no database". The shared harness throws without
   `DATABASE_URL` before any suite loads. They need no database *server*; a dummy URL

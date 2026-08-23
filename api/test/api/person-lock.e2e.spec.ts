@@ -39,6 +39,12 @@ import type { TestAccount, TestPerson } from '../setup/fixtures';
  * for that lock, and which fails by timing out if it never does.
  *
  * Fixture names and dates are invented (CLAUDE.md, Secrets).
+ *
+ * **This file carries a second subject**, which its title does not cover and
+ * which is here rather than in its own file because it needs this one's
+ * fixtures and app: the identifier boundary's global-ness (section 7), pinned by
+ * the probe controller below and by the case that drives it. That case is the
+ * only one in the suite that fails if the boundary regresses to being opt-in.
  */
 /**
  * A route that opts into nothing.
@@ -70,7 +76,7 @@ class IdentifierProbeController {
   }
 }
 
-describe('the person lock is taken by every path that can strand an edge', () => {
+describe('the person lock, and the identifier boundary that needs the same fixtures', () => {
   let app: INestApplication;
   let db: Kysely<Database>;
 

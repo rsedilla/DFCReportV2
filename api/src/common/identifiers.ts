@@ -123,7 +123,8 @@ const IDENTIFIER_KEY = /^ids?$|_ids?$/;
  * the reason, which described a path this code does not take.
  *
  * Twenty is far beyond any DTO in this system — the deepest is an array of
- * identifiers inside a body, at three — and far short of a stack.
+ * identifiers inside a body, which is **two** containers, the body and the array;
+ * the string inside it is a leaf and is not a level — and far short of a stack.
  */
 export const MAX_IDENTIFIER_DEPTH = 20;
 
