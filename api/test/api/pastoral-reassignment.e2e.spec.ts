@@ -1,8 +1,10 @@
 import { randomUUID } from 'node:crypto';
 
+import { Client } from 'pg';
 import request from 'supertest';
 
-import { HierarchyService } from '../../src/hierarchy/hierarchy.service';
+import { AuthorizationService } from '../../src/auth/authorization/authorization.service';
+import { PeopleService } from '../../src/people/people.service';
 import { createTestDb, truncateAll } from '../setup/database';
 import { assignTo, createAccount, createPerson, createTestApp, EPOCH } from '../setup/fixtures';
 
@@ -235,14 +237,28 @@ describe('reassigning a pastoral leader: the record (sections 5, 21, 22)', () =>
       // Section 4: the system is authoritative for Network history only from each
       // person's encoding date forward, and the trigger raises on an unknown
       // Network rather than treating it as a match.
-      const response = await reassign(mark.id, {
+      //
+      // **The person is chosen so the floor cannot be what refuses this.** They hold
+      // no assignment at all, so their floor is empty, and their Network row begins
+      // after the date submitted. Asserted against `mark`, whose floor is March
+      // 2026, the case would pass with this branch deleted.
+      const encodedAt = new Date('2026-02-01T00:00:00+08:00');
+      const late = await createPerson(db, {
+        firstName: 'Nena',
+        network: 'MENS',
+        startedAt: encodedAt,
+      });
+
+      const response = await reassign(late.id, {
         leader_id: rico.id,
-        effective_date: '2019-01-01',
+        effective_date: '2026-01-01',
         reason: 'Correcting a transfer recorded late.',
       });
 
       expect(response.status).toBe(409);
       expect(response.body.error.code).toBe('INVARIANT_VIOLATION');
+      expect(response.body.error.message).toMatch(/no Network on record/);
+      expect(response.body.error.details).not.toHaveProperty('earliest_effective_date');
     });
 
     it('requires a reason when backdating, and not otherwise', async () => {
@@ -381,33 +397,139 @@ describe('reassigning a pastoral leader: the record (sections 5, 21, 22)', () =>
 
     it('exempts Admin from invariant 4, which is what section 5 says', async () => {
       // Without this the two cases above are satisfied by a check that refuses
-      // everyone. Ester is Admin and has no position in the Men's tree at all.
-      const response = await reassign(ben.id, { leader_id: rico.id });
+      // everyone. It has to reach the exemption, which means an Admin acting on
+      // **their own** Person — an Admin with no position in the tree passes
+      // invariant 4 whether the exemption exists or not, which is what the first
+      // version of this case did.
+      const manuelAdmin = await createAccount(app, db, { person: manuel, roles: ['ADMIN'] });
+
+      const response = await reassign(manuel.id, { leader_id: rico.id }, manuelAdmin);
+
       expect(response.status).toBe(200);
+      expect(response.body.previous_pastoral_leader_id).toBe(raymond.id);
     });
 
-    it('checks invariant 1 against the source leader, which the guard subsumes', async () => {
-      // Under every scope this system can issue, a person inside the actor's scope
-      // has their current leader inside it too — so the guard subsumes the source
-      // half and no end-to-end case can reach it. Called directly, because a rule
-      // section 5 states must have something that can fail on it, and because a
-      // scope type added later would not be subsumed.
-      const hierarchy = app.get(HierarchyService);
-
-      // Sanity: the tree is the shape this case assumes.
-      await expect(hierarchy.ancestorsOf(db, mark.id)).resolves.toEqual([
-        manuel.id,
-        raymond.id,
-        ben.id,
-        oriel.id,
-      ]);
-
+    it('refuses a destination the actor does not oversee', async () => {
+      // Invariant 1's destination half, end to end. Mark is inside Raymond's
+      // subtree so the guard passes; Rico is outside it.
       const response = await reassign(mark.id, { leader_id: rico.id }, raymondAccount);
 
-      // Rico is outside Raymond's subtree: the destination half refuses.
       expect(response.status).toBe(403);
       expect(response.body.error.code).toBe('SCOPE_DENIED');
       expect(response.body.error.details.field).toBe('leader_id');
+    });
+
+    it('refuses a source the actor does not oversee, which no request can reach', async () => {
+      // **Called directly, and the previous version of this case did not.** It
+      // asserted `field === 'leader_id'`, which is the *destination* label, so it
+      // pinned the destination half a second time and the source entry could be
+      // deleted with the suite still green.
+      //
+      // No request can reach it: under a subtree scope a person inside the actor's
+      // scope has their current leader inside it too, and under a Network scope the
+      // same-Network rule puts them in the same Network. Section 5 mandates the
+      // check anyway, and a scope type added later would not be subsumed — so it
+      // gets the only test that can fail against its absence.
+      const people = app.get(PeopleService);
+      const authorization = app.get(AuthorizationService);
+      const grants = await authorization.grantsFor(raymondAccount.id);
+
+      const actor = { accountId: raymondAccount.id, personId: raymond.id };
+
+      await expect(
+        people.assertBothEndpointsInScope(db, actor, grants, rico.id, manuel.id),
+      ).rejects.toMatchObject({ code: 'SCOPE_DENIED', details: { field: 'current_leader' } });
+
+      // And it permits what it should, so it is not satisfied by refusing everyone.
+      await expect(
+        people.assertBothEndpointsInScope(db, actor, grants, manuel.id, raymond.id),
+      ).resolves.toBeUndefined();
+    });
+  });
+
+  describe('the decision is made after the lock, not before it', () => {
+    it('denies a request whose person left the actor subtree while it waited', async () => {
+      // **The headline of this endpoint's authorization, and nothing else pins it.**
+      // Move every authorization call back above `this.db.transaction()` and the
+      // whole suite stays green except this one.
+      //
+      // Raymond may move Mark to Raymond, and both endpoints are his at the moment
+      // he asks. While the request waits on Mark's lock, Mark is moved under Rico —
+      // outside Raymond's subtree entirely. Decided beforehand, the request then
+      // writes a move it is no longer authorized to make; decided after the lock,
+      // it is refused.
+      const holder = new Client({ connectionString: process.env.DATABASE_URL });
+      await holder.connect();
+
+      try {
+        await holder.query('BEGIN');
+        await holder.query('SELECT pg_advisory_xact_lock(hashtextextended($1::uuid::text, 0))', [
+          mark.id,
+        ]);
+
+        let settled = false;
+        const pending = reassign(mark.id, { leader_id: raymond.id }, raymondAccount).then(
+          (response) => {
+            settled = true;
+            return response;
+          },
+        );
+
+        // Wait for the request to be blocked on Mark's key, so the move below
+        // genuinely lands between its authorization and its write.
+        let waiting = 0;
+        const deadline = Date.now() + 2_500;
+        while (Date.now() < deadline && waiting === 0) {
+          const found = await holder.query<{ waiting: string }>(
+            `SELECT count(*) AS waiting
+               FROM pg_locks
+              WHERE locktype = 'advisory'
+                AND NOT granted
+                AND objsubid = 1
+                AND classid::bigint = ((hashtextextended($1::uuid::text, 0) >> 32) & 4294967295)
+                AND objid::bigint = (hashtextextended($1::uuid::text, 0) & 4294967295)`,
+            [mark.id],
+          );
+          waiting = Number(found.rows[0].waiting);
+          if (waiting === 0) {
+            await new Promise((resolve) => setTimeout(resolve, 50));
+          }
+        }
+
+        expect(waiting).toBeGreaterThan(0);
+        expect(settled).toBe(false);
+
+        // Written directly, so it takes no advisory lock and lands while the
+        // request is queued behind the holder.
+        const movedAt = new Date();
+        await db
+          .updateTable('pastoral_assignments')
+          .set({ ended_at: movedAt })
+          .where('person_id', '=', mark.id)
+          .where('ended_at', 'is', null)
+          .execute();
+        await assignTo(db, mark.id, rico.id, movedAt);
+
+        await holder.query('ROLLBACK');
+
+        const response = await pending;
+
+        expect(response.status).toBe(403);
+        expect(response.body.error.code).toBe('SCOPE_DENIED');
+
+        // And it wrote nothing: Mark is still where the concurrent move put him.
+        const open = await db
+          .selectFrom('pastoral_assignments')
+          .select('leader_id')
+          .where('person_id', '=', mark.id)
+          .where('ended_at', 'is', null)
+          .executeTakeFirstOrThrow();
+
+        expect(open.leader_id).toBe(rico.id);
+      } finally {
+        await holder.query('ROLLBACK').catch(() => undefined);
+        await holder.end();
+      }
     });
   });
 

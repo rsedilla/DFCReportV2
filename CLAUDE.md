@@ -1750,13 +1750,27 @@ mechanism — committed, this time, in the entry created to settle that mechanis
 Both are now true: the floor is the shared call, which also settles the Stop
 Condition below.
 
-**A person with no open assignment is bounded by §4's term (b).** Nothing else
+**A person with no open assignment is bounded by a term (b) of its own.** Nothing else
 bounds them — the one-active index is partial over `ended_at IS NULL`, so an
 effective date inside an already-closed period is permitted by the schema and leaves
 two rows valid at one instant, with "who led this person on date D" having two
 answers. Not reachable in Stage 2, because nothing yet closes an assignment without
 opening one; ruled now because the rule reads as complete without it and the term
 already exists.
+
+**It reaches only the subordinate side, and the first attempt reached both.** I
+recommended "the same term §4's floor already carries, for the same reason", and
+the reason does not carry: §4 needs both directions because
+`assert_network_change_keeps_edges` selects edges either way, while a reassignment
+fires `assert_assignment_same_network`, which reads only the row being written. Both
+directions therefore refused a legitimate Admin correction for every leader who had
+ever had a disciple moved — which §4 makes the *ordinary* precondition of a Network
+correction. The shared method now takes which disjuncts apply, and §5 states its own
+reason instead of borrowing one.
+
+Recorded because the fault is a specific one and this is the second time in two
+batches it has appeared here: a rule adopted from a neighbouring section by its
+*shape* rather than by re-deriving why it has that shape.
 
 **A reassignment to the leader the person already has is refused**, matching what §4
 does for a sex correction that changes nothing, on the same reasoning: the operation

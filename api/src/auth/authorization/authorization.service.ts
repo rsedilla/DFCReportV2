@@ -192,11 +192,37 @@ export class AuthorizationService {
     capability: Capability,
     target: Target,
   ): Promise<boolean> {
-    const grants = (await this.grantsFor(actor.accountId)).filter(
-      (grant) => grant.capability === capability,
+    return this.coversWith(
+      executor,
+      actor,
+      await this.grantsFor(actor.accountId),
+      capability,
+      target,
     );
+  }
 
-    for (const grant of grants) {
+  /**
+   * The same question, against grants the caller has already read.
+   *
+   * **This exists so that a caller inside a transaction touches the pool exactly
+   * never.** `grantsFor` reads two tables on the pooled connection, and a pooled
+   * read taken while holding a transaction asks a bounded pool for a second
+   * connection — which SKILL.md section 24 names as a liveness hazard, because the
+   * wait is unbounded and every waiter is holding a connection of its own.
+   *
+   * The split is along the right seam rather than a convenient one. An account's
+   * grants are a fact about the account and cannot change under a tree write, so
+   * reading them before the transaction costs nothing in correctness; *scope* is a
+   * fact about the tree, and that is the half that has to see the transaction.
+   */
+  async coversWith(
+    executor: Db,
+    actor: Actor,
+    grants: readonly EffectiveGrant[],
+    capability: Capability,
+    target: Target,
+  ): Promise<boolean> {
+    for (const grant of grants.filter((held) => held.capability === capability)) {
       if (await this.scopeCovers(executor, grant.scope, target, actor)) {
         return true;
       }

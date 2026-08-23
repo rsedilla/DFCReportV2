@@ -2,7 +2,11 @@ import { Inject, Injectable } from '@nestjs/common';
 import { sql } from 'kysely';
 
 import { AuditService } from '../audit/audit.service';
-import { AuthorizationService, type Actor } from '../auth/authorization/authorization.service';
+import {
+  AuthorizationService,
+  type Actor,
+  type EffectiveGrant,
+} from '../auth/authorization/authorization.service';
 import { Capability } from '../auth/authorization/capabilities';
 import { ScopeType } from '../auth/authorization/scopes';
 import { HierarchyService } from '../hierarchy/hierarchy.service';
@@ -755,11 +759,7 @@ export class PeopleService {
     // capability moves a person between Networks either way, and a rule that
     // switched itself off depending on whether the target currently holds an edge
     // would be a rule nobody could reason about.
-    await this.hierarchy.assertMayReparent(
-      this.db,
-      { personId: actor.personId, roles: await this.authorization.rolesFor(actor.accountId) },
-      personId,
-    );
+    const roles = await this.authorization.rolesFor(actor.accountId);
 
     const recordedAt = new Date();
     const backdated = input.effectiveDate !== undefined;
@@ -798,6 +798,13 @@ export class PeopleService {
         trx,
         input.pastoralLeaderId === undefined ? [personId] : [personId, input.pastoralLeaderId],
       );
+
+      // Section 5 invariant 4, inside the transaction and after the lock, for the
+      // reason the reassignment path gives: the walk it makes is over the tree, and
+      // a decision taken before the lock is taken against a tree the winner of it
+      // may have changed. The roles it compares are read on the pool beforehand,
+      // because those are a fact about the actor's account.
+      await this.hierarchy.assertMayReparent(trx, { personId: actor.personId, roles }, personId);
 
       // Read inside the transaction, as the basic edit does: outside it, a
       // concurrent write landing between the read and the update makes this
@@ -1045,10 +1052,22 @@ export class PeopleService {
    * are about the resulting record and are checked here against the transaction
    * that will write it, with the database as the backstop for both.
    *
-   * Authorization runs before the transaction and data checks inside it. That is
-   * not arbitrary: the scope predicates read through the pooled connection, and a
-   * pooled read taken while holding a transaction needs a second connection from a
-   * bounded pool (section 24).
+   * **Every decision that depends on the tree is taken inside the transaction,
+   * after the lock**, because the lock is precisely when two reassignments of one
+   * person overlap: a decision taken beforehand is made against a tree the winner
+   * has since changed. That includes the guard's own conclusion about the person,
+   * which a concurrent move can invalidate between the guard and the write.
+   *
+   * What is read *before* it is what cannot change under a tree write — the
+   * actor's roles and grants, which are facts about their account. Reading those
+   * inside would ask a bounded pool for a second connection while holding one,
+   * which section 24 names as a liveness hazard.
+   *
+   * This rests on READ COMMITTED, which is the default and is not set anywhere: a
+   * statement after the lock takes a fresh snapshot and therefore sees the winner's
+   * commit. Under REPEATABLE READ the snapshot would be taken by the first
+   * statement of the transaction — the key hashing inside `lockPersonsWithin`,
+   * before the lock is held — and every read after it would be stale again.
    */
   async reassignPastoralLeader(
     personId: string,
@@ -1056,7 +1075,14 @@ export class PeopleService {
     actor: Actor,
     claim: CurrentClaim,
   ): Promise<Record<string, unknown>> {
-    const roles = await this.authorization.rolesFor(actor.accountId);
+    // Read here, on the pool, and deliberately: these are facts about the actor's
+    // account rather than about the tree, so nothing a concurrent reassignment does
+    // can change them — and reading them inside the transaction would be the
+    // pooled-read-while-holding-one that section 24 forbids.
+    const [roles, grants] = await Promise.all([
+      this.authorization.rolesFor(actor.accountId),
+      this.authorization.grantsFor(actor.accountId),
+    ]);
     const backdated = input.effectiveDate !== undefined;
 
     if (backdated) {
@@ -1084,21 +1110,19 @@ export class PeopleService {
       // unique index (section 5, Database enforcement).
       await lockPersonsWithin(trx, [personId, input.leaderId]);
 
-      // **Every authorization decision is taken here, after the lock, and against
-      // this transaction.** Taken before it, they are decided on a snapshot that
-      // another reassignment of the same person can invalidate while this one
-      // waits — and the whole point of the lock is that the two overlap exactly
-      // then. The guard's own decision about the person is re-made for the same
-      // reason: a concurrent move can carry them out of the actor's subtree
-      // between the guard and the write.
+      // **Re-made here, after the lock, against this transaction.** The guard
+      // reached this same conclusion before the request queued; a concurrent move
+      // can have carried the person out of the actor's subtree since. Both walks
+      // read the tree, which is why the predicates take an executor — the choice
+      // was never "pool or transaction", it was "stale or transaction-capable".
       //
-      // This is why the scope predicates take an executor at all. Reading them on
-      // the pooled connection while holding a transaction needs a second
-      // connection from a bounded pool (section 24), so the choice was never
-      // "pool or transaction" — it was "stale or transaction-capable".
+      // The lock covers the person and the destination leader, not the actor's
+      // upline, so these narrow the window rather than closing it. Closing it
+      // entirely would mean locking every row a scope decision reads, which is the
+      // whole tree above the actor.
       await this.hierarchy.assertMayReparent(trx, { personId: actor.personId, roles }, personId);
 
-      if (!(await this.isWithinManageScope(trx, actor, personId))) {
+      if (!(await this.isWithinManageScope(trx, actor, grants, personId))) {
         throw new ScopeDeniedError(
           'You hold people.manage_pastoral_assignment, but not over this person.',
           { capability: Capability.PeopleManagePastoralAssignment },
@@ -1151,7 +1175,13 @@ export class PeopleService {
       const current = await this.hierarchy.openAssignmentOf(trx, personId);
 
       // Invariant 1, against the state this transaction will actually write over.
-      await this.assertBothEndpointsInScope(trx, actor, current?.leaderId ?? null, input.leaderId);
+      await this.assertBothEndpointsInScope(
+        trx,
+        actor,
+        grants,
+        current?.leaderId ?? null,
+        input.leaderId,
+      );
 
       if (current !== null && current.leaderId === null) {
         // Section 5, Network roots: a root cannot be reassigned by anyone, Admin
@@ -1227,16 +1257,21 @@ export class PeopleService {
 
       await this.assertLeaderIsAssignable(trx, input.leaderId, personNetwork, effectiveAt);
 
-      // **The same floor the Network correction uses, from the same method.**
-      // Term (a) is the current assignment's `started_at`: at that instant the
-      // close is zero-length and therefore inert, so the leader this person
+      // **The same method as the Network correction, and deliberately not the same
+      // term.** Term (a) is the current assignment's `started_at`: at that instant
+      // the close is zero-length and therefore inert, so the leader this person
       // actually had for the whole period disappears from every as-of query, and
-      // below it the row cannot be closed at all. Term (b) is the `ended_at` of
-      // every already-closed assignment touching them, which bounds the case a
-      // person with no open assignment would otherwise leave unbounded — an
-      // effective date inside a closed period, leaving two rows valid at one
-      // instant and "who led them on date D" with two answers.
-      const floor = await this.hierarchy.backdateFloorFor(trx, personId);
+      // below it the row cannot be closed at all.
+      //
+      // Term (b) here ranges over closed rows where **this person is the
+      // subordinate**, and bounds the case term (a) leaves unbounded — a person
+      // with no open assignment, for whom an effective date inside an
+      // already-closed period would leave two rows valid at one instant and give
+      // "who led them on date D" two answers. Section 4's version reaches the other
+      // direction as well, because the trigger *it* guards selects edges both ways;
+      // this one does not fire that trigger, and borrowing the wider term refused
+      // legitimate corrections for every leader who had ever had a disciple moved.
+      const floor = await this.hierarchy.backdateFloorFor(trx, personId, 'as-subordinate');
 
       if (floor !== null && effectiveAt.getTime() <= floor.getTime()) {
         throw this.reassignmentTooEarly(personId, floor, backdated);
@@ -1305,9 +1340,10 @@ export class PeopleService {
    * A null source is a Person with no current assignment. There is no second
    * endpoint to authorize, and section 5 permits an unassigned Person.
    */
-  private async assertBothEndpointsInScope(
+  async assertBothEndpointsInScope(
     executor: Db,
     actor: Actor,
+    grants: readonly EffectiveGrant[],
     sourceLeaderId: string | null,
     destinationLeaderId: string,
   ): Promise<void> {
@@ -1317,7 +1353,7 @@ export class PeopleService {
     ];
 
     for (const endpoint of endpoints) {
-      const covered = await this.isWithinManageScope(executor, actor, endpoint.personId);
+      const covered = await this.isWithinManageScope(executor, actor, grants, endpoint.personId);
 
       if (!covered) {
         throw new ScopeDeniedError(
@@ -1332,12 +1368,16 @@ export class PeopleService {
   private async isWithinManageScope(
     executor: Db,
     actor: Actor,
+    grants: readonly EffectiveGrant[],
     personId: string,
   ): Promise<boolean> {
-    return this.authorization.covers(executor, actor, Capability.PeopleManagePastoralAssignment, {
-      kind: 'person',
-      personId,
-    });
+    return this.authorization.coversWith(
+      executor,
+      actor,
+      grants,
+      Capability.PeopleManagePastoralAssignment,
+      { kind: 'person', personId },
+    );
   }
 
   /**

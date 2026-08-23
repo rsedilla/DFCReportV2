@@ -192,7 +192,13 @@ export class NetworksService {
       );
     }
 
-    const floor = await this.hierarchy.backdateFloorFor(transaction, change.personId);
+    const floor = await this.hierarchy.backdateFloorFor(
+      transaction,
+      change.personId,
+      // Section 4: the same-Network trigger on a Network change selects edges in
+      // both directions, so the limit covers both.
+      'either-direction',
+    );
 
     // **Two bounds, resolved to whichever binds, and refused once.**
     //
