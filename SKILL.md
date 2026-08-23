@@ -3062,6 +3062,17 @@ When generating or reviewing code for this system:
 16. Prefer derived reports from normalized source data over manually entered aggregate totals.
 17. Keep infrastructure/provider-specific integrations behind adapters/interfaces where practical.
 18. Preserve API versioning for future mobile clients.
+19. Never reuse a pattern from elsewhere in this system without first stating **why it has that shape**, and checking whether the reason holds where it is going.
+
+Rule 19 is the only one here that is about the act of writing rather than about the domain, and it earns its place because it is the mistake this system's own history keeps producing. A guard, an executor threaded through a call chain, a floor over closed rows, a test that holds a lock — each was copied from a working use into a new one where part of the original justification did not carry, and each looked right at the call site.
+
+The check is one sentence and it is answerable: *this had that shape because X; does X hold here?* Three worked examples, all real:
+
+- Section 4's backdate floor reaches closed rows **in either direction** because the trigger it guards selects edges both ways. A reassignment fires a trigger that reads only the row being written, so the reason does not carry and Section 5's term is narrower.
+- Passing a database executor down a call chain makes a read honour a caller's transaction — but only for the reads that actually take it. A predicate that reads an account's grants before evaluating scope keeps touching the pool however many executors it is handed.
+- A test that holds a lock and asserts a request waits must first *dispatch* the request. The object that represents it is lazy, which the working example next to it handled and the copy did not.
+
+None of these is caught by a type, a constraint or a passing test. The rule is stated because the alternative is finding each one again.
 
 ---
 

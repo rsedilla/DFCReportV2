@@ -1720,7 +1720,7 @@ put in `database/person-lock.ts` and imported by the exception filter, which poi
 point the same way. Behaviourally identical; it is about which direction the
 dependency runs.
 
-### 2026-08-23 — A backdated reassignment carries the same two bounds as a backdated correction
+### 2026-08-23 — A backdated reassignment is bounded by §4's floor and one rule of its own
 
 Stage 2 step 6's only Stop Condition. §5 permits Admin to backdate a reassignment
 and states no bound at all, and two failures follow from that silence.
@@ -1739,8 +1739,10 @@ floor `hierarchy.backdateFloorFor` already computes, and the edge validated as o
 the effective date rather than as of now. The refusal names the earliest legal date,
 or names none where the bound falls on the current day.
 
-*The first version of this entry said "the same two bounds" and "same code", and
-both were false.* §4's second bound is on the Network row, which a reassignment does
+*The first version of this entry said "the same two bounds" and "same code" — in
+its heading as well as its body — and both were false.* The heading outlived the
+first correction by two commits, which is its own small lesson: a heading is what
+gets skimmed and quoted, so a stale one travels further than a stale paragraph. §4's second bound is on the Network row, which a reassignment does
 not write, so the pair is not the same pair; and the first implementation compared
 against the current assignment's `started_at` inline rather than calling the floor,
 so the code was parallel rather than shared. Found by `architecture-guardian`, and it
@@ -1825,6 +1827,37 @@ red, no constraint fires, and the endpoint keeps answering 200. `SET LOCAL` is a
 utility command and takes no snapshot, which is why the lock helper's first
 *snapshot-taking* statement is the one that matters — a detail worth writing down,
 since it is the kind of mechanism this log has recorded getting wrong seven times.
+### 2026-08-23 — Reusing a shape requires re-deriving why it has that shape
+
+`SKILL.md` §25 gains rule 19, the only rule there about the act of writing rather
+than about the domain. It is earned rather than general advice: it is the mistake
+this log has now recorded seven times, and three of them happened on one branch.
+
+The three on Stage 2 step 6, each of which looked right at the call site:
+
+- **§4's backdate floor was adopted whole.** Its term (b) reaches closed rows in
+  either direction *because the trigger it guards selects edges both ways*. A
+  reassignment fires a different trigger, which reads only the row being written,
+  so the reason does not carry — and carrying it anyway refused a legitimate
+  correction for every leader who had ever had a disciple moved.
+- **An executor was threaded through a call chain** to make reads honour a
+  caller's transaction, and stopped one frame short: the predicate read the
+  account's grants before evaluating any scope, so it kept touching the pool
+  however many executors it was handed. The comment above it asserted the opposite.
+- **A test copied from a working lock test** did not dispatch its request. The
+  supertest object is lazy; the original handled that and the copy did not, so the
+  probe correctly found no waiter. This repository had already fixed that exact
+  defect once, in `19dfe3c`.
+
+The earlier four are the backdate floor's first version, the zero-length row, Nest's
+status ordering, and the §8 redaction — all recorded as "a mechanism described from
+the part of it being looked at", which is the same fault in the reading direction
+rather than the writing one.
+
+**What makes the rule usable is that the check is one sentence and is answerable**:
+*this had that shape because X; does X hold here?* Nothing detects a breach — not a
+type, not a constraint, not a passing test — which is why it is written down rather
+than left to care.
 
 ### Open — awaiting a ruling
 
