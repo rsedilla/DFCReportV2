@@ -11,7 +11,7 @@ export const AUTHENTICATED_ONLY_METADATA = 'dfc:authenticated-only';
  * Where the guard finds the target's identifier on the request.
  *
  * `from` is a dotted path against the request, e.g. `params.id` or
- * `body.leader_id`. `actor` needs no path: the target is the actor's own Person.
+ * `body.pastoral_leader_id`. `actor` needs no path: the target is the actor's own Person.
  */
 export type TargetSpec =
   | { kind: Extract<TargetKind, 'person' | 'account'>; from: string }

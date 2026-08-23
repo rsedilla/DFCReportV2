@@ -2,6 +2,7 @@ import { ValidationPipe, type INestApplication } from '@nestjs/common';
 import helmet from 'helmet';
 
 import { ValidationFailedError } from './common/errors/api-error';
+import { CanonicalIdentifierPipe } from './common/identifiers';
 
 import type { ValidationError } from 'class-validator';
 
@@ -16,6 +17,11 @@ export function configureApp(app: INestApplication): void {
   app.setGlobalPrefix('api/v1');
   app.use(helmet());
   app.useGlobalPipes(
+    // Before validation, so every downstream reader — including the DTO
+    // transforms and every service below them — sees one spelling of an
+    // identifier (SKILL.md section 7). Global rather than per route: a rule that
+    // each new `@Param` has to opt into is one the newest route silently escapes.
+    new CanonicalIdentifierPipe(),
     new ValidationPipe({
       whitelist: true,
       forbidNonWhitelisted: true,

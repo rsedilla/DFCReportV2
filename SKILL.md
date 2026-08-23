@@ -1243,6 +1243,22 @@ The flag exists because a scope widened beyond a leader's normal management scop
 
 **An identifier supplied by a client is compared canonically, always.** A `uuid` column compares case-insensitively and application code does not, so a person named with their identifier in uppercase is one record to every query and a different string to every comparison written in the application. Identifiers are therefore normalized at the request boundary, and any comparison that decides authority normalizes again rather than trusting that they were.
 
+**The boundary normalizes every route, not the routes that remember to ask.** It is applied globally, to path parameters, query parameters and bodies alike, so a route added later is inside the rule without its author knowing the rule exists. A pipe wired onto each parameter, and a transform wired onto each identifier field, were both first attempts and are exactly the failure Section 2 gives as the reason the capability guard is declarative: a convention held per call site is only as reliable as the least familiar developer writing the newest one.
+
+**A value is canonicalized only where the field's name says it is an identifier *and* the value is UUID-shaped**, and the intersection is what makes it safe to run over a whole request. Each half stops a different corruption. Name alone would rewrite a Member ID, which is `M-` and six digits (Section 3). Shape alone would rewrite a **credential**: a password is arbitrary bytes, case-sensitive, and nothing in its content marks it as one — so a password that happens to be UUID-shaped would be silently lowercased and that account could never sign in again. Field names are chosen by this system; the contents of a password are not.
+
+Which names count is Section 22's field-naming convention, and it is load-bearing here rather than tidy: the boundary keys on it literally. A bare `id` is in the set because a path parameter binds under exactly that name, so excluding it would put every path parameter outside the rule — which is the case the boundary was written for.
+
+Arguments this application constructed rather than received are skipped, by the framework's own bucket for anything that is not a body, a path parameter or a query. Today that means the authenticated actor and the idempotency claim.
+
+**Two different things are outside the rule, and only one of them is an exclusion.** An uploaded file or a raw body falls in the same bucket and *is* client input, so a route binding one — or an identifier decorator built as a custom parameter — needs naming here rather than inheriting the skip. But a request header, a session, a host and a caller's address are not offered to any pipe at all, whatever bucket they would land in, so naming them here would not reach them: an identifier arriving in a header is normalized by the code that reads it or not at all. The `Idempotency-Key` is the one that exists, and it reaches a `uuid` cast in SQL rather than a comparison in TypeScript.
+
+The distinction is recorded because the first version of this paragraph collapsed it, describing a remedy that works for half the set it implied.
+
+**The idempotency fingerprint canonicalizes separately**, because interceptors run before pipes and it would otherwise be taken over the spelling the client used. Left raw, one retry of one request with an identifier in a different case fingerprints differently and is answered `IDEMPOTENCY_KEY_REUSED`, which Section 22 makes permanent — turning an ordinary retry into a dead end.
+
+**What this does not do is validate.** Whether a value is a UUID at all is decided by the capability guard for the one target it resolves scope against (Section 7, the guard checks one target) and by the DTOs for every field they declare. A path parameter that is neither — a second identifier in a route path, which Section 22 already sketches — is validated by neither, and reaching a `uuid` comparison with one produces a database error rather than an answer. A route with a path parameter the guard does not resolve against must validate it itself.
+
 This is stated in Section 7 because the consequence is an authorization one. Invariant 4 below is two identifier comparisons and is the only check on its path that fails **open**; against the one actor class it exists to stop, a comparison that answers "this is not you" is the whole of the escalation. The same defect has also appeared where it merely fails closed — a duplicate acknowledgement that could never be satisfied, blocking a Person from being created at all (Section 3), and a lock that took two keys for one person and serialized nothing (Section 5).
 
 **Invariant 4 of Section 5 binds every operation that can reassign, not only the reassignment endpoint.** A sex correction can perform a reassignment (Section 4), so it refuses a target that is the actor's own Person or anyone upline of them unless the actor holds Admin or Senior Pastor. The Whole Church rule below does not cover it and cannot: that one asks how far a grant reaches, and this one asks who the actor is relative to the target. A holder of an explicit Whole Church grant passes the first and must not pass the second, or the capability becomes the escalation route it is Admin-only to close.
@@ -2735,6 +2751,7 @@ GET  /api/v1/people/duplicate-candidates  declared before /{id}, or it is one
 GET  /api/v1/people/{id}
 GET  /api/v1/people/{id}/pastoral-path
 PUT  /api/v1/people/{id}/sex             the audited correction of Section 4
+PUT  /api/v1/people/{id}/pastoral-leader  the reassignment of Section 5
 
 GET  /api/v1/network/my-tree
 GET  /api/v1/leaders/{id}/children
@@ -2747,7 +2764,7 @@ POST /api/v1/dcc/events/{id}/submit
 GET  /api/v1/cells/{id}
 GET  /api/v1/cells/{id}/members
 GET  /api/v1/cells/{id}/meetings
-POST /api/v1/cells/{id}/meetings/{meetingId}/submit
+POST /api/v1/cells/{id}/meetings/{meeting_id}/submit
 
 GET  /api/v1/reports/dcc/monthly
 GET  /api/v1/reports/dcc/yearly
@@ -2765,6 +2782,108 @@ All requests and responses are JSON. No redirects, no HTML error pages, no form 
 #### Dates and times
 
 Timestamps are ISO 8601 with an offset. Date-only fields — an attendance date, an effective date, a Cell meeting date — are plain `YYYY-MM-DD` and are always Asia/Manila dates (Section 20). Never send a date-only field as a timestamp; the conversion is where months silently shift.
+
+#### Field naming
+
+One concept carries one field name across every endpoint. **Names are `snake_case`**, and an identifier's name is either a bare `id` or `ids`, or ends in `_id` or `_ids`.
+
+That is not tidiness: it is what the boundary in Section 7 keys on when deciding whether a value may be canonicalized, so a field carrying an identifier under any other name is outside the rule and is compared in whatever case the client sent it.
+
+**The bare forms are in the set because a path parameter binds under one.** A route declaring `{id}` hands the boundary the key `id`, so a convention admitting only the suffixed forms would exclude every path parameter in the API — which is the case the boundary exists for. The plural is admitted with it, at both positions, so that `ids` and `acknowledged_duplicate_ids` are one rule rather than two.
+
+**`camelCase` is not used at this boundary**, and the convention is stated rather than assumed because the boundary cannot enforce what it is not told. A field named `meetingId` carries an identifier and is not canonicalized, which is a defect that shows up as an authorization comparison quietly answering on a spelling. The example routes above use `{meeting_id}` for this reason.
+
+A pastoral leader is `pastoral_leader_id` wherever a request names one — Section 11 makes Cell leadership a first-class concept, so a bare `leader_id` does not say which kind of leader is meant. A **Cell's** leader is `cell_leader_id`, and the filter sketched under Filtering and sorting below carries that name rather than the bare one.
+
+Naming the Cell filter now, before Stage 3 builds it, is the rule applied to itself: this section's own argument is that the only moment to fix a field name is before a client depends on one, and an example a specification documents is what the implementer copies.
+
+Database columns are not bound by this: `pastoral_assignments.leader_id` needs no qualifier because its table supplies one.
+
+A field name that differs between two endpoints for one concept is a permanent cost on three client codebases that cannot be force-updated, and the only moment to fix one is before any client depends on it.
+
+#### Request bodies are bounded in depth
+
+**A request whose JSON nests more than twenty levels is refused with
+`VALIDATION_FAILED`, carrying `max_depth` in `details`, wherever anything in this API
+reads that body.** No DTO describes it and no controller checks it: it is a property
+of the request, refused at the boundary.
+
+**The qualifier is exact rather than cautious.** The hazard is a recursive walk, so
+a body nothing walks cannot produce one; the *rule* is therefore never violated by a
+route that does not read its body, only unenforced there. That is stated because
+three clients branch on this section and would otherwise read the rule as absolute.
+
+**What enforces it is a walk over a bound argument**, which is where the rule can be
+escaped. The identifier boundary walks whatever a route binds; the idempotency
+fingerprint walks the body of every authenticated state-changing request. A route
+therefore escapes exactly where **the body is not among the bound arguments and the
+request is not an authenticated state-changing one**. Both halves are needed:
+`POST /api/v1/auth/logout-all` binds nothing a client sent and is still covered,
+because the fingerprint reaches its body regardless of what the handler bound.
+
+Five routes are in that position today, in three shapes, and all are harmless because
+nothing reads those bodies:
+
+- binding **nothing at all** — the liveness probe;
+- binding only a value **this application constructed** — `GET /api/v1/auth/me`,
+  which takes the authenticated actor;
+- binding a client-sent **path parameter or query, and no body** — the three `GET`
+  routes under `/api/v1/people`.
+
+A request carrying a 25-deep body to any of them is answered normally rather than
+refused.
+
+A fourth shape does not exist and would matter: a handler binding a **sub-field**,
+`@Body('token')` rather than `@Body()`. That one can coexist with a route which goes
+on to read the whole body by other means, and nothing prevents it. One added later is
+outside the rule silently — the shape Sections 2 and 7 refuse everywhere else, and
+the reason the boundary was made global rather than per route. Such a route either
+binds the whole body, or the check moves somewhere a binding cannot escape.
+
+The bound exists because **`JSON.parse` accepts a depth that the code reading its
+result cannot**. V8 parses iteratively and has no practical limit — two hundred
+thousand levels parses — while this API walks a body recursively at least twice on
+every authenticated write: once to canonicalize identifiers (Section 7), once to
+fingerprint it for idempotency. A few thousand levels exhausts the stack, and an
+unhandled `RangeError` is an `INTERNAL_ERROR`: a 500, logged as a defect, produced
+by ordinary input, on every write endpoint at once.
+
+A body-size limit does not cover it. Depth is cheap: a nested array costs two bytes
+per level, one for each bracket, so the payload that overflows arrives in
+single-digit kilobytes — far inside any size limit worth setting.
+
+**Twenty, and the number is deliberately far from both edges.** Levels are counted
+as containers, per the rule below, so the deepest structure this specification
+describes — an array of identifiers inside a body — is **two**: the body and the
+array. The string inside the array is a leaf and is not a level. Twenty leaves room
+for anything a future endpoint plausibly needs and is orders of magnitude short of a
+stack, so it never has to be tuned against either.
+
+**Refused, not truncated.** Accepting the request and declining to walk past the
+bound is the tempting reading of "bounded", and it is worse than refusing: the part
+below the bound keeps whatever the client sent, so identifiers there are compared in
+whatever case they arrived — which is exactly the defect Section 7's boundary exists
+to remove, reintroduced by its own safety valve, silently and only for the requests
+nobody looks at.
+
+`VALIDATION_FAILED` because a body no endpoint in this system describes is malformed
+input, which is what that code means. It is not one of the retryable conditions: the
+refusal is deterministic, so a client that retries the same body gets the same
+answer.
+
+On an authenticated write the refusal lands **before the idempotency key is
+claimed**, so no row is written and the store-a-4xx rule below never applies. That
+is a consequence of evaluation order rather than a rule: the identifier walk is
+passed to the fingerprint as an argument, so it runs first and throws first. Nothing
+should be built on it — the answer is the same either way, which is the property
+that matters.
+
+**Every walk over a client's body shares this one bound, and applies it at the same
+point** — immediately before descending into a container, never on a leaf. Sharing
+the number is not sufficient on its own. Two walks that count differently give one
+body two answers, and the first implementation did exactly that: one counted a
+primitive leaf as a level and the other did not, so a body at the bound was refused
+or accepted according to whether its innermost value happened to be a string.
 
 #### Pagination
 
@@ -2903,7 +3022,7 @@ Filters are explicit named query parameters. Do not build a general query langua
 Sorting uses `sort`, with a leading `-` for descending:
 
 ```text
-GET /api/v1/cells?leader_id=...&sort=-not_held_count
+GET /api/v1/cells?cell_leader_id=...&sort=-not_held_count
 ```
 
 Sorting and filtering are permitted, including on meeting-status figures — finding the Cells that need help is pastoral work (Section 13).

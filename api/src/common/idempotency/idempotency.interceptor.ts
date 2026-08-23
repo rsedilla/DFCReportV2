@@ -16,6 +16,8 @@ import {
 } from '../errors/api-error';
 import { describeFailure } from '../errors/api-exception.filter';
 
+import { canonicalIfUuid, canonicalizeIdentifiers } from '../identifiers';
+
 import { IdempotencyService } from './idempotency.service';
 
 import type { AuthenticatedRequest } from '../../auth/authorization/access-token.guard';
@@ -100,10 +102,17 @@ export class IdempotencyInterceptor implements NestInterceptor {
     }
 
     const accountId = actor.accountId;
+    // Canonicalized here, because **this runs before pipes do**. Nest's lifecycle
+    // puts interceptors ahead of the global pipe that normalizes identifiers, so
+    // the path and body seen here are exactly as the client spelled them. Left
+    // raw, one retry of one request with an identifier in a different case
+    // fingerprints differently and is answered `IDEMPOTENCY_KEY_REUSED` — which
+    // section 22 makes permanent and says must never be retried, so an ordinary
+    // retry becomes a dead end (SKILL.md section 7).
     const fingerprint = this.idempotency.fingerprint(
       request.method,
       requestPath(request),
-      request.body,
+      canonicalizeIdentifiers(request.body),
     );
 
     return from(this.idempotency.claim({ key, accountId, fingerprint })).pipe(
@@ -217,7 +226,28 @@ export class IdempotencyInterceptor implements NestInterceptor {
  */
 function requestPath(request: AuthenticatedRequest): string {
   const [rawPath, rawQuery] = request.originalUrl.split('?');
-  const path = rawPath.length > 1 ? rawPath.replace(/\/+$/, '') : rawPath;
+  const trimmed = rawPath.length > 1 ? rawPath.replace(/\/+$/, '') : rawPath;
+
+  // **Segment by segment, not over the whole string.** An identifier reaches this
+  // as one segment of a path, and a path is never itself UUID-shaped — so handing
+  // the whole thing to `canonicalizeIdentifiers` would do nothing at all, quietly.
+  //
+  // **By shape rather than by name, because a path segment has no key**, which
+  // is the one place this application still keys on shape. What makes that safe
+  // is not that a path "carries identifiers and nothing else" -- that was the
+  // reason first written here, and it is an assertion nothing enforces, of
+  // exactly the kind section 25 rule 19 exists to stop. What makes it safe is
+  // reachability: the credentials that travel in a URL-shaped position are the
+  // activation and reset tokens, those routes are on section 7's unauthenticated
+  // list, and this interceptor returns above before `requestPath` is reached for
+  // any of them.
+  //
+  // So what would break it is a credential added to a path on an *authenticated*
+  // route -- not a UUID-shaped password in a body, which never arrives here.
+  const path = trimmed
+    .split('/')
+    .map((segment) => canonicalIfUuid(segment))
+    .join('/');
 
   if (!rawQuery) {
     return path;
@@ -230,9 +260,15 @@ function requestPath(request: AuthenticatedRequest): string {
   // requests would then share a fingerprint, and the second would be answered
   // with the first's stored response -- the exact outcome keeping the query is
   // meant to prevent.
-  const sorted = [...new URLSearchParams(rawQuery).entries()].sort((a, b) =>
-    a[0] === b[0] ? compare(a[1], b[1]) : compare(a[0], b[0]),
-  );
+  // Canonicalized **before** sorting, and by the parameter's own name: sorting
+  // first would order two spellings of one request differently and defeat the
+  // point of doing this at all.
+  const sorted = [...new URLSearchParams(rawQuery).entries()]
+    .map(([name, value]): [string, string] => [
+      name,
+      canonicalizeIdentifiers(value, name) as string,
+    ])
+    .sort((a, b) => (a[0] === b[0] ? compare(a[1], b[1]) : compare(a[0], b[0])));
 
   return `${path}?${JSON.stringify(sorted)}`;
 }

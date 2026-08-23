@@ -1,5 +1,9 @@
 import { randomUUID } from 'node:crypto';
 
+import { Body, Controller, Param, Post, Query } from '@nestjs/common';
+
+import { AuthenticatedOnly } from '../../src/auth/authorization/authorization.decorators';
+
 import { Client } from 'pg';
 import request from 'supertest';
 
@@ -35,8 +39,44 @@ import type { TestAccount, TestPerson } from '../setup/fixtures';
  * for that lock, and which fails by timing out if it never does.
  *
  * Fixture names and dates are invented (CLAUDE.md, Secrets).
+ *
+ * **This file carries a second subject**, which its title does not cover and
+ * which is here rather than in its own file because it needs this one's
+ * fixtures and app: the identifier boundary's global-ness (section 7), pinned by
+ * the probe controller below and by the case that drives it. That case is the
+ * only one in the suite that fails if the boundary regresses to being opt-in.
  */
-describe('the person lock is taken by every path that can strand an edge', () => {
+/**
+ * A route that opts into nothing.
+ *
+ * It exists to be written the way somebody adding a route next month would write
+ * one — no pipe, no decorator, no knowledge that identifiers are canonicalized —
+ * so that the global boundary is what has to hold. `@AuthenticatedOnly` because it
+ * touches no church data and reads only what it was handed.
+ */
+@Controller('__identifier-probe')
+class IdentifierProbeController {
+  @Post(':id')
+  @AuthenticatedOnly('A test probe that reads back what it was handed.')
+  seen(
+    // **Object bindings, deliberately.** `@Param('id')` and `@Query('filter_id')`
+    // are handed a bare string and pass whether or not the walk handles the
+    // objects Express actually builds — which are null-prototype, and which the
+    // first version of this pipe silently skipped.
+    @Param() params: { id: string },
+    @Query() query: { filter_id: string },
+    @Body() body: { nested: { ids: string[] }; password: string },
+  ): { param: string; query: string; body: string; password: string } {
+    return {
+      param: params.id,
+      query: query.filter_id,
+      body: body.nested.ids[0],
+      password: body.password,
+    };
+  }
+}
+
+describe('the person lock, and the identifier boundary that needs the same fixtures', () => {
   let app: INestApplication;
   let db: Kysely<Database>;
 
@@ -48,7 +88,7 @@ describe('the person lock is taken by every path that can strand an edge', () =>
 
   beforeAll(async () => {
     db = createTestDb();
-    app = await createTestApp();
+    app = await createTestApp([IdentifierProbeController]);
   });
 
   beforeEach(async () => {
@@ -131,6 +171,46 @@ describe('the person lock is taken by every path that can strand an edge', () =>
       await holder.end();
     }
   }
+
+  it('canonicalizes a path identifier on a route that never opted in', async () => {
+    // **This is what "structural" means, and it is the only case that can fail if
+    // the boundary goes back to being opt-in.** The probe route below is written
+    // the way any new route would be — bare `@Param`, `@Query` and `@Body`, no
+    // pipe, no `@Transform`, nobody having remembered anything — and it must still
+    // see the canonical form in all three. The body identifier is nested inside an
+    // array inside an object, because that is where a real one turns up, and the
+    // bindings are objects because that is what Express hands over.
+    //
+    // Every other identifier case passes if *either* layer is present, so none of
+    // them notices the boundary regressing to a per-parameter opt-in.
+    const upper = mark.id.toUpperCase();
+
+    const response = await request(app.getHttpServer())
+      .post(`/api/v1/__identifier-probe/${upper}`)
+      .set('Authorization', `Bearer ${admin.accessToken}`)
+      // A POST is state-changing, so section 22 requires the header on it — which
+      // the probe inherits without asking, exactly as it inherits the pipe. The
+      // first version of this case omitted it and was answered 422.
+      .set('Idempotency-Key', randomUUID())
+      .query({ filter_id: upper })
+      // UUID-shaped on purpose: the credential is the case that decides the rule
+      // is about field names rather than value shapes.
+      .send({ nested: { ids: [upper] }, password: upper });
+
+    expect(response.status).toBe(201);
+
+    // All three, because a client supplies identifiers in all three and the rule
+    // says "always". Path and query were opt-in before; the body needed a
+    // decorator per field.
+    expect(response.body.param).toBe(mark.id);
+    expect(response.body.query).toBe(mark.id);
+    expect(response.body.body).toBe(mark.id);
+
+    // **And a credential is untouched, though it is UUID-shaped.** Canonicalizing
+    // by value shape would lowercase it and lock that account out permanently,
+    // with nothing to diagnose. This is what pins the rule being about the name.
+    expect(response.body.password).toBe(upper);
+  });
 
   it('normalizes identifiers in the authority check itself, not only at the boundary', async () => {
     // **The two layers are pinned separately on purpose.** Every end-to-end case

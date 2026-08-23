@@ -1221,7 +1221,7 @@ export class PeopleService {
 
       if (sameId(input.leaderId, personId)) {
         throw new InvariantViolationError('A person cannot be their own pastoral leader.', {
-          field: 'leader_id',
+          field: 'pastoral_leader_id',
         });
       }
 
@@ -1238,7 +1238,7 @@ export class PeopleService {
         // wrongly ever after. A client that lost the response retries with the
         // same `Idempotency-Key`, which is what that header is for.
         throw new ValidationFailedError('That person is already under that leader.', {
-          field: 'leader_id',
+          field: 'pastoral_leader_id',
           value: input.leaderId,
         });
       }
@@ -1249,7 +1249,7 @@ export class PeopleService {
       if (subtree.some((descendantId) => sameId(descendantId, input.leaderId))) {
         throw new InvariantViolationError(
           'That leader is below this person in the tree, so the assignment would create a cycle.',
-          { person_id: personId, leader_id: input.leaderId },
+          { person_id: personId, pastoral_leader_id: input.leaderId },
         );
       }
 
@@ -1357,7 +1357,7 @@ export class PeopleService {
     destinationLeaderId: string,
   ): Promise<void> {
     const endpoints: { label: string; personId: string }[] = [
-      { label: 'leader_id', personId: destinationLeaderId },
+      { label: 'pastoral_leader_id', personId: destinationLeaderId },
       ...(sourceLeaderId === null ? [] : [{ label: 'current_leader', personId: sourceLeaderId }]),
     ];
 

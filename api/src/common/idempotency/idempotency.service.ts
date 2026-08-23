@@ -4,6 +4,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { sql } from 'kysely';
 
 import { ApiError, ApiErrorCode } from '../errors/api-error';
+import { assertWithinDepth } from '../identifiers';
 
 import { DATABASE, type Db } from '../../database/database.module';
 
@@ -317,20 +318,48 @@ export class IdempotencyService {
  * A stable string for any JSON body: object keys sorted, everything else left
  * alone. Arrays keep their order, because order is meaning in an array and two
  * differently ordered arrays are two different requests.
+ *
+ * **Bounded by the same depth as the identifier walk, and refusing at it.** This
+ * is the second recursive walk over a client's body and it was the unbounded one:
+ * a body a few thousand levels deep — single-digit kilobytes for a nested array,
+ * well inside any body limit — overflowed the stack here and answered
+ * `INTERNAL_ERROR`, on every authenticated write endpoint, for any signed-in
+ * caller.
+ *
+ * It shares `MAX_IDENTIFIER_DEPTH` rather than choosing its own, because two walks
+ * over one body with two bounds is a disagreement waiting to be found: the
+ * shallower would refuse a request the deeper had already rewritten.
+ *
+ * **Sharing the constant is not sufficient for that, and the first version proved
+ * it.** Both walks must also apply it at the same point — immediately before
+ * descending into a container, never on a leaf — or one counts a level the other
+ * does not, and a body twenty deep is refused or accepted according to its
+ * innermost value's type. The two agree for everything either walk sees, which is
+ * parsed JSON: objects, arrays, strings, numbers, booleans and null. A `Date` or a
+ * class instance would still be counted here and not there, and neither can occur
+ * in a parsed body.
+ *
+ * The interceptor reaches `canonicalizeIdentifiers` first, so in practice that
+ * call refuses before this one is entered. The bound is here as well because
+ * `fingerprint` is a public method on this service and the ordering of its callers
+ * is not a property this function can rely on — which is the reason the version
+ * without it was reached at all.
  */
-function canonicalize(value: unknown): string {
+function canonicalize(value: unknown, depth = 0): string {
   if (value === null || typeof value !== 'object') {
     return JSON.stringify(value ?? null);
   }
 
+  assertWithinDepth(depth);
+
   if (Array.isArray(value)) {
-    return `[${value.map(canonicalize).join(',')}]`;
+    return `[${value.map((item) => canonicalize(item, depth + 1)).join(',')}]`;
   }
 
   const entries = Object.entries(value as Record<string, unknown>)
     .filter(([, item]) => item !== undefined)
     .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
-    .map(([itemKey, item]) => `${JSON.stringify(itemKey)}:${canonicalize(item)}`);
+    .map(([itemKey, item]) => `${JSON.stringify(itemKey)}:${canonicalize(item, depth + 1)}`);
 
   return `{${entries.join(',')}}`;
 }

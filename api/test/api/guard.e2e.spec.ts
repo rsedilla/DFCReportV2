@@ -44,6 +44,16 @@ class GuardProbeController {
     return { reached: true };
   }
 
+  // Declares a target the guard resolves from the **actor**, not from the
+  // request, while still carrying a path parameter. Section 7 says such a
+  // parameter is validated by neither the guard nor a DTO, and the route owns
+  // it; this is what lets that be asserted rather than assumed.
+  @Get('actor/:id')
+  @RequiresCapability(Capability.PeopleViewSubtree, { kind: 'actor' })
+  actorTarget(): { reached: true } {
+    return { reached: true };
+  }
+
   @Get('settings')
   @RequiresCapability(Capability.SettingsManage, { kind: 'church' })
   settings(): { reached: true } {
@@ -153,6 +163,63 @@ describe('the capability guard (SKILL.md section 7)', () => {
 
       expect(response.status).toBe(403);
       expect(response.body.error.code).toBe('SCOPE_DENIED');
+    });
+  });
+
+  describe('the target identifier is validated here, and nowhere else', () => {
+    it('refuses a path parameter that is not a UUID', async () => {
+      // **This is the validation that used to live in a pipe.** Every `:id` route
+      // once carried `CanonicalUuidPipe`, which both canonicalized and threw. The
+      // canonicalization moved to the global boundary and the throwing branch was
+      // removed as dead code — correctly, because the guard already refuses a
+      // non-UUID target before any pipe runs.
+      //
+      // Correct and unpinned are different things. Nothing asserted the guard did
+      // it, so "the pipe's throw was redundant" was an argument rather than a
+      // fact, and removing it left the whole API's target validation resting on a
+      // branch no test entered.
+      const response = await get('/__guard-probe/person/not-a-uuid', adminAccount);
+
+      expect(response.status).toBe(422);
+      expect(response.body.error.code).toBe('VALIDATION_FAILED');
+      expect(response.body.error.details).toMatchObject({ field: 'params.id' });
+    });
+
+    it('refuses it before authorization, so a non-UUID is never a permission answer', async () => {
+      // An account that holds nothing still gets 422 rather than CAPABILITY_DENIED.
+      // The order matters for the reason section 22 keeps the two 403s apart: an
+      // administrator diagnosing a permission problem must not be shown one for
+      // what is actually malformed input.
+      const response = await get('/__guard-probe/person/not-a-uuid', grantlessAccount);
+
+      expect(response.status).toBe(422);
+      expect(response.body.error.code).toBe('VALIDATION_FAILED');
+    });
+
+    it('leaves a route the guard does not resolve against to validate its own', async () => {
+      // Section 7: a path parameter the guard never resolves a target from is
+      // validated by neither the guard nor a DTO, and reaching a `uuid` comparison
+      // with one produces a database error rather than an answer. The `actor`
+      // target kind is exactly that shape — it reads nothing off the request — so
+      // a garbage `:id` sails past the guard, and the route owns the problem.
+      //
+      // Pinned as the *current* behaviour rather than as the desired one: this
+      // asserts the guard does not cover it, which is what makes the section 7
+      // sentence a real obligation on the next route rather than a caution.
+      const response = await get('/__guard-probe/actor/not-a-uuid', adminAccount);
+
+      // **`reached`, not merely 200.** A status alone would still pass if the route
+      // began validating its own `:id` and happened to answer 200, which is the
+      // opposite of what this case exists to say. The handler running on a value
+      // no `uuid` comparison would accept is the fact, and this one request is the
+      // whole of the evidence.
+      //
+      // A companion request with a well-formed identifier was tried here and
+      // removed: it reaches the handler under both hypotheses \u2014 a guard that
+      // ignores `:id` and a guard that validates it \u2014 so it discriminates nothing,
+      // while its comment claimed it was what showed the guard never looked.
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual({ reached: true });
     });
   });
 
