@@ -195,8 +195,7 @@ npm run dev                          # http://localhost:3000
 | `npm run lint` | `api`, `web` | ESLint. In `web` it also fails on an API route or a server action |
 | `npm run typecheck` | `api`, `web` | `tsc --noEmit` |
 | `npm run format:check` | `api` | Prettier |
-| `npm test` | `api` | The suite that must stay green. Needs a migrated database |
-| `npm run test:authorization` | `api` | The eleven authorization cases. **Fails until Stage 2** |
+| `npm test` | `api` | The suite that must stay green, the eleven authorization cases included. Needs a migrated database |
 | `npm run migrate:up` / `:down` / `:status` | `api` | Applies, reverts one, or lists migrations |
 | `npm run build` | `api`, `web` | Production build |
 

@@ -16,7 +16,7 @@ import {
 } from '../common/errors/api-error';
 import { IdempotencyService } from '../common/idempotency/idempotency.service';
 import { canonicalId, sameId } from '../common/identifiers';
-import { manilaDayOf, startOfManilaDay } from '../common/time/manila';
+import { manilaDayAfter, manilaDayOf, startOfManilaDay } from '../common/time/manila';
 import { DATABASE, type Db } from '../database/database.module';
 import { lockPersonsWithin } from '../database/person-lock';
 
@@ -1024,6 +1024,297 @@ export class PeopleService {
 
       return response;
     });
+  }
+
+  /**
+   * Reassigns a person to a different pastoral leader (SKILL.md section 5).
+   *
+   * **Only the reassigned person's own row changes.** Their subtree moves with
+   * them because it resolves through the tree, and rewriting a descendant's row to
+   * reflect a leader's move destroys assignment history — a partial rewrite
+   * silently detaches a branch, so the descendants disappear from the moved
+   * leader's totals while appearing under nobody.
+   *
+   * The five invariants divide by what they are about, which is why they are not
+   * all in one place. Invariant 4 is about the actor's position and lives in
+   * `hierarchy`, where the second caller of it already is. Invariant 1 is about the
+   * actor's scope over two objects the guard does not evaluate. Invariants 2 and 5
+   * are about the resulting record and are checked here against the transaction
+   * that will write it, with the database as the backstop for both.
+   *
+   * Authorization runs before the transaction and data checks inside it. That is
+   * not arbitrary: the scope predicates read through the pooled connection, and a
+   * pooled read taken while holding a transaction needs a second connection from a
+   * bounded pool (section 24).
+   */
+  async reassignPastoralLeader(
+    personId: string,
+    input: { leaderId: string; reason?: string; effectiveDate?: string },
+    actor: Actor,
+    claim: CurrentClaim,
+  ): Promise<Record<string, unknown>> {
+    const roles = await this.authorization.rolesFor(actor.accountId);
+
+    // Invariant 4, before anything else: a leader may never change their own
+    // assignment nor an upline's, and only Admin or a Senior Pastor may.
+    await this.hierarchy.assertMayReparent({ personId: actor.personId, roles }, personId);
+
+    // Invariant 1, the half the guard cannot express. Read on the pool, before the
+    // transaction, because this is an authorization decision and is evaluated
+    // exactly as the guard's is.
+    const currentBefore = await this.hierarchy.openAssignmentOf(this.db, personId);
+    await this.assertBothEndpointsInScope(actor, currentBefore?.leaderId ?? null, input.leaderId);
+
+    const recordedAt = new Date();
+    const backdated = input.effectiveDate !== undefined;
+    let effectiveAt = recordedAt;
+
+    if (input.effectiveDate !== undefined) {
+      await this.authorization.authorize(actor, Capability.RecordsBackdateEffectiveDate, {
+        kind: 'person',
+        personId,
+      });
+
+      if (input.reason === undefined) {
+        // Section 5: backdating "always requires a reason". Not required otherwise.
+        throw new ValidationFailedError('Backdating an effective date requires a reason.', {
+          field: 'reason',
+        });
+      }
+
+      effectiveAt = startOfManilaDay(input.effectiveDate);
+
+      if (effectiveAt.getTime() > recordedAt.getTime()) {
+        throw new ValidationFailedError(
+          'An effective date is a correction to the past. It cannot be in the future.',
+          { field: 'effective_date', value: input.effectiveDate },
+        );
+      }
+    }
+
+    return this.db.transaction().execute(async (trx) => {
+      // Both persons whose Networks decide the edge's legality, in one call so the
+      // ordering is the helper's rather than the order that reads best here.
+      // Locking the **person** as well as the leader is what makes concurrent
+      // reassignments of one person serialize rather than collide on the partial
+      // unique index (section 5, Database enforcement).
+      await lockPersonsWithin(trx, [personId, input.leaderId]);
+
+      const person = await trx
+        .selectFrom('persons')
+        .select([
+          'id',
+          'member_id',
+          'first_name',
+          'middle_name',
+          'last_name',
+          'birth_date',
+          'sex',
+          'civil_status',
+          'mobile_number',
+          'merged_into_id',
+        ])
+        .where('id', '=', personId)
+        .executeTakeFirst();
+
+      if (person === undefined) {
+        throw new NotFoundError('No such person.');
+      }
+
+      if (person.merged_into_id !== null) {
+        throw new InvariantViolationError(
+          'That person was absorbed by a merge. Reassign the surviving Person instead.',
+          { person_id: personId, merged_into_id: person.merged_into_id },
+        );
+      }
+
+      const current = await this.hierarchy.openAssignmentOf(trx, personId);
+
+      if (current !== null && current.leaderId === null) {
+        // Section 5, Network roots: a root cannot be reassigned by anyone, Admin
+        // included, because there is no valid leader above them. Changing who holds
+        // a root position is a Network-level decision, not a pastoral one.
+        throw new InvariantViolationError(
+          'That person is a Network root and has no leader above them. Changing who holds a root position is a Network-level decision, not a reassignment.',
+          { person_id: personId },
+        );
+      }
+
+      const lifecycle = await trx
+        .selectFrom('person_lifecycle')
+        .select('state')
+        .where('person_id', '=', personId)
+        .where('ended_at', 'is', null)
+        .executeTakeFirst();
+
+      if (lifecycle?.state === 'ARCHIVED') {
+        // Section 5, Lifecycle state. Restore them first, which is an explicit and
+        // separately audited decision — keeping the two apart is what stops an
+        // archived record re-entering a leader's current totals through a side door.
+        throw new InvariantViolationError(
+          'That person is archived. Restore them to current first, then reassign them.',
+          { person_id: personId },
+        );
+      }
+
+      if (sameId(input.leaderId, personId)) {
+        throw new InvariantViolationError('A person cannot be their own pastoral leader.', {
+          field: 'leader_id',
+        });
+      }
+
+      // Invariant 2. Rejected before writing, and the recursive queries carry their
+      // own cycle detection as the backstop for a cycle arriving by any other route.
+      const subtree = await this.hierarchy.subtreeOf(trx, personId);
+      if (subtree.some((descendantId) => sameId(descendantId, input.leaderId))) {
+        throw new InvariantViolationError(
+          'That leader is below this person in the tree, so the assignment would create a cycle.',
+          { person_id: personId, leader_id: input.leaderId },
+        );
+      }
+
+      // Invariant 5, **as of the effective date**, which is the instant the
+      // constraint trigger compares. Validating against today would let this answer
+      // that a backdated edge is legal and then fail on it at commit.
+      const personNetwork = await this.networks.networkAsOf(trx, personId, effectiveAt);
+      if (personNetwork === null) {
+        throw new InvariantViolationError(
+          'That person had no Network on record at that date, so no assignment can be recorded then.',
+          { person_id: personId },
+        );
+      }
+
+      await this.assertLeaderIsAssignable(trx, input.leaderId, personNetwork, effectiveAt);
+
+      if (current !== null && effectiveAt.getTime() <= current.startedAt.getTime()) {
+        // Section 5: at that instant the close is zero-length and therefore inert,
+        // so the leader this person actually had for the whole period disappears
+        // from every as-of query. Below it the row cannot be closed at all.
+        throw this.reassignmentTooEarly(personId, current.startedAt, backdated);
+      }
+
+      const { previousLeaderId } = await this.hierarchy.reassignWithin(trx, {
+        personId,
+        leaderId: input.leaderId,
+        effectiveAt,
+      });
+
+      await this.audit.writeWithin(trx, {
+        actorId: actor.accountId,
+        action: 'pastoral_assignment.transferred',
+        targetType: 'person',
+        targetId: personId,
+        // Section 5: actor, target, previous leader, new leader, and timestamp.
+        before: { leader_id: previousLeaderId },
+        after: { leader_id: input.leaderId, effective_at: effectiveAt.toISOString() },
+        reason: input.reason ?? null,
+      });
+
+      if (backdated) {
+        await this.audit.writeWithin(trx, {
+          actorId: actor.accountId,
+          action: 'effective_date.backdated',
+          targetType: 'person',
+          targetId: personId,
+          after: {
+            operation: 'pastoral_assignment.transferred',
+            recorded_at: recordedAt.toISOString(),
+            effective_at: effectiveAt.toISOString(),
+            effective_date: manilaDayOf(effectiveAt),
+          },
+          reason: input.reason ?? null,
+        });
+      }
+
+      const response = {
+        ...fullProfile(person),
+        pastoral_leader_id: input.leaderId,
+        previous_pastoral_leader_id: previousLeaderId,
+        effective_at: effectiveAt.toISOString(),
+        effective_date: manilaDayOf(effectiveAt),
+      };
+
+      await this.idempotency.completeWithin(trx, {
+        ...claim,
+        status: 200,
+        body: response,
+      });
+
+      return response;
+    });
+  }
+
+  /**
+   * SKILL.md section 5 invariant 1: a reassignment has a source and a destination
+   * and the actor must be authorized for **both**.
+   *
+   * Validating only the destination lets an actor pull people in from a branch
+   * they do not oversee; validating only the source lets them push people out of
+   * their scope and lose them. The guard evaluates the person being reassigned and
+   * neither of these, which is why both are here.
+   *
+   * A null source is a Person with no current assignment. There is no second
+   * endpoint to authorize, and section 5 permits an unassigned Person.
+   */
+  private async assertBothEndpointsInScope(
+    actor: Actor,
+    sourceLeaderId: string | null,
+    destinationLeaderId: string,
+  ): Promise<void> {
+    const endpoints: { label: string; personId: string }[] = [
+      { label: 'leader_id', personId: destinationLeaderId },
+      ...(sourceLeaderId === null ? [] : [{ label: 'current_leader', personId: sourceLeaderId }]),
+    ];
+
+    for (const endpoint of endpoints) {
+      const covered = await this.authorization.covers(
+        actor,
+        Capability.PeopleManagePastoralAssignment,
+        { kind: 'person', personId: endpoint.personId },
+      );
+
+      if (!covered) {
+        throw new ScopeDeniedError(
+          'A reassignment must stay within your authorized scope at both ends: the leader the person is moving from, and the leader they are moving to.',
+          { capability: Capability.PeopleManagePastoralAssignment, field: endpoint.label },
+        );
+      }
+    }
+  }
+
+  /**
+   * The refusal for an effective date at or before the current assignment's start.
+   *
+   * Names a date only where a date can legally be submitted, for the reason
+   * `networks.floorBreach` gives: an effective date is a day resolved to its start
+   * in Asia/Manila, so where the bound falls on the current day the day after it is
+   * tomorrow, which no reassignment may take.
+   */
+  private reassignmentTooEarly(
+    personId: string,
+    startedAt: Date,
+    backdated: boolean,
+  ): InvariantViolationError {
+    if (!backdated) {
+      return new InvariantViolationError(
+        'This reassignment cannot take effect at this instant, because the current assignment was recorded at it. Retry in a moment.',
+        { person_id: personId },
+      );
+    }
+
+    const earliest = manilaDayAfter(startedAt);
+
+    if (startOfManilaDay(earliest).getTime() > Date.now()) {
+      return new InvariantViolationError(
+        'This reassignment cannot be backdated: the current assignment began today. Submit it without an effective date, and it will take effect now.',
+        { person_id: personId },
+      );
+    }
+
+    return new InvariantViolationError(
+      'That effective date is at or before the moment the current assignment began, so the reassignment would erase the period rather than end it. Use the earliest date given here or later.',
+      { person_id: personId, earliest_effective_date: earliest },
+    );
   }
 
   /**

@@ -55,7 +55,7 @@ describe('recursive queries are cycle-safe (SKILL.md section 5)', () => {
     await assignTo(db, manuel.id, raymond.id);
     await assignTo(db, mark.id, manuel.id);
 
-    await expect(hierarchy.subtreeOf(raymond.id)).resolves.toEqual([
+    await expect(hierarchy.subtreeOf(db, raymond.id)).resolves.toEqual([
       raymond.id,
       manuel.id,
       mark.id,
@@ -72,7 +72,7 @@ describe('recursive queries are cycle-safe (SKILL.md section 5)', () => {
     await assignTo(db, mark.id, manuel.id);
     await assignTo(db, manuel.id, mark.id);
 
-    await expect(hierarchy.subtreeOf(manuel.id)).rejects.toThrow(/cycle/i);
+    await expect(hierarchy.subtreeOf(db, manuel.id)).rejects.toThrow(/cycle/i);
     await expect(hierarchy.ancestorsOf(mark.id)).rejects.toThrow(/cycle/i);
   });
 

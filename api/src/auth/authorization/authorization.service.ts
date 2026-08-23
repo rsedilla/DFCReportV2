@@ -170,6 +170,33 @@ export class AuthorizationService {
     });
   }
 
+  /**
+   * Whether the actor holds `capability` over `target` — the same question
+   * `authorize` asks, answered rather than thrown.
+   *
+   * SKILL.md section 5 invariant 1 needs it: a reassignment has a source and a
+   * destination and the actor must be authorized for **both**, which is two
+   * objects and one grant. The guard evaluates the request's primary target and
+   * the owning module checks the rest (section 7), and the rest needs a predicate.
+   *
+   * Deliberately not a second way to authorize an endpoint. `authorize` remains
+   * what a guard calls, because a guard that has to remember to throw is the
+   * failure section 2 chose a fail-closed framework to avoid.
+   */
+  async covers(actor: Actor, capability: Capability, target: Target): Promise<boolean> {
+    const grants = (await this.grantsFor(actor.accountId)).filter(
+      (grant) => grant.capability === capability,
+    );
+
+    for (const grant of grants) {
+      if (await this.scopeCovers(grant.scope, target, actor)) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
   private async scopeCovers(scope: Scope, target: Target, actor: Actor): Promise<boolean> {
     if (scope.type === ScopeType.WholeChurch) {
       return true;

@@ -211,6 +211,42 @@ export class CorrectSexDto {
 }
 
 /**
+ * Reassigning a person's pastoral leader (SKILL.md section 5, Changing a person's
+ * pastoral leader).
+ *
+ * The contract these fields carry is pinned by the eleven authorization cases in
+ * `test/authorization/pastoral-assignment.spec.ts`, which were written before the
+ * endpoint and are what it is built toward.
+ */
+export class ReassignPastoralLeaderDto {
+  /** The leader the person moves to, in the person's own unchanged Network. */
+  @Transform(toCanonicalId)
+  @IsUUID()
+  leader_id!: string;
+
+  /**
+   * Required when `effective_date` is given and not otherwise (section 5).
+   * Backdating "always requires a reason"; an ordinary reassignment records a
+   * decision taken today and the audit entry already carries who took it.
+   */
+  @IsOptional()
+  @IsString()
+  @Length(1, 500)
+  reason?: string;
+
+  /**
+   * A plain `YYYY-MM-DD` Asia/Manila date (section 22), resolved to the start of
+   * that day in that zone (section 20). Its presence makes this a backdated
+   * reassignment, which additionally requires `records.backdate_effective_date`
+   * and is bounded by the two rules in section 5.
+   */
+  @IsOptional()
+  @Matches(DATE_ONLY, { message: 'must be a plain YYYY-MM-DD date, not a timestamp' })
+  @IsDateString({ strict: true })
+  effective_date?: string;
+}
+
+/**
  * The pre-flight duplicate check (SKILL.md section 3; section 9, step 1: "Search
  * existing People first").
  *

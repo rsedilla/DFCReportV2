@@ -60,7 +60,7 @@ export class HierarchyService {
    * Direct leaders and descendants are different things and are never conflated
    * (section 5, Direct leaders vs descendants); this is the second of the two.
    */
-  async subtreeOf(personId: string): Promise<string[]> {
+  async subtreeOf(executor: Db, personId: string): Promise<string[]> {
     const result = await sql<{ person_id: string; depth: number; is_cycle: boolean }>`
       WITH RECURSIVE subtree AS (
         SELECT ${personId}::uuid AS person_id, 0 AS depth
@@ -71,7 +71,7 @@ export class HierarchyService {
          WHERE pa.ended_at IS NULL
       ) CYCLE person_id SET is_cycle USING path
       SELECT person_id, depth, is_cycle FROM subtree ORDER BY depth
-    `.execute(this.db);
+    `.execute(executor);
 
     this.rejectCycle(result.rows, personId);
 

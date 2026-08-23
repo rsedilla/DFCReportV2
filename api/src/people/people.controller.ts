@@ -15,6 +15,7 @@ import { NetworksService } from '../networks/networks.service';
 
 import {
   CorrectSexDto,
+  ReassignPastoralLeaderDto,
   CreatePersonDto,
   DuplicateCandidatesDto,
   EditPersonDto,
@@ -243,6 +244,42 @@ export class PeopleController {
         sex: body.sex,
         reason: body.reason,
         pastoralLeaderId: body.pastoral_leader_id,
+        effectiveDate: body.effective_date,
+      },
+      actor,
+      claim,
+    );
+  }
+
+  /**
+   * Reassigning a person's pastoral leader (SKILL.md section 5).
+   *
+   * **The guard checks one of the three objects this touches.** Section 5 requires
+   * the source leader and the destination leader both to be within the actor's
+   * scope, and forbids the actor acting on themselves or on anyone upline of them.
+   * That is three objects with three different rules and a grant carries one
+   * scope, so the guard evaluates the person and the `people` and `hierarchy`
+   * domain layers evaluate the rest. A developer who implements the guard and
+   * believes the rule is implemented has built half of it.
+   */
+  @Put(':id/pastoral-leader')
+  @RequiresCapability(Capability.PeopleManagePastoralAssignment, {
+    kind: 'person',
+    from: 'params.id',
+  })
+  async reassignPastoralLeader(
+    @Param('id', CanonicalUuidPipe) id: string,
+    @Body() body: ReassignPastoralLeaderDto,
+    @CurrentActor() actor: Actor,
+    @CurrentIdempotency() claim: CurrentClaim,
+  ): Promise<Record<string, unknown>> {
+    // Returned unchanged: the service composed this body and recorded it inside
+    // the write's transaction (section 22).
+    return this.people.reassignPastoralLeader(
+      id,
+      {
+        leaderId: body.leader_id,
+        reason: body.reason,
         effectiveDate: body.effective_date,
       },
       actor,
