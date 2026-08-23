@@ -53,11 +53,20 @@ class IdentifierProbeController {
   @Post(':id')
   @AuthenticatedOnly('A test probe that reads back what it was handed.')
   seen(
-    @Param('id') id: string,
-    @Query('filter_id') filterId: string,
-    @Body() body: { nested: { ids: string[] }; reason: string },
-  ): { param: string; query: string; body: string; reason: string } {
-    return { param: id, query: filterId, body: body.nested.ids[0], reason: body.reason };
+    // **Object bindings, deliberately.** `@Param('id')` and `@Query('filter_id')`
+    // are handed a bare string and pass whether or not the walk handles the
+    // objects Express actually builds — which are null-prototype, and which the
+    // first version of this pipe silently skipped.
+    @Param() params: { id: string },
+    @Query() query: { filter_id: string },
+    @Body() body: { nested: { ids: string[] }; password: string },
+  ): { param: string; query: string; body: string; password: string } {
+    return {
+      param: params.id,
+      query: query.filter_id,
+      body: body.nested.ids[0],
+      password: body.password,
+    };
   }
 }
 
@@ -163,7 +172,8 @@ describe('the person lock is taken by every path that can strand an edge', () =>
     // the way any new route would be — bare `@Param`, `@Query` and `@Body`, no
     // pipe, no `@Transform`, nobody having remembered anything — and it must still
     // see the canonical form in all three. The body identifier is nested inside an
-    // array inside an object, because that is where a real one turns up.
+    // array inside an object, because that is where a real one turns up, and the
+    // bindings are objects because that is what Express hands over.
     //
     // Every other identifier case passes if *either* layer is present, so none of
     // them notices the boundary regressing to a per-parameter opt-in.
@@ -177,7 +187,9 @@ describe('the person lock is taken by every path that can strand an edge', () =>
       // first version of this case omitted it and was answered 422.
       .set('Idempotency-Key', randomUUID())
       .query({ filter_id: upper })
-      .send({ nested: { ids: [upper] }, reason: 'Left ALONE because it is not a UUID.' });
+      // UUID-shaped on purpose: the credential is the case that decides the rule
+      // is about field names rather than value shapes.
+      .send({ nested: { ids: [upper] }, password: upper });
 
     expect(response.status).toBe(201);
 
@@ -188,9 +200,10 @@ describe('the person lock is taken by every path that can strand an edge', () =>
     expect(response.body.query).toBe(mark.id);
     expect(response.body.body).toBe(mark.id);
 
-    // And nothing that is not UUID-shaped is touched — the reason for it being
-    // safe to run over a whole request.
-    expect(response.body.reason).toBe('Left ALONE because it is not a UUID.');
+    // **And a credential is untouched, though it is UUID-shaped.** Canonicalizing
+    // by value shape would lowercase it and lock that account out permanently,
+    // with nothing to diagnose. This is what pins the rule being about the name.
+    expect(response.body.password).toBe(upper);
   });
 
   it('normalizes identifiers in the authority check itself, not only at the boundary', async () => {

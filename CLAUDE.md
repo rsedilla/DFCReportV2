@@ -1883,15 +1883,33 @@ needed a transform somebody had to remember — the same per-site opt-in the cha
 existed to remove, one layer over.
 
 Found by `architecture-guardian`, and it is the same fault as the five before it: a
-mechanism described from the part of it being looked at. Worth recording that it
-happened in the branch adjacent to the one adding §25's rule 19 against exactly
-this.
+mechanism described from the part of it being looked at.
 
-Only UUID-shaped strings are touched, which is what makes running over a whole
-request safe: a name, a reason, a search term and a cursor are none of them
-eight-four-four-four-twelve hex. Values this application constructed — the
-authenticated actor, the idempotency claim — are excluded as not being client
-input.
+**The second version was wrong in a worse way, and the rule is now name-based
+because of it.** Widening the pipe to every argument meant it walked the body of
+`POST /auth/login`, and it decided what to touch by *shape* — so a password that
+happened to be UUID-shaped was silently lowercased and that account could never
+sign in again, with nothing to diagnose. `uuidgen` output is an ordinary ad-hoc
+password. A boundary cannot tell an identifier from a credential by looking at the
+value, and it does not have to: it can look at the field's name, which this system
+chooses.
+
+A value is canonicalized only where **both** hold — the key names an identifier,
+and the value is UUID-shaped. Name alone would rewrite a Member ID, which is `M-`
+and six digits; shape alone rewrites credentials. §22's naming convention now
+carries the other half: an identifier's field name ends in `_id` or `_ids`, because
+that is what the boundary keys on.
+
+**A prototype check silently skipped every object-bound query and path parameter.**
+Express 5 builds `req.query` and `req.params` with `Object.create(null)`, so testing
+against `Object.prototype` alone excluded exactly the bindings §22's documented
+`/cells?leader_id=` filter would use. No end-to-end case could see it, because the
+*named* bindings receive a bare string and work either way.
+
+**The walk was also unbounded**, which the widening made reachable before
+authentication: a nested body well inside the 100 KB limit overflowed the stack and
+answered `INTERNAL_ERROR` — a 500 logged as a defect, for input, on the sign-in
+route.
 
 **The idempotency fingerprint canonicalizes separately**, because interceptors run
 before pipes: it would otherwise be taken over the spelling the client used, and one
@@ -1933,8 +1951,15 @@ present, so none of them notices the boundary regressing to per-site opt-in. The
 probe route is written the way any new route would be — bare path, query and body
 bindings, no pipe, no transform, nobody having remembered anything — and asserts all
 three arrive canonical, with the body's identifier nested inside an array inside an
-object because that is where a real one turns up. It also asserts a non-UUID string
-is left alone, which is the property that makes running over a whole request safe.
+object because that is where a real one turns up. It also asserts that a
+**UUID-shaped password** comes back untouched, which is the property that makes
+running over a whole request safe and the one a shape-based rule fails.
+
+**The walk itself is pinned by unit tests rather than only by that probe**, because
+its three dangerous properties are invisible end to end: a prototype check that
+skips `req.query`, a credential quietly rewritten, and a stack overflow on a legal
+payload all look identical to a green suite. Two of the three defects above would
+have been caught by the tests that now exist and did not.
 
 ### Open — awaiting a ruling
 

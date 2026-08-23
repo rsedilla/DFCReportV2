@@ -16,7 +16,7 @@ import {
 } from '../errors/api-error';
 import { describeFailure } from '../errors/api-exception.filter';
 
-import { canonicalizeIdentifiers } from '../identifiers';
+import { canonicalIfUuid, canonicalizeIdentifiers } from '../identifiers';
 
 import { IdempotencyService } from './idempotency.service';
 
@@ -231,9 +231,13 @@ function requestPath(request: AuthenticatedRequest): string {
   // **Segment by segment, not over the whole string.** An identifier reaches this
   // as one segment of a path, and a path is never itself UUID-shaped — so handing
   // the whole thing to `canonicalizeIdentifiers` would do nothing at all, quietly.
+  // **Segment by segment, and by shape rather than by name**, because a path
+  // segment has no key. That is safe here in a way it is not for a body: a URL
+  // path carries identifiers and nothing else -- no credential is ever a path
+  // segment -- so a UUID-shaped segment is an identifier by construction.
   const path = trimmed
     .split('/')
-    .map((segment) => canonicalizeIdentifiers(segment) as string)
+    .map((segment) => canonicalIfUuid(segment))
     .join('/');
 
   if (!rawQuery) {
@@ -247,9 +251,15 @@ function requestPath(request: AuthenticatedRequest): string {
   // requests would then share a fingerprint, and the second would be answered
   // with the first's stored response -- the exact outcome keeping the query is
   // meant to prevent.
-  const sorted = (
-    canonicalizeIdentifiers([...new URLSearchParams(rawQuery).entries()]) as [string, string][]
-  ).sort((a, b) => (a[0] === b[0] ? compare(a[1], b[1]) : compare(a[0], b[0])));
+  // Canonicalized **before** sorting, and by the parameter's own name: sorting
+  // first would order two spellings of one request differently and defeat the
+  // point of doing this at all.
+  const sorted = [...new URLSearchParams(rawQuery).entries()]
+    .map(([name, value]): [string, string] => [
+      name,
+      canonicalizeIdentifiers(value, name) as string,
+    ])
+    .sort((a, b) => (a[0] === b[0] ? compare(a[1], b[1]) : compare(a[0], b[0])));
 
   return `${path}?${JSON.stringify(sorted)}`;
 }

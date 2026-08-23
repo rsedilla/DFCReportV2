@@ -1245,7 +1245,9 @@ The flag exists because a scope widened beyond a leader's normal management scop
 
 **The boundary normalizes every route, not the routes that remember to ask.** It is applied globally, to path parameters, query parameters and bodies alike, so a route added later is inside the rule without its author knowing the rule exists. A pipe wired onto each parameter, and a transform wired onto each identifier field, were both first attempts and are exactly the failure Section 2 gives as the reason the capability guard is declarative: a convention held per call site is only as reliable as the least familiar developer writing the newest one.
 
-Only UUID-shaped strings are touched, which is what makes it safe to run over a whole request: a name, a reason, a search term and a pagination cursor are none of them eight-four-four-four-twelve hex, and a UUID is case-insensitive by definition. Values this application constructed rather than received — the authenticated actor, the idempotency claim — are excluded, because they are not client input.
+**A value is canonicalized only where the field's name says it is an identifier *and* the value is UUID-shaped**, and the intersection is what makes it safe to run over a whole request. Each half stops a different corruption. Name alone would rewrite a Member ID, which is `M-` and six digits (Section 3). Shape alone would rewrite a **credential**: a password is arbitrary bytes, case-sensitive, and nothing in its content marks it as one — so a password that happens to be UUID-shaped would be silently lowercased and that account could never sign in again. Field names are chosen by this system; the contents of a password are not.
+
+Arguments this application constructed rather than received are skipped. That exclusion is currently by the framework's own bucket for anything that is not a body, a path parameter or a query, which today means the authenticated actor and the idempotency claim — but the same bucket would hold an uploaded file or a raw body, which *are* client input. A route binding one, or an identifier decorator built as a custom parameter, needs naming here rather than inheriting the exclusion.
 
 **The idempotency fingerprint canonicalizes separately**, because interceptors run before pipes and it would otherwise be taken over the spelling the client used. Left raw, one retry of one request with an identifier in a different case fingerprints differently and is answered `IDEMPOTENCY_KEY_REUSED`, which Section 22 makes permanent — turning an ordinary retry into a dead end.
 
@@ -2777,7 +2779,9 @@ Timestamps are ISO 8601 with an offset. Date-only fields — an attendance date,
 
 #### Field naming
 
-One concept carries one field name across every endpoint. A pastoral leader is `pastoral_leader_id` wherever a request names one — Section 11 makes Cell leadership a first-class concept, so a bare `leader_id` does not say which kind of leader is meant. A Cell's leader, when Stage 3 names one, is subject to the same discipline and must not be `leader_id` either.
+One concept carries one field name across every endpoint, and an identifier's name ends in `_id` or `_ids`. That is not only tidiness: it is what the boundary in Section 7 keys on when deciding whether a value may be canonicalized, so a field carrying an identifier under some other name is outside the rule.
+
+A pastoral leader is `pastoral_leader_id` wherever a request names one — Section 11 makes Cell leadership a first-class concept, so a bare `leader_id` does not say which kind of leader is meant. A Cell's leader, when Stage 3 names one, is subject to the same discipline and must not be `leader_id` either.
 
 Database columns are not bound by this: `pastoral_assignments.leader_id` needs no qualifier because its table supplies one.
 
