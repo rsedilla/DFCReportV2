@@ -1,5 +1,9 @@
 import { randomUUID } from 'node:crypto';
 
+import { Controller, Get, Param } from '@nestjs/common';
+
+import { AuthenticatedOnly } from '../../src/auth/authorization/authorization.decorators';
+
 import { Client } from 'pg';
 import request from 'supertest';
 
@@ -36,6 +40,23 @@ import type { TestAccount, TestPerson } from '../setup/fixtures';
  *
  * Fixture names and dates are invented (CLAUDE.md, Secrets).
  */
+/**
+ * A route that opts into nothing.
+ *
+ * It exists to be written the way somebody adding a route next month would write
+ * one — no pipe, no decorator, no knowledge that identifiers are canonicalized —
+ * so that the global boundary is what has to hold. `@AuthenticatedOnly` because it
+ * touches no church data and reads only what it was handed.
+ */
+@Controller('__identifier-probe')
+class IdentifierProbeController {
+  @Get(':id')
+  @AuthenticatedOnly('A test probe that reads back its own path parameter.')
+  seen(@Param('id') id: string): { seen: string } {
+    return { seen: id };
+  }
+}
+
 describe('the person lock is taken by every path that can strand an edge', () => {
   let app: INestApplication;
   let db: Kysely<Database>;
@@ -48,7 +69,7 @@ describe('the person lock is taken by every path that can strand an edge', () =>
 
   beforeAll(async () => {
     db = createTestDb();
-    app = await createTestApp();
+    app = await createTestApp([IdentifierProbeController]);
   });
 
   beforeEach(async () => {
@@ -131,6 +152,25 @@ describe('the person lock is taken by every path that can strand an edge', () =>
       await holder.end();
     }
   }
+
+  it('canonicalizes a path identifier on a route that never opted in', async () => {
+    // **This is what "structural" means, and it is the only case that can fail if
+    // the boundary goes back to being opt-in.** The probe route below is written
+    // the way any new route would be — a bare `@Param('id')`, no pipe, nobody
+    // having remembered anything — and it must still see the canonical form.
+    //
+    // Every other identifier case passes if *either* layer is present, so none of
+    // them notices the boundary regressing to a per-parameter opt-in.
+    const upper = mark.id.toUpperCase();
+
+    const response = await request(app.getHttpServer())
+      .get(`/api/v1/__identifier-probe/${upper}`)
+      .set('Authorization', `Bearer ${admin.accessToken}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body.seen).toBe(mark.id);
+    expect(response.body.seen).not.toBe(upper);
+  });
 
   it('normalizes identifiers in the authority check itself, not only at the boundary', async () => {
     // **The two layers are pinned separately on purpose.** Every end-to-end case

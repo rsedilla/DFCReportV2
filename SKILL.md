@@ -1241,7 +1241,11 @@ A grant of a read capability may set `read_only` true or false; true is the defa
 
 The flag exists because a scope widened beyond a leader's normal management scope is a reporting grant unless something says otherwise (above). It is the visible difference between letting someone see a Network and letting them change it.
 
+**One concept carries one field name.** A pastoral leader is `pastoral_leader_id` on every endpoint that names one. Section 11 makes Cell leadership a first-class concept, so a bare `leader_id` does not say which kind of leader it means; the database column `pastoral_assignments.leader_id` needs no such qualifier because its table supplies it. A field name that differs between two endpoints for one concept is a permanent cost on three client codebases, and the moment to fix one is before any client depends on it.
+
 **An identifier supplied by a client is compared canonically, always.** A `uuid` column compares case-insensitively and application code does not, so a person named with their identifier in uppercase is one record to every query and a different string to every comparison written in the application. Identifiers are therefore normalized at the request boundary, and any comparison that decides authority normalizes again rather than trusting that they were.
+
+**The boundary normalizes every route, not the routes that remember to ask.** It is applied globally to path parameters, so a route added later is inside the rule without its author knowing the rule exists. A pipe wired onto each parameter was the first attempt and is exactly the failure Section 2 gives as the reason the capability guard is declarative: a convention held per call site is only as reliable as the least familiar developer writing the newest one. Query parameters are deliberately excluded — a pagination cursor is case-sensitive by construction — and body fields carry their own transform.
 
 This is stated in Section 7 because the consequence is an authorization one. Invariant 4 below is two identifier comparisons and is the only check on its path that fails **open**; against the one actor class it exists to stop, a comparison that answers "this is not you" is the whole of the escalation. The same defect has also appeared where it merely fails closed — a duplicate acknowledgement that could never be satisfied, blocking a Person from being created at all (Section 3), and a lock that took two keys for one person and serialized nothing (Section 5).
 
@@ -2735,6 +2739,7 @@ GET  /api/v1/people/duplicate-candidates  declared before /{id}, or it is one
 GET  /api/v1/people/{id}
 GET  /api/v1/people/{id}/pastoral-path
 PUT  /api/v1/people/{id}/sex             the audited correction of Section 4
+PUT  /api/v1/people/{id}/pastoral-leader  the reassignment of Section 5
 
 GET  /api/v1/network/my-tree
 GET  /api/v1/leaders/{id}/children

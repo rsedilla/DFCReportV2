@@ -1859,9 +1859,56 @@ rather than the writing one.
 type, not a constraint, not a passing test — which is why it is written down rather
 than left to care.
 
+### 2026-08-23 — Identifier normalization is global, and a pastoral leader has one field name
+
+Two changes to the API boundary, settled together because both are about an
+identifier arriving from a client and neither is worth a review cycle alone.
+
+**The boundary normalizes every route.** `CanonicalIdentifierPipe` is registered
+globally and canonicalizes any UUID-shaped **path parameter**, so a route added
+later is inside §7's canonical-comparison rule without its author knowing the rule
+exists. The first attempt was a pipe wired onto each `@Param('id')`, which is
+verbatim the failure §2 gives as the reason the capability guard is declarative —
+a convention held per call site is only as reliable as the least familiar developer
+writing the newest one. That closes the open item this log has carried since the
+identifier work began.
+
+Path parameters only, and the exclusions are reasons rather than caution. A query
+parameter can be case-sensitive by construction — the search cursor is base64url,
+where case is data — so canonicalizing queries would corrupt pagination. A body is
+a DTO whose identifier fields carry their own transform and whose other fields are
+names and reasons that must survive untouched.
+
+It canonicalizes and does not validate. Whether a path parameter is a UUID is
+already decided before it runs, because guards execute before pipes and the
+capability guard refuses a target that is not one. The previous pipe's throwing
+branch was unreachable for that reason, which is worth recording: it looked like a
+second line of defence and was dead code.
+
+**`leader_id` becomes `pastoral_leader_id`** on the reassignment endpoint, matching
+`POST /people` and the sex correction. §11 makes Cell leadership a first-class
+concept, so a bare `leader_id` does not say which kind of leader it means. The
+database column keeps its name: `pastoral_assignments.leader_id` is disambiguated
+by its table.
+
+**It is a rename inside §22's window rather than a break §22 absorbed.** §22 binds
+`/api/v1` to stay behaviourally unchanged "for as long as any client calls it", and
+nothing calls it — `web/` is a placeholder and no mobile build exists. The window
+closes at the first real client, which is the argument for doing it now rather than
+recording it as debt. The eleven authorization cases pinned the old name and their
+own header always provided for this: "Stage 2 implements this shape, or changes
+these tests deliberately and says why."
+
+**What pins the global boundary is a route that opts into nothing.** Every other
+identifier case passes if either the boundary or the defensive comparison is
+present, so none of them notices the boundary regressing to per-parameter opt-in.
+The probe route is written the way any new route would be — a bare `@Param('id')`,
+no pipe, nobody having remembered anything — and asserts it still sees the
+canonical form.
+
 ### Open — awaiting a ruling
 
-**One item awaits a ruling and blocks Stage 5. Eight other things are unsettled, none of them blocking. They are listed at the end, so this section is the whole of what is open.**
+**One item awaits a ruling and blocks Stage 5. Seven other things are unsettled, none of them blocking. They are listed at the end, so this section is the whole of what is open.**
 
 Nine items that stood here on 2026-08-22 were settled that day and are recorded above. Seven were Stop Conditions for Stage 2, and the last two were opened and closed the same day by `architecture-guardian` passes.
 
@@ -1879,6 +1926,5 @@ Two related questions have defined behaviour and are recorded in `SKILL.md` §12
 - **The native client framework.** `SKILL.md` §2 settles the web stack and says nothing about Android and iOS. Deferred since the specification was written; indexed here because two rules now point at it as open.
 - **What the native clients owe on accessibility.** `SKILL.md` §23 binds the web application to WCAG 2.2 AA and says the equivalent obligation for a native client is the platform accessibility API rather than WCAG. Which platform guarantees, and what would fail a build, is a ruling to make when the client is.
 
-- **Whether identifier normalization should be structural rather than per-parameter.** §7 requires a client-supplied identifier to be compared canonically, and the boundary half of that is currently a pipe wired onto each `@Param('id')` — so the next route written without it is silently outside the rule. That is verbatim the failure mode §2 gives as the reason the capability guard is declarative and fails closed. It is not a problem at three routes with the authority checks normalizing defensively; it will be one by the time there are forty. A global pipe or a `@PersonId()` decorator would close it. Settle it before Stage 3 adds routes.
 - **Whether the liveness probe should share the application connection pool.** §24 now records that it does, and that pool exhaustion therefore presents to the platform as a dead process — so the response is a restart that discards the transactions still making progress. A separate connection, or a probe that does not reach the database, are both defensible and mean different things by "healthy". Deployment work with a ruling attached, alongside the database-role item above.
 - **Whether `audit_log`'s append-only guarantee tolerates `TRUNCATE`.** §5 records the exemption for history tables and leans it on a least-privilege role that does not exist, which is already open above. §21 says nothing at all, and the test suite truncates `audit_log` before every test. Same answer as the `TRUNCATE` question above, most likely, but it is not written down for the one table whose whole purpose is that nothing removes a row.

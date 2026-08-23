@@ -219,10 +219,18 @@ export class CorrectSexDto {
  * endpoint and are what it is built toward.
  */
 export class ReassignPastoralLeaderDto {
-  /** The leader the person moves to, in the person's own unchanged Network. */
+  /**
+   * The leader the person moves to, in the person's own unchanged Network.
+   *
+   * Named `pastoral_leader_id` to match `POST /people` and the sex correction.
+   * Section 11 makes Cell leadership a first-class concept, so a bare `leader_id`
+   * is ambiguous in this domain — the longer name says which kind. The database
+   * column stays `pastoral_assignments.leader_id`, which its table already
+   * disambiguates.
+   */
   @Transform(toCanonicalId)
   @IsUUID()
-  leader_id!: string;
+  pastoral_leader_id!: string;
 
   /**
    * Required when `effective_date` is given and not otherwise (section 5).

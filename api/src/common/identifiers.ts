@@ -1,6 +1,4 @@
-import { Injectable, type PipeTransform } from '@nestjs/common';
-
-import { ValidationFailedError } from './errors/api-error';
+import { Injectable, type ArgumentMetadata, type PipeTransform } from '@nestjs/common';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -24,10 +22,11 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
  * own record with their id in uppercase, which is the escalation that check exists
  * to stop.
  *
- * The remedy is applied in two places on purpose. `CanonicalUuidPipe` normalizes
- * at the boundary so that nothing downstream has to remember, and the security
- * check in `hierarchy` normalizes again, because a check that fails open must not
- * depend on a caller having wired a pipe.
+ * The remedy is applied in two places on purpose. `CanonicalIdentifierPipe`
+ * normalizes at the boundary — globally, so that no route has to opt in and
+ * nothing downstream has to remember — and the security check in `hierarchy`
+ * normalizes again, because a check that fails open must not depend on the
+ * boundary having done its job.
  */
 export function canonicalId(value: string): string {
   return value.toLowerCase();
@@ -53,21 +52,36 @@ export function sameId(left: string, right: string): boolean {
 }
 
 /**
- * Validates a path parameter as a UUID and hands on its canonical form.
+ * Canonicalizes every UUID-shaped **path parameter**, on every route, without
+ * being asked.
  *
- * Nest's own `ParseUUIDPipe` validates and returns the value unchanged, which
- * leaves exactly the problem above. This one lowercases, so a handler and every
- * service below it compare identifiers that came from a client against
- * identifiers that came from the database and get the right answer.
+ * Registered globally, which is the whole point. The rule above was previously a
+ * pipe wired onto each `@Param('id')`, so the next route written without it was
+ * silently outside the rule — verbatim the failure SKILL.md section 2 gives as the
+ * reason the capability guard is declarative and fails closed. A convention
+ * remembered per parameter is only as reliable as the least familiar developer
+ * writing the newest route.
  *
- * Guards run before pipes, so the capability guard still sees the raw value — that
- * is safe, because everything it does with it ends in a `uuid` comparison in SQL.
+ * **Path parameters only, and that is deliberate rather than cautious.** A query
+ * parameter can be case-sensitive by construction: the search cursor is base64url,
+ * where `A` and `a` are different bytes, so canonicalizing queries would corrupt
+ * pagination. A body is a DTO, whose identifier fields carry their own transform
+ * and whose other fields are names and reasons that must survive untouched.
+ *
+ * **It canonicalizes and does not validate.** Whether a path parameter is a UUID
+ * at all is already decided before this runs: guards execute before pipes, and the
+ * capability guard refuses a target that is not one (section 7). A pipe that threw
+ * here would be a second answer to a question already answered — and its throwing
+ * branch was, in fact, unreachable for exactly that reason.
+ *
+ * Anything that is not a UUID-shaped string is passed through untouched, so a
+ * route with a non-UUID path parameter is unaffected by this existing.
  */
 @Injectable()
-export class CanonicalUuidPipe implements PipeTransform<string, string> {
-  transform(value: string): string {
-    if (typeof value !== 'string' || !UUID.test(value)) {
-      throw new ValidationFailedError('That identifier is not a UUID.', { value });
+export class CanonicalIdentifierPipe implements PipeTransform<unknown, unknown> {
+  transform(value: unknown, metadata: ArgumentMetadata): unknown {
+    if (metadata.type !== 'param' || typeof value !== 'string' || !UUID.test(value)) {
+      return value;
     }
 
     return canonicalId(value);

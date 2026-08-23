@@ -100,7 +100,7 @@ describe('reassigning a pastoral leader: the record (sections 5, 21, 22)', () =>
 
   describe('the write', () => {
     it('closes and opens at one instant, and audits the transfer', async () => {
-      const response = await reassign(mark.id, { leader_id: rico.id });
+      const response = await reassign(mark.id, { pastoral_leader_id: rico.id });
 
       expect(response.status).toBe(200);
       expect(response.body).toMatchObject({
@@ -136,7 +136,7 @@ describe('reassigning a pastoral leader: the record (sections 5, 21, 22)', () =>
 
     it('replays a retry rather than reassigning twice', async () => {
       const key = randomUUID();
-      const body = { leader_id: rico.id };
+      const body = { pastoral_leader_id: rico.id };
 
       const first = await reassign(mark.id, body, admin, key);
       expect(first.status).toBe(200);
@@ -160,7 +160,7 @@ describe('reassigning a pastoral leader: the record (sections 5, 21, 22)', () =>
       // The property: whatever date the refusal names must itself be accepted,
       // or the administrator is handed a date that will be refused again.
       const refused = await reassign(mark.id, {
-        leader_id: rico.id,
+        pastoral_leader_id: rico.id,
         effective_date: '2026-03-01',
         reason: 'Correcting a transfer recorded late.',
       });
@@ -172,7 +172,7 @@ describe('reassigning a pastoral leader: the record (sections 5, 21, 22)', () =>
       expect(earliest).toBe('2026-03-02');
 
       const accepted = await reassign(mark.id, {
-        leader_id: rico.id,
+        pastoral_leader_id: rico.id,
         effective_date: earliest,
         reason: 'Correcting a transfer recorded late.',
       });
@@ -202,7 +202,7 @@ describe('reassigning a pastoral leader: the record (sections 5, 21, 22)', () =>
         .execute();
 
       const refused = await reassign(drifted.id, {
-        leader_id: rico.id,
+        pastoral_leader_id: rico.id,
         effective_date: '2026-05-01',
         reason: 'Recording a move that happened during the gap.',
       });
@@ -211,7 +211,7 @@ describe('reassigning a pastoral leader: the record (sections 5, 21, 22)', () =>
       expect(refused.body.error.details.earliest_effective_date).toBe('2026-06-02');
 
       const accepted = await reassign(drifted.id, {
-        leader_id: rico.id,
+        pastoral_leader_id: rico.id,
         effective_date: '2026-06-02',
         reason: 'Recording a move that happened during the gap.',
       });
@@ -238,7 +238,7 @@ describe('reassigning a pastoral leader: the record (sections 5, 21, 22)', () =>
       await assignTo(db, mark.id, rico.id, movedAt);
 
       const response = await reassign(manuel.id, {
-        leader_id: rico.id,
+        pastoral_leader_id: rico.id,
         effective_date: '2026-06-01',
         reason: 'Correcting a transfer recorded late.',
       });
@@ -267,7 +267,7 @@ describe('reassigning a pastoral leader: the record (sections 5, 21, 22)', () =>
         .execute();
 
       const response = await reassign(formerRoot.id, {
-        leader_id: rico.id,
+        pastoral_leader_id: rico.id,
         effective_date: '2026-05-01',
         reason: 'Recording a move that happened during the gap.',
       });
@@ -281,7 +281,7 @@ describe('reassigning a pastoral leader: the record (sections 5, 21, 22)', () =>
       // so an edge to her is refused — and it is refused *here*, with a date the
       // administrator can act on, rather than at COMMIT as a constraint violation.
       const response = await reassign(mark.id, {
-        leader_id: nora.id,
+        pastoral_leader_id: nora.id,
         effective_date: '2026-06-01',
         reason: 'Correcting a transfer recorded late.',
       });
@@ -307,7 +307,7 @@ describe('reassigning a pastoral leader: the record (sections 5, 21, 22)', () =>
       });
 
       const response = await reassign(late.id, {
-        leader_id: rico.id,
+        pastoral_leader_id: rico.id,
         effective_date: '2026-01-01',
         reason: 'Correcting a transfer recorded late.',
       });
@@ -320,7 +320,7 @@ describe('reassigning a pastoral leader: the record (sections 5, 21, 22)', () =>
 
     it('requires a reason when backdating, and not otherwise', async () => {
       const withoutReason = await reassign(mark.id, {
-        leader_id: rico.id,
+        pastoral_leader_id: rico.id,
         effective_date: '2026-06-01',
       });
 
@@ -328,13 +328,13 @@ describe('reassigning a pastoral leader: the record (sections 5, 21, 22)', () =>
       expect(withoutReason.body.error.details.field).toBe('reason');
 
       // The same request without a date needs none.
-      const undated = await reassign(mark.id, { leader_id: rico.id });
+      const undated = await reassign(mark.id, { pastoral_leader_id: rico.id });
       expect(undated.status).toBe(200);
     });
 
     it('refuses an effective date in the future', async () => {
       const response = await reassign(mark.id, {
-        leader_id: rico.id,
+        pastoral_leader_id: rico.id,
         effective_date: '2099-01-01',
         reason: 'Correcting a transfer recorded late.',
       });
@@ -344,7 +344,7 @@ describe('reassigning a pastoral leader: the record (sections 5, 21, 22)', () =>
 
     it('writes a backdating audit entry carrying both dates', async () => {
       await reassign(mark.id, {
-        leader_id: rico.id,
+        pastoral_leader_id: rico.id,
         effective_date: '2026-03-02',
         reason: 'Correcting a transfer recorded late.',
       }).expect(200);
@@ -369,10 +369,10 @@ describe('reassigning a pastoral leader: the record (sections 5, 21, 22)', () =>
       // Section 5 is silent and section 4 refuses the analogue: an audited transfer
       // whose before and after name the same leader misleads whoever reads the log,
       // and it puts a boundary in the history where nothing happened.
-      const response = await reassign(mark.id, { leader_id: manuel.id });
+      const response = await reassign(mark.id, { pastoral_leader_id: manuel.id });
 
       expect(response.status).toBe(422);
-      expect(response.body.error.details.field).toBe('leader_id');
+      expect(response.body.error.details.field).toBe('pastoral_leader_id');
 
       const rows = await db
         .selectFrom('pastoral_assignments')
@@ -390,7 +390,7 @@ describe('reassigning a pastoral leader: the record (sections 5, 21, 22)', () =>
         .where('id', '=', mark.id)
         .execute();
 
-      const response = await reassign(mark.id, { leader_id: rico.id });
+      const response = await reassign(mark.id, { pastoral_leader_id: rico.id });
 
       expect(response.status).toBe(409);
       expect(response.body.error.message).toMatch(/merge/i);
@@ -427,7 +427,7 @@ describe('reassigning a pastoral leader: the record (sections 5, 21, 22)', () =>
       // Ben is Raymond's own leader. In the eleven this is denied by the guard,
       // because Ben is outside Raymond's subtree — so invariant 4's ancestors
       // branch is never executed there. Here the guard passes.
-      const response = await reassign(ben.id, { leader_id: rico.id }, raymondAccount);
+      const response = await reassign(ben.id, { pastoral_leader_id: rico.id }, raymondAccount);
 
       expect(response.status).toBe(403);
       expect(response.body.error.code).toBe('SCOPE_DENIED');
@@ -446,7 +446,7 @@ describe('reassigning a pastoral leader: the record (sections 5, 21, 22)', () =>
     it('refuses a Leader reassigning themselves, with the guard out of the way', async () => {
       await grantManageChurchWide(raymondAccount);
 
-      const response = await reassign(raymond.id, { leader_id: rico.id }, raymondAccount);
+      const response = await reassign(raymond.id, { pastoral_leader_id: rico.id }, raymondAccount);
 
       expect(response.status).toBe(403);
       expect(response.body.error.message).toMatch(/your own pastoral assignment/);
@@ -460,7 +460,7 @@ describe('reassigning a pastoral leader: the record (sections 5, 21, 22)', () =>
       // version of this case did.
       const manuelAdmin = await createAccount(app, db, { person: manuel, roles: ['ADMIN'] });
 
-      const response = await reassign(manuel.id, { leader_id: rico.id }, manuelAdmin);
+      const response = await reassign(manuel.id, { pastoral_leader_id: rico.id }, manuelAdmin);
 
       expect(response.status).toBe(200);
       expect(response.body.previous_pastoral_leader_id).toBe(raymond.id);
@@ -469,16 +469,16 @@ describe('reassigning a pastoral leader: the record (sections 5, 21, 22)', () =>
     it('refuses a destination the actor does not oversee', async () => {
       // Invariant 1's destination half, end to end. Mark is inside Raymond's
       // subtree so the guard passes; Rico is outside it.
-      const response = await reassign(mark.id, { leader_id: rico.id }, raymondAccount);
+      const response = await reassign(mark.id, { pastoral_leader_id: rico.id }, raymondAccount);
 
       expect(response.status).toBe(403);
       expect(response.body.error.code).toBe('SCOPE_DENIED');
-      expect(response.body.error.details.field).toBe('leader_id');
+      expect(response.body.error.details.field).toBe('pastoral_leader_id');
     });
 
     it('refuses a source the actor does not oversee, which no request can reach', async () => {
       // **Called directly, and the previous version of this case did not.** It
-      // asserted `field === 'leader_id'`, which is the *destination* label, so it
+      // asserted the *destination* label rather than the source's, so it
       // pinned the destination half a second time and the source entry could be
       // deleted with the suite still green.
       //
@@ -525,7 +525,7 @@ describe('reassigning a pastoral leader: the record (sections 5, 21, 22)', () =>
         ]);
 
         let settled = false;
-        const pending = reassign(mark.id, { leader_id: raymond.id }, raymondAccount).then(
+        const pending = reassign(mark.id, { pastoral_leader_id: raymond.id }, raymondAccount).then(
           (response) => {
             settled = true;
             return response;
@@ -640,7 +640,7 @@ describe('reassigning a pastoral leader: the record (sections 5, 21, 22)', () =>
         // no waiter. This repository has made that exact mistake once before
         // (`fix(test): dispatch the in-flight probe, which supertest had never
         // sent`), and CI caught it again here.
-        const pending = reassign(rico.id, { leader_id: ben.id }, raymondAccount).then(
+        const pending = reassign(rico.id, { pastoral_leader_id: ben.id }, raymondAccount).then(
           (response) => response,
         );
 
@@ -703,7 +703,7 @@ describe('reassigning a pastoral leader: the record (sections 5, 21, 22)', () =>
     it('opens one, since section 5 permits an unassigned Person', async () => {
       const unassigned = await createPerson(db, { firstName: 'Nena', network: 'MENS' });
 
-      const response = await reassign(unassigned.id, { leader_id: rico.id });
+      const response = await reassign(unassigned.id, { pastoral_leader_id: rico.id });
 
       expect(response.status).toBe(200);
       expect(response.body.previous_pastoral_leader_id).toBeNull();

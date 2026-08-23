@@ -37,11 +37,17 @@ import type { TestAccount, TestPerson } from '../setup/fixtures';
  *
  * ---
  *
- * **The contract these cases pin.**
+ * **The contract these cases pin.** The body field was `leader_id` when these were
+ * written and is `pastoral_leader_id` now: section 11 makes Cell leadership a
+ * first-class concept, so a bare `leader_id` is ambiguous, and every other endpoint
+ * already said `pastoral_leader_id`. Changed deliberately and inside the window
+ * section 22 allows — no client calls `/api/v1` yet — which is what this header
+ * always provided for.
+ *
  *
  *   PUT /api/v1/people/{id}/pastoral-leader
  *   Idempotency-Key: <client-generated UUID>
- *   { "leader_id": uuid, "effective_date": "YYYY-MM-DD"?, "reason": string? }
+ *   { "pastoral_leader_id": uuid, "effective_date": "YYYY-MM-DD"?, "reason": string? }
  *
  *   200                       the reassignment was recorded
  *   403 CAPABILITY_DENIED     the actor lacks people.manage_pastoral_assignment,
@@ -389,7 +395,7 @@ describe('reassigning a pastoral leader (SKILL.md section 5)', () => {
         // A leader on an unreliable connection will retry, and a retry must never
         // create a second record.
         .set('Idempotency-Key', randomUUID())
-        .send({ leader_id: leaderId, ...extra })
+        .send({ pastoral_leader_id: leaderId, ...extra })
     );
   }
 
