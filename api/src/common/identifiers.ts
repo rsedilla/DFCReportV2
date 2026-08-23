@@ -68,8 +68,15 @@ export function sameId(left: string, right: string): boolean {
  * `snake_case`, so a `meetingId` arriving from a client is a naming defect to fix
  * at the route rather than a spelling for this to absorb. An earlier version
  * accepted `Id`/`Ids` as defence in depth, which is a shape kept without its
- * reason holding (section 25, rule 19): nothing in this API can produce such a
- * key, and `forbidNonWhitelisted` rejects one that arrives.
+ * reason holding (section 25, rule 19): no route, DTO or fixture in this
+ * repository names an identifier that way.
+ *
+ * `forbidNonWhitelisted` is a *partial* backstop and was first cited here as a
+ * complete one. `ValidationPipe` validates class metatypes only, so a binding
+ * typed as a plain object is skipped entirely, and the idempotency fingerprint
+ * walks the raw body before any pipe runs. What the narrowing rests on is that
+ * absorbing a `meetingId` silently is what would hide the naming defect, not that
+ * one could never arrive.
  *
  * Ordinary words ending in those letters — `valid`, `humid`, `candid` — are not
  * matched, because every branch requires either the whole key or a preceding
@@ -87,19 +94,33 @@ const IDENTIFIER_KEY = /^ids?$|_ids?$/;
  * How deep a client's JSON may nest before the request is refused.
  *
  * A body is JSON that arrived from a client, so its nesting is chosen by whoever
- * sent it. `JSON.parse` is iterative in V8 and accepts any depth; every walk over
- * the result in this application is recursive and does not. Around three thousand
- * levels — **eighteen kilobytes**, far inside any body limit — overflows the
- * stack, and an unhandled `RangeError` renders as `INTERNAL_ERROR`: a 500 logged
+ * sent it. `JSON.parse` is iterative in V8 and accepts any depth — measured past
+ * two hundred thousand levels — while every walk over the result in this
+ * application is recursive and does not. **A few thousand levels overflows the
+ * stack**, and an unhandled `RangeError` renders as `INTERNAL_ERROR`: a 500 logged
  * as a defect, produced by input, on every authenticated write endpoint.
+ *
+ * No exact threshold is quoted, deliberately. It moves with the payload's shape
+ * and with the stack headroom at the call site, and an earlier version of this
+ * comment asserted one measured pair as though it were a constant — it was one
+ * shape in one context, and both halves were wrong for every other. What is worth
+ * recording is the cheapest case, because it decides whether a body limit helps:
+ * a nested **array** reaches it in single-digit kilobytes, since each level costs
+ * one byte.
  *
  * **Exceeding it is refused, not truncated.** An earlier version stopped
  * descending and returned the container unchanged, which is worse than it looks:
  * a request nested past the bound kept its identifiers in whatever case the client
  * sent them, silently, and every comparison below became a comparison on a
- * spelling. Refusing makes it `VALIDATION_FAILED` — a decision the rules reached,
- * which is what section 22 stores against an idempotency key rather than
- * releasing.
+ * spelling.
+ *
+ * It answers `VALIDATION_FAILED` because a body no DTO in this system describes is
+ * malformed input, which is what that code means (section 22). The refusal is
+ * deterministic, so a retry gets the same answer whether or not anything was
+ * stored — and on the path that actually fires nothing is: the interceptor reaches
+ * this before it claims the key, so no row exists and section 22's store-a-4xx
+ * rule is never consulted. An earlier version of this comment cited that rule as
+ * the reason, which described a path this code does not take.
  *
  * Twenty is far beyond any DTO in this system — the deepest is an array of
  * identifiers inside a body, at three — and far short of a stack.
@@ -138,23 +159,29 @@ export function assertWithinDepth(depth: number): void {
  * path parameter — which is exactly the "silently outside the rule" failure this
  * exists to remove. A `Date`, a `Buffer` or a class instance is still excluded.
  *
- * Nothing is mutated, and the returned structure **aliases** the input wherever
- * nothing changed: a value this declines to rewrite is the same reference, not a
- * copy. That is what matters at the call sites — the capability guard reads the
- * raw body before this runs, and must go on seeing what the client sent.
+ * *A revision of this docblock claimed the result **aliases** the input wherever
+ * nothing changed. It does not, for any array or plain object — every container is
+ * rebuilt unconditionally — and the reason offered for it described non-mutation
+ * rather than aliasing. The original sentence above is the true one and stands.*
  */
 export function canonicalizeIdentifiers(value: unknown, key?: string, depth = 0): unknown {
   if (typeof value === 'string') {
     return key !== undefined && IDENTIFIER_KEY.test(key) ? canonicalIfUuid(value) : value;
   }
 
-  assertWithinDepth(depth);
-
+  // **Asserted immediately before descending, never on a leaf**, which is what
+  // makes this agree with the fingerprint's walk rather than merely share its
+  // constant. Asserted first, a leaf occupied a level here and not there, so one
+  // body twenty deep was refused or accepted according to whether its innermost
+  // value happened to be a string — the disagreement the shared constant is
+  // supposed to prevent, introduced by the commit claiming it had been.
   if (Array.isArray(value)) {
+    assertWithinDepth(depth);
     return value.map((item) => canonicalizeIdentifiers(item, key, depth + 1));
   }
 
   if (isPlainObject(value)) {
+    assertWithinDepth(depth);
     return Object.fromEntries(
       Object.entries(value).map(([itemKey, item]) => [
         itemKey,

@@ -152,31 +152,61 @@ describe('canonicalizing identifiers (section 7)', () => {
   });
 
   describe('a body nested past the bound is refused, not truncated', () => {
-    /** `{nested:{nested:{…{id:UPPER}}}}`, `levels` deep. */
-    function nest(levels: number): unknown {
-      let deep: unknown = { id: UPPER };
-      for (let level = 0; level < levels; level += 1) {
-        deep = { nested: deep };
+    /**
+     * Exactly `containers` nested objects around `leaf`, and no more.
+     *
+     * **The count has to be exact, and this helper has now been wrong twice.** The
+     * boundary sits between two adjacent counts, so a helper off by one cannot
+     * express either of them. The first version wrapped `levels + 1` times, and
+     * the second defaulted `leaf` to `{ id: UPPER }` \u2014 itself a container \u2014 so
+     * `nest(20)` built 21. Both were written to pin an off-by-one.
+     *
+     * `leaf` therefore defaults to a **string**, which no walk descends into, and
+     * the key is `id` at every level so that the innermost value is an identifier
+     * the walk must reach.
+     */
+    function nest(containers: number, leaf: unknown = UPPER): unknown {
+      let deep: unknown = leaf;
+      for (let level = 0; level < containers; level += 1) {
+        deep = { id: deep };
       }
       return deep;
     }
 
+    function refusal(run: () => unknown): { code?: string } | undefined {
+      try {
+        run();
+        return undefined;
+      } catch (error) {
+        return error as { code?: string };
+      }
+    }
+
     it('answers VALIDATION_FAILED rather than overflowing the stack', () => {
       // **A body is JSON chosen by whoever sent it.** `JSON.parse` is iterative in
-      // V8 and accepts any depth; every walk over the result here is recursive and
-      // does not. Around three thousand levels — eighteen kilobytes, well inside
-      // any body limit — overflows, and an unhandled RangeError renders as
-      // INTERNAL_ERROR: a 500 logged as a defect, produced by input.
-      let thrown: unknown;
-      try {
-        canonicalizeIdentifiers(nest(5_000));
-      } catch (error) {
-        thrown = error;
-      }
+      // V8 and accepts any depth \u2014 measured past two hundred thousand levels \u2014 while
+      // both walks over the result are recursive and do not. A few thousand levels
+      // overflows, and an unhandled RangeError renders as INTERNAL_ERROR: a 500
+      // logged as a defect, produced by input.
+      //
+      // No exact threshold is asserted, because it moves with the payload's shape
+      // and the stack headroom at the call site. The cheapest case is a nested
+      // array, which reaches it in single-digit kilobytes.
+      const thrown = refusal(() => canonicalizeIdentifiers(nest(5_000)));
 
       expect(thrown).toBeDefined();
-      expect((thrown as { code?: string }).code).toBe(ApiErrorCode.VALIDATION_FAILED);
+      expect(thrown?.code).toBe(ApiErrorCode.VALIDATION_FAILED);
       expect(thrown).not.toBeInstanceOf(RangeError);
+    });
+
+    it('refuses exactly one container past the bound, and accepts the bound itself', () => {
+      // **The boundary, not a number either side of it.** `>=` relaxed to `>`, or
+      // the constant moved by one in either direction, has to fail here \u2014 the
+      // earlier pair (18 and 22 containers) left every one of those green.
+      expect(refusal(() => canonicalizeIdentifiers(nest(MAX_IDENTIFIER_DEPTH)))).toBeUndefined();
+      expect(refusal(() => canonicalizeIdentifiers(nest(MAX_IDENTIFIER_DEPTH + 1)))?.code).toBe(
+        ApiErrorCode.VALIDATION_FAILED,
+      );
     });
 
     it('refuses rather than returning the container unwalked', () => {
@@ -185,11 +215,10 @@ describe('canonicalizing identifiers (section 7)', () => {
       // than it looks: a request nested past the bound kept its identifiers in
       // whatever case the client sent, silently, and every comparison below became
       // a comparison on a spelling. It has to refuse, not truncate.
-      expect(() => canonicalizeIdentifiers(nest(MAX_IDENTIFIER_DEPTH + 1))).toThrow();
-
+      //
       // And a body inside the bound is walked all the way down, so the refusal is
       // not simply "deep bodies fail".
-      const shallow = canonicalizeIdentifiers(nest(MAX_IDENTIFIER_DEPTH - 3));
+      const shallow = canonicalizeIdentifiers(nest(MAX_IDENTIFIER_DEPTH));
       expect(JSON.stringify(shallow)).toContain(LOWER);
       expect(JSON.stringify(shallow)).not.toContain(UPPER);
     });
@@ -197,18 +226,49 @@ describe('canonicalizing identifiers (section 7)', () => {
     it('bounds the fingerprint walk too, at the same depth', () => {
       // **The second recursive walk over the same body, and the one that was
       // unbounded.** The interceptor calls `canonicalizeIdentifiers` first, so in
-      // practice that refuses before this is entered — but `fingerprint` is a
+      // practice that refuses before this is entered \u2014 but `fingerprint` is a
       // public method and the ordering of its callers is not a property it can
       // rely on, which is how the unbounded version was reached at all.
+      const idempotency = new IdempotencyService(null as unknown as Db);
+      const fingerprint = (body: unknown): unknown =>
+        idempotency.fingerprint('POST', '/api/v1/people', body);
+
+      expect(refusal(() => fingerprint(nest(5_000)))?.code).toBe(ApiErrorCode.VALIDATION_FAILED);
+      expect(refusal(() => fingerprint(nest(MAX_IDENTIFIER_DEPTH)))).toBeUndefined();
+      expect(refusal(() => fingerprint(nest(MAX_IDENTIFIER_DEPTH + 1)))?.code).toBe(
+        ApiErrorCode.VALIDATION_FAILED,
+      );
+    });
+
+    it('gives both walks one answer for one body, whatever the leaf is', () => {
+      // **Sharing the constant is not sufficient, and the first version proved it.**
+      // The identifier walk asserted before dispatching on type, so a leaf occupied
+      // a level; the fingerprint walk returned for a primitive before asserting, so
+      // it did not. One body twenty deep was then refused or accepted according to
+      // whether its innermost value happened to be a string:
       //
-      // Sharing one constant is the point: two walks over one body with two bounds
-      // would let the shallower refuse a request the deeper had already rewritten.
+      //     leaf "x" -> both accepted        leaf 5 -> identifier walk refused only
+      //
+      // Client-visible arbitrariness, and it was introduced by the commit whose own
+      // comment said sharing the constant meant one answer for one body. Both must
+      // assert at the same point -- immediately before descending, never on a leaf.
       const idempotency = new IdempotencyService(null as unknown as Db);
 
-      expect(() => idempotency.fingerprint('POST', '/api/v1/people', nest(5_000))).toThrow();
-      expect(() =>
-        idempotency.fingerprint('POST', '/api/v1/people', nest(MAX_IDENTIFIER_DEPTH - 3)),
-      ).not.toThrow();
+      for (const leaf of ['x', 5, null, true, { id: UPPER }, []]) {
+        for (const containers of [MAX_IDENTIFIER_DEPTH, MAX_IDENTIFIER_DEPTH + 1]) {
+          const body = nest(containers, leaf);
+          const walk = refusal(() => canonicalizeIdentifiers(body)) !== undefined;
+          const print =
+            refusal(() => idempotency.fingerprint('POST', '/api/v1/people', body)) !== undefined;
+
+          expect({ leaf, containers, walk, print }).toEqual({
+            leaf,
+            containers,
+            walk,
+            print: walk,
+          });
+        }
+      }
     });
   });
 

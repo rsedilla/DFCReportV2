@@ -2000,10 +2000,15 @@ The plural is admitted at both positions with it, so `ids` and
 `acknowledged_duplicate_ids` are one rule rather than two.
 
 **`camelCase` leaves the boundary, and §22 says the surface is `snake_case`.** The
-regex accepted `Id`/`Ids` as defence in depth. Nothing in this API can produce such a
-key — §22 fixes the surface as `snake_case`, and `forbidNonWhitelisted` rejects an
-undeclared one — so it was a shape kept without its reason holding, which is §25 rule
-19, merged the same morning, applied to the branch that was open when it merged.
+regex accepted `Id`/`Ids` as defence in depth, and no route, DTO or fixture in the
+repository names an identifier that way — so it was a shape kept without its reason
+holding, which is §25 rule 19, merged the same morning, applied to the branch that was
+open when it merged.
+
+`forbidNonWhitelisted` was first cited here as a complete backstop and is a partial
+one: `ValidationPipe` validates class metatypes only, so a binding typed as a plain
+object is skipped, and the idempotency fingerprint walks the raw body before any pipe
+runs. The narrowing rests on the argument below rather than on that.
 
 The narrowing is the safer direction and not only the tidier one. A `meetingId`
 arriving from a client is a naming defect, and it shows up as an authorization
@@ -2018,19 +2023,34 @@ than when Stage 3 builds it, on §22's own argument: the only moment to fix a fi
 name is before a client depends on one, and an example a specification documents is
 what the implementer copies. Nothing calls `/cells` — it does not exist.
 
-**The bound on a client's nesting refuses, and covers both walks.** This is the one
-that was a live defect rather than a disagreement, and it was **pre-existing on
-`main`** — fixed here because it is the identical class this branch is about, and
+**The bound on a client's nesting refuses, and covers both walks**, and it is now in
+§22 beside the other refusal shapes — the depth, the code, and refusing rather than
+truncating are all client-visible on every route, and three clients branch on them.
+*The first version of this entry claimed that amendment and did not make it*, which is
+the failure the preamble of this log names in one line: a decision here but not in the
+specification is unfinished work. It is the third time on this project that a
+"written to §x" claim has been false, because nothing checks one.
+
+This is the one that was a live defect rather than a disagreement, and it was
+**pre-existing on `main`** — fixed here because it is the identical class this branch is about, and
 because the branch carried a test comment claiming protection against it.
 
 There are two recursive walks over a request body: the identifier walk, and the
 idempotency fingerprint's `canonicalize`. The branch bounded the first and left the
 second untouched, one line apart. `JSON.parse` is iterative in V8 and accepts any
-depth; both walks are recursive and do not. Measured: **around three thousand levels,
-eighteen kilobytes**, far inside any body limit, overflows the stack — so an
-unhandled `RangeError` rendered as `INTERNAL_ERROR` on **every authenticated write
-endpoint**, for any signed-in leader. The earlier entry's claim that the walk was
-bounded was true of the walk it named and false of the hazard.
+depth — measured past two hundred thousand levels — while both walks are recursive
+and do not. **A few thousand levels** overflows the stack, so an unhandled
+`RangeError` rendered as `INTERNAL_ERROR` on **every authenticated write endpoint**,
+for any signed-in leader. The earlier entry's claim that the walk was bounded was
+true of the walk it named and false of the hazard.
+
+*This paragraph first asserted "around three thousand levels, eighteen kilobytes" as
+a measured pair. It is not one.* The threshold moves with the payload's shape and
+with stack headroom at the call site: measured here, `{"a":…}` overflows near 1,950
+and `{"nested":…}` near 6,250, and neither produces the quoted bytes. The figure that
+actually matters was in none of the four places it was written — the cheapest payload
+is a nested **array**, one byte per level, which overflows in single-digit
+kilobytes and is why a body-size limit does not cover this.
 
 Two decisions inside it, and the first is not the obvious one.
 
@@ -2040,15 +2060,39 @@ worse: a request nested past the bound kept its identifiers in whatever case the
 client sent, silently, and every comparison below became a comparison on a spelling
 — which is the defect the boundary exists to remove, reintroduced by its own safety
 valve. It answers `VALIDATION_FAILED`: a body no DTO in this system describes is
-malformed input, which is a decision the rules reached and therefore what §22 stores
-against an idempotency key rather than releasing.
+malformed input, which is what that code means.
 
-**One constant, shared by both walks.** Two bounds over one body is a disagreement
-waiting to be found — the shallower would refuse a request the deeper had already
-rewritten. The fingerprint's walk keeps its own check even though the interceptor
-reaches the identifier walk first, because `fingerprint` is a public method and the
-ordering of its callers is not a property it can rely on. That ordering is exactly
-what the unbounded version was resting on without saying so.
+*The reason first given here was §22's store-a-4xx rule, and that describes a path
+this code does not take.* On the path that fires — an authenticated write — the
+refusal is thrown inside the interceptor **before** the key is claimed, so no row
+exists and the store/release split is never consulted. What actually makes the 4xx
+right is that the refusal is deterministic: the same body gets the same answer
+whether or not anything was stored, so nothing depends on which it is.
+
+**One constant, shared by both walks — and applied at the same point, which is the
+half that was got wrong.** Two bounds over one body is a disagreement waiting to be
+found. The fingerprint's walk keeps its own check even though the interceptor reaches
+the identifier walk first, because `fingerprint` is a public method and the ordering
+of its callers is not a property it can rely on — exactly what the unbounded version
+was resting on without saying so.
+
+*The first version of this said sharing the constant "means one answer for one body",
+and shipped a disagreement in the same commit.* The identifier walk asserted before
+dispatching on type, so a primitive leaf occupied a level; the fingerprint walk
+returned for a primitive before asserting, so it did not. A body at the bound was
+therefore refused or accepted according to whether its innermost value happened to be
+a string — client-visible arbitrariness, produced by the sentence denying it.
+
+Both now assert immediately before descending into a container and never on a leaf,
+which makes them agree for everything either walk sees: parsed JSON. A `Date` or a
+class instance would still be counted by one and not the other, and neither can occur
+in a parsed body.
+
+Recorded at length because it is §25 rule 19 — merged that morning, and cited three
+paragraphs earlier in this entry — failing inside the batch written to apply it. The
+reason the fingerprint's walk had that shape was that its early return served
+serialization, not depth; reusing the shape without re-deriving that is the whole of
+the mistake.
 
 **Also corrected, all of them statements rather than behaviour**, and grouped because
 each is the fault §25 rule 19 and its predecessors name — a mechanism described from
@@ -2070,10 +2114,14 @@ the part being looked at:
   before a path is canonicalized for any of them. So what would break it is a
   credential added to a path on an *authenticated* route — which is worth knowing and
   is not what was written.
-- The identifier walk's docblock said "nothing is mutated — a fresh value is built".
-  True of mutation; the returned structure **aliases** the input wherever nothing
-  changed. That is the property the call sites actually need, since the capability
-  guard reads the raw body before the pipe runs.
+- The identifier walk's docblock said "nothing is mutated — a fresh value is built",
+  and this entry first "corrected" it to say the result **aliases** the input wherever
+  nothing changed. *That correction was the false half.* Every array and every plain
+  object is rebuilt unconditionally, so nothing aliases but primitives; the reason
+  offered for it — that the guard reads the raw body first — is a property of
+  non-mutation, which is what the original sentence already said. The original stands
+  and the addition is withdrawn. Worth keeping visible: this is the one item in the
+  batch where a true statement was replaced with a false one.
 - `api/test/unit/identifiers.spec.ts` justified its own existence with "these are
   pure functions and need no database". The shared harness throws without
   `DATABASE_URL` before any suite loads. They need no database *server*; a dummy URL

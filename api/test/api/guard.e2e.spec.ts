@@ -208,7 +208,16 @@ describe('the capability guard (SKILL.md section 7)', () => {
       // sentence a real obligation on the next route rather than a caution.
       const response = await get('/__guard-probe/actor/not-a-uuid', adminAccount);
 
+      // **`reached`, not merely 200.** A status alone would still pass if the route
+      // began validating its own `:id` and happened to answer 200, which is the
+      // opposite of what this case exists to say. The handler running is the fact.
       expect(response.status).toBe(200);
+      expect(response.body).toEqual({ reached: true });
+
+      // And the same route with a well-formed identifier answers identically,
+      // which is what shows the guard never looked at it either way.
+      const wellFormed = await get(`/__guard-probe/actor/${mark.id}`, adminAccount);
+      expect(wellFormed.body).toEqual({ reached: true });
     });
   });
 

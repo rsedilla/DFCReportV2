@@ -2801,6 +2801,53 @@ Database columns are not bound by this: `pastoral_assignments.leader_id` needs n
 
 A field name that differs between two endpoints for one concept is a permanent cost on three client codebases that cannot be force-updated, and the only moment to fix one is before any client depends on it.
 
+#### Request bodies are bounded in depth
+
+**A request whose JSON nests more than twenty levels is refused with
+`VALIDATION_FAILED`, carrying `max_depth` in `details`.** It applies to every
+route, authenticated or not, and it is a property of the request rather than of
+any endpoint, so no DTO describes it and no controller checks it.
+
+The bound exists because **`JSON.parse` accepts a depth that the code reading its
+result cannot**. V8 parses iteratively and has no practical limit — two hundred
+thousand levels parses — while this API walks a body recursively at least twice on
+every authenticated write: once to canonicalize identifiers (Section 7), once to
+fingerprint it for idempotency. A few thousand levels exhausts the stack, and an
+unhandled `RangeError` is an `INTERNAL_ERROR`: a 500, logged as a defect, produced
+by ordinary input, on every write endpoint at once.
+
+A body-size limit does not cover it. Depth is cheap: a nested array costs one byte
+per level, so the payload that overflows arrives in single-digit kilobytes, far
+inside any size limit worth setting.
+
+**Twenty, and the number is deliberately far from both edges.** The deepest
+structure this specification describes is an array of identifiers inside a body,
+which is three. Twenty leaves room for anything a future endpoint plausibly needs
+and is orders of magnitude short of a stack, so it never has to be tuned against
+either.
+
+**Refused, not truncated.** Accepting the request and declining to walk past the
+bound is the tempting reading of "bounded", and it is worse than refusing: the part
+below the bound keeps whatever the client sent, so identifiers there are compared in
+whatever case they arrived — which is exactly the defect Section 7's boundary exists
+to remove, reintroduced by its own safety valve, silently and only for the requests
+nobody looks at.
+
+`VALIDATION_FAILED` because a body no endpoint in this system describes is malformed
+input, which is what that code means. It is not one of the retryable conditions: the
+refusal is deterministic, so a client that retries the same body gets the same
+answer. Where the refusal happens before an idempotency claim is taken — which is
+the ordinary path, since the fingerprint walk is what meets the bound first — no key
+row is written and the store-a-4xx rule below never applies. Nothing depends on
+which of the two it is, and that is the point: the answer is the same either way.
+
+**Every walk over a client's body shares this one bound, and applies it at the same
+point** — immediately before descending into a container, never on a leaf. Sharing
+the number is not sufficient on its own. Two walks that count differently give one
+body two answers, and the first implementation did exactly that: one counted a
+primitive leaf as a level and the other did not, so a body at the bound was refused
+or accepted according to whether its innermost value happened to be a string.
+
 #### Pagination
 
 Cursor-based, on every collection endpoint:
