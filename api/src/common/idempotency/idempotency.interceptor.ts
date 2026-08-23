@@ -16,6 +16,8 @@ import {
 } from '../errors/api-error';
 import { describeFailure } from '../errors/api-exception.filter';
 
+import { canonicalizeIdentifiers } from '../identifiers';
+
 import { IdempotencyService } from './idempotency.service';
 
 import type { AuthenticatedRequest } from '../../auth/authorization/access-token.guard';
@@ -100,10 +102,17 @@ export class IdempotencyInterceptor implements NestInterceptor {
     }
 
     const accountId = actor.accountId;
+    // Canonicalized here, because **this runs before pipes do**. Nest's lifecycle
+    // puts interceptors ahead of the global pipe that normalizes identifiers, so
+    // the path and body seen here are exactly as the client spelled them. Left
+    // raw, one retry of one request with an identifier in a different case
+    // fingerprints differently and is answered `IDEMPOTENCY_KEY_REUSED` — which
+    // section 22 makes permanent and says must never be retried, so an ordinary
+    // retry becomes a dead end (SKILL.md section 7).
     const fingerprint = this.idempotency.fingerprint(
       request.method,
       requestPath(request),
-      request.body,
+      canonicalizeIdentifiers(request.body),
     );
 
     return from(this.idempotency.claim({ key, accountId, fingerprint })).pipe(
@@ -217,7 +226,15 @@ export class IdempotencyInterceptor implements NestInterceptor {
  */
 function requestPath(request: AuthenticatedRequest): string {
   const [rawPath, rawQuery] = request.originalUrl.split('?');
-  const path = rawPath.length > 1 ? rawPath.replace(/\/+$/, '') : rawPath;
+  const trimmed = rawPath.length > 1 ? rawPath.replace(/\/+$/, '') : rawPath;
+
+  // **Segment by segment, not over the whole string.** An identifier reaches this
+  // as one segment of a path, and a path is never itself UUID-shaped — so handing
+  // the whole thing to `canonicalizeIdentifiers` would do nothing at all, quietly.
+  const path = trimmed
+    .split('/')
+    .map((segment) => canonicalizeIdentifiers(segment) as string)
+    .join('/');
 
   if (!rawQuery) {
     return path;
@@ -230,9 +247,9 @@ function requestPath(request: AuthenticatedRequest): string {
   // requests would then share a fingerprint, and the second would be answered
   // with the first's stored response -- the exact outcome keeping the query is
   // meant to prevent.
-  const sorted = [...new URLSearchParams(rawQuery).entries()].sort((a, b) =>
-    a[0] === b[0] ? compare(a[1], b[1]) : compare(a[0], b[0]),
-  );
+  const sorted = (
+    canonicalizeIdentifiers([...new URLSearchParams(rawQuery).entries()]) as [string, string][]
+  ).sort((a, b) => (a[0] === b[0] ? compare(a[1], b[1]) : compare(a[0], b[0])));
 
   return `${path}?${JSON.stringify(sorted)}`;
 }

@@ -1241,11 +1241,15 @@ A grant of a read capability may set `read_only` true or false; true is the defa
 
 The flag exists because a scope widened beyond a leader's normal management scope is a reporting grant unless something says otherwise (above). It is the visible difference between letting someone see a Network and letting them change it.
 
-**One concept carries one field name.** A pastoral leader is `pastoral_leader_id` on every endpoint that names one. Section 11 makes Cell leadership a first-class concept, so a bare `leader_id` does not say which kind of leader it means; the database column `pastoral_assignments.leader_id` needs no such qualifier because its table supplies it. A field name that differs between two endpoints for one concept is a permanent cost on three client codebases, and the moment to fix one is before any client depends on it.
-
 **An identifier supplied by a client is compared canonically, always.** A `uuid` column compares case-insensitively and application code does not, so a person named with their identifier in uppercase is one record to every query and a different string to every comparison written in the application. Identifiers are therefore normalized at the request boundary, and any comparison that decides authority normalizes again rather than trusting that they were.
 
-**The boundary normalizes every route, not the routes that remember to ask.** It is applied globally to path parameters, so a route added later is inside the rule without its author knowing the rule exists. A pipe wired onto each parameter was the first attempt and is exactly the failure Section 2 gives as the reason the capability guard is declarative: a convention held per call site is only as reliable as the least familiar developer writing the newest one. Query parameters are deliberately excluded — a pagination cursor is case-sensitive by construction — and body fields carry their own transform.
+**The boundary normalizes every route, not the routes that remember to ask.** It is applied globally, to path parameters, query parameters and bodies alike, so a route added later is inside the rule without its author knowing the rule exists. A pipe wired onto each parameter, and a transform wired onto each identifier field, were both first attempts and are exactly the failure Section 2 gives as the reason the capability guard is declarative: a convention held per call site is only as reliable as the least familiar developer writing the newest one.
+
+Only UUID-shaped strings are touched, which is what makes it safe to run over a whole request: a name, a reason, a search term and a pagination cursor are none of them eight-four-four-four-twelve hex, and a UUID is case-insensitive by definition. Values this application constructed rather than received — the authenticated actor, the idempotency claim — are excluded, because they are not client input.
+
+**The idempotency fingerprint canonicalizes separately**, because interceptors run before pipes and it would otherwise be taken over the spelling the client used. Left raw, one retry of one request with an identifier in a different case fingerprints differently and is answered `IDEMPOTENCY_KEY_REUSED`, which Section 22 makes permanent — turning an ordinary retry into a dead end.
+
+**What this does not do is validate.** Whether a value is a UUID at all is decided by the capability guard for the one target it resolves scope against (Section 7, the guard checks one target) and by the DTOs for every field they declare. A path parameter that is neither — a second identifier in a route path, which Section 22 already sketches — is validated by neither, and reaching a `uuid` comparison with one produces a database error rather than an answer. A route with a path parameter the guard does not resolve against must validate it itself.
 
 This is stated in Section 7 because the consequence is an authorization one. Invariant 4 below is two identifier comparisons and is the only check on its path that fails **open**; against the one actor class it exists to stop, a comparison that answers "this is not you" is the whole of the escalation. The same defect has also appeared where it merely fails closed — a duplicate acknowledgement that could never be satisfied, blocking a Person from being created at all (Section 3), and a lock that took two keys for one person and serialized nothing (Section 5).
 
@@ -2770,6 +2774,14 @@ All requests and responses are JSON. No redirects, no HTML error pages, no form 
 #### Dates and times
 
 Timestamps are ISO 8601 with an offset. Date-only fields — an attendance date, an effective date, a Cell meeting date — are plain `YYYY-MM-DD` and are always Asia/Manila dates (Section 20). Never send a date-only field as a timestamp; the conversion is where months silently shift.
+
+#### Field naming
+
+One concept carries one field name across every endpoint. A pastoral leader is `pastoral_leader_id` wherever a request names one — Section 11 makes Cell leadership a first-class concept, so a bare `leader_id` does not say which kind of leader is meant. A Cell's leader, when Stage 3 names one, is subject to the same discipline and must not be `leader_id` either.
+
+Database columns are not bound by this: `pastoral_assignments.leader_id` needs no qualifier because its table supplies one.
+
+A field name that differs between two endpoints for one concept is a permanent cost on three client codebases that cannot be force-updated, and the only moment to fix one is before any client depends on it.
 
 #### Pagination
 

@@ -52,38 +52,80 @@ export function sameId(left: string, right: string): boolean {
 }
 
 /**
- * Canonicalizes every UUID-shaped **path parameter**, on every route, without
- * being asked.
+ * The same value with every UUID-shaped string in it canonicalized.
+ *
+ * Strings, arrays and plain objects, recursively; anything else is returned as it
+ * came. Nothing is mutated — a fresh value is built, because the caller may be
+ * holding the request body.
+ *
+ * **Only UUID-shaped strings are touched, and that is what makes this safe to run
+ * over a whole request.** A name, a reason, a search term or a pagination cursor
+ * is not eight-four-four-four-twelve hex, so none of them can be caught by
+ * accident. A UUID is case-insensitive by definition, so canonicalizing one loses
+ * nothing.
+ */
+export function canonicalizeIdentifiers(value: unknown): unknown {
+  if (typeof value === 'string') {
+    return UUID.test(value) ? canonicalId(value) : value;
+  }
+
+  if (Array.isArray(value)) {
+    return value.map(canonicalizeIdentifiers);
+  }
+
+  // Plain objects only. A `Date`, a `Buffer` or a class instance is left alone:
+  // this runs before validation, where a body is still the parsed JSON.
+  if (
+    typeof value === 'object' &&
+    value !== null &&
+    Object.getPrototypeOf(value) === Object.prototype
+  ) {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>).map(([key, item]) => [
+        key,
+        canonicalizeIdentifiers(item),
+      ]),
+    );
+  }
+
+  return value;
+}
+
+/**
+ * Canonicalizes every identifier a client supplies, on every route, without being
+ * asked.
  *
  * Registered globally, which is the whole point. The rule above was previously a
  * pipe wired onto each `@Param('id')`, so the next route written without it was
  * silently outside the rule — verbatim the failure SKILL.md section 2 gives as the
  * reason the capability guard is declarative and fails closed. A convention
  * remembered per parameter is only as reliable as the least familiar developer
- * writing the newest route.
+ * writing the newest route, and per *field* is no better.
  *
- * **Path parameters only, and that is deliberate rather than cautious.** A query
- * parameter can be case-sensitive by construction: the search cursor is base64url,
- * where `A` and `a` are different bytes, so canonicalizing queries would corrupt
- * pagination. A body is a DTO, whose identifier fields carry their own transform
- * and whose other fields are names and reasons that must survive untouched.
+ * **Path parameters, query and body — everything a client sends.** An earlier
+ * version took path parameters alone and gave a reason that its own implementation
+ * made inapplicable: it claimed the search cursor had to be protected from
+ * canonicalization, when a base64url cursor is not UUID-shaped and could never
+ * have been touched. What the narrow version actually left out was every
+ * identifier arriving as a query filter (section 22 documents one) and every body
+ * field, which each needed a decorator somebody had to remember.
  *
- * **It canonicalizes and does not validate.** Whether a path parameter is a UUID
- * at all is already decided before this runs: guards execute before pipes, and the
- * capability guard refuses a target that is not one (section 7). A pipe that threw
- * here would be a second answer to a question already answered — and its throwing
- * branch was, in fact, unreachable for exactly that reason.
+ * `custom` arguments are excluded because they are not client input: `@CurrentActor`
+ * and `@CurrentIdempotency` are values this application constructed.
  *
- * Anything that is not a UUID-shaped string is passed through untouched, so a
- * route with a non-UUID path parameter is unaffected by this existing.
+ * **It canonicalizes and does not validate.** Whether a value is a UUID at all is
+ * decided elsewhere — by the capability guard for the target it resolves scope
+ * against, and by the DTOs for everything they declare. A pipe that threw here
+ * would be a second answer to a question already asked, and its throwing branch
+ * was in fact unreachable for that reason.
  */
 @Injectable()
 export class CanonicalIdentifierPipe implements PipeTransform<unknown, unknown> {
   transform(value: unknown, metadata: ArgumentMetadata): unknown {
-    if (metadata.type !== 'param' || typeof value !== 'string' || !UUID.test(value)) {
+    if (metadata.type === 'custom') {
       return value;
     }
 
-    return canonicalId(value);
+    return canonicalizeIdentifiers(value);
   }
 }

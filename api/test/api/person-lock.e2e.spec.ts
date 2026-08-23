@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
-import { Controller, Get, Param } from '@nestjs/common';
+import { Body, Controller, Param, Post, Query } from '@nestjs/common';
 
 import { AuthenticatedOnly } from '../../src/auth/authorization/authorization.decorators';
 
@@ -50,10 +50,14 @@ import type { TestAccount, TestPerson } from '../setup/fixtures';
  */
 @Controller('__identifier-probe')
 class IdentifierProbeController {
-  @Get(':id')
-  @AuthenticatedOnly('A test probe that reads back its own path parameter.')
-  seen(@Param('id') id: string): { seen: string } {
-    return { seen: id };
+  @Post(':id')
+  @AuthenticatedOnly('A test probe that reads back what it was handed.')
+  seen(
+    @Param('id') id: string,
+    @Query('filter_id') filterId: string,
+    @Body() body: { nested: { ids: string[] }; reason: string },
+  ): { param: string; query: string; body: string; reason: string } {
+    return { param: id, query: filterId, body: body.nested.ids[0], reason: body.reason };
   }
 }
 
@@ -156,20 +160,33 @@ describe('the person lock is taken by every path that can strand an edge', () =>
   it('canonicalizes a path identifier on a route that never opted in', async () => {
     // **This is what "structural" means, and it is the only case that can fail if
     // the boundary goes back to being opt-in.** The probe route below is written
-    // the way any new route would be — a bare `@Param('id')`, no pipe, nobody
-    // having remembered anything — and it must still see the canonical form.
+    // the way any new route would be — bare `@Param`, `@Query` and `@Body`, no
+    // pipe, no `@Transform`, nobody having remembered anything — and it must still
+    // see the canonical form in all three. The body identifier is nested inside an
+    // array inside an object, because that is where a real one turns up.
     //
     // Every other identifier case passes if *either* layer is present, so none of
     // them notices the boundary regressing to a per-parameter opt-in.
     const upper = mark.id.toUpperCase();
 
     const response = await request(app.getHttpServer())
-      .get(`/api/v1/__identifier-probe/${upper}`)
-      .set('Authorization', `Bearer ${admin.accessToken}`);
+      .post(`/api/v1/__identifier-probe/${upper}`)
+      .set('Authorization', `Bearer ${admin.accessToken}`)
+      .query({ filter_id: upper })
+      .send({ nested: { ids: [upper] }, reason: 'Left ALONE because it is not a UUID.' });
 
-    expect(response.status).toBe(200);
-    expect(response.body.seen).toBe(mark.id);
-    expect(response.body.seen).not.toBe(upper);
+    expect(response.status).toBe(201);
+
+    // All three, because a client supplies identifiers in all three and the rule
+    // says "always". Path and query were opt-in before; the body needed a
+    // decorator per field.
+    expect(response.body.param).toBe(mark.id);
+    expect(response.body.query).toBe(mark.id);
+    expect(response.body.body).toBe(mark.id);
+
+    // And nothing that is not UUID-shaped is touched — the reason for it being
+    // safe to run over a whole request.
+    expect(response.body.reason).toBe('Left ALONE because it is not a UUID.');
   });
 
   it('normalizes identifiers in the authority check itself, not only at the boundary', async () => {

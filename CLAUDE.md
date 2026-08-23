@@ -1864,29 +1864,57 @@ than left to care.
 Two changes to the API boundary, settled together because both are about an
 identifier arriving from a client and neither is worth a review cycle alone.
 
-**The boundary normalizes every route.** `CanonicalIdentifierPipe` is registered
-globally and canonicalizes any UUID-shaped **path parameter**, so a route added
-later is inside §7's canonical-comparison rule without its author knowing the rule
-exists. The first attempt was a pipe wired onto each `@Param('id')`, which is
+**The boundary normalizes every route, and every argument a client sends it.**
+`CanonicalIdentifierPipe` is registered globally and canonicalizes every UUID-shaped
+string in a path parameter, a query parameter or a body, so a route added later is
+inside §7's canonical-comparison rule without its author knowing the rule exists. The first attempt was a pipe wired onto each `@Param('id')`, which is
 verbatim the failure §2 gives as the reason the capability guard is declarative —
 a convention held per call site is only as reliable as the least familiar developer
 writing the newest one. That closes the open item this log has carried since the
 identifier work began.
 
-Path parameters only, and the exclusions are reasons rather than caution. A query
-parameter can be case-sensitive by construction — the search cursor is base64url,
-where case is data — so canonicalizing queries would corrupt pagination. A body is
-a DTO whose identifier fields carry their own transform and whose other fields are
-names and reasons that must survive untouched.
+**The first version took path parameters alone, and the reason it gave was false.**
+It said a query parameter must be protected because the search cursor is
+case-sensitive base64url — but the pipe only touches UUID-shaped strings, and a
+cursor is not one, so the hazard it named could not be produced by the code naming
+it. What the narrow version actually left out was every identifier arriving as a
+query filter (§22 documents one on `/cells`) and every body field, each of which
+needed a transform somebody had to remember — the same per-site opt-in the change
+existed to remove, one layer over.
 
-It canonicalizes and does not validate. Whether a path parameter is a UUID is
-already decided before it runs, because guards execute before pipes and the
-capability guard refuses a target that is not one. The previous pipe's throwing
-branch was unreachable for that reason, which is worth recording: it looked like a
-second line of defence and was dead code.
+Found by `architecture-guardian`, and it is the same fault as the five before it: a
+mechanism described from the part of it being looked at. Worth recording that it
+happened in the branch adjacent to the one adding §25's rule 19 against exactly
+this.
+
+Only UUID-shaped strings are touched, which is what makes running over a whole
+request safe: a name, a reason, a search term and a cursor are none of them
+eight-four-four-four-twelve hex. Values this application constructed — the
+authenticated actor, the idempotency claim — are excluded as not being client
+input.
+
+**The idempotency fingerprint canonicalizes separately**, because interceptors run
+before pipes: it would otherwise be taken over the spelling the client used, and one
+retry differing only in case would fingerprint differently and be answered
+`IDEMPOTENCY_KEY_REUSED` — which §22 makes permanent, turning an ordinary retry into
+a dead end. The path is canonicalized **segment by segment**, because a path is
+never itself UUID-shaped and handing the whole string to the helper does nothing at
+all, quietly. That was caught before it shipped and is recorded because it is the
+same mistake in miniature: reusing a helper without checking its shape fits.
+
+It canonicalizes and does not validate. Whether a value is a UUID is decided by the
+capability guard for the one target it resolves scope against, and by the DTOs for
+what they declare. The previous pipe's throwing branch was unreachable for that
+reason — it looked like a second line of defence and was dead code. **A path
+parameter the guard does not resolve against is validated by neither**, which §22
+already sketches with a second identifier in a route path; §7 now says such a route
+must validate it itself, because reaching a `uuid` comparison with a non-UUID
+produces a database error rather than an answer.
 
 **`leader_id` becomes `pastoral_leader_id`** on the reassignment endpoint, matching
-`POST /people` and the sex correction. §11 makes Cell leadership a first-class
+`POST /people` and the sex correction. The rule is written to §22's Conventions
+rather than to §7: a field-naming convention has no authorization consequence, and
+§22 is where three client codebases look. §11 makes Cell leadership a first-class
 concept, so a bare `leader_id` does not say which kind of leader it means. The
 database column keeps its name: `pastoral_assignments.leader_id` is disambiguated
 by its table.
@@ -1901,10 +1929,12 @@ these tests deliberately and says why."
 
 **What pins the global boundary is a route that opts into nothing.** Every other
 identifier case passes if either the boundary or the defensive comparison is
-present, so none of them notices the boundary regressing to per-parameter opt-in.
-The probe route is written the way any new route would be — a bare `@Param('id')`,
-no pipe, nobody having remembered anything — and asserts it still sees the
-canonical form.
+present, so none of them notices the boundary regressing to per-site opt-in. The
+probe route is written the way any new route would be — bare path, query and body
+bindings, no pipe, no transform, nobody having remembered anything — and asserts all
+three arrive canonical, with the body's identifier nested inside an array inside an
+object because that is where a real one turns up. It also asserts a non-UUID string
+is left alone, which is the property that makes running over a whole request safe.
 
 ### Open — awaiting a ruling
 
