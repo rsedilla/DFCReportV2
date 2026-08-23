@@ -172,6 +172,10 @@ describe('the person lock is taken by every path that can strand an edge', () =>
     const response = await request(app.getHttpServer())
       .post(`/api/v1/__identifier-probe/${upper}`)
       .set('Authorization', `Bearer ${admin.accessToken}`)
+      // A POST is state-changing, so section 22 requires the header on it — which
+      // the probe inherits without asking, exactly as it inherits the pipe. The
+      // first version of this case omitted it and was answered 422.
+      .set('Idempotency-Key', randomUUID())
       .query({ filter_id: upper })
       .send({ nested: { ids: [upper] }, reason: 'Left ALONE because it is not a UUID.' });
 
