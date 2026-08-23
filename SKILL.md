@@ -1247,7 +1247,13 @@ The flag exists because a scope widened beyond a leader's normal management scop
 
 **A value is canonicalized only where the field's name says it is an identifier *and* the value is UUID-shaped**, and the intersection is what makes it safe to run over a whole request. Each half stops a different corruption. Name alone would rewrite a Member ID, which is `M-` and six digits (Section 3). Shape alone would rewrite a **credential**: a password is arbitrary bytes, case-sensitive, and nothing in its content marks it as one — so a password that happens to be UUID-shaped would be silently lowercased and that account could never sign in again. Field names are chosen by this system; the contents of a password are not.
 
-Arguments this application constructed rather than received are skipped. That exclusion is currently by the framework's own bucket for anything that is not a body, a path parameter or a query, which today means the authenticated actor and the idempotency claim — but the same bucket would hold an uploaded file or a raw body, which *are* client input. A route binding one, or an identifier decorator built as a custom parameter, needs naming here rather than inheriting the exclusion.
+Which names count is Section 22's field-naming convention, and it is load-bearing here rather than tidy: the boundary keys on it literally. A bare `id` is in the set because a path parameter binds under exactly that name, so excluding it would put every path parameter outside the rule — which is the case the boundary was written for.
+
+Arguments this application constructed rather than received are skipped, by the framework's own bucket for anything that is not a body, a path parameter or a query. Today that means the authenticated actor and the idempotency claim.
+
+**Two different things are outside the rule, and only one of them is an exclusion.** An uploaded file or a raw body falls in the same bucket and *is* client input, so a route binding one — or an identifier decorator built as a custom parameter — needs naming here rather than inheriting the skip. But a request header, a session, a host and a caller's address are not offered to any pipe at all, whatever bucket they would land in, so naming them here would not reach them: an identifier arriving in a header is normalized by the code that reads it or not at all. The `Idempotency-Key` is the one that exists, and it reaches a `uuid` cast in SQL rather than a comparison in TypeScript.
+
+The distinction is recorded because the first version of this paragraph collapsed it, describing a remedy that works for half the set it implied.
 
 **The idempotency fingerprint canonicalizes separately**, because interceptors run before pipes and it would otherwise be taken over the spelling the client used. Left raw, one retry of one request with an identifier in a different case fingerprints differently and is answered `IDEMPOTENCY_KEY_REUSED`, which Section 22 makes permanent — turning an ordinary retry into a dead end.
 
@@ -2758,7 +2764,7 @@ POST /api/v1/dcc/events/{id}/submit
 GET  /api/v1/cells/{id}
 GET  /api/v1/cells/{id}/members
 GET  /api/v1/cells/{id}/meetings
-POST /api/v1/cells/{id}/meetings/{meetingId}/submit
+POST /api/v1/cells/{id}/meetings/{meeting_id}/submit
 
 GET  /api/v1/reports/dcc/monthly
 GET  /api/v1/reports/dcc/yearly
@@ -2779,9 +2785,17 @@ Timestamps are ISO 8601 with an offset. Date-only fields — an attendance date,
 
 #### Field naming
 
-One concept carries one field name across every endpoint, and an identifier's name ends in `_id` or `_ids`. That is not only tidiness: it is what the boundary in Section 7 keys on when deciding whether a value may be canonicalized, so a field carrying an identifier under some other name is outside the rule.
+One concept carries one field name across every endpoint. **Names are `snake_case`**, and an identifier's name is either a bare `id` or `ids`, or ends in `_id` or `_ids`.
 
-A pastoral leader is `pastoral_leader_id` wherever a request names one — Section 11 makes Cell leadership a first-class concept, so a bare `leader_id` does not say which kind of leader is meant. A Cell's leader, when Stage 3 names one, is subject to the same discipline and must not be `leader_id` either.
+That is not tidiness: it is what the boundary in Section 7 keys on when deciding whether a value may be canonicalized, so a field carrying an identifier under any other name is outside the rule and is compared in whatever case the client sent it.
+
+**The bare forms are in the set because a path parameter binds under one.** A route declaring `{id}` hands the boundary the key `id`, so a convention admitting only the suffixed forms would exclude every path parameter in the API — which is the case the boundary exists for. The plural is admitted with it, at both positions, so that `ids` and `acknowledged_duplicate_ids` are one rule rather than two.
+
+**`camelCase` is not used at this boundary**, and the convention is stated rather than assumed because the boundary cannot enforce what it is not told. A field named `meetingId` carries an identifier and is not canonicalized, which is a defect that shows up as an authorization comparison quietly answering on a spelling. The example routes above use `{meeting_id}` for this reason.
+
+A pastoral leader is `pastoral_leader_id` wherever a request names one — Section 11 makes Cell leadership a first-class concept, so a bare `leader_id` does not say which kind of leader is meant. A **Cell's** leader is `cell_leader_id`, and the filter sketched under Filtering and sorting below carries that name rather than the bare one.
+
+Naming the Cell filter now, before Stage 3 builds it, is the rule applied to itself: this section's own argument is that the only moment to fix a field name is before a client depends on one, and an example a specification documents is what the implementer copies.
 
 Database columns are not bound by this: `pastoral_assignments.leader_id` needs no qualifier because its table supplies one.
 
@@ -2924,7 +2938,7 @@ Filters are explicit named query parameters. Do not build a general query langua
 Sorting uses `sort`, with a leading `-` for descending:
 
 ```text
-GET /api/v1/cells?leader_id=...&sort=-not_held_count
+GET /api/v1/cells?cell_leader_id=...&sort=-not_held_count
 ```
 
 Sorting and filtering are permitted, including on meeting-status figures — finding the Cells that need help is pastoral work (Section 13).

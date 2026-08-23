@@ -1865,13 +1865,22 @@ Two changes to the API boundary, settled together because both are about an
 identifier arriving from a client and neither is worth a review cycle alone.
 
 **The boundary normalizes every route, and every argument a client sends it.**
-`CanonicalIdentifierPipe` is registered globally and canonicalizes every UUID-shaped
-string in a path parameter, a query parameter or a body, so a route added later is
-inside §7's canonical-comparison rule without its author knowing the rule exists. The first attempt was a pipe wired onto each `@Param('id')`, which is
-verbatim the failure §2 gives as the reason the capability guard is declarative —
-a convention held per call site is only as reliable as the least familiar developer
-writing the newest one. That closes the open item this log has carried since the
-identifier work began.
+`CanonicalIdentifierPipe` is registered globally and canonicalizes a string in a
+path parameter, a query parameter or a body wherever the field's **name** says it
+is an identifier and the value is UUID-shaped — both halves, always; the rule is
+stated in full below. A route added later is inside §7's canonical-comparison rule
+without its author knowing the rule exists. The first attempt was a pipe wired onto
+each `@Param('id')`, which is verbatim the failure §2 gives as the reason the
+capability guard is declarative — a convention held per call site is only as
+reliable as the least familiar developer writing the newest one. That closes the
+open item this log has carried since the identifier work began.
+
+*This sentence first said "canonicalizes every UUID-shaped string", which is the
+shape-only rule the entry goes on to describe as the defect that had to be fixed.*
+A reader who stopped at the summary — which is what a summary invites — read back
+the version that lowercased a password. Corrected in place rather than deleted,
+because a false reason here is worse than none, and because an entry contradicting
+itself two paragraphs apart is the exact failure this log keeps recording.
 
 **The first version took path parameters alone, and the reason it gave was false.**
 It said a query parameter must be protected because the search cursor is
@@ -1897,19 +1906,28 @@ chooses.
 A value is canonicalized only where **both** hold — the key names an identifier,
 and the value is UUID-shaped. Name alone would rewrite a Member ID, which is `M-`
 and six digits; shape alone rewrites credentials. §22's naming convention now
-carries the other half: an identifier's field name ends in `_id` or `_ids`, because
-that is what the boundary keys on.
+carries the other half, and what exactly it says is settled in the ruling below —
+the version written here first was narrower than the code it claimed to describe.
 
 **A prototype check silently skipped every object-bound query and path parameter.**
 Express 5 builds `req.query` and `req.params` with `Object.create(null)`, so testing
 against `Object.prototype` alone excluded exactly the bindings §22's documented
-`/cells?leader_id=` filter would use. No end-to-end case could see it, because the
+`/cells` leader filter would use — named `leader_id` when this was written, and
+`cell_leader_id` since the ruling below. No end-to-end case could see it, because the
 *named* bindings receive a bare string and work either way.
 
 **The walk was also unbounded**, which the widening made reachable before
 authentication: a nested body well inside the 100 KB limit overflowed the stack and
 answered `INTERNAL_ERROR` — a 500 logged as a defect, for input, on the sign-in
 route.
+
+*This bounded one of the two walks over a client's body and said so as though it
+had bounded the hazard.* The idempotency fingerprint's own walk was left
+unbounded, on every authenticated write endpoint, and is closed by the ruling
+below — which also replaces the bound's behaviour, because stopping the descent
+and returning the container was itself a defect. Left standing as written, because
+the claim was true of what it named and the fault was in what it did not look
+for.
 
 **The idempotency fingerprint canonicalizes separately**, because interceptors run
 before pipes: it would otherwise be taken over the spelling the client used, and one
@@ -1960,6 +1978,119 @@ its three dangerous properties are invisible end to end: a prototype check that
 skips `req.query`, a credential quietly rewritten, and a stack overflow on a legal
 payload all look identical to a green suite. Two of the three defects above would
 have been caught by the tests that now exist and did not.
+
+### 2026-08-23 — What an identifier's field name is, and the second walk over a body
+
+`architecture-guardian` on the identifier branch, escalating a Stop Condition: §22
+said an identifier's field name "ends in `_id` or `_ids`" **and** said that is what
+the boundary keys on. Both could not be true. The boundary also accepts a bare `id`,
+a bare `ids`, and the `camelCase` forms, and §22's own example routes used
+`{meetingId}` and `/cells?leader_id=`. Four things are settled here, and each is
+amended into `SKILL.md` in the same change.
+
+**A bare `id` is an identifier field name, and §22 moves rather than the code.** This
+is the half that had to go the way it went: a path parameter binds under the name its
+route declared, so `@Param('id')` hands the boundary the key `id`. A convention
+admitting only the suffixed forms would put **every path parameter in the API**
+outside the rule — which is the case the boundary was built for, and the case §7
+names as the one where the comparison fails *open*. Narrowing the regex to match the
+sentence would have been following the specification off a cliff.
+
+The plural is admitted at both positions with it, so `ids` and
+`acknowledged_duplicate_ids` are one rule rather than two.
+
+**`camelCase` leaves the boundary, and §22 says the surface is `snake_case`.** The
+regex accepted `Id`/`Ids` as defence in depth. Nothing in this API can produce such a
+key — §22 fixes the surface as `snake_case`, and `forbidNonWhitelisted` rejects an
+undeclared one — so it was a shape kept without its reason holding, which is §25 rule
+19, merged the same morning, applied to the branch that was open when it merged.
+
+The narrowing is the safer direction and not only the tidier one. A `meetingId`
+arriving from a client is a naming defect, and it shows up as an authorization
+comparison quietly answering on a spelling; a boundary that silently absorbs it is
+what would hide the defect rather than surface it. §22's example route becomes
+`{meeting_id}`.
+
+**A Cell's leader is `cell_leader_id`, including in the filter §22 already
+documents.** §22 forbade naming a Cell's leader `leader_id` and then, three
+subsections later, documented `GET /api/v1/cells?leader_id=...`. Corrected now rather
+than when Stage 3 builds it, on §22's own argument: the only moment to fix a field
+name is before a client depends on one, and an example a specification documents is
+what the implementer copies. Nothing calls `/cells` — it does not exist.
+
+**The bound on a client's nesting refuses, and covers both walks.** This is the one
+that was a live defect rather than a disagreement, and it was **pre-existing on
+`main`** — fixed here because it is the identical class this branch is about, and
+because the branch carried a test comment claiming protection against it.
+
+There are two recursive walks over a request body: the identifier walk, and the
+idempotency fingerprint's `canonicalize`. The branch bounded the first and left the
+second untouched, one line apart. `JSON.parse` is iterative in V8 and accepts any
+depth; both walks are recursive and do not. Measured: **around three thousand levels,
+eighteen kilobytes**, far inside any body limit, overflows the stack — so an
+unhandled `RangeError` rendered as `INTERNAL_ERROR` on **every authenticated write
+endpoint**, for any signed-in leader. The earlier entry's claim that the walk was
+bounded was true of the walk it named and false of the hazard.
+
+Two decisions inside it, and the first is not the obvious one.
+
+**Exceeding the bound is refused, not truncated.** The first version stopped
+descending and returned the container unchanged, which reads as graceful and is
+worse: a request nested past the bound kept its identifiers in whatever case the
+client sent, silently, and every comparison below became a comparison on a spelling
+— which is the defect the boundary exists to remove, reintroduced by its own safety
+valve. It answers `VALIDATION_FAILED`: a body no DTO in this system describes is
+malformed input, which is a decision the rules reached and therefore what §22 stores
+against an idempotency key rather than releasing.
+
+**One constant, shared by both walks.** Two bounds over one body is a disagreement
+waiting to be found — the shallower would refuse a request the deeper had already
+rewritten. The fingerprint's walk keeps its own check even though the interceptor
+reaches the identifier walk first, because `fingerprint` is a public method and the
+ordering of its callers is not a property it can rely on. That ordering is exactly
+what the unbounded version was resting on without saying so.
+
+**Also corrected, all of them statements rather than behaviour**, and grouped because
+each is the fault §25 rule 19 and its predecessors name — a mechanism described from
+the part being looked at:
+
+- §7 said arguments this application constructed are skipped "by the framework's own
+  bucket", and implied naming a binding there would bring it in. True of an uploaded
+  file or a raw body, which are pipeable and *are* client input. **False of a header,
+  a session, a host or a caller's address**, which Nest never offers to any pipe at
+  all — so the remedy the sentence prescribed does not work for half the set it
+  implied. The `Idempotency-Key` is the header that exists, and it reaches a `uuid`
+  cast in SQL rather than a comparison in TypeScript.
+- The fingerprint canonicalizes path segments by **shape**, and the comment justified
+  it with "no credential is ever a path segment" — an assertion nothing enforces, in
+  the batch whose own conclusion is that a boundary cannot tell an identifier from a
+  credential by looking at the value. What actually makes it safe is reachability:
+  the credentials that travel in a URL-shaped position are the activation and reset
+  tokens, those routes are on §7's unauthenticated list, and the interceptor returns
+  before a path is canonicalized for any of them. So what would break it is a
+  credential added to a path on an *authenticated* route — which is worth knowing and
+  is not what was written.
+- The identifier walk's docblock said "nothing is mutated — a fresh value is built".
+  True of mutation; the returned structure **aliases** the input wherever nothing
+  changed. That is the property the call sites actually need, since the capability
+  guard reads the raw body before the pipe runs.
+- `api/test/unit/identifiers.spec.ts` justified its own existence with "these are
+  pure functions and need no database". The shared harness throws without
+  `DATABASE_URL` before any suite loads. They need no database *server*; a dummy URL
+  is enough, and the file now says that.
+
+**Three tests were added for rules that had nothing that could fail on them**, which
+is the recurring finding rather than a new one.
+
+The fingerprint's canonicalization — justified in three places by one specific,
+testable failure — had no case sending one key twice in two spellings, so both the
+path and the body canonicalization could be deleted with the suite green. And
+removing the old `CanonicalUuidPipe` removed a validation on the argument that the
+capability guard already refuses a non-UUID target; the argument is correct and
+nothing asserted it, which left the whole API's target validation resting on a branch
+no test entered. The guard probe gained an `actor`-target route with a path parameter
+so that §7's new obligation — a route the guard does not resolve against must
+validate its own — is pinned as a real gap rather than left as a caution.
 
 ### Open — awaiting a ruling
 
