@@ -2625,9 +2625,13 @@ sometimes unavailable that is real friction, and it is what "a second party" mea
 the two**, not by a check in `auth`. The distinction from the identity half is the
 whole reason: that one must live in the application because the database holds no
 durable representation of who the two Persons are, while role combination is
-entirely inside `account_roles` — so an index makes the state unrepresentable
-rather than merely detected, and survives `pg_restore --disable-triggers`, which is
-the argument the 2026-08-21 slot ruling already made on this same table.
+entirely inside `account_roles` — so an index decides it where the state lives
+rather than where a request happens to pass, and is still enforced under
+`pg_restore --disable-triggers`, which is the argument the 2026-08-21 slot ruling
+already made on this same table. Not quite *unrepresentable*, which two of the
+three copies of this reasoning claimed until a review pointed at the third: a full
+restore builds indexes after loading data, so a dump already holding the pair loads
+and then fails index creation.
 
 **No domain check was written, deliberately.** `roles.manage` has no endpoint, and
 provisioning cannot produce the state — it creates exactly one role on a new

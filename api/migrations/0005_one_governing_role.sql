@@ -4,11 +4,18 @@
 -- (CLAUDE.md, Definition of Done -> Migration policy). Reversible.
 --
 -- Why it exists. Section 7's table withholds seven capabilities from
--- SENIOR_PASTOR -- `roles.manage`, `accounts.manage`,
+-- SENIOR_PASTOR: `roles.manage`, `accounts.manage`,
 -- `records.backdate_effective_date`, `people.merge`, `people.correct_sex`,
--- `settings.manage` and `cell.approve_creation` -- and says why: the church's two
--- highest-visibility accounts cannot escalate their own authority, and every
--- permission change involves a second party. An account's effective authority is the union of its roles'
+-- `settings.manage` and `cell.approve_creation`.
+--
+-- Section 7 argues four of them and is silent on `settings.manage` and
+-- `cell.approve_creation`, so the argument quoted here is the one it makes for
+-- `roles.manage` and `accounts.manage` and is not offered for the rest: the
+-- church's two highest-visibility accounts cannot escalate their own authority,
+-- and every permission change involves a second party. That is enough on its own
+-- -- those two are the pair that makes the combination self-perpetuating.
+--
+-- An account's effective authority is the union of its roles'
 -- defaults, and ADMIN's set is a superset of SENIOR_PASTOR's -- so one extra row
 -- makes that union ADMIN's own and every one of those exclusions void, for
 -- exactly the two accounts they were written for.
@@ -44,8 +51,12 @@
 -- holding the pair loads and then fails index creation. Loud, and not the same as
 -- impossible.
 --
--- It also makes `account_roles_one_active` redundant for these two roles, which is
--- visible in an error: a duplicate active ADMIN row now reports this index's name.
+-- It also makes `account_roles_one_active` redundant for these two roles, though
+-- not visibly: PostgreSQL checks unique indexes in ascending OID order, and that
+-- one is older, so a duplicate active ADMIN row still reports its name rather than
+-- this one's. A first version of this comment claimed the opposite and nothing
+-- tested it. What does report this index is the case it alone forbids -- an ADMIN
+-- row beside a SENIOR_PASTOR one -- which is what the tests assert on.
 --
 -- Validated against existing data before enforcing, per the migration policy: no
 -- deployed database exists, and no path in the API can have produced this state

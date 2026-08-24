@@ -641,6 +641,15 @@ describe('the database enforces the section 3 and section 7 rules it can', () =>
         [first, 'SENIOR_PASTOR'],
       );
 
+      // **Read before `b` is blocked, never after.** `pg` does not pipeline: a
+      // query issued on a connection with a statement in flight sits in that
+      // client's queue until the first one returns, so asking the blocked
+      // connection for its own pid cannot be answered until the transaction it is
+      // waiting on commits -- which is the line below. That deadlocks the case and,
+      // on the Jest timeout, abandons both open transactions for the next
+      // `TRUNCATE` to block on forever.
+      const blockedPid = await backendPid(b);
+
       const blocked = settled(
         b.query(
           'INSERT INTO account_roles (account_id, role, senior_pastor_slot) VALUES ($1, $2, 2)',
@@ -651,7 +660,7 @@ describe('the database enforces the section 3 and section 7 rules it can', () =>
       // Observed rather than assumed. This case predates the governing-role rule
       // and had the same gap, so it is corrected with it rather than left as the
       // one instance of the class nobody looked for.
-      expect(await waitUntilBlocked(a, await backendPid(b))).toBeGreaterThan(0);
+      expect(await waitUntilBlocked(a, blockedPid)).toBeGreaterThan(0);
 
       await a.query('COMMIT');
       expect((await blocked)?.message).toMatch(/account_roles_one_senior_pastor_per_slot/);
@@ -676,7 +685,8 @@ describe('the database enforces the section 3 and section 7 rules it can', () =>
     // the union of its roles' defaults and ADMIN's set is a superset, so the pair
     // is not a Senior Pastor who also administers -- it is an account holding
     // every capability, for which every exclusion section 7 writes for the role is
-    // void, and which holds `roles.manage` and can therefore grant itself more.
+    // void, and which holds `roles.manage` and can therefore retain the pair and
+    // revoke anybody else's roles.
     const account = await accountFor(db, 'Oriel', 'MENS');
 
     await db
@@ -764,6 +774,9 @@ describe('the database enforces the section 3 and section 7 rules it can', () =>
         [account, 'SENIOR_PASTOR'],
       );
 
+      // Read before the insert blocks this connection -- see the sibling case.
+      const blockedPid = await backendPid(b);
+
       const blocked = settled(
         b.query(
           'INSERT INTO account_roles (account_id, role, senior_pastor_slot) VALUES ($1, $2, NULL)',
@@ -775,7 +788,7 @@ describe('the database enforces the section 3 and section 7 rules it can', () =>
       // the sequential case above. Dispatching the second write and committing the
       // first passes on a run where the server happens to reach the commit first,
       // and passes with no index at all.
-      expect(await waitUntilBlocked(a, await backendPid(b))).toBeGreaterThan(0);
+      expect(await waitUntilBlocked(a, blockedPid)).toBeGreaterThan(0);
 
       await a.query('COMMIT');
       expect((await blocked)?.message).toMatch(/account_roles_one_governing_role/);
@@ -1008,9 +1021,24 @@ async function backendPid(client: Client): Promise<number> {
  * waiting while the other transaction is still open, which is how SKILL.md
  * section 5's lock ordering is pinned in `person-lock.e2e.spec.ts`.
  *
- * The observer must be a connection other than the blocked one, which is why the
- * callers pass the transaction that holds the conflicting row: it is idle in its
- * transaction and can still answer a read.
+ * **Two arguments, two rules, and the second is the one that bit.** The observer
+ * must be a connection other than the blocked one, which is why callers pass the
+ * transaction holding the conflicting row -- it is idle in its transaction and can
+ * still answer a read. And the pid must be read from the blocked connection
+ * *before* it is blocked: `pg` does not pipeline, so a query issued on a connection
+ * with a statement in flight waits in that client's queue until the first returns,
+ * and asking a blocked connection for its own pid therefore cannot be answered
+ * until the transaction it waits on commits. The first version did exactly that and
+ * deadlocked both cases.
+ *
+ * `person-lock.e2e.spec.ts` avoids the question by identifying the waiter by lock
+ * *target* -- an advisory key it computes itself -- and never querying the blocked
+ * connection at all. Reusing "poll pg_locks" without re-deriving how the waiter is
+ * identified is section 25 rule 19, in the batch that cited that precedent.
+ *
+ * It counts any ungranted lock held by the pid rather than the specific index wait,
+ * which is looser than the precedent's predicate and sufficient here: the
+ * transactions are two statements long and hold nothing else contended.
  */
 async function waitUntilBlocked(observer: Client, pid: number): Promise<number> {
   const deadline = Date.now() + 2_500;
