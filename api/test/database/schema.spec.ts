@@ -128,6 +128,28 @@ describe('the schema (SKILL.md sections 4, 5, 6 and 7)', () => {
       expect(index).not.toMatch(/LEADER/);
     });
 
+    it('refuses grant-making to a Senior Pastor from both sides, and defers', async () => {
+      // Section 7: `roles.manage` and `accounts.manage` are never held by an
+      // account holding SENIOR_PASTOR, however granted. The rule spans two tables,
+      // so no index reaches it and there are two triggers rather than one --
+      // enforcing on grants alone is walkable by granting first and adding the
+      // role second.
+      //
+      // **Both halves of the shape matter.** Deferral is what lets a transaction
+      // revoke a conflicting grant and add the role in either order; the pairing is
+      // what makes the rule symmetric. A later migration dropping either would
+      // leave the behavioural cases in invariants.spec.ts as the only guard, and
+      // one of those passes on the surviving direction alone.
+      const onGrants = await triggerDefinition(db, 'capability_grants_not_for_senior_pastor');
+      const onRoles = await triggerDefinition(db, 'account_roles_senior_pastor_makes_no_grants');
+
+      for (const definition of [onGrants, onRoles]) {
+        expect(definition).toMatch(/CONSTRAINT TRIGGER/i);
+        expect(definition).toMatch(/DEFERRABLE INITIALLY DEFERRED/i);
+        expect(definition).toMatch(/AFTER INSERT OR UPDATE/i);
+      }
+    });
+
     it('ties the slot to the role, and refuses a null slot explicitly', async () => {
       const constraint = await constraintDefinition(db, 'account_roles_slot_belongs_to_the_role');
 
@@ -347,6 +369,18 @@ async function indexDefinition(db: Kysely<Database>, name: string): Promise<stri
   }
 
   return result.rows[0].indexdef;
+}
+
+async function triggerDefinition(db: Kysely<Database>, name: string): Promise<string> {
+  const result = await sql<{ definition: string }>`
+    SELECT pg_get_triggerdef(oid) AS definition FROM pg_trigger WHERE tgname = ${name}
+  `.execute(db);
+
+  if (result.rows.length === 0) {
+    throw new Error(`trigger ${name} does not exist`);
+  }
+
+  return result.rows[0].definition;
 }
 
 async function constraintDefinition(db: Kysely<Database>, name: string): Promise<string> {

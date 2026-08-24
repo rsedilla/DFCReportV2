@@ -2651,17 +2651,77 @@ it confers strictly less than either governing role and carries none of the
 excluded capabilities, so an index over *every* role would forbid a legitimate row
 and pass every other case. Written to `SKILL.md` §7 and migration `0005`.
 
+### 2026-08-24 — The grant-making pair is never held by a Senior Pastor
+
+The Stop Condition the role-combination ruling escalated. §7's role catalog says
+"Anything beyond a role's defaults requires an explicit, Admin-issued grant" and
+names no exception, so the index added in migration 0005 closed the role-combination
+route and left the explicit-grant route wide open: a Whole Church grant of
+`roles.manage` reaches the same authority with no `ADMIN` row, nothing violated, and
+invisibly to the identity check, which filters role rows and not grants.
+
+**`roles.manage` and `accounts.manage` may never be held by an account holding
+`SENIOR_PASTOR`, by role or by grant. The other five §7 withholds may be granted.**
+
+Three options were weighed and the middle one is not the compromise it looks like —
+it is the only one that matches §7's own argument.
+
+**Refusing all seven** is wider than §7. It would refuse `people.merge` and
+`people.correct_sex` to the people most likely to *know* a correction is needed,
+and it buys nothing: neither is self-perpetuating, each use is one audited
+operation, and an Admin can revoke the authority afterwards.
+
+**Permitting all seven** is what the specification said by omission, and it is how
+a small church's authorization model actually dies. Granting "the admin bundle" in
+a hurry on a Saturday hands over `roles.manage`, after which the holder can grant
+themselves the rest and revoke the Admin who granted it. Every step is a legal use
+of a legally issued grant. The Monday revocation never happens, because the person
+who would perform it no longer can.
+
+**The pair is the line because the pair is what removes the second party
+permanently.** §7 justifies withholding `roles.manage` and `accounts.manage` on
+exactly that ground — "every permission change has a second party involved" — and
+justifies `records.backdate_effective_date` and `people.merge` on a different one,
+that they move totals for periods already reported. `people.correct_sex`,
+`settings.manage` and `cell.approve_creation` it withholds in the table and argues
+nowhere. Treating the seven alike was a simplification of mine, not §7's position,
+and the review that found the hole is what made the difference visible.
+
+**Two triggers, not one, and not an index.** The rule spans `account_roles` and
+`capability_grants`, so no index reaches it. Enforcing on grants alone is walkable
+from the other side — grant first, add the role second — so whichever row arrives
+second is refused.
+
+**Each path locks the account before it looks, and that is the half worth
+recording.** A deferred trigger sees only its own transaction's commit-time state,
+so two concurrent transactions writing the role and the grant would each find
+nothing and both commit — the exact defect the 2026-08-21 ruling records in the
+`SENIOR_PASTOR` counting trigger, whose remedy there was a unique index. No index is
+available here, so both paths take `FOR NO KEY UPDATE` on the account instead.
+`FOR NO KEY UPDATE` rather than `FOR UPDATE` because it conflicts with itself, which
+is all that is needed, and not with the `FOR KEY SHARE` a foreign key takes — the
+same reasoning §6 records for the revocation lock.
+
+**Deferred, but not for §4's reason, and the difference is why it is written down.**
+There, neither order works and an immediate trigger makes a mandated operation
+unperformable. Here every conflict has a legal order — revoke the grant, then add
+the role — so an immediate trigger would be satisfiable. It is deferred so the order
+is not a trap, and so a row written and revoked inside one transaction has nothing
+left to validate.
+
+**The cost is the rule rather than a side effect.** The two Senior Pastors cannot be
+handed grant-making authority even temporarily, so an unreachable Admin is answered
+by a second Admin account and not by widening theirs. A capability joins the pair
+only by amending §7, which is where the argument for refusing rather than auditing
+has to be made. Written to `SKILL.md` §7 and migration `0006`.
+
 ### Open — awaiting a ruling
 
-**Two items await a ruling. One blocks Stage 5; the other is an open authorization question raised on 2026-08-24. Seven other things are unsettled, none of them blocking. They are listed at the end, so this section is the whole of what is open.**
+**One item awaits a ruling and blocks Stage 5. Seven other things are unsettled, none of them blocking. They are listed at the end, so this section is the whole of what is open.**
 
 Nine items that stood here on 2026-08-22 were settled that day and are recorded above. Seven were Stop Conditions for Stage 2, and the last two were opened and closed the same day by `architecture-guardian` passes.
 
 The `audit_log.action` vocabulary left this list on 2026-08-23, settled by the ruling above: the convention is `<noun>.<past-tense verb>`, and section 21's list stays open.
-
-**Whether a capability §7 withholds from `SENIOR_PASTOR` may be granted to that account explicitly.** §7's role catalog says "Anything beyond a role's defaults requires an explicit, Admin-issued grant" and names no exception, so Admin may issue a Whole Church `roles.manage` or `accounts.manage` grant against a Senior Pastor's account. That reaches exactly the authority the 2026-08-24 role-combination ruling refuses, with no `ADMIN` row and no constraint violated — and the identity check does not see it either, since it filters role rows rather than grants.
-
-So §7 currently withholds seven capabilities from the role by default and permits every one of them to be granted back. Either the exclusions are hard limits, which needs enforcement spanning `account_roles` and `capability_grants` and is not expressible as an index, or they are defaults Admin may deliberately widen — in which case §7 should say so, and the "every permission change has a second party" argument is weaker than it reads. Raised by `architecture-guardian` on the role-combination branch and deliberately not decided there, because the ruling under review depended on the answer and inferring it would have been the same fault the review found.
 
 **What an aggregate Cell attendance view offers in place of buckets.** Monthly-attendance buckets are a Cell-scope view only, because N belongs to a Cell and aggregating across different N inflates `Completed` for the Cells that recorded least (`SKILL.md` §12). At leader and Network scope the spec offers unique people, classification and coverage, and does not say whether anything should replace the buckets. Settle it in Stage 5 against real data.
 
