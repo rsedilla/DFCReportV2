@@ -7,6 +7,7 @@ import { HierarchyService } from '../../hierarchy/hierarchy.service';
 import { NetworksService } from '../../networks/networks.service';
 
 import { isCapability, isReadCapability, type Capability } from './capabilities';
+import { isGrantMaking } from './grant-making';
 import { ROLE_DEFAULTS } from './role-defaults';
 import { ScopeType, type Scope, type Target } from './scopes';
 import { isNamedSeniorPastor } from './senior-pastors';
@@ -29,6 +30,13 @@ export interface ActorAuthority {
   accountId: string;
   roles: readonly AccountRole[];
   grants: readonly EffectiveGrant[];
+}
+
+interface ActiveRoles {
+  /** Roles whose row this system honours; the source of role defaults. */
+  honoured: AccountRole[];
+  /** Every active role row, honoured or not. See `activeRoles` for why both. */
+  held: AccountRole[];
 }
 
 export interface EffectiveGrant {
@@ -72,7 +80,8 @@ export class AuthorizationService {
   ) {}
 
   /**
-   * The account's active roles, less any row this system refuses to honour.
+   * The account's active roles, in two lists: those whose row this system honours,
+   * and every row it holds.
    *
    * **The single reader of `account_roles` in this service, and that is the
    * point.** There were two — one for the roles an account holds, one inside
@@ -98,7 +107,7 @@ export class AuthorizationService {
    * and the reason section 7 puts the identity half on the path every request
    * follows rather than only at the write.
    */
-  private async activeRoles(accountId: string): Promise<AccountRole[]> {
+  private async activeRoles(accountId: string): Promise<ActiveRoles> {
     const rows = await this.db
       .selectFrom('account_roles')
       .innerJoin('accounts', 'accounts.id', 'account_roles.account_id')
@@ -107,9 +116,19 @@ export class AuthorizationService {
       .where('account_roles.revoked_at', 'is', null)
       .execute();
 
-    return rows
-      .filter((row) => this.roleIsHonoured(accountId, row.role, row.person_id))
-      .map((row) => row.role);
+    return {
+      honoured: rows
+        .filter((row) => this.roleIsHonoured(accountId, row.role, row.person_id))
+        .map((row) => row.role),
+      // **Held, honoured or not**, and the distinction is load-bearing for exactly
+      // one rule. Section 7 refuses a grant-making capability to an account
+      // *holding* a `SENIOR_PASTOR` row, and the database refuses that pair on the
+      // row rather than on whether configuration honours it. Deciding it here on
+      // the honoured list instead would let the two enforcement points disagree:
+      // configuration lost, the database still refuses the write while the
+      // application honours the grant.
+      held: rows.map((row) => row.role),
+    };
   }
 
   /** Whether a role row grants what it appears to (SKILL.md section 7). */
@@ -182,7 +201,7 @@ export class AuthorizationService {
 
     const effective: EffectiveGrant[] = [];
 
-    for (const role of roles) {
+    for (const role of roles.honoured) {
       for (const [capability, scopeType] of Object.entries(ROLE_DEFAULTS[role])) {
         effective.push({
           capability: capability as Capability,
@@ -199,6 +218,23 @@ export class AuthorizationService {
         // logged rather than ignored if they ever stop agreeing.
         this.logger.error(
           `capability_grants holds "${grant.capability}", which is not a capability in SKILL.md section 7. Ignoring it.`,
+        );
+        continue;
+      }
+
+      if (roles.held.includes('SENIOR_PASTOR') && isGrantMaking(grant.capability)) {
+        // **Section 7: the grant-making pair is never held by a Senior Pastor**,
+        // by role or by grant. Migration 0006 refuses the write from both sides,
+        // and this is the second enforcement point that section requires for the
+        // same reason it gives for the identity check and for preferring an index
+        // to a counting trigger: `pg_restore --disable-triggers` skips a constraint
+        // trigger entirely, so a rule enforced only by one is a rule a restore can
+        // load straight past.
+        //
+        // Decided on the role **row** rather than on an honoured role, so that this
+        // and the database refuse the same states. See `activeRoles`.
+        this.logger.error(
+          `Account ${accountId} holds SENIOR_PASTOR and a grant of "${grant.capability}", which SKILL.md section 7 forbids together. Ignoring the grant.`,
         );
         continue;
       }
@@ -220,7 +256,7 @@ export class AuthorizationService {
       });
     }
 
-    return { roles, grants: effective };
+    return { roles: roles.honoured, grants: effective };
   }
 
   /**

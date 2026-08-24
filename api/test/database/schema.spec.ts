@@ -128,6 +128,49 @@ describe('the schema (SKILL.md sections 4, 5, 6 and 7)', () => {
       expect(index).not.toMatch(/LEADER/);
     });
 
+    it('refuses grant-making to a Senior Pastor from both sides, and defers', async () => {
+      // Section 7: `roles.manage` and `accounts.manage` are never held by an
+      // account holding SENIOR_PASTOR, however granted. The rule spans two tables,
+      // so no index reaches it and there are two triggers rather than one --
+      // enforcing on grants alone is walkable by granting first and adding the
+      // role second.
+      //
+      // **Both halves of the shape matter.** Deferral is what lets a transaction
+      // revoke a conflicting grant and add the role in either order; the pairing is
+      // what makes the rule symmetric. A later migration dropping either would
+      // leave the behavioural cases in invariants.spec.ts as the only guard, and
+      // one of those passes on the surviving direction alone.
+      const onGrants = await constraintTriggerFacts(
+        db,
+        'capability_grants',
+        'capability_grants_not_for_senior_pastor',
+      );
+      const onRoles = await constraintTriggerFacts(
+        db,
+        'account_roles',
+        'account_roles_senior_pastor_makes_no_grants',
+      );
+
+      const shared = {
+        deferrable: true,
+        initially_deferred: true,
+        fires_on_insert: true,
+        fires_on_update: true,
+        timing: 'AFTER',
+        per_row: true,
+        enabled: true,
+      };
+
+      // The function is named too, because a migration repointing either trigger
+      // at a different function would otherwise pass -- which is the one fact
+      // `deleteTriggerFacts` asserts at every one of its call sites.
+      expect(onGrants).toEqual({ ...shared, function_name: 'assert_grant_not_for_senior_pastor' });
+      expect(onRoles).toEqual({
+        ...shared,
+        function_name: 'assert_senior_pastor_makes_no_grants',
+      });
+    });
+
     it('ties the slot to the role, and refuses a null slot explicitly', async () => {
       const constraint = await constraintDefinition(db, 'account_roles_slot_belongs_to_the_role');
 
@@ -347,6 +390,64 @@ async function indexDefinition(db: Kysely<Database>, name: string): Promise<stri
   }
 
   return result.rows[0].indexdef;
+}
+
+/**
+ * A constraint trigger's shape, read from the catalog rather than from its
+ * definition text.
+ *
+ * Named for the table as well as the trigger, because trigger names are per
+ * relation in PostgreSQL -- so matching on the name alone passes for a trigger of
+ * the right name on the wrong table, and for one left disabled by
+ * `ALTER TABLE ... DISABLE TRIGGER`. That is the warning `deleteTriggerFacts`
+ * below already carries, and a first version of this helper reintroduced both
+ * gaps eighty lines above it.
+ */
+async function constraintTriggerFacts(
+  db: Kysely<Database>,
+  table: string,
+  name: string,
+): Promise<{
+  deferrable: boolean;
+  initially_deferred: boolean;
+  fires_on_insert: boolean;
+  fires_on_update: boolean;
+  timing: string;
+  per_row: boolean;
+  enabled: boolean;
+  function_name: string;
+}> {
+  const result = await sql<{
+    deferrable: boolean;
+    initially_deferred: boolean;
+    fires_on_insert: boolean;
+    fires_on_update: boolean;
+    timing: string;
+    per_row: boolean;
+    enabled: boolean;
+    function_name: string;
+  }>`
+    SELECT t.tgdeferrable          AS deferrable,
+           t.tginitdeferred        AS initially_deferred,
+           (t.tgtype & 4) <> 0     AS fires_on_insert,
+           (t.tgtype & 16) <> 0    AS fires_on_update,
+           (t.tgtype & 1) <> 0     AS per_row,
+           CASE WHEN (t.tgtype & 2) <> 0 THEN 'BEFORE' ELSE 'AFTER' END AS timing,
+           t.tgenabled IN ('O', 'A') AS enabled,
+           p.proname               AS function_name
+      FROM pg_trigger t
+      JOIN pg_proc p ON p.oid = t.tgfoid
+      JOIN pg_class c ON c.oid = t.tgrelid
+     WHERE t.tgname = ${name}
+       AND c.relname = ${table}
+       AND NOT t.tgisinternal
+  `.execute(db);
+
+  if (result.rows.length === 0) {
+    throw new Error(`constraint trigger ${name} does not exist on ${table}`);
+  }
+
+  return result.rows[0];
 }
 
 async function constraintDefinition(db: Kysely<Database>, name: string): Promise<string> {

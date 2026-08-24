@@ -680,6 +680,266 @@ describe('the database enforces the section 3 and section 7 rules it can', () =>
     expect(active).toHaveLength(2);
   });
 
+  /**
+   * Grant one capability to an account, returning the insert promise unawaited so
+   * a caller can observe it blocking.
+   */
+  function grant(
+    accountId: string,
+    capability:
+      | 'roles.manage'
+      | 'accounts.manage'
+      | 'people.merge'
+      | 'people.correct_sex'
+      | 'settings.manage'
+      | 'cell.approve_creation'
+      | 'records.backdate_effective_date',
+  ) {
+    return db
+      .insertInto('capability_grants')
+      .values({
+        account_id: accountId,
+        capability,
+        scope_type: 'WHOLE_CHURCH',
+        scope_network: null,
+        read_only: false,
+        reason: 'Exercising the section 7 grant limit.',
+        granted_by: accountId,
+      })
+      .execute();
+  }
+
+  it('refuses a grant-making capability to a Senior Pastor, both of them', async () => {
+    // Section 7: `roles.manage` and `accounts.manage` are never held by an account
+    // holding SENIOR_PASTOR, however granted. This is the route migration 0005's
+    // index does not reach -- no ADMIN row exists here.
+    const oriel = await accountFor(db, 'Oriel', 'MENS');
+
+    await db
+      .insertInto('account_roles')
+      .values({ account_id: oriel, role: 'SENIOR_PASTOR', senior_pastor_slot: 1 })
+      .execute();
+
+    await expect(grant(oriel, 'roles.manage')).rejects.toThrow(/may not be granted/);
+    await expect(grant(oriel, 'accounts.manage')).rejects.toThrow(/may not be granted/);
+  });
+
+  it('refuses SENIOR_PASTOR to an account that already makes grants', async () => {
+    // The mirror, and the reason there are two triggers. Enforcing on grants alone
+    // is walkable in this order: grant first, add the role second.
+    const account = await accountFor(db, 'Ester', 'WOMENS');
+
+    await grant(account, 'accounts.manage');
+
+    await expect(
+      db
+        .insertInto('account_roles')
+        .values({ account_id: account, role: 'SENIOR_PASTOR', senior_pastor_slot: 1 })
+        .execute(),
+    ).rejects.toThrow(/may not hold SENIOR_PASTOR/);
+  });
+
+  it('permits the withheld capabilities that are not grant-making', async () => {
+    // **The half that makes this a line rather than a ban**, and the mutation that
+    // matters: a rule widened to every capability the section 7 table withholds
+    // would refuse these and pass every case above.
+    //
+    // `people.correct_sex` is here deliberately. A first version of this branch
+    // filed it among the capabilities section 7 argues nowhere, which is false --
+    // section 7 argues it on the same ground as `people.merge`, that it moves
+    // totals for periods already reported. Neither is self-perpetuating, which is
+    // why neither is refused.
+    const oriel = await accountFor(db, 'Oriel', 'MENS');
+
+    await db
+      .insertInto('account_roles')
+      .values({ account_id: oriel, role: 'SENIOR_PASTOR', senior_pastor_slot: 1 })
+      .execute();
+
+    // All five, not a sample. The TypeScript set is pinned exactly in
+    // `grant-making.spec.ts`; this is the hand-kept SQL copy in `is_grant_making`,
+    // which is the half that can drift, so it gets the exact assertion too.
+    for (const capability of [
+      'people.merge',
+      'people.correct_sex',
+      'records.backdate_effective_date',
+      'settings.manage',
+      'cell.approve_creation',
+    ] as const) {
+      await expect(grant(oriel, capability)).resolves.toBeDefined();
+    }
+  });
+
+  it('lets a revoked grant free the account, which is how one is undone', async () => {
+    const account = await accountFor(db, 'Ester', 'WOMENS');
+
+    await grant(account, 'roles.manage');
+
+    await db
+      .updateTable('capability_grants')
+      .set({ revoked_at: sql<Date>`now()` })
+      .where('account_id', '=', account)
+      .execute();
+
+    await expect(
+      db
+        .insertInto('account_roles')
+        .values({ account_id: account, role: 'SENIOR_PASTOR', senior_pastor_slot: 1 })
+        .execute(),
+    ).resolves.toBeDefined();
+  });
+
+  it('takes the account lock before it decides, which is what closes the race', async () => {
+    // **The property, pinned directly, because the race itself cannot be observed
+    // reliably.** Two transactions writing the role and the grant fire their
+    // deferred triggers at COMMIT; each sees only its own state, so without a lock
+    // both look, find nothing, and commit. Firing two and hoping to catch the
+    // overlap passes against no lock at all nearly every run -- which is the
+    // shape CLAUDE.md's 2026-08-23 person-lock ruling rejects.
+    //
+    // So a third connection holds `FOR NO KEY UPDATE` on the account, and the
+    // assertion is that a commit which must take that lock **waits**. Remove the
+    // PERFORM from the role-side trigger and nothing waits here; the grant side
+    // has a case of its own below, because this one writes no grant and an earlier
+    // version claimed it covered both.
+    const account = await accountFor(db, 'Oriel', 'MENS');
+
+    const [holder, writer] = [await openClient(), await openClient()];
+
+    try {
+      await holder.query('BEGIN');
+      await holder.query('SELECT 1 FROM accounts WHERE id = $1 FOR NO KEY UPDATE', [account]);
+
+      const writerPid = await backendPid(writer);
+
+      await writer.query('BEGIN');
+      await writer.query(
+        'INSERT INTO account_roles (account_id, role, senior_pastor_slot) VALUES ($1, $2, 1)',
+        [account, 'SENIOR_PASTOR'],
+      );
+
+      // The trigger is deferred, so the insert returns and the lock is taken by
+      // the COMMIT. Dispatched unawaited, because it is expected to block.
+      const commit = settled(writer.query('COMMIT'));
+
+      expect(await waitUntilBlocked(holder, writerPid)).toBeGreaterThan(0);
+
+      await holder.query('ROLLBACK');
+
+      // Nothing conflicts once the lock is free, so the commit completes.
+      expect(await commit).toBeNull();
+    } finally {
+      await holder.end();
+      await writer.end();
+    }
+
+    const roles = await db
+      .selectFrom('account_roles')
+      .select('role')
+      .where('account_id', '=', account)
+      .where('revoked_at', 'is', null)
+      .execute();
+
+    expect(roles).toEqual([{ role: 'SENIOR_PASTOR' }]);
+  });
+
+  it('takes the account lock on the grant side too', async () => {
+    // The mirror of the case above, and it exists because the claim that one case
+    // covered both triggers was false: that one writes only `account_roles`, so
+    // deleting the PERFORM from the grant-side trigger left it green.
+    const account = await accountFor(db, 'Ester', 'WOMENS');
+
+    const [holder, writer] = [await openClient(), await openClient()];
+
+    try {
+      await holder.query('BEGIN');
+      await holder.query('SELECT 1 FROM accounts WHERE id = $1 FOR NO KEY UPDATE', [account]);
+
+      const writerPid = await backendPid(writer);
+
+      await writer.query('BEGIN');
+      await writer.query(
+        `INSERT INTO capability_grants
+           (account_id, capability, scope_type, read_only, reason, granted_by)
+         VALUES ($1, 'roles.manage', 'WHOLE_CHURCH', false, 'Exercising the lock.', $1)`,
+        [account],
+      );
+
+      const commit = settled(writer.query('COMMIT'));
+
+      expect(await waitUntilBlocked(holder, writerPid)).toBeGreaterThan(0);
+
+      await holder.query('ROLLBACK');
+
+      // The account holds no SENIOR_PASTOR row, so nothing conflicts once the lock
+      // is free and the grant stands.
+      expect(await commit).toBeNull();
+    } finally {
+      await holder.end();
+      await writer.end();
+    }
+
+    const grants = await db
+      .selectFrom('capability_grants')
+      .select('capability')
+      .where('account_id', '=', account)
+      .where('revoked_at', 'is', null)
+      .execute();
+
+    expect(grants).toEqual([{ capability: 'roles.manage' }]);
+  });
+
+  it('lets only one of two concurrent writers end up holding the pair', async () => {
+    // Whichever commits second is refused; which one that is depends on timing and
+    // is deliberately not asserted. What must hold either way is that the account
+    // does not end up with both, which is the rule itself.
+    const account = await accountFor(db, 'Ester', 'WOMENS');
+
+    const [a, b] = [await openClient(), await openClient()];
+
+    try {
+      await a.query('BEGIN');
+      await b.query('BEGIN');
+
+      await a.query(
+        'INSERT INTO account_roles (account_id, role, senior_pastor_slot) VALUES ($1, $2, 1)',
+        [account, 'SENIOR_PASTOR'],
+      );
+
+      await b.query(
+        `INSERT INTO capability_grants
+           (account_id, capability, scope_type, read_only, reason, granted_by)
+         VALUES ($1, 'roles.manage', 'WHOLE_CHURCH', false, 'Concurrent write.', $1)`,
+        [account],
+      );
+
+      const commits = [settled(a.query('COMMIT')), settled(b.query('COMMIT'))];
+      const failures = (await Promise.all(commits)).filter((error) => error !== null);
+
+      expect(failures).toHaveLength(1);
+      expect(failures[0]?.message).toMatch(/SENIOR_PASTOR|may not be granted/);
+    } finally {
+      await a.end();
+      await b.end();
+    }
+
+    const held = await db
+      .selectFrom('account_roles')
+      .select('role')
+      .where('account_id', '=', account)
+      .where('revoked_at', 'is', null)
+      .execute();
+
+    const granted = await db
+      .selectFrom('capability_grants')
+      .select('capability')
+      .where('account_id', '=', account)
+      .where('revoked_at', 'is', null)
+      .execute();
+
+    expect(held.length === 0 || granted.length === 0).toBe(true);
+  });
+
   it('refuses one account both ADMIN and SENIOR_PASTOR', async () => {
     // Section 7: an account holds at most one of the two. Effective authority is
     // the union of its roles' defaults and ADMIN's set is a superset, so the pair
