@@ -3,7 +3,14 @@ import { randomUUID } from 'node:crypto';
 import request from 'supertest';
 
 import { createTestDb, truncateAll } from '../setup/database';
-import { assignTo, createAccount, createPerson, createTestApp, EPOCH } from '../setup/fixtures';
+import {
+  assignTo,
+  createAccount,
+  createPerson,
+  createTestApp,
+  EPOCH,
+  nameSeniorPastors,
+} from '../setup/fixtures';
 
 import type { INestApplication } from '@nestjs/common';
 import type { Kysely } from 'kysely';
@@ -154,6 +161,12 @@ describe('reassigning a pastoral leader (SKILL.md section 5)', () => {
     await assignTo(db, nora.id, geraldine.id);
     await assignTo(db, bea.id, nora.id);
     await assignTo(db, cely.id, geraldine.id);
+
+    // Cases 8 and 9 turn on the Senior Pastor role, and section 7 honours it only
+    // for the two Persons section 4 names. The application reads them from
+    // configuration, so a fixture tree has to say who its two are — see
+    // `nameSeniorPastors`.
+    nameSeniorPastors(app, [oriel.id, geraldine.id]);
 
     raymondAccount = await createAccount(app, db, { person: raymond, roles: ['LEADER'] });
     orielAccount = await createAccount(app, db, {

@@ -8,6 +8,7 @@ import type { Kysely } from 'kysely';
 import { AppModule } from '../../src/app.module';
 import { TokensService } from '../../src/auth/tokens.service';
 import { configureApp } from '../../src/bootstrap';
+import { APP_CONFIG, type AppConfig } from '../../src/config/configuration';
 import { EMAIL_PORT } from '../../src/email/email.port';
 
 import { CapturingEmailAdapter } from './capturing-email.adapter';
@@ -187,6 +188,27 @@ export async function createTestApp(controllers: Type<unknown>[] = []): Promise<
   await app.init();
 
   return app;
+}
+
+/**
+ * Names the Persons this running application will honour as Senior Pastors
+ * (SKILL.md section 7).
+ *
+ * **Set on the live configuration rather than by overriding the provider**, and
+ * the reason is ordering: the identifiers are per-database, a fixture Person does
+ * not exist when the application is built, and suites build the application once
+ * in `beforeAll` and their people in `beforeEach`. Both readers — provisioning and
+ * `AuthorizationService` — read the value at call time, exactly as they would read
+ * a deployment's environment, so nothing here exercises a path production does not.
+ *
+ * **Deliberately not folded into `createAccount`.** Creating an account with the
+ * role could name its Person automatically, and every existing case would then go
+ * green without anybody deciding it should. The rule is that a `SENIOR_PASTOR` row
+ * grants nothing unless its Person is named, and a suite that wants the role has
+ * to say so.
+ */
+export function nameSeniorPastors(app: INestApplication, personIds: string[]): void {
+  app.get<AppConfig>(APP_CONFIG).seniorPastorPersonIds = personIds.map((id) => id.toLowerCase());
 }
 
 /** The captured outbox for an app built by `createTestApp`. */

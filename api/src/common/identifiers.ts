@@ -45,7 +45,21 @@ export function canonicalId(value: string): string {
  * this narrows to the shape it understands.
  */
 export function canonicalIfUuid(value: string): string {
-  return UUID.test(value) ? canonicalId(value) : value;
+  return isUuid(value) ? canonicalId(value) : value;
+}
+
+/**
+ * Whether a value is UUID-shaped, in either case.
+ *
+ * Exported so that everything in the application deciding "is this an
+ * identifier?" answers from one pattern. `canonicalIfUuid` narrows on it, and the
+ * configuration naming the two Senior Pastors (SKILL.md section 7) validates
+ * against it when the process starts — a value that configuration accepted and
+ * this rejected would be one the boundary never canonicalizes, so it would name
+ * nobody while looking as though it named somebody.
+ */
+export function isUuid(value: string): boolean {
+  return UUID.test(value);
 }
 
 /** Whether two identifiers name the same record, however each was spelled. */

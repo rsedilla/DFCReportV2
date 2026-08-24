@@ -7,7 +7,14 @@ import { AuthorizationService } from '../../src/auth/authorization/authorization
 import { HierarchyService } from '../../src/hierarchy/hierarchy.service';
 import { PeopleReassignmentService } from '../../src/people/people.reassignment.service';
 import { createTestDb, truncateAll } from '../setup/database';
-import { assignTo, createAccount, createPerson, createTestApp, EPOCH } from '../setup/fixtures';
+import {
+  assignTo,
+  createAccount,
+  createPerson,
+  createTestApp,
+  EPOCH,
+  nameSeniorPastors,
+} from '../setup/fixtures';
 
 import type { INestApplication } from '@nestjs/common';
 import type { Kysely } from 'kysely';
@@ -58,6 +65,9 @@ describe('reassigning a pastoral leader: the record (sections 5, 21, 22)', () =>
 
   beforeEach(async () => {
     await truncateAll(db);
+    // Cases share an application and therefore its configuration, and one case
+    // below names a Senior Pastor. Reset so no case inherits it.
+    nameSeniorPastors(app, []);
 
     oriel = await createPerson(db, { firstName: 'Oriel', network: 'MENS' });
     ben = await createPerson(db, { firstName: 'Ben', network: 'MENS' });
@@ -506,6 +516,42 @@ describe('reassigning a pastoral leader: the record (sections 5, 21, 22)', () =>
 
       expect(response.status).toBe(200);
       expect(response.body.previous_pastoral_leader_id).toBe(raymond.id);
+    });
+
+    it('withholds the invariant 4 exemption from a SENIOR_PASTOR section 4 does not name', async () => {
+      // The identity half of section 7's `SENIOR_PASTOR` rule, on the path a
+      // restore takes rather than the path provisioning takes: this role row is
+      // inserted directly, so the grant-time check never ran on it.
+      //
+      // **This isolates `rolesFor`, which nothing else does.** The Whole Church
+      // grant supplies the capability, so `grantsFor` is satisfied either way and
+      // a refusal cannot be coming from there. The only thing the role row can
+      // still contribute is the invariant 4 exemption, which section 5 decides by
+      // role — so naming the Person is the single variable between the two halves
+      // of this case.
+      const manuelSeniorPastor = await createAccount(app, db, {
+        person: manuel,
+        roles: ['SENIOR_PASTOR'],
+        seniorPastorSlot: 1,
+      });
+      await grantManageChurchWide(manuelSeniorPastor);
+
+      const unnamed = await reassign(
+        manuel.id,
+        { pastoral_leader_id: rico.id },
+        manuelSeniorPastor,
+      );
+
+      expect(unnamed.status).toBe(403);
+      expect(unnamed.body.error.code).toBe('SCOPE_DENIED');
+      expect(unnamed.body.error.message).toMatch(/your own pastoral assignment/);
+
+      nameSeniorPastors(app, [manuel.id]);
+
+      const named = await reassign(manuel.id, { pastoral_leader_id: rico.id }, manuelSeniorPastor);
+
+      expect(named.status).toBe(200);
+      expect(named.body.previous_pastoral_leader_id).toBe(raymond.id);
     });
 
     it('refuses a destination the actor does not oversee', async () => {

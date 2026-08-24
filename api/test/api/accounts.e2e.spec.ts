@@ -7,6 +7,7 @@ import {
   createAccount,
   createPerson,
   createTestApp,
+  nameSeniorPastors,
   outbox,
   resetRateLimits,
 } from '../setup/fixtures';
@@ -48,6 +49,9 @@ describe('accounts: provisioning, activation and reset (section 6)', () => {
     // sixth call in the file is a 429 attributed to whatever that case was about —
     // which is how the limit was discovered rather than pinned.
     resetRateLimits(app);
+    // Cases share an application and therefore its configuration. Reset to the
+    // deployed default — unset — so that a case wanting a Senior Pastor names one.
+    nameSeniorPastors(app, []);
 
     admin = await createAccount(app, db, {
       person: await createPerson(db, { firstName: 'Nora', network: 'WOMENS' }),
@@ -236,6 +240,8 @@ describe('accounts: provisioning, activation and reset (section 6)', () => {
       // which the check constraint requires for this role — a 23505/23514 the
       // filter does not recognise, so a 500. No test named the role, and section 6
       // as amended says such an account is created like any other.
+      nameSeniorPastors(app, [ester.id]);
+
       const response = await provision({
         person_id: ester.id,
         email: 'ester@example.test',
@@ -253,28 +259,92 @@ describe('accounts: provisioning, activation and reset (section 6)', () => {
       expect(roles).toEqual([{ role: 'SENIOR_PASTOR', senior_pastor_slot: 1 }]);
     });
 
-    it('refuses a third Senior Pastor, which is the cap section 7 states', async () => {
-      const second = await createPerson(db, { firstName: 'Oriel', network: 'MENS' });
-      const third = await createPerson(db, { firstName: 'Manuel', network: 'MENS' });
+    it('refuses a named Person when both seats are held, which is the cap section 7 states', async () => {
+      // **The seats are held by accounts the identity rule does not honour**, and
+      // that is the only way this branch is now reachable: configuration names at
+      // most two Persons, so a third can never get past the check above. Rows like
+      // these are what a restore or a hand-run statement leaves behind.
+      //
+      // It therefore pins the free-seat read being **unfiltered**. Were it to skip
+      // rows the identity rule refuses, it would report seat 1 free, and the insert
+      // would meet the partial unique index — a 23505 the exception filter does not
+      // recognise, so a 500 where section 22 requires an answer.
+      await createAccount(app, db, {
+        person: await createPerson(db, { firstName: 'Oriel', network: 'MENS' }),
+        roles: ['SENIOR_PASTOR'],
+        seniorPastorSlot: 1,
+      });
+      await createAccount(app, db, {
+        person: await createPerson(db, { firstName: 'Cely', network: 'WOMENS' }),
+        roles: ['SENIOR_PASTOR'],
+        seniorPastorSlot: 2,
+      });
 
-      expect(
-        (await provision({ person_id: ester.id, email: 'a@example.test', role: 'SENIOR_PASTOR' }))
-          .status,
-      ).toBe(201);
-      expect(
-        (await provision({ person_id: second.id, email: 'b@example.test', role: 'SENIOR_PASTOR' }))
-          .status,
-      ).toBe(201);
+      nameSeniorPastors(app, [ester.id]);
 
       const overflow = await provision({
-        person_id: third.id,
+        person_id: ester.id,
         email: 'c@example.test',
         role: 'SENIOR_PASTOR',
       });
 
-      // An answer rather than a raw constraint violation rendered 500.
+      // An answer rather than a raw constraint violation rendered 500 — and the
+      // message matters, because the identity refusal is also a 409
+      // `INVARIANT_VIOLATION` and this case must not be satisfied by it.
       expect(overflow.status).toBe(409);
       expect(overflow.body.error.code).toBe('INVARIANT_VIOLATION');
+      expect(overflow.body.error.message).toMatch(/seats are held/);
+    });
+
+    it('refuses a Person section 4 does not name', async () => {
+      // The grant-time half of section 7's identity rule. Nothing else in this
+      // suite reaches it, because every other Senior Pastor case names its Person
+      // first.
+      const response = await provision({
+        person_id: ester.id,
+        email: 'ester@example.test',
+        role: 'SENIOR_PASTOR',
+      });
+
+      expect(response.status).toBe(409);
+      expect(response.body.error.code).toBe('INVARIANT_VIOLATION');
+      expect(response.body.error.message).toMatch(/two Persons section 4 names/);
+
+      // Refused inside the transaction, so the account, the role row and the
+      // activation token are all absent rather than half-written.
+      const accounts = await db
+        .selectFrom('accounts')
+        .select('id')
+        .where('person_id', '=', ester.id)
+        .execute();
+
+      expect(accounts).toHaveLength(0);
+      expect(outbox(app).last('ACTIVATION')).toBeUndefined();
+    });
+
+    it('objects to the Person before the seats, when both are wrong', async () => {
+      // **Order, and it is the whole of what this case pins.** Reversed, an
+      // administrator naming somebody section 4 does not name would be told the
+      // seats were full — which is true, and is not the objection. The two
+      // refusals share a status and a code, so only the message separates them.
+      await createAccount(app, db, {
+        person: await createPerson(db, { firstName: 'Oriel', network: 'MENS' }),
+        roles: ['SENIOR_PASTOR'],
+        seniorPastorSlot: 1,
+      });
+      await createAccount(app, db, {
+        person: await createPerson(db, { firstName: 'Cely', network: 'WOMENS' }),
+        roles: ['SENIOR_PASTOR'],
+        seniorPastorSlot: 2,
+      });
+
+      const response = await provision({
+        person_id: ester.id,
+        email: 'ester@example.test',
+        role: 'SENIOR_PASTOR',
+      });
+
+      expect(response.body.error.message).toMatch(/two Persons section 4 names/);
     });
 
     it('refuses an archived Person', async () => {
@@ -480,6 +550,73 @@ describe('accounts: provisioning, activation and reset (section 6)', () => {
         .execute();
 
       expect(accounts).toHaveLength(1);
+    });
+  });
+
+  /**
+   * The identity half of section 7's `SENIOR_PASTOR` rule, where it is asked the
+   * second time.
+   *
+   * Provisioning asks before it grants the role, and these cases are about the row
+   * that never went through provisioning — the one a `pg_restore` or a hand-run
+   * statement leaves behind. That is why the count moved from a counting trigger to
+   * a unique index in the first place, and a check made only at the write is skipped
+   * by exactly the same paths.
+   */
+  describe('a SENIOR_PASTOR row the rule does not honour (section 7)', () => {
+    function me(account: TestAccount): request.Test {
+      return request(app.getHttpServer())
+        .get('/api/v1/auth/me')
+        .set('Authorization', `Bearer ${account.accessToken}`);
+    }
+
+    it('confers no role default until the Person is one section 4 names', async () => {
+      // Inserted directly, as a restore would leave it. The account holds no other
+      // role and no explicit grant, so everything it could carry comes from this
+      // one row — which makes an empty list the whole assertion.
+      const account = await createAccount(app, db, {
+        person: ester,
+        roles: ['SENIOR_PASTOR'],
+        seniorPastorSlot: 1,
+      });
+
+      const unnamed = await me(account);
+
+      expect(unnamed.status).toBe(200);
+      expect(unnamed.body.capabilities).toEqual([]);
+
+      nameSeniorPastors(app, [ester.id]);
+
+      const named = await me(account);
+
+      expect(named.body.capabilities).toContainEqual(
+        expect.objectContaining({
+          capability: 'people.manage_pastoral_assignment',
+          scope_type: 'WHOLE_CHURCH',
+          source: 'role',
+        }),
+      );
+    });
+
+    it('refuses the row without refusing the account its other roles', async () => {
+      // **A Leader carrying a stray Senior Pastor row is the escalation this
+      // guards against**, and it is sharper than the case above because the two
+      // roles differ on scope rather than on membership: `SENIOR_PASTOR` holds
+      // `people.manage_pastoral_assignment` at Whole Church and `LEADER` holds the
+      // same capability at own subtree. So the row being dropped and the account
+      // keeping its own authority are one assertion each, on one capability.
+      const account = await createAccount(app, db, {
+        person: ester,
+        roles: ['LEADER', 'SENIOR_PASTOR'],
+        seniorPastorSlot: 1,
+      });
+
+      const response = await me(account);
+      const manage = (response.body.capabilities as { capability: string; scope_type: string }[])
+        .filter((held) => held.capability === 'people.manage_pastoral_assignment')
+        .map((held) => held.scope_type);
+
+      expect(manage).toEqual(['OWN_SUBTREE']);
     });
   });
 

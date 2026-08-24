@@ -3,6 +3,7 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import { AuditService } from '../audit/audit.service';
 import { InvariantViolationError, NotFoundError } from '../common/errors/api-error';
 import { IdempotencyService } from '../common/idempotency/idempotency.service';
+import { APP_CONFIG, type AppConfig } from '../config/configuration';
 import { DATABASE, type Db } from '../database/database.module';
 import { EMAIL_PORT, type EmailPort, type OutboundEmail } from '../email/email.port';
 
@@ -11,6 +12,7 @@ import { PeopleReadService } from '../people/people.read.service';
 import { AccountTokensService } from './account-tokens.service';
 import { normalizeEmail } from './accounts.repository';
 import { type Actor } from './authorization/authorization.service';
+import { isNamedSeniorPastor } from './authorization/senior-pastors';
 
 import type { CurrentClaim } from '../common/idempotency/current-idempotency.decorator';
 import type { AccountRole, Database } from '../database/schema';
@@ -68,6 +70,7 @@ export class AccountProvisioningService {
 
   constructor(
     @Inject(DATABASE) private readonly db: Db,
+    @Inject(APP_CONFIG) private readonly config: AppConfig,
     @Inject(EMAIL_PORT) private readonly email: EmailPort,
     private readonly tokens: AccountTokensService,
     private readonly people: PeopleReadService,
@@ -155,6 +158,27 @@ export class AccountProvisioningService {
         throw new InvariantViolationError('That email address already has an account.', {
           field: 'email',
         });
+      }
+
+      // **`SENIOR_PASTOR` is held by exactly the two Persons section 4 names**, and
+      // this is the grant-time half of that rule (section 7). It reads
+      // configuration, because section 7 refuses the database a durable record of
+      // who they are — see `authorization/senior-pastors.ts` for why configuration
+      // is the source and why the same question is asked again when authority is
+      // assembled.
+      //
+      // **Before the seat is read, deliberately.** Naming a Person this rule
+      // refuses is refused for that reason whether or not a seat happens to be
+      // free; the other order would tell an administrator the seats were full when
+      // the objection was to the person.
+      if (
+        input.role === 'SENIOR_PASTOR' &&
+        !isNamedSeniorPastor(input.personId, this.config.seniorPastorPersonIds)
+      ) {
+        throw new InvariantViolationError(
+          'SENIOR_PASTOR is held by exactly the two Persons section 4 names, and this is not one of them. Naming somebody else is an amendment to section 4 and a configuration change together.',
+          { person_id: input.personId, role: input.role },
+        );
       }
 
       // **Which slot a Senior Pastor takes is chosen here, not by the caller.**
@@ -365,6 +389,13 @@ export class AccountProvisioningService {
  * therefore not the enforcement**; it exists so that the ordinary case answers
  * `INVARIANT_VIOLATION` rather than a raw constraint violation rendered as a 500.
  * Under a race the index still decides, and one of the two requests fails.
+ *
+ * **It counts every active row, including one the identity rule refuses to
+ * honour** (section 7). That is not an oversight: this read exists to agree with
+ * the index, and the index knows nothing about who the two Persons are. A row for
+ * an unnamed Person still occupies its slot, so filtering it out here would report
+ * a free seat and hand the insert a constraint violation — replacing an answer
+ * with a 500, which is the whole failure this function exists to prevent.
  */
 async function freeSeniorPastorSlot(trx: Transaction<Database>): Promise<number> {
   const held = await trx
