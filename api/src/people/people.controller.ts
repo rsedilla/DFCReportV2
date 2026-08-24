@@ -18,7 +18,12 @@ import {
   EditPersonDto,
   SearchPeopleDto,
 } from './dto/people.dto';
-import { fullProfile, normalizeMobile, PeopleService, type SearchCursor } from './people.service';
+import { PeopleDuplicatesService } from './people.duplicates.service';
+import { PeopleReadService } from './people.read.service';
+import { PeopleReassignmentService } from './people.reassignment.service';
+import { PeopleService } from './people.service';
+import { PeopleSexCorrectionService } from './people.sex-correction.service';
+import { fullProfile, normalizeMobile, type SearchCursor } from './people.shared';
 
 /**
  * `/api/v1/people` (SKILL.md section 22).
@@ -32,7 +37,13 @@ import { fullProfile, normalizeMobile, PeopleService, type SearchCursor } from '
  */
 @Controller('people')
 export class PeopleController {
-  constructor(private readonly people: PeopleService) {}
+  constructor(
+    private readonly people: PeopleService,
+    private readonly read: PeopleReadService,
+    private readonly duplicates: PeopleDuplicatesService,
+    private readonly sexCorrection: PeopleSexCorrectionService,
+    private readonly reassignment: PeopleReassignmentService,
+  ) {}
 
   /**
    * Section 9 requires the pastoral leader at registration, and the guard's scope
@@ -73,7 +84,7 @@ export class PeopleController {
       // names the field that matched for a person the actor has no scope over —
       // and the refusal happens before the transaction opens, so probing costs
       // nothing and writes nothing.
-      (candidateId) => this.people.isWithinViewScope(actor, candidateId),
+      (candidateId) => this.read.isWithinViewScope(actor, candidateId),
     );
   }
 
@@ -110,7 +121,7 @@ export class PeopleController {
     // Membership and fields are both redacted inside the service, in one place
     // shared with the creation refusal so the two surfaces cannot answer
     // differently.
-    const visible = await this.people.visibleDuplicatesFor(
+    const visible = await this.duplicates.visibleDuplicatesFor(
       {
         firstName: query.first_name,
         lastName: query.last_name,
@@ -118,7 +129,7 @@ export class PeopleController {
         sex: query.sex,
         mobileNumberNormalized: normalizeMobile(query.mobile_number),
       },
-      (personId) => this.people.isWithinViewScope(actor, personId),
+      (personId) => this.read.isWithinViewScope(actor, personId),
     );
 
     return { data: visible.slice(0, limit), next_cursor: null };
@@ -127,7 +138,7 @@ export class PeopleController {
   @Get(':id')
   @RequiresCapability(Capability.PeopleViewSubtree, { kind: 'person', from: 'params.id' })
   async findOne(@Param('id') id: string): Promise<Record<string, unknown>> {
-    const person = await this.people.findById(id);
+    const person = await this.read.findById(id);
     if (!person) {
       throw new NotFoundError('No such person.');
     }
@@ -152,7 +163,7 @@ export class PeopleController {
     @Query() query: SearchPeopleDto,
     @CurrentActor() actor: Actor,
   ): Promise<{ data: Record<string, unknown>[]; next_cursor: string | null }> {
-    const { rows, nextCursor } = await this.people.searchByName(
+    const { rows, nextCursor } = await this.read.searchByName(
       query.q,
       query.limit ?? 50,
       decodeCursor(query.cursor),
@@ -160,11 +171,11 @@ export class PeopleController {
 
     const data = await Promise.all(
       rows.map(async (person) => {
-        if (await this.people.isWithinViewScope(actor, person.id)) {
+        if (await this.read.isWithinViewScope(actor, person.id)) {
           return fullProfile(person);
         }
 
-        return this.people.minimalIdentity(person);
+        return this.read.minimalIdentity(person);
       }),
     );
 
@@ -223,7 +234,7 @@ export class PeopleController {
     // composed this body and recorded it inside the write's transaction, and
     // reshaping it here would make the sent response differ from the stored one
     // (section 22).
-    return this.people.correctSex(
+    return this.sexCorrection.correctSex(
       id,
       {
         sex: body.sex,
@@ -260,7 +271,7 @@ export class PeopleController {
   ): Promise<Record<string, unknown>> {
     // Returned unchanged: the service composed this body and recorded it inside
     // the write's transaction (section 22).
-    return this.people.reassignPastoralLeader(
+    return this.reassignment.reassignPastoralLeader(
       id,
       {
         leaderId: body.pastoral_leader_id,
