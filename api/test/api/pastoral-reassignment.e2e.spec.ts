@@ -7,7 +7,14 @@ import { AuthorizationService } from '../../src/auth/authorization/authorization
 import { HierarchyService } from '../../src/hierarchy/hierarchy.service';
 import { PeopleReassignmentService } from '../../src/people/people.reassignment.service';
 import { createTestDb, truncateAll } from '../setup/database';
-import { assignTo, createAccount, createPerson, createTestApp, EPOCH } from '../setup/fixtures';
+import {
+  assignTo,
+  createAccount,
+  createPerson,
+  createTestApp,
+  EPOCH,
+  nameSeniorPastors,
+} from '../setup/fixtures';
 
 import type { INestApplication } from '@nestjs/common';
 import type { Kysely } from 'kysely';
@@ -58,6 +65,9 @@ describe('reassigning a pastoral leader: the record (sections 5, 21, 22)', () =>
 
   beforeEach(async () => {
     await truncateAll(db);
+    // Cases share an application and therefore its configuration, and one case
+    // below names a Senior Pastor. Reset so no case inherits it.
+    nameSeniorPastors(app, []);
 
     oriel = await createPerson(db, { firstName: 'Oriel', network: 'MENS' });
     ben = await createPerson(db, { firstName: 'Ben', network: 'MENS' });
@@ -506,6 +516,65 @@ describe('reassigning a pastoral leader: the record (sections 5, 21, 22)', () =>
 
       expect(response.status).toBe(200);
       expect(response.body.previous_pastoral_leader_id).toBe(raymond.id);
+    });
+
+    it('withholds the invariant 4 exemption from a SENIOR_PASTOR section 4 does not name', async () => {
+      // The identity half of section 7's `SENIOR_PASTOR` rule, on the path a
+      // restore takes rather than the path provisioning takes: this role row is
+      // inserted directly, so the grant-time check never ran on it.
+      //
+      // **This isolates `ActorAuthority.roles`** — the one path where a role decides
+      // authorization without passing through `ROLE_DEFAULTS`. The Whole Church
+      // grant supplies the capability, so the grant half is satisfied either way and
+      // a refusal cannot be coming from there. The only thing the role row can still
+      // contribute is the invariant 4 exemption, which section 5 decides by role, so
+      // naming the Person is the single variable between the two halves of this case.
+      //
+      // *Two earlier versions named this wrongly. The first said it isolates
+      // `rolesFor`, which was true until the batch that folded `authorityFor` into
+      // `effective` orphaned that method — in the batch correcting three other claims
+      // of exactly this kind. The second said "the role half of an account's
+      // authority, which nothing else does", which collides with
+      // `accounts.e2e.spec.ts`: that suite isolates the role half through
+      // `ROLE_DEFAULTS`, and this one through the exemption.*
+      const manuelSeniorPastor = await createAccount(app, db, {
+        person: manuel,
+        roles: ['SENIOR_PASTOR'],
+        seniorPastorSlot: 1,
+      });
+      // **`CAPABILITY_DENIED`, and it is the honest code**, asked before the grant
+      // exists so that the role row is the account's only possible source of
+      // authority. A refused row names nothing, so *this* account holds none of the
+      // role's capabilities at any scope — `SCOPE_DENIED` would send an
+      // administrator to widen a scope that does not exist. The emphasis is the
+      // qualifier the other three copies of this sentence had to be corrected for:
+      // it follows from the fixture holding no second role and no grant, not from
+      // the row being refused. That is the opposite
+      // of `single-scope.ts`, where the capability *is* held, and the difference
+      // is what section 22's two codes are for.
+      const bare = await reassign(mark.id, { pastoral_leader_id: rico.id }, manuelSeniorPastor);
+
+      expect(bare.status).toBe(403);
+      expect(bare.body.error.code).toBe('CAPABILITY_DENIED');
+
+      await grantManageChurchWide(manuelSeniorPastor);
+
+      const unnamed = await reassign(
+        manuel.id,
+        { pastoral_leader_id: rico.id },
+        manuelSeniorPastor,
+      );
+
+      expect(unnamed.status).toBe(403);
+      expect(unnamed.body.error.code).toBe('SCOPE_DENIED');
+      expect(unnamed.body.error.message).toMatch(/your own pastoral assignment/);
+
+      nameSeniorPastors(app, [manuel.id]);
+
+      const named = await reassign(manuel.id, { pastoral_leader_id: rico.id }, manuelSeniorPastor);
+
+      expect(named.status).toBe(200);
+      expect(named.body.previous_pastoral_leader_id).toBe(raymond.id);
     });
 
     it('refuses a destination the actor does not oversee', async () => {

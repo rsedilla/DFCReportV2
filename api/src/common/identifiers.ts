@@ -45,7 +45,28 @@ export function canonicalId(value: string): string {
  * this narrows to the shape it understands.
  */
 export function canonicalIfUuid(value: string): string {
-  return UUID.test(value) ? canonicalId(value) : value;
+  return isUuid(value) ? canonicalId(value) : value;
+}
+
+/**
+ * Whether a value is UUID-shaped, in either case.
+ *
+ * **The one pattern, and it is exported because there were three.** This file,
+ * `capability.guard.ts` and `idempotency.interceptor.ts` each held a
+ * byte-identical copy, all three deciding the same question — the guard
+ * validating a resolved target, the interceptor validating an `Idempotency-Key`.
+ * Identical copies are the drift that has not happened yet, and the extraction
+ * was made for the configuration that names the two Senior Pastors (SKILL.md
+ * section 7): a value that configuration accepted and the boundary would not
+ * canonicalize is one that names nobody while looking as though it named
+ * somebody. Consolidating the other two was fixing the class rather than the
+ * instance.
+ *
+ * It is behaviourally inert. The pattern carries no `g` flag, so `.test` holds no
+ * state and every call site answers exactly as it did.
+ */
+export function isUuid(value: string): boolean {
+  return UUID.test(value);
 }
 
 /** Whether two identifiers name the same record, however each was spelled. */

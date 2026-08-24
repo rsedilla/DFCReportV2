@@ -1,6 +1,7 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 
 import { CapabilityDeniedError, ScopeDeniedError } from '../../common/errors/api-error';
+import { APP_CONFIG, type AppConfig } from '../../config/configuration';
 import { DATABASE, type Db } from '../../database/database.module';
 import { HierarchyService } from '../../hierarchy/hierarchy.service';
 import { NetworksService } from '../../networks/networks.service';
@@ -8,6 +9,7 @@ import { NetworksService } from '../../networks/networks.service';
 import { isCapability, isReadCapability, type Capability } from './capabilities';
 import { ROLE_DEFAULTS } from './role-defaults';
 import { ScopeType, type Scope, type Target } from './scopes';
+import { isNamedSeniorPastor } from './senior-pastors';
 import { grantCoversNothing } from './single-scope';
 
 import type { AccountRole } from '../../database/schema';
@@ -64,39 +66,112 @@ export class AuthorizationService {
 
   constructor(
     @Inject(DATABASE) private readonly db: Db,
+    @Inject(APP_CONFIG) private readonly config: AppConfig,
     private readonly hierarchy: HierarchyService,
     private readonly networks: NetworksService,
   ) {}
 
   /**
-   * The roles the account currently holds.
+   * The account's active roles, less any row this system refuses to honour.
    *
-   * Authorization is decided by capability and scope, and this is the one rule
-   * that is not: SKILL.md section 5 invariant 4 names **roles** — "Only Admin or
-   * a Senior Pastor may do so" — because the rule is about who is outside the
-   * pastoral incentive rather than about what anyone was granted. It is exposed
-   * here rather than read from `account_roles` by the module that needs it,
-   * because `auth` owns that table (section 2, Modules).
+   * **The single reader of `account_roles` in this service, and that is the
+   * point.** There were two — one for the roles an account holds, one inside
+   * `grantsFor` for the defaults they carry — and a rule applied to one of them and
+   * not the other is invisible: the account would be outside a role's defaults
+   * while still counting as holding the role for the checks section 5 decides by
+   * role, or the reverse. One reader means the question is asked once.
+   *
+   * Roles are exposed at all, rather than read from `account_roles` by the module
+   * that needs them, for two reasons. `auth` owns that table (section 2, Modules).
+   * And authorization is decided by capability and scope everywhere but one place:
+   * section 5 invariant 4 names **roles** — "Only Admin or a Senior Pastor may do
+   * so" — because that rule is about who sits outside the pastoral incentive rather
+   * than about what anyone was granted. Today they reach `hierarchy` on
+   * `ActorAuthority`, which {@link effective} builds from this — though
+   * `assertMayReparent` takes only a person and a role list, so that is a fact
+   * about its two call sites rather than a seam anything enforces.
+   *
+   * Today it refuses exactly one thing: a `SENIOR_PASTOR` row on an account whose
+   * Person is not one of the two section 4 names (`senior-pastors.ts`). Such a row
+   * cannot be created through provisioning, so reaching this means it arrived by
+   * some route that skipped that check — which is the route a `pg_restore` takes,
+   * and the reason section 7 puts the identity half on the path every request
+   * follows rather than only at the write.
    */
-  async rolesFor(accountId: string): Promise<AccountRole[]> {
+  private async activeRoles(accountId: string): Promise<AccountRole[]> {
     const rows = await this.db
       .selectFrom('account_roles')
-      .select('role')
-      .where('account_id', '=', accountId)
-      .where('revoked_at', 'is', null)
+      .innerJoin('accounts', 'accounts.id', 'account_roles.account_id')
+      .select(['account_roles.role', 'accounts.person_id'])
+      .where('account_roles.account_id', '=', accountId)
+      .where('account_roles.revoked_at', 'is', null)
       .execute();
 
-    return rows.map((row) => row.role);
+    return rows
+      .filter((row) => this.roleIsHonoured(accountId, row.role, row.person_id))
+      .map((row) => row.role);
+  }
+
+  /** Whether a role row grants what it appears to (SKILL.md section 7). */
+  private roleIsHonoured(accountId: string, role: AccountRole, personId: string): boolean {
+    if (role !== 'SENIOR_PASTOR') {
+      return true;
+    }
+
+    if (isNamedSeniorPastor(personId, this.config.seniorPastorPersonIds)) {
+      return true;
+    }
+
+    // Logged at `error`, because there are only two ways to reach it and both are
+    // worth an operator's attention: a role row that never passed provisioning, or
+    // configuration that has lost the identifiers. The second is the accepted cost
+    // of failing closed (section 7) and looks exactly like the first from here,
+    // which is why the message names both rather than guessing.
+    this.logger.error(
+      `Account ${accountId} holds SENIOR_PASTOR and its Person ${personId} is not one SKILL.md section 4 names. ` +
+        'It grants nothing. Either the row bypassed provisioning, or SENIOR_PASTOR_PERSON_IDS is unset or wrong.',
+    );
+
+    return false;
   }
 
   async grantsFor(accountId: string): Promise<EffectiveGrant[]> {
+    return (await this.effective(accountId)).grants;
+  }
+
+  /**
+   * An account's roles and the authority they and its explicit grants carry, from
+   * one read of each table.
+   *
+   * `authorityFor` needs both and used to ask for them separately, which read
+   * `account_roles` twice — harmless while the second read was free, and no longer
+   * free now that a row this system refuses to honour is logged where it is
+   * refused.
+   *
+   * **It halved that method's contribution and not the request's**, and the rule
+   * is one line per call rather than any fixed number per request. A request makes
+   * one call for each authorization read it takes: the guard's `authorize` always,
+   * plus whatever its domain layer asks for. `POST /accounts` takes none beyond the
+   * guard and so logs once; an unbackdated reassignment adds `authorityFor` for
+   * section 5 invariant 1, and went from three lines to two; a backdated one adds a
+   * second `authorize` for `records.backdate_effective_date`. A sex correction takes
+   * one more than the reassignment of the same kind, for its Whole Church check —
+   * three unbackdated and four backdated, rather than continuing the sequence above.
+   *
+   * *Two earlier versions of this paragraph each gave a count — "two per request",
+   * then "twice regardless" — and both were exactly right for the one path they
+   * were written from and wrong for every other. Counting a mechanism from the call
+   * site in front of you is the fault this file's neighbourhood keeps recording.*
+   *
+   * The volume is nonetheless bounded rather than merely small: the partial unique
+   * index permits at most two active `SENIOR_PASTOR` rows, so at most two accounts
+   * can produce this line at all.
+   */
+  private async effective(
+    accountId: string,
+  ): Promise<{ roles: AccountRole[]; grants: EffectiveGrant[] }> {
     const [roles, grants] = await Promise.all([
-      this.db
-        .selectFrom('account_roles')
-        .select('role')
-        .where('account_id', '=', accountId)
-        .where('revoked_at', 'is', null)
-        .execute(),
+      this.activeRoles(accountId),
       this.db
         .selectFrom('capability_grants')
         .select(['capability', 'scope_type', 'scope_network', 'read_only'])
@@ -107,7 +182,7 @@ export class AuthorizationService {
 
     const effective: EffectiveGrant[] = [];
 
-    for (const { role } of roles) {
+    for (const role of roles) {
       for (const [capability, scopeType] of Object.entries(ROLE_DEFAULTS[role])) {
         effective.push({
           capability: capability as Capability,
@@ -145,7 +220,7 @@ export class AuthorizationService {
       });
     }
 
-    return effective;
+    return { roles, grants: effective };
   }
 
   /**
@@ -250,12 +325,7 @@ export class AuthorizationService {
    * typed to make unrepresentable rather than merely absent.
    */
   async authorityFor(accountId: string): Promise<ActorAuthority> {
-    const [roles, grants] = await Promise.all([
-      this.rolesFor(accountId),
-      this.grantsFor(accountId),
-    ]);
-
-    return { accountId, roles, grants };
+    return { accountId, ...(await this.effective(accountId)) };
   }
 
   /**

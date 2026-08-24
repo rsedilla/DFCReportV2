@@ -1,8 +1,9 @@
+import { Logger } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 
 import { AppModule } from './app.module';
 import { configureApp } from './bootstrap';
-import { APP_CONFIG, type AppConfig } from './config/configuration';
+import { APP_CONFIG, seniorPastorsUnnamedWarning, type AppConfig } from './config/configuration';
 
 /**
  * The API is separately deployable and serves three client surfaces. It is not
@@ -16,6 +17,14 @@ async function bootstrap(): Promise<void> {
 
   configureApp(app);
   app.enableShutdownHooks();
+
+  // **Said out loud, because the alternative is silence** (SKILL.md section 7).
+  // The message itself lives in `configuration.ts` so that a test can hold it;
+  // this is the one line of it nothing can reach.
+  const unnamed = seniorPastorsUnnamedWarning(config);
+  if (unnamed !== null) {
+    new Logger('Bootstrap').warn(unnamed);
+  }
 
   // CORS is an allowlist. An empty one permits no browser origin at all, which is
   // the right default for an API whose other two clients are phones.
