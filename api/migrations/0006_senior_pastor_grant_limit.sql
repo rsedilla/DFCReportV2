@@ -36,9 +36,11 @@
 --     Migration 0005 is not the counter-example it was first cited as. Its header
 --     says section 7 "argues four of them and is silent on `settings.manage` and
 --     `cell.approve_creation`", which accounts for six of the seven: its list of
---     silent ones is right and its count is one short, leaving `people.correct_sex`
---     out of both groups. It is merged and only 0001 may be corrected in place, so
---     this is where a reader learns that.
+--     silent ones is right and its count is one short, because section 7 argues
+--     five. Which capability 0005 left out is not recoverable from it -- it never
+--     enumerates its four -- so no more is claimed here than that the count is
+--     wrong. It is merged and only 0001 may be corrected in place, so this is where
+--     a reader learns that.
 --
 -- So the five remain ordinary Admin-issued grants: audited, revocable, and needing
 -- a second party every time. Only the pair that removes the second party
@@ -79,23 +81,35 @@
 --
 -- **Two mechanism dependencies, neither of them obvious from the code.**
 --
--- The row lock requires a VOLATILE function, which `plpgsql` gives these two by
--- default. PostgreSQL runs a non-volatile function's statements read-only and
--- refuses a row-locking SELECT inside one, so marking either trigger function
--- STABLE does not weaken the rule quietly -- it fails at the lock, loudly, and
--- every grant-limit case goes red. Recorded because it is the sort of tidying
--- somebody attempts on a function that only reads.
+-- The row lock requires a VOLATILE function, which `plpgsql` gives the two trigger
+-- functions by default. PostgreSQL runs a non-volatile function's statements
+-- read-only and refuses a row-locking SELECT inside one, so marking either of them
+-- STABLE does not weaken the rule quietly: the write fails at the lock with
+-- `SELECT FOR NO KEY UPDATE is not allowed in a non-volatile function`. Recorded
+-- because it is the sort of tidying somebody attempts on a function that only
+-- reads.
 --
--- The two helpers above *are* STABLE, and that is correct rather than an
+-- **What goes red is the cases that reach the lock**, which is fewer than all of
+-- them -- measured, marking `assert_grant_not_for_senior_pastor` STABLE turns four
+-- of the eight grant-limit cases red and leaves four green. `permits the withheld
+-- capabilities that are not grant-making` returns at the `is_grant_making` guard
+-- below, before the PERFORM, and the three e2e cases disable the trigger outright.
+-- An earlier version of this paragraph said "every grant-limit case goes red",
+-- which is the kind of claim this repository requires to be checkable and which
+-- nobody had checked.
+--
+-- The two *reading* helpers below are STABLE, and that is correct rather than an
 -- oversight: a STABLE function runs on the snapshot of the statement that called
--- it, and the caller here is the volatile trigger function, whose every statement
--- takes a fresh snapshot under READ COMMITTED. So the post-lock read sees the
--- transaction that held the lock first, which is the property the lock is for.
+-- it, and the caller is a volatile trigger function whose every statement takes a
+-- fresh snapshot under READ COMMITTED. So the post-lock read sees the transaction
+-- that held the lock first, which is the property the lock is for.
+-- (`is_grant_making` is the third helper and is IMMUTABLE -- it reads nothing.)
 --
 -- *An earlier version of this paragraph said the opposite -- that STABLE would
--- silently decide on a stale snapshot -- while the file it is in declares the two
--- reading functions STABLE four lines above. Wrong about the mechanism and
--- contradicted by its own file.*
+-- silently decide on a stale snapshot -- while this same file declares those two
+-- reading functions STABLE some thirty lines below it. Wrong about the mechanism,
+-- contradicted by its own file, and then "corrected" with the direction and the
+-- distance both wrong.*
 --
 -- And this is the system's second dependency on READ COMMITTED, after the advisory
 -- lock section 5 takes. Under REPEATABLE READ the whole transaction answers from

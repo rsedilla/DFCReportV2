@@ -163,7 +163,7 @@ describe('the schema (SKILL.md sections 4, 5, 6 and 7)', () => {
 
       // The function is named too, because a migration repointing either trigger
       // at a different function would otherwise pass -- which is the one fact
-      // `deleteTriggerFacts` asserts at all three of its call sites.
+      // `deleteTriggerFacts` asserts at every one of its call sites.
       expect(onGrants).toEqual({ ...shared, function_name: 'assert_grant_not_for_senior_pastor' });
       expect(onRoles).toEqual({
         ...shared,

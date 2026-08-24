@@ -2695,8 +2695,12 @@ what made the difference visible.
 `people.correct_sex` in the "argued nowhere" group. §7 argues it 87 lines above the
 sentence denying it, on the same ground as `people.merge`. Migration 0005 is not the
 counter-example this entry first cited: its header says §7 "argues four of them and
-is silent on" two, which accounts for six of the seven and leaves `people.correct_sex`
-out of both groups — its list of silent ones is right and its count is one short. The ruling is unaffected, since self-perpetuation is what
+is silent on" two, which accounts for six of the seven. Its list of silent ones is
+right and its count is one short, because §7 argues five. **Which** capability 0005
+left out cannot be read off it — it never enumerates its four — so nothing more is
+claimed than that the count is wrong. Asserting it was `people.correct_sex` would be
+a guess about that file inside a paragraph correcting a previous guess about it. The
+ruling is unaffected, since self-perpetuation is what
 decides the line and `people.correct_sex` is not; what was wrong was the taxonomy
 offered as its justification, asserted without grepping §7 for the third member.*
 
@@ -2726,15 +2730,39 @@ left to validate.
 handed grant-making authority even temporarily, so an unreachable Admin is answered
 by a second Admin account and not by widening theirs. A capability joins the pair
 only by amending §7, which is where the argument for refusing rather than auditing
-has to be made. Written to `SKILL.md` §7 and migration `0006`.
+has to be made.
+
+**Two things the review added, recorded here because this log's own record on "written
+to §x" claims is bad.** The triggers were the whole of the enforcement at first, and a
+constraint trigger is what `pg_restore --disable-triggers` skips — which §7 argues
+twice in that same section, for the 0005 index and for the identity check. So a
+grant-making capability is refused a second time where authority is assembled, reading
+the role **row** rather than an honoured role so the two points refuse the same states.
+And that refusal answers `CAPABILITY_DENIED` where nothing else the account holds
+carries the capability, which is client-visible and therefore §7's to state.
+
+The qualifier on that is load-bearing and §7 now says what it leaves open: the other
+route to these two capabilities is an `ADMIN` role row, which this point does not
+touch. That pairing is refused by 0005's index, and 0005's index is the one §7 already
+concedes is "not quite unrepresentable" — a full restore fails at index creation rather
+than at the write. So the role half rests on the index and on that failure being acted
+upon; only the grant half is refused twice.
+
+Written to `SKILL.md` §7, §24 and migration `0006`.
 
 ### Open — awaiting a ruling
 
-**One item awaits a ruling and blocks Stage 5. Seven other things are unsettled, none of them blocking. They are listed at the end, so this section is the whole of what is open.**
+**One item awaits a ruling and blocks Stage 5. Seven other things are unsettled,
+none of them blocking. They are listed at the end, so this section is the whole of
+what is open.**
 
-Nine items that stood here on 2026-08-22 were settled that day and are recorded above. Seven were Stop Conditions for Stage 2, and the last two were opened and closed the same day by `architecture-guardian` passes.
+Nine items that stood here on 2026-08-22 were settled that day and are recorded
+above. Seven were Stop Conditions for Stage 2, and the last two were opened and
+closed the same day by `architecture-guardian` passes.
 
-The `audit_log.action` vocabulary left this list on 2026-08-23, settled by the ruling above: the convention is `<noun>.<past-tense verb>`, and section 21's list stays open.
+The `audit_log.action` vocabulary left this list on 2026-08-23, settled by the
+ruling above: the convention is `<noun>.<past-tense verb>`, and section 21's list
+stays open.
 
 **What an aggregate Cell attendance view offers in place of buckets.** Monthly-attendance buckets are a Cell-scope view only, because N belongs to a Cell and aggregating across different N inflates `Completed` for the Cells that recorded least (`SKILL.md` §12). At leader and Network scope the spec offers unique people, classification and coverage, and does not say whether anything should replace the buckets. Settle it in Stage 5 against real data.
 

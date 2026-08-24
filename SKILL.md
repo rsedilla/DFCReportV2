@@ -454,6 +454,7 @@ network_assignments
 
 A `network` column on the Person cannot answer which Network someone belonged to during a past month, and every Network-scoped report for a closed period depends on that answer.
 
+
 A person's network relationship must be preserved historically (effective-dated), the same way pastoral assignments and Cell category are, so that Network-scoped reports remain accurate for past periods even if a person's network is later corrected or changed.
 
 For Version 1, a person's initial network assignment becomes effective on the date/time the Person is encoded/created in the new system. Do not attempt to reconstruct or infer network history from before the person was encoded, and do not fabricate legacy network-change dates. The system is authoritative for network history from each person's encoding date forward; subsequent network changes must preserve their actual effective history from that point on.
@@ -1297,7 +1298,9 @@ So the other five remain ordinary Admin-issued grants: explained, audited, revoc
 
 **Enforced in both directions, and in two places.** The rule spans `account_roles` and `capability_grants`, so no index reaches it and the database half is a pair of constraint triggers: enforcing on grants alone would be walkable from the other side — grant first, add the role second — so whichever row arrives second is the one refused. Each path takes `FOR NO KEY UPDATE` on the account before it looks, because a deferred trigger sees only its own transaction's commit-time state and two concurrent transactions writing the role and the grant would otherwise each see nothing and both commit, which is the defect this section's own Senior Pastor cap was corrected for.
 
-**And the grant is refused again where authority is assembled**, for the reason this section gives twice already: a constraint trigger is skipped entirely by `pg_restore --disable-triggers`, so a rule enforced only by one is a rule a restore can load straight past. A grant-making capability held by an account carrying a `SENIOR_PASTOR` row therefore contributes nothing, exactly as a `read_only` grant of a write capability does, and a request needing it is refused `CAPABILITY_DENIED` — the account holds it at no scope, so `SCOPE_DENIED` would send an administrator to widen a scope that cannot exist. Unlike the identity check, this one reads the role **row** rather than an honoured role, so that the two enforcement points refuse the same states rather than nearly the same ones.
+**And the grant is refused again where authority is assembled**, for the reason this section gives twice already: a constraint trigger is skipped entirely by `pg_restore --disable-triggers`, so a rule enforced only by one is a rule a restore can load straight past. A grant-making capability held by an account carrying a `SENIOR_PASTOR` row therefore contributes nothing, exactly as a `read_only` grant of a write capability does. Where nothing else the account holds carries the capability, a request needing it is refused `CAPABILITY_DENIED` — it is held at no scope, so `SCOPE_DENIED` would send an administrator to widen a scope that cannot exist. That qualifier is the same load-bearing one the identity check carries below, and for the same reason.
+
+**It is worth being exact about what the qualifier leaves open here**, because the one other route to these two capabilities is an `ADMIN` role row, and this enforcement point does not touch role defaults. That pairing is refused by the index above — which is the strong enforcement — but that index is the one this section already concedes is "not quite unrepresentable": a full restore builds indexes after loading, so a dump already holding the pair loads and fails at index creation rather than at the write. An operator who carries on past that failure has an account whose `ADMIN` defaults still supply the capability, and no refusal follows. The role half rests on the index and on that failure being acted upon; only the grant half is refused twice. Unlike the identity check, this one reads the role **row** rather than an honoured role, so that the two enforcement points refuse the same states rather than nearly the same ones.
 
 The cost is the same one the role limit above accepts, and it is the reason for that rule rather than a side effect: the two Senior Pastors cannot be handed grant-making authority even temporarily, and an unreachable Admin is answered by a second Admin account rather than by widening theirs.
 
@@ -1757,6 +1760,7 @@ cell_categories
 - started_at
 - ended_at           nullable
 ```
+
 
 Cell category is editable over time, e.g. Youth -> Young Pro.
 
@@ -3336,11 +3340,11 @@ The application runs at **`READ COMMITTED`**, PostgreSQL's default. It is named 
 
 Section 5 requires a Network change and a reassignment to take an advisory lock on the person and then decide — scope, invariant 4, invariant 1, the backdate floor — against what the lock reveals. Under `READ COMMITTED` each statement after the lock takes a fresh snapshot and therefore sees the transaction that held the lock before it. Under `REPEATABLE READ` the snapshot is taken by the transaction's *first* statement, which is the key hashing inside the lock helper and runs before the lock is held: every check after it would then be decided on the state the request arrived with, which is exactly the staleness the lock exists to remove.
 
+Some of those cases would fail loudly rather than silently — where the loser's own assignment row was the one that moved, its update would meet a version committed after its snapshot and raise a serialization failure. The dangerous ones are the cases where nothing the loser writes has changed and only the *decision* is stale: a concurrent move of an intermediate ancestor leaves the actor's scope different and every row this request touches untouched, so it commits, and it commits a write the actor was no longer authorized to make.
+
 **A second dependency arrived with the grant limit in Section 7.** Its two constraint triggers take `FOR NO KEY UPDATE` on the account and then read the other table to decide, which is the same shape one statement further in: under `READ COMMITTED` the read after the lock sees the transaction that held it first, while under `REPEATABLE READ` the whole transaction answers from one snapshot taken before the lock — so the triggers would serialize correctly and then decide on stale reads, and because the two writers touch different tables neither raises a serialization failure to warn anybody.
 
 The row lock also requires those trigger functions to be `VOLATILE`, which is their default. That is not a silent dependency: PostgreSQL runs a non-volatile function's statements read-only and refuses a row-locking `SELECT` inside one, so marking them otherwise fails at the lock rather than quietly weakening the rule.
-
-Some of those cases would fail loudly rather than silently — where the loser's own assignment row was the one that moved, its update would meet a version committed after its snapshot and raise a serialization failure. The dangerous ones are the cases where nothing the loser writes has changed and only the *decision* is stale: a concurrent move of an intermediate ancestor leaves the actor's scope different and every row this request touches untouched, so it commits, and it commits a write the actor was no longer authorized to make.
 
 A deployment that changes `default_transaction_isolation` therefore silently removes an authorization guarantee. That is checked rather than assumed.
 
