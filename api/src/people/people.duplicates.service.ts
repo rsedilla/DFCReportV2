@@ -52,8 +52,9 @@ export class PeopleDuplicatesService {
    *
    * That is a small set in a church of this size (section 2, Scale) and keeps
    * every rule in one readable place.
-   */
-  /**
+   *
+   * ---
+   *
    * The candidates a viewer may be shown, membership and fields both redacted.
    *
    * Runs the matcher twice: once on the subject as given, and once on a subject
@@ -222,7 +223,7 @@ function comparisonForm(value: string): string {
  * One function, used by every surface that returns candidates, so the pre-flight
  * lookup and the creation refusal cannot answer differently.
  */
-export async function visibleCandidates(
+async function visibleCandidates(
   matches: readonly Match[],
   publishableIds: ReadonlySet<string>,
   inScope: (personId: string) => Promise<boolean>,
@@ -265,7 +266,7 @@ export async function visibleCandidates(
  * be recorded, ask the leader who holds them. It is not what a caller can binary
  * search on.
  */
-export function describeCandidate(match: Match, inScope: boolean): Record<string, unknown> {
+function describeCandidate(match: Match, inScope: boolean): Record<string, unknown> {
   const identity = {
     id: match.candidate.id,
     member_id: match.candidate.memberId,

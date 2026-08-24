@@ -12,8 +12,14 @@ import { PeopleService } from './people.service';
 import { PeopleSexCorrectionService } from './people.sex-correction.service';
 
 /**
- * Owns `persons` and `person_lifecycle` (SKILL.md section 2, Modules). No other
- * module reads or writes them directly.
+ * Owns `persons` and `person_lifecycle` (SKILL.md section 2, Modules). **No other
+ * module writes them**, which is the half of section 2's rule that is true here
+ * and the half the invariants depend on.
+ *
+ * It is deliberately not "no other module reads them": `hierarchy` joins `persons`
+ * to name a leader and a disciple in its own queries. The sentence said "reads or
+ * writes" until the split, and stating a rule more strongly than the code keeps it
+ * is how the rule stops being checkable.
  *
  * It touches no table it does not own, in either direction. Creating a Person
  * opens a Network assignment, a pastoral assignment and an audit entry, and each
@@ -26,12 +32,21 @@ import { PeopleSexCorrectionService } from './people.sex-correction.service';
  * write. The same argument covers `audit_log`, which section 21 makes append-only
  * and which this module was also the first to write.
  *
- * **Five services, one module.** The split is by operation rather than by layer,
- * which section 2 requires: each of them owns a rule this specification states,
- * and every one still writes through the same owning services. What it buys is
- * that the two operations carrying a section number of their own — the sex
- * correction and the reassignment — can be reviewed alone, which is what a single
- * file assembling every write path's invariants by hand made impossible.
+ * **Five services, one module**, split by operation rather than by layer: each
+ * owns a rule this specification states, and every one still writes through the
+ * same owning services.
+ *
+ * What it buys is that the two operations carrying a section number of their own —
+ * the sex correction and the reassignment — can be reviewed alone. **What it does
+ * not buy is any sharing of the write skeleton**, which is still assembled by hand
+ * in three places. An earlier version of this paragraph implied otherwise.
+ *
+ * That is deferred rather than declined. Extracting it from two call sites and
+ * guessing at a third is the shape-without-its-reason section 25 rule 19 exists to
+ * stop, and Stage 3's Cell writes are the third. The concern is not hypothetical:
+ * the copies have already drifted on one of the eleven steps — the sex correction
+ * stamps its effective instant before its transaction where the reassignment does
+ * it after the lock — and this split neither detected nor prevented that.
  */
 @Module({
   imports: [HierarchyModule, NetworksModule, AuthModule],

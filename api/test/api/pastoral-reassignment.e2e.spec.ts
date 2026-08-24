@@ -519,10 +519,13 @@ describe('reassigning a pastoral leader: the record (sections 5, 21, 22)', () =>
     });
 
     it('refuses a source the actor does not oversee, which no request can reach', async () => {
-      // **Called directly, and the previous version of this case did not.** It
-      // asserted the *destination* label rather than the source's, so it
-      // pinned the destination half a second time and the source entry could be
-      // deleted with the suite still green.
+      // **Called directly, because no request reaches this half.**
+      //
+      // An earlier version of this comment said the previous version of the case
+      // was not a direct call and asserted the destination label. Both halves were
+      // false: every version of this case since it was written has been a direct
+      // call asserting `current_leader`, the source label. Corrected rather than
+      // deleted, because a false reason is worse than none.
       //
       // No request can reach it: under a subtree scope a person inside the actor's
       // scope has their current leader inside it too, and under a Network scope the

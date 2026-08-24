@@ -3,11 +3,17 @@ import type { CivilStatus, Sex } from '../database/schema';
 /**
  * The `people` module's shapes and pure functions (SKILL.md section 2).
  *
- * What belongs here is what has **no database handle and no injector** — the
- * shapes, the profile projections, and the text transformations the search and the
- * matcher both fold names with. A file rather than a base class, deliberately:
- * giving these a `this` is what would invite a database handle onto the one part
- * of this module whose merit is having none.
+ * What belongs here has **no database handle and no injector**, and is needed
+ * outside any one service: the shapes, the profile projections, and the text
+ * transformations. A file rather than a base class, deliberately: giving these a
+ * `this` is what would invite a database handle onto the one part of this module
+ * whose merit is having none.
+ *
+ * Both halves are required, and the first alone is not a test — it would admit
+ * every private helper in the module, including the two removed from here for
+ * belonging to one service. `transpositionsOf` and `isCalendarDate` sit on the
+ * line: they are used by the matcher alone today, and are here because they encode
+ * section 3's rules about dates rather than that service's mechanics.
  *
  * **Not "everything used by more than one service"**, which an earlier version of
  * this header claimed and which was false for six of its exports. That test is
