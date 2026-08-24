@@ -1276,7 +1276,17 @@ account_roles
 - revoked_at         nullable
 ```
 
-`SENIOR_PASTOR` is held by exactly the two Persons named in Section 4, and by nobody else. Section 1, Principle 6 names them, and the role carries Whole Church scope on `people.manage_lifecycle`, `people.manage_pastoral_assignment` and `audit.view` — so this is a constraint the system enforces, not a convention it assumes. Granting it to a third account is rejected. An account holds at most one active row per role.
+`SENIOR_PASTOR` is held by exactly the two Persons named in Section 4, and by nobody else. Section 1, Principle 6 names them, and the role carries Whole Church scope on `people.manage_lifecycle`, `people.manage_pastoral_assignment` and `audit.view` — so this is a constraint the system enforces, not a convention it assumes. Granting it to a third account is rejected. An account holds at most one active row per role, **and at most one of `SENIOR_PASTOR` and `ADMIN` in total**.
+
+That second limit is what makes the exclusions below mean anything. An account's effective authority is the union of its roles' defaults, and Admin's set is a superset of a Senior Pastor's — so an `ADMIN` row beside a `SENIOR_PASTOR` one does not produce a Senior Pastor who also helps with administration. It produces an account holding every capability in the system, for which every exclusion this section writes for the role is void.
+
+It is self-perpetuating, which is why it is a constraint rather than a caution: such an account holds `roles.manage`, so it may grant itself anything further and revoke anybody else's roles, and no second party remains anywhere in the system. It would also neutralise the identity check above — where the configuration is lost, that check refuses the `SENIOR_PASTOR` row and the account falls to nothing, and an `ADMIN` row beside it keeps the account at full authority so the control never bites, for exactly the two accounts it exists for.
+
+**The cost is accepted rather than worked around.** Section 6 gives one Person one Account, so the two Senior Pastors cannot perform an administrative action at all: provisioning, a merge, a backdated record and a sex correction are each somebody else's to do. That is this section's own sentence — every permission change involves a second party — made true rather than aspirational, and the friction is the mechanism rather than a side effect of it.
+
+**Enforced by a partial unique index**, not by a check in `auth`. The identity half above must live in the application because the database holds no durable representation of who the two Persons are; this rule has no such gap, since role combination is entirely inside `account_roles`. An index therefore makes the state unrepresentable rather than merely detected, and is what survives `pg_restore --disable-triggers`. Any endpoint that grants a role answers `INVARIANT_VIOLATION` (Section 22) rather than letting the constraint surface as an unhandled error.
+
+`LEADER` is outside the limit. It confers strictly less than either governing role and carries none of the excluded capabilities, so an account may hold it beside one of them without escalating anything.
 
 The enforcement is in two places, because the two halves of that rule are enforceable in different ways. The **count** is a database constraint: there are two slots, a holder occupies one, and a partial unique index over the slot permits no second occupant of either. Revoking a row frees its slot, which is how a succession happens.
 

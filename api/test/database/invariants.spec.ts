@@ -664,6 +664,123 @@ describe('the database enforces the section 3 and section 7 rules it can', () =>
     expect(active).toHaveLength(2);
   });
 
+  it('refuses one account both ADMIN and SENIOR_PASTOR', async () => {
+    // Section 7: an account holds at most one of the two. Effective authority is
+    // the union of its roles' defaults and ADMIN's set is a superset, so the pair
+    // is not a Senior Pastor who also administers -- it is an account holding
+    // every capability, for which every exclusion section 7 writes for the role is
+    // void, and which holds `roles.manage` and can therefore grant itself more.
+    const account = await accountFor(db, 'Oriel', 'MENS');
+
+    await db
+      .insertInto('account_roles')
+      .values({ account_id: account, role: 'SENIOR_PASTOR', senior_pastor_slot: 1 })
+      .execute();
+
+    await expect(
+      db
+        .insertInto('account_roles')
+        .values({ account_id: account, role: 'ADMIN', senior_pastor_slot: null })
+        .execute(),
+    ).rejects.toThrow(/account_roles_one_governing_role/);
+
+    // And in the other order, because a partial unique index is symmetric and a
+    // check written per-role would not be.
+    const other = await accountFor(db, 'Ester', 'WOMENS');
+
+    await db
+      .insertInto('account_roles')
+      .values({ account_id: other, role: 'ADMIN', senior_pastor_slot: null })
+      .execute();
+
+    await expect(
+      db
+        .insertInto('account_roles')
+        .values({ account_id: other, role: 'SENIOR_PASTOR', senior_pastor_slot: 2 })
+        .execute(),
+    ).rejects.toThrow(/account_roles_one_governing_role/);
+  });
+
+  it('permits LEADER beside a governing role, and a revoked row frees it', async () => {
+    // The half that makes the rule a limit rather than a ban. LEADER confers
+    // strictly less than either governing role and carries none of the excluded
+    // capabilities, so it escalates nothing -- an index over every role would
+    // forbid this and pass every case above, which is the mutation that matters.
+    const account = await accountFor(db, 'Oriel', 'MENS');
+
+    await db
+      .insertInto('account_roles')
+      .values([
+        { account_id: account, role: 'SENIOR_PASTOR', senior_pastor_slot: 1 },
+        { account_id: account, role: 'LEADER', senior_pastor_slot: null },
+      ])
+      .execute();
+
+    // Revoking the governing row frees the account for the other, which is how a
+    // handover is recorded -- section 7 revokes rather than deletes.
+    await db
+      .updateTable('account_roles')
+      .set({ revoked_at: sql<Date>`now()` })
+      .where('account_id', '=', account)
+      .where('role', '=', 'SENIOR_PASTOR')
+      .execute();
+
+    await db
+      .insertInto('account_roles')
+      .values({ account_id: account, role: 'ADMIN', senior_pastor_slot: null })
+      .execute();
+
+    const active = await db
+      .selectFrom('account_roles')
+      .select('role')
+      .where('account_id', '=', account)
+      .where('revoked_at', 'is', null)
+      .execute();
+
+    expect(active.map((row) => row.role).sort()).toEqual(['ADMIN', 'LEADER']);
+  });
+
+  it('refuses a second governing role under concurrent writes', async () => {
+    // A sequential test passes against an application-layer check alone and tells
+    // you nothing about whether the index exists (CLAUDE.md, authorization case
+    // 7). Under READ COMMITTED neither transaction sees the other's uncommitted
+    // row, so anything that counts first and writes second admits both.
+    const account = await accountFor(db, 'Oriel', 'MENS');
+
+    const [a, b] = [await openClient(), await openClient()];
+
+    try {
+      await a.query('BEGIN');
+      await b.query('BEGIN');
+
+      await a.query(
+        'INSERT INTO account_roles (account_id, role, senior_pastor_slot) VALUES ($1, $2, 1)',
+        [account, 'SENIOR_PASTOR'],
+      );
+
+      const blocked = b.query(
+        'INSERT INTO account_roles (account_id, role, senior_pastor_slot) VALUES ($1, $2, NULL)',
+        [account, 'ADMIN'],
+      );
+
+      await a.query('COMMIT');
+      await expect(blocked).rejects.toThrow(/account_roles_one_governing_role/);
+      await b.query('ROLLBACK');
+    } finally {
+      await a.end();
+      await b.end();
+    }
+
+    const active = await db
+      .selectFrom('account_roles')
+      .select('role')
+      .where('account_id', '=', account)
+      .where('revoked_at', 'is', null)
+      .execute();
+
+    expect(active).toEqual([{ role: 'SENIOR_PASTOR' }]);
+  });
+
   it('refuses SENIOR_PASTOR with no slot at all', async () => {
     // The case that matters most, and the one every other test here misses by
     // supplying a slot. A CHECK fails only on FALSE and passes on NULL, so a

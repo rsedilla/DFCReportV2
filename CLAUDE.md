@@ -2570,9 +2570,61 @@ two Stage 2 items it spans, and `.env.example` says it where the operator reads.
 Written to `SKILL.md` §7 with the identity ruling, which is where the mechanism was
 already described; this entry is what makes it a decision rather than a description.
 
+### 2026-08-24 — An account holds at most one of `ADMIN` and `SENIOR_PASTOR`
+
+The question the configuration ruling raised and deliberately left open. §7 says an
+account holds at most one active row **per role**, which permits two rows of
+different roles, and the schema agreed: `UNIQUE (account_id, role) WHERE revoked_at
+IS NULL`.
+
+**Refused.** An account's effective authority is the union of its roles' defaults
+and Admin's set is a superset of a Senior Pastor's, so the pair does not produce a
+Senior Pastor who also helps with administration. It produces an account holding
+every capability in the system, for which each of §7's five deliberate exclusions —
+`roles.manage`, `accounts.manage`, `records.backdate_effective_date`,
+`people.merge`, `people.correct_sex` — is void.
+
+It is self-perpetuating, which is what moved it from a caution to a constraint:
+such an account holds `roles.manage`, so it can grant itself anything further and
+revoke anybody else's roles, and no second party remains anywhere in the system.
+§7's own justification for the exclusions is that "every permission change has a
+second party involved", and one row makes that sentence false.
+
+**It would also have neutralised the identity check merged the same day.** Where
+the configuration is lost, that check refuses the `SENIOR_PASTOR` row and the
+account falls to nothing — the deliberate fail-closed behaviour. An `ADMIN` row
+beside it keeps the account at full authority, so the control never bites for
+exactly the two accounts it exists for.
+
+**The cost is accepted and is the mechanism, not a side effect.** §6 gives one
+Person one Account, so Bishop Oriel and Pastora Geraldine cannot perform an
+administrative action at all — provisioning, a merge, a backdated record and a sex
+correction are each somebody else's to do. In a small church whose Admin is
+sometimes unavailable that is real friction, and it is what "a second party" means.
+
+**Enforced by a partial unique index over `(account_id)` where the role is one of
+the two**, not by a check in `auth`. The distinction from the identity half is the
+whole reason: that one must live in the application because the database holds no
+durable representation of who the two Persons are, while role combination is
+entirely inside `account_roles` — so an index makes the state unrepresentable
+rather than merely detected, and survives `pg_restore --disable-triggers`, which is
+the argument the 2026-08-21 slot ruling already made on this same table.
+
+**No domain check was written, deliberately.** `roles.manage` has no endpoint, and
+provisioning cannot produce the state — it creates exactly one role on a new
+account and refuses a Person who already has one. A check with no caller is what
+was deleted from `AuthorizationService` two commits earlier for being dead. §7
+instead states the contract the endpoint owes when Stage 3 or later builds it:
+`INVARIANT_VIOLATION` rather than a raw constraint violation rendered 500.
+
+`LEADER` is outside the limit, and a test pins that rather than leaving it implied:
+it confers strictly less than either governing role and carries none of the
+excluded capabilities, so an index over *every* role would forbid a legitimate row
+and pass every other case. Written to `SKILL.md` §7 and migration `0005`.
+
 ### Open — awaiting a ruling
 
-**One item awaits a ruling and blocks Stage 5. Eight other things are unsettled, none of them blocking. They are listed at the end, so this section is the whole of what is open.**
+**One item awaits a ruling and blocks Stage 5. Seven other things are unsettled, none of them blocking. They are listed at the end, so this section is the whole of what is open.**
 
 Nine items that stood here on 2026-08-22 were settled that day and are recorded above. Seven were Stop Conditions for Stage 2, and the last two were opened and closed the same day by `architecture-guardian` passes.
 
@@ -2591,5 +2643,4 @@ Two related questions have defined behaviour and are recorded in `SKILL.md` §12
 - **What the native clients owe on accessibility.** `SKILL.md` §23 binds the web application to WCAG 2.2 AA and says the equivalent obligation for a native client is the platform accessibility API rather than WCAG. Which platform guarantees, and what would fail a build, is a ruling to make when the client is.
 
 - **Whether the liveness probe should share the application connection pool.** §24 now records that it does, and that pool exhaustion therefore presents to the platform as a dead process — so the response is a restart that discards the transactions still making progress. A separate connection, or a probe that does not reach the database, are both defensible and mean different things by "healthy". Deployment work with a ruling attached, alongside the database-role item above.
-- **Whether a Senior Pastor may also hold `ADMIN` on the same account.** §7 names the two Persons who hold `SENIOR_PASTOR` and keeps `roles.manage` and `accounts.manage` away from that role, so that the church's two most visible accounts cannot escalate their own authority and every permission change involves a second party. Nothing forbids an `ADMIN` row beside the `SENIOR_PASTOR` one on the same account, which would defeat exactly that — §7 says an account holds at most one active row **per role**, not one row overall. Raised by the 2026-08-24 configuration ruling and deliberately not decided in it, because it is a rule about role combination rather than about who the two Persons are.
 - **Whether `audit_log`'s append-only guarantee tolerates `TRUNCATE`.** §5 records the exemption for history tables and leans it on a least-privilege role that does not exist, which is already open above. §21 says nothing at all, and the test suite truncates `audit_log` before every test. Same answer as the `TRUNCATE` question above, most likely, but it is not written down for the one table whose whole purpose is that nothing removes a row.
