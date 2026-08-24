@@ -8,6 +8,7 @@ import { NetworksService } from '../../networks/networks.service';
 import { isCapability, isReadCapability, type Capability } from './capabilities';
 import { ROLE_DEFAULTS } from './role-defaults';
 import { ScopeType, type Scope, type Target } from './scopes';
+import { grantCoversNothing } from './single-scope';
 
 import type { AccountRole } from '../../database/schema';
 
@@ -160,6 +161,18 @@ export class AuthorizationService {
    * destination leader both to be in scope, and forbids the actor acting on
    * themselves or on anyone upline of them. Those live in the owning module's
    * domain layer, additional to this and never a substitute for it.
+   *
+   * **A grant that covers nothing is skipped in the scope half, not the capability
+   * half.** Section 7 gives some capabilities one scope, and a grant of one at
+   * anything narrower covers nothing (`single-scope.ts`). An earlier version
+   * dropped those grants in `grantsFor`, which was wrong in a way only an existing
+   * test caught: the account then looks as though it does not hold the capability
+   * at all, and the refusal becomes `CAPABILITY_DENIED`.
+   *
+   * The 2026-08-23 ruling says `SCOPE_DENIED`, and it is right for the reason
+   * above — an administrator diagnosing this issued a grant with the wrong
+   * **scope**, and `CAPABILITY_DENIED` would send them to add a capability they
+   * had already granted.
    */
   async authorize(actor: Actor, capability: Capability, target: Target): Promise<void> {
     const grants = (await this.grantsFor(actor.accountId)).filter(
@@ -170,13 +183,31 @@ export class AuthorizationService {
       throw new CapabilityDeniedError(`You do not hold ${capability}.`, { capability });
     }
 
+    let coveredNothing = false;
+
     for (const grant of grants) {
+      if (grantCoversNothing(capability, grant.scope.type)) {
+        coveredNothing = true;
+        continue;
+      }
+
       // The guard runs outside any transaction, so the pooled connection is the
       // right reader here. A caller re-checking scope *inside* a transaction —
       // section 5 invariant 1 after taking the person lock — passes its own.
       if (await this.scopeCovers(this.db, grant.scope, target, actor)) {
         return;
       }
+    }
+
+    if (coveredNothing) {
+      // **A different message, because "not over this record" would be a lie.** It
+      // says another target would work; for a capability section 7 gives at Whole
+      // Church only, none would. An administrator reading the generic wording goes
+      // looking for the right record, and the thing to fix is the grant.
+      throw new ScopeDeniedError(
+        `You hold ${capability}, but section 7 grants it at Whole Church only and yours is narrower. It covers no record at all.`,
+        { capability, required_scope: ScopeType.WholeChurch },
+      );
     }
 
     throw new ScopeDeniedError(`You hold ${capability}, but not over this record.`, {
@@ -262,6 +293,10 @@ export class AuthorizationService {
     }
 
     for (const grant of authority.grants.filter((held) => held.capability === capability)) {
+      if (grantCoversNothing(capability, grant.scope.type)) {
+        continue;
+      }
+
       if (await this.scopeCovers(executor, grant.scope, target, actor)) {
         return true;
       }

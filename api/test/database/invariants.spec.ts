@@ -594,9 +594,17 @@ describe('the database enforces the section 3 and section 7 rules it can', () =>
     ).rejects.toThrow(/account_roles_one_senior_pastor_per_slot/);
 
     // Revoking frees the slot, which is how a succession happens.
+    //
+    // `now()`, not `new Date()`: `granted_at` is stamped by the database, and
+    // `account_roles_period_ordered` requires `revoked_at >= granted_at`. A
+    // JavaScript timestamp compares two clocks, so when the database's runs
+    // microseconds ahead the constraint fires and this step fails on the ordering
+    // rather than on the cap it is testing. The same trap took out the guard's
+    // revocation case, and this is its closest sibling — same constraint family,
+    // same margin.
     await db
       .updateTable('account_roles')
-      .set({ revoked_at: new Date() })
+      .set({ revoked_at: sql<Date>`now()` })
       .where('account_id', '=', second)
       .execute();
 

@@ -481,9 +481,16 @@ describe('sex correction (SKILL.md sections 4, 5, 7, 21, 22)', () => {
     });
 
     it('denies the capability granted at a scope narrower than Whole Church', async () => {
-      // Mark is inside Raymond's subtree, so the **guard passes** and the refusal
-      // comes from the rule under test. Without that the case would pass on the
-      // guard's own SCOPE_DENIED and assert nothing.
+      // Mark is inside Raymond's subtree, so a scope-covering grant would pass the
+      // guard — which is what makes this about the *scope of the grant* rather than
+      // the position of the target.
+      //
+      // **The refusal now comes from the guard**, not from the service check it
+      // used to. The rule generalised on 2026-08-24: every capability section 7
+      // gives at Whole Church only is refused there, rather than each operation
+      // carrying its own version. The assertions below are unchanged and still
+      // distinguish this from an ordinary scope denial, which is the property that
+      // mattered.
       await db
         .insertInto('capability_grants')
         .values({

@@ -396,6 +396,14 @@ export class PeopleSexCorrectionService {
    *
    * `SCOPE_DENIED` rather than `CAPABILITY_DENIED`: the actor does hold the
    * capability, and what fails is its reach (section 22).
+   *
+   * **Pre-empted by the guard since 2026-08-24, and kept as a second line.** The
+   * rule generalised to every capability section 7 gives at one scope, and now
+   * refuses in `AuthorizationService.authorize` before this runs — so through the
+   * endpoint this is unreachable. Kept because it fails closed, costs one read,
+   * and defends the one path the guard does not: a caller reaching this service
+   * directly. It is not the enforcement, and `single-scope.spec.ts` is what pins
+   * the rule.
    */
   private async assertCorrectSexIsHeldChurchWide(actor: Actor): Promise<void> {
     const churchWide = (await this.authorization.grantsFor(actor.accountId)).some(

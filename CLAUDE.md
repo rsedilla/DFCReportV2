@@ -2194,6 +2194,239 @@ table ownership as the thing actually enforced. A rule cited as a requirement wh
 it is silent is the same defect as a rule stated more strongly than the code keeps
 it — both of which this branch corrected elsewhere.
 
+### 2026-08-24 — Three rulings the accounts work needed, settled before the code
+
+§6 describes account provisioning, activation and password reset in enough detail
+to build, and leaves three things undefined that an endpoint cannot avoid
+answering. Each is amended into `SKILL.md` in the same change.
+
+**A password is twelve characters minimum, 128 maximum, with no composition rule.**
+§6 requires the holder to set their own password and §23 requires password managers
+unobstructed, and neither states a length. Nothing in the system could refuse a
+one-character password.
+
+Length rather than complexity, because the accessibility conformance rests on the
+managers. §23's criterion 3.3.8 permits a password only where a mechanism assists
+in completing it, and support for managers is that mechanism — so a rule forcing a
+symbol works against the thing conformance depends on, by pushing people toward
+something short enough to retype. The maximum exists only to bound a hash, and
+**the password is never truncated to fit**: hashing a prefix silently makes a long
+password no stronger than its first *n* characters, and the holder cannot tell.
+
+Refused with `VALIDATION_FAILED` on the request that sets it, never at sign-in,
+where the stored password is whatever it was when it was set.
+
+**An account is provisioned together with the role that qualifies it, and until
+`cells` exists that means `ADMIN` or `SENIOR_PASTOR` only.** §6 ties a Leader
+account to Cell leadership, which is Stage 3, so a provisioning endpoint built now
+has nothing to check a Leader against.
+
+Deferring the check was rejected. It is the shape this project keeps correcting —
+a guard written as a comment — and the 2026-08-20 ruling on submission rolling up
+to the nearest upline already refused to widen §6 for exactly this, on the grounds
+that an account for someone who has not opened a Cell detaches "leader" from
+"leads a Cell", which §11 makes non-negotiable. A `LEADER` provisioning request is
+therefore refused with `INVARIANT_VIOLATION` rather than accepted: it is a rule
+about what may be recorded, whoever submits it, which is the distinction §22 draws
+against `SCOPE_DENIED`.
+
+No new error code. §22's table is a minimum and adding to it is client-visible, and
+`INVARIANT_VIOLATION` already means what this refusal means.
+
+The two exceptions §6 names — Senior Pastor and Administrator — are exceptions to
+the *qualification* and never to the workflow: each still gets an account created,
+an activation email sent, and a password the holder sets. The first Admin account
+remains the one exception to all of it, created by a system action because there is
+no account above it (§7, `granted_by`).
+
+**Provisioning is `POST /api/v1/accounts`, a new area in §22, and deliberately not
+under `/auth`.** Everything under `/auth` is either on §7's closed unauthenticated
+list or acts solely on the caller's own session, which is what makes that prefix's
+exemption from the capability guard readable in one place. Provisioning is neither —
+it is an administrative action on somebody else's Account, carrying
+`accounts.manage` — and putting it there would mean the prefix no longer describes
+one thing.
+
+`POST /api/v1/auth/activate` joins the two reset routes §22 already documented,
+because those three *are* on the unauthenticated list.
+
+### 2026-08-24 — Four rulings the accounts review forced, and the escalation that prompted them
+
+`architecture-guardian` on the accounts branch returned nine violations, of which
+one was a live privilege escalation. Each ruling is amended into `SKILL.md` in the
+same change.
+
+**A capability §7's catalog gives only at Whole Church covers nothing when granted
+narrower.** The 2026-08-23 ruling closed this for `people.correct_sex` and named the
+escalation it prevented. The same hole was open on eight other capabilities, because
+the guard asks whether a grant covers the *target* — so a grant issued at
+`OWN_SUBTREE` passes for everyone inside that subtree.
+
+`accounts.manage` was the worst of them, and it was reachable: a Leader holding one
+such grant could `POST /api/v1/accounts` naming anybody in their own subtree, an
+address they control, and `role: ADMIN`; then read the activation mail, set a
+password, and sign in as Admin at Whole Church. That is the escalation the entire
+role catalog is arranged to prevent, reached through the endpoint this branch added.
+
+Generalised rather than named per capability, because the hole is general and naming
+them one at a time is as many chances to miss the next — same argument as §2 gives
+for the guard being declarative: an operation that forgets the check looks exactly
+like one that does not need it.
+
+**Two things about it were wrong when first written, and both were caught rather
+than reasoned out.**
+
+It was enforced where an account's effective authority is assembled, beside the
+`read_only` rejection, which is where an earlier version of this entry said it
+belonged. That made the account look as though it held no such capability at all,
+so the refusal became `CAPABILITY_DENIED` — and CI caught it, because the
+sex-correction suite has pinned `SCOPE_DENIED` since the 2026-08-23 ruling. It is
+right there: an administrator diagnosing this issued a grant naming the correct
+capability with the wrong **scope**, and `CAPABILITY_DENIED` would send them to
+grant something they had already granted. The check sits in the scope half of
+`authorize` and `coversWith`, and `/auth/me` filters the same grants out of what it
+advertises, so a client is not shown an action that is refused every time.
+
+And the set was **derived** from the role catalog rather than stated — "every role
+that holds this holds it at Whole Church" — which looked self-maintaining and had
+the wrong predicate. Admin and Senior Pastor hold every capability at Whole Church,
+so it reduced to "a Leader does not hold it by default", which is a statement about
+who gets something automatically rather than about the scope it may be held at.
+
+That produced a false positive on `audit.view`, and §7 refutes it twice in
+consecutive lines: "an audit entry resolves through its target" is machinery with no
+purpose unless the capability can be held narrower, and the line after it — "a
+setting is Whole Church only, and is never in scope at any narrower value" — is this
+specification's own way of saying what the rule says, written for settings and
+deliberately not for audit. A narrower `audit.view` grants strictly *less* than the
+default, so there is no escalation to close and the rule was removing authority §7
+offers.
+
+The set is now stated, with eight members and §7's argument for each, and
+`single-scope.spec.ts` asserts its membership — which is what makes a stated list
+safe, since the objection to one is that it goes stale silently.
+
+**An archived Person is not provisioned an account.** §6 covers the access decision
+at archive and reactivation after it, and was silent on creating one for somebody
+already archived. Every neighbouring rule points one way — §5 refuses an archived
+Person as a pastoral destination, §3 refuses archiving somebody who leads a Cell —
+so an archived Person does not acquire new live relationships, and an account is
+one. Worth recording that `leader-assignability.ts` reads `person_lifecycle` for the
+analogous decision twenty lines from its merged-Person check, and provisioning
+carried the second across and not the first.
+
+**The server chooses the Senior Pastor seat.** §7 caps the role at two and the
+2026-08-21 ruling calls a slot a seat rather than a rank, so naming one chooses
+nothing meaningful and a caller naming an occupied seat would meet a constraint
+violation for a decision it should never have been making. Both held is refused with
+`INVARIANT_VIOLATION`. The partial unique index remains the enforcement; the read
+exists so the ordinary case is an answer rather than a raw violation rendered 500.
+
+Found because the insert omitted `senior_pastor_slot` entirely, which the check
+constraint requires — so `SENIOR_PASTOR`, one of the two roles this branch's own new
+§6 text says are provisionable, answered 500 on every attempt. No test named it.
+
+**A delivery failure never fails provisioning, and an activation email may be
+re-sent.** The completion is recorded inside the transaction, so by the time the send
+runs the store already holds a `COMPLETED` 201. Raising there gave the client a 500
+while every retry on that key replayed the 201 — and `release` could not help, since
+its predicate is `IN_FLIGHT` and the row was `COMPLETED`. An account was left
+stranded with a live token nobody held. That is the write-endpoint obligation this
+repository states in one line: an endpoint must not commit its completion and then
+fail.
+
+The account genuinely was created, so 201 is the honest answer, and
+`POST /accounts/{id}/activation-email` is the second path §6 step 3 lacked. Before
+it, the only recovery was the holder using the forgotten-password flow, which works
+on a `PENDING_ACTIVATION` account by accident and records itself as a password reset.
+
+**Also corrected, and each is the recurring fault rather than a new one:**
+
+- Setting a password reactivated a `DISABLED` account, because it set `ACTIVE`
+  unconditionally and never read the current status. An activation token outlives a
+  disablement by a week, so an unauthenticated endpoint undid an `accounts.manage`
+  decision.
+- Account-wide revocation was re-implemented in the credentials service and
+  **inverted**: the marker stamped before the tokens were revoked, with its
+  timestamp computed before the statement that waits on the lock. §6 states both
+  halves and `TokensService` already had them right; it now exposes a
+  transaction-taking variant rather than being copied.
+- A duplicate email address raised an unrecognised 23505 and rendered
+  `INTERNAL_ERROR`, permanently — the 500-instead-of-an-answer failure recorded on
+  2026-08-23 for the self-leader check.
+- The DTO declared the password bounds alongside the service's own check, under a
+  comment saying they shared constants and so could not drift. They shared the
+  constants and not the *counting rule*: `class-validator` counts UTF-16 units and
+  §6 counts characters, so a 128-code-point passphrase was refused by the pipe while
+  the unit tests asserted the service accepts it. One rule, in one place.
+- `account.password_reset` did not fit §21's `<noun>.<past-tense verb>` convention;
+  it is `password.reset`.
+
+**Three false statements, all written by this branch about itself.** The
+provisioning docblock described an operator re-send path that did not exist; the
+email port's docblock promised a guarantee its only caller did not provide; and the
+single-use test claimed to fail against a read-then-write redemption while being
+strictly sequential — which is CLAUDE.md's own authorization-case-7 lesson restated
+in a comment asserting the opposite. The concurrent case exists now.
+
+The password-reset docblock claimed the miss branch does "comparable work" as the
+hit branch. It does not: the miss branch is a bare early return, so the two are
+distinguishable by timing. §6 requires only that the *response* be identical, and it
+is — so the code is compliant and the comment was false. It now records the gap
+rather than denying it, because a decoy that does not actually match a database
+write and a network call would be a second false claim.
+
+### 2026-08-24 — The authorization seam is its own module, and a cycle was the reason a rule was being broken
+
+Escalated by `architecture-guardian`: `auth` was reading `persons` directly, which
+§2 forbids. The obvious fix — ask `people` through its service — closed a module
+cycle, because `PeopleModule` imported `AuthModule`.
+
+**`src/auth/authorization/` becomes `AuthorizationModule`.** `people` imports that
+rather than the whole of `auth`, and `auth` may then import `people`. The graph runs
+`people → authorization`, `auth → people`, `authorization → {hierarchy, networks}`,
+with nothing pointing back.
+
+The point is not that it dodges a `forwardRef`. It is that **`people` never needed
+`auth`** — it needed `AuthorizationService`, and importing a module of accounts,
+tokens, controllers and provisioning to ask an authorization question was the defect
+that made everything downstream awkward. `AccessTokenGuard` stays in `AuthModule`
+because it needs `TokensService` and `AccountsRepository`: it authenticates, which is
+a different question from what an authenticated actor may do.
+
+**No §2 amendment is needed.** `AuthorizationModule` owns no tables; it reads
+`account_roles` and `capability_grants`, which §2 gives to `auth`, and the ruling
+above on intra-module seams puts an arrangement of files inside one module outside
+§2's reach.
+
+Two things are worth recording beyond the fix.
+
+**The cycle was causing the violation, not merely blocking its repair.** Three
+direct `persons` reads had accumulated in `auth`, each individually the path of least
+resistance. `PeopleReadService.forDecisionWithin` replaces them, returning identity
+and two lifecycle facts rather than a `PersonRecord` — a cross-module reader that
+cannot receive a birthday or a mobile number cannot leak one.
+
+**The split compiled, type-checked, linted, passed 117 unit tests, and broke every
+authenticated request.** Nest resolves a provider's dependencies in the context of
+the module that *registers* it, not the one its class lives in, and `CapabilityGuard`
+is registered globally in `AppModule` — which imported `AuthModule`, which imports
+`AuthorizationModule` without re-exporting it. `AppModule` imports it directly now;
+re-exporting from `AuthModule` was rejected, because it would put the authorization
+providers back into the surface the split had just removed them from and let the
+cycle return unnoticed.
+
+`test/unit/module-graph.spec.ts` closes the gap that let this reach CI at all.
+Nothing running without a database built the application: `tsc` checks imports and
+says nothing about the injector, and the unit suite never constructed `AppModule`.
+`Test.createTestingModule(...).compile()` builds the injector without opening a
+connection, so the whole class of wiring failure now fails on a developer's machine
+in seconds. It is verified against the real mutation rather than assumed — removing
+the import reproduces CI's exact message.
+
+Stage 3 will ask this question again when `cells` needs authorization, and the
+answer is that it imports `AuthorizationModule`.
+
 ### Open — awaiting a ruling
 
 **One item awaits a ruling and blocks Stage 5. Seven other things are unsettled, none of them blocking. They are listed at the end, so this section is the whole of what is open.**

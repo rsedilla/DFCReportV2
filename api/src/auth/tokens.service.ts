@@ -6,6 +6,9 @@ import { JwtService } from '@nestjs/jwt';
 import { UnauthenticatedError } from '../common/errors/api-error';
 import { DATABASE, type Db } from '../database/database.module';
 
+import type { Database } from '../database/schema';
+import type { Transaction } from 'kysely';
+
 /**
  * An access token lives 15 minutes and a refresh token 30 days (SKILL.md
  * section 6). Neither is configurable: the 15 minutes is what makes the
@@ -242,7 +245,22 @@ export class TokensService {
    * tokens already out there, which carry no row of their own to revoke.
    */
   async revokeAllSessions(accountId: string): Promise<void> {
-    await this.db.transaction().execute(async (trx) => {
+    await this.db.transaction().execute((trx) => this.revokeAllSessionsWithin(trx, accountId));
+  }
+
+  /**
+   * The same revocation, inside a caller's transaction.
+   *
+   * Exists because setting a password revokes every session (section 6) and must
+   * do so in the transaction that sets it. An earlier version of the credentials
+   * service re-implemented this and **inverted it** — stamping the marker before
+   * revoking the tokens, with a timestamp computed before the statement that
+   * waits on the lock. Both halves of the ordering below are load-bearing and
+   * neither is obvious from the outside, which is the argument for one
+   * implementation rather than two.
+   */
+  async revokeAllSessionsWithin(trx: Transaction<Database>, accountId: string): Promise<void> {
+    await (async () => {
       // The account row first, and for the same reason rotation takes it first:
       // so that both paths take these two locks in the same order.
       //
@@ -289,7 +307,7 @@ export class TokensService {
         .set({ sessions_revoked_at: revokedAt })
         .where('id', '=', accountId)
         .execute();
-    });
+    })();
   }
 }
 

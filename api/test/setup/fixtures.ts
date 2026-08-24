@@ -2,11 +2,15 @@ import { randomUUID } from 'node:crypto';
 
 import { type INestApplication, type Type } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
+import { ThrottlerStorage, type ThrottlerStorageService } from '@nestjs/throttler';
 import type { Kysely } from 'kysely';
 
 import { AppModule } from '../../src/app.module';
 import { TokensService } from '../../src/auth/tokens.service';
 import { configureApp } from '../../src/bootstrap';
+import { EMAIL_PORT } from '../../src/email/email.port';
+
+import { CapturingEmailAdapter } from './capturing-email.adapter';
 
 import type { AccountRole, Database, NetworkName, Sex } from '../../src/database/schema';
 
@@ -167,11 +171,46 @@ export async function createTestApp(controllers: Type<unknown>[] = []): Promise<
   const moduleRef = await Test.createTestingModule({
     imports: [AppModule],
     controllers,
-  }).compile();
+  })
+    // **The one provider a test replaces.** Everything else is the deployed
+    // wiring, deliberately — but the shipped adapter drops mail and never reveals
+    // a token (`src/email/logging-email.adapter.ts`), so an activation could not
+    // be completed against it. Swapped here rather than per suite, so no test can
+    // accidentally exercise a real sender, and so `app.get(EMAIL_PORT)` reaches
+    // the same instance the services were handed.
+    .overrideProvider(EMAIL_PORT)
+    .useClass(CapturingEmailAdapter)
+    .compile();
 
   const app = moduleRef.createNestApplication();
   configureApp(app);
   await app.init();
 
   return app;
+}
+
+/** The captured outbox for an app built by `createTestApp`. */
+export function outbox(app: INestApplication): CapturingEmailAdapter {
+  return app.get<CapturingEmailAdapter>(EMAIL_PORT);
+}
+
+/**
+ * Forgets every rate-limit count the application is holding.
+ *
+ * **Cases share an application, and therefore a source address**, so without this
+ * a suite exercising a tightly limited endpoint several times fails on its later
+ * cases — and fails in a way that reads as a defect in whatever that case was
+ * about rather than as one case borrowing another's budget. That is exactly how
+ * this was found: the sixth `forgot-password` in one file returned 429 and the
+ * assertion that noticed was about email delivery.
+ *
+ * Reaching into the storage rather than raising the limits, because the limits are
+ * production behaviour: `forgot-password` is deliberately tighter than sign-in
+ * (section 24), and loosening it so a test suite fits would be tuning the
+ * application to the tests. The endpoint's own limit is pinned deliberately in
+ * `accounts.e2e.spec.ts` instead.
+ */
+export function resetRateLimits(app: INestApplication): void {
+  const storage = app.get<ThrottlerStorageService>(ThrottlerStorage);
+  storage.storage.clear();
 }

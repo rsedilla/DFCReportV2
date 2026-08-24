@@ -955,6 +955,29 @@ Signing out on one device ends that session only.
 
 Revocation, by contrast, is account-wide. Where account access is disabled — at archive, at merge, or by an authorized administrative action — **every** refresh token for that account is revoked and every active session becomes invalid immediately, on all devices. Access already granted must not outlive the revocation by the remaining life of an access token that happens to be long; keep access-token lifetime short enough that immediate means immediate in practice.
 
+### What a password must be
+
+**Twelve characters minimum, 128 maximum, and no composition rule of any kind.**
+No required uppercase, digit or symbol; no forced rotation; no truncation before
+hashing.
+
+Length rather than complexity, because this system's accessibility conformance
+rests on password managers. Section 23's criterion 3.3.8 permits a password only
+where a mechanism assists in completing it, and support for managers is that
+mechanism (Section 6, Authentication V1). Composition rules push people toward
+short passwords they can retype from memory, which is the behaviour that criterion
+exists to prevent — so a rule that forces a symbol works against the thing
+conformance depends on.
+
+The maximum exists only so that a hash is bounded, and it is high enough that no
+passphrase a person would choose reaches it. **The password is never truncated to
+fit**: silently hashing a prefix means a longer password is no stronger than its
+first *n* characters, and the holder cannot tell.
+
+A password below the minimum is refused with `VALIDATION_FAILED` (Section 22), on
+the request that sets it — activation, reset, or change. It is never refused at
+sign-in, where the stored password is whatever it was when it was set.
+
 ### Password reset security
 
 - Generate cryptographically secure, single-use reset token
@@ -985,6 +1008,68 @@ When a person becomes a Cell Leader and has no account:
 2. Create/reuse the person's single account.
 3. Send activation/set-password email.
 4. User creates their own password.
+
+**Provisioning is an explicit action under `accounts.manage`, and what it may
+create is bounded by what qualifies the holder.** Cell leadership is the ordinary
+qualification and it is the one this section describes. The two exceptions above —
+Senior Pastor and Administrator — are the others, and they are exceptions to the
+*qualification*, never to the workflow: each still gets an account created,
+an activation email sent, and a password the holder sets themselves.
+
+**An account is therefore provisioned together with the role that qualifies it**,
+and a request naming no qualifying role is refused with `INVARIANT_VIOLATION`
+(Section 22). That is a rule about what may be recorded rather than about the
+actor's authority, which is the distinction Section 22 draws.
+
+The consequence is worth stating because it is a phase rather than a permanent
+rule: until `cells` exists, only an `ADMIN` or `SENIOR_PASTOR` account can be
+provisioned, because a `LEADER` account's qualification is an active Cell
+leadership assignment (Section 11) and there is nothing yet to hold one. A
+`LEADER` provisioning request is refused for that reason rather than accepted with
+the check deferred — an account for someone who has not opened a Cell would
+detach "leader" from "leads a Cell", which Section 11 makes non-negotiable.
+
+The first Admin account is the one exception to all of it, created by a system
+action because there is no account above it to do the creating (Section 7,
+`granted_by`).
+
+**An archived Person is not provisioned an account.** The request is refused with
+`INVARIANT_VIOLATION`, naming the restore that must happen first. This section
+covers the account-access decision *at* archive and reactivation *after* it, and
+said nothing about creating one for somebody already archived — but every
+neighbouring rule points one way: Section 5 refuses an archived Person as the
+destination of a pastoral assignment, and Section 3 refuses archiving somebody who
+leads a Cell. An archived Person does not acquire new live relationships, and an
+account is one.
+
+**Which Senior Pastor seat a provisioning request takes is chosen by the server.**
+Section 7 caps the role at two slots and calls a slot a seat rather than a rank, so
+naming one chooses nothing meaningful — and a caller naming an occupied seat would
+meet a constraint violation for a decision it should never have been making. The
+free seat is taken; where both are held the request is refused with
+`INVARIANT_VIOLATION`, naming the revocation that records a succession. The partial
+unique index remains the enforcement, so two concurrent requests for one free seat
+still resolve to one account.
+
+**An activation email may be re-sent.** Step 3 above sends one and defined no second
+path, which left an account unreachable whenever a delivery failed: the Person
+already has an account, so provisioning refuses, and the holder's only route was the
+forgotten-password flow — which happens to work on a `PENDING_ACTIVATION` account and
+records itself as a password reset rather than an activation.
+
+Re-sending mints a fresh token and supersedes the outstanding one by the rule above,
+so a link from an earlier attempt stops working. That is the right way round: the
+reason to re-send is that the earlier one reached nobody. It is available only while
+the account is `PENDING_ACTIVATION` — an active holder who has forgotten their
+password uses the reset flow, and a disabled one is not invited back in through an
+activation link, since reactivation is a separate authorized decision.
+
+**A delivery failure never fails the request that caused it.** This holds for
+provisioning and for a re-send alike: each records its outcome before the message is
+attempted, so raising afterwards would hand the client a failure while the store
+holds the success that every retry reproduces (Section 22). The failure is recorded
+for an operator, who re-sends — and a re-send that cannot be delivered is recorded
+the same way rather than reported, since it has already committed a token.
 
 One person has one account even if they lead multiple Cell Groups.
 
@@ -1271,7 +1356,43 @@ It is refused whether or not the particular correction turns out to force a reas
 
 This is the one authorization rule in the system decided by **role** rather than by capability, and Section 5 states it that way deliberately: what matters is that Admin and the Senior Pastors sit outside the pastoral incentive the rule guards against, not that they hold something extra.
 
-**`people.correct_sex` exists at Whole Church and at no narrower scope.** The catalog above gives it one scope, and the rule is stated here because the guard alone would not hold it: the guard asks whether the actor's grant covers the target, so a grant issued at `OWN_SUBTREE` would pass for anyone inside that subtree. Held at a subtree scope it becomes exactly the escalation route this capability is Admin-only to close — moving a person between Networks, and re-parenting them in the process, without ever holding `people.manage_pastoral_assignment` (Section 4). A grant of it at any narrower scope therefore covers nothing, and the operation refuses with `SCOPE_DENIED`, in the same spirit as the `read_only` rejection above: a row that cannot mean what it appears to mean is refused rather than honoured in part.
+**A capability this catalog gives only at Whole Church covers nothing when granted
+narrower.** The guard cannot hold that on its own: it asks whether a grant covers
+the request's target, so a grant issued at `OWN_SUBTREE` passes for everyone inside
+that subtree. A grant of one of these at any narrower scope therefore covers no
+target at all, and the request is refused with `SCOPE_DENIED`.
+
+**`SCOPE_DENIED` rather than `CAPABILITY_DENIED`**, which is the opposite of how a
+`read_only` grant of a write capability is treated, and the difference is the point.
+That one is rejected at creation and so never exists; this one exists and names the
+right capability with the wrong scope. An administrator diagnosing it needs to be
+sent to the scope, and `CAPABILITY_DENIED` would send them to grant a capability
+they had already granted — which is the distinction this section draws between the
+two codes.
+
+The rule is general rather than named per capability, because the hole is. It was
+first closed for `people.correct_sex` alone, and the same shape was open on
+`accounts.manage`, `roles.manage`, `people.merge`, `records.backdate_effective_date`,
+`settings.manage`, `people.manage_lifecycle` and `cell.approve_creation`.
+
+**`audit.view` is deliberately not among them**, and the two lines above say why:
+an audit entry resolves through its target, which is machinery with no purpose
+unless the capability can be held narrower — at Whole Church a target is never
+consulted. A narrower grant of a read gives strictly *less* than the default
+rather than more, so there is no escalation to close. The sentence naming a
+setting as "Whole Church only, and never in scope at any narrower value" is how
+this section says what this rule says, and it is written for settings and not for
+audit on purpose. `accounts.manage` was the worst of them: a subtree-scoped grant is a
+route to provisioning yourself an Admin account and signing in as one, which is the
+escalation the whole catalog is arranged to prevent. Naming them one at a time is as
+many chances to miss the next.
+
+A **wider** grant is untouched. This section contemplates Admin issuing authority
+beyond a role's defaults, and this rule is about a grant that cannot mean what it
+says, not a cap on anyone.
+
+**`people.correct_sex` exists at Whole Church and at no narrower scope**, and is the
+case that first established the rule above. The catalog above gives it one scope, and the rule is stated here because the guard alone would not hold it: the guard asks whether the actor's grant covers the target, so a grant issued at `OWN_SUBTREE` would pass for anyone inside that subtree. Held at a subtree scope it becomes exactly the escalation route this capability is Admin-only to close — moving a person between Networks, and re-parenting them in the process, without ever holding `people.manage_pastoral_assignment` (Section 4). A grant of it at any narrower scope therefore covers nothing, and the operation refuses with `SCOPE_DENIED`, in the same spirit as the `read_only` rejection above: a row that cannot mean what it appears to mean is refused rather than honoured in part.
 
 `read_only` belongs to `capability_grants` and to nothing else. **A role default carries no such flag**, and none is to be derived for one: a role's authority is exactly what the catalog above says it is. Anywhere an account's effective authority is presented — `/api/v1/auth/me` is the case that exists — authority carried by a role reports no `read_only` value rather than an invented one, because a client branching on a value this specification never defined is branching on a rule that does not exist.
 
@@ -2733,6 +2854,7 @@ Recommended REST areas:
 
 ```text
 /api/v1/auth
+/api/v1/accounts
 /api/v1/people
 /api/v1/networks
 /api/v1/leaders
@@ -2748,7 +2870,11 @@ Examples:
 POST /api/v1/auth/login
 POST /api/v1/auth/forgot-password
 POST /api/v1/auth/reset-password
+POST /api/v1/auth/activate               sets the first password (Section 6)
 GET  /api/v1/auth/me
+
+POST /api/v1/accounts                    provisioning, `accounts.manage`
+POST /api/v1/accounts/{id}/activation-email   re-send (Section 6)
 
 GET  /api/v1/people                       search, church-wide (Section 8)
 GET  /api/v1/people/duplicate-candidates  declared before /{id}, or it is one
@@ -2782,6 +2908,13 @@ GET  /api/v1/reports/network-summary
 Three clients consume this API concurrently (Section 2) and mobile builds cannot be force-updated, so these conventions are part of the contract rather than house style. Settle them before the third controller is written.
 
 All requests and responses are JSON. No redirects, no HTML error pages, no form encoding — only one of the three surfaces is a browser.
+
+**`/api/v1/accounts` is separate from `/api/v1/auth` deliberately.** Everything
+under `/auth` is either on Section 7's closed unauthenticated list or acts solely
+on the caller's own session, which is what makes that prefix's exemption from the
+capability guard readable in one place. Provisioning is neither: it is an
+administrative action on somebody else's Account, it carries `accounts.manage`, and
+putting it under `/auth` would mean the prefix no longer describes one thing.
 
 #### Dates and times
 

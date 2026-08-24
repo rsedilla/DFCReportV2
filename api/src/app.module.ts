@@ -5,6 +5,7 @@ import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { AuditModule } from './audit/audit.module';
 import { AuthModule } from './auth/auth.module';
 import { AccessTokenGuard } from './auth/authorization/access-token.guard';
+import { AuthorizationModule } from './auth/authorization/authorization.module';
 import { CapabilityGuard } from './auth/authorization/capability.guard';
 import { ApiExceptionFilter } from './common/errors/api-exception.filter';
 import { IdempotencyInterceptor } from './common/idempotency/idempotency.interceptor';
@@ -28,6 +29,15 @@ import { PeopleModule } from './people/people.module';
  * The two guards are global and ordered: authentication first, then the
  * capability and scope check. Registering them here rather than per controller is
  * what makes an endpoint closed until it declares otherwise.
+ *
+ * **Both guards' modules are imported here for that reason.** Nest resolves a
+ * provider's dependencies in the context of the module that registers it, so a
+ * globally registered guard needs its dependencies reachable from *this* module
+ * rather than from wherever the guard's class happens to live. `AuthorizationModule`
+ * was added when the authorization seam split out of `AuthModule`: `AuthModule`
+ * imports it but does not re-export it, so the graph compiled and every request
+ * failed at `CapabilityGuard`. The unit suite could not see it, because it never
+ * builds the application.
  */
 @Module({
   imports: [
@@ -37,6 +47,7 @@ import { PeopleModule } from './people/people.module';
     IdempotencyModule,
     AuditModule,
     AuthModule,
+    AuthorizationModule,
     HierarchyModule,
     NetworksModule,
     PeopleModule,
