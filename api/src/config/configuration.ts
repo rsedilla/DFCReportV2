@@ -50,12 +50,14 @@ function required(name: string): string {
  * `SENIOR_PASTOR` account can be provisioned, and an existing role row confers
  * nothing.
  *
- * **Anything else that names nobody stops the process**, including a value that is
- * present and yields no identifier. A bare separator is what a deployment template
- * renders for an empty list, and it *looks* configured — which is the distinction
- * the whole rule turns on. A blank value and a missing one both read as "not set
- * yet"; a typo strips both Senior Pastors of their authority just as silently and
- * leaves nothing for a reviewer to notice.
+ * **Anything else that does not name one or two distinct, well-formed identifiers
+ * stops the process** — too many, one named twice, a value that is not an
+ * identifier, or a value that is present and names nobody at all. A bare separator
+ * is the last of those, and is what a deployment template renders for an empty
+ * list; it *looks* configured, which is the distinction the whole rule turns on. A
+ * blank value and a missing one both read as "not set yet"; every other mistake
+ * strips both Senior Pastors of their authority just as silently and leaves
+ * nothing for a reviewer to notice.
  *
  * **Read once, when the process starts.** Naming the two after the import, and a
  * succession later, each take effect on the next restart (section 7).

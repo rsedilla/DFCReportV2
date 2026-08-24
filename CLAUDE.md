@@ -2487,6 +2487,15 @@ Pastor is told they hold nothing while `account_roles` says otherwise; what reso
 that is the error logged at the refusal, which names both causes, and the code is
 pinned by a test rather than left to be inferred.
 
+*This rule reached `SKILL.md` §7 on the following review pass, not in the batch that
+settled it — which is the **fourth** false "written to §x" claim on this project, and
+the second in this entry's own vicinity.* It matters more than the others did: an
+error code is client-visible and §7 states the contrasting `SCOPE_DENIED` rule
+explicitly, so the specification carried one half of a distinction and not the other.
+Nothing checks such a claim, which is why they keep happening; what would is a
+reviewer grepping §7 for the rule rather than reading the sentence asserting it is
+there.
+
 **Absent configuration fails closed and the process still starts; malformed
 configuration stops it.** A fresh installation must boot and run the import (§2)
 before either Person exists to be named, so this cannot be a required value.

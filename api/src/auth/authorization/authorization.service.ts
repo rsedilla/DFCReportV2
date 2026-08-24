@@ -72,14 +72,22 @@ export class AuthorizationService {
   ) {}
 
   /**
-   * The account's active role rows, less any this system refuses to honour.
+   * The account's active roles, less any row this system refuses to honour.
    *
    * **The single reader of `account_roles` in this service, and that is the
-   * point.** `rolesFor` and `grantsFor` each read the table for their own purpose,
-   * and a rule applied to one of them and not the other is invisible: the account
-   * would be outside a role's defaults while still counting as holding the role
-   * for the checks section 5 decides by role, or the reverse. One reader means the
-   * question is asked once.
+   * point.** There were two — one for the roles an account holds, one inside
+   * `grantsFor` for the defaults they carry — and a rule applied to one of them and
+   * not the other is invisible: the account would be outside a role's defaults
+   * while still counting as holding the role for the checks section 5 decides by
+   * role, or the reverse. One reader means the question is asked once.
+   *
+   * Roles are exposed at all, rather than read from `account_roles` by the module
+   * that needs them, for two reasons. `auth` owns that table (section 2, Modules).
+   * And authorization is decided by capability and scope everywhere but one place:
+   * section 5 invariant 4 names **roles** — "Only Admin or a Senior Pastor may do
+   * so" — because that rule is about who sits outside the pastoral incentive rather
+   * than about what anyone was granted. They reach `hierarchy` on `ActorAuthority`,
+   * which {@link effective} builds from this.
    *
    * Today it refuses exactly one thing: a `SENIOR_PASTOR` row on an account whose
    * Person is not one of the two section 4 names (`senior-pastors.ts`). Such a row
@@ -125,23 +133,6 @@ export class AuthorizationService {
     return false;
   }
 
-  /**
-   * The roles the account currently holds.
-   *
-   * Authorization is decided by capability and scope, and this is the one rule
-   * that is not: SKILL.md section 5 invariant 4 names **roles** — "Only Admin or
-   * a Senior Pastor may do so" — because the rule is about who is outside the
-   * pastoral incentive rather than about what anyone was granted. It is exposed
-   * here rather than read from `account_roles` by the module that needs it,
-   * because `auth` owns that table (section 2, Modules).
-   *
-   * A row this system refuses to honour is already gone by the time a caller sees
-   * this — see {@link activeRoles}, which both this and `grantsFor` read through.
-   */
-  async rolesFor(accountId: string): Promise<AccountRole[]> {
-    return this.activeRoles(accountId);
-  }
-
   async grantsFor(accountId: string): Promise<EffectiveGrant[]> {
     return (await this.effective(accountId)).grants;
   }
@@ -153,10 +144,16 @@ export class AuthorizationService {
    * `authorityFor` needs both and used to ask for them separately, which read
    * `account_roles` twice — harmless while the second read was free, and no longer
    * free now that a row this system refuses to honour is logged where it is
-   * refused. That would have been two identical error lines per request, per
-   * unhonoured row, on the failure mode section 7 accepts.
+   * refused.
    *
-   * The remaining volume is bounded rather than merely small: the partial unique
+   * **It halved that method's contribution rather than the request's**, and the
+   * difference is worth stating because an earlier version of this paragraph did
+   * not. A write endpoint reaches `effective` twice regardless: once through the
+   * guard's `authorize`, and once through the `authorityFor` its own domain layer
+   * takes for section 5 invariant 1. So on the failure mode section 7 accepts, a
+   * reassignment logs two lines rather than three, not one rather than two.
+   *
+   * The volume is nonetheless bounded rather than merely small: the partial unique
    * index permits at most two active `SENIOR_PASTOR` rows, so at most two accounts
    * can produce this line at all.
    */

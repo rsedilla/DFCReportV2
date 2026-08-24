@@ -523,12 +523,17 @@ describe('reassigning a pastoral leader: the record (sections 5, 21, 22)', () =>
       // restore takes rather than the path provisioning takes: this role row is
       // inserted directly, so the grant-time check never ran on it.
       //
-      // **This isolates `rolesFor`, which nothing else does.** The Whole Church
-      // grant supplies the capability, so `grantsFor` is satisfied either way and
-      // a refusal cannot be coming from there. The only thing the role row can
-      // still contribute is the invariant 4 exemption, which section 5 decides by
-      // role — so naming the Person is the single variable between the two halves
-      // of this case.
+      // **This isolates the role half of an account's authority**, which nothing
+      // else does. The Whole Church grant supplies the capability, so the *grant*
+      // half is satisfied either way and a refusal cannot be coming from there.
+      // The only thing the role row can still contribute is the invariant 4
+      // exemption, which section 5 decides by role — so naming the Person is the
+      // single variable between the two halves of this case.
+      //
+      // *An earlier version said it isolates `rolesFor`. It did when it was
+      // written; the batch that folded `authorityFor` into `effective` removed that
+      // method's last caller and made the sentence false, in the same batch that
+      // was correcting three other claims of exactly this kind. `rolesFor` is gone.*
       const manuelSeniorPastor = await createAccount(app, db, {
         person: manuel,
         roles: ['SENIOR_PASTOR'],
