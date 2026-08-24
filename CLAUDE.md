@@ -2693,8 +2693,10 @@ what made the difference visible.
 
 *The first version of this entry, and three other files with it, put
 `people.correct_sex` in the "argued nowhere" group. §7 argues it 87 lines above the
-sentence denying it, on the same ground as `people.merge` — and migration 0005 had
-already said so correctly. The ruling is unaffected, since self-perpetuation is what
+sentence denying it, on the same ground as `people.merge`. Migration 0005 is not the
+counter-example this entry first cited: its header says §7 "argues four of them and
+is silent on" two, which accounts for six of the seven and leaves `people.correct_sex`
+out of both groups — its list of silent ones is right and its count is one short. The ruling is unaffected, since self-perpetuation is what
 decides the line and `people.correct_sex` is not; what was wrong was the taxonomy
 offered as its justification, asserted without grepping §7 for the third member.*
 

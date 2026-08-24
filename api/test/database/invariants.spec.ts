@@ -686,7 +686,14 @@ describe('the database enforces the section 3 and section 7 rules it can', () =>
    */
   function grant(
     accountId: string,
-    capability: 'roles.manage' | 'accounts.manage' | 'people.merge' | 'people.correct_sex',
+    capability:
+      | 'roles.manage'
+      | 'accounts.manage'
+      | 'people.merge'
+      | 'people.correct_sex'
+      | 'settings.manage'
+      | 'cell.approve_creation'
+      | 'records.backdate_effective_date',
   ) {
     return db
       .insertInto('capability_grants')
@@ -749,8 +756,18 @@ describe('the database enforces the section 3 and section 7 rules it can', () =>
       .values({ account_id: oriel, role: 'SENIOR_PASTOR', senior_pastor_slot: 1 })
       .execute();
 
-    await expect(grant(oriel, 'people.merge')).resolves.toBeDefined();
-    await expect(grant(oriel, 'people.correct_sex')).resolves.toBeDefined();
+    // All five, not a sample. The TypeScript set is pinned exactly in
+    // `grant-making.spec.ts`; this is the hand-kept SQL copy in `is_grant_making`,
+    // which is the half that can drift, so it gets the exact assertion too.
+    for (const capability of [
+      'people.merge',
+      'people.correct_sex',
+      'records.backdate_effective_date',
+      'settings.manage',
+      'cell.approve_creation',
+    ] as const) {
+      await expect(grant(oriel, capability)).resolves.toBeDefined();
+    }
   });
 
   it('lets a revoked grant free the account, which is how one is undone', async () => {

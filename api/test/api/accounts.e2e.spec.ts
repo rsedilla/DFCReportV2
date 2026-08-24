@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
+import { sql } from 'kysely';
 import request from 'supertest';
 
 import { createTestDb, truncateAll } from '../setup/database';
@@ -563,6 +564,126 @@ describe('accounts: provisioning, activation and reset (section 6)', () => {
    * a unique index in the first place, and a check made only at the write is skipped
    * by exactly the same paths.
    */
+  describe('a grant-making capability the rule does not honour (section 7)', () => {
+    /**
+     * Builds the state migration 0006 refuses, the way a restore would.
+     *
+     * **This is the scenario the second enforcement point exists for, not an
+     * approximation of it.** Section 7 puts the check on the request path because
+     * `pg_restore --disable-triggers` skips a constraint trigger entirely, so the
+     * only honest way to reach the state is to disable the trigger and write it.
+     * The API's role can do that today, which is itself the open item on
+     * least-privilege credentials.
+     */
+    async function loadPastTheTriggers(
+      account: TestAccount,
+      capability: 'roles.manage' | 'accounts.manage' = 'roles.manage',
+    ): Promise<void> {
+      await sql`ALTER TABLE capability_grants DISABLE TRIGGER capability_grants_not_for_senior_pastor`.execute(
+        db,
+      );
+
+      try {
+        await db
+          .insertInto('capability_grants')
+          .values({
+            account_id: account.id,
+            capability,
+            scope_type: 'WHOLE_CHURCH',
+            scope_network: null,
+            read_only: false,
+            reason: 'Fixture: the row a restore can load past the trigger.',
+            granted_by: account.id,
+          })
+          .execute();
+      } finally {
+        await sql`ALTER TABLE capability_grants ENABLE TRIGGER capability_grants_not_for_senior_pastor`.execute(
+          db,
+        );
+      }
+    }
+
+    it('grants nothing where the account carries a SENIOR_PASTOR row', async () => {
+      const account = await createAccount(app, db, {
+        person: ester,
+        roles: ['SENIOR_PASTOR'],
+        seniorPastorSlot: 1,
+      });
+      nameSeniorPastors(app, [ester.id]);
+
+      await loadPastTheTriggers(account);
+
+      const response = await request(app.getHttpServer())
+        .get('/api/v1/auth/me')
+        .set('Authorization', `Bearer ${account.accessToken}`);
+
+      const held = (response.body.capabilities as { capability: string }[]).map(
+        (row) => row.capability,
+      );
+
+      expect(held).not.toContain('roles.manage');
+      // Still a Senior Pastor in every other respect, so the filter is refusing the
+      // grant rather than the account.
+      expect(held).toContain('people.manage_pastoral_assignment');
+    });
+
+    it('refuses on the row, not on whether the role is honoured', async () => {
+      // **The mutation nothing else catches.** `activeRoles` returns `held` beside
+      // `honoured` precisely so this decision matches the database, which refuses
+      // the pair on the row and never consults configuration. Switch the filter to
+      // `honoured` and this case goes red while every other test stays green.
+      const account = await createAccount(app, db, {
+        person: ester,
+        roles: ['SENIOR_PASTOR'],
+        seniorPastorSlot: 1,
+      });
+      // Deliberately *not* named, so the role row is present and unhonoured.
+      nameSeniorPastors(app, []);
+
+      await loadPastTheTriggers(account);
+
+      const response = await request(app.getHttpServer())
+        .get('/api/v1/auth/me')
+        .set('Authorization', `Bearer ${account.accessToken}`);
+
+      // The role confers nothing because it is unhonoured, and the grant confers
+      // nothing because the row is there. The account holds no authority at all.
+      expect(response.body.capabilities).toEqual([]);
+    });
+
+    it('answers CAPABILITY_DENIED, since the capability is held at no scope', async () => {
+      // Client-visible, so it is pinned rather than inferred. A dropped grant means
+      // the account does not hold the capability at all — `SCOPE_DENIED` would send
+      // an administrator to widen a scope that cannot exist, which is the
+      // distinction section 22's two codes draw and the one the 2026-08-24 ruling
+      // settled for the identity check.
+      const account = await createAccount(app, db, {
+        person: ester,
+        roles: ['SENIOR_PASTOR'],
+        seniorPastorSlot: 1,
+      });
+      nameSeniorPastors(app, [ester.id]);
+
+      // **`accounts.manage`, not `roles.manage`, and that is the whole design of
+      // this case.** A Senior Pastor does not hold `accounts.manage` by default, so
+      // a request refused for want of it proves nothing unless the grant is the
+      // only thing that could have supplied it. Without the filter this account
+      // holds it church-wide and the call succeeds.
+      await loadPastTheTriggers(account, 'accounts.manage');
+
+      const target = await createPerson(db, { firstName: 'Rico', network: 'MENS' });
+
+      const response = await request(app.getHttpServer())
+        .post('/api/v1/accounts')
+        .set('Authorization', `Bearer ${account.accessToken}`)
+        .set('Idempotency-Key', randomUUID())
+        .send({ person_id: target.id, email: 'rico@example.test', role: 'ADMIN' });
+
+      expect(response.status).toBe(403);
+      expect(response.body.error.code).toBe('CAPABILITY_DENIED');
+    });
+  });
+
   describe('a SENIOR_PASTOR row the rule does not honour (section 7)', () => {
     function me(account: TestAccount): request.Test {
       return request(app.getHttpServer())

@@ -29,10 +29,16 @@
 --
 --     A first version of this file put `people.correct_sex` in that last group.
 --     Section 7 argues it explicitly, on the same ground as `people.merge`, 87
---     lines above the sentence that denied it -- and migration 0005 had it right.
---     The conclusion is unchanged, because it is self-perpetuation that decides
---     the line and none of these five is; the taxonomy offered as the reason was
---     simply not checked against the section.
+--     lines above the sentence that denied it. The conclusion is unchanged --
+--     self-perpetuation decides the line and none of these five is -- but the
+--     taxonomy offered as the reason was not checked against the section.
+--
+--     Migration 0005 is not the counter-example it was first cited as. Its header
+--     says section 7 "argues four of them and is silent on `settings.manage` and
+--     `cell.approve_creation`", which accounts for six of the seven: its list of
+--     silent ones is right and its count is one short, leaving `people.correct_sex`
+--     out of both groups. It is merged and only 0001 may be corrected in place, so
+--     this is where a reader learns that.
 --
 -- So the five remain ordinary Admin-issued grants: audited, revocable, and needing
 -- a second party every time. Only the pair that removes the second party
@@ -73,19 +79,31 @@
 --
 -- **Two mechanism dependencies, neither of them obvious from the code.**
 --
--- The trigger functions must stay VOLATILE, which `plpgsql` gives them by default
--- and nothing here restates. Volatility is what makes each statement take a fresh
--- snapshot, so the read *after* the lock sees the transaction that held it first.
--- Marked STABLE, the post-lock read would silently revert to the snapshot the
--- transaction arrived with: nothing raises, no test goes red, and the rule stops
--- holding under concurrency. That is the same staleness section 24 records for
--- REPEATABLE READ.
+-- The row lock requires a VOLATILE function, which `plpgsql` gives these two by
+-- default. PostgreSQL runs a non-volatile function's statements read-only and
+-- refuses a row-locking SELECT inside one, so marking either trigger function
+-- STABLE does not weaken the rule quietly -- it fails at the lock, loudly, and
+-- every grant-limit case goes red. Recorded because it is the sort of tidying
+-- somebody attempts on a function that only reads.
+--
+-- The two helpers above *are* STABLE, and that is correct rather than an
+-- oversight: a STABLE function runs on the snapshot of the statement that called
+-- it, and the caller here is the volatile trigger function, whose every statement
+-- takes a fresh snapshot under READ COMMITTED. So the post-lock read sees the
+-- transaction that held the lock first, which is the property the lock is for.
+--
+-- *An earlier version of this paragraph said the opposite -- that STABLE would
+-- silently decide on a stale snapshot -- while the file it is in declares the two
+-- reading functions STABLE four lines above. Wrong about the mechanism and
+-- contradicted by its own file.*
 --
 -- And this is the system's second dependency on READ COMMITTED, after the advisory
--- lock section 5 takes. Under REPEATABLE READ these triggers would take the lock
--- and then decide on the arrival snapshot, which is the failure the lock exists to
--- prevent. Section 24 names the isolation level as a requirement rather than a
--- default, and this is now a second reason it is one.
+-- lock section 5 takes. Under REPEATABLE READ the whole transaction answers from
+-- one snapshot taken before the lock, so these triggers would serialize correctly
+-- and then decide on stale reads -- and the two writers touch different tables, so
+-- neither raises a serialization failure to warn anybody. Section 24 names the
+-- isolation level as a requirement rather than a default, and this is now a second
+-- reason it is one.
 --
 -- Validated against existing data before enforcing, per the migration policy: no
 -- deployed database exists, and no API path can have produced the state --

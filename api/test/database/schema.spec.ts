@@ -151,17 +151,24 @@ describe('the schema (SKILL.md sections 4, 5, 6 and 7)', () => {
         'account_roles_senior_pastor_makes_no_grants',
       );
 
-      for (const trigger of [onGrants, onRoles]) {
-        expect(trigger).toEqual({
-          deferrable: true,
-          initially_deferred: true,
-          fires_on_insert: true,
-          fires_on_update: true,
-          timing: 'AFTER',
-          per_row: true,
-          enabled: true,
-        });
-      }
+      const shared = {
+        deferrable: true,
+        initially_deferred: true,
+        fires_on_insert: true,
+        fires_on_update: true,
+        timing: 'AFTER',
+        per_row: true,
+        enabled: true,
+      };
+
+      // The function is named too, because a migration repointing either trigger
+      // at a different function would otherwise pass -- which is the one fact
+      // `deleteTriggerFacts` asserts at all three of its call sites.
+      expect(onGrants).toEqual({ ...shared, function_name: 'assert_grant_not_for_senior_pastor' });
+      expect(onRoles).toEqual({
+        ...shared,
+        function_name: 'assert_senior_pastor_makes_no_grants',
+      });
     });
 
     it('ties the slot to the role, and refuses a null slot explicitly', async () => {
@@ -408,6 +415,7 @@ async function constraintTriggerFacts(
   timing: string;
   per_row: boolean;
   enabled: boolean;
+  function_name: string;
 }> {
   const result = await sql<{
     deferrable: boolean;
@@ -417,6 +425,7 @@ async function constraintTriggerFacts(
     timing: string;
     per_row: boolean;
     enabled: boolean;
+    function_name: string;
   }>`
     SELECT t.tgdeferrable          AS deferrable,
            t.tginitdeferred        AS initially_deferred,
@@ -424,8 +433,10 @@ async function constraintTriggerFacts(
            (t.tgtype & 16) <> 0    AS fires_on_update,
            (t.tgtype & 1) <> 0     AS per_row,
            CASE WHEN (t.tgtype & 2) <> 0 THEN 'BEFORE' ELSE 'AFTER' END AS timing,
-           t.tgenabled IN ('O', 'A') AS enabled
+           t.tgenabled IN ('O', 'A') AS enabled,
+           p.proname               AS function_name
       FROM pg_trigger t
+      JOIN pg_proc p ON p.oid = t.tgfoid
       JOIN pg_class c ON c.oid = t.tgrelid
      WHERE t.tgname = ${name}
        AND c.relname = ${table}

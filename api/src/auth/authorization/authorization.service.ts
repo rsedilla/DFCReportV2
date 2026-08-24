@@ -7,9 +7,9 @@ import { HierarchyService } from '../../hierarchy/hierarchy.service';
 import { NetworksService } from '../../networks/networks.service';
 
 import { isCapability, isReadCapability, type Capability } from './capabilities';
+import { isGrantMaking } from './grant-making';
 import { ROLE_DEFAULTS } from './role-defaults';
 import { ScopeType, type Scope, type Target } from './scopes';
-import { isGrantMaking } from './grant-making';
 import { isNamedSeniorPastor } from './senior-pastors';
 import { grantCoversNothing } from './single-scope';
 
@@ -35,7 +35,7 @@ export interface ActorAuthority {
 interface ActiveRoles {
   /** Roles whose row this system honours; the source of role defaults. */
   honoured: AccountRole[];
-  /** Every active role row, honoured or not. See {@link AuthorizationService}. */
+  /** Every active role row, honoured or not. See `activeRoles` for why both. */
   held: AccountRole[];
 }
 
@@ -80,7 +80,8 @@ export class AuthorizationService {
   ) {}
 
   /**
-   * The account's active roles, less any row this system refuses to honour.
+   * The account's active roles, in two lists: those whose row this system honours,
+   * and every row it holds.
    *
    * **The single reader of `account_roles` in this service, and that is the
    * point.** There were two — one for the roles an account holds, one inside
