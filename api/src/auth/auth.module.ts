@@ -1,12 +1,18 @@
 import { Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 
+import { AuditModule } from '../audit/audit.module';
 import { APP_CONFIG, type AppConfig } from '../config/configuration';
+import { EmailModule } from '../email/email.module';
 import { HierarchyModule } from '../hierarchy/hierarchy.module';
 import { NetworksModule } from '../networks/networks.module';
 
+import { AccountProvisioningService } from './account-provisioning.service';
+import { AccountTokensService } from './account-tokens.service';
+import { AccountsController } from './accounts.controller';
 import { AccountsRepository } from './accounts.repository';
 import { AuthController } from './auth.controller';
+import { CredentialsService } from './credentials.service';
 import { AuthService } from './auth.service';
 import { AccessTokenGuard } from './authorization/access-token.guard';
 import { AuthorizationService } from './authorization/authorization.service';
@@ -20,6 +26,8 @@ import { TokensService } from './tokens.service';
  */
 @Module({
   imports: [
+    AuditModule,
+    EmailModule,
     HierarchyModule,
     NetworksModule,
     JwtModule.registerAsync({
@@ -31,10 +39,13 @@ import { TokensService } from './tokens.service';
       }),
     }),
   ],
-  controllers: [AuthController],
+  controllers: [AuthController, AccountsController],
   providers: [
+    AccountProvisioningService,
+    AccountTokensService,
     AccountsRepository,
     AuthService,
+    CredentialsService,
     AuthorizationService,
     PasswordService,
     TokensService,

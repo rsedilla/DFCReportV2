@@ -7,6 +7,9 @@ import type { Kysely } from 'kysely';
 import { AppModule } from '../../src/app.module';
 import { TokensService } from '../../src/auth/tokens.service';
 import { configureApp } from '../../src/bootstrap';
+import { EMAIL_PORT } from '../../src/email/email.port';
+
+import { CapturingEmailAdapter } from './capturing-email.adapter';
 
 import type { AccountRole, Database, NetworkName, Sex } from '../../src/database/schema';
 
@@ -167,11 +170,25 @@ export async function createTestApp(controllers: Type<unknown>[] = []): Promise<
   const moduleRef = await Test.createTestingModule({
     imports: [AppModule],
     controllers,
-  }).compile();
+  })
+    // **The one provider a test replaces.** Everything else is the deployed
+    // wiring, deliberately — but the shipped adapter drops mail and never reveals
+    // a token (`src/email/logging-email.adapter.ts`), so an activation could not
+    // be completed against it. Swapped here rather than per suite, so no test can
+    // accidentally exercise a real sender, and so `app.get(EMAIL_PORT)` reaches
+    // the same instance the services were handed.
+    .overrideProvider(EMAIL_PORT)
+    .useClass(CapturingEmailAdapter)
+    .compile();
 
   const app = moduleRef.createNestApplication();
   configureApp(app);
   await app.init();
 
   return app;
+}
+
+/** The captured outbox for an app built by `createTestApp`. */
+export function outbox(app: INestApplication): CapturingEmailAdapter {
+  return app.get<CapturingEmailAdapter>(EMAIL_PORT);
 }
