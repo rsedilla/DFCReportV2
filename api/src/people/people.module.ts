@@ -32,9 +32,16 @@ import { PeopleSexCorrectionService } from './people.sex-correction.service';
  * write. The same argument covers `audit_log`, which section 21 makes append-only
  * and which this module was also the first to write.
  *
- * **Five services, one module**, split by operation rather than by layer: each
- * owns a rule this specification states, and every one still writes through the
- * same owning services.
+ * **Five services, one module.** Four are named for operations and one,
+ * `PeopleReadService`, for the reads; each owns a rule this specification states,
+ * and every one still writes through the same owning services.
+ *
+ * Section 2's "organise by module, never by layer" is about how the application is
+ * divided into modules and does not reach inside one — settled deliberately, since
+ * this module was the first large enough to need dividing and could not answer the
+ * question from the section. So the read seam is a judgement rather than a
+ * requirement, and the boundary that is enforced is still table ownership: none of
+ * the five can touch a table this module does not own.
  *
  * What it buys is that the two operations carrying a section number of their own —
  * the sex correction and the reassignment — can be reviewed alone. **What it does
