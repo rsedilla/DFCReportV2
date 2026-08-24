@@ -2470,8 +2470,8 @@ would have carried is what the request needed.** *That qualifier was missing for
 review passes, and it was copied unqualified into `SKILL.md` §7 by the batch written
 to close the false "written to §x" claim below.* A refused row has two consequences,
 and the sentence covered one: it also withholds the §5 invariant-4 exemption, and an
-actor holding the capability by some other route — a second role's defaults, or an
-explicit Whole Church grant — reaches that check and
+actor holding the capability by any other route — a second role's defaults, or an
+explicit grant at any scope that capability permits — reaches that check and
 is refused `SCOPE_DENIED` — which §22 already settles for a domain-layer statement
 about an actor's authority over a target, and which this branch's own test asserted
 the whole time. §7 now states both, and the principle they share: the code names the
@@ -2496,9 +2496,17 @@ exist to draw. A narrow grant of a Whole Church capability **names** it, so the
 account holds it and only the scope is unusable. A refused `SENIOR_PASTOR` row names
 nothing, so it contributes none of the role's capabilities at any scope, and where
 the account has no other source for the one being asked about, `SCOPE_DENIED` would
-send an administrator to widen a scope that does not exist. That qualifier was
-dropped by three successive versions of this paragraph, including the two written to
-correct it: an account holding a second role keeps whatever that names.
+send an administrator to widen a scope that does not exist. An account holding a
+second role keeps whatever that names.
+
+*That qualifier was missing here from the day this paragraph was written, and the
+paragraph then stood unrevised through both later correction batches — each of which
+edited the text immediately above or below it.* A first attempt to record that said
+it had been "dropped by three successive versions of this paragraph, including the
+two written to correct it", which is false twice over: the paragraph had exactly one
+earlier version, and neither correction batch touched it. Getting the history of a
+wrong claim wrong is the same fault one layer out, and the true version is the worse
+one — two passes read around this paragraph without reading it.
 The cost is that on the accepted failure mode, configuration lost, a real Senior
 Pastor is told they hold nothing while `account_roles` says otherwise; what resolves
 that is the error logged at the refusal, which names both causes, and the code is

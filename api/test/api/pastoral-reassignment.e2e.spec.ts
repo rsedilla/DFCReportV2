@@ -544,9 +544,12 @@ describe('reassigning a pastoral leader: the record (sections 5, 21, 22)', () =>
       });
       // **`CAPABILITY_DENIED`, and it is the honest code**, asked before the grant
       // exists so that the role row is the account's only possible source of
-      // authority. A refused row names nothing, so the account holds none of the
+      // authority. A refused row names nothing, so *this* account holds none of the
       // role's capabilities at any scope — `SCOPE_DENIED` would send an
-      // administrator to widen a scope that does not exist. That is the opposite
+      // administrator to widen a scope that does not exist. The emphasis is the
+      // qualifier the other three copies of this sentence had to be corrected for:
+      // it follows from the fixture holding no second role and no grant, not from
+      // the row being refused. That is the opposite
       // of `single-scope.ts`, where the capability *is* held, and the difference
       // is what section 22's two codes are for.
       const bare = await reassign(mark.id, { pastoral_leader_id: rico.id }, manuelSeniorPastor);

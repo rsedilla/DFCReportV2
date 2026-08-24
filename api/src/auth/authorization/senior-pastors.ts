@@ -42,19 +42,24 @@ import { sameId } from '../../common/identifiers';
  * being asked about, `CAPABILITY_DENIED` is the true answer and `SCOPE_DENIED`
  * would send an administrator to widen a scope that does not exist.
  *
- * **That qualifier is load-bearing and three earlier versions dropped it.** An
- * account holding a second role, or an explicit grant, keeps whatever those name
- * and is refused on its own terms — `accounts.e2e.spec.ts` builds exactly that,
- * a `LEADER` carrying an unhonoured row, and asserts it keeps own-subtree
- * authority.
+ * **That qualifier is load-bearing, and both versions of this docblock that made
+ * the claim about the *account* dropped it.** An account holding a second role, or
+ * an explicit grant, keeps whatever those name and is refused on its own terms —
+ * `accounts.e2e.spec.ts` builds exactly that, a `LEADER` carrying an unhonoured
+ * row, asserting it keeps own-subtree authority. This file's first version said it
+ * at row level and was right; the two that restated it about the account were not.
  *
  * **The other consequence of a refused row answers the other code, and this
  * paragraph did not say so for two review passes.** A refused row also withholds
  * the exemption section 5 invariant 4 decides by role — and an actor who holds the
- * capability by some other route — a second role's defaults, or an explicit Whole
- * Church grant — reaches that check and is refused
- * `SCOPE_DENIED`, which is what section 22 says a domain-layer statement about an
- * actor's authority over a target answers. Both codes name the half that failed;
+ * capability by any other route reaches that check and is refused `SCOPE_DENIED`,
+ * which is what section 22 says a domain-layer statement about an
+ * actor's authority over a target answers. Any other route, deliberately: a second
+ * role's defaults, or an explicit grant at *any* scope the capability permits, since
+ * `people.manage_pastoral_assignment` is not one of the Whole-Church-only set. An
+ * earlier version named a Whole Church grant as though it were the only way here,
+ * which is the same enumeration mistake one route further out. Both codes name the
+ * half that failed;
  * one unqualified sentence covered only the half being looked at, which is the
  * fault this file's own history is a record of. A test on this branch asserted the
  * `SCOPE_DENIED` case throughout.
