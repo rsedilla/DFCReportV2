@@ -47,7 +47,7 @@ Four rulings were forced by building it, each recorded in `CLAUDE.md` and amende
 - Networks, effective-dated (§4)
 - Pastoral assignments, with all five invariants enforced in the domain layer and in the database (§5)
 - Accounts: provisioning, activation, password reset (§6), and the email provider adapter behind it
-- **The domain half of the `SENIOR_PASTOR` rule** (§7): the database caps the count at two, and `auth` checks that the two are the Persons §4 names. The check had no owning stage until now
+- **The domain half of the `SENIOR_PASTOR` rule** (§7): the database caps the count at two, and `auth` checks that the two are the Persons §4 names. The check had no owning stage until now — **done**, and it reads the two Person identifiers from deployment configuration
 - The first real screens, and with them the UI libraries recorded in `CLAUDE.md`, and axe-core in CI over every route (`SKILL.md` §23, WCAG 2.2 AA)
 - **`audit_log`** (§21), **`idempotency_keys`** (§22) and **`settings`** (§7), with the first write endpoint
 - **Import the leadership tree**, through the dry-run, adjudicate, commit flow (`SKILL.md` §2, Initial data load)
@@ -55,6 +55,8 @@ Four rulings were forced by building it, each recorded in `CLAUDE.md` and amende
 Three tables Stage 1 did not create arrive here rather than later. §5 requires every reassignment to be audit logged, and §22 requires an `Idempotency-Key` on every state-changing request "from the first write endpoint, not added later" — and reassignment *is* the first write endpoint, so neither can wait for the stage that merely makes heavy use of them.
 
 `settings` is the third, and it was missing from this list until 2026-08-22. §2 holds the initial-encoding phase flag under `settings.manage`, and the tree import at the end of this stage runs inside that phase. Without the table the relaxation has no way to end, which is the failure the ruling on closing the phase exists to prevent: a relaxation attached to a phase with no defined end is a permanent relaxation.
+
+**The two items above are ordered, and the order is not obvious from the list.** The `SENIOR_PASTOR` check names its two Persons by identifier, and those identifiers do not exist until the import has created them — so the sequence is import, then read the two ids, then set `SENIOR_PASTOR_PERSON_IDS`, then restart, because the value is read once when the process starts (§7). Until that is done no `SENIOR_PASTOR` account can be provisioned and any such role row grants nothing, which is the deliberate fail-closed default and is correct for every moment before it.
 
 **Done when:** all eleven authorization tests are **green**, including case 7 exercised concurrently, and the real leadership tree is loaded in a development database.
 
