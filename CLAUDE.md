@@ -2427,9 +2427,76 @@ the import reproduces CI's exact message.
 Stage 3 will ask this question again when `cells` needs authorization, and the
 answer is that it imports `AuthorizationModule`.
 
+### 2026-08-24 — Who the two Senior Pastors are is read from configuration, and checked twice
+
+The domain half of the `SENIOR_PASTOR` rule, which had no owning stage until Stage
+2 and no source of truth at all. §7 caps the count in the database, says **which
+two Persons** hold it is checked in `auth`, and rules out the obvious answers by
+name — a flag on the Person, a reserved identifier — because either "would make
+the two most consequential accounts in the church depend on a row somebody could
+edit". It did not say what the check reads instead, so nothing could be built.
+
+**It reads deployment configuration**, naming the two by Person identifier.
+
+The test is not "is this outside the database" but **whether editing the source
+would be an escalation for whoever can edit it**, and that disposes of the
+alternatives without appeal to taste. A flag on the Person is editable under
+`people.edit_basic`, which an ordinary Leader holds over their own subtree. A
+`settings` row is editable under `settings.manage`, which is Admin's — and Admin
+deliberately holds neither seat, so a setting is a route by which Admin names
+themselves into one, collapsing the separation §7 builds by keeping
+`accounts.manage` and `roles.manage` away from the Senior Pastors. Hard-coding the
+two **names** from §4 and matching them against `persons` is the same defect one
+indirection out, and additionally fights §3, which says a name is not an identity
+and that a woman's surname may change.
+
+The environment is editable by whoever deploys the API, and that person already
+holds `JWT_SECRET` and can therefore mint a session for any account that exists.
+Configuration is the only candidate whose editor gains nothing from it.
+
+**Enforced at grant time and again at authority assembly.** Provisioning refuses a
+`SENIOR_PASTOR` request for an unnamed Person with `INVARIANT_VIOLATION`, and
+`AuthorizationService` drops a `SENIOR_PASTOR` row whose account belongs to anyone
+else — so it yields no role default and no §5 invariant-4 exemption.
+
+The second point exists for the reason the 2026-08-21 slot ruling gives for
+preferring an index to a counting trigger: `pg_restore --disable-triggers` skips a
+check that runs. A check made only where the row is written is skipped by a restore
+in exactly the same way, so the identity half needs an enforcement point on the
+path every request takes. `single-scope.ts` is the existing precedent for the
+shape — a row that cannot mean what it appears to mean is honoured as nothing
+rather than in part — and re-deriving it rather than copying it (§25 rule 19) is
+what makes it apply here: both are facts about a row that the database cannot
+express, so both must be re-decided wherever authority is assembled.
+
+**Absent configuration fails closed and the process still starts; malformed
+configuration stops it.** A fresh installation must boot and run the import (§2)
+before either Person exists to be named, so this cannot be a required value.
+Absent, no `SENIOR_PASTOR` can be provisioned and an existing row confers nothing,
+which is logged at startup. The availability cost is real and is accepted in
+writing: a deployment that loses the variable strips both Senior Pastors of their
+authority until it is restored. Fail-open was rejected — it would mean the check
+protects nothing in exactly the circumstance where nobody has noticed it is gone.
+A malformed value stops the process, because a typo produces the same silent
+stripping and would be noticed last.
+
+**The free-seat read stays unfiltered**, because the partial unique index it has to
+agree with is. A row this rule refuses to honour still occupies its slot, and
+offering that seat to a provisioning request would hand it a seat the insert then
+rejects — replacing an answer with a constraint violation, which is the failure
+§4's backdate floor and §22's error codes exist to prevent.
+
+Written to `SKILL.md` §7 in the same change.
+
+**One question is raised and deliberately not answered here.** Whether the mapping
+is exclusive the other way — whether Bishop Oriel or Pastora Geraldine may hold an
+`ADMIN` role on the same account — is not stated by §7, and an `ADMIN` row beside a
+`SENIOR_PASTOR` one would defeat the separation §7 builds. It is a separate ruling
+and is listed as unsettled below rather than decided in passing.
+
 ### Open — awaiting a ruling
 
-**One item awaits a ruling and blocks Stage 5. Seven other things are unsettled, none of them blocking. They are listed at the end, so this section is the whole of what is open.**
+**One item awaits a ruling and blocks Stage 5. Eight other things are unsettled, none of them blocking. They are listed at the end, so this section is the whole of what is open.**
 
 Nine items that stood here on 2026-08-22 were settled that day and are recorded above. Seven were Stop Conditions for Stage 2, and the last two were opened and closed the same day by `architecture-guardian` passes.
 
@@ -2448,4 +2515,5 @@ Two related questions have defined behaviour and are recorded in `SKILL.md` §12
 - **What the native clients owe on accessibility.** `SKILL.md` §23 binds the web application to WCAG 2.2 AA and says the equivalent obligation for a native client is the platform accessibility API rather than WCAG. Which platform guarantees, and what would fail a build, is a ruling to make when the client is.
 
 - **Whether the liveness probe should share the application connection pool.** §24 now records that it does, and that pool exhaustion therefore presents to the platform as a dead process — so the response is a restart that discards the transactions still making progress. A separate connection, or a probe that does not reach the database, are both defensible and mean different things by "healthy". Deployment work with a ruling attached, alongside the database-role item above.
+- **Whether a Senior Pastor may also hold `ADMIN` on the same account.** §7 names the two Persons who hold `SENIOR_PASTOR` and keeps `roles.manage` and `accounts.manage` away from that role, so that the church's two most visible accounts cannot escalate their own authority and every permission change involves a second party. Nothing forbids an `ADMIN` row beside the `SENIOR_PASTOR` one on the same account, which would defeat exactly that — §7 says an account holds at most one active row **per role**, not one row overall. Raised by the 2026-08-24 configuration ruling and deliberately not decided in it, because it is a rule about role combination rather than about who the two Persons are.
 - **Whether `audit_log`'s append-only guarantee tolerates `TRUNCATE`.** §5 records the exemption for history tables and leans it on a least-privilege role that does not exist, which is already open above. §21 says nothing at all, and the test suite truncates `audit_log` before every test. Same answer as the `TRUNCATE` question above, most likely, but it is not written down for the one table whose whole purpose is that nothing removes a row.
