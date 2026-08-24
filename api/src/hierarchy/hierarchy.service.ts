@@ -1,6 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { sql } from 'kysely';
 
+import { Capability } from '../auth/authorization/capabilities';
 import { InvariantViolationError, ScopeDeniedError } from '../common/errors/api-error';
 import { sameId } from '../common/identifiers';
 import { DATABASE, type Db } from '../database/database.module';
@@ -172,6 +173,55 @@ export class HierarchyService {
       .execute();
 
     return { previousLeaderId: closed?.leader_id ?? null };
+  }
+
+  /**
+   * SKILL.md section 5 invariant 1: a reassignment has a source and a destination
+   * and the actor must be authorized for **both**.
+   *
+   * Validating only the destination lets an actor pull people in from a branch
+   * they do not oversee; validating only the source lets them push people out of
+   * their scope and lose them. The guard evaluates the person being reassigned and
+   * neither of these, which is why the rule is here: section 7 says a capability
+   * and a scope carry one target, and the conditions concerning other objects are
+   * enforced in the owning module's domain layer.
+   *
+   * A null source is a Person with no current assignment. There is no second
+   * endpoint to authorize, and section 5 permits an unassigned Person.
+   *
+   * **`covers` is a parameter rather than a dependency, and that is the whole
+   * design of this method.** Deciding whether an actor's scope reaches a person is
+   * `auth`'s job, and `auth` answers it by asking *this* module about the tree
+   * (`isWithinSubtree`). Injecting `AuthorizationService` here would therefore
+   * close a loop between the two modules that decide authorization, and would need
+   * a `forwardRef` this codebase has never used. Splitting it the other way costs
+   * nothing and is the same seam section 7 already draws: this module owns **which
+   * endpoints must be covered** and what the refusal says; `auth` owns **what
+   * covered means**. The caller passes the second in.
+   *
+   * The caller is also what makes the executor honest. A coverage test built over
+   * a transaction sees that transaction; one built over the pool does not, and
+   * this method cannot tell the difference — which is why the reassignment path
+   * builds it from `coversWith` inside its own transaction, after taking the lock.
+   */
+  async assertBothEndpointsInScope(
+    sourceLeaderId: string | null,
+    destinationLeaderId: string,
+    covers: (personId: string) => Promise<boolean>,
+  ): Promise<void> {
+    const endpoints: { label: string; personId: string }[] = [
+      { label: 'pastoral_leader_id', personId: destinationLeaderId },
+      ...(sourceLeaderId === null ? [] : [{ label: 'current_leader', personId: sourceLeaderId }]),
+    ];
+
+    for (const endpoint of endpoints) {
+      if (!(await covers(endpoint.personId))) {
+        throw new ScopeDeniedError(
+          'A reassignment must stay within your authorized scope at both ends: the leader the person is moving from, and the leader they are moving to.',
+          { capability: Capability.PeopleManagePastoralAssignment, field: endpoint.label },
+        );
+      }
+    }
   }
 
   /**

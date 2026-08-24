@@ -1184,12 +1184,10 @@ export class PeopleService {
       const current = await this.hierarchy.openAssignmentOf(trx, personId);
 
       // Invariant 1, against the state this transaction will actually write over.
-      await this.assertBothEndpointsInScope(
-        trx,
-        actor,
-        authority,
+      await this.hierarchy.assertBothEndpointsInScope(
         current?.leaderId ?? null,
         input.leaderId,
+        (personId) => this.isWithinManageScope(trx, actor, authority, personId),
       );
 
       if (current !== null && current.leaderId === null) {
@@ -1338,42 +1336,19 @@ export class PeopleService {
   }
 
   /**
-   * SKILL.md section 5 invariant 1: a reassignment has a source and a destination
-   * and the actor must be authorized for **both**.
+   * Whether the actor holds `people.manage_pastoral_assignment` over this person.
    *
-   * Validating only the destination lets an actor pull people in from a branch
-   * they do not oversee; validating only the source lets them push people out of
-   * their scope and lose them. The guard evaluates the person being reassigned and
-   * neither of these, which is why both are here.
+   * This is the coverage test section 5 invariant 1 is evaluated with, and it is
+   * supplied to `hierarchy.assertBothEndpointsInScope` rather than reimplemented
+   * there. `auth` decides what covered means and answers by asking `hierarchy`
+   * about the tree, so `hierarchy` asking `auth` back would close a loop between
+   * the two modules that decide authorization.
    *
-   * A null source is a Person with no current assignment. There is no second
-   * endpoint to authorize, and section 5 permits an unassigned Person.
+   * It takes an executor because the reassignment path builds it inside its own
+   * transaction, after the lock: a coverage test over the pool would answer from
+   * the state the request arrived with, which is the staleness the lock exists to
+   * remove (section 24, Transaction isolation).
    */
-  async assertBothEndpointsInScope(
-    executor: Db,
-    actor: Actor,
-    authority: ActorAuthority,
-    sourceLeaderId: string | null,
-    destinationLeaderId: string,
-  ): Promise<void> {
-    const endpoints: { label: string; personId: string }[] = [
-      { label: 'pastoral_leader_id', personId: destinationLeaderId },
-      ...(sourceLeaderId === null ? [] : [{ label: 'current_leader', personId: sourceLeaderId }]),
-    ];
-
-    for (const endpoint of endpoints) {
-      const covered = await this.isWithinManageScope(executor, actor, authority, endpoint.personId);
-
-      if (!covered) {
-        throw new ScopeDeniedError(
-          'A reassignment must stay within your authorized scope at both ends: the leader the person is moving from, and the leader they are moving to.',
-          { capability: Capability.PeopleManagePastoralAssignment, field: endpoint.label },
-        );
-      }
-    }
-  }
-
-  /** Whether the actor holds `people.manage_pastoral_assignment` over this person. */
   private async isWithinManageScope(
     executor: Db,
     actor: Actor,

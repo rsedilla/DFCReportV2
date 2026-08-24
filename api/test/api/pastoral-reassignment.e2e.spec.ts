@@ -4,7 +4,8 @@ import { Client } from 'pg';
 import request from 'supertest';
 
 import { AuthorizationService } from '../../src/auth/authorization/authorization.service';
-import { PeopleService } from '../../src/people/people.service';
+import { Capability } from '../../src/auth/authorization/capabilities';
+import { HierarchyService } from '../../src/hierarchy/hierarchy.service';
 import { createTestDb, truncateAll } from '../setup/database';
 import { assignTo, createAccount, createPerson, createTestApp, EPOCH } from '../setup/fixtures';
 
@@ -528,19 +529,31 @@ describe('reassigning a pastoral leader: the record (sections 5, 21, 22)', () =>
       // same-Network rule puts them in the same Network. Section 5 mandates the
       // check anyway, and a scope type added later would not be subsumed — so it
       // gets the only test that can fail against its absence.
-      const people = app.get(PeopleService);
+      // **It lives in `hierarchy` and takes its coverage test as a parameter.**
+      // Deciding whether an actor's scope reaches a person is `auth`'s job, and
+      // `auth` answers it by asking `hierarchy` about the tree — so injecting
+      // `AuthorizationService` into `hierarchy` would close a loop between the two
+      // modules that decide authorization. `hierarchy` owns which endpoints must be
+      // covered; `auth` owns what covered means. This calls it the way the
+      // reassignment path does.
+      const hierarchy = app.get(HierarchyService);
       const authorization = app.get(AuthorizationService);
       const authority = await authorization.authorityFor(raymondAccount.id);
 
       const actor = { accountId: raymondAccount.id, personId: raymond.id };
+      const covers = (personId: string): Promise<boolean> =>
+        authorization.coversWith(db, actor, authority, Capability.PeopleManagePastoralAssignment, {
+          kind: 'person',
+          personId,
+        });
 
       await expect(
-        people.assertBothEndpointsInScope(db, actor, authority, rico.id, manuel.id),
+        hierarchy.assertBothEndpointsInScope(rico.id, manuel.id, covers),
       ).rejects.toMatchObject({ code: 'SCOPE_DENIED', details: { field: 'current_leader' } });
 
       // And it permits what it should, so it is not satisfied by refusing everyone.
       await expect(
-        people.assertBothEndpointsInScope(db, actor, authority, manuel.id, raymond.id),
+        hierarchy.assertBothEndpointsInScope(manuel.id, raymond.id, covers),
       ).resolves.toBeUndefined();
     });
   });
