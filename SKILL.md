@@ -1371,8 +1371,16 @@ two codes.
 The rule is general rather than named per capability, because the hole is. It was
 first closed for `people.correct_sex` alone, and the same shape was open on
 `accounts.manage`, `roles.manage`, `people.merge`, `records.backdate_effective_date`,
-`settings.manage`, `people.manage_lifecycle`, `cell.approve_creation` and
-`audit.view`. `accounts.manage` was the worst of them: a subtree-scoped grant is a
+`settings.manage`, `people.manage_lifecycle` and `cell.approve_creation`.
+
+**`audit.view` is deliberately not among them**, and the two lines above say why:
+an audit entry resolves through its target, which is machinery with no purpose
+unless the capability can be held narrower — at Whole Church a target is never
+consulted. A narrower grant of a read gives strictly *less* than the default
+rather than more, so there is no escalation to close. The sentence naming a
+setting as "Whole Church only, and never in scope at any narrower value" is how
+this section says what this rule says, and it is written for settings and not for
+audit on purpose. `accounts.manage` was the worst of them: a subtree-scoped grant is a
 route to provisioning yourself an Admin account and signing in as one, which is the
 escalation the whole catalog is arranged to prevent. Naming them one at a time is as
 many chances to miss the next.

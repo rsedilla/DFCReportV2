@@ -6,6 +6,8 @@ import { IdempotencyService } from '../common/idempotency/idempotency.service';
 import { DATABASE, type Db } from '../database/database.module';
 import { EMAIL_PORT, type EmailPort, type OutboundEmail } from '../email/email.port';
 
+import { PeopleReadService } from '../people/people.read.service';
+
 import { AccountTokensService } from './account-tokens.service';
 import { normalizeEmail } from './accounts.repository';
 import { type Actor } from './authorization/authorization.service';
@@ -68,6 +70,7 @@ export class AccountProvisioningService {
     @Inject(DATABASE) private readonly db: Db,
     @Inject(EMAIL_PORT) private readonly email: EmailPort,
     private readonly tokens: AccountTokensService,
+    private readonly people: PeopleReadService,
     private readonly audit: AuditService,
     private readonly idempotency: IdempotencyService,
   ) {}
@@ -88,17 +91,14 @@ export class AccountProvisioningService {
     }
 
     const outcome = await this.db.transaction().execute(async (trx) => {
-      const person = await trx
-        .selectFrom('persons')
-        .select(['id', 'first_name', 'middle_name', 'last_name', 'merged_into_id'])
-        .where('id', '=', input.personId)
-        .executeTakeFirst();
+      // Through `people`, which owns `persons` and `person_lifecycle` (section 2).
+      const person = await this.people.forDecisionWithin(trx, input.personId);
 
       if (!person) {
         throw new NotFoundError('No such person.');
       }
 
-      if (person.merged_into_id !== null) {
+      if (person.mergedIntoId !== null) {
         throw new InvariantViolationError(
           'That person was absorbed by a merge. Use the surviving Person instead.',
           { person_id: input.personId },
@@ -113,17 +113,8 @@ export class AccountProvisioningService {
       // Consistent with every neighbouring rule: section 5 refuses an archived
       // Person as a pastoral destination, section 3 refuses archiving somebody who
       // leads a Cell. An archived Person does not acquire new live relationships,
-      // and an account is one. `leader-assignability.ts` reads this same table for
-      // the analogous decision, twenty lines from the merged check above — which is
-      // the one that was carried across here while this one was not.
-      const lifecycle = await trx
-        .selectFrom('person_lifecycle')
-        .select('state')
-        .where('person_id', '=', input.personId)
-        .where('ended_at', 'is', null)
-        .executeTakeFirst();
-
-      if (lifecycle?.state === 'ARCHIVED') {
+      // and an account is one.
+      if (person.isArchived) {
         throw new InvariantViolationError(
           'That person is archived. Restore them first, which is a separate and separately audited decision.',
           { person_id: input.personId },
@@ -241,12 +232,7 @@ export class AccountProvisioningService {
         body,
         message: {
           kind: 'ACTIVATION' as const,
-          to: {
-            email: account.email,
-            name: [person.first_name, person.middle_name, person.last_name]
-              .filter((part) => part !== null && part !== '')
-              .join(' '),
-          },
+          to: { email: account.email, name: person.fullName },
           token: token.token,
           expiresAt: token.expiresAt,
         },
@@ -274,24 +260,24 @@ export class AccountProvisioningService {
    * link from a first attempt that *did* arrive stops working. That is the right
    * way round: the reason to re-send is that the first one did not reach anybody.
    */
-  async resendActivation(accountId: string, actor: Actor): Promise<void> {
+  async resendActivation(accountId: string, actor: Actor, claim: CurrentClaim): Promise<void> {
     const outcome = await this.db.transaction().execute(async (trx) => {
       const account = await trx
         .selectFrom('accounts')
-        .innerJoin('persons', 'persons.id', 'accounts.person_id')
-        .select([
-          'accounts.id as id',
-          'accounts.email as email',
-          'accounts.status as status',
-          'persons.first_name as first_name',
-          'persons.middle_name as middle_name',
-          'persons.last_name as last_name',
-        ])
-        .where('accounts.id', '=', accountId)
+        .select(['id', 'person_id', 'email', 'status'])
+        .where('id', '=', accountId)
         .executeTakeFirst();
 
       if (!account) {
         throw new NotFoundError('No such account.');
+      }
+
+      const person = await this.people.forDecisionWithin(trx, account.person_id);
+
+      if (!person) {
+        // Unreachable: `accounts.person_id` is a foreign key. Checked because the
+        // alternative is addressing an email to `undefined`.
+        throw new NotFoundError('No such person.');
       }
 
       // Only an account that has never been activated. An `ACTIVE` holder who has
@@ -319,14 +305,18 @@ export class AccountProvisioningService {
         targetId: accountId,
       });
 
+      // **Last statement, like every other write endpoint** (CLAUDE.md, Write
+      // endpoints). Omitted at first, which made this the only write in the API
+      // that recorded no completion — and the omission was not a narrow window but
+      // the designed path: this endpoint raises on a delivery failure, the
+      // interceptor's `release` then matched because the row genuinely was
+      // `IN_FLIGHT`, and the retry minted a second token and wrote a second audit
+      // entry claiming a re-send.
+      await this.idempotency.completeWithin(trx, { ...claim, status: 204, body: null });
+
       return {
         kind: 'ACTIVATION' as const,
-        to: {
-          email: account.email,
-          name: [account.first_name, account.middle_name, account.last_name]
-            .filter((part) => part !== null && part !== '')
-            .join(' '),
-        },
+        to: { email: account.email, name: person.fullName },
         token: token.token,
         expiresAt: token.expiresAt,
       };

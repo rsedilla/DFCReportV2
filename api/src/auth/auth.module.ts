@@ -4,8 +4,9 @@ import { JwtModule } from '@nestjs/jwt';
 import { AuditModule } from '../audit/audit.module';
 import { APP_CONFIG, type AppConfig } from '../config/configuration';
 import { EmailModule } from '../email/email.module';
-import { HierarchyModule } from '../hierarchy/hierarchy.module';
-import { NetworksModule } from '../networks/networks.module';
+import { PeopleModule } from '../people/people.module';
+
+import { AuthorizationModule } from './authorization/authorization.module';
 
 import { AccountProvisioningService } from './account-provisioning.service';
 import { AccountTokensService } from './account-tokens.service';
@@ -15,8 +16,6 @@ import { AuthController } from './auth.controller';
 import { CredentialsService } from './credentials.service';
 import { AuthService } from './auth.service';
 import { AccessTokenGuard } from './authorization/access-token.guard';
-import { AuthorizationService } from './authorization/authorization.service';
-import { CapabilityGuard } from './authorization/capability.guard';
 import { PasswordService } from './password.service';
 import { TokensService } from './tokens.service';
 
@@ -27,9 +26,14 @@ import { TokensService } from './tokens.service';
 @Module({
   imports: [
     AuditModule,
+    AuthorizationModule,
     EmailModule,
-    HierarchyModule,
-    NetworksModule,
+    // **`auth` reads no table it does not own.** Provisioning and the reset flow
+    // both need a Person's name and lifecycle, and section 2 gives `persons` to
+    // `people` — so they ask `people` rather than joining its table. This import
+    // is only possible because the authorization seam moved out: `people` needs
+    // `AuthorizationService`, and importing `AuthModule` for it made this a cycle.
+    PeopleModule,
     JwtModule.registerAsync({
       inject: [APP_CONFIG],
       useFactory: (config: AppConfig) => ({
@@ -46,21 +50,13 @@ import { TokensService } from './tokens.service';
     AccountsRepository,
     AuthService,
     CredentialsService,
-    AuthorizationService,
     PasswordService,
     TokensService,
     AccessTokenGuard,
-    CapabilityGuard,
   ],
   // AccessTokenGuard and CapabilityGuard are registered as global guards in
   // AppModule, so their dependencies must be resolvable from there. Nest resolves
   // a provider's dependencies in the context of the module that registers it.
-  exports: [
-    AccountsRepository,
-    AuthorizationService,
-    AccessTokenGuard,
-    CapabilityGuard,
-    TokensService,
-  ],
+  exports: [AccountsRepository, AccessTokenGuard, TokensService],
 })
 export class AuthModule {}

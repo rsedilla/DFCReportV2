@@ -1,11 +1,9 @@
-import { ROLE_DEFAULTS } from './role-defaults';
+import { Capability } from './capabilities';
 import { ScopeType } from './scopes';
 
-import type { Capability } from './capabilities';
-
 /**
- * The capabilities SKILL.md section 7's catalog gives at Whole Church and nowhere
- * else, for which a **narrower** grant covers nothing.
+ * The capabilities SKILL.md section 7 gives at Whole Church and nowhere else, for
+ * which a **narrower** grant covers nothing.
  *
  * Section 7 gives several capabilities exactly one scope, and the guard alone
  * cannot hold that: it asks whether a grant covers the target, so a grant issued
@@ -16,40 +14,47 @@ import type { Capability } from './capabilities';
  * them: a subtree-scoped grant of it is a route to provisioning yourself an Admin
  * account and signing in as one.
  *
- * **Derived from the catalog rather than transcribed beside it.** A hand-kept list
- * is a second copy that goes stale the moment `ROLE_DEFAULTS` changes, and the
- * failure would be silent in the direction that matters — a capability dropping
- * out of the list still authorizes, it just stops being protected. Deriving it
- * means adding a Whole-Church-only capability to the catalog protects it in the
- * same change.
+ * **Stated rather than derived, and the first version was derived.** Computing it
+ * from `ROLE_DEFAULTS` — "every role that holds this holds it at Whole Church" —
+ * looked self-maintaining and had the wrong predicate. Since `ADMIN` and
+ * `SENIOR_PASTOR` hold every capability at Whole Church, it reduced to "`LEADER`
+ * does not hold it by default", which is a different property: it is a statement
+ * about who gets it automatically, not about the scope at which it may be held.
+ *
+ * That produced a false positive on `audit.view`, and section 7 says so twice over.
+ * "An audit entry resolves through its target" is machinery with no purpose unless
+ * the capability can be held narrower — at Whole Church the target is never
+ * consulted. And the very next line, "a **setting** is Whole Church only, and is
+ * never in scope at any narrower value", is this specification's own way of saying
+ * what this file says; audit is deliberately not written that way. A narrower
+ * `audit.view` grants strictly *less* than the default, so there is no escalation
+ * to close — and the rule was removing authority section 7 contemplates.
+ *
+ * A stated list is a second copy that can go stale, which is the real objection to
+ * it. `single-scope.spec.ts` is the answer: it asserts the membership, so a role
+ * default edited in Stage 3 cannot silently add or remove protection.
  *
  * A **wider** grant is untouched, which is deliberate: section 7 contemplates
  * Admin issuing authority beyond a role's defaults, and this rule is about a grant
  * that cannot mean what it appears to mean, not about capping anyone.
  */
-export const WHOLE_CHURCH_ONLY: ReadonlySet<Capability> = deriveWholeChurchOnly();
-
-function deriveWholeChurchOnly(): ReadonlySet<Capability> {
-  const seen = new Map<Capability, Set<ScopeType>>();
-
-  for (const defaults of Object.values(ROLE_DEFAULTS)) {
-    for (const [capability, scopeType] of Object.entries(defaults)) {
-      const scopes = seen.get(capability as Capability) ?? new Set<ScopeType>();
-      scopes.add(scopeType);
-      seen.set(capability as Capability, scopes);
-    }
-  }
-
-  const only = new Set<Capability>();
-
-  for (const [capability, scopes] of seen) {
-    if (scopes.size === 1 && scopes.has(ScopeType.WholeChurch)) {
-      only.add(capability);
-    }
-  }
-
-  return only;
-}
+export const WHOLE_CHURCH_ONLY: ReadonlySet<Capability> = new Set([
+  // Section 7 states the escalation for each of these: moving a person between
+  // Networks without holding `people.manage_pastoral_assignment`; granting
+  // authority; merging identities; rewriting periods already reported; changing
+  // behaviour for the whole church from one control; provisioning an account and
+  // the role that qualifies it; archiving, which reduces a leader's own People
+  // count and is the incentive section 3 guards against; and approving a Cell,
+  // which mints a Cell Leader and provisions their credentials.
+  Capability.PeopleCorrectSex,
+  Capability.PeopleManageLifecycle,
+  Capability.PeopleMerge,
+  Capability.RecordsBackdateEffectiveDate,
+  Capability.SettingsManage,
+  Capability.AccountsManage,
+  Capability.RolesManage,
+  Capability.CellApproveCreation,
+]);
 
 /**
  * Whether a grant of this capability at this scope can mean anything.

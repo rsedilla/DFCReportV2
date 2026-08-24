@@ -4,6 +4,7 @@ import { ApiError, ApiErrorCode } from '../common/errors/api-error';
 
 import { AccountsRepository } from './accounts.repository';
 import { AuthorizationService, type Actor } from './authorization/authorization.service';
+import { grantCoversNothing } from './authorization/single-scope';
 import { PasswordService } from './password.service';
 import { ACCESS_TOKEN_TTL_SECONDS, TokensService } from './tokens.service';
 
@@ -172,13 +173,26 @@ export class AuthService {
       account_id: actor.accountId,
       person_id: actor.personId,
       email: account?.email ?? null,
-      capabilities: grants.map((grant) => ({
-        capability: grant.capability,
-        scope_type: grant.scope.type,
-        scope_network: grant.scope.network,
-        read_only: grant.readOnly,
-        source: grant.source,
-      })),
+      // **A grant that covers nothing is not advertised.** Section 7 gives some
+      // capabilities Whole Church and nothing narrower, and a narrower grant of one
+      // authorizes no request at all — so publishing it invites a client to render
+      // an action that is refused every time it is attempted, which is what section
+      // 7 says this response must not do.
+      //
+      // Filtered here rather than in `grantsFor`, because that is where the first
+      // version put it and the account then looked as though it lacked the
+      // capability entirely, turning a `SCOPE_DENIED` into a `CAPABILITY_DENIED`.
+      // `grantsFor` already suppresses the other meaningless grant — a `read_only`
+      // write capability — and the two now behave alike from a client's side.
+      capabilities: grants
+        .filter((grant) => !grantCoversNothing(grant.capability, grant.scope.type))
+        .map((grant) => ({
+          capability: grant.capability,
+          scope_type: grant.scope.type,
+          scope_network: grant.scope.network,
+          read_only: grant.readOnly,
+          source: grant.source,
+        })),
     };
   }
 

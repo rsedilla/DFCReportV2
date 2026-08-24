@@ -18,6 +18,22 @@ import {
 } from './people.shared';
 
 /**
+ * What another module may learn about a Person in order to decide about them.
+ *
+ * Deliberately not `PersonRecord`: section 8 protects a birthday and a mobile
+ * number, and a cross-module reader has no business receiving them. This carries
+ * the identity needed to address somebody and the two lifecycle facts that decide
+ * whether they may acquire a new relationship.
+ */
+export interface PersonForDecision {
+  id: string;
+  /** Composed here, because `people` owns name shape (section 3). */
+  fullName: string;
+  mergedIntoId: string | null;
+  isArchived: boolean;
+}
+
+/**
  * Reading a Person, and the church-wide directory search (SKILL.md sections 3 and
  * 8).
  *
@@ -25,6 +41,9 @@ import {
  * transaction, no person lock, no idempotency claim, no audit entry. Section 8's
  * redaction is the whole of the authorization work here, and keeping it away from
  * the eleven-step write skeleton is what makes either readable.
+ *
+ * It is also where other modules ask about a Person, since this one owns `persons`
+ * and `person_lifecycle` (section 2) — see `forDecisionWithin`.
  */
 @Injectable()
 export class PeopleReadService {
@@ -34,6 +53,50 @@ export class PeopleReadService {
     private readonly networks: NetworksService,
     private readonly authorization: AuthorizationService,
   ) {}
+
+  /**
+   * The interface another module uses to decide something about a Person.
+   *
+   * **`persons` and `person_lifecycle` belong to this module** (section 2), so a
+   * module that needs to know whether somebody may be given an account, or what to
+   * call them in an email, asks here rather than joining the tables. `auth` did
+   * join them, in three places, until the authorization seam moved into its own
+   * module and made this import possible without a cycle.
+   *
+   * It takes an executor because every caller so far is deciding inside its own
+   * transaction, and a pooled read there answers from the state the request
+   * arrived with.
+   */
+  async forDecisionWithin(executor: Db, personId: string): Promise<PersonForDecision | null> {
+    const person = await executor
+      .selectFrom('persons')
+      .leftJoin('person_lifecycle', (join) =>
+        join
+          .onRef('person_lifecycle.person_id', '=', 'persons.id')
+          .on('person_lifecycle.ended_at', 'is', null),
+      )
+      .select([
+        'persons.id as id',
+        'persons.first_name as first_name',
+        'persons.middle_name as middle_name',
+        'persons.last_name as last_name',
+        'persons.merged_into_id as merged_into_id',
+        'person_lifecycle.state as state',
+      ])
+      .where('persons.id', '=', personId)
+      .executeTakeFirst();
+
+    if (!person) {
+      return null;
+    }
+
+    return {
+      id: person.id,
+      fullName: composeName(person),
+      mergedIntoId: person.merged_into_id,
+      isArchived: person.state === 'ARCHIVED',
+    };
+  }
 
   /**
    * A Person by id, or null.

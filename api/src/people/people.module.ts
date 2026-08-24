@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
 
-import { AuthModule } from '../auth/auth.module';
+import { AuthorizationModule } from '../auth/authorization/authorization.module';
 import { HierarchyModule } from '../hierarchy/hierarchy.module';
 import { NetworksModule } from '../networks/networks.module';
 
@@ -56,7 +56,7 @@ import { PeopleSexCorrectionService } from './people.sex-correction.service';
  * it after the lock — and this split neither detected nor prevented that.
  */
 @Module({
-  imports: [HierarchyModule, NetworksModule, AuthModule],
+  imports: [HierarchyModule, NetworksModule, AuthorizationModule],
   controllers: [PeopleController],
   providers: [
     PeopleService,

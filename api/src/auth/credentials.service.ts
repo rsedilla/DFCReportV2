@@ -5,6 +5,8 @@ import { ValidationFailedError } from '../common/errors/api-error';
 import { DATABASE, type Db } from '../database/database.module';
 import { EMAIL_PORT, type EmailPort } from '../email/email.port';
 
+import { PeopleReadService } from '../people/people.read.service';
+
 import { AccountTokensService } from './account-tokens.service';
 import { normalizeEmail } from './accounts.repository';
 import { PasswordService } from './password.service';
@@ -29,6 +31,7 @@ export class CredentialsService {
     @Inject(DATABASE) private readonly db: Db,
     @Inject(EMAIL_PORT) private readonly email: EmailPort,
     private readonly tokens: AccountTokensService,
+    private readonly people: PeopleReadService,
     private readonly sessions: TokensService,
     private readonly passwords: PasswordService,
     private readonly audit: AuditService,
@@ -58,16 +61,8 @@ export class CredentialsService {
   async requestPasswordReset(email: string): Promise<void> {
     const account = await this.db
       .selectFrom('accounts')
-      .innerJoin('persons', 'persons.id', 'accounts.person_id')
-      .select([
-        'accounts.id as id',
-        'accounts.email as email',
-        'accounts.status as status',
-        'persons.first_name as first_name',
-        'persons.middle_name as middle_name',
-        'persons.last_name as last_name',
-      ])
-      .where('accounts.email_normalized', '=', normalizeEmail(email))
+      .select(['id', 'person_id', 'email', 'status'])
+      .where('email_normalized', '=', normalizeEmail(email))
       .executeTakeFirst();
 
     // A disabled account is not reset into life: section 6 makes reactivation "a
@@ -84,14 +79,12 @@ export class CredentialsService {
           this.tokens.mintWithin(trx, account.id, 'PASSWORD_RESET', RESET_LIFETIME_MS),
         );
 
+      // Through `people`, which owns `persons` (section 2).
+      const person = await this.people.forDecisionWithin(this.db, account.person_id);
+
       await this.email.send({
         kind: 'PASSWORD_RESET',
-        to: {
-          email: account.email,
-          name: [account.first_name, account.middle_name, account.last_name]
-            .filter((part) => part !== null && part !== '')
-            .join(' '),
-        },
+        to: { email: account.email, name: person?.fullName ?? '' },
         token: token.token,
         expiresAt: token.expiresAt,
       });
@@ -145,12 +138,23 @@ export class CredentialsService {
       // minutes, an activation token by a week. Without this, an unauthenticated
       // endpoint undoes an `accounts.manage` decision.
       //
-      // Read inside the transaction and after the claim, so the answer is the
-      // state this write will actually overwrite.
+      // **Locked, not merely read inside the transaction.** Under `READ COMMITTED`
+      // (section 24) a bare read takes no lock and sees committed state at
+      // statement start, so a disablement committing between here and the update
+      // below would be silently overwritten and the account would come back
+      // `ACTIVE` with the token-holder's password. An earlier version of this
+      // comment claimed the read alone gave "the state this write will actually
+      // overwrite", which is the lock-then-decide omission section 5 exists to
+      // prevent, asserted rather than implemented.
+      //
+      // `FOR NO KEY UPDATE` on `accounts` first, which is the order every other
+      // path takes these two tables in — the revocation below then takes the same
+      // row, so no new wait is introduced and no cycle is possible.
       const account = await trx
         .selectFrom('accounts')
         .select('status')
         .where('id', '=', claimed.accountId)
+        .forNoKeyUpdate()
         .executeTakeFirstOrThrow();
 
       if (account.status === 'DISABLED') {

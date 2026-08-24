@@ -59,7 +59,11 @@ export class AccountsController {
   @Post(':id/activation-email')
   @HttpCode(HttpStatus.NO_CONTENT)
   @RequiresCapability(Capability.AccountsManage, { kind: 'account', from: 'params.id' })
-  async resendActivation(@Param('id') id: string, @CurrentActor() actor: Actor): Promise<void> {
-    await this.provisioning.resendActivation(id, actor);
+  async resendActivation(
+    @Param('id') id: string,
+    @CurrentActor() actor: Actor,
+    @CurrentIdempotency() claim: CurrentClaim,
+  ): Promise<void> {
+    await this.provisioning.resendActivation(id, actor, claim);
   }
 }
