@@ -4,8 +4,8 @@ import { Client } from 'pg';
 import request from 'supertest';
 
 import { AuthorizationService } from '../../src/auth/authorization/authorization.service';
-import { Capability } from '../../src/auth/authorization/capabilities';
 import { HierarchyService } from '../../src/hierarchy/hierarchy.service';
+import { PeopleReassignmentService } from '../../src/people/people.reassignment.service';
 import { createTestDb, truncateAll } from '../setup/database';
 import { assignTo, createAccount, createPerson, createTestApp, EPOCH } from '../setup/fixtures';
 
@@ -534,18 +534,21 @@ describe('reassigning a pastoral leader: the record (sections 5, 21, 22)', () =>
       // `auth` answers it by asking `hierarchy` about the tree — so injecting
       // `AuthorizationService` into `hierarchy` would close a loop between the two
       // modules that decide authorization. `hierarchy` owns which endpoints must be
-      // covered; `auth` owns what covered means. This calls it the way the
-      // reassignment path does.
+      // covered; `auth` owns what covered means.
+      //
+      // **The coverage comes from the reassignment service, not rebuilt here.** A
+      // first version constructed it from `coversWith` directly, which is
+      // *equivalent* rather than the same: it named the capability and the target
+      // kind a second time, so changing either on the production path would have
+      // left this passing against its own copy.
       const hierarchy = app.get(HierarchyService);
+      const reassignment = app.get(PeopleReassignmentService);
       const authorization = app.get(AuthorizationService);
       const authority = await authorization.authorityFor(raymondAccount.id);
 
       const actor = { accountId: raymondAccount.id, personId: raymond.id };
-      const covers = (personId: string): Promise<boolean> =>
-        authorization.coversWith(db, actor, authority, Capability.PeopleManagePastoralAssignment, {
-          kind: 'person',
-          personId,
-        });
+      const covers = (endpointId: string): Promise<boolean> =>
+        reassignment.isWithinManageScope(db, actor, authority, endpointId);
 
       await expect(
         hierarchy.assertBothEndpointsInScope(rico.id, manuel.id, covers),

@@ -13,12 +13,9 @@ import {
 import {
   ACCENTED,
   UNACCENTED,
-  comparisonForm,
   escapeLike,
   normalizeMobile,
-  normalizedFirstLetter,
   transpositionsOf,
-  visibleCandidates,
 } from './people.shared';
 
 /**
@@ -179,4 +176,106 @@ export class PeopleDuplicatesService {
       })),
     );
   }
+}
+
+function normalizedFirstLetter(value: string): string {
+  return (normalizeName(value)[0] ?? '').toLowerCase();
+}
+
+function comparisonForm(value: string): string {
+  return normalizeName(value);
+}
+
+/**
+ * The candidates a caller may be shown, membership included.
+ *
+ * **Two separate redactions, and the first is the one that took three attempts.**
+ *
+ * *Which candidates appear.* A candidate outside the viewer's pastoral scope is
+ * surfaced only if they would **still** have matched a subject carrying nothing
+ * section 8 protects — no birthday, no mobile number. `publishableIds` is that
+ * second run of the matcher, and membership out of scope is therefore a function
+ * of the names and sex alone.
+ *
+ * This is why **membership is itself the disclosure**: with a first name that
+ * matches nothing, "this person is in the result" is exactly "their birthday
+ * equals the value I submitted", answered 200 either way and writing nothing.
+ * Redacting fields on a returned candidate cannot close that, which is what the
+ * first two attempts did.
+ *
+ * It is a second run rather than a flag on the rule that fired, and that
+ * distinction cost a CI round. A candidate matching on *both* the names and the
+ * birthday is classified by the stronger rule, which reads a protected field — so
+ * a flag hid people whose presence the names alone already explain, which is
+ * backwards. What matters is not which rule won, but whether a publishable rule
+ * would have matched at all.
+ *
+ * *What each candidate carries.* In scope, the tier and the reasons. Out of
+ * scope, neither — the reasons name the field that matched, and the tier is
+ * derived from which rule fired, so with an equal name Tier 1 means the birthday
+ * matched and Tier 2 means it did not.
+ *
+ * The cost is real and is accepted (`SKILL.md` section 3): a cross-branch
+ * duplicate whose surname changed on marriage is no longer surfaced to a leader
+ * outside that branch, because that rule reads a birthday.
+ *
+ * One function, used by every surface that returns candidates, so the pre-flight
+ * lookup and the creation refusal cannot answer differently.
+ */
+export async function visibleCandidates(
+  matches: readonly Match[],
+  publishableIds: ReadonlySet<string>,
+  inScope: (personId: string) => Promise<boolean>,
+): Promise<Record<string, unknown>[]> {
+  const visible: Record<string, unknown>[] = [];
+
+  for (const match of matches) {
+    const withinScope = await inScope(match.candidate.id);
+
+    if (!withinScope && !publishableIds.has(match.candidate.id)) {
+      continue;
+    }
+
+    visible.push(describeCandidate(match, withinScope));
+  }
+
+  return visible;
+}
+
+/**
+ * A candidate as the caller may see it.
+ *
+ * `inScope` is required rather than defaulting to true. A default that discloses
+ * means a call site which forgets it leaks and still compiles — the wrong
+ * direction for a rule about what the church may see, and the same argument this
+ * project made for `completeWithin` taking a transaction rather than the pool.
+ *
+ * It is false for a candidate outside the viewer's pastoral scope, and
+ * then **neither the tier nor the reasons travel**.
+ *
+ * Withholding only the reasons was not enough, and the reason it was not is worth
+ * stating. The tier is derived from which rule matched: with the same first and
+ * last name, Tier 1 means the birthday was equal and Tier 2 means it was not. So
+ * a tier returned church-wide is a yes/no birthday oracle over a name section 8
+ * already makes visible — enumerable, answered 200 every time, writing nothing.
+ * The wording was hidden and the information kept.
+ *
+ * What an out-of-scope candidate carries instead is that they are a possible
+ * match. That is what section 3 needs the encoder to know: somebody may already
+ * be recorded, ask the leader who holds them. It is not what a caller can binary
+ * search on.
+ */
+export function describeCandidate(match: Match, inScope: boolean): Record<string, unknown> {
+  const identity = {
+    id: match.candidate.id,
+    member_id: match.candidate.memberId,
+    full_name: [match.candidate.firstName, match.candidate.middleName, match.candidate.lastName]
+      .filter((part) => part !== null && part !== '')
+      .join(' '),
+    sex: match.candidate.sex,
+  };
+
+  return inScope
+    ? { ...identity, tier: match.tier, reasons: match.reasons }
+    : { ...identity, possible_match: true };
 }

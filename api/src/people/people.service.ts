@@ -18,8 +18,14 @@ import type { CurrentClaim } from '../common/idempotency/current-idempotency.dec
 import type { CivilStatus, Json } from '../database/schema';
 
 /**
- * The `people` module: Person, Member ID, and the basic edit (SKILL.md section 2,
- * Modules). It is the only writer of `persons`.
+ * Person, Member ID, and the basic edit (SKILL.md section 2, Modules).
+ *
+ * **The module is the only writer of `persons`; this class is not.** The sex
+ * correction writes it too, which is what section 2's rule is actually about — it
+ * gives a table to a module, not to a class. Said precisely because this change
+ * exists to make ownership legible, and the sentence it replaced ("It is the only
+ * writer of `persons`") sat directly above a paragraph contrasting this class with
+ * the rest of the module, which is the reading that makes it false.
  *
  * The module's other work has its own services, because a single file assembling
  * every write path's invariants by hand is how one of them quietly ends up

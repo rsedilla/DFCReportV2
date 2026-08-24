@@ -191,10 +191,16 @@ export class PeopleReassignmentService {
       const current = await this.hierarchy.openAssignmentOf(trx, personId);
 
       // Invariant 1, against the state this transaction will actually write over.
+      //
+      // `endpointId`, not `personId`: the outer `personId` is the person being
+      // reassigned, and this lambda is asked about the two *leaders*. Shadowing it
+      // is harmless today because the body uses only its own parameter, and a
+      // later edit reaching for the outer name would silently authorize against
+      // the wrong person — on invariant 1, which fails open.
       await this.hierarchy.assertBothEndpointsInScope(
         current?.leaderId ?? null,
         input.leaderId,
-        (personId) => this.isWithinManageScope(trx, actor, authority, personId),
+        (endpointId) => this.isWithinManageScope(trx, actor, authority, endpointId),
       );
 
       if (current !== null && current.leaderId === null) {
@@ -361,8 +367,16 @@ export class PeopleReassignmentService {
    * transaction, after the lock: a coverage test over the pool would answer from
    * the state the request arrived with, which is the staleness the lock exists to
    * remove (section 24, Transaction isolation).
+   *
+   * **Public so that the one test which can reach invariant 1's source half calls
+   * the coverage function this path actually supplies.** No request reaches that
+   * half — under a subtree scope a person inside the actor's scope has their
+   * current leader inside it too, and under a Network scope the same-Network rule
+   * puts them in the same Network — so it is tested by direct call. Building the
+   * coverage by hand there would leave the capability and the target kind named in
+   * two places, and a change to either would go unnoticed.
    */
-  private async isWithinManageScope(
+  async isWithinManageScope(
     executor: Db,
     actor: Actor,
     authority: ActorAuthority,
