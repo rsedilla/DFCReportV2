@@ -140,13 +140,27 @@ describe('the schema (SKILL.md sections 4, 5, 6 and 7)', () => {
       // what makes the rule symmetric. A later migration dropping either would
       // leave the behavioural cases in invariants.spec.ts as the only guard, and
       // one of those passes on the surviving direction alone.
-      const onGrants = await triggerDefinition(db, 'capability_grants_not_for_senior_pastor');
-      const onRoles = await triggerDefinition(db, 'account_roles_senior_pastor_makes_no_grants');
+      const onGrants = await constraintTriggerFacts(
+        db,
+        'capability_grants',
+        'capability_grants_not_for_senior_pastor',
+      );
+      const onRoles = await constraintTriggerFacts(
+        db,
+        'account_roles',
+        'account_roles_senior_pastor_makes_no_grants',
+      );
 
-      for (const definition of [onGrants, onRoles]) {
-        expect(definition).toMatch(/CONSTRAINT TRIGGER/i);
-        expect(definition).toMatch(/DEFERRABLE INITIALLY DEFERRED/i);
-        expect(definition).toMatch(/AFTER INSERT OR UPDATE/i);
+      for (const trigger of [onGrants, onRoles]) {
+        expect(trigger).toEqual({
+          deferrable: true,
+          initially_deferred: true,
+          fires_on_insert: true,
+          fires_on_update: true,
+          timing: 'AFTER',
+          per_row: true,
+          enabled: true,
+        });
       }
     });
 
@@ -371,16 +385,58 @@ async function indexDefinition(db: Kysely<Database>, name: string): Promise<stri
   return result.rows[0].indexdef;
 }
 
-async function triggerDefinition(db: Kysely<Database>, name: string): Promise<string> {
-  const result = await sql<{ definition: string }>`
-    SELECT pg_get_triggerdef(oid) AS definition FROM pg_trigger WHERE tgname = ${name}
+/**
+ * A constraint trigger's shape, read from the catalog rather than from its
+ * definition text.
+ *
+ * Named for the table as well as the trigger, because trigger names are per
+ * relation in PostgreSQL -- so matching on the name alone passes for a trigger of
+ * the right name on the wrong table, and for one left disabled by
+ * `ALTER TABLE ... DISABLE TRIGGER`. That is the warning `deleteTriggerFacts`
+ * below already carries, and a first version of this helper reintroduced both
+ * gaps eighty lines above it.
+ */
+async function constraintTriggerFacts(
+  db: Kysely<Database>,
+  table: string,
+  name: string,
+): Promise<{
+  deferrable: boolean;
+  initially_deferred: boolean;
+  fires_on_insert: boolean;
+  fires_on_update: boolean;
+  timing: string;
+  per_row: boolean;
+  enabled: boolean;
+}> {
+  const result = await sql<{
+    deferrable: boolean;
+    initially_deferred: boolean;
+    fires_on_insert: boolean;
+    fires_on_update: boolean;
+    timing: string;
+    per_row: boolean;
+    enabled: boolean;
+  }>`
+    SELECT t.tgdeferrable          AS deferrable,
+           t.tginitdeferred        AS initially_deferred,
+           (t.tgtype & 4) <> 0     AS fires_on_insert,
+           (t.tgtype & 16) <> 0    AS fires_on_update,
+           (t.tgtype & 1) <> 0     AS per_row,
+           CASE WHEN (t.tgtype & 2) <> 0 THEN 'BEFORE' ELSE 'AFTER' END AS timing,
+           t.tgenabled IN ('O', 'A') AS enabled
+      FROM pg_trigger t
+      JOIN pg_class c ON c.oid = t.tgrelid
+     WHERE t.tgname = ${name}
+       AND c.relname = ${table}
+       AND NOT t.tgisinternal
   `.execute(db);
 
   if (result.rows.length === 0) {
-    throw new Error(`trigger ${name} does not exist`);
+    throw new Error(`constraint trigger ${name} does not exist on ${table}`);
   }
 
-  return result.rows[0].definition;
+  return result.rows[0];
 }
 
 async function constraintDefinition(db: Kysely<Database>, name: string): Promise<string> {

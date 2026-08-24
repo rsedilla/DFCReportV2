@@ -2613,7 +2613,10 @@ account — same destination, no `ADMIN` row, no constraint violated, and invisi
 to the identity check, which filters role rows and not grants. Found by
 `architecture-guardian`, which is the point of running it: the ruling was argued
 from the route being looked at. That question is escalated rather than inferred
-from this one, and is listed as open below.
+from this one, and is listed as open below. **Settled the same day** by the ruling
+below it: the grant-making pair is refused, the other five may be granted. Migration
+`0005`'s own header still says the question is open and is deliberately left alone —
+it is merged, and only `0001` may be corrected in place (ruling of 2026-08-21).
 
 **The cost is accepted and is the mechanism, not a side effect.** §6 gives one
 Person one Account, so Bishop Oriel and Pastora Geraldine cannot perform an
@@ -2682,10 +2685,18 @@ who would perform it no longer can.
 permanently.** §7 justifies withholding `roles.manage` and `accounts.manage` on
 exactly that ground — "every permission change has a second party involved" — and
 justifies `records.backdate_effective_date` and `people.merge` on a different one,
-that they move totals for periods already reported. `people.correct_sex`,
-`settings.manage` and `cell.approve_creation` it withholds in the table and argues
-nowhere. Treating the seven alike was a simplification of mine, not §7's position,
-and the review that found the hole is what made the difference visible.
+that they move totals for periods already reported. `people.correct_sex` it argues on that same
+second ground, explicitly. `settings.manage` and `cell.approve_creation` it
+withholds in the table and argues nowhere. Treating the seven alike was a
+simplification of mine, not §7's position, and the review that found the hole is
+what made the difference visible.
+
+*The first version of this entry, and three other files with it, put
+`people.correct_sex` in the "argued nowhere" group. §7 argues it 87 lines above the
+sentence denying it, on the same ground as `people.merge` — and migration 0005 had
+already said so correctly. The ruling is unaffected, since self-perpetuation is what
+decides the line and `people.correct_sex` is not; what was wrong was the taxonomy
+offered as its justification, asserted without grepping §7 for the third member.*
 
 **Two triggers, not one, and not an index.** The rule spans `account_roles` and
 `capability_grants`, so no index reaches it. Enforcing on grants alone is walkable

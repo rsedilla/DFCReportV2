@@ -20,12 +20,19 @@
 --     party section 7 requires is present when the grant is issued and never
 --     again. That is self-perpetuating and unrecoverable by anybody but the
 --     holder, which is what earns a constraint.
---   * `records.backdate_effective_date` and `people.merge` are argued by section 7
---     on different grounds -- they move totals for periods already reported -- and
---     each use is one audited operation that an Admin can still reverse the
---     authority for.
---   * `people.correct_sex`, `settings.manage` and `cell.approve_creation` are
---     withheld by the table and argued nowhere in section 7 at all.
+--   * `records.backdate_effective_date`, `people.merge` and `people.correct_sex`
+--     are argued by section 7 on a different ground -- each moves totals for
+--     periods already reported -- and each use is one audited operation that an
+--     Admin can still reverse the authority for.
+--   * `settings.manage` and `cell.approve_creation` are withheld by the table and
+--     argued nowhere in section 7 at all.
+--
+--     A first version of this file put `people.correct_sex` in that last group.
+--     Section 7 argues it explicitly, on the same ground as `people.merge`, 87
+--     lines above the sentence that denied it -- and migration 0005 had it right.
+--     The conclusion is unchanged, because it is self-perpetuation that decides
+--     the line and none of these five is; the taxonomy offered as the reason was
+--     simply not checked against the section.
 --
 -- So the five remain ordinary Admin-issued grants: audited, revocable, and needing
 -- a second party every time. Only the pair that removes the second party
@@ -63,6 +70,22 @@
 -- adds the role in the other order is doing nothing wrong, and reading final state
 -- also means a row inserted and revoked within one transaction has nothing left to
 -- validate.
+--
+-- **Two mechanism dependencies, neither of them obvious from the code.**
+--
+-- The trigger functions must stay VOLATILE, which `plpgsql` gives them by default
+-- and nothing here restates. Volatility is what makes each statement take a fresh
+-- snapshot, so the read *after* the lock sees the transaction that held it first.
+-- Marked STABLE, the post-lock read would silently revert to the snapshot the
+-- transaction arrived with: nothing raises, no test goes red, and the rule stops
+-- holding under concurrency. That is the same staleness section 24 records for
+-- REPEATABLE READ.
+--
+-- And this is the system's second dependency on READ COMMITTED, after the advisory
+-- lock section 5 takes. Under REPEATABLE READ these triggers would take the lock
+-- and then decide on the arrival snapshot, which is the failure the lock exists to
+-- prevent. Section 24 names the isolation level as a requirement rather than a
+-- default, and this is now a second reason it is one.
 --
 -- Validated against existing data before enforcing, per the migration policy: no
 -- deployed database exists, and no API path can have produced the state --

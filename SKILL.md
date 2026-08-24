@@ -1160,7 +1160,7 @@ Sex is excluded deliberately. Sex determines Network under the homogeneous-netwo
 
 ### Role catalog
 
-Three roles exist. Each carries the default capabilities and scopes below. Anything beyond a role's defaults requires an explicit, Admin-issued grant, and is read-only unless a management capability is granted alongside it.
+Three roles exist. Each carries the default capabilities and scopes below. Anything beyond a role's defaults requires an explicit, Admin-issued grant, and is read-only unless a management capability is granted alongside it. **Two capabilities are an exception and may not be granted to an account holding `SENIOR_PASTOR` at all** — see How grants are held, below.
 
 | Capability | Senior Pastor | Admin | Leader |
 | --- | --- | --- | --- |
@@ -1191,7 +1191,7 @@ Three roles exist. Each carries the default capabilities and scopes below. Anyth
 | `roles.manage` | — | Whole Church | — |
 | `people.merge` | — | Whole Church | — |
 
-Five of these defaults are deliberate and must not be widened for convenience.
+Five of these defaults are deliberate and must not be widened for convenience. Two of them — `roles.manage` and `accounts.manage`, for a Senior Pastor — may not be widened at all, by any grant and for any reason; the rest are defaults an Admin may deliberately exceed.
 
 **Senior Pastors do not hold `roles.manage` or `accounts.manage`.** Granting permissions and administering accounts is Admin's operational responsibility; Senior Pastor and Admin are different responsibilities even where their visibility overlaps (Section 19). Keeping grant-making out of the Senior Pastor role means the two highest-visibility accounts in the church cannot escalate their own authority, and every permission change has a second party involved.
 
@@ -1282,23 +1282,26 @@ An account's effective authority is the union of its roles' defaults, and Admin'
 
 It is self-perpetuating, which is why it is a constraint rather than a caution: such an account holds `roles.manage`, so it can retain the pair and revoke anybody else's roles, and its own permission changes no longer involve a second party. It would also mask the identity check above — where the configuration is lost, that check refuses the `SENIOR_PASTOR` row and the account falls to nothing, and an `ADMIN` row beside it keeps the account at full authority so the control never bites, for exactly the two accounts it exists for.
 
-**The role row is one route to that authority, and an explicit grant is the other.** The role catalog above permits Admin to grant any capability explicitly, so a Whole Church grant of `roles.manage` reaches the same place with no `ADMIN` row and no uniqueness constraint violated — and invisibly to the identity check, which filters role rows and not grants. That route is closed for two capabilities and left open for the rest.
-
-**`roles.manage` and `accounts.manage` are never held by an account holding `SENIOR_PASTOR`, by role or by explicit grant.** A grant of either against such an account is rejected, and so is a `SENIOR_PASTOR` row on an account already carrying one. Both answer `INVARIANT_VIOLATION` (Section 22).
-
-**The stopping point is two rather than the seven this section withholds, and the seven are not alike.** This is the pair that makes the combination self-perpetuating: a holder can grant themselves the remaining five and revoke everybody else's roles, so the second party this section requires is present when the grant is issued and never again, and no Admin can undo it afterwards. `records.backdate_effective_date` and `people.merge` are withheld on different grounds — they move totals for periods already reported — and each use is a single audited operation whose authority an Admin can still revoke. `people.correct_sex`, `settings.manage` and `cell.approve_creation` are withheld by the table and argued nowhere above.
-
-So the other five remain ordinary Admin-issued grants: explained, audited, revocable, and requiring a second party every time. Only the pair that removes the second party permanently is refused outright. **A capability joins that pair by amending this section**, which is where the argument for refusing it rather than auditing it has to be made.
-
-**Enforced in both directions, by constraint triggers rather than an index**, because the rule spans `account_roles` and `capability_grants` and no index reaches across two tables. Enforcing it on grants alone would be walkable from the other side — grant first, add the role second — so whichever row arrives second is the one refused. Each path takes `FOR NO KEY UPDATE` on the account before it looks: a deferred trigger sees only its own transaction's commit-time state, so without it two concurrent transactions writing the role and the grant would each see nothing and both commit, which is the defect this section's own Senior Pastor cap was corrected for.
-
-The cost is the same one the limit above accepts, and it is the reason for the rule rather than a side effect: the two Senior Pastors cannot be handed grant-making authority even temporarily, and an unreachable Admin is answered by a second Admin account rather than by widening theirs.
-
 **The cost is accepted rather than worked around.** Section 6 gives one Person one Account, so the two Senior Pastors cannot perform an administrative action at all: provisioning, a merge, a backdated record and a sex correction are each somebody else's to do. That is this section's own sentence — every permission change involves a second party — made true rather than aspirational, and the friction is the mechanism rather than a side effect of it.
 
 **Enforced by a partial unique index**, not by a check in `auth`. The identity half above must live in the application because the database holds no durable representation of who the two Persons are; this rule has no such gap, since role combination is entirely inside `account_roles`. An index therefore decides it where the state lives rather than where a request happens to pass, and is what a `pg_restore --disable-triggers` still enforces. It is not quite unrepresentable, and the difference is worth knowing: a full restore builds indexes after loading, so a dump already holding the pair loads and then fails index creation — loud, and not the same as impossible. Any endpoint that grants a role answers `INVARIANT_VIOLATION` (Section 22) rather than letting the constraint surface as an unhandled error.
 
 `LEADER` is outside the limit. It confers strictly less than either governing role and carries none of the excluded capabilities, so an account may hold it beside one of them without escalating anything.
+
+**The role row is one route to that authority, and an explicit grant is the other.** The role catalog above permits Admin to grant any capability explicitly, so a Whole Church grant of `roles.manage` reaches the same place with no `ADMIN` row and no uniqueness constraint violated — and invisibly to the identity check, which filters role rows and not grants. That route is closed for two capabilities and left open for the rest.
+
+**`roles.manage` and `accounts.manage` are never held by an account holding `SENIOR_PASTOR`, by role or by explicit grant.** A grant of either against such an account is rejected, and so is a `SENIOR_PASTOR` row on an account already carrying one. An endpoint that issues a grant or a role answers `INVARIANT_VIOLATION` (Section 22) rather than letting the constraint surface as an unhandled error; none exists yet, and that is the contract the first one owes.
+
+**The stopping point is two rather than the seven this section withholds, and the seven are not alike.** This pair is what makes the combination self-perpetuating: a holder can grant themselves the remaining five and revoke everybody else's roles, so the second party this section requires is present when the grant is issued and never again, and no Admin can undo it afterwards. `records.backdate_effective_date`, `people.merge` and `people.correct_sex` are withheld on a different ground, stated above — each moves totals for periods already reported — and each use is a single audited operation whose authority an Admin can still revoke. `settings.manage` and `cell.approve_creation` are withheld by the table and argued nowhere above.
+
+So the other five remain ordinary Admin-issued grants: explained, audited, revocable, and requiring a second party every time. Only the pair that removes the second party permanently is refused outright. **A capability joins that pair by amending this section**, which is where the argument for refusing it rather than auditing it has to be made.
+
+**Enforced in both directions, and in two places.** The rule spans `account_roles` and `capability_grants`, so no index reaches it and the database half is a pair of constraint triggers: enforcing on grants alone would be walkable from the other side — grant first, add the role second — so whichever row arrives second is the one refused. Each path takes `FOR NO KEY UPDATE` on the account before it looks, because a deferred trigger sees only its own transaction's commit-time state and two concurrent transactions writing the role and the grant would otherwise each see nothing and both commit, which is the defect this section's own Senior Pastor cap was corrected for.
+
+**And the grant is refused again where authority is assembled**, for the reason this section gives twice already: a constraint trigger is skipped entirely by `pg_restore --disable-triggers`, so a rule enforced only by one is a rule a restore can load straight past. A grant-making capability held by an account carrying a `SENIOR_PASTOR` row therefore contributes nothing, exactly as a `read_only` grant of a write capability does. Unlike the identity check, this one reads the role **row** rather than an honoured role, so that the two enforcement points refuse the same states rather than nearly the same ones.
+
+The cost is the same one the role limit above accepts, and it is the reason for that rule rather than a side effect: the two Senior Pastors cannot be handed grant-making authority even temporarily, and an unreachable Admin is answered by a second Admin account rather than by widening theirs.
+
 
 The enforcement is in two places, because the two halves of that rule are enforceable in different ways. The **count** is a database constraint: there are two slots, a holder occupies one, and a partial unique index over the slot permits no second occupant of either. Revoking a row frees its slot, which is how a succession happens.
 
@@ -3335,6 +3338,8 @@ The bound has a consequence that reaches beyond this section, and it is recorded
 The application runs at **`READ COMMITTED`**, PostgreSQL's default. It is named here because correctness now depends on it rather than merely tolerating it.
 
 Section 5 requires a Network change and a reassignment to take an advisory lock on the person and then decide — scope, invariant 4, invariant 1, the backdate floor — against what the lock reveals. Under `READ COMMITTED` each statement after the lock takes a fresh snapshot and therefore sees the transaction that held the lock before it. Under `REPEATABLE READ` the snapshot is taken by the transaction's *first* statement, which is the key hashing inside the lock helper and runs before the lock is held: every check after it would then be decided on the state the request arrived with, which is exactly the staleness the lock exists to remove.
+
+**A second dependency arrived with the grant limit in Section 7.** Its two constraint triggers take `FOR NO KEY UPDATE` on the account and then read the other table to decide, which is the same shape one statement further in: under `READ COMMITTED` the read after the lock sees the transaction that held it first, and under `REPEATABLE READ` it would answer from the snapshot the transaction arrived with. The same rule makes the trigger functions' default `VOLATILE` a correctness property rather than an incidental one — marked `STABLE` they would take no fresh snapshot, and the lock would serialize the transactions while deciding on stale reads.
 
 Some of those cases would fail loudly rather than silently — where the loser's own assignment row was the one that moved, its update would meet a version committed after its snapshot and raise a serialization failure. The dangerous ones are the cases where nothing the loser writes has changed and only the *decision* is stale: a concurrent move of an intermediate ancestor leaves the actor's scope different and every row this request touches untouched, so it commits, and it commits a write the actor was no longer authorized to make.
 
