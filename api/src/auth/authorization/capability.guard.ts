@@ -6,6 +6,7 @@ import {
   UnauthenticatedError,
   ValidationFailedError,
 } from '../../common/errors/api-error';
+import { isUuid } from '../../common/identifiers';
 
 import {
   AUTHENTICATED_ONLY_METADATA,
@@ -18,8 +19,6 @@ import { AuthorizationService, type Actor } from './authorization.service';
 
 import type { AuthenticatedRequest } from './access-token.guard';
 import type { Target } from './scopes';
-
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
  * The capability and scope check, applied to every endpoint (SKILL.md section 7).
@@ -95,7 +94,7 @@ export class CapabilityGuard implements CanActivate {
     }
 
     const value = readPath(request, spec.from);
-    if (typeof value !== 'string' || !UUID.test(value)) {
+    if (typeof value !== 'string' || !isUuid(value)) {
       throw new ValidationFailedError(`${spec.from} must be a UUID identifying the target.`, {
         field: spec.from,
       });

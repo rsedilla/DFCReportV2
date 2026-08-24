@@ -1,5 +1,9 @@
 import { isNamedSeniorPastor } from '../../src/auth/authorization/senior-pastors';
-import { loadConfig } from '../../src/config/configuration';
+import {
+  loadConfig,
+  seniorPastorsUnnamedWarning,
+  type AppConfig,
+} from '../../src/config/configuration';
 
 /**
  * Who may hold `SENIOR_PASTOR`, and where the answer comes from (SKILL.md
@@ -38,14 +42,26 @@ describe('the two Persons section 4 names (section 7)', () => {
       }
     });
 
-    it('is empty when unset, and the process still starts', () => {
+    it('is empty when unset or blank, and the process still starts', () => {
       // **Absent is legitimate and must not be fatal.** A fresh installation has
       // to boot and run the initial import (section 2) before either Person exists
       // to be named. Empty means the check fails closed, which is what the
       // application-level cases pin.
       expect(load(undefined)).toEqual([]);
       expect(load('')).toEqual([]);
-      expect(load('  ,  ')).toEqual([]);
+      expect(load('   ')).toEqual([]);
+    });
+
+    it('refuses a value that is present and names nobody', () => {
+      // **A bare separator is not blank, and the difference is the whole rule.** It
+      // is what a deployment template renders for an empty list, and unlike a
+      // missing value it *looks* configured — so treating it as absent would strip
+      // both Senior Pastors of their authority with nothing for a reviewer to see.
+      //
+      // Found by `architecture-guardian`: section 7 said any value that is not one
+      // or two well-formed identifiers stops the process, and this one booted.
+      expect(() => load(',')).toThrow(/names nobody/);
+      expect(() => load('  ,  ')).toThrow(/names nobody/);
     });
 
     it('accepts one or two, and canonicalizes them', () => {
@@ -79,6 +95,20 @@ describe('the two Persons section 4 names (section 7)', () => {
       // both were named.
       expect(() => load(`${OLIVE},${OLIVE}`)).toThrow(/same Person twice/);
       expect(() => load(`${OLIVE},${OLIVE.toUpperCase()}`)).toThrow(/same Person twice/);
+    });
+  });
+
+  describe('the startup warning', () => {
+    // Section 7 says the process says so at startup. `bootstrap()` is the one line
+    // nothing reaches, so the message is a value and this is what can fail on it.
+    const base = { seniorPastorPersonIds: [] } as unknown as AppConfig;
+
+    it('says so while nobody is named', () => {
+      expect(seniorPastorsUnnamedWarning(base)).toMatch(/SENIOR_PASTOR_PERSON_IDS is unset/);
+    });
+
+    it('says nothing once somebody is', () => {
+      expect(seniorPastorsUnnamedWarning({ ...base, seniorPastorPersonIds: [OLIVE] })).toBeNull();
     });
   });
 

@@ -206,6 +206,11 @@ export async function createTestApp(controllers: Type<unknown>[] = []): Promise<
  * green without anybody deciding it should. The rule is that a `SENIOR_PASTOR` row
  * grants nothing unless its Person is named, and a suite that wants the role has
  * to say so.
+ *
+ * **It bypasses `loadConfig`'s validation**, so nothing here stops a suite naming
+ * three people or a value that is not an identifier. `loadConfig` refuses both, so
+ * a scenario built that way is one no deployment can reach — the parsing rules are
+ * pinned in `test/unit/senior-pastors.spec.ts` and are not this helper's job.
  */
 export function nameSeniorPastors(app: INestApplication, personIds: string[]): void {
   app.get<AppConfig>(APP_CONFIG).seniorPastorPersonIds = personIds.map((id) => id.toLowerCase());

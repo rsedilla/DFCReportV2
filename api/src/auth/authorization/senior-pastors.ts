@@ -23,10 +23,27 @@ import { sameId } from '../../common/identifiers';
  * ruling's own, re-derived rather than copied (section 25, rule 19): a check made
  * only where a row is written is skipped by exactly the paths that skip a trigger.
  *
- * `single-scope.ts` is the nearest existing shape — a row that cannot mean what it
- * appears to mean is honoured as nothing rather than in part — and it applies for
- * the same underlying reason, that both express a fact about a row which the
- * database cannot.
+ * **A refused row answers `CAPABILITY_DENIED`, and that is derived here rather
+ * than borrowed.** An earlier version of this docblock cited `single-scope.ts` as
+ * the precedent — "a row that cannot mean what it appears to mean is honoured as
+ * nothing rather than in part" — which is the one thing that file does not do.
+ * `grantCoversNothing` is applied in the *scope* half of `authorize`, deliberately:
+ * the 2026-08-24 ruling records dropping it at assembly as a live defect, because
+ * the account then looked as though it did not hold the capability at all and a
+ * `SCOPE_DENIED` became a `CAPABILITY_DENIED`. Citing it while doing the removed
+ * thing is section 25 rule 19 committed inside a sentence claiming to apply it.
+ *
+ * The two differ on whether the capability is held at all, which is exactly what
+ * section 22's two codes distinguish. A narrow grant of a Whole Church capability
+ * names it, so the account holds it and only the scope is unusable. A refused
+ * `SENIOR_PASTOR` row names nothing: the account holds none of the role's
+ * capabilities, at any scope, so `CAPABILITY_DENIED` is the true answer and
+ * `SCOPE_DENIED` would send an administrator to widen a scope that does not exist.
+ *
+ * On the failure mode section 7 accepts — configuration lost — that means a real
+ * Senior Pastor is told they hold nothing while `account_roles` says otherwise.
+ * What resolves it is the error logged at the refusal, which names both causes,
+ * rather than a status code that could only be misleading in the other direction.
  */
 export function isNamedSeniorPastor(personId: string, named: readonly string[]): boolean {
   // `sameId`, not `===`. Both sides normally arrive from a `uuid` column or from

@@ -143,6 +143,26 @@ export class AuthorizationService {
   }
 
   async grantsFor(accountId: string): Promise<EffectiveGrant[]> {
+    return (await this.effective(accountId)).grants;
+  }
+
+  /**
+   * An account's roles and the authority they and its explicit grants carry, from
+   * one read of each table.
+   *
+   * `authorityFor` needs both and used to ask for them separately, which read
+   * `account_roles` twice — harmless while the second read was free, and no longer
+   * free now that a row this system refuses to honour is logged where it is
+   * refused. That would have been two identical error lines per request, per
+   * unhonoured row, on the failure mode section 7 accepts.
+   *
+   * The remaining volume is bounded rather than merely small: the partial unique
+   * index permits at most two active `SENIOR_PASTOR` rows, so at most two accounts
+   * can produce this line at all.
+   */
+  private async effective(
+    accountId: string,
+  ): Promise<{ roles: AccountRole[]; grants: EffectiveGrant[] }> {
     const [roles, grants] = await Promise.all([
       this.activeRoles(accountId),
       this.db
@@ -193,7 +213,7 @@ export class AuthorizationService {
       });
     }
 
-    return effective;
+    return { roles, grants: effective };
   }
 
   /**
@@ -298,12 +318,7 @@ export class AuthorizationService {
    * typed to make unrepresentable rather than merely absent.
    */
   async authorityFor(accountId: string): Promise<ActorAuthority> {
-    const [roles, grants] = await Promise.all([
-      this.rolesFor(accountId),
-      this.grantsFor(accountId),
-    ]);
-
-    return { accountId, roles, grants };
+    return { accountId, ...(await this.effective(accountId)) };
   }
 
   /**

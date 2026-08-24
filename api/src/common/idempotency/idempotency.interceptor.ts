@@ -16,7 +16,7 @@ import {
 } from '../errors/api-error';
 import { describeFailure } from '../errors/api-exception.filter';
 
-import { canonicalIfUuid, canonicalizeIdentifiers } from '../identifiers';
+import { canonicalIfUuid, canonicalizeIdentifiers, isUuid } from '../identifiers';
 
 import { IdempotencyService } from './idempotency.service';
 
@@ -24,8 +24,6 @@ import type { AuthenticatedRequest } from '../../auth/authorization/access-token
 import type { Json } from '../../database/schema';
 import type { Observable } from 'rxjs';
 import type { Response } from 'express';
-
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const STATE_CHANGING = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
@@ -95,7 +93,7 @@ export class IdempotencyInterceptor implements NestInterceptor {
       );
     }
 
-    if (!UUID.test(key)) {
+    if (!isUuid(key)) {
       throw new ValidationFailedError('Idempotency-Key must be a UUID.', {
         header: 'Idempotency-Key',
       });

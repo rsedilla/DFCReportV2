@@ -2463,11 +2463,29 @@ The second point exists for the reason the 2026-08-21 slot ruling gives for
 preferring an index to a counting trigger: `pg_restore --disable-triggers` skips a
 check that runs. A check made only where the row is written is skipped by a restore
 in exactly the same way, so the identity half needs an enforcement point on the
-path every request takes. `single-scope.ts` is the existing precedent for the
-shape — a row that cannot mean what it appears to mean is honoured as nothing
-rather than in part — and re-deriving it rather than copying it (§25 rule 19) is
-what makes it apply here: both are facts about a row that the database cannot
-express, so both must be re-decided wherever authority is assembled.
+path every request takes.
+
+**A refused row therefore answers `CAPABILITY_DENIED`.** *The first version of this
+entry cited `single-scope.ts` as the precedent for the shape — "a row that cannot
+mean what it appears to mean is honoured as nothing rather than in part" — and that
+is the one thing `single-scope.ts` does not do.* `grantCoversNothing` is applied in
+the **scope** half of `authorize`, and the 2026-08-24 ruling above records dropping
+it at assembly as a live defect precisely because the account then looked as though
+it held no such capability, turning a `SCOPE_DENIED` into a `CAPABILITY_DENIED`.
+Citing that file while doing the thing it had removed is §25 rule 19 failing inside
+the sentence claiming to apply it — the eighth time on this project, and the second
+inside a batch written to observe it. Found by `architecture-guardian`.
+
+The code is nonetheless right, for a reason of its own. The two cases differ on
+whether the capability is held at all, which is the distinction §22's two codes
+exist to draw. A narrow grant of a Whole Church capability **names** it, so the
+account holds it and only the scope is unusable. A refused `SENIOR_PASTOR` row names
+nothing, so the account holds none of the role's capabilities at any scope —
+`SCOPE_DENIED` would send an administrator to widen a scope that does not exist.
+The cost is that on the accepted failure mode, configuration lost, a real Senior
+Pastor is told they hold nothing while `account_roles` says otherwise; what resolves
+that is the error logged at the refusal, which names both causes, and the code is
+pinned by a test rather than left to be inferred.
 
 **Absent configuration fails closed and the process still starts; malformed
 configuration stops it.** A fresh installation must boot and run the import (§2)

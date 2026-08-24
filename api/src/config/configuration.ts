@@ -12,7 +12,11 @@ export interface AppConfig {
   databaseUrl: string;
   jwtSecret: string;
   corsAllowedOrigins: string[];
-  /** {@link seniorPastorPersonIds} */
+  /**
+   * The Person identifiers of the two Senior Pastors (SKILL.md section 7). Empty
+   * where none is configured, which fails the check closed. Parsed and validated
+   * by the loader below.
+   */
   seniorPastorPersonIds: string[];
 }
 
@@ -40,16 +44,21 @@ function required(name: string): string {
  * and the environment is editable by whoever deploys the API, who already holds
  * `JWT_SECRET` and can mint a session for any account that exists.
  *
- * **Absent is permitted and the process still starts**, because a fresh
- * installation has to boot and run the initial import (section 2) before either
- * Person exists to be named. Absent means the check fails closed: no
+ * **Absent — unset, or blank — is permitted and the process still starts**,
+ * because a fresh installation has to boot and run the initial import (section 2)
+ * before either Person exists to be named. Absent means the check fails closed: no
  * `SENIOR_PASTOR` account can be provisioned, and an existing role row confers
  * nothing.
  *
- * **Malformed does stop the process.** A typo strips both Senior Pastors of their
- * authority just as silently as a missing value, and unlike a missing value it
- * looks configured. Anything that is not one or two distinct, UUID-shaped
- * identifiers is refused here.
+ * **Anything else that names nobody stops the process**, including a value that is
+ * present and yields no identifier. A bare separator is what a deployment template
+ * renders for an empty list, and it *looks* configured — which is the distinction
+ * the whole rule turns on. A blank value and a missing one both read as "not set
+ * yet"; a typo strips both Senior Pastors of their authority just as silently and
+ * leaves nothing for a reviewer to notice.
+ *
+ * **Read once, when the process starts.** Naming the two after the import, and a
+ * succession later, each take effect on the next restart (section 7).
  *
  * Canonicalized on the way in, so a value spelled in uppercase — which
  * `UUID().uuidString` on iOS produces by default, and which a person copying an
@@ -57,10 +66,20 @@ function required(name: string): string {
  * the database does.
  */
 function seniorPastorPersonIds(): string[] {
-  const raw = (process.env.SENIOR_PASTOR_PERSON_IDS ?? '')
+  const configured = process.env.SENIOR_PASTOR_PERSON_IDS ?? '';
+  const raw = configured
     .split(',')
     .map((id) => id.trim())
     .filter((id) => id !== '');
+
+  if (raw.length === 0) {
+    if (configured.trim() !== '') {
+      throw new Error(
+        'SENIOR_PASTOR_PERSON_IDS is set and names nobody. Leave it empty to mean "not yet".',
+      );
+    }
+    return [];
+  }
 
   if (raw.length > SENIOR_PASTOR_SEATS) {
     throw new Error(
@@ -111,6 +130,32 @@ export function loadConfig(): AppConfig {
       .filter((origin) => origin !== ''),
     seniorPastorPersonIds: seniorPastorPersonIds(),
   };
+}
+
+/**
+ * What to say at startup when nobody is named, and null when somebody is.
+ *
+ * SKILL.md section 7 says the process says so at startup, and a sentence in a
+ * specification with nothing that can fail on it is what this repository keeps
+ * refusing to ship — so the message is a value that a test can hold rather than a
+ * `logger.warn` buried in `bootstrap()`, which nothing reaches.
+ *
+ * It is a warning and not an error because absent is legitimate: a fresh
+ * installation boots with it unset and runs the initial import (section 2). What
+ * makes it worth saying is the other case, a deployment that has *lost* the value,
+ * where both Senior Pastors are stripped of their authority and nothing else
+ * reports anything.
+ */
+export function seniorPastorsUnnamedWarning(config: AppConfig): string | null {
+  if (config.seniorPastorPersonIds.length > 0) {
+    return null;
+  }
+
+  return (
+    'SENIOR_PASTOR_PERSON_IDS is unset. No SENIOR_PASTOR account can be provisioned, and any ' +
+    'existing SENIOR_PASTOR role grants nothing. That is correct before the initial import ' +
+    'and wrong afterwards.'
+  );
 }
 
 export const APP_CONFIG = 'APP_CONFIG';
