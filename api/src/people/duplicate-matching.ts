@@ -52,7 +52,7 @@ export interface Match {
  *
  * That question is answered by running this matcher a second time against a
  * subject carrying nothing section 8 protects, and asking whether the candidate
- * still appears — see `PeopleService.visibleDuplicatesFor`. The property is
+ * still appears — see `PeopleDuplicatesService.visibleDuplicatesFor`. The property is
  * "would a publishable rule have matched", not "which rule won", and only the
  * second run expresses it.
  */

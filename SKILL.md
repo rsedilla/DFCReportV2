@@ -142,6 +142,10 @@ This is what makes "enforced in the domain layer" a statement rather than a hope
 
 Organise by module, never by layer. A `controllers/`, `services/`, `entities/` layout spreads every feature across four folders and gives no boundary anything can be enforced on.
 
+**That rule is about how the application is divided into modules, and reaches no further.** How one module arranges its own files is a judgement for whoever writes it: the boundary this section cares about is the module's, and it is enforced by table ownership rather than by filenames. A module holding a service for its reads alongside services for its operations breaks nothing here, because none of them can touch a table the module does not own.
+
+Stated because the rule reads as though it governs every seam, and the first module large enough to need dividing — `people`, split into five services in Stage 2 — had no way to answer from this section whether a read/write seam was permitted. The answer is that this section does not ask. What it forbids is a *module* that is a layer, which is the arrangement that leaves an invariant with four homes and no owner.
+
 ### Initial data load
 
 The church already exists. Roughly 800 Cells are running under an established leadership structure, and the system's first task is to record what is already there rather than to govern what gets created. Initial encoding is a distinct phase with its own rules.

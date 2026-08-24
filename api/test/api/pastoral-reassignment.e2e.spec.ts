@@ -4,7 +4,8 @@ import { Client } from 'pg';
 import request from 'supertest';
 
 import { AuthorizationService } from '../../src/auth/authorization/authorization.service';
-import { PeopleService } from '../../src/people/people.service';
+import { HierarchyService } from '../../src/hierarchy/hierarchy.service';
+import { PeopleReassignmentService } from '../../src/people/people.reassignment.service';
 import { createTestDb, truncateAll } from '../setup/database';
 import { assignTo, createAccount, createPerson, createTestApp, EPOCH } from '../setup/fixtures';
 
@@ -518,29 +519,47 @@ describe('reassigning a pastoral leader: the record (sections 5, 21, 22)', () =>
     });
 
     it('refuses a source the actor does not oversee, which no request can reach', async () => {
-      // **Called directly, and the previous version of this case did not.** It
-      // asserted the *destination* label rather than the source's, so it
-      // pinned the destination half a second time and the source entry could be
-      // deleted with the suite still green.
+      // **Called directly, because no request reaches this half.**
+      //
+      // An earlier version of this comment said the previous version of the case
+      // was not a direct call and asserted the destination label. Both halves were
+      // false: every version of this case since it was written has been a direct
+      // call asserting `current_leader`, the source label. Corrected rather than
+      // deleted, because a false reason is worse than none.
       //
       // No request can reach it: under a subtree scope a person inside the actor's
       // scope has their current leader inside it too, and under a Network scope the
       // same-Network rule puts them in the same Network. Section 5 mandates the
       // check anyway, and a scope type added later would not be subsumed — so it
       // gets the only test that can fail against its absence.
-      const people = app.get(PeopleService);
+      // **It lives in `hierarchy` and takes its coverage test as a parameter.**
+      // Deciding whether an actor's scope reaches a person is `auth`'s job, and
+      // `auth` answers it by asking `hierarchy` about the tree — so injecting
+      // `AuthorizationService` into `hierarchy` would close a loop between the two
+      // modules that decide authorization. `hierarchy` owns which endpoints must be
+      // covered; `auth` owns what covered means.
+      //
+      // **The coverage comes from the reassignment service, not rebuilt here.** A
+      // first version constructed it from `coversWith` directly, which is
+      // *equivalent* rather than the same: it named the capability and the target
+      // kind a second time, so changing either on the production path would have
+      // left this passing against its own copy.
+      const hierarchy = app.get(HierarchyService);
+      const reassignment = app.get(PeopleReassignmentService);
       const authorization = app.get(AuthorizationService);
       const authority = await authorization.authorityFor(raymondAccount.id);
 
       const actor = { accountId: raymondAccount.id, personId: raymond.id };
+      const covers = (endpointId: string): Promise<boolean> =>
+        reassignment.isWithinManageScope(db, actor, authority, endpointId);
 
       await expect(
-        people.assertBothEndpointsInScope(db, actor, authority, rico.id, manuel.id),
+        hierarchy.assertBothEndpointsInScope(rico.id, manuel.id, covers),
       ).rejects.toMatchObject({ code: 'SCOPE_DENIED', details: { field: 'current_leader' } });
 
       // And it permits what it should, so it is not satisfied by refusing everyone.
       await expect(
-        people.assertBothEndpointsInScope(db, actor, authority, manuel.id, raymond.id),
+        hierarchy.assertBothEndpointsInScope(manuel.id, raymond.id, covers),
       ).resolves.toBeUndefined();
     });
   });

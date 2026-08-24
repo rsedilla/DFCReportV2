@@ -4,7 +4,7 @@ import {
   type Candidate,
   type Subject,
 } from '../../src/people/duplicate-matching';
-import { isCalendarDate, transpositionsOf } from '../../src/people/people.service';
+import { isCalendarDate, transpositionsOf } from '../../src/people/people.shared';
 
 /**
  * SKILL.md section 3, Matching rules.
