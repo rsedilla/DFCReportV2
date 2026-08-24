@@ -191,6 +191,11 @@ describe('accounts: provisioning, activation and reset (section 6)', () => {
       const leaderPerson = await createPerson(db, { firstName: 'Rico', network: 'MENS' });
       const leader = await createAccount(app, db, { person: leaderPerson, roles: ['LEADER'] });
 
+      // A distinct target. An earlier version named the Leader's own Person, who
+      // already holds the account `createAccount` made for them — so "no account
+      // exists" was false for a reason that had nothing to do with the rule.
+      const target = await createPerson(db, { firstName: 'Manuel', network: 'MENS' });
+
       await db
         .insertInto('capability_grants')
         .values({
@@ -204,19 +209,23 @@ describe('accounts: provisioning, activation and reset (section 6)', () => {
         .execute();
 
       const response = await provision(
-        { person_id: leaderPerson.id, email: 'rico@example.test', role: 'ADMIN' },
+        { person_id: target.id, email: 'manuel@example.test', role: 'ADMIN' },
         leader,
       );
 
-      // CAPABILITY_DENIED, not SCOPE_DENIED: the grant covers nothing at all, so
-      // the account holds no usable `accounts.manage` whatever the target.
+      // **`SCOPE_DENIED`, not `CAPABILITY_DENIED`.** The account does hold
+      // `accounts.manage`; what it does not hold is a scope at which that grant
+      // means anything. An administrator diagnosing this needs sending to the
+      // scope, and the 2026-08-23 ruling says so — an earlier version of this rule
+      // dropped the grant before the capability check and answered the other code,
+      // which the sex-correction suite caught.
       expect(response.status).toBe(403);
-      expect(response.body.error.code).toBe('CAPABILITY_DENIED');
+      expect(response.body.error.code).toBe('SCOPE_DENIED');
 
       const accounts = await db
         .selectFrom('accounts')
         .select('id')
-        .where('person_id', '=', leaderPerson.id)
+        .where('person_id', '=', target.id)
         .execute();
 
       expect(accounts).toHaveLength(0);

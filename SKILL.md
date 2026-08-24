@@ -1357,10 +1357,16 @@ This is the one authorization rule in the system decided by **role** rather than
 **A capability this catalog gives only at Whole Church covers nothing when granted
 narrower.** The guard cannot hold that on its own: it asks whether a grant covers
 the request's target, so a grant issued at `OWN_SUBTREE` passes for everyone inside
-that subtree. A grant of one of these at any narrower scope is therefore ignored
-when an account's effective authority is assembled, exactly as a `read_only` grant
-of a write capability is — a row that cannot mean what it appears to mean grants
-nothing rather than being honoured in part.
+that subtree. A grant of one of these at any narrower scope therefore covers no
+target at all, and the request is refused with `SCOPE_DENIED`.
+
+**`SCOPE_DENIED` rather than `CAPABILITY_DENIED`**, which is the opposite of how a
+`read_only` grant of a write capability is treated, and the difference is the point.
+That one is rejected at creation and so never exists; this one exists and names the
+right capability with the wrong scope. An administrator diagnosing it needs to be
+sent to the scope, and `CAPABILITY_DENIED` would send them to grant a capability
+they had already granted — which is the distinction this section draws between the
+two codes.
 
 The rule is general rather than named per capability, because the hole is. It was
 first closed for `people.correct_sex` alone, and the same shape was open on

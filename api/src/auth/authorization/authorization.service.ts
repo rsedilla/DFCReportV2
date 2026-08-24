@@ -137,25 +137,6 @@ export class AuthorizationService {
         continue;
       }
 
-      if (grantCoversNothing(grant.capability, grant.scope_type)) {
-        // **Section 7 gives these capabilities one scope, and the guard cannot
-        // hold that on its own**: it asks whether a grant covers the target, so a
-        // subtree-scoped grant passes for everyone inside that subtree. On
-        // `accounts.manage` that is a route to provisioning yourself an Admin
-        // account; on `people.correct_sex` it is the Network escalation the
-        // 2026-08-23 ruling names.
-        //
-        // Refused here rather than in each operation, for the reason section 2
-        // gives for the guard being declarative — an operation that forgets the
-        // check looks exactly like one that does not need it. Same treatment as
-        // `read_only` above, and for the same reason: a row that cannot mean what
-        // it appears to mean grants nothing rather than being honoured in part.
-        this.logger.error(
-          `capability_grants holds "${grant.capability}" at ${grant.scope_type} for account ${accountId}, and section 7 gives it Whole Church only. Ignoring it.`,
-        );
-        continue;
-      }
-
       effective.push({
         capability: grant.capability,
         scope: { type: grant.scope_type, network: grant.scope_network },
@@ -180,6 +161,18 @@ export class AuthorizationService {
    * destination leader both to be in scope, and forbids the actor acting on
    * themselves or on anyone upline of them. Those live in the owning module's
    * domain layer, additional to this and never a substitute for it.
+   *
+   * **A grant that covers nothing is skipped in the scope half, not the capability
+   * half.** Section 7 gives some capabilities one scope, and a grant of one at
+   * anything narrower covers nothing (`single-scope.ts`). An earlier version
+   * dropped those grants in `grantsFor`, which was wrong in a way only an existing
+   * test caught: the account then looks as though it does not hold the capability
+   * at all, and the refusal becomes `CAPABILITY_DENIED`.
+   *
+   * The 2026-08-23 ruling says `SCOPE_DENIED`, and it is right for the reason
+   * above — an administrator diagnosing this issued a grant with the wrong
+   * **scope**, and `CAPABILITY_DENIED` would send them to add a capability they
+   * had already granted.
    */
   async authorize(actor: Actor, capability: Capability, target: Target): Promise<void> {
     const grants = (await this.grantsFor(actor.accountId)).filter(
@@ -191,6 +184,10 @@ export class AuthorizationService {
     }
 
     for (const grant of grants) {
+      if (grantCoversNothing(capability, grant.scope.type)) {
+        continue;
+      }
+
       // The guard runs outside any transaction, so the pooled connection is the
       // right reader here. A caller re-checking scope *inside* a transaction —
       // section 5 invariant 1 after taking the person lock — passes its own.
@@ -282,6 +279,10 @@ export class AuthorizationService {
     }
 
     for (const grant of authority.grants.filter((held) => held.capability === capability)) {
+      if (grantCoversNothing(capability, grant.scope.type)) {
+        continue;
+      }
+
       if (await this.scopeCovers(executor, grant.scope, target, actor)) {
         return true;
       }
