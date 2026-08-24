@@ -86,8 +86,10 @@ export class AuthorizationService {
    * And authorization is decided by capability and scope everywhere but one place:
    * section 5 invariant 4 names **roles** — "Only Admin or a Senior Pastor may do
    * so" — because that rule is about who sits outside the pastoral incentive rather
-   * than about what anyone was granted. They reach `hierarchy` on `ActorAuthority`,
-   * which {@link effective} builds from this.
+   * than about what anyone was granted. Today they reach `hierarchy` on
+   * `ActorAuthority`, which {@link effective} builds from this — though
+   * `assertMayReparent` takes only a person and a role list, so that is a fact
+   * about its two call sites rather than a seam anything enforces.
    *
    * Today it refuses exactly one thing: a `SENIOR_PASTOR` row on an account whose
    * Person is not one of the two section 4 names (`senior-pastors.ts`). Such a row
@@ -146,12 +148,19 @@ export class AuthorizationService {
    * free now that a row this system refuses to honour is logged where it is
    * refused.
    *
-   * **It halved that method's contribution rather than the request's**, and the
-   * difference is worth stating because an earlier version of this paragraph did
-   * not. A write endpoint reaches `effective` twice regardless: once through the
-   * guard's `authorize`, and once through the `authorityFor` its own domain layer
-   * takes for section 5 invariant 1. So on the failure mode section 7 accepts, a
-   * reassignment logs two lines rather than three, not one rather than two.
+   * **It halved that method's contribution and not the request's**, and the rule
+   * is one line per call rather than any fixed number per request. A request makes
+   * one call for each authorization read it takes: the guard's `authorize` always,
+   * plus whatever its domain layer asks for. `POST /accounts` takes none beyond the
+   * guard and so logs once; an unbackdated reassignment adds `authorityFor` for
+   * section 5 invariant 1, and went from three lines to two; a backdated one adds a
+   * second `authorize` for `records.backdate_effective_date`; a sex correction takes
+   * more again.
+   *
+   * *Two earlier versions of this paragraph each gave a count — "two per request",
+   * then "twice regardless" — and both were exactly right for the one path they
+   * were written from and wrong for every other. Counting a mechanism from the call
+   * site in front of you is the fault this file's neighbourhood keeps recording.*
    *
    * The volume is nonetheless bounded rather than merely small: the partial unique
    * index permits at most two active `SENIOR_PASTOR` rows, so at most two accounts

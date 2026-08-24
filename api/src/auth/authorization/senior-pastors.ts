@@ -23,8 +23,9 @@ import { sameId } from '../../common/identifiers';
  * ruling's own, re-derived rather than copied (section 25, rule 19): a check made
  * only where a row is written is skipped by exactly the paths that skip a trigger.
  *
- * **A refused row answers `CAPABILITY_DENIED`, and that is derived here rather
- * than borrowed.** An earlier version of this docblock cited `single-scope.ts` as
+ * **A refused row answers `CAPABILITY_DENIED` where the capability it would have
+ * carried is what the request needed, and that is derived here rather than
+ * borrowed.** An earlier version of this docblock cited `single-scope.ts` as
  * the precedent — "a row that cannot mean what it appears to mean is honoured as
  * nothing rather than in part" — which is the one thing that file does not do.
  * `grantCoversNothing` is applied in the *scope* half of `authorize`, deliberately:
@@ -39,6 +40,16 @@ import { sameId } from '../../common/identifiers';
  * `SENIOR_PASTOR` row names nothing: the account holds none of the role's
  * capabilities, at any scope, so `CAPABILITY_DENIED` is the true answer and
  * `SCOPE_DENIED` would send an administrator to widen a scope that does not exist.
+ *
+ * **The other consequence of a refused row answers the other code, and this
+ * paragraph did not say so for two review passes.** A refused row also withholds
+ * the exemption section 5 invariant 4 decides by role — and an actor who holds the
+ * capability by an explicit Whole Church grant reaches that check and is refused
+ * `SCOPE_DENIED`, which is what section 22 says a domain-layer statement about an
+ * actor's authority over a target answers. Both codes name the half that failed;
+ * one unqualified sentence covered only the half being looked at, which is the
+ * fault this file's own history is a record of. A test on this branch asserted the
+ * `SCOPE_DENIED` case throughout.
  *
  * On the failure mode section 7 accepts — configuration lost — that means a real
  * Senior Pastor is told they hold nothing while `account_roles` says otherwise.

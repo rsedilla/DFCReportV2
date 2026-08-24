@@ -2465,7 +2465,20 @@ check that runs. A check made only where the row is written is skipped by a rest
 in exactly the same way, so the identity half needs an enforcement point on the
 path every request takes.
 
-**A refused row therefore answers `CAPABILITY_DENIED`.** *The first version of this
+**A refused row therefore answers `CAPABILITY_DENIED` — where the capability it
+would have carried is what the request needed.** *That qualifier was missing for two
+review passes, and it was copied unqualified into `SKILL.md` §7 by the batch written
+to close the false "written to §x" claim below.* A refused row has two consequences,
+and the sentence covered one: it also withholds the §5 invariant-4 exemption, and an
+actor holding the capability by an explicit Whole Church grant reaches that check and
+is refused `SCOPE_DENIED` — which §22 already settles for a domain-layer statement
+about an actor's authority over a target, and which this branch's own test asserted
+the whole time. §7 now states both, and the principle they share: the code names the
+half that failed. Recorded because the rule was moved into the specification by
+copying a sentence rather than re-deriving it against the two paths it governs, which
+is §25 rule 19 inside the batch citing §25 rule 19.
+
+*The first version of this
 entry cited `single-scope.ts` as the precedent for the shape — "a row that cannot
 mean what it appears to mean is honoured as nothing rather than in part" — and that
 is the one thing `single-scope.ts` does not do.* `grantCoversNothing` is applied in
