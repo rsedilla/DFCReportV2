@@ -2580,21 +2580,40 @@ IS NULL`.
 **Refused.** An account's effective authority is the union of its roles' defaults
 and Admin's set is a superset of a Senior Pastor's, so the pair does not produce a
 Senior Pastor who also helps with administration. It produces an account holding
-every capability in the system, for which each of §7's five deliberate exclusions —
-`roles.manage`, `accounts.manage`, `records.backdate_effective_date`,
-`people.merge`, `people.correct_sex` — is void.
+every capability in the system, for which every capability §7 withholds from the
+role is void — `roles.manage`, `accounts.manage`, `records.backdate_effective_date`,
+`people.merge`, `people.correct_sex`, `settings.manage` and `cell.approve_creation`.
+
+*A first version of this entry said "§7's five deliberate exclusions" and listed
+five. Both halves were wrong: the §7 table withholds **seven** capabilities from the
+role, and §7's own "five" counts bullets, one of which is about Leaders rather than
+Senior Pastors. Quoting a count out of a neighbouring sentence is the cheapest form
+of the fault this log keeps recording.*
 
 It is self-perpetuating, which is what moved it from a caution to a constraint:
-such an account holds `roles.manage`, so it can grant itself anything further and
-revoke anybody else's roles, and no second party remains anywhere in the system.
-§7's own justification for the exclusions is that "every permission change has a
-second party involved", and one row makes that sentence false.
+such an account holds `roles.manage`, so it can retain the pair and revoke anybody
+else's roles. §7's own justification for the exclusions is that "every permission
+change has a second party involved", and one row makes that false *of that
+account's own permissions* — another Admin may still exist and revoke the row,
+which is the narrower and true claim.
 
-**It would also have neutralised the identity check merged the same day.** Where
-the configuration is lost, that check refuses the `SENIOR_PASTOR` row and the
-account falls to nothing — the deliberate fail-closed behaviour. An `ADMIN` row
-beside it keeps the account at full authority, so the control never bites for
-exactly the two accounts it exists for.
+*"Grant itself anything further" was in the first version and is vacuous: Admin
+already holds all twenty-six capabilities, so there is nothing further to grant.*
+
+**It would also have masked the identity check merged the same day.** Where the
+configuration is lost, that check refuses the `SENIOR_PASTOR` row and the account
+falls to nothing — the deliberate fail-closed behaviour. An `ADMIN` row beside it
+keeps the account at full authority, so the control never bites for exactly the two
+accounts it exists for.
+
+**This closes one route to that authority and not the only one, and the first
+version of this entry did not say so.** §7 permits Admin to grant any capability
+explicitly, and nothing forbids granting a withheld one to a Senior Pastor's
+account — same destination, no `ADMIN` row, no constraint violated, and invisible
+to the identity check, which filters role rows and not grants. Found by
+`architecture-guardian`, which is the point of running it: the ruling was argued
+from the route being looked at. That question is escalated rather than inferred
+from this one, and is listed as open below.
 
 **The cost is accepted and is the mechanism, not a side effect.** §6 gives one
 Person one Account, so Bishop Oriel and Pastora Geraldine cannot perform an
@@ -2612,10 +2631,16 @@ the argument the 2026-08-21 slot ruling already made on this same table.
 
 **No domain check was written, deliberately.** `roles.manage` has no endpoint, and
 provisioning cannot produce the state — it creates exactly one role on a new
-account and refuses a Person who already has one. A check with no caller is what
-was deleted from `AuthorizationService` two commits earlier for being dead. §7
-instead states the contract the endpoint owes when Stage 3 or later builds it:
-`INVARIANT_VIOLATION` rather than a raw constraint violation rendered 500.
+account and refuses a Person who already has one, and it is the only writer of
+`account_roles`. Code with no caller is what `58925c8` removed from
+`AuthorizationService` on the previous branch, and the same reasoning applies here
+before the fact rather than after it. §7 instead states the contract the endpoint
+owes when Stage 3 or later builds it: `INVARIANT_VIOLATION` rather than a raw
+constraint violation rendered 500.
+
+*The first version of this paragraph called what `58925c8` removed "a check", "two
+commits earlier". It was `rolesFor`, an accessor, and it was five commits before
+this branch's base. The decision stands; the precedent was misdescribed.*
 
 `LEADER` is outside the limit, and a test pins that rather than leaving it implied:
 it confers strictly less than either governing role and carries none of the
@@ -2624,11 +2649,15 @@ and pass every other case. Written to `SKILL.md` §7 and migration `0005`.
 
 ### Open — awaiting a ruling
 
-**One item awaits a ruling and blocks Stage 5. Seven other things are unsettled, none of them blocking. They are listed at the end, so this section is the whole of what is open.**
+**Two items await a ruling. One blocks Stage 5; the other is an open authorization question raised on 2026-08-24. Seven other things are unsettled, none of them blocking. They are listed at the end, so this section is the whole of what is open.**
 
 Nine items that stood here on 2026-08-22 were settled that day and are recorded above. Seven were Stop Conditions for Stage 2, and the last two were opened and closed the same day by `architecture-guardian` passes.
 
 The `audit_log.action` vocabulary left this list on 2026-08-23, settled by the ruling above: the convention is `<noun>.<past-tense verb>`, and section 21's list stays open.
+
+**Whether a capability §7 withholds from `SENIOR_PASTOR` may be granted to that account explicitly.** §7's role catalog says "Anything beyond a role's defaults requires an explicit, Admin-issued grant" and names no exception, so Admin may issue a Whole Church `roles.manage` or `accounts.manage` grant against a Senior Pastor's account. That reaches exactly the authority the 2026-08-24 role-combination ruling refuses, with no `ADMIN` row and no constraint violated — and the identity check does not see it either, since it filters role rows rather than grants.
+
+So §7 currently withholds seven capabilities from the role by default and permits every one of them to be granted back. Either the exclusions are hard limits, which needs enforcement spanning `account_roles` and `capability_grants` and is not expressible as an index, or they are defaults Admin may deliberately widen — in which case §7 should say so, and the "every permission change has a second party" argument is weaker than it reads. Raised by `architecture-guardian` on the role-combination branch and deliberately not decided there, because the ruling under review depended on the answer and inferring it would have been the same fault the review found.
 
 **What an aggregate Cell attendance view offers in place of buckets.** Monthly-attendance buckets are a Cell-scope view only, because N belongs to a Cell and aggregating across different N inflates `Completed` for the Cells that recorded least (`SKILL.md` §12). At leader and Network scope the spec offers unique people, classification and coverage, and does not say whether anything should replace the buckets. Settle it in Stage 5 against real data.
 

@@ -641,13 +641,20 @@ describe('the database enforces the section 3 and section 7 rules it can', () =>
         [first, 'SENIOR_PASTOR'],
       );
 
-      const blocked = b.query(
-        'INSERT INTO account_roles (account_id, role, senior_pastor_slot) VALUES ($1, $2, 2)',
-        [second, 'SENIOR_PASTOR'],
+      const blocked = settled(
+        b.query(
+          'INSERT INTO account_roles (account_id, role, senior_pastor_slot) VALUES ($1, $2, 2)',
+          [second, 'SENIOR_PASTOR'],
+        ),
       );
 
+      // Observed rather than assumed. This case predates the governing-role rule
+      // and had the same gap, so it is corrected with it rather than left as the
+      // one instance of the class nobody looked for.
+      expect(await waitUntilBlocked(a, await backendPid(b))).toBeGreaterThan(0);
+
       await a.query('COMMIT');
-      await expect(blocked).rejects.toThrow(/account_roles_one_senior_pastor_per_slot/);
+      expect((await blocked)?.message).toMatch(/account_roles_one_senior_pastor_per_slot/);
       await b.query('ROLLBACK');
     } finally {
       await a.end();
@@ -741,10 +748,9 @@ describe('the database enforces the section 3 and section 7 rules it can', () =>
   });
 
   it('refuses a second governing role under concurrent writes', async () => {
-    // A sequential test passes against an application-layer check alone and tells
-    // you nothing about whether the index exists (CLAUDE.md, authorization case
-    // 7). Under READ COMMITTED neither transaction sees the other's uncommitted
-    // row, so anything that counts first and writes second admits both.
+    // Under READ COMMITTED neither transaction sees the other's uncommitted row,
+    // so anything that counts first and writes second admits both. Only an index
+    // makes the second write wait.
     const account = await accountFor(db, 'Oriel', 'MENS');
 
     const [a, b] = [await openClient(), await openClient()];
@@ -758,13 +764,21 @@ describe('the database enforces the section 3 and section 7 rules it can', () =>
         [account, 'SENIOR_PASTOR'],
       );
 
-      const blocked = b.query(
-        'INSERT INTO account_roles (account_id, role, senior_pastor_slot) VALUES ($1, $2, NULL)',
-        [account, 'ADMIN'],
+      const blocked = settled(
+        b.query(
+          'INSERT INTO account_roles (account_id, role, senior_pastor_slot) VALUES ($1, $2, NULL)',
+          [account, 'ADMIN'],
+        ),
       );
 
+      // **Observed, not assumed**, which is the whole difference between this and
+      // the sequential case above. Dispatching the second write and committing the
+      // first passes on a run where the server happens to reach the commit first,
+      // and passes with no index at all.
+      expect(await waitUntilBlocked(a, await backendPid(b))).toBeGreaterThan(0);
+
       await a.query('COMMIT');
-      await expect(blocked).rejects.toThrow(/account_roles_one_governing_role/);
+      expect((await blocked)?.message).toMatch(/account_roles_one_governing_role/);
       await b.query('ROLLBACK');
     } finally {
       await a.end();
@@ -972,6 +986,63 @@ async function accountFor(
     .executeTakeFirstOrThrow();
 
   return account.id;
+}
+
+/**
+ * The backend process id behind a client, for observing what it is waiting on.
+ */
+async function backendPid(client: Client): Promise<number> {
+  const row = await client.query<{ pid: number }>('SELECT pg_backend_pid() AS pid');
+  return row.rows[0].pid;
+}
+
+/**
+ * Waits until `pid` is blocked on a lock, and answers how many it is waiting for.
+ *
+ * **Dispatching a conflicting statement is not the same as observing it block**,
+ * and the difference decides whether a concurrency case pins anything. Firing the
+ * second write and immediately committing the first passes on any run where the
+ * server reaches the commit first — and passes with no index at all, because the
+ * second write then simply succeeds and every assertion about the first
+ * transaction's row still holds. The discriminating observation is a backend
+ * waiting while the other transaction is still open, which is how SKILL.md
+ * section 5's lock ordering is pinned in `person-lock.e2e.spec.ts`.
+ *
+ * The observer must be a connection other than the blocked one, which is why the
+ * callers pass the transaction that holds the conflicting row: it is idle in its
+ * transaction and can still answer a read.
+ */
+async function waitUntilBlocked(observer: Client, pid: number): Promise<number> {
+  const deadline = Date.now() + 2_500;
+  let waiting = 0;
+
+  while (Date.now() < deadline && waiting === 0) {
+    const found = await observer.query<{ waiting: string }>(
+      'SELECT count(*) AS waiting FROM pg_locks WHERE pid = $1 AND NOT granted',
+      [pid],
+    );
+
+    waiting = Number(found.rows[0].waiting);
+    if (waiting === 0) {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+  }
+
+  return waiting;
+}
+
+/**
+ * The error a promise rejected with, or null where it resolved.
+ *
+ * Awaiting a rejection only *after* another statement can leave it unhandled if
+ * that statement throws first, which takes down the run with a failure that names
+ * neither test.
+ */
+async function settled(promise: Promise<unknown>): Promise<Error | null> {
+  return promise.then(
+    () => null,
+    (error: Error) => error,
+  );
 }
 
 async function openClient(): Promise<Client> {

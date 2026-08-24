@@ -109,9 +109,15 @@ describe('the schema (SKILL.md sections 4, 5, 6 and 7)', () => {
 
     it('holds an account to one governing role with an index, for the same reason', async () => {
       // Section 7: an account holds at most one of ADMIN and SENIOR_PASTOR. The
-      // shape is held here rather than only its behaviour, because the predicate
-      // is the whole rule — widened to every role it would forbid a LEADER row
-      // beside a governing one, and narrowed to one role it would forbid nothing.
+      // shape is held here as well as the behaviour, because the predicate is the
+      // whole rule.
+      //
+      // **The absence is the load-bearing assertion.** Presence of the two names
+      // is satisfied by a predicate widened to include LEADER, which would forbid
+      // a legitimate row — so a shape test asserting only what is there pins the
+      // narrowing and not the widening, and the comment here claimed both until a
+      // review said otherwise. The behavioural cases in invariants.spec.ts catch
+      // it too; a shape that agrees with them is what stops the two drifting.
       const index = await indexDefinition(db, 'account_roles_one_governing_role');
 
       expect(index).toMatch(/CREATE UNIQUE INDEX/i);
@@ -119,6 +125,7 @@ describe('the schema (SKILL.md sections 4, 5, 6 and 7)', () => {
       expect(index).toMatch(/revoked_at IS NULL/i);
       expect(index).toMatch(/ADMIN/);
       expect(index).toMatch(/SENIOR_PASTOR/);
+      expect(index).not.toMatch(/LEADER/);
     });
 
     it('ties the slot to the role, and refuses a null slot explicitly', async () => {
