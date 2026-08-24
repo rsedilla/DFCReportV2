@@ -1,4 +1,5 @@
 import { Controller, Get, type INestApplication } from '@nestjs/common';
+import { sql } from 'kysely';
 import request from 'supertest';
 
 import { Capability } from '../../src/auth/authorization/capabilities';
@@ -325,9 +326,22 @@ describe('the capability guard (SKILL.md section 7)', () => {
         .returning('id')
         .executeTakeFirstOrThrow();
 
+      // **`now()`, not `new Date()`, and the difference is a real failure rather
+      // than tidiness.** `granted_at` defaults to the database's `now()`, so a
+      // `revoked_at` stamped by this process compares two clocks — and
+      // `capability_grants_period_ordered` requires `revoked_at >= granted_at`.
+      // When the database's clock ran microseconds ahead of the runner's, the
+      // constraint fired and this case failed for a reason that had nothing to do
+      // with revocation.
+      //
+      // It is the hazard section 6 already records for `issued_at`: "stamped by
+      // the API process, never by the database... the database's clock is a
+      // different one". The rule generalises — one row's timestamps come from one
+      // clock — and it is a live trap for the revoke endpoint nobody has written
+      // yet, which will meet this constraint with `granted_at` still DB-stamped.
       await db
         .updateTable('capability_grants')
-        .set({ revoked_at: new Date() })
+        .set({ revoked_at: sql<Date>`now()` })
         .where('id', '=', grant.id)
         .execute();
 
