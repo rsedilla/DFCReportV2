@@ -955,6 +955,29 @@ Signing out on one device ends that session only.
 
 Revocation, by contrast, is account-wide. Where account access is disabled — at archive, at merge, or by an authorized administrative action — **every** refresh token for that account is revoked and every active session becomes invalid immediately, on all devices. Access already granted must not outlive the revocation by the remaining life of an access token that happens to be long; keep access-token lifetime short enough that immediate means immediate in practice.
 
+### What a password must be
+
+**Twelve characters minimum, 128 maximum, and no composition rule of any kind.**
+No required uppercase, digit or symbol; no forced rotation; no truncation before
+hashing.
+
+Length rather than complexity, because this system's accessibility conformance
+rests on password managers. Section 23's criterion 3.3.8 permits a password only
+where a mechanism assists in completing it, and support for managers is that
+mechanism (Section 6, Authentication V1). Composition rules push people toward
+short passwords they can retype from memory, which is the behaviour that criterion
+exists to prevent — so a rule that forces a symbol works against the thing
+conformance depends on.
+
+The maximum exists only so that a hash is bounded, and it is high enough that no
+passphrase a person would choose reaches it. **The password is never truncated to
+fit**: silently hashing a prefix means a longer password is no stronger than its
+first *n* characters, and the holder cannot tell.
+
+A password below the minimum is refused with `VALIDATION_FAILED` (Section 22), on
+the request that sets it — activation, reset, or change. It is never refused at
+sign-in, where the stored password is whatever it was when it was set.
+
 ### Password reset security
 
 - Generate cryptographically secure, single-use reset token
@@ -985,6 +1008,30 @@ When a person becomes a Cell Leader and has no account:
 2. Create/reuse the person's single account.
 3. Send activation/set-password email.
 4. User creates their own password.
+
+**Provisioning is an explicit action under `accounts.manage`, and what it may
+create is bounded by what qualifies the holder.** Cell leadership is the ordinary
+qualification and it is the one this section describes. The two exceptions above —
+Senior Pastor and Administrator — are the others, and they are exceptions to the
+*qualification*, never to the workflow: each still gets an account created,
+an activation email sent, and a password the holder sets themselves.
+
+**An account is therefore provisioned together with the role that qualifies it**,
+and a request naming no qualifying role is refused with `INVARIANT_VIOLATION`
+(Section 22). That is a rule about what may be recorded rather than about the
+actor's authority, which is the distinction Section 22 draws.
+
+The consequence is worth stating because it is a phase rather than a permanent
+rule: until `cells` exists, only an `ADMIN` or `SENIOR_PASTOR` account can be
+provisioned, because a `LEADER` account's qualification is an active Cell
+leadership assignment (Section 11) and there is nothing yet to hold one. A
+`LEADER` provisioning request is refused for that reason rather than accepted with
+the check deferred — an account for someone who has not opened a Cell would
+detach "leader" from "leads a Cell", which Section 11 makes non-negotiable.
+
+The first Admin account is the one exception to all of it, created by a system
+action because there is no account above it to do the creating (Section 7,
+`granted_by`).
 
 One person has one account even if they lead multiple Cell Groups.
 
@@ -2733,6 +2780,7 @@ Recommended REST areas:
 
 ```text
 /api/v1/auth
+/api/v1/accounts
 /api/v1/people
 /api/v1/networks
 /api/v1/leaders
@@ -2748,7 +2796,10 @@ Examples:
 POST /api/v1/auth/login
 POST /api/v1/auth/forgot-password
 POST /api/v1/auth/reset-password
+POST /api/v1/auth/activate               sets the first password (Section 6)
 GET  /api/v1/auth/me
+
+POST /api/v1/accounts                    provisioning, `accounts.manage`
 
 GET  /api/v1/people                       search, church-wide (Section 8)
 GET  /api/v1/people/duplicate-candidates  declared before /{id}, or it is one
@@ -2782,6 +2833,13 @@ GET  /api/v1/reports/network-summary
 Three clients consume this API concurrently (Section 2) and mobile builds cannot be force-updated, so these conventions are part of the contract rather than house style. Settle them before the third controller is written.
 
 All requests and responses are JSON. No redirects, no HTML error pages, no form encoding — only one of the three surfaces is a browser.
+
+**`/api/v1/accounts` is separate from `/api/v1/auth` deliberately.** Everything
+under `/auth` is either on Section 7's closed unauthenticated list or acts solely
+on the caller's own session, which is what makes that prefix's exemption from the
+capability guard readable in one place. Provisioning is neither: it is an
+administrative action on somebody else's Account, it carries `accounts.manage`, and
+putting it under `/auth` would mean the prefix no longer describes one thing.
 
 #### Dates and times
 
