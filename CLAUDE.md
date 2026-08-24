@@ -2546,13 +2546,122 @@ is exclusive the other way — whether Bishop Oriel or Pastora Geraldine may hol
 `SENIOR_PASTOR` one would defeat the separation §7 builds. It is a separate ruling
 and is listed as unsettled below rather than decided in passing.
 
+### 2026-08-24 — Naming a Senior Pastor takes effect on the next restart
+
+Confirmed rather than discovered. `SENIOR_PASTOR_PERSON_IDS` is read once, by the
+`AppConfigModule` factory, and nothing reloads it — so setting it after the initial
+import, and any later succession, requires a restart.
+
+Kept deliberately, and it is worth saying why the alternative was refused. A
+hot-reload would make the answer to "who are the two Senior Pastors" change under a
+running process, with no deployment event marking it and nothing in the audit log —
+which is most of what makes configuration a safe home for this in the first place.
+A restart is an operational act somebody performs and can see. The ruling that put
+the identity in configuration rests on its editor already holding `JWT_SECRET`; it
+does not follow that the value should be quietly re-readable.
+
+The cost is a short window: between the import finishing and the restart, no
+`SENIOR_PASTOR` account can be provisioned and any such row grants nothing. That is
+the fail-closed default and is correct for every moment before the two Persons
+exist — but it is not obvious from either document alone, so `docs/ROADMAP.md` now
+records the ordering (import, read the ids, set the variable, restart) beside the
+two Stage 2 items it spans, and `.env.example` says it where the operator reads.
+
+Written to `SKILL.md` §7 with the identity ruling, which is where the mechanism was
+already described; this entry is what makes it a decision rather than a description.
+
+### 2026-08-24 — An account holds at most one of `ADMIN` and `SENIOR_PASTOR`
+
+The question the configuration ruling raised and deliberately left open. §7 says an
+account holds at most one active row **per role**, which permits two rows of
+different roles, and the schema agreed: `UNIQUE (account_id, role) WHERE revoked_at
+IS NULL`.
+
+**Refused.** An account's effective authority is the union of its roles' defaults
+and Admin's set is a superset of a Senior Pastor's, so the pair does not produce a
+Senior Pastor who also helps with administration. It produces an account holding
+every capability in the system, for which every capability §7 withholds from the
+role is void — `roles.manage`, `accounts.manage`, `records.backdate_effective_date`,
+`people.merge`, `people.correct_sex`, `settings.manage` and `cell.approve_creation`.
+
+*A first version of this entry said "§7's five deliberate exclusions" and listed
+five. Both halves were wrong: the §7 table withholds **seven** capabilities from the
+role, and §7's own "five" counts bullets, one of which is about Leaders rather than
+Senior Pastors. Quoting a count out of a neighbouring sentence is the cheapest form
+of the fault this log keeps recording.*
+
+It is self-perpetuating, which is what moved it from a caution to a constraint:
+such an account holds `roles.manage`, so it can retain the pair and revoke anybody
+else's roles. §7's own justification for the exclusions is that "every permission
+change has a second party involved", and one row makes that false *of that
+account's own permissions* — another Admin may still exist and revoke the row,
+which is the narrower and true claim.
+
+*"Grant itself anything further" was in the first version and is vacuous: Admin
+already holds all twenty-six capabilities, so there is nothing further to grant.*
+
+**It would also have masked the identity check merged the same day.** Where the
+configuration is lost, that check refuses the `SENIOR_PASTOR` row and the account
+falls to nothing — the deliberate fail-closed behaviour. An `ADMIN` row beside it
+keeps the account at full authority, so the control never bites for exactly the two
+accounts it exists for.
+
+**This closes one route to that authority and not the only one, and the first
+version of this entry did not say so.** §7 permits Admin to grant any capability
+explicitly, and nothing forbids granting a withheld one to a Senior Pastor's
+account — same destination, no `ADMIN` row, no constraint violated, and invisible
+to the identity check, which filters role rows and not grants. Found by
+`architecture-guardian`, which is the point of running it: the ruling was argued
+from the route being looked at. That question is escalated rather than inferred
+from this one, and is listed as open below.
+
+**The cost is accepted and is the mechanism, not a side effect.** §6 gives one
+Person one Account, so Bishop Oriel and Pastora Geraldine cannot perform an
+administrative action at all — provisioning, a merge, a backdated record and a sex
+correction are each somebody else's to do. In a small church whose Admin is
+sometimes unavailable that is real friction, and it is what "a second party" means.
+
+**Enforced by a partial unique index over `(account_id)` where the role is one of
+the two**, not by a check in `auth`. The distinction from the identity half is the
+whole reason: that one must live in the application because the database holds no
+durable representation of who the two Persons are, while role combination is
+entirely inside `account_roles` — so an index decides it where the state lives
+rather than where a request happens to pass, and is still enforced under
+`pg_restore --disable-triggers`, which is the argument the 2026-08-21 slot ruling
+already made on this same table. Not quite *unrepresentable*, which two of the
+three copies of this reasoning claimed until a review pointed at the third: a full
+restore builds indexes after loading data, so a dump already holding the pair loads
+and then fails index creation.
+
+**No domain check was written, deliberately.** `roles.manage` has no endpoint, and
+provisioning cannot produce the state — it creates exactly one role on a new
+account and refuses a Person who already has one, and it is the only writer of
+`account_roles`. Code with no caller is what `58925c8` removed from
+`AuthorizationService` on the previous branch, and the same reasoning applies here
+before the fact rather than after it. §7 instead states the contract the endpoint
+owes when Stage 3 or later builds it: `INVARIANT_VIOLATION` rather than a raw
+constraint violation rendered 500.
+
+*The first version of this paragraph called what `58925c8` removed "a check", "two
+commits earlier". It was `rolesFor`, an accessor, and it was five commits before
+this branch's base. The decision stands; the precedent was misdescribed.*
+
+`LEADER` is outside the limit, and a test pins that rather than leaving it implied:
+it confers strictly less than either governing role and carries none of the
+excluded capabilities, so an index over *every* role would forbid a legitimate row
+and pass every other case. Written to `SKILL.md` §7 and migration `0005`.
+
 ### Open — awaiting a ruling
 
-**One item awaits a ruling and blocks Stage 5. Eight other things are unsettled, none of them blocking. They are listed at the end, so this section is the whole of what is open.**
+**Two items await a ruling. One blocks Stage 5; the other is an open authorization question raised on 2026-08-24. Seven other things are unsettled, none of them blocking. They are listed at the end, so this section is the whole of what is open.**
 
 Nine items that stood here on 2026-08-22 were settled that day and are recorded above. Seven were Stop Conditions for Stage 2, and the last two were opened and closed the same day by `architecture-guardian` passes.
 
 The `audit_log.action` vocabulary left this list on 2026-08-23, settled by the ruling above: the convention is `<noun>.<past-tense verb>`, and section 21's list stays open.
+
+**Whether a capability §7 withholds from `SENIOR_PASTOR` may be granted to that account explicitly.** §7's role catalog says "Anything beyond a role's defaults requires an explicit, Admin-issued grant" and names no exception, so Admin may issue a Whole Church `roles.manage` or `accounts.manage` grant against a Senior Pastor's account. That reaches exactly the authority the 2026-08-24 role-combination ruling refuses, with no `ADMIN` row and no constraint violated — and the identity check does not see it either, since it filters role rows rather than grants.
+
+So §7 currently withholds seven capabilities from the role by default and permits every one of them to be granted back. Either the exclusions are hard limits, which needs enforcement spanning `account_roles` and `capability_grants` and is not expressible as an index, or they are defaults Admin may deliberately widen — in which case §7 should say so, and the "every permission change has a second party" argument is weaker than it reads. Raised by `architecture-guardian` on the role-combination branch and deliberately not decided there, because the ruling under review depended on the answer and inferring it would have been the same fault the review found.
 
 **What an aggregate Cell attendance view offers in place of buckets.** Monthly-attendance buckets are a Cell-scope view only, because N belongs to a Cell and aggregating across different N inflates `Completed` for the Cells that recorded least (`SKILL.md` §12). At leader and Network scope the spec offers unique people, classification and coverage, and does not say whether anything should replace the buckets. Settle it in Stage 5 against real data.
 
@@ -2567,5 +2676,4 @@ Two related questions have defined behaviour and are recorded in `SKILL.md` §12
 - **What the native clients owe on accessibility.** `SKILL.md` §23 binds the web application to WCAG 2.2 AA and says the equivalent obligation for a native client is the platform accessibility API rather than WCAG. Which platform guarantees, and what would fail a build, is a ruling to make when the client is.
 
 - **Whether the liveness probe should share the application connection pool.** §24 now records that it does, and that pool exhaustion therefore presents to the platform as a dead process — so the response is a restart that discards the transactions still making progress. A separate connection, or a probe that does not reach the database, are both defensible and mean different things by "healthy". Deployment work with a ruling attached, alongside the database-role item above.
-- **Whether a Senior Pastor may also hold `ADMIN` on the same account.** §7 names the two Persons who hold `SENIOR_PASTOR` and keeps `roles.manage` and `accounts.manage` away from that role, so that the church's two most visible accounts cannot escalate their own authority and every permission change involves a second party. Nothing forbids an `ADMIN` row beside the `SENIOR_PASTOR` one on the same account, which would defeat exactly that — §7 says an account holds at most one active row **per role**, not one row overall. Raised by the 2026-08-24 configuration ruling and deliberately not decided in it, because it is a rule about role combination rather than about who the two Persons are.
 - **Whether `audit_log`'s append-only guarantee tolerates `TRUNCATE`.** §5 records the exemption for history tables and leans it on a least-privilege role that does not exist, which is already open above. §21 says nothing at all, and the test suite truncates `audit_log` before every test. Same answer as the `TRUNCATE` question above, most likely, but it is not written down for the one table whose whole purpose is that nothing removes a row.

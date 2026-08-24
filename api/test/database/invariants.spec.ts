@@ -641,13 +641,29 @@ describe('the database enforces the section 3 and section 7 rules it can', () =>
         [first, 'SENIOR_PASTOR'],
       );
 
-      const blocked = b.query(
-        'INSERT INTO account_roles (account_id, role, senior_pastor_slot) VALUES ($1, $2, 2)',
-        [second, 'SENIOR_PASTOR'],
+      // **Read before `b` is blocked, never after.** `pg` does not pipeline: a
+      // query issued on a connection with a statement in flight sits in that
+      // client's queue until the first one returns, so asking the blocked
+      // connection for its own pid cannot be answered until the transaction it is
+      // waiting on commits -- which is the line below. That deadlocks the case and,
+      // on the Jest timeout, abandons both open transactions for the next
+      // `TRUNCATE` to block on forever.
+      const blockedPid = await backendPid(b);
+
+      const blocked = settled(
+        b.query(
+          'INSERT INTO account_roles (account_id, role, senior_pastor_slot) VALUES ($1, $2, 2)',
+          [second, 'SENIOR_PASTOR'],
+        ),
       );
 
+      // Observed rather than assumed. This case predates the governing-role rule
+      // and had the same gap, so it is corrected with it rather than left as the
+      // one instance of the class nobody looked for.
+      expect(await waitUntilBlocked(a, blockedPid)).toBeGreaterThan(0);
+
       await a.query('COMMIT');
-      await expect(blocked).rejects.toThrow(/account_roles_one_senior_pastor_per_slot/);
+      expect((await blocked)?.message).toMatch(/account_roles_one_senior_pastor_per_slot/);
       await b.query('ROLLBACK');
     } finally {
       await a.end();
@@ -662,6 +678,134 @@ describe('the database enforces the section 3 and section 7 rules it can', () =>
       .execute();
 
     expect(active).toHaveLength(2);
+  });
+
+  it('refuses one account both ADMIN and SENIOR_PASTOR', async () => {
+    // Section 7: an account holds at most one of the two. Effective authority is
+    // the union of its roles' defaults and ADMIN's set is a superset, so the pair
+    // is not a Senior Pastor who also administers -- it is an account holding
+    // every capability, for which every exclusion section 7 writes for the role is
+    // void, and which holds `roles.manage` and can therefore retain the pair and
+    // revoke anybody else's roles.
+    const account = await accountFor(db, 'Oriel', 'MENS');
+
+    await db
+      .insertInto('account_roles')
+      .values({ account_id: account, role: 'SENIOR_PASTOR', senior_pastor_slot: 1 })
+      .execute();
+
+    await expect(
+      db
+        .insertInto('account_roles')
+        .values({ account_id: account, role: 'ADMIN', senior_pastor_slot: null })
+        .execute(),
+    ).rejects.toThrow(/account_roles_one_governing_role/);
+
+    // And in the other order, because a partial unique index is symmetric and a
+    // check written per-role would not be.
+    const other = await accountFor(db, 'Ester', 'WOMENS');
+
+    await db
+      .insertInto('account_roles')
+      .values({ account_id: other, role: 'ADMIN', senior_pastor_slot: null })
+      .execute();
+
+    await expect(
+      db
+        .insertInto('account_roles')
+        .values({ account_id: other, role: 'SENIOR_PASTOR', senior_pastor_slot: 2 })
+        .execute(),
+    ).rejects.toThrow(/account_roles_one_governing_role/);
+  });
+
+  it('permits LEADER beside a governing role, and a revoked row frees it', async () => {
+    // The half that makes the rule a limit rather than a ban. LEADER confers
+    // strictly less than either governing role and carries none of the excluded
+    // capabilities, so it escalates nothing -- an index over every role would
+    // forbid this and pass every case above, which is the mutation that matters.
+    const account = await accountFor(db, 'Oriel', 'MENS');
+
+    await db
+      .insertInto('account_roles')
+      .values([
+        { account_id: account, role: 'SENIOR_PASTOR', senior_pastor_slot: 1 },
+        { account_id: account, role: 'LEADER', senior_pastor_slot: null },
+      ])
+      .execute();
+
+    // Revoking the governing row frees the account for the other, which is how a
+    // handover is recorded -- section 7 revokes rather than deletes.
+    await db
+      .updateTable('account_roles')
+      .set({ revoked_at: sql<Date>`now()` })
+      .where('account_id', '=', account)
+      .where('role', '=', 'SENIOR_PASTOR')
+      .execute();
+
+    await db
+      .insertInto('account_roles')
+      .values({ account_id: account, role: 'ADMIN', senior_pastor_slot: null })
+      .execute();
+
+    const active = await db
+      .selectFrom('account_roles')
+      .select('role')
+      .where('account_id', '=', account)
+      .where('revoked_at', 'is', null)
+      .execute();
+
+    expect(active.map((row) => row.role).sort()).toEqual(['ADMIN', 'LEADER']);
+  });
+
+  it('refuses a second governing role under concurrent writes', async () => {
+    // Under READ COMMITTED neither transaction sees the other's uncommitted row,
+    // so anything that counts first and writes second admits both. Only an index
+    // makes the second write wait.
+    const account = await accountFor(db, 'Oriel', 'MENS');
+
+    const [a, b] = [await openClient(), await openClient()];
+
+    try {
+      await a.query('BEGIN');
+      await b.query('BEGIN');
+
+      await a.query(
+        'INSERT INTO account_roles (account_id, role, senior_pastor_slot) VALUES ($1, $2, 1)',
+        [account, 'SENIOR_PASTOR'],
+      );
+
+      // Read before the insert blocks this connection -- see the sibling case.
+      const blockedPid = await backendPid(b);
+
+      const blocked = settled(
+        b.query(
+          'INSERT INTO account_roles (account_id, role, senior_pastor_slot) VALUES ($1, $2, NULL)',
+          [account, 'ADMIN'],
+        ),
+      );
+
+      // **Observed, not assumed**, which is the whole difference between this and
+      // the sequential case above. Dispatching the second write and committing the
+      // first passes on a run where the server happens to reach the commit first,
+      // and passes with no index at all.
+      expect(await waitUntilBlocked(a, blockedPid)).toBeGreaterThan(0);
+
+      await a.query('COMMIT');
+      expect((await blocked)?.message).toMatch(/account_roles_one_governing_role/);
+      await b.query('ROLLBACK');
+    } finally {
+      await a.end();
+      await b.end();
+    }
+
+    const active = await db
+      .selectFrom('account_roles')
+      .select('role')
+      .where('account_id', '=', account)
+      .where('revoked_at', 'is', null)
+      .execute();
+
+    expect(active).toEqual([{ role: 'SENIOR_PASTOR' }]);
   });
 
   it('refuses SENIOR_PASTOR with no slot at all', async () => {
@@ -855,6 +999,78 @@ async function accountFor(
     .executeTakeFirstOrThrow();
 
   return account.id;
+}
+
+/**
+ * The backend process id behind a client, for observing what it is waiting on.
+ */
+async function backendPid(client: Client): Promise<number> {
+  const row = await client.query<{ pid: number }>('SELECT pg_backend_pid() AS pid');
+  return row.rows[0].pid;
+}
+
+/**
+ * Waits until `pid` is blocked on a lock, and answers how many it is waiting for.
+ *
+ * **Dispatching a conflicting statement is not the same as observing it block**,
+ * and the difference decides whether a concurrency case pins anything. Firing the
+ * second write and immediately committing the first passes on any run where the
+ * server reaches the commit first — and passes with no index at all, because the
+ * second write then simply succeeds and every assertion about the first
+ * transaction's row still holds. The discriminating observation is a backend
+ * waiting while the other transaction is still open, which is how SKILL.md
+ * section 5's lock ordering is pinned in `person-lock.e2e.spec.ts`.
+ *
+ * **Two arguments, two rules, and the second is the one that bit.** The observer
+ * must be a connection other than the blocked one, which is why callers pass the
+ * transaction holding the conflicting row -- it is idle in its transaction and can
+ * still answer a read. And the pid must be read from the blocked connection
+ * *before* it is blocked: `pg` does not pipeline, so a query issued on a connection
+ * with a statement in flight waits in that client's queue until the first returns,
+ * and asking a blocked connection for its own pid therefore cannot be answered
+ * until the transaction it waits on commits. The first version did exactly that and
+ * deadlocked both cases.
+ *
+ * `person-lock.e2e.spec.ts` avoids the question by identifying the waiter by lock
+ * *target* -- an advisory key it computes itself -- and never querying the blocked
+ * connection at all. Reusing "poll pg_locks" without re-deriving how the waiter is
+ * identified is section 25 rule 19, in the batch that cited that precedent.
+ *
+ * It counts any ungranted lock held by the pid rather than the specific index wait,
+ * which is looser than the precedent's predicate and sufficient here: the
+ * transactions are two statements long and hold nothing else contended.
+ */
+async function waitUntilBlocked(observer: Client, pid: number): Promise<number> {
+  const deadline = Date.now() + 2_500;
+  let waiting = 0;
+
+  while (Date.now() < deadline && waiting === 0) {
+    const found = await observer.query<{ waiting: string }>(
+      'SELECT count(*) AS waiting FROM pg_locks WHERE pid = $1 AND NOT granted',
+      [pid],
+    );
+
+    waiting = Number(found.rows[0].waiting);
+    if (waiting === 0) {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+  }
+
+  return waiting;
+}
+
+/**
+ * The error a promise rejected with, or null where it resolved.
+ *
+ * Awaiting a rejection only *after* another statement can leave it unhandled if
+ * that statement throws first, which takes down the run with a failure that names
+ * neither test.
+ */
+async function settled(promise: Promise<unknown>): Promise<Error | null> {
+  return promise.then(
+    () => null,
+    (error: Error) => error,
+  );
 }
 
 async function openClient(): Promise<Client> {
