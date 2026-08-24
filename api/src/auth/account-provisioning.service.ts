@@ -322,12 +322,25 @@ export class AccountProvisioningService {
       };
     });
 
-    // **Fatal here, unlike provisioning, and the difference is the point.** The
-    // whole purpose of this endpoint is to deliver a message, so an operator must
-    // learn that it failed rather than being told it succeeded. Nothing is
-    // stranded by raising: the transaction has committed a token that a further
-    // re-send will simply supersede.
-    await this.email.send(outcome);
+    // **Logged, not raised — the same rule as provisioning, and an earlier version
+    // of this endpoint broke it.**
+    //
+    // Raising after the commit contradicts a completion the store already holds:
+    // the client gets a 500, `release` matches nothing because the row is
+    // `COMPLETED` rather than `IN_FLIGHT`, and the retry replays 204 — telling the
+    // operator the re-send succeeded when no mail was attempted. That is the
+    // identical mechanism as the defect this endpoint exists to give a recovery
+    // path for, reintroduced inside the recovery path.
+    //
+    // The comment that stood here claimed the opposite of both halves: that an
+    // operator "must learn that it failed rather than being told it succeeded",
+    // and that "nothing is stranded by raising". The retry told them it succeeded,
+    // and nothing was superseded because nothing re-executed.
+    //
+    // So the operator learns from the log, exactly as they do for provisioning,
+    // and calls this endpoint again if they want another attempt — which mints a
+    // fresh token and supersedes the last, as section 6 requires.
+    await this.sendOrLog(outcome, accountId);
   }
 
   /** Sends, and turns a failure into a log line rather than a thrown error. */

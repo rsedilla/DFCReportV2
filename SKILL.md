@@ -1064,10 +1064,12 @@ the account is `PENDING_ACTIVATION` — an active holder who has forgotten their
 password uses the reset flow, and a disabled one is not invited back in through an
 activation link, since reactivation is a separate authorized decision.
 
-**A delivery failure never fails provisioning.** The account was created and its
-outcome recorded; raising afterwards would hand the client a failure while the store
+**A delivery failure never fails the request that caused it.** This holds for
+provisioning and for a re-send alike: each records its outcome before the message is
+attempted, so raising afterwards would hand the client a failure while the store
 holds the success that every retry reproduces (Section 22). The failure is recorded
-for an operator, who re-sends.
+for an operator, who re-sends — and a re-send that cannot be delivered is recorded
+the same way rather than reported, since it has already committed a token.
 
 One person has one account even if they lead multiple Cell Groups.
 

@@ -378,6 +378,90 @@ describe('accounts: provisioning, activation and reset (section 6)', () => {
       expect(current.status).toBe(204);
     });
 
+    it('still answers 204 when a re-send cannot be delivered', async () => {
+      // **The case that would have caught the defect, and it was missing.**
+      // Adding `completeWithin` to the re-send satisfied the first write-endpoint
+      // obligation and broke the second, one bullet away in CLAUDE.md: the
+      // completion committed, the send raised, `release` matched nothing because
+      // the row was `COMPLETED` rather than `IN_FLIGHT`, and the retry replayed
+      // 204 — telling the operator a re-send had succeeded when no mail was ever
+      // attempted.
+      //
+      // That is the identical mechanism as the provisioning defect this endpoint
+      // exists to give a recovery path for, reintroduced inside the recovery path.
+      const created = await provision({
+        person_id: ester.id,
+        email: 'ester@example.test',
+        role: 'ADMIN',
+      });
+
+      outbox(app).failNext = true;
+
+      const resend = await request(app.getHttpServer())
+        .post(`/api/v1/accounts/${created.body.id}/activation-email`)
+        .set('Authorization', `Bearer ${admin.accessToken}`)
+        .set('Idempotency-Key', randomUUID())
+        .send({});
+
+      expect(resend.status).toBe(204);
+
+      // And the token it minted is real, so a further re-send supersedes it rather
+      // than the account being stranded.
+      const again = await request(app.getHttpServer())
+        .post(`/api/v1/accounts/${created.body.id}/activation-email`)
+        .set('Authorization', `Bearer ${admin.accessToken}`)
+        .set('Idempotency-Key', randomUUID())
+        .send({});
+
+      expect(again.status).toBe(204);
+      expect(outbox(app).last('ACTIVATION')).toBeDefined();
+    });
+
+    it('refuses a re-send for an account that is not awaiting activation', async () => {
+      const created = await provision({
+        person_id: ester.id,
+        email: 'ester@example.test',
+        role: 'ADMIN',
+      });
+      const token = outbox(app).last('ACTIVATION')?.token;
+
+      await request(app.getHttpServer())
+        .post('/api/v1/auth/activate')
+        .send({ token, password: PASSWORD });
+
+      // An active holder who has forgotten their password uses the reset flow;
+      // section 6 does not invite them back in through an activation link.
+      const resend = await request(app.getHttpServer())
+        .post(`/api/v1/accounts/${created.body.id}/activation-email`)
+        .set('Authorization', `Bearer ${admin.accessToken}`)
+        .set('Idempotency-Key', randomUUID())
+        .send({});
+
+      expect(resend.status).toBe(409);
+      expect(resend.body.error.code).toBe('INVARIANT_VIOLATION');
+    });
+
+    it('refuses a re-send to an actor without accounts.manage', async () => {
+      const created = await provision({
+        person_id: ester.id,
+        email: 'ester@example.test',
+        role: 'ADMIN',
+      });
+
+      const leader = await createAccount(app, db, {
+        person: await createPerson(db, { firstName: 'Rico', network: 'MENS' }),
+        roles: ['LEADER'],
+      });
+
+      const resend = await request(app.getHttpServer())
+        .post(`/api/v1/accounts/${created.body.id}/activation-email`)
+        .set('Authorization', `Bearer ${leader.accessToken}`)
+        .set('Idempotency-Key', randomUUID())
+        .send({});
+
+      expect(resend.status).toBe(403);
+    });
+
     it('replays a retry rather than provisioning twice', async () => {
       const key = randomUUID();
       const body = { person_id: ester.id, email: 'ester@example.test', role: 'ADMIN' };

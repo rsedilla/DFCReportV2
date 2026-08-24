@@ -64,21 +64,23 @@ export interface EmailPort {
   /**
    * Delivers one message, or throws.
    *
-   * **A caller decides what a failure means; this never swallows one.** The three
-   * callers want different things, which is why the decision is theirs:
+   * **A caller decides what a failure means; this never swallows one.** Every
+   * caller today logs rather than raises, and each reaches that from a different
+   * direction:
    *
-   * - **Provisioning** logs and returns 201. The account was created, and its
-   *   completion is already recorded inside the committed transaction, so raising
-   *   would hand the client a 500 that every retry replays as a 201.
-   * - **Re-sending an activation** raises. Delivering the message is the entire
-   *   purpose of that endpoint, so an operator must learn that it failed.
-   * - **A password reset** logs and returns 204, because an error on the hit path
-   *   and a success on the miss path is the same oracle the identical response
-   *   exists to prevent.
+   * - **Provisioning** and **re-sending an activation** both record their
+   *   idempotency completion inside the committed transaction, so raising
+   *   afterwards would hand the client a 500 while the store holds the success
+   *   every retry replays (`CLAUDE.md`, Write endpoints). The operator learns from
+   *   the log and calls the re-send endpoint, which mints a fresh token.
+   * - **A password reset** logs because an error on the hit path and a success on
+   *   the miss path is the same oracle the identical response exists to prevent.
    *
-   * An earlier version of this docblock said provisioning "must not commit an
-   * account whose holder was never told how to activate it", which described a
-   * guarantee its only caller did not provide.
+   * That the answer is currently unanimous is not a reason to move the decision in
+   * here. It became unanimous twice over by correction: this docblock first
+   * asserted a guarantee provisioning did not provide, then said re-sending raises
+   * — which was true when written and was made false by the commit that gave that
+   * endpoint an idempotency completion, twelve lines from the comment.
    */
   send(message: OutboundEmail): Promise<void>;
 }
