@@ -37,14 +37,22 @@ import { sameId } from '../../common/identifiers';
  * The two differ on whether the capability is held at all, which is exactly what
  * section 22's two codes distinguish. A narrow grant of a Whole Church capability
  * names it, so the account holds it and only the scope is unusable. A refused
- * `SENIOR_PASTOR` row names nothing: the account holds none of the role's
- * capabilities, at any scope, so `CAPABILITY_DENIED` is the true answer and
- * `SCOPE_DENIED` would send an administrator to widen a scope that does not exist.
+ * `SENIOR_PASTOR` row names nothing: it contributes none of the role's
+ * capabilities, at any scope, so where the account has no other source for the one
+ * being asked about, `CAPABILITY_DENIED` is the true answer and `SCOPE_DENIED`
+ * would send an administrator to widen a scope that does not exist.
+ *
+ * **That qualifier is load-bearing and three earlier versions dropped it.** An
+ * account holding a second role, or an explicit grant, keeps whatever those name
+ * and is refused on its own terms — `accounts.e2e.spec.ts` builds exactly that,
+ * a `LEADER` carrying an unhonoured row, and asserts it keeps own-subtree
+ * authority.
  *
  * **The other consequence of a refused row answers the other code, and this
  * paragraph did not say so for two review passes.** A refused row also withholds
  * the exemption section 5 invariant 4 decides by role — and an actor who holds the
- * capability by an explicit Whole Church grant reaches that check and is refused
+ * capability by some other route — a second role's defaults, or an explicit Whole
+ * Church grant — reaches that check and is refused
  * `SCOPE_DENIED`, which is what section 22 says a domain-layer statement about an
  * actor's authority over a target answers. Both codes name the half that failed;
  * one unqualified sentence covered only the half being looked at, which is the

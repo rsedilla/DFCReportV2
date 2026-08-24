@@ -2470,7 +2470,8 @@ would have carried is what the request needed.** *That qualifier was missing for
 review passes, and it was copied unqualified into `SKILL.md` §7 by the batch written
 to close the false "written to §x" claim below.* A refused row has two consequences,
 and the sentence covered one: it also withholds the §5 invariant-4 exemption, and an
-actor holding the capability by an explicit Whole Church grant reaches that check and
+actor holding the capability by some other route — a second role's defaults, or an
+explicit Whole Church grant — reaches that check and
 is refused `SCOPE_DENIED` — which §22 already settles for a domain-layer statement
 about an actor's authority over a target, and which this branch's own test asserted
 the whole time. §7 now states both, and the principle they share: the code names the
@@ -2493,8 +2494,11 @@ The code is nonetheless right, for a reason of its own. The two cases differ on
 whether the capability is held at all, which is the distinction §22's two codes
 exist to draw. A narrow grant of a Whole Church capability **names** it, so the
 account holds it and only the scope is unusable. A refused `SENIOR_PASTOR` row names
-nothing, so the account holds none of the role's capabilities at any scope —
-`SCOPE_DENIED` would send an administrator to widen a scope that does not exist.
+nothing, so it contributes none of the role's capabilities at any scope, and where
+the account has no other source for the one being asked about, `SCOPE_DENIED` would
+send an administrator to widen a scope that does not exist. That qualifier was
+dropped by three successive versions of this paragraph, including the two written to
+correct it: an account holding a second role keeps whatever that names.
 The cost is that on the accepted failure mode, configuration lost, a real Senior
 Pastor is told they hold nothing while `account_roles` says otherwise; what resolves
 that is the error logged at the refusal, which names both causes, and the code is

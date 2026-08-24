@@ -154,8 +154,9 @@ export class AuthorizationService {
    * plus whatever its domain layer asks for. `POST /accounts` takes none beyond the
    * guard and so logs once; an unbackdated reassignment adds `authorityFor` for
    * section 5 invariant 1, and went from three lines to two; a backdated one adds a
-   * second `authorize` for `records.backdate_effective_date`; a sex correction takes
-   * more again.
+   * second `authorize` for `records.backdate_effective_date`. A sex correction takes
+   * one more than the reassignment of the same kind, for its Whole Church check —
+   * three unbackdated and four backdated, rather than continuing the sequence above.
    *
    * *Two earlier versions of this paragraph each gave a count — "two per request",
    * then "twice regardless" — and both were exactly right for the one path they
