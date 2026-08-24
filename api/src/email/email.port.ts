@@ -14,8 +14,11 @@
  * time somebody needed it. Naming the messages keeps that in one place and makes
  * the set of mail this system can send a list somebody can read.
  *
- * Section 7 keeps the tokens out of every API response, so this is the only route
- * by which an activation or reset token reaches a person.
+ * Section 6 keeps the tokens out of every API response — an administrator may not
+ * know or choose another user's password, and a token that sets one is the same
+ * secret a step earlier — so this is the only route by which an activation or
+ * reset token reaches a person. (An earlier version of this line cited section 7,
+ * which is the Authorization Model and says nothing about token disclosure.)
  */
 export const EMAIL_PORT = Symbol('EMAIL_PORT');
 
@@ -61,11 +64,21 @@ export interface EmailPort {
   /**
    * Delivers one message, or throws.
    *
-   * **A caller decides what a failure means; this never swallows one.** The two
-   * flows want opposite things and neither is served by a silent catch:
-   * provisioning must not commit an account whose holder was never told how to
-   * activate it, while a reset must not let a delivery failure become a signal
-   * about whether the address exists.
+   * **A caller decides what a failure means; this never swallows one.** The three
+   * callers want different things, which is why the decision is theirs:
+   *
+   * - **Provisioning** logs and returns 201. The account was created, and its
+   *   completion is already recorded inside the committed transaction, so raising
+   *   would hand the client a 500 that every retry replays as a 201.
+   * - **Re-sending an activation** raises. Delivering the message is the entire
+   *   purpose of that endpoint, so an operator must learn that it failed.
+   * - **A password reset** logs and returns 204, because an error on the hit path
+   *   and a success on the miss path is the same oracle the identical response
+   *   exists to prevent.
+   *
+   * An earlier version of this docblock said provisioning "must not commit an
+   * account whose holder was never told how to activate it", which described a
+   * guarantee its only caller did not provide.
    */
   send(message: OutboundEmail): Promise<void>;
 }

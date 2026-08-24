@@ -1,7 +1,5 @@
 import { IsEmail, IsIn, IsString, IsUUID, MaxLength, MinLength } from 'class-validator';
 
-import { PASSWORD_MAX_LENGTH, PASSWORD_MIN_LENGTH } from '../credentials.service';
-
 import type { AccountRole } from '../../database/schema';
 
 /**
@@ -46,11 +44,18 @@ export class ForgotPasswordDto {
 /**
  * Setting a password with a token, for activation and for reset alike.
  *
- * **The length bounds are declared here as well as in the service**, and that is
- * not belt-and-braces for its own sake: the DTO is what a client can read off a
- * 422, and the service is what holds the rule for any caller that does not arrive
- * through this controller. Both cite section 6 and both take the same constants,
- * so they cannot drift.
+ * **The length is not checked here, and that is deliberate.** An earlier version
+ * carried `@MinLength`/`@MaxLength` alongside the service's own check, on the
+ * reasoning that both took the same constants and so could not drift. They shared
+ * the constants and not the *counting rule*: `class-validator` counts UTF-16
+ * units and section 6 counts characters, so a 128-code-point passphrase
+ * containing astral characters is 256 units and was refused by the pipe — while
+ * the unit tests asserted the service accepts exactly that input.
+ *
+ * One rule in one place, in `assertPasswordIsAcceptable`, which counts code
+ * points and is reached by every caller including any that does not arrive
+ * through this controller. `@IsString` stays, because a non-string is malformed
+ * in a way length has nothing to say about.
  */
 export class SetPasswordDto {
   @IsString()
@@ -58,7 +63,5 @@ export class SetPasswordDto {
   token!: string;
 
   @IsString()
-  @MinLength(PASSWORD_MIN_LENGTH)
-  @MaxLength(PASSWORD_MAX_LENGTH)
   password!: string;
 }

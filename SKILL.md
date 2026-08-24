@@ -1033,6 +1033,42 @@ The first Admin account is the one exception to all of it, created by a system
 action because there is no account above it to do the creating (Section 7,
 `granted_by`).
 
+**An archived Person is not provisioned an account.** The request is refused with
+`INVARIANT_VIOLATION`, naming the restore that must happen first. This section
+covers the account-access decision *at* archive and reactivation *after* it, and
+said nothing about creating one for somebody already archived — but every
+neighbouring rule points one way: Section 5 refuses an archived Person as the
+destination of a pastoral assignment, and Section 3 refuses archiving somebody who
+leads a Cell. An archived Person does not acquire new live relationships, and an
+account is one.
+
+**Which Senior Pastor seat a provisioning request takes is chosen by the server.**
+Section 7 caps the role at two slots and calls a slot a seat rather than a rank, so
+naming one chooses nothing meaningful — and a caller naming an occupied seat would
+meet a constraint violation for a decision it should never have been making. The
+free seat is taken; where both are held the request is refused with
+`INVARIANT_VIOLATION`, naming the revocation that records a succession. The partial
+unique index remains the enforcement, so two concurrent requests for one free seat
+still resolve to one account.
+
+**An activation email may be re-sent.** Step 3 above sends one and defined no second
+path, which left an account unreachable whenever a delivery failed: the Person
+already has an account, so provisioning refuses, and the holder's only route was the
+forgotten-password flow — which happens to work on a `PENDING_ACTIVATION` account and
+records itself as a password reset rather than an activation.
+
+Re-sending mints a fresh token and supersedes the outstanding one by the rule above,
+so a link from an earlier attempt stops working. That is the right way round: the
+reason to re-send is that the earlier one reached nobody. It is available only while
+the account is `PENDING_ACTIVATION` — an active holder who has forgotten their
+password uses the reset flow, and a disabled one is not invited back in through an
+activation link, since reactivation is a separate authorized decision.
+
+**A delivery failure never fails provisioning.** The account was created and its
+outcome recorded; raising afterwards would hand the client a failure while the store
+holds the success that every retry reproduces (Section 22). The failure is recorded
+for an operator, who re-sends.
+
 One person has one account even if they lead multiple Cell Groups.
 
 Assigning Cell leadership and provisioning an account are separately authorized. Where designating a person as a Cell Leader would trigger account creation, the actor must hold both `cell.manage_leadership` and `accounts.manage` against that same target — mirroring the dual-authorization rule for archiving a Person who holds an active account (Account access at archive, below).
@@ -1318,7 +1354,29 @@ It is refused whether or not the particular correction turns out to force a reas
 
 This is the one authorization rule in the system decided by **role** rather than by capability, and Section 5 states it that way deliberately: what matters is that Admin and the Senior Pastors sit outside the pastoral incentive the rule guards against, not that they hold something extra.
 
-**`people.correct_sex` exists at Whole Church and at no narrower scope.** The catalog above gives it one scope, and the rule is stated here because the guard alone would not hold it: the guard asks whether the actor's grant covers the target, so a grant issued at `OWN_SUBTREE` would pass for anyone inside that subtree. Held at a subtree scope it becomes exactly the escalation route this capability is Admin-only to close — moving a person between Networks, and re-parenting them in the process, without ever holding `people.manage_pastoral_assignment` (Section 4). A grant of it at any narrower scope therefore covers nothing, and the operation refuses with `SCOPE_DENIED`, in the same spirit as the `read_only` rejection above: a row that cannot mean what it appears to mean is refused rather than honoured in part.
+**A capability this catalog gives only at Whole Church covers nothing when granted
+narrower.** The guard cannot hold that on its own: it asks whether a grant covers
+the request's target, so a grant issued at `OWN_SUBTREE` passes for everyone inside
+that subtree. A grant of one of these at any narrower scope is therefore ignored
+when an account's effective authority is assembled, exactly as a `read_only` grant
+of a write capability is — a row that cannot mean what it appears to mean grants
+nothing rather than being honoured in part.
+
+The rule is general rather than named per capability, because the hole is. It was
+first closed for `people.correct_sex` alone, and the same shape was open on
+`accounts.manage`, `roles.manage`, `people.merge`, `records.backdate_effective_date`,
+`settings.manage`, `people.manage_lifecycle`, `cell.approve_creation` and
+`audit.view`. `accounts.manage` was the worst of them: a subtree-scoped grant is a
+route to provisioning yourself an Admin account and signing in as one, which is the
+escalation the whole catalog is arranged to prevent. Naming them one at a time is as
+many chances to miss the next.
+
+A **wider** grant is untouched. This section contemplates Admin issuing authority
+beyond a role's defaults, and this rule is about a grant that cannot mean what it
+says, not a cap on anyone.
+
+**`people.correct_sex` exists at Whole Church and at no narrower scope**, and is the
+case that first established the rule above. The catalog above gives it one scope, and the rule is stated here because the guard alone would not hold it: the guard asks whether the actor's grant covers the target, so a grant issued at `OWN_SUBTREE` would pass for anyone inside that subtree. Held at a subtree scope it becomes exactly the escalation route this capability is Admin-only to close — moving a person between Networks, and re-parenting them in the process, without ever holding `people.manage_pastoral_assignment` (Section 4). A grant of it at any narrower scope therefore covers nothing, and the operation refuses with `SCOPE_DENIED`, in the same spirit as the `read_only` rejection above: a row that cannot mean what it appears to mean is refused rather than honoured in part.
 
 `read_only` belongs to `capability_grants` and to nothing else. **A role default carries no such flag**, and none is to be derived for one: a role's authority is exactly what the catalog above says it is. Anywhere an account's effective authority is presented — `/api/v1/auth/me` is the case that exists — authority carried by a role reports no `read_only` value rather than an invented one, because a client branching on a value this specification never defined is branching on a rule that does not exist.
 
@@ -2800,6 +2858,7 @@ POST /api/v1/auth/activate               sets the first password (Section 6)
 GET  /api/v1/auth/me
 
 POST /api/v1/accounts                    provisioning, `accounts.manage`
+POST /api/v1/accounts/{id}/activation-email   re-send (Section 6)
 
 GET  /api/v1/people                       search, church-wide (Section 8)
 GET  /api/v1/people/duplicate-candidates  declared before /{id}, or it is one

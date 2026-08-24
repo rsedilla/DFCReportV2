@@ -178,6 +178,197 @@ describe('accounts: provisioning, activation and reset (section 6)', () => {
       expect(response.body.error.code).toBe('CAPABILITY_DENIED');
     });
 
+    it('covers nothing when accounts.manage is granted narrower than Whole Church', async () => {
+      // **The escalation this branch shipped and review caught.** Section 7 gives
+      // `accounts.manage` one scope, and the guard alone cannot hold that: it asks
+      // whether a grant covers the target, so a subtree-scoped grant passes for
+      // everyone inside that subtree. A Leader holding one could provision
+      // themselves an ADMIN account at an address they control and sign in as one.
+      //
+      // **The refusal case above does not pin this** — it uses a Leader with no
+      // grant at all, so it passes equally against a service that honours a narrow
+      // one. This is the case that fails if the rule is removed.
+      const leaderPerson = await createPerson(db, { firstName: 'Rico', network: 'MENS' });
+      const leader = await createAccount(app, db, { person: leaderPerson, roles: ['LEADER'] });
+
+      await db
+        .insertInto('capability_grants')
+        .values({
+          account_id: leader.id,
+          capability: 'accounts.manage',
+          scope_type: 'OWN_SUBTREE',
+          read_only: false,
+          reason: 'Invented for this case (CLAUDE.md, Secrets).',
+          granted_by: admin.id,
+        })
+        .execute();
+
+      const response = await provision(
+        { person_id: leaderPerson.id, email: 'rico@example.test', role: 'ADMIN' },
+        leader,
+      );
+
+      // CAPABILITY_DENIED, not SCOPE_DENIED: the grant covers nothing at all, so
+      // the account holds no usable `accounts.manage` whatever the target.
+      expect(response.status).toBe(403);
+      expect(response.body.error.code).toBe('CAPABILITY_DENIED');
+
+      const accounts = await db
+        .selectFrom('accounts')
+        .select('id')
+        .where('person_id', '=', leaderPerson.id)
+        .execute();
+
+      expect(accounts).toHaveLength(0);
+    });
+
+    it('provisions a SENIOR_PASTOR into a free seat', async () => {
+      // **Unreachable before review.** The insert omitted `senior_pastor_slot`,
+      // which the check constraint requires for this role — a 23505/23514 the
+      // filter does not recognise, so a 500. No test named the role, and section 6
+      // as amended says such an account is created like any other.
+      const response = await provision({
+        person_id: ester.id,
+        email: 'ester@example.test',
+        role: 'SENIOR_PASTOR',
+      });
+
+      expect(response.status).toBe(201);
+
+      const roles = await db
+        .selectFrom('account_roles')
+        .select(['role', 'senior_pastor_slot'])
+        .where('account_id', '=', response.body.id)
+        .execute();
+
+      expect(roles).toEqual([{ role: 'SENIOR_PASTOR', senior_pastor_slot: 1 }]);
+    });
+
+    it('refuses a third Senior Pastor, which is the cap section 7 states', async () => {
+      const second = await createPerson(db, { firstName: 'Oriel', network: 'MENS' });
+      const third = await createPerson(db, { firstName: 'Manuel', network: 'MENS' });
+
+      expect(
+        (await provision({ person_id: ester.id, email: 'a@example.test', role: 'SENIOR_PASTOR' }))
+          .status,
+      ).toBe(201);
+      expect(
+        (await provision({ person_id: second.id, email: 'b@example.test', role: 'SENIOR_PASTOR' }))
+          .status,
+      ).toBe(201);
+
+      const overflow = await provision({
+        person_id: third.id,
+        email: 'c@example.test',
+        role: 'SENIOR_PASTOR',
+      });
+
+      // An answer rather than a raw constraint violation rendered 500.
+      expect(overflow.status).toBe(409);
+      expect(overflow.body.error.code).toBe('INVARIANT_VIOLATION');
+    });
+
+    it('refuses an archived Person', async () => {
+      // Settled 2026-08-24: an archived Person does not acquire new live
+      // relationships, and an account is one. The merged check was carried across
+      // from `leader-assignability.ts` and this one was not.
+      await db
+        .updateTable('person_lifecycle')
+        .set({ state: 'ARCHIVED' })
+        .where('person_id', '=', ester.id)
+        .where('ended_at', 'is', null)
+        .execute();
+
+      const response = await provision({
+        person_id: ester.id,
+        email: 'ester@example.test',
+        role: 'ADMIN',
+      });
+
+      expect(response.status).toBe(409);
+      expect(response.body.error.code).toBe('INVARIANT_VIOLATION');
+    });
+
+    it('refuses a duplicate email with an answer, not a 500', async () => {
+      // `accounts.email_normalized` is UNIQUE, and an unrecognised 23505 renders
+      // as INTERNAL_ERROR — the 500-instead-of-an-answer failure recorded on
+      // 2026-08-23. Normalization is part of it: the same address in another case
+      // is the same account.
+      const other = await createPerson(db, { firstName: 'Rico', network: 'MENS' });
+
+      await provision({ person_id: ester.id, email: 'shared@example.test', role: 'ADMIN' });
+
+      const clash = await provision({
+        person_id: other.id,
+        email: 'SHARED@Example.test',
+        role: 'ADMIN',
+      });
+
+      expect(clash.status).toBe(409);
+      expect(clash.body.error.code).toBe('INVARIANT_VIOLATION');
+    });
+
+    it('still answers 201 when the activation email cannot be delivered', async () => {
+      // **The write-endpoint contract, and the case the harness could always have
+      // run.** The completion is recorded inside the transaction, so by the time
+      // the send happens the store holds a COMPLETED 201. Raising there gave the
+      // client a 500 while every retry on that key replayed the 201, and `release`
+      // could not help because its predicate is IN_FLIGHT.
+      //
+      // The account genuinely exists, so 201 is the honest answer and the operator
+      // re-sends.
+      outbox(app).failNext = true;
+
+      const response = await provision({
+        person_id: ester.id,
+        email: 'ester@example.test',
+        role: 'ADMIN',
+      });
+
+      expect(response.status).toBe(201);
+
+      const accounts = await db
+        .selectFrom('accounts')
+        .select('status')
+        .where('person_id', '=', ester.id)
+        .execute();
+
+      expect(accounts).toEqual([{ status: 'PENDING_ACTIVATION' }]);
+    });
+
+    it('re-sends an activation email, superseding the token that did not arrive', async () => {
+      const created = await provision({
+        person_id: ester.id,
+        email: 'ester@example.test',
+        role: 'ADMIN',
+      });
+      const first = outbox(app).last('ACTIVATION')?.token;
+
+      const resend = await request(app.getHttpServer())
+        .post(`/api/v1/accounts/${created.body.id}/activation-email`)
+        .set('Authorization', `Bearer ${admin.accessToken}`)
+        .set('Idempotency-Key', randomUUID())
+        .send({});
+
+      expect(resend.status).toBe(204);
+
+      const second = outbox(app).last('ACTIVATION')?.token;
+      expect(second).not.toBe(first);
+
+      // Section 6: issuing a new token of a purpose invalidates the outstanding
+      // one. The stale link stops working, which is the right way round — the
+      // reason to re-send is that the first did not reach anybody.
+      const stale = await request(app.getHttpServer())
+        .post('/api/v1/auth/activate')
+        .send({ token: first, password: PASSWORD });
+      expect(stale.status).toBe(422);
+
+      const current = await request(app.getHttpServer())
+        .post('/api/v1/auth/activate')
+        .send({ token: second, password: PASSWORD });
+      expect(current.status).toBe(204);
+    });
+
     it('replays a retry rather than provisioning twice', async () => {
       const key = randomUUID();
       const body = { person_id: ester.id, email: 'ester@example.test', role: 'ADMIN' };
@@ -227,9 +418,12 @@ describe('accounts: provisioning, activation and reset (section 6)', () => {
     });
 
     it('is single-use, so a replayed link cannot set a second password', async () => {
-      // **The mutation this fails against** is a read-then-write redemption, where
-      // two requests presenting one token both pass the read. Section 6 makes
-      // single-use a property rather than an intention.
+      // Sequential replay. **This does not pin the concurrent property**, and an
+      // earlier version of this comment claimed it did: a read-then-write
+      // redemption passes here, because by the second request `used_at` is already
+      // set. The concurrent case is the one below, on the reasoning CLAUDE.md
+      // records for authorization case 7 — a sequential test passes against an
+      // application-layer check alone.
       const token = await provisionEster();
 
       expect((await activate({ token, password: PASSWORD })).status).toBe(204);
@@ -255,6 +449,71 @@ describe('accounts: provisioning, activation and reset (section 6)', () => {
       // The token survives a refused attempt: a holder who typed something too
       // short must not have to ask for a new link.
       expect((await activate({ token, password: PASSWORD })).status).toBe(204);
+    });
+
+    it('is single-use under concurrent redemption, not only sequentially', async () => {
+      // **The property the sequential case cannot see.** A read-then-write
+      // redemption lets two requests presenting one token both pass the read, and
+      // CLAUDE.md records exactly this for authorization case 7: a sequential test
+      // passes against an application-layer check alone.
+      //
+      // Both requests are dispatched before either is awaited — a supertest object
+      // is lazy, and this repository has already shipped a probe that found no
+      // waiter because it was never sent.
+      const token = await provisionEster();
+
+      const [first, second] = await Promise.all([
+        activate({ token, password: PASSWORD }),
+        activate({ token, password: 'a different passphrase' }),
+      ]);
+
+      const statuses = [first.status, second.status].sort();
+      expect(statuses).toEqual([204, 422]);
+
+      // And exactly one of the two passwords works, so the loser set nothing.
+      const winner = first.status === 204 ? PASSWORD : 'a different passphrase';
+      const loser = first.status === 204 ? 'a different passphrase' : PASSWORD;
+
+      expect(
+        (
+          await request(app.getHttpServer())
+            .post('/api/v1/auth/login')
+            .send({ email: 'ester@example.test', password: loser })
+        ).status,
+      ).toBe(401);
+
+      expect(
+        (
+          await request(app.getHttpServer())
+            .post('/api/v1/auth/login')
+            .send({ email: 'ester@example.test', password: winner })
+        ).status,
+      ).toBe(200);
+    });
+
+    it('does not reactivate a DISABLED account', async () => {
+      // Section 6 makes reactivation "a separate, explicit, authorized decision",
+      // and an activation token outlives a disablement by up to a week. Without
+      // this an unauthenticated endpoint undoes an `accounts.manage` decision.
+      const token = await provisionEster();
+
+      await db
+        .updateTable('accounts')
+        .set({ status: 'DISABLED' })
+        .where('email_normalized', '=', 'ester@example.test')
+        .execute();
+
+      const response = await activate({ token, password: PASSWORD });
+      expect(response.status).toBe(422);
+
+      const accounts = await db
+        .selectFrom('accounts')
+        .select(['status', 'password_hash'])
+        .where('email_normalized', '=', 'ester@example.test')
+        .execute();
+
+      expect(accounts[0].status).toBe('DISABLED');
+      expect(accounts[0].password_hash).toBeNull();
     });
 
     it('refuses an unknown token the same way as a used one', async () => {

@@ -8,6 +8,7 @@ import { NetworksService } from '../../networks/networks.service';
 import { isCapability, isReadCapability, type Capability } from './capabilities';
 import { ROLE_DEFAULTS } from './role-defaults';
 import { ScopeType, type Scope, type Target } from './scopes';
+import { grantCoversNothing } from './single-scope';
 
 import type { AccountRole } from '../../database/schema';
 
@@ -132,6 +133,25 @@ export class AuthorizationService {
         // grants nothing rather than silently granting a write.
         this.logger.error(
           `capability_grants holds a read-only grant of the write capability "${grant.capability}" for account ${accountId}. Ignoring it.`,
+        );
+        continue;
+      }
+
+      if (grantCoversNothing(grant.capability, grant.scope_type)) {
+        // **Section 7 gives these capabilities one scope, and the guard cannot
+        // hold that on its own**: it asks whether a grant covers the target, so a
+        // subtree-scoped grant passes for everyone inside that subtree. On
+        // `accounts.manage` that is a route to provisioning yourself an Admin
+        // account; on `people.correct_sex` it is the Network escalation the
+        // 2026-08-23 ruling names.
+        //
+        // Refused here rather than in each operation, for the reason section 2
+        // gives for the guard being declarative — an operation that forgets the
+        // check looks exactly like one that does not need it. Same treatment as
+        // `read_only` above, and for the same reason: a row that cannot mean what
+        // it appears to mean grants nothing rather than being honoured in part.
+        this.logger.error(
+          `capability_grants holds "${grant.capability}" at ${grant.scope_type} for account ${accountId}, and section 7 gives it Whole Church only. Ignoring it.`,
         );
         continue;
       }

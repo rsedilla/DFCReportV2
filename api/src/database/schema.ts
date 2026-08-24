@@ -165,7 +165,11 @@ export type AuditAction =
   // find that entry whether it arose from provisioning or from a later change.
   | 'account.created'
   | 'account.activated'
-  | 'account.password_reset'
+  | 'account.activation_resent'
+  // `password.reset`, not `account.password_reset`: section 21's convention is
+  // `<noun>.<past-tense verb>`, and "password_reset" is a noun phrase. The noun is
+  // the thing the action happened to.
+  | 'password.reset'
   | 'role.granted';
 
 export interface AuditLogTable {
