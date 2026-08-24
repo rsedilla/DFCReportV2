@@ -3,7 +3,13 @@ import { randomUUID } from 'node:crypto';
 import request from 'supertest';
 
 import { createTestDb, truncateAll } from '../setup/database';
-import { createAccount, createPerson, createTestApp, outbox } from '../setup/fixtures';
+import {
+  createAccount,
+  createPerson,
+  createTestApp,
+  outbox,
+  resetRateLimits,
+} from '../setup/fixtures';
 
 import type { INestApplication } from '@nestjs/common';
 import type { Kysely } from 'kysely';
@@ -37,6 +43,11 @@ describe('accounts: provisioning, activation and reset (section 6)', () => {
   beforeEach(async () => {
     await truncateAll(db);
     outbox(app).reset();
+    // Cases share an application and therefore a source address, and
+    // `forgot-password` is deliberately limited to five a minute. Without this the
+    // sixth call in the file is a 429 attributed to whatever that case was about —
+    // which is how the limit was discovered rather than pinned.
+    resetRateLimits(app);
 
     admin = await createAccount(app, db, {
       person: await createPerson(db, { firstName: 'Nora', network: 'WOMENS' }),
@@ -348,6 +359,29 @@ describe('accounts: provisioning, activation and reset (section 6)', () => {
         .send({ token: second, password: 'an entirely new passphrase' });
 
       expect(current.status).toBe(204);
+    });
+
+    it('is rate limited, because it mails somebody on an unauthenticated request', async () => {
+      // **Found by accident and pinned deliberately.** An earlier version of this
+      // file called `forgot-password` six times across its cases and the sixth
+      // returned 429, failing an assertion about email delivery. The limit was
+      // right and the isolation was wrong — but nothing had asserted the limit
+      // existed, so removing `@Throttle` from that route would have gone unnoticed.
+      //
+      // Section 24 requires rate limiting on authentication and sensitive
+      // endpoints, and this one is sensitive in two ways at once: it is
+      // unauthenticated, and it causes mail to be sent to an address the caller
+      // chose. Unlimited, it is a mail-bombing primitive as well as an enumeration
+      // one.
+      await activeEster();
+
+      const answers: number[] = [];
+      for (let attempt = 0; attempt < 7; attempt += 1) {
+        answers.push((await forgot('ester@example.test')).status);
+      }
+
+      expect(answers.slice(0, 5)).toEqual([204, 204, 204, 204, 204]);
+      expect(answers.slice(5)).toEqual([429, 429]);
     });
 
     it('answers 204 even when delivery fails, so the outcome is not an oracle', async () => {

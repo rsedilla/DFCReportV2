@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 
 import { type INestApplication, type Type } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
+import { ThrottlerStorage, type ThrottlerStorageService } from '@nestjs/throttler';
 import type { Kysely } from 'kysely';
 
 import { AppModule } from '../../src/app.module';
@@ -191,4 +192,25 @@ export async function createTestApp(controllers: Type<unknown>[] = []): Promise<
 /** The captured outbox for an app built by `createTestApp`. */
 export function outbox(app: INestApplication): CapturingEmailAdapter {
   return app.get<CapturingEmailAdapter>(EMAIL_PORT);
+}
+
+/**
+ * Forgets every rate-limit count the application is holding.
+ *
+ * **Cases share an application, and therefore a source address**, so without this
+ * a suite exercising a tightly limited endpoint several times fails on its later
+ * cases — and fails in a way that reads as a defect in whatever that case was
+ * about rather than as one case borrowing another's budget. That is exactly how
+ * this was found: the sixth `forgot-password` in one file returned 429 and the
+ * assertion that noticed was about email delivery.
+ *
+ * Reaching into the storage rather than raising the limits, because the limits are
+ * production behaviour: `forgot-password` is deliberately tighter than sign-in
+ * (section 24), and loosening it so a test suite fits would be tuning the
+ * application to the tests. The endpoint's own limit is pinned deliberately in
+ * `accounts.e2e.spec.ts` instead.
+ */
+export function resetRateLimits(app: INestApplication): void {
+  const storage = app.get<ThrottlerStorageService>(ThrottlerStorage);
+  storage.storage.clear();
 }
