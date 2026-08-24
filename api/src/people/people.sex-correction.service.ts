@@ -397,6 +397,20 @@ export class PeopleSexCorrectionService {
    * `SCOPE_DENIED` rather than `CAPABILITY_DENIED`: the actor does hold the
    * capability, and what fails is its reach (section 22).
    */
+  /**
+   * **Pre-empted by the guard since 2026-08-24, and kept as a second line.**
+   *
+   * The rule this enforces — section 7 gives `people.correct_sex` at Whole Church
+   * and a narrower grant covers nothing — was generalised to every capability the
+   * catalog gives at one scope, and now refuses in `AuthorizationService.authorize`
+   * before this runs. Through the endpoint, this is unreachable.
+   *
+   * Kept because it fails closed and costs one read, and because it defends the
+   * one path the guard does not: a caller reaching this service directly. It is
+   * not the enforcement, and a reader should not mistake it for one — which is why
+   * this note is here rather than the original wording, which read as though it
+   * were the only thing standing between a subtree grant and a Network move.
+   */
   private async assertCorrectSexIsHeldChurchWide(actor: Actor): Promise<void> {
     const churchWide = (await this.authorization.grantsFor(actor.accountId)).some(
       (grant) =>

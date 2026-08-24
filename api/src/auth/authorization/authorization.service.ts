@@ -183,8 +183,11 @@ export class AuthorizationService {
       throw new CapabilityDeniedError(`You do not hold ${capability}.`, { capability });
     }
 
+    let coveredNothing = false;
+
     for (const grant of grants) {
       if (grantCoversNothing(capability, grant.scope.type)) {
+        coveredNothing = true;
         continue;
       }
 
@@ -194,6 +197,17 @@ export class AuthorizationService {
       if (await this.scopeCovers(this.db, grant.scope, target, actor)) {
         return;
       }
+    }
+
+    if (coveredNothing) {
+      // **A different message, because "not over this record" would be a lie.** It
+      // says another target would work; for a capability section 7 gives at Whole
+      // Church only, none would. An administrator reading the generic wording goes
+      // looking for the right record, and the thing to fix is the grant.
+      throw new ScopeDeniedError(
+        `You hold ${capability}, but section 7 grants it at Whole Church only and yours is narrower. It covers no record at all.`,
+        { capability, required_scope: ScopeType.WholeChurch },
+      );
     }
 
     throw new ScopeDeniedError(`You hold ${capability}, but not over this record.`, {
