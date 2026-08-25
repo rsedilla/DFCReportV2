@@ -209,10 +209,15 @@ describe('people (SKILL.md sections 3, 7 and 8)', () => {
       expect(stored.birth_date).toBeNull();
     });
 
-    it('cannot reach Tier 1 without a birthday, so creation is not gated', async () => {
-      // **The consequence worth pinning.** Both Tier 1 rules rest on the birthday,
-      // and Tier 1 blocks creation — so a Person with none can only ever reach
-      // Tier 2 and is never refused for it.
+    it('is not gated on a name match alone once the birthday is absent', async () => {
+      // **The consequence worth pinning.** Two of the three Tier 1 rules read the
+      // birthday, and Tier 1 blocks creation — so with none, a name match alone
+      // reaches only Tier 2 and creation proceeds.
+      //
+      // Not "Tier 1 is unreachable": the third rule reads a mobile number, and
+      // equal names on a shared household number are still a Tier 1 refusal
+      // (section 3). An earlier version of this comment claimed otherwise, as did
+      // five other places on this branch.
       //
       // Same name as an existing fixture, which with a matching birthday is the
       // Tier 1 refusal two cases above. Without one it creates.
@@ -254,6 +259,45 @@ describe('people (SKILL.md sections 3, 7 and 8)', () => {
         .executeTakeFirstOrThrow();
 
       expect(stored.birth_date).toBe('1992-03-08');
+    });
+
+    it('refuses an edit that would clear a recorded birthday', async () => {
+      // Section 3 defines adding a birthday and does not define removing one.
+      //
+      // This is a live behaviour the migration would have introduced by accident:
+      // `@IsOptional()` skips null as well as undefined, so `{"birth_date": null}`
+      // reached the service and wrote NULL over a recorded date. Before the column
+      // became nullable the database refused it. Relaxing a constraint must not
+      // quietly become a new capability.
+      const created = await post(raymondAccount, randomUUID()).send(
+        personBody({
+          pastoral_leader_id: manuel.id,
+          first_name: 'Nena',
+          last_name: 'Villar',
+          birth_date: '1988-11-04',
+        }),
+      );
+      expect(created.status).toBe(201);
+
+      const cleared = await request(app.getHttpServer())
+        .patch(`/api/v1/people/${created.body.id}`)
+        .set('Authorization', `Bearer ${raymondAccount.accessToken}`)
+        .set('Idempotency-Key', randomUUID())
+        .send({ birth_date: null });
+
+      // 422, which is what section 22's VALIDATION_FAILED carries everywhere else
+      // in this suite. Asserted alongside the code so a later change to one of the
+      // two cannot pass by agreeing with itself.
+      expect(cleared.status).toBe(422);
+      expect(cleared.body.error.code).toBe('VALIDATION_FAILED');
+
+      const stored = await db
+        .selectFrom('persons')
+        .select('birth_date')
+        .where('id', '=', created.body.id)
+        .executeTakeFirstOrThrow();
+
+      expect(stored.birth_date).toBe('1988-11-04');
     });
 
     it('refuses a leader in the other Network', async () => {

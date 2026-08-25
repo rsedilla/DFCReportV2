@@ -11,10 +11,11 @@
 -- which corrupts both the data and duplicate matching.
 --
 -- For a birthday the corruption is worse than the general case, and that is what
--- makes this a rule rather than a convenience. Both Tier 1 duplicate rules rest
--- on the birthday, and Tier 1 *blocks* creation — so two unrelated people
--- carrying the same invented date match each other at Tier 1, and the system
--- refuses to record one of them on the strength of a value nobody meant.
+-- makes this a rule rather than a convenience. Two of the three Tier 1 duplicate
+-- rules read the birthday -- the third reads a mobile number, so absence does not
+-- put a person beyond Tier 1 -- and Tier 1 *blocks* creation. So two unrelated
+-- people carrying the same invented date match each other at Tier 1, and the
+-- system refuses to record one of them on the strength of a value nobody meant.
 -- Requiring the field does not protect the matcher; it poisons it and then acts
 -- on the poison.
 --

@@ -2763,8 +2763,8 @@ about email: "a mandatory field that people cannot fill is filled with fictions,
 which corrupts both the data and duplicate matching."
 
 **For a birthday the corruption is worse than the general case**, which is what
-makes this more than consistency. Both Tier 1 rules rest on the birthday, and Tier 1
-*blocks* creation. So two unrelated people carrying the same invented date match each
+makes this more than consistency. Two of the three Tier 1 rules read the birthday,
+and Tier 1 *blocks* creation. So two unrelated people carrying the same invented date match each
 other at Tier 1, and the system refuses to record one of them on the strength of a
 value nobody meant. Requiring the field does not protect the matcher; it poisons it,
 and then acts on the poison.
@@ -2775,6 +2775,25 @@ about the population that actually lacks one.* Absence drops a candidate to Tier
 which is honest: less is known, so less is claimed. Fabrication produces false
 confidence. The owner's question about consolidation is what surfaced the
 distinction.
+
+*The first version of this entry said "both Tier 1 rules", in §3 twice, in migration
+0007, in a test comment and in the commit message. §3 makes a matching mobile number
+with equal first and last names a Tier 1 as well, and states the generalisation three
+subsections along: "Every Tier 1 rule reads a birthday or a mobile number." The
+argument survives — a fabricated date still produces a false Tier 1 that blocks a
+real person — but "no birthday means no Tier 1" is false, and the case is pastoral
+rather than theoretical: names compare with `Jr` and `Sr` stripped and households
+share numbers, so a father and son with no birthdays on one number are a Tier 1
+refusal today.*
+
+*Two live defects came with the ruling and are recorded here rather than only in the
+fix. The null guard in `duplicate-matching.ts` became load-bearing the moment a
+candidate could carry null, and nothing held it — removing it passed all 436 tests
+while refusing two birthday-less people at Tier 1 on a claim their birthdays matched.
+And `@IsOptional()` skips null as well as undefined, so `PATCH {"birth_date": null}`
+erased a recorded date, answering 200; before the column was nullable the database
+refused it. Relaxing a constraint turned into a capability nobody decided on, which
+is worth remembering as a class rather than an incident.*
 
 **Two situations produce a Person with no birthday**, and the second decided it. A
 leader may not have asked. Or somebody may **decline** — a first conversation is not

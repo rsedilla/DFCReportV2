@@ -152,7 +152,7 @@ The church already exists. Roughly 800 Cells are running under an established le
 
 The two halves of the data live in different places and are loaded differently.
 
-**The leadership tree is known centrally and is small.** The Senior Pastors, their direct leaders, and the leaders below them number in the low thousands. Admin imports it: names, sex, and each person's direct leader. Network follows from sex (Section 4). Every pastoral assignment created this way takes an effective date of the encoding date, exactly as Section 4 requires for initial Network assignment. Do not fabricate historical dates for relationships that predate the system.
+**The leadership tree is known centrally and is small.** The Senior Pastors, their direct leaders, and the leaders below them number in the low thousands. Admin imports it: names, sex, and each person's direct leader — **and a birthday, which the import requires** even though Section 3 makes it optional everywhere else. The central record already holds one for every leader, so a gap here is an omission rather than somebody's decision to withhold it, and the import is a bulk load with nobody present to ask. Network follows from sex (Section 4). Every pastoral assignment created this way takes an effective date of the encoding date, exactly as Section 4 requires for initial Network assignment. Do not fabricate historical dates for relationships that predate the system.
 
 **Cell members are known only to their own leaders.** Nobody holds a central, current list of every member of every Cell. Each Cell Leader encodes their own members once they have an account. This is slower than a central import and considerably more accurate, and it doubles as the leader's first real use of the application.
 
@@ -195,17 +195,23 @@ Member IDs are assigned by the server from the sequence. Nothing is backdated.
   - `WIDOWED`
 - Mobile Number — optional
 
-**Birthday is optional, and the reason is the one this section already gives for email.** A mandatory field that people cannot fill is filled with fictions, which corrupts both the data and duplicate matching — and for a birthday the corruption is worse than for most fields, because the Tier 1 rules below rest on it. Two unrelated people carrying the same invented date match each other at Tier 1, and Tier 1 *blocks* creation, so a fabricated birthday does not merely weaken the matcher: it refuses to record real people on the strength of a value nobody meant.
+**Birthday is optional, and the reason is the one this section already gives for email.** A mandatory field that people cannot fill is filled with fictions, which corrupts both the data and duplicate matching — and for a birthday the corruption is worse than for most fields, because two of the three Tier 1 rules below read it. Two unrelated people carrying the same invented date match each other at Tier 1, and Tier 1 *blocks* creation, so a fabricated birthday does not merely weaken the matcher: it refuses to record real people on the strength of a value nobody meant.
 
 Two situations produce a Person with no birthday, and the second is why this is a rule rather than a convenience. A leader meeting somebody for the first time may simply not have asked. And **somebody may decline to give it** — a first conversation is not the moment to press for personal information, and a church that insists serves least the people most guarded about their details.
 
 **Never fabricate one.** A placeholder is indistinguishable from a fact afterwards, and it is the failure this rule exists to prevent rather than a shortcut around it.
 
-**Absence is honest, and the matcher already accounts for it.** A candidate with no birthday cannot reach Tier 1 — the strongest statement the system can make about two records needs that field — and falls to the Tier 2 rule below that names an absent birthday explicitly. That is correct: less is known, so less is claimed.
+**Absence is honest, and the matcher already accounts for it.** With no birthday on either side, the two Tier 1 rules that read one cannot fire, and the pair falls to the Tier 2 rule below that names an absent birthday explicitly. That is correct: less is known, so less is claimed.
+
+**It does not put a person beyond Tier 1 altogether**, and the difference bites at exactly the moment this rule is for. The third Tier 1 rule reads a **mobile number** — equal first and last names with a matching number — and Section 9 prompts for a number in the same conversation where a birthday is most likely to be declined. Households share numbers, and names are compared with `Jr` and `Sr` stripped, so two relatives on one household number and no birthdays are a Tier 1 refusal. That is the rule working as written rather than a defect, and it is named here because "no birthday, no Tier 1" is the obvious inference and is wrong.
+
+**The larger cost is reach rather than tier, and it is accepted here rather than discovered later.** Three of the five Tier 2 rules read a birthday too. The one that matters most is the surname-change rule — same birthday and first name, last name differing — which this section names twice as the case the matcher exists for. A woman whose surname changed on marriage and who has no birthday is not demoted to a weaker tier; she is invisible to the matcher unless her first and last names or her mobile number still match. The remedy is the ordinary one: her birthday is added later, and the matcher reaches her from then on.
 
 **It is added later by an ordinary edit**, under `people.edit_basic` (Section 7), by the leader who holds the person or anyone upline within scope. Nothing else is gated on it. Age is derived from birthday (Section 25) and is therefore unavailable until one is recorded, which is the accepted cost.
 
-**The initial leadership-tree import is the one place a birthday is required** (Section 2). It loads from a central record that already holds them, so a gap there is an omission rather than a person's decision.
+**This section defines adding one and does not define removing one.** An edit that clears a recorded birthday is refused as malformed input (`VALIDATION_FAILED`, Section 22) rather than permitted by omission. Making the column nullable was a decision about what may be *recorded at first contact*, and it must not silently become a decision that a recorded birthday may be erased. Whether removal should ever be possible is a separate question, and is not answered here.
+
+**The initial leadership-tree import is the one place a birthday is required** (Section 2, Initial data load, which states it). It loads from a central record that already holds them, so a gap there is an omission rather than a person's decision.
 
 ```text
 persons
@@ -1640,8 +1646,9 @@ When adding a VIP:
 2. Reuse existing Person if matched.
 3. Otherwise create one Person record using the core personal fields, **including the pastoral leader they are being placed under**.
 4. Ask for a mobile number. It is optional (Section 3), but this is the moment it is most likely to be given and most needed later: a first-time visitor who does not return is exactly who Participation reporting surfaces (Section 16), and a leader cannot follow up a name alone.
-5. Record DCC attendance only.
-6. Do not automatically create Cell attendance.
+5. Ask for a birthday on the same footing. It is optional too (Section 3), it is asked here for the same reason, and it is the field most likely to be declined at a first conversation — so record what is given and never a placeholder. A leader adds it later under `people.edit_basic` once it is offered.
+6. Record DCC attendance only.
+7. Do not automatically create Cell attendance.
 
 The Person becomes available to other authorized modules, but participation remains domain-specific.
 
