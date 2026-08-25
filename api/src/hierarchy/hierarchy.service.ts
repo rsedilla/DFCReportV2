@@ -7,8 +7,27 @@ import { sameId } from '../common/identifiers';
 import { DATABASE, type Db } from '../database/database.module';
 import { lockPersonsWithin } from '../database/person-lock';
 
-import type { AccountRole, Database } from '../database/schema';
+import type { AccountRole, Database, NetworkName } from '../database/schema';
 import type { Transaction } from 'kysely';
+
+/**
+ * An assignment row to open: an ordinary edge, or a Network root.
+ *
+ * **Discriminated rather than `leaderId: string | null`**, for the reason
+ * `PersonPlacement` gives at greater length. Section 5 settled that a root is a
+ * row carrying a null `leader_id`, and that a Person with no row is unassigned
+ * rather than a root — a nullable identifier cannot say which was meant, and the
+ * version of this signature that took one silently offered a third outcome that
+ * was neither.
+ *
+ * The union also carries the root seat where, and only where, there is a seat to
+ * take, so a root cannot be written without one. Migration 0008 refuses the row
+ * otherwise; this refuses it a compile step earlier, where the message names the
+ * rule rather than a constraint.
+ */
+export type OpenAssignment = { personId: string; startedAt: Date } & (
+  { root?: false; leaderId: string } | { root: true; rootNetwork: NetworkName }
+);
 
 /**
  * The `hierarchy` module: pastoral assignments, subtree resolution, and the
@@ -94,7 +113,7 @@ export class HierarchyService {
    */
   async openAssignmentWithin(
     transaction: Transaction<Database>,
-    assignment: { personId: string; leaderId: string | null; startedAt: Date },
+    assignment: OpenAssignment,
   ): Promise<void> {
     // The leader's Network governs whether this edge is legal, and the deferred
     // trigger cannot see a correction to it committing alongside (section 5,
@@ -102,13 +121,21 @@ export class HierarchyService {
     // module is the only writer of the table, which is what section 2 says makes
     // the section 5 invariants checkable in one place — an obligation held only by
     // callers is one the next caller can omit with nothing failing.
-    await lockPersonsWithin(transaction, assignment.leaderId === null ? [] : [assignment.leaderId]);
+    //
+    // A root has no leader, so there is nothing to lock against and nothing to
+    // check: section 5 gives them no leader above them, which is the whole of what
+    // being a root is.
+    await lockPersonsWithin(transaction, assignment.root ? [] : [assignment.leaderId]);
 
     await transaction
       .insertInto('pastoral_assignments')
       .values({
         person_id: assignment.personId,
-        leader_id: assignment.leaderId,
+        leader_id: assignment.root ? null : assignment.leaderId,
+        // Section 5's one-root-per-Network seat (migration 0008). The database
+        // refuses a value that disagrees with the person's own Network as of
+        // `started_at`, so this cannot claim the other Network's seat.
+        root_network: assignment.root ? assignment.rootNetwork : null,
         started_at: assignment.startedAt,
       })
       .execute();

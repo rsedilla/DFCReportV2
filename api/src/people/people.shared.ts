@@ -30,6 +30,45 @@ import type { CivilStatus, Sex } from '../database/schema';
  * two files.
  */
 
+/**
+ * Where a new Person is placed in the pastoral tree.
+ *
+ * **A union rather than `pastoralLeaderId: string | null`, and the reason is a
+ * defect this shape makes unwriteable.** Section 5 settled on 2026-08-23 that a
+ * Network root *is a row* — an active assignment whose `leader_id` is null — and
+ * that a Person with no assignment row at all "is therefore never a root; they
+ * are unassigned". A nullable identifier cannot tell those apart. It read as
+ * though null meant root, its own comment said null was "only for the import
+ * path", and what it actually did was open no row at all.
+ *
+ * So the one caller that field existed for — the import, creating the two roots
+ * (section 2) — would have passed null, received two unassigned Persons, and
+ * produced a tree with no roots. Nothing would have failed: no constraint, no
+ * test, no error. The tree would simply have been wrong, in the way section 5
+ * describes as never to be rendered as a second root.
+ *
+ * A union costs one word at each call site and makes that outcome a compile
+ * error, which is the standard section 2 sets for the capability guard and
+ * section 22 for `completeWithin`'s transaction parameter.
+ *
+ * There is deliberately no `UNASSIGNED` member. Section 5 permits zero open
+ * assignments for a Person not yet assigned or an archived one, but nothing
+ * creates a Person into that state — archival reaches it by closing a row. A
+ * variant no caller can justify is a capability nobody decided on, which is what
+ * the nullable field turned out to be.
+ */
+export type PersonPlacement =
+  /** Under an existing leader, in the person's own Network (section 5). */
+  | { kind: 'UNDER'; pastoralLeaderId: string }
+  /**
+   * As their Network's root: an active assignment carrying a null `leader_id`
+   * and the root seat for that Network. Reachable only from the initial import
+   * (section 2), never from an endpoint — the API requires a leader, and section
+   * 5 makes who holds a root a Network-level decision rather than an encoding
+   * one.
+   */
+  | { kind: 'ROOT' };
+
 export interface CreatePersonInput {
   firstName: string;
   middleName?: string | null;
@@ -44,11 +83,10 @@ export interface CreatePersonInput {
   civilStatus: CivilStatus;
   mobileNumber?: string | null;
   /**
-   * Null only for the import path (section 2, Initial data load). Section 5
-   * permits a Person "encoded but not yet assigned", and section 9 requires the
-   * leader at VIP registration — so the API requires it and the service does not.
+   * Where this Person sits in the tree, as a choice the caller states rather than
+   * as a nullable identifier (below).
    */
-  pastoralLeaderId: string | null;
+  placement: PersonPlacement;
   /** Tier 1 candidates the actor has seen and passed over (section 3). */
   acknowledgedDuplicateIds?: readonly string[];
 }

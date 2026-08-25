@@ -151,7 +151,8 @@ export class PeopleService {
     }
 
     return this.db.transaction().execute(async (trx) => {
-      if (input.pastoralLeaderId !== null) {
+      if (input.placement.kind === 'UNDER') {
+        const pastoralLeaderId = input.placement.pastoralLeaderId;
         // **Lock first, then check.** The leader's Network decides whether the edge
         // opened below is legal, and a correction to *their* Network can commit
         // between a check and this write. Validating beforehand — which this path
@@ -160,17 +161,11 @@ export class PeopleService {
         // violation rendered `INTERNAL_ERROR`, which is the 500-instead-of-an-answer
         // failure this module exists to avoid. Two of the three checks in there
         // have no trigger behind them at all.
-        await lockPersonsWithin(trx, [input.pastoralLeaderId]);
+        await lockPersonsWithin(trx, [pastoralLeaderId]);
 
         // Section 4 gives a new Person's Network its effect on the date they are
         // encoded, so there is no earlier instant for this edge to be checked at.
-        await assertLeaderIsAssignable(
-          trx,
-          input.pastoralLeaderId,
-          network,
-          new Date(),
-          this.networks,
-        );
+        await assertLeaderIsAssignable(trx, pastoralLeaderId, network, new Date(), this.networks);
       }
 
       const person = await trx
@@ -219,13 +214,20 @@ export class PeopleService {
         })
         .execute();
 
-      if (input.pastoralLeaderId !== null) {
-        await this.hierarchy.openAssignmentWithin(trx, {
-          personId: person.id,
-          leaderId: input.pastoralLeaderId,
-          startedAt: encodedAt,
-        });
-      }
+      // Section 5: every Person created here gets an assignment row, and which
+      // kind is the caller's stated intent rather than a nullable identifier.
+      // A root's row carries a null leader and the Network's root seat; that is
+      // what makes them a root rather than merely unassigned.
+      await this.hierarchy.openAssignmentWithin(
+        trx,
+        input.placement.kind === 'ROOT'
+          ? { personId: person.id, root: true, rootNetwork: network, startedAt: encodedAt }
+          : {
+              personId: person.id,
+              leaderId: input.placement.pastoralLeaderId,
+              startedAt: encodedAt,
+            },
+      );
 
       await this.audit.writeWithin(trx, {
         actorId: actor.accountId,
@@ -237,7 +239,12 @@ export class PeopleService {
         after: {
           ...(person as unknown as Record<string, Json>),
           network,
-          pastoral_leader_id: input.pastoralLeaderId,
+          pastoral_leader_id:
+            input.placement.kind === 'ROOT' ? null : input.placement.pastoralLeaderId,
+          // Section 21 wants the values. A root is not "no leader" — it is a
+          // Network-level position, and an entry recording only a null would not
+          // say which of the two states was created.
+          network_root: input.placement.kind === 'ROOT',
           acknowledged_duplicate_ids: [...(input.acknowledgedDuplicateIds ?? [])],
         },
       });

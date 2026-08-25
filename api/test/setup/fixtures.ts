@@ -97,9 +97,31 @@ export async function assignTo(
   leaderId: string | null,
   startedAt: Date = EPOCH,
 ): Promise<string> {
+  // A null leader means a Network root, and a root row carries its Network's root
+  // seat (section 5, migration 0008). Read here rather than asked of every caller:
+  // the seat is derivable from the person, the database refuses a value that
+  // disagrees with it, and a fixture that took it as an argument would let a test
+  // claim the wrong one and then assert on the result.
+  const rootNetwork =
+    leaderId === null
+      ? (
+          await db
+            .selectFrom('network_assignments')
+            .select('network')
+            .where('person_id', '=', personId)
+            .where('ended_at', 'is', null)
+            .executeTakeFirstOrThrow()
+        ).network
+      : null;
+
   const row = await db
     .insertInto('pastoral_assignments')
-    .values({ person_id: personId, leader_id: leaderId, started_at: startedAt })
+    .values({
+      person_id: personId,
+      leader_id: leaderId,
+      root_network: rootNetwork,
+      started_at: startedAt,
+    })
     .returning('id')
     .executeTakeFirstOrThrow();
 

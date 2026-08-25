@@ -2907,6 +2907,80 @@ with no dashboard dependency at all.
 
 Written to `SKILL.md` §3 in the same change.
 
+### 2026-08-25 — A root has a seat, and a nullable leader could not say what it meant
+
+Found building toward the tree import, which creates the two Network roots as its
+first act and could not. Three things, and the middle one is a defect that was on
+`main`.
+
+**§5's "exactly one root leader" per Network was enforced nowhere.** Not by a
+constraint, not by application code, not by a test. `pastoral_assignments` carried
+no constraint on null-leader rows at all, and the only writer of the table took
+`leaderId: string | null` and inserted whatever it was handed. A third root was a
+plain `INSERT` away, and every subtree total walking the tree would then have had
+two answers with nothing raised. The Definition of Done requires an invariant
+expressible as a constraint to exist as one; this one was expressible and did not.
+
+**`pastoral_assignments.root_network`, with a partial unique index**, which is
+`account_roles.senior_pastor_slot` again — and adopted by re-deriving its two
+reasons rather than by resemblance, since reusing a shape without that is §25 rule
+19. A trigger counting open roots is not a constraint: under READ COMMITTED
+neither of two concurrent transactions sees the other's uncommitted row, both
+count zero, both commit. And `pg_restore --disable-triggers` skips a constraint
+trigger while never skipping a unique index.
+
+**Where the analogy does not hold is the interesting part.** The slot works partly
+because the state it constrains lives entirely in `account_roles`. A root's
+Network does not — it lives in `network_assignments`, effective-dated — so this
+denormalizes, and a denormalized value can drift. It cannot drift here: §5 refuses
+to reassign a root, and §4 refuses a Network change both for a root and for anyone
+holding open assignments as leader, which a root does over their whole Network. A
+root's Network is immutable for as long as they are a root. A second constraint
+trigger checks the seat against `network_as_of` anyway, because the index cannot
+read `network_assignments` and would happily let a MENS root take the WOMENS seat
+and leave its own free.
+
+Zero roots in a Network stays legal, because that is what a fresh database holds
+before the import runs. "Exactly one" is not expressible without forbidding an
+empty database, so the index forbids the second and §2 makes the import refuse a
+file that does not carry both.
+
+**The nullable identifier was a booby-trap aimed squarely at the import.**
+`CreatePersonInput.pastoralLeaderId` was `string | null`, its comment said null was
+"only for the import path", and what null actually did was open **no assignment row
+at all** — producing an unassigned Person, which the 2026-08-23 ruling says is
+"never a root". So the one caller that field was written for would have passed null
+for its two roots, got two unassigned Persons, and built a tree with no roots.
+Nothing would have failed: no constraint, no test, no error, and the defect
+surfaces only when somebody asks why a subtree total is wrong.
+
+It is now a discriminated union — `{ kind: 'UNDER'; pastoralLeaderId }` or
+`{ kind: 'ROOT' }` — at both `CreatePersonInput` and `HierarchyService.openAssignmentWithin`,
+so the wrong outcome is a compile error. That is the standard §2 sets for the
+capability guard and §22 for `completeWithin`'s transaction parameter: the one
+mistake a caller can make is refused by the compiler rather than left invisible at
+the call site.
+
+**No `UNASSIGNED` variant, deliberately.** §5 permits zero open assignments for a
+Person not yet assigned or an archived one, but nothing *creates* a Person into
+that state — archival reaches it by closing a row. The nullable field had silently
+offered it, which is a capability nobody decided on; a variant no caller can
+justify is the same thing spelled differently. The earlier ruling that "only the
+import creates one" was written before the root-is-a-row ruling superseded it, and
+nobody updated it — this does.
+
+**A root is created only by the import**, and no endpoint can ask for one:
+`POST /people` requires a pastoral leader, and §5 makes who holds a root a
+Network-level decision rather than an encoding one. Written to `SKILL.md` §5 in the
+same change, and checked by grep rather than asserted.
+
+**One test lesson, caught before it shipped.** The concurrency case was first
+written with two pooled `db.transaction()` calls awaited together, which may simply
+run one after the other — so it would have passed against a counting trigger and
+proved nothing, which is the exact failure CLAUDE.md records for authorization case
+7. It uses two raw connections with explicit `BEGIN`, like the one-active-assignment
+case beside it. Both root cases were then verified red by dropping the index.
+
 ### Open — awaiting a ruling
 
 **One item awaits a ruling and blocks Stage 5. Ten other things are unsettled,

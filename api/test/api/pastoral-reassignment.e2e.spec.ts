@@ -313,6 +313,11 @@ describe('reassigning a pastoral leader: the record (sections 5, 21, 22)', () =>
         .values({
           person_id: formerRoot.id,
           leader_id: null,
+          // A root row carries its Network's seat whether it is open or closed
+          // (section 5, migration 0008). Closed, it occupies nothing — the index
+          // is partial over open rows — and keeps the history of who held it,
+          // which is exactly the former-root period this case is about.
+          root_network: 'MENS',
           started_at: rootFrom,
           ended_at: rootTo,
         })

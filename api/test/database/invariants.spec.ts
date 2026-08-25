@@ -129,6 +129,151 @@ describe('the database enforces the section 5 invariants', () => {
 
       expect(rows).toEqual([{ leader_id: null }]);
     });
+
+    it('refuses a second open root in the same Network', async () => {
+      // Section 5: "Each Network has exactly one root leader". Nothing enforced
+      // the count until migration 0008 — `pastoral_assignments` had no constraint
+      // on null-leader rows at all, so a second root was a plain INSERT away and
+      // every subtree total walking the tree would then have had two answers.
+      const first = await createPerson(db, { firstName: 'Oriel', network: 'MENS' });
+      await assignTo(db, first.id, null);
+
+      const second = await createPerson(db, { firstName: 'Bayani', network: 'MENS' });
+
+      await expect(assignTo(db, second.id, null)).rejects.toThrow(
+        /pastoral_assignments_one_root_per_network/,
+      );
+    });
+
+    it('permits one root in each Network', async () => {
+      // The seat is per Network, not per tree. Enforcing it globally would forbid
+      // the second of the two roots section 5 requires, and would pass every other
+      // case in this file.
+      const mens = await createPerson(db, { firstName: 'Oriel', network: 'MENS' });
+      const womens = await createPerson(db, { firstName: 'Geraldine', network: 'WOMENS' });
+
+      await assignTo(db, mens.id, null);
+      await expect(assignTo(db, womens.id, null)).resolves.toBeDefined();
+    });
+
+    it('frees the seat when a root is closed, so a succession is possible', async () => {
+      // Partial over open rows, exactly as `senior_pastor_slot` is. Section 5 calls
+      // changing who holds a root a Network-level decision — it does not make it
+      // impossible, and the closed row keeps the history of who held it.
+      const first = await createPerson(db, { firstName: 'Oriel', network: 'MENS' });
+      const firstRow = await assignTo(db, first.id, null);
+
+      await db
+        .updateTable('pastoral_assignments')
+        .set({ ended_at: new Date() })
+        .where('id', '=', firstRow)
+        .execute();
+
+      const second = await createPerson(db, { firstName: 'Bayani', network: 'MENS' });
+      await expect(assignTo(db, second.id, null)).resolves.toBeDefined();
+    });
+
+    it('refuses a second root under concurrent writes', async () => {
+      // **The case an application-layer check cannot cover**, and the reason this
+      // is an index rather than a counting trigger. CLAUDE.md records the same
+      // failure on the `SENIOR_PASTOR` cap: a deferred trigger counting active
+      // rows sees only its own transaction's state, so under READ COMMITTED both
+      // transactions count zero and both commit.
+      //
+      // Written concurrently for the reason CLAUDE.md gives for authorization case
+      // 7: a sequential test passes against a count and tells you nothing about
+      // whether the constraint exists.
+      // Two raw connections with explicit BEGIN, exactly as the one-active-assignment
+      // case above does, and for the same reason: two pooled transactions awaited
+      // together may simply run one after the other, and a test that does that
+      // passes against a sequential count and proves nothing.
+      const a = await createPerson(db, { firstName: 'Oriel', network: 'MENS' });
+      const b = await createPerson(db, { firstName: 'Bayani', network: 'MENS' });
+
+      const [one, two] = [await openClient(), await openClient()];
+
+      try {
+        await one.query('BEGIN');
+        await two.query('BEGIN');
+
+        await one.query(
+          'INSERT INTO pastoral_assignments (person_id, leader_id, root_network, started_at) VALUES ($1, NULL, $2, $3)',
+          [a.id, 'MENS', EPOCH],
+        );
+
+        // Blocks on the unique index until the first commits, then fails. Both are
+        // in flight at once, which is the case the index exists for and the case a
+        // counting trigger would wave through.
+        const blocked = two.query(
+          'INSERT INTO pastoral_assignments (person_id, leader_id, root_network, started_at) VALUES ($1, NULL, $2, $3)',
+          [b.id, 'MENS', EPOCH],
+        );
+
+        await one.query('COMMIT');
+        await expect(blocked).rejects.toThrow(/pastoral_assignments_one_root_per_network/);
+        await two.query('ROLLBACK');
+      } finally {
+        await one.end();
+        await two.end();
+      }
+
+      const open = await db
+        .selectFrom('pastoral_assignments')
+        .select('id')
+        .where('root_network', '=', 'MENS')
+        .where('ended_at', 'is', null)
+        .execute();
+
+      expect(open).toHaveLength(1);
+    });
+
+    it('refuses a root row claiming the other Network seat', async () => {
+      // The index makes the seat unique; the trigger makes it honest. Without the
+      // trigger the column is a client-supplied claim, and a MENS root inserted
+      // with WOMENS would take the wrong seat and leave its own free — passing the
+      // index, which cannot read `network_assignments`.
+      const person = await createPerson(db, { firstName: 'Oriel', network: 'MENS' });
+
+      await expect(
+        db
+          .insertInto('pastoral_assignments')
+          .values({
+            person_id: person.id,
+            leader_id: null,
+            root_network: 'WOMENS',
+            started_at: new Date(),
+          })
+          .execute(),
+      ).rejects.toThrow(/claims the WOMENS seat/);
+    });
+
+    it('refuses a root row with no seat, and an ordinary edge that claims one', async () => {
+      // Stated as an equivalence in the schema rather than as two one-way checks,
+      // so neither half can be written. An edge carrying a seat would occupy one
+      // no root is using.
+      const leader = await createPerson(db, { firstName: 'Oriel', network: 'MENS' });
+      await assignTo(db, leader.id, null);
+      const person = await createPerson(db, { firstName: 'Mark', network: 'MENS' });
+
+      await expect(
+        db
+          .insertInto('pastoral_assignments')
+          .values({ person_id: person.id, leader_id: null, started_at: new Date() })
+          .execute(),
+      ).rejects.toThrow(/root_network_iff_root/);
+
+      await expect(
+        db
+          .insertInto('pastoral_assignments')
+          .values({
+            person_id: person.id,
+            leader_id: leader.id,
+            root_network: 'MENS',
+            started_at: new Date(),
+          })
+          .execute(),
+      ).rejects.toThrow(/root_network_iff_root/);
+    });
   });
 
   describe('history is never deleted (principle 12)', () => {

@@ -63,6 +63,32 @@ describe('the schema (SKILL.md sections 4, 5, 6 and 7)', () => {
       expect(index).toMatch(/WHERE \(ended_at IS NULL\)/i);
     });
 
+    it('has the one-root-per-Network index, partial over open rows', async () => {
+      // Section 5's "exactly one root leader" per Network. An index rather than a
+      // counting trigger, on the argument the 2026-08-21 `senior_pastor_slot`
+      // ruling already made on this schema: a count is race-prone under deferred
+      // triggers, and `pg_restore --disable-triggers` skips a constraint trigger
+      // while never skipping a unique index.
+      const index = await indexDefinition(db, 'pastoral_assignments_one_root_per_network');
+
+      expect(index).toMatch(/CREATE UNIQUE INDEX/i);
+      expect(index).toMatch(/\(root_network\)/i);
+      expect(index).toMatch(/ended_at IS NULL/i);
+    });
+
+    it('carries the root seat on exactly the rows that are roots', async () => {
+      // An equivalence rather than two one-way checks, so neither a root without a
+      // seat nor an ordinary edge holding one can be written.
+      const constraint = await constraintDefinition(
+        db,
+        'pastoral_assignments_root_network_iff_root',
+      );
+
+      expect(constraint).toMatch(/CHECK/i);
+      expect(constraint).toMatch(/leader_id IS NULL/i);
+      expect(constraint).toMatch(/root_network IS NOT NULL/i);
+    });
+
     it('has the no-self-assignment check', async () => {
       const constraint = await constraintDefinition(db, 'pastoral_assignments_no_self');
 

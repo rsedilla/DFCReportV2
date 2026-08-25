@@ -620,6 +620,16 @@ A root leader cannot be reassigned by anyone, Admin included, because there is n
 
 Never represent a root as an assignment pointing at itself. A self-referencing row is rejected by the no-self-assignment constraint, and would make the root its own ancestor — a one-node cycle.
 
+**The count is enforced, not assumed.** A root row carries `root_network`, the root seat for its Network, and a partial unique index over it permits no second occupant while the first is open. Closing a root's row frees the seat, which is how a succession is recorded; the closed row keeps the history of who held it.
+
+That is a column on `pastoral_assignments` and a shape amended because a rule needed it, exactly as `account_roles.senior_pastor_slot` was — and for the same two reasons rather than by resemblance. A trigger counting open roots is not a constraint: under `READ COMMITTED` neither of two concurrent transactions sees the other's uncommitted row, so both count zero and both commit. And `pg_restore --disable-triggers` skips a constraint trigger while never skipping a unique index, so a restore could load a second root in silence.
+
+The seat denormalizes a Network onto an assignment row, which is safe here for a reason specific to roots rather than in general: a root's Network cannot change. This section refuses to reassign a root at all, and Section 4 refuses a Network change both for a root and for anyone holding open assignments as leader — which a root does, over their whole Network. A constraint trigger additionally checks the seat against the person's Network as of the row's `started_at`, so the column cannot be set to a value that disagrees with its source.
+
+**Zero roots in a Network is a legal database state and is not a legal church state.** It is what a fresh installation holds before the import runs, so the constraint cannot forbid it; the import refuses a file that does not carry exactly two roots, one per Network (Section 2, How the tree import runs).
+
+**A root is created only by the initial import.** No endpoint creates one: `POST /api/v1/people` requires a pastoral leader, and this section makes who holds a root a Network-level decision rather than an encoding one. The service layer states the placement as a choice — under a named leader, or as a Network root — rather than as an identifier that may be null, because a nullable identifier cannot distinguish a root from an unassigned Person and the two are different states this section is at pains to separate.
+
 ### Recommended historical model
 
 Prefer a pastoral assignment/history table for a long-lived production system:
@@ -629,6 +639,8 @@ pastoral_assignments
 - id
 - person_id
 - leader_id          nullable, only for a Network root
+- root_network       nullable; non-null on exactly the rows whose leader_id is
+                     null, carrying that Network's one root seat (Network roots)
 - started_at
 - ended_at           nullable
 ```
@@ -788,6 +800,20 @@ CREATE UNIQUE INDEX pastoral_assignments_one_active
   ON pastoral_assignments (person_id)
   WHERE ended_at IS NULL;
 ```
+
+One root per Network — a partial unique index over the root seat, which permits zero and forbids two (Network roots):
+
+```sql
+ALTER TABLE pastoral_assignments
+  ADD CONSTRAINT pastoral_assignments_root_network_iff_root
+  CHECK ((leader_id IS NULL) = (root_network IS NOT NULL));
+
+CREATE UNIQUE INDEX pastoral_assignments_one_root_per_network
+  ON pastoral_assignments (root_network)
+  WHERE ended_at IS NULL AND root_network IS NOT NULL;
+```
+
+The seat must also be honest, which the index cannot check because it cannot read `network_assignments`. A second constraint trigger compares `root_network` against the person's own Network as of the row's `started_at`, so a root cannot take the other Network's seat and leave their own free.
 
 No self-assignment — a check constraint covers the degenerate case; the wider rule against re-parenting an upline stays in the domain layer:
 
