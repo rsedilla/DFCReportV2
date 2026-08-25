@@ -74,7 +74,10 @@ export class PeopleController {
         sex: body.sex,
         civilStatus: body.civil_status,
         mobileNumber: body.mobile_number ?? null,
-        pastoralLeaderId: body.pastoral_leader_id,
+        // Always `UNDER`. The endpoint requires a leader, and section 5 makes who
+        // holds a Network root a Network-level decision rather than something an
+        // encoder does — so no request body can ask for one.
+        placement: { kind: 'UNDER', pastoralLeaderId: body.pastoral_leader_id },
         acknowledgedDuplicateIds: body.acknowledged_duplicate_ids ?? [],
       },
       actor,

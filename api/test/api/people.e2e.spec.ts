@@ -2,6 +2,8 @@ import { randomUUID } from 'node:crypto';
 
 import request from 'supertest';
 
+import { IdempotencyService } from '../../src/common/idempotency/idempotency.service';
+import { PeopleService } from '../../src/people/people.service';
 import { createTestDb, truncateAll } from '../setup/database';
 import { assignTo, createAccount, createPerson, createTestApp } from '../setup/fixtures';
 
@@ -793,6 +795,170 @@ describe('people (SKILL.md sections 3, 7 and 8)', () => {
 
       // Compared raw, this is 409 forever and the Person can never be created.
       expect(acknowledged.status).toBe(201);
+    });
+  });
+
+  describe('creating a Network root (section 5, Network roots)', () => {
+    /**
+     * **The root path had no caller and no test**, which is how the defect this
+     * suite now pins survived: `pastoralLeaderId: string | null` read as though
+     * null meant root, and what it did was open no assignment row at all. The
+     * import — its only intended caller — would have produced two unassigned
+     * Persons and a tree with no roots, silently.
+     *
+     * Reached through the service rather than the API on purpose: section 5 makes
+     * who holds a root a Network-level decision, so no endpoint offers it, and a
+     * test that could only go through HTTP could not reach this at all.
+     */
+    async function mintClaim(): Promise<{ key: string; accountId: string; claimId: string }> {
+      const idempotency = app.get(IdempotencyService);
+      const key = randomUUID();
+      const claimed = await idempotency.claim({
+        key,
+        accountId: adminAccount.id,
+        fingerprint: randomUUID(),
+      });
+
+      if (claimed.outcome !== 'claimed') {
+        throw new Error(`Expected a fresh key to be claimable, got ${claimed.outcome}.`);
+      }
+
+      return { key, accountId: adminAccount.id, claimId: claimed.claimId };
+    }
+
+    it('opens a row with a null leader and the Network seat', async () => {
+      // Free the seat by closing the fixture root, which is how section 5 says a
+      // seat is freed. A DELETE is refused outright — principle 12.
+      await db
+        .updateTable('pastoral_assignments')
+        .set({ ended_at: new Date() })
+        .where('leader_id', 'is', null)
+        .where('ended_at', 'is', null)
+        .execute();
+
+      const people = app.get(PeopleService);
+      const created = await people.create(
+        {
+          firstName: 'Nena',
+          lastName: 'Bagumbayan',
+          birthDate: '1962-11-08',
+          sex: 'FEMALE',
+          civilStatus: 'MARRIED',
+          placement: { kind: 'ROOT' },
+        },
+        { accountId: adminAccount.id, personId: oriel.id },
+        await mintClaim(),
+        () => Promise.resolve(true),
+      );
+
+      const row = await db
+        .selectFrom('pastoral_assignments')
+        .select(['leader_id', 'root_network'])
+        .where('person_id', '=', String(created.id))
+        .where('ended_at', 'is', null)
+        .executeTakeFirstOrThrow();
+
+      // Both facts together. A row with a null leader and no seat is what the old
+      // shape produced, and a row with no seat is not a root (section 5).
+      expect(row.leader_id).toBeNull();
+      expect(row.root_network).toBe('WOMENS');
+    });
+
+    it('takes the seat from the person own sex, not from anything the caller says', async () => {
+      // Section 4: Network follows from sex, and is assigned rather than proposed.
+      // The placement carries no Network, so there is no way for a caller to ask
+      // for the wrong seat — which is what the database trigger would refuse.
+      // Free the seat by closing the fixture root, which is how section 5 says a
+      // seat is freed. A DELETE is refused outright — principle 12.
+      await db
+        .updateTable('pastoral_assignments')
+        .set({ ended_at: new Date() })
+        .where('leader_id', 'is', null)
+        .where('ended_at', 'is', null)
+        .execute();
+
+      const people = app.get(PeopleService);
+      const created = await people.create(
+        {
+          firstName: 'Bayani',
+          lastName: 'Bagumbayan',
+          birthDate: '1960-02-14',
+          sex: 'MALE',
+          civilStatus: 'MARRIED',
+          placement: { kind: 'ROOT' },
+        },
+        { accountId: adminAccount.id, personId: oriel.id },
+        await mintClaim(),
+        () => Promise.resolve(true),
+      );
+
+      const row = await db
+        .selectFrom('pastoral_assignments')
+        .select('root_network')
+        .where('person_id', '=', String(created.id))
+        .executeTakeFirstOrThrow();
+
+      expect(row.root_network).toBe('MENS');
+    });
+
+    it('refuses a second root in the same Network, through the service', async () => {
+      // The fixtures already give the Men's Network a root. The database refuses
+      // the second, and the service does not swallow it.
+      const people = app.get(PeopleService);
+
+      await expect(
+        people.create(
+          {
+            firstName: 'Bayani',
+            lastName: 'Bagumbayan',
+            birthDate: '1960-02-14',
+            sex: 'MALE',
+            civilStatus: 'MARRIED',
+            placement: { kind: 'ROOT' },
+          },
+          { accountId: adminAccount.id, personId: oriel.id },
+          await mintClaim(),
+          () => Promise.resolve(true),
+        ),
+      ).rejects.toThrow(/pastoral_assignments_one_root_per_network/);
+    });
+
+    it('records in the audit entry which of the two states was created', async () => {
+      // Section 21 wants the values. A null `pastoral_leader_id` alone cannot say
+      // whether a root or an unassigned Person was created, and those are
+      // different facts about the tree.
+      // Free the seat by closing the fixture root, which is how section 5 says a
+      // seat is freed. A DELETE is refused outright — principle 12.
+      await db
+        .updateTable('pastoral_assignments')
+        .set({ ended_at: new Date() })
+        .where('leader_id', 'is', null)
+        .where('ended_at', 'is', null)
+        .execute();
+
+      const people = app.get(PeopleService);
+      const created = await people.create(
+        {
+          firstName: 'Nena',
+          lastName: 'Bagumbayan',
+          birthDate: '1962-11-08',
+          sex: 'FEMALE',
+          civilStatus: 'MARRIED',
+          placement: { kind: 'ROOT' },
+        },
+        { accountId: adminAccount.id, personId: oriel.id },
+        await mintClaim(),
+        () => Promise.resolve(true),
+      );
+
+      const entry = await db
+        .selectFrom('audit_log')
+        .select('after')
+        .where('action', '=', 'person.created')
+        .where('target_id', '=', String(created.id))
+        .executeTakeFirstOrThrow();
+
+      expect(entry.after).toMatchObject({ network_root: true, pastoral_leader_id: null });
     });
   });
 

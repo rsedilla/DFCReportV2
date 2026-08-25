@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { type INestApplication, type Type } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { ThrottlerStorage, type ThrottlerStorageService } from '@nestjs/throttler';
-import type { Kysely } from 'kysely';
+import { sql, type Kysely } from 'kysely';
 
 import { AppModule } from '../../src/app.module';
 import { TokensService } from '../../src/auth/tokens.service';
@@ -97,9 +97,32 @@ export async function assignTo(
   leaderId: string | null,
   startedAt: Date = EPOCH,
 ): Promise<string> {
+  // A null leader means a Network root, and a root row carries its Network's root
+  // seat (section 5, migration 0008). Read here rather than asked of every caller,
+  // so that no test can claim the wrong seat and then assert on the result.
+  //
+  // Read with `network_as_of(person, startedAt)` rather than from the currently
+  // open row, because that is what the trigger compares against. The two agree
+  // only for a person whose Network has never changed, so taking the open row
+  // would present a fixture bug as a trigger failure the first time a test writes
+  // a root with a historical `startedAt`.
+  const rootNetwork =
+    leaderId === null
+      ? (
+          await sql<{
+            network: 'MENS' | 'WOMENS' | null;
+          }>`SELECT network_as_of(${personId}::uuid, ${startedAt}) AS network`.execute(db)
+        ).rows[0].network
+      : null;
+
   const row = await db
     .insertInto('pastoral_assignments')
-    .values({ person_id: personId, leader_id: leaderId, started_at: startedAt })
+    .values({
+      person_id: personId,
+      leader_id: leaderId,
+      root_network: rootNetwork,
+      started_at: startedAt,
+    })
     .returning('id')
     .executeTakeFirstOrThrow();
 

@@ -276,7 +276,7 @@ describe('the person lock, and the identifier boundary that needs the same fixtu
       birthDate: '1991-07-19',
       sex: 'MALE' as const,
       civilStatus: 'SINGLE' as const,
-      pastoralLeaderId: manuel.id,
+      placement: { kind: 'UNDER' as const, pastoralLeaderId: manuel.id },
       acknowledgedDuplicateIds: [] as string[],
     };
 

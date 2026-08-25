@@ -69,6 +69,14 @@ export interface PastoralAssignmentsTable {
   person_id: string;
   /** Null only for a Network root leader (SKILL.md section 5, Network roots). */
   leader_id: string | null;
+  /**
+   * The root seat for a Network, non-null on exactly the rows whose `leader_id`
+   * is null (migration 0008). A partial unique index over it is what makes
+   * section 5's "exactly one root leader" per Network enforced rather than
+   * asserted, and a constraint trigger checks it against the person's own Network
+   * so the seat cannot be claimed dishonestly.
+   */
+  root_network: NetworkName | null;
   started_at: ColumnType<Date, Date | string, Date | string>;
   ended_at: ColumnType<Date | null, Date | string | null, Date | string | null>;
 }

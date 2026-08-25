@@ -63,6 +63,55 @@ describe('the schema (SKILL.md sections 4, 5, 6 and 7)', () => {
       expect(index).toMatch(/WHERE \(ended_at IS NULL\)/i);
     });
 
+    it('has the one-root-per-Network index, partial over open rows', async () => {
+      // Section 5's "exactly one root leader" per Network. An index rather than a
+      // counting trigger, on the argument the 2026-08-21 `senior_pastor_slot`
+      // ruling already made on this schema: a count is race-prone under deferred
+      // triggers, and `pg_restore --disable-triggers` skips a constraint trigger
+      // while never skipping a unique index.
+      const index = await indexDefinition(db, 'pastoral_assignments_one_root_per_network');
+
+      expect(index).toMatch(/CREATE UNIQUE INDEX/i);
+      expect(index).toMatch(/\(root_network\)/i);
+      expect(index).toMatch(/ended_at IS NULL/i);
+    });
+
+    it('carries the root seat on exactly the rows that are roots', async () => {
+      // An equivalence rather than two one-way checks, so neither a root without a
+      // seat nor an ordinary edge holding one can be written.
+      //
+      // **Asserting the `=` is the whole point.** The first version of this case
+      // checked that the definition contained `leader_id IS NULL` and
+      // `root_network IS NOT NULL` as substrings — which a one-way implication
+      // also contains, so it passed against half the rule while its own comment
+      // claimed it pinned both. The behavioural case in `invariants.spec.ts` does
+      // pin both halves; a shape test that agrees with it is what stops the two
+      // drifting.
+      const constraint = await constraintDefinition(
+        db,
+        'pastoral_assignments_root_network_iff_root',
+      );
+
+      expect(constraint).toMatch(/CHECK/i);
+      expect(constraint).toMatch(/\(leader_id IS NULL\)\s*=\s*\(root_network IS NOT NULL\)/i);
+    });
+
+    it('checks the seat against the person own Network, immediately', async () => {
+      // The index makes the seat unique; this makes it honest, and it cannot be
+      // deferred without turning a violation into a raw check_violation at COMMIT.
+      // Its first version was deferred, on a reason borrowed from the trigger
+      // beside it that does not carry — see migration 0008.
+      const trigger = await triggerFacts(db, 'pastoral_assignments_root_network_honest');
+
+      expect(trigger.is_constraint_trigger).toBe(true);
+      // Both, not just the second. `DEFERRABLE INITIALLY IMMEDIATE` satisfies
+      // `initially_deferred === false` and could then be deferred by any
+      // `SET CONSTRAINTS ALL DEFERRED` — a statement migration 0008 itself
+      // establishes this codebase uses.
+      expect(trigger.deferrable).toBe(false);
+      expect(trigger.initially_deferred).toBe(false);
+    });
+
     it('has the no-self-assignment check', async () => {
       const constraint = await constraintDefinition(db, 'pastoral_assignments_no_self');
 
@@ -90,6 +139,18 @@ describe('the schema (SKILL.md sections 4, 5, 6 and 7)', () => {
   });
 
   describe('network_assignments', () => {
+    it('refuses a Network change while the person holds an open root seat', async () => {
+      // Section 4 refuses a Network change for a root, and until migration 0008
+      // that refusal lived only in TypeScript — the same-Network trigger filters
+      // `leader_id IS NOT NULL`, so a root's own row was never examined and the
+      // seat drifted. Probed on this schema, the change committed.
+      const trigger = await triggerFacts(db, 'network_assignments_not_changed_for_root');
+
+      expect(trigger.is_constraint_trigger).toBe(true);
+      expect(trigger.deferrable).toBe(true);
+      expect(trigger.initially_deferred).toBe(true);
+    });
+
     it('re-validates open edges on a Network change, deferred', async () => {
       const trigger = await triggerFacts(db, 'network_assignments_keep_edges_same_network');
 

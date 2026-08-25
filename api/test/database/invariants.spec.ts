@@ -129,6 +129,282 @@ describe('the database enforces the section 5 invariants', () => {
 
       expect(rows).toEqual([{ leader_id: null }]);
     });
+
+    it('refuses a second open root in the same Network', async () => {
+      // Section 5: "Each Network has exactly one root leader". Nothing enforced
+      // the count until migration 0008 — `pastoral_assignments` had no constraint
+      // on null-leader rows at all, so a second root was a plain INSERT away and
+      // every subtree total walking the tree would then have had two answers.
+      const first = await createPerson(db, { firstName: 'Oriel', network: 'MENS' });
+      await assignTo(db, first.id, null);
+
+      const second = await createPerson(db, { firstName: 'Bayani', network: 'MENS' });
+
+      await expect(assignTo(db, second.id, null)).rejects.toThrow(
+        /pastoral_assignments_one_root_per_network/,
+      );
+    });
+
+    it('permits one root in each Network', async () => {
+      // The seat is per Network, not per tree. Enforcing it globally would forbid
+      // the second of the two roots section 5 requires, and would pass every other
+      // case in this file.
+      const mens = await createPerson(db, { firstName: 'Oriel', network: 'MENS' });
+      const womens = await createPerson(db, { firstName: 'Geraldine', network: 'WOMENS' });
+
+      await assignTo(db, mens.id, null);
+      await expect(assignTo(db, womens.id, null)).resolves.toBeDefined();
+    });
+
+    it('leaves a closed root row occupying no seat', async () => {
+      // Partial over open rows, exactly as `senior_pastor_slot` is, so the closed
+      // row keeps the history of who held the position without holding the seat.
+      //
+      // Deliberately not called "so a succession is possible": section 5 says a
+      // succession is not an operation this system offers, because nothing defines
+      // who may close a root's row. This pins a property of the index, and naming
+      // it after an operation the specification declines to define would be
+      // asserting that operation exists.
+      const first = await createPerson(db, { firstName: 'Oriel', network: 'MENS' });
+      const firstRow = await assignTo(db, first.id, null);
+
+      await db
+        .updateTable('pastoral_assignments')
+        .set({ ended_at: new Date() })
+        .where('id', '=', firstRow)
+        .execute();
+
+      const second = await createPerson(db, { firstName: 'Bayani', network: 'MENS' });
+      await expect(assignTo(db, second.id, null)).resolves.toBeDefined();
+    });
+
+    it('refuses a second root under concurrent writes', async () => {
+      // **The case an application-layer check cannot cover**, and the reason this
+      // is an index rather than a counting trigger. CLAUDE.md records the same
+      // failure on the `SENIOR_PASTOR` cap: a deferred trigger counting active
+      // rows sees only its own transaction's state, so under READ COMMITTED both
+      // transactions count zero and both commit.
+      //
+      // Written concurrently for the reason CLAUDE.md gives for authorization case
+      // 7: a sequential test passes against a count and tells you nothing about
+      // whether the constraint exists.
+      // Two raw connections with explicit BEGIN, exactly as the one-active-assignment
+      // case above does, and for the same reason: two pooled transactions awaited
+      // together may simply run one after the other, and a test that does that
+      // passes against a sequential count and proves nothing.
+      const a = await createPerson(db, { firstName: 'Oriel', network: 'MENS' });
+      const b = await createPerson(db, { firstName: 'Bayani', network: 'MENS' });
+
+      const [one, two] = [await openClient(), await openClient()];
+
+      try {
+        await one.query('BEGIN');
+        await two.query('BEGIN');
+
+        // The waiter is identified by its own backend, not by a query-text guess.
+        const twoPid = Number(
+          (await two.query<{ pid: string }>('SELECT pg_backend_pid() AS pid')).rows[0].pid,
+        );
+
+        await one.query(
+          'INSERT INTO pastoral_assignments (person_id, leader_id, root_network, started_at) VALUES ($1, NULL, $2, $3)',
+          [a.id, 'MENS', EPOCH],
+        );
+
+        const blocked = two.query(
+          'INSERT INTO pastoral_assignments (person_id, leader_id, root_network, started_at) VALUES ($1, NULL, $2, $3)',
+          [b.id, 'MENS', EPOCH],
+        );
+
+        // **Assert it is actually waiting, before the first commits.** Without
+        // this the test proves nothing the sequential case above does not: the
+        // second INSERT may simply arrive after the COMMIT and fail against an
+        // already-committed index, and the assertion still passes. Observing the
+        // wait is what makes this about concurrency — the same thing
+        // `person-lock.e2e.spec.ts` does by asserting the caller holds the lower
+        // lock while it waits.
+        let settled = false;
+        void blocked.then(
+          () => (settled = true),
+          () => (settled = true),
+        );
+        await waitForBlocked(db, twoPid, 'pastoral_assignments_one_root_per_network');
+        expect(settled).toBe(false);
+
+        await one.query('COMMIT');
+        await expect(blocked).rejects.toThrow(/pastoral_assignments_one_root_per_network/);
+        await two.query('ROLLBACK');
+      } finally {
+        await one.end();
+        await two.end();
+      }
+
+      const open = await db
+        .selectFrom('pastoral_assignments')
+        .select('id')
+        .where('root_network', '=', 'MENS')
+        .where('ended_at', 'is', null)
+        .execute();
+
+      expect(open).toHaveLength(1);
+    });
+
+    it('refuses a root row claiming the other Network seat', async () => {
+      // The index makes the seat unique; the trigger makes it honest. Without the
+      // trigger the column is a client-supplied claim, and a MENS root inserted
+      // with WOMENS would take the wrong seat and leave its own free — passing the
+      // index, which cannot read `network_assignments`.
+      const person = await createPerson(db, { firstName: 'Oriel', network: 'MENS' });
+
+      await expect(
+        db
+          .insertInto('pastoral_assignments')
+          .values({
+            person_id: person.id,
+            leader_id: null,
+            root_network: 'WOMENS',
+            started_at: new Date(),
+          })
+          .execute(),
+      ).rejects.toThrow(/claims the WOMENS seat/);
+    });
+
+    it('refuses a Network change while the person holds an open root seat', async () => {
+      // **The case the first version of migration 0008 argued could not happen.**
+      // It reasoned that section 4 refuses a Network change for a root and for
+      // anyone leading disciples, and concluded the seat could not drift. Both are
+      // true of the application and neither was true of the database:
+      // `assert_network_change_keeps_edges` filters `leader_id IS NOT NULL`, so a
+      // root's own row is never examined, and the honesty trigger compares against
+      // `network_as_of(person_id, started_at)` — frozen history, which cannot see
+      // a later change however often it fires.
+      //
+      // Probed, it committed, leaving one Network rootless and the other free to
+      // take a second root. This is that probe.
+      const root = await createPerson(db, { firstName: 'Oriel', network: 'MENS' });
+      await assignTo(db, root.id, null);
+
+      await expect(
+        db.transaction().execute(async (trx) => {
+          await trx
+            .updateTable('network_assignments')
+            .set({ ended_at: new Date('2026-06-01T10:00:00+08:00') })
+            .where('person_id', '=', root.id)
+            .where('ended_at', 'is', null)
+            .execute();
+
+          await trx
+            .insertInto('network_assignments')
+            .values({
+              person_id: root.id,
+              network: 'WOMENS',
+              started_at: new Date('2026-06-01T10:00:00+08:00'),
+            })
+            .execute();
+        }),
+      ).rejects.toThrow(/holds the MENS root seat/);
+    });
+
+    it('refuses closing a root holder Network row without opening another', async () => {
+      // **The hole the first version of this trigger left**, and the more damaging
+      // of the two: the person then belongs to no Network from that instant while
+      // the index still reads their seat as occupied — so the Network is rootless
+      // in fact and cannot take a replacement. The first predicate compared the
+      // Network at the *written row's* start, which the row being closed still
+      // covers, so it returned the old Network and passed.
+      const root = await createPerson(db, { firstName: 'Oriel', network: 'MENS' });
+      await assignTo(db, root.id, null);
+
+      await expect(
+        db.transaction().execute(async (trx) => {
+          await trx
+            .updateTable('network_assignments')
+            .set({ ended_at: new Date('2026-06-01T10:00:00+08:00') })
+            .where('person_id', '=', root.id)
+            .where('ended_at', 'is', null)
+            .execute();
+        }),
+      ).rejects.toThrow(/root seat/);
+    });
+
+    it('refuses moving a root holder Network row start past the seat', async () => {
+      // The second hole. It leaves `network_as_of(person, root.started_at)` null
+      // while the seat still names a Network — the disagreement
+      // `assert_root_network_matches` exists to prevent and cannot see, because it
+      // fires only on writes to the other table.
+      const root = await createPerson(db, { firstName: 'Oriel', network: 'MENS' });
+      await assignTo(db, root.id, null);
+
+      await expect(
+        db
+          .updateTable('network_assignments')
+          .set({ started_at: new Date('2030-01-01T10:00:00+08:00') })
+          .where('person_id', '=', root.id)
+          .where('ended_at', 'is', null)
+          .execute(),
+      ).rejects.toThrow(/root seat/);
+    });
+
+    it('permits a Network change once the root row is closed', async () => {
+      // The refusal is scoped to an *open* seat, so it never becomes a permanent bar
+      // on somebody who used to be a root.
+      const former = await createPerson(db, { firstName: 'Oriel', network: 'MENS' });
+      const row = await assignTo(db, former.id, null);
+
+      await db
+        .updateTable('pastoral_assignments')
+        .set({ ended_at: new Date('2026-05-01T10:00:00+08:00') })
+        .where('id', '=', row)
+        .execute();
+
+      await expect(
+        db.transaction().execute(async (trx) => {
+          await trx
+            .updateTable('network_assignments')
+            .set({ ended_at: new Date('2026-06-01T10:00:00+08:00') })
+            .where('person_id', '=', former.id)
+            .where('ended_at', 'is', null)
+            .execute();
+
+          await trx
+            .insertInto('network_assignments')
+            .values({
+              person_id: former.id,
+              network: 'WOMENS',
+              started_at: new Date('2026-06-01T10:00:00+08:00'),
+            })
+            .execute();
+        }),
+      ).resolves.toBeUndefined();
+    });
+
+    it('refuses a root row with no seat, and an ordinary edge that claims one', async () => {
+      // Stated as an equivalence in the schema rather than as two one-way checks,
+      // so neither half can be written. An edge carrying a seat would occupy one
+      // no root is using.
+      const leader = await createPerson(db, { firstName: 'Oriel', network: 'MENS' });
+      await assignTo(db, leader.id, null);
+      const person = await createPerson(db, { firstName: 'Mark', network: 'MENS' });
+
+      await expect(
+        db
+          .insertInto('pastoral_assignments')
+          .values({ person_id: person.id, leader_id: null, started_at: new Date() })
+          .execute(),
+      ).rejects.toThrow(/root_network_iff_root/);
+
+      await expect(
+        db
+          .insertInto('pastoral_assignments')
+          .values({
+            person_id: person.id,
+            leader_id: leader.id,
+            root_network: 'MENS',
+            started_at: new Date(),
+          })
+          .execute(),
+      ).rejects.toThrow(/root_network_iff_root/);
+    });
   });
 
   describe('history is never deleted (principle 12)', () => {
@@ -1331,6 +1607,38 @@ async function settled(promise: Promise<unknown>): Promise<Error | null> {
     () => null,
     (error: Error) => error,
   );
+}
+
+/**
+ * Waits until the given backend is blocked, so a concurrency case can assert the
+ * wait rather than assume it.
+ *
+ * **It watches one named PID.** The first version filtered on a hardcoded
+ * `query LIKE '%pastoral_assignments%'`, took an `indexName` it used only in the
+ * error message, and was therefore satisfied by any backend blocked on any lock
+ * whose query text mentioned the table. That was not vacuous — `--runInBand`
+ * leaves one candidate — but it rested on a property of the harness rather than
+ * on what it claimed to check, which is the shape these cases exist to avoid.
+ *
+ * `pg_stat_activity.wait_event_type = 'Lock'` is how a speculative-insertion wait
+ * on a unique index presents. Polling rather than sleeping a fixed interval: a
+ * fixed sleep is either flaky or slow, and this is neither.
+ */
+async function waitForBlocked(db: Kysely<Database>, pid: number, what: string): Promise<void> {
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    const waiting = await sql<{ count: string }>`
+      SELECT count(*) AS count
+        FROM pg_stat_activity
+       WHERE pid = ${pid}
+         AND state = 'active'
+         AND wait_event_type = 'Lock'
+    `.execute(db);
+
+    if (Number(waiting.rows[0].count) > 0) return;
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  }
+
+  throw new Error(`backend ${pid} never blocked on ${what}; the case proves nothing`);
 }
 
 async function openClient(): Promise<Client> {
