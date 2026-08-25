@@ -8,6 +8,7 @@ import { NetworksService } from '../networks/networks.service';
 import { DuplicateAcknowledgementRequiredError, NotFoundError } from '../common/errors/api-error';
 import { IdempotencyService } from '../common/idempotency/idempotency.service';
 import { canonicalId } from '../common/identifiers';
+import { AlreadyBootstrappedError } from '../common/errors/already-bootstrapped';
 import { DATABASE, type Db } from '../database/database.module';
 import { lockPersonsWithin } from '../database/person-lock';
 
@@ -397,6 +398,23 @@ export class PeopleService {
    *   administrator outside the pastoral structure, and section 6 requires it here:
    *   at this moment there is no tree to place anybody in.
    *
+   * **It refuses unless no Person exists**, and asks its own table rather than
+   * `auth`'s. A first version had no guard and relied on having one caller — but
+   * this is public on a service the API uses, and what it creates is a Person with
+   * **zero pastoral assignments**, which is the capability the 2026-08-25 ruling
+   * removed from `CreatePersonInput` on the grounds that "a variant no caller can
+   * justify is the same thing spelled differently". Offering it again as an
+   * unguarded method is that capability once more, with a docblock instead of a
+   * type.
+   *
+   * **Why `persons` rather than `accounts`.** The account is the thing that makes
+   * a bootstrap a bootstrap, so `accounts` is the more direct question — and
+   * `people` cannot ask it: `auth` imports `people` (the 2026-08-24 seam), so the
+   * reverse restores the cycle that ruling removed. `persons` being empty is
+   * exactly as true at the only moment this may run, because the bootstrap is the
+   * first write to an empty database. Either table being non-empty means this is
+   * not a fresh installation.
+   *
    * The audit entry is the caller's, not this method's: the bootstrap writes three
    * and section 21 wants them named separately.
    */
@@ -411,6 +429,19 @@ export class PeopleService {
       encodedAt: Date;
     },
   ): Promise<{ id: string; memberId: string; network: NetworkName }> {
+    const anyPerson = await transaction
+      .selectFrom('persons')
+      .select('id')
+      .limit(1)
+      .executeTakeFirst();
+
+    if (anyPerson) {
+      throw new AlreadyBootstrappedError(
+        'People already exist, so this is not a fresh installation. An administrator ' +
+          'is created once, by the bootstrap, before anything else is recorded.',
+      );
+    }
+
     const network = this.networks.networkForSex(input.sex);
 
     const person = await transaction

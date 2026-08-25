@@ -136,7 +136,13 @@ Principle 13 requires a modular monolith. These are the modules, and the list is
 | `audit` | The audit log |
 | `admin` | Settings, the initial-encoding phase, administrative operations |
 
-**A module owns its tables.** No other module reads or writes them directly. Cross-module access goes through the owning module's service interface, never through its repository or its tables.
+**A module owns its tables. No other module writes them, ever, and no other module reaches them for anything a service interface can answer.** Cross-module access goes through the owning module's service interface, never through its repository.
+
+**One thing is exempt, and it is named rather than left to interpretation: a read joined inside a query the owning module cannot express.** `hierarchy` joins `persons` to name a leader and a disciple in its own recursive walks. Asking `people` per row would turn one query into hundreds, and returning identifiers for the caller to resolve moves the join rather than removing it. Nothing else qualifies today, and adding to this is an amendment rather than a decision taken in a module.
+
+The exemption is deliberately narrow and the asymmetry is the point. A write is what an invariant guards, so the five pastoral-assignment rules have one home only while `hierarchy` is the sole writer of `pastoral_assignments`. A join reads rows the owning module would have returned anyway and changes nothing.
+
+**This was stated as “reads or writes” and the code never matched it.** `people.module.ts` narrowed the rule in a comment when the module was split, on the reasoning that a rule stated more strongly than the code keeps stops being checkable — which is right about the danger and wrong about the remedy. Narrowing a rule in one module's comment leaves every other module to find that comment or not, and a reviewer to discover that the specification and the code disagree. The rule is narrowed here instead, where it is the rule.
 
 This is what makes "enforced in the domain layer" a statement rather than a hope. The five pastoral-assignment invariants (Section 5) have exactly one place to live because `hierarchy` is the only writer of `pastoral_assignments`. Where four modules write a table, an invariant needs checking in four places, and the fourth is the one somebody forgets — which is also why those invariants carry database constraints as a backstop.
 

@@ -7,13 +7,18 @@
  * the null actor, the absent pastoral assignment — that would otherwise be stated
  * with nothing able to fail on them.
  *
- * **It writes no table itself**, which is the whole shape of this file. The first
+ * **It touches no table itself**, which is the whole shape of this file. The first
  * version inserted into `persons`, `person_lifecycle`, `network_assignments`,
  * `accounts` and `account_roles` directly, justified against section 2's *imports*
  * rule — a different sentence from "a module owns its tables. No other module
  * reads or writes them directly", which carries no exemption and which this
  * repository defended once already at the cost of restructuring the module graph
  * (2026-08-24, the authorization seam).
+ *
+ * **It reads no table either**, which the first version of this sentence claimed
+ * while the emptiness check read `accounts` eleven lines below it. Section 2 says
+ * "reads or writes"; the write half moved and the read half did not, and the claim
+ * was true as worded and misleading as placed.
  *
  * So each write goes to the module that owns the table:
  * `PeopleService.createSystemAdministratorWithin`, which opens the Network row
@@ -23,6 +28,8 @@
  */
 
 import { sql } from 'kysely';
+
+import { AlreadyBootstrappedError } from '../../common/errors/already-bootstrapped';
 
 import type { AuditService } from '../../audit/audit.service';
 import type { AccountProvisioningService } from '../../auth/account-provisioning.service';
@@ -56,17 +63,7 @@ export interface BootstrapResult {
   activationExpiresAt: Date;
 }
 
-/** Thrown where an account already exists, which is what makes this one-time. */
-export class AlreadyBootstrappedError extends Error {
-  constructor() {
-    super(
-      'An account already exists, so this is not a fresh installation. The first ' +
-        'Admin is created once; provision further accounts through POST /api/v1/accounts, ' +
-        'which is audited and names the Admin who did it.',
-    );
-    this.name = 'AlreadyBootstrappedError';
-  }
-}
+export { AlreadyBootstrappedError } from '../../common/errors/already-bootstrapped';
 
 /**
  * **The administrator this creates is never placed in the pastoral tree**, and the
@@ -109,11 +106,15 @@ export async function bootstrapFirstAdmin(
     // invisible while unstated.
     await sql`SELECT pg_advisory_xact_lock(${BOOTSTRAP_LOCK_KEY})`.execute(trx);
 
-    // "Any account", not "any Admin": a system already in use by somebody is not a
-    // fresh installation, whatever roles it holds, and a narrower check would let
-    // this mint an Admin into a live church's records.
-    const existing = await trx.selectFrom('accounts').select('id').limit(1).executeTakeFirst();
-    if (existing) {
+    // **Asked of `auth`, which owns `accounts`** (section 2). This read was done
+    // here directly for one commit, under a docblock quoting section 2's "reads or
+    // writes them directly" and claiming the rule was met because nothing was
+    // written.
+    //
+    // Both services below refuse on their own account too, so this is not the only
+    // guard — it is here so the operator is told before anything is attempted,
+    // rather than learning it from whichever write happens to run first.
+    if (await modules.accounts.anyAccountExistsWithin(trx)) {
       throw new AlreadyBootstrappedError();
     }
 
