@@ -409,7 +409,10 @@ export class AccountProvisioningService {
       .insertInto('accounts')
       .values({
         person_id: input.personId,
-        email: input.email,
+        // `.trim()`, exactly as `provision` stores it. Hand-writing this column
+        // differently from the method it is aligned to is the same drift the line
+        // below explains at length and then, in a first version, committed.
+        email: input.email.trim(),
         // Through `normalizeEmail`, which trims as well as lowercasing. A second
         // implementation that dropped the trim would store a value no sign-in and
         // no password reset could match — and the bootstrap refuses to run twice,

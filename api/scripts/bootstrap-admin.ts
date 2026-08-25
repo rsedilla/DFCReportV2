@@ -25,11 +25,27 @@
  * `undefined`. The failure is silent at build time and arrives as
  * "Cannot read properties of undefined" from inside a service.
  *
- * An earlier version of this file ran under `tsx` and appeared to work, because
- * the three services it happened to use inject everything through explicit
- * `@Inject(...)`. Routing the writes through `PeopleService`, which does not, is
- * what surfaced it. `migrate.ts` and `validate-tree-csv.ts` stay on `tsx`: neither
- * builds a Nest context.
+ * **The container is broadly broken under `tsx`, not selectively.** Without
+ * `design:paramtypes` Nest sees *zero* constructor parameters and injects nothing,
+ * so `AccountProvisioningService` (four of seven parameters undecorated) is as
+ * hollow as `PeopleService` (five of six). A script is not safe because the
+ * services it names are decorated; it is safe only while no method it calls
+ * dereferences an injected dependency, which nobody can verify by reading.
+ *
+ * An earlier version of this file said the opposite — that it had worked under
+ * `tsx` "because the three services it happened to use inject everything through
+ * explicit `@Inject(...)`". **That is false of all three.** `AuditService` and
+ * `AccountTokensService` have no constructor at all, and `NetworksService` has
+ * `constructor(private readonly hierarchy: HierarchyService)` with no `@Inject`.
+ * It worked because the one method called on it, `networkForSex`, is a ternary
+ * that never touches `this.hierarchy`.
+ *
+ * The false version is the more dangerous one, which is why it is recorded rather
+ * than quietly replaced: it invites the next person to audit a script's decorators
+ * and conclude it is safe.
+ *
+ * `migrate.ts` and `validate-tree-csv.ts` stay on `tsx`: neither builds a Nest
+ * context.
  */
 
 import { NestFactory } from '@nestjs/core';

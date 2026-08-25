@@ -124,34 +124,33 @@ describe('the first Admin account (SKILL.md section 6)', () => {
     await expect(run()).rejects.toBeInstanceOf(AlreadyBootstrappedError);
   });
 
-  it('leaves the administrator out of the pastoral tree when no leader is named', async () => {
+  it('leaves the administrator out of the pastoral tree', async () => {
     // Section 5 invariant 3's third case, added for this: zero open assignments is
     // correct and permanent for somebody who administers the system without being
     // anybody's disciple. **Not** "not yet assigned" — nothing is coming.
+    //
+    // **One case, not two.** A second was written beside this one, titled "never
+    // opens a pastoral edge, whatever it is given" and claiming to pin the removed
+    // `--pastoral-leader` option as a property of the module rather than of its
+    // arguments. It did not: it called `run()` with the same default input and
+    // asserted the same emptiness, so both died to one mutation and neither
+    // touched an argument. Re-adding the option would have left both green.
+    //
+    // What actually forecloses the option is the type: `BootstrapInput` has no
+    // field for a leader, so restoring one is a compile-time change a reviewer
+    // sees. A test cannot pin the absence of an argument it cannot pass.
     const result = await run();
 
-    const assignments = await db
+    const forThisPerson = await db
       .selectFrom('pastoral_assignments')
       .select('id')
       .where('person_id', '=', result.personId)
       .execute();
 
-    expect(assignments).toEqual([]);
-  });
+    const anyAtAll = await db.selectFrom('pastoral_assignments').select('id').execute();
 
-  it('never opens a pastoral edge, whatever it is given', async () => {
-    // The option to place the administrator under a leader was removed rather
-    // than left unused: it opened an edge with none of section 5's checks, and of
-    // the three `assertLeaderIsAssignable` catches, only the cross-Network one has
-    // a constraint behind it — an archived or merged leader is refused by
-    // application code alone, verified by probing this schema.
-    //
-    // Pinned as a property of the module rather than of its arguments, so the
-    // option cannot come back without this failing.
-    await run();
-
-    const edges = await db.selectFrom('pastoral_assignments').select('id').execute();
-    expect(edges).toEqual([]);
+    expect(forThisPerson).toEqual([]);
+    expect(anyAtAll).toEqual([]);
   });
 
   it('records three audit entries, every one of them a system action', async () => {
@@ -215,6 +214,9 @@ describe('the first Admin account (SKILL.md section 6)', () => {
       .executeTakeFirstOrThrow();
 
     expect(account.email_normalized).toBe('mixed.case@example.test');
+    // The display column too. It was selected and not asserted, so it drifted from
+    // `provision` — which trims — and stored the surrounding spaces.
+    expect(account.email).toBe('Mixed.Case@Example.Test');
   });
 
   it('hands back an activation token that is stored only as a hash', async () => {

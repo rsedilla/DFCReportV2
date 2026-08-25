@@ -381,10 +381,18 @@ export class PeopleService {
    * - **No actor.** Sections 3 and 4 permit a null `actor_id` for a system action,
    *   which section 6 names as this and nothing else.
    * - **No duplicate matching.** Section 3's Tier 1 gate needs a person present to
-   *   acknowledge a candidate, and nobody is. It runs against an empty database by
-   *   construction — the caller refuses unless no account exists — so there is
-   *   nothing to match against. Stated rather than assumed, because "no accounts"
-   *   does not strictly imply "no Persons".
+   *   acknowledge a candidate, and nobody is. There is also nothing to match
+   *   against: the caller refuses unless no account exists, and every supported
+   *   path that creates a Person requires one — `POST /people` is authenticated,
+   *   and the tree import is given an Admin account. So no accounts means no
+   *   Persons.
+   *
+   *   A first version asserted that and then withdrew it in the same sentence
+   *   ("'no accounts' does not strictly imply 'no Persons'"), which left section
+   *   3's gate skipped on a premise the comment disowned. The strong reading is
+   *   the one that holds and the one section 6 relies on elsewhere; if a path is
+   *   ever added that creates a Person without an account, this is what has to be
+   *   revisited.
    * - **No pastoral assignment.** Section 5 invariant 3 permits zero for an
    *   administrator outside the pastoral structure, and section 6 requires it here:
    *   at this moment there is no tree to place anybody in.

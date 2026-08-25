@@ -99,6 +99,14 @@ export async function bootstrapFirstAdmin(
     // **Lock before looking.** Two runs would otherwise both find an empty table
     // and both create an Admin, which is the failure the refusal exists to
     // prevent. Transaction-scoped, so a failing path cannot leak it.
+    //
+    // **This is a third path that depends on READ COMMITTED** (section 24, which
+    // names only the Network change and the reassignment). The lock statement is
+    // snapshot-taking, so under REPEATABLE READ the snapshot would be fixed before
+    // the lock is granted and the loser would read a pre-lock `accounts` — and
+    // there is no unique constraint behind this to catch what follows. Recorded
+    // because the 2026-08-23 ruling's whole argument was that the dependency is
+    // invisible while unstated.
     await sql`SELECT pg_advisory_xact_lock(${BOOTSTRAP_LOCK_KEY})`.execute(trx);
 
     // "Any account", not "any Admin": a system already in use by somebody is not a
@@ -132,9 +140,16 @@ export async function bootstrapFirstAdmin(
       action: 'person.created',
       targetType: 'person',
       targetId: person.id,
+      // Section 21 wants the values, not merely that it happened — an entry
+      // recording only the identifiers cannot answer what was created. A first
+      // version omitted `middle_name` and `member_id`, so an administrator created
+      // with a middle name had it in `persons` and in no audit entry.
       after: {
+        member_id: person.memberId,
         first_name: input.firstName,
+        middle_name: input.middleName,
         last_name: input.lastName,
+        birth_date: null,
         sex: input.sex,
         civil_status: input.civilStatus,
         network: person.network,
