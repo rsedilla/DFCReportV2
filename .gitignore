@@ -27,3 +27,11 @@ Thumbs.db
 
 # claude local overrides
 .claude/settings.local.json
+
+# leadership tree data (SKILL.md section 2, Initial data load)
+# The real file carries names and birthdays for several thousand people, minors
+# among them, and this repository is public. It belongs outside the repository
+# entirely -- the validator and the import both take a path. This is a backstop
+# against an accidental `git add`, never the plan. See docs/TREE_CSV.md.
+*.tree.csv
+tree-data/

@@ -21,6 +21,7 @@
     "migrate:status": "tsx scripts/migrate.ts status",
     "test": "jest --runInBand",
     "test:watch": "jest --watch",
+    "validate:tree": "tsx scripts/validate-tree-csv.ts",
     "format:check": "prettier --check \"src/**/*.ts\" \"test/**/*.ts\" \"scripts/**/*.ts\" \"*.ts\""
   },
   "dependencies": {
