@@ -35,7 +35,7 @@ row_id,first_name,last_name,birth_date,sex,civil_status,leader_row_id
 | --- | --- |
 | `row_id` | Required, unique within the file, no whitespace. It is how other rows name this person, and nothing else. It is not the Member ID — the server assigns that from a sequence (section 3). |
 | `first_name`, `last_name` | Required. Spaces, hyphens, apostrophes and any Unicode are fine (section 3 forbids "letters only" validation). |
-| `birth_date` | Required **here**, exactly `YYYY-MM-DD`. See below. |
+| `birth_date` | Optional, and exactly `YYYY-MM-DD` where given. Never invented — see below. |
 | `sex` | Exactly `MALE` or `FEMALE`. Network follows from it (section 4). |
 | `civil_status` | Exactly `SINGLE`, `MARRIED` or `WIDOWED`. |
 | `leader_row_id` | Another row's `row_id`, or empty for a Network root. Never a name. |
@@ -53,18 +53,23 @@ leader's `sex` (sections 4 and 5).
 
 ## Two things to get right, because nothing downstream will catch them
 
-### The birthday is never invented
+### The birthday is optional, and is never invented
 
-Section 2 requires a birthday here and section 3 makes it optional everywhere
-else. The reason it is required here is that the import reads a central record
-that already holds one, so a blank is an omission rather than somebody declining
-to give it.
+Section 2 used to require one here, on the ground that the import reads a central
+record that already holds them. No such record exists for this church, so that
+requirement is gone and section 3 governs: a birthday where it is known, absent
+where it is not.
 
-**Do not fill a blank in to make the validator pass.** Two of the three Tier 1
-duplicate rules read the birthday, and **Tier 1 blocks creation** (section 3). Two
-unrelated people carrying the same invented date match each other at Tier 1, and
-the import then refuses to record a real person on the strength of a value nobody
-meant. A blank you cannot fill is a question for whoever holds the central record.
+**Never fill a blank in to make the validator quieter.** It reports a missing
+birthday as a *warning* precisely so that nobody is tempted to. Two of the three
+Tier 1 duplicate rules read the birthday, and **Tier 1 blocks creation**
+(section 3) — so two unrelated people carrying the same invented date match each
+other, and the system then refuses to record one of them on the strength of a value
+nobody meant. Absence is honest and costs a little matching reach; invention is
+dishonest and blocks real people.
+
+It is added later by an ordinary edit, by the leader who holds the person or
+anyone upline.
 
 ### A leader is named by `row_id`, never by name
 

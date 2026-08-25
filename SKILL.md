@@ -152,9 +152,21 @@ The church already exists. Roughly 800 Cells are running under an established le
 
 The two halves of the data live in different places and are loaded differently.
 
-**The leadership tree is known centrally and is small.** The Senior Pastors, their direct leaders, and the leaders below them number in the low thousands. Admin imports it: names, sex, and each person's direct leader — **and a birthday, which the import requires** even though Section 3 makes it optional everywhere else. The central record already holds one for every leader, so a gap here is an omission rather than somebody's decision to withhold it, and the import is a bulk load with nobody present to ask. Network follows from sex (Section 4). Every pastoral assignment created this way takes an effective date of the encoding date, exactly as Section 4 requires for initial Network assignment. Do not fabricate historical dates for relationships that predate the system.
+**The leadership tree is known centrally only to its first level.** The two Senior Pastors and their own direct disciples are recorded centrally and can be imported. Below that, nothing is: every leader keeps their own record of the people under their care, and no central roster of them exists to be imported.
 
-**Cell members are known only to their own leaders.** Nobody holds a central, current list of every member of every Cell. Each Cell Leader encodes their own members once they have an account. This is slower than a central import and considerably more accurate, and it doubles as the leader's first real use of the application.
+This corrects an earlier statement of this section, which said the tree "is known centrally and is small" and put the leaders below the Senior Pastors' direct disciples at "the low thousands" for Admin to import in one pass. That was never true of this church, and building an import against it would have produced a file assembled by somebody who does not hold the facts — the worst kind of source for a structure that decides where every person's attendance is counted.
+
+So the import loads the **spine**: the two Network roots, and each root's direct disciples. It carries names, sex, and each person's direct leader; Network follows from sex (Section 4). Every pastoral assignment created this way takes an effective date of the encoding date, exactly as Section 4 requires for initial Network assignment. Do not fabricate historical dates for relationships that predate the system.
+
+**A birthday is not required, here or anywhere.** An earlier version of this section required one of the import, on the stated ground that "the central record already holds one for every leader" — which fails with the premise above. Section 3 governs instead, and its rule is the one that matters: **never fabricate one**. A required field that nobody can fill gets filled, and for a birthday the fabrication is worse than the gap, because two invented dates that collide match at Tier 1 and Tier 1 blocks creation. A birthday is added later by an ordinary edit under `people.edit_basic`, by the leader who holds the person or anyone upline.
+
+**Everyone below the spine is encoded by the leader who holds them**, through the application, level by level. Each leader is given a Cell and an account (Section 6), encodes their own direct disciples, and each of those is then given a Cell and an account in turn.
+
+This is the rule this section already applies to Cell members, applied to the tree itself and for the same reasons. Nobody holds a central, current list; the leader who does hold it is the one who knows it is current; and encoding it is that leader's first real use of the application. It is slower than one import and considerably more accurate, which was already the trade this section accepted one level down.
+
+**Cell members are known only to their own leaders**, and are encoded the same way, by their own Cell Leader once they have an account.
+
+**The cost is that the initial-encoding phase now lasts as long as the cascade does**, and that is stated here rather than discovered. The phase relaxes one rule — Admin creates Cells directly, without request-and-approve (Section 10) — and a relaxation held open for months is a larger thing than one held open for an afternoon. It is still bounded, by the audited Admin action that closes it and by nothing else, so closing it remains a decision somebody takes rather than a date that passes.
 
 The sequence matters. The tree must exist before leaders can be assigned, accounts provisioned, or Cells attached in the right place.
 
@@ -196,7 +208,7 @@ The script also refuses unless the initial-encoding phase is open. The phase is 
 
 Resuming was rejected for a specific reason rather than for simplicity. A resumed run meets the Persons its own earlier attempt created, each of them a Tier 1 candidate against the row that created it, and Section 3 forbids adjudicating those inline because nobody is present. Escaping that needs the batch and row recorded against every Person created, which is permanent structure for a phase that runs once.
 
-**The dry run therefore carries the validation burden**: cycles, the root count, every `leader_row_id` resolving, sex present and mapping to a Network, and every edge same-Network. A commit should fail for a structural reason only where something changed underneath it, because the dry run already refused everything else.
+**The dry run therefore carries the validation burden**: cycles, the root count, every `leader_row_id` resolving, sex present and mapping to a Network, and every edge same-Network. A missing birthday is reported and does not refuse the file, since Section 3 permits its absence and this section no longer requires one. A commit should fail for a structural reason only where something changed underneath it, because the dry run already refused everything else.
 
 ### The decisions file
 
@@ -269,7 +281,7 @@ Two situations produce a Person with no birthday, and the second is why this is 
 
 **This section defines adding one and does not define removing one.** An edit that sends `birth_date` explicitly as null is refused as malformed input (`VALIDATION_FAILED`, Section 22) rather than permitted by omission — any explicit null, whether or not a birthday is recorded, since the refusal reads the request and never the stored row. Omitting the field entirely is unaffected and means what it always meant: leave it alone. Making the column nullable was a decision about what may be *recorded at first contact*, and it must not silently become a decision that a recorded birthday may be erased. Whether removal should ever be possible is a separate question, and is not answered here.
 
-**The initial leadership-tree import is the one place a birthday is required** (Section 2, Initial data load, which states it). It loads from a central record that already holds them, so a gap there is an omission rather than a person's decision.
+**Nothing requires a birthday, including the initial leadership-tree import.** Section 2 required one until it was found to rest on a central record that does not exist; it now follows the rule above like every other path. The absence of an exception is the point: a rule with one carve-out is a rule people look for a carve-out from, and this is the field where a fabricated value refuses to record a real person.
 
 ```text
 persons

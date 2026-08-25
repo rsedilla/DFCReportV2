@@ -132,10 +132,39 @@ describe('row_id and leader_row_id', () => {
 });
 
 describe('fields', () => {
-  it('refuses a missing birthday and says never to invent one', () => {
-    const found = errorsOf(file('3,Marisol,Ventura,,FEMALE,SINGLE,2'));
-    const missing = found.find((f) => f.code === 'BIRTH_DATE_MISSING');
-    expect(missing?.message).toMatch(/never fill it in/);
+  it('reports a missing birthday as a warning, and still accepts the file', () => {
+    // Section 2 required one until its premise — a central record holding them —
+    // was found not to exist for this church. Section 3 governs, and permits
+    // absence. **Refusing the file would be the surest way to have the field
+    // filled with something**, and a fabricated birthday matches another at
+    // Tier 1, where creation is blocked. So the file passes and the gap is said.
+    const result = validateTreeCsv(file('3,Marisol,Ventura,,FEMALE,SINGLE,2'), {
+      today: '2026-08-25',
+    });
+
+    expect(codes(result.findings, 'error')).toEqual([]);
+
+    const missing = result.findings.find((f) => f.code === 'BIRTH_DATE_MISSING');
+    expect(missing?.severity).toBe('warning');
+    expect(missing?.message).toMatch(/never fill one in/);
+  });
+
+  it('accepts a whole file carrying no birthdays at all', () => {
+    // The case the spine import actually is: thirty senior leaders whose
+    // birthdays nobody holds centrally. A rule that passes one blank row and
+    // refuses thirty would be no use to it.
+    const noBirthdays = [
+      HEADER,
+      '1,Andres,Batungbakal,,MALE,MARRIED,',
+      '2,Perlita,Batungbakal,,FEMALE,MARRIED,',
+      '3,Bayani,Ilagan,,MALE,MARRIED,1',
+      '4,Marisol,Ventura,,FEMALE,SINGLE,2',
+    ].join('\n');
+
+    const result = validateTreeCsv(`${noBirthdays}\n`, { today: '2026-08-25' });
+
+    expect(codes(result.findings, 'error')).toEqual([]);
+    expect(result.summary.rowCount).toBe(4);
   });
 
   it.each([
