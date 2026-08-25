@@ -31,10 +31,17 @@ export class AccountTokensService {
   /**
    * Mints a token, invalidating any outstanding one of the same purpose.
    *
-   * Returns the plaintext **once**, to its caller, which passes it to the email
-   * port and nowhere else. It is never stored, never logged, and never in an API
-   * response: section 6 says an administrator may not know or choose another
-   * user's password, and a token that sets one is the same secret a step earlier.
+   * Returns the plaintext **once**, to its caller. It is never stored and never in
+   * an API response: section 6 says an administrator may not know or choose
+   * another user's password, and a token that sets one is the same secret a step
+   * earlier.
+   *
+   * **One caller prints it, and section 6 names that one.** The first Admin
+   * bootstrap has no Admin to re-send from and refuses to run twice, so a lost
+   * token would leave the installation unrecoverable — and its operator is the
+   * holder, standing at the machine. Every other caller passes it to the email
+   * port and nowhere else. This paragraph replaces "never logged", which was left
+   * standing one frame from a caller that logs it.
    *
    * **The invalidation and the insert are one statement each inside the caller's
    * transaction**, so a mint that fails leaves neither a live old token nor a new
