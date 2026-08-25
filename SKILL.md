@@ -198,6 +198,38 @@ Resuming was rejected for a specific reason rather than for simplicity. A resume
 
 **The dry run therefore carries the validation burden**: cycles, the root count, every `leader_row_id` resolving, sex present and mapping to a Network, and every edge same-Network. A commit should fail for a structural reason only where something changed underneath it, because the dry run already refused everything else.
 
+### The decisions file
+
+The ruling above fixes that adjudication returns a file carrying a fingerprint, and leaves the shape of both open. An import cannot be written without them.
+
+**It is a CSV, for the same reason the ruling chose a file at all.** It is sorted, emailed to the leader who actually knows whether those two are one person, and returned. That person opens a CSV in a spreadsheet; they open a JSON document in a text editor and edit it wrongly.
+
+```text
+input_fingerprint,row_id,decision,member_id
+```
+
+**The fingerprint is repeated on every row rather than carried once.** A comment line is not CSV, a companion file can be separated from the file it describes, and a spreadsheet round-trip preserves a column while preserving little else. The commit refuses unless every row agrees, which also catches two decisions files spliced together.
+
+**Only rows the dry run matched to a candidate appear.** A row matching nobody has nothing to decide, and asking a person to fill three thousand rows in order to say so produces a file completed without being read — the failure Section 4 gives for asking anyone to confirm a tautology. A row absent from the decisions file is created.
+
+**A row with a Tier 1 candidate must carry an explicit decision, and the commit refuses where it is blank.** Section 3 requires a Tier 1 candidate to be acknowledged before a Person is created, and silence is not acknowledgement. A row carrying only Tier 2 candidates may be left blank, which means create — Section 3 presents Tier 2 in a list and requires nothing of the person reading it.
+
+`decision` is `CREATE` or `USE_EXISTING`. `member_id` names the Person where the decision is `USE_EXISTING` and is empty otherwise. The Member ID rather than the UUID, because the person adjudicating reads it off the dry-run report and may retype it, and `M-000000` survives that where a UUID does not.
+
+**Where a row resolves to an existing Person, that Person receives the pastoral assignment the tree gives them**, and every row naming that `row_id` as its leader resolves to them. No Person is created and no Member ID is drawn from the sequence.
+
+**The commit refuses where that Person already holds an active pastoral assignment**, naming the row. Section 5 permits exactly one, so proceeding would mean closing the existing one — which is a reassignment, carrying its own authorization and its own audit entry (Section 5). An import must not perform one as a side effect of a duplicate adjudication, because the person who decided these two records are one person was not asked whether to move anybody.
+
+### The fingerprint
+
+Over the parsed rows in file order. Each row contributes its seven trimmed field values; the values are encoded as a JSON array of strings, the rows are joined by a newline, and the digest is SHA-256 written as lowercase hexadecimal.
+
+JSON encoding rather than a delimiter, because a name may legitimately contain any character (Section 3) and there is no character that cannot appear in a field. Trimmed values rather than raw, because surrounding whitespace is precisely what a spreadsheet adds and removes on its own — the class of change this fingerprint exists not to refuse.
+
+The header contributes nothing. It is fixed, and a file whose header differs is refused before any fingerprint is taken.
+
+**Row order is part of the digest, so sorting the input invalidates a decisions file** even though every decision would still apply correctly, since decisions key on `row_id` rather than on position. That is not an oversight. The dry-run report the adjudicator was reading names line numbers, and in a re-sorted file those line numbers point at other people — so the file they answered is no longer the file in front of them. Refusing forces a fresh report, which costs one dry run: it writes nothing and may be run as often as needed.
+
 ---
 
 ## 3. Person Model
