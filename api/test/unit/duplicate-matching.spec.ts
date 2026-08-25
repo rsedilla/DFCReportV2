@@ -210,6 +210,36 @@ describe('signals that annotate without excluding or demoting', () => {
     expect(matches[0].reasons.join(' ')).toMatch(/suffixes differ/);
   });
 
+  it('reads a suffix out of the last name, which is where section 3 stores it', () => {
+    // Section 3, Name handling: a generational suffix is written into `last_name`.
+    // The rule needs something that can fail, and this is it — the storage
+    // location is only correct because the matcher reads that field.
+    const matches = findCandidates({ firstName: 'Juan', lastName: 'Dela Cruz Jr' }, [
+      { ...BASE, firstName: 'Juan', lastName: 'Dela Cruz Sr' },
+    ]);
+
+    expect(matches).toHaveLength(1);
+    expect(matches[0].reasons.join(' ')).toMatch(/suffixes differ/);
+  });
+
+  it('cannot see a suffix in the middle name, which is why section 3 forbids putting one there', () => {
+    // **The failure the rule exists to prevent, pinned as behaviour.** `suffixOf`
+    // reads `first_name` and `last_name` and nothing else, and middle name is not
+    // compared at all — so a suffix recorded there is stripped from nothing and
+    // surfaced as nothing. A father and son recorded that way match with no signal
+    // distinguishing them, silently.
+    //
+    // This asserts the limitation rather than a defect: widening the matcher is
+    // the alternative section 3 rejected, because it would leave two working
+    // places to put a suffix and the same family recorded two ways.
+    const matches = findCandidates({ firstName: 'Juan', lastName: 'Dela Cruz', middleName: 'Jr' }, [
+      { ...BASE, firstName: 'Juan', lastName: 'Dela Cruz', middleName: 'Sr' },
+    ]);
+
+    expect(matches).toHaveLength(1);
+    expect(matches[0].reasons.join(' ')).not.toMatch(/suffixes differ/);
+  });
+
   it('never counts an absent middle name against a match', () => {
     // It is optional and frequently left blank (section 3).
     const withMiddle = findCandidates(subject(), [{ ...BASE, middleName: 'Santos' }]);

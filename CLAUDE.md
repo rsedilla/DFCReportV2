@@ -3135,6 +3135,52 @@ succession language was corrected in §5 but left standing in the migration and 
 test name, so two files still described an operation §5 had just said the system
 does not offer.
 
+### 2026-08-25 — A generational suffix lives in `last_name`, and a title lives nowhere
+
+Found preparing the spine file, where two of the thirty rows carried `II` and `III`
+and four carried `Bishop` or `Pastor` inside `first_name`.
+
+**Suffixes were not forgotten; where they are *stored* was never said.** §3's
+matching rules already name `Jr`, `Sr`, `II`, `III` and say to ignore them when
+comparing and compare them separately as a weak signal, and `duplicate-matching.ts`
+implements exactly that — `normalizeName` strips them, `suffixOf` reads them back.
+What no section stated is which field they go in, and the silence has a live failure
+mode rather than being merely untidy.
+
+`suffixOf` reads `first_name` and `last_name` and nothing else, and `middle_name` is
+never compared at all. So a suffix written into `middle_name` is **invisible**: not
+stripped, which is harmless, and never surfaced as a distinguishing signal, which is
+not — a father and son recorded that way lose the one signal §3 provides for telling
+them apart, silently. That is reachable today, because encoders are about to type
+names into a form and nothing tells them where `Jr` goes.
+
+**`last_name`, and no column.** A `suffix` column was rejected: the matcher already
+reaches the right answer from the name fields, and §3's rule is *written* on that
+assumption — "ignore the suffixes when comparing" presupposes they are inside the
+compared string — so a column would mean amending the rule, the `persons` shape and
+the matcher in order to arrive at behaviour that is already correct. The list is also
+deliberately closed, and `duplicate-matching.ts` records that `IV` was in the set and
+was removed because "a closed list in the specification is not a starting point to
+extend". A column invites exactly that extension; a suffix inside a name is just part
+of the name, and only the four get special treatment.
+
+`last_name` rather than `first_name` is a choice between two that both work, since
+both fields are stripped and both are read. The surname is what a generational suffix
+qualifies, sorting by last name keeps a father and son adjacent, and one stated place
+beats two working ones.
+
+**A title is a different question and is left open.** `Bishop`, `Pastor` and `Pastora`
+are not suffixes and §3 now says plainly that a name field is not where they go —
+because anything put there is compared as though it were part of the name, which is
+how `Bishop Oriel` fails to match `Oriel` and a second record for the same person goes
+unnoticed. Where a title *does* live is listed below rather than decided here: a
+stored title is not effective-dated and so cannot answer what somebody was called in a
+past period, which is the mistake the 2026-08-20 structures ruling names, and two of
+them are derivable from `SENIOR_PASTOR_PERSON_IDS` in any case. It is a display
+question, and there are no screens yet to decide it against.
+
+Written to `SKILL.md` §3 (*Name handling*), and verified by grep rather than asserted.
+
 ### Open — awaiting a ruling
 
 **One item awaits a ruling and blocks Stage 5. Ten other things are unsettled,
@@ -3157,6 +3203,7 @@ Two related questions have defined behaviour and are recorded in `SKILL.md` §12
 
 - **Whether closing a person's only open `network_assignments` row, without opening a replacement, is a legal write.** Escalated by `architecture-guardian` on 2026-08-25 and general rather than root-specific. §4 defines a Network change as an atomic close-and-open pair sharing one instant; §5 forbids `DELETE` on the table; nothing addresses a close alone. No constraint refuses it — `network_assignments_one_open` is partial and permits zero, and the same-Network trigger compares at the closed row's own start, so it passes. The consequence is that `network_as_of` becomes null from that instant and every edge beneath the person is silently unresolvable, which is the outcome the no-delete trigger exists to prevent, reached one column over. The root seat made it visible rather than causing it, and the root case is now refused specifically; the general case is not. The same silence covers a close at T1 reopened at T2, which leaves a gap with no Network at all.
 - **Who may close a Network root's row, and under what capability.** §5 gives each Network exactly one root and says changing who holds one is "a deliberate Network-level decision, not a pastoral reassignment" — and names no capability, no endpoint and no workflow for it. The seat added on 2026-08-25 is partial over open rows, so a successor becomes possible the moment the previous root's row is closed; both write paths that could close it refuse a root outright, so nothing can. §5 now says plainly that a succession is not an operation this system offers, rather than implying one from the seat being freeable. Not blocking: the import creates two roots and neither changes.
+- **How a person's title is displayed, and whether it is stored.** §3 keeps first, middle and last names and has no title field, and since 2026-08-25 says plainly that a name field is not where a title goes — a title inside one is compared as though it were part of the name, so `Bishop Oriel` never matches `Oriel` and a duplicate goes unnoticed. What is unsettled is where it *does* go. A column is the obvious answer and is not effective-dated, so it cannot say what somebody was called in a past period — the mistake the 2026-08-20 structures ruling names. Two of them are derivable from `SENIOR_PASTOR_PERSON_IDS` already. It is a display question; decide it with the first screens.
 - **Whether a leader sees a "details to collect" list.** Birthday became optional on 2026-08-24, and an optional field with nothing surfacing it is one that never gets collected. §15's attention-list idiom fits — filtered, never ranked, never colour-graded, shown to the leader who can act — but there is no dashboard to put it on until Stage 2's screens exist. Decide it with them.
 - **Whether "asked, not given" is a state on the Person.** It follows the item above rather than standing alone. Without it, somebody who declined to give their birthday stays on a collect-list forever, which presses on exactly the privacy the optional ruling protects. With it, the next leader learns she was asked rather than rediscovering it by asking again — but it is a new field on `persons`, so it is a ruling and not a detail.
 - **Whether a recorded birthday may ever be removed.** §3 defines adding one and, since 2026-08-24, refuses an explicit null on the edit path so that a nullable column does not become an erase capability nobody decided on. The privacy argument that made the field optional cuts toward permitting removal — somebody may withdraw what they earlier gave. Reproducibility cuts the other way: a Tier 1 acknowledgement recorded against a birthday, and every age derived from it, stop being explicable once it is gone. Left refused until decided.
