@@ -2750,9 +2750,64 @@ upon; only the grant half is refused twice.
 
 Written to `SKILL.md` §7, §24 and migration `0006`.
 
+### 2026-08-24 — Birthday is optional on a Person
+
+Found by building the tree import: §2 has Admin import "names, sex, and each
+person's direct leader", §3 required a birthday and a civil status, and
+`persons.birth_date` is `NOT NULL` — so the import as specified could not create a
+single Person. The tree turned out to hold birthdays, which unblocked the import;
+the question it exposed was the ordinary one, at consolidation.
+
+**Birthday becomes optional.** The argument is §3's own, made two sections earlier
+about email: "a mandatory field that people cannot fill is filled with fictions,
+which corrupts both the data and duplicate matching."
+
+**For a birthday the corruption is worse than the general case**, which is what
+makes this more than consistency. Both Tier 1 rules rest on the birthday, and Tier 1
+*blocks* creation. So two unrelated people carrying the same invented date match each
+other at Tier 1, and the system refuses to record one of them on the strength of a
+value nobody meant. Requiring the field does not protect the matcher; it poisons it,
+and then acts on the poison.
+
+*My first recommendation was the opposite — that making it optional "guts the
+matcher" — and it was wrong because it reasoned about wholesale absence rather than
+about the population that actually lacks one.* Absence drops a candidate to Tier 2,
+which is honest: less is known, so less is claimed. Fabrication produces false
+confidence. The owner's question about consolidation is what surfaced the
+distinction.
+
+**Two situations produce a Person with no birthday**, and the second decided it. A
+leader may not have asked. Or somebody may **decline** — a first conversation is not
+the moment to press for personal information, and a church that insists serves least
+the people most guarded about their details. That is a privacy position, not a data
+gap, and no later gate may coerce it: a milestone that refuses attendance or Cell
+membership until a birthday appears would press hardest on exactly the person who
+withheld it.
+
+**The matcher needed no change.** `Subject.birthDate` and `Candidate.birthDate` were
+already `string | null`, and §3 already carried a Tier 2 rule naming an absent
+birthday. The edit endpoint needed none either: `PATCH /api/v1/people/{id}` under
+`people.edit_basic` already accepts `birth_date`, so "the leader adds it later" was
+built before the rule required it.
+
+**The import still requires it** (§2), because it loads from a central record that
+holds them — a gap there is an omission rather than a person's decision.
+
+**Reversibility has a deadline, and the migration says so.** Re-adding `NOT NULL`
+works only while no row lacks a birthday, which is true today and false after the
+first person is recorded without one.
+
+Two things are deliberately **not** settled here, and are listed as open below: a
+"details to collect" attention list so an optional field is not an invisible one,
+and whether "asked, not given" is a state on the Person distinguishing a decision
+from a gap. Both wait for the first real screens, since an attention list with no
+dashboard to live on is a list nobody sees.
+
+Written to `SKILL.md` §3 in the same change.
+
 ### Open — awaiting a ruling
 
-**One item awaits a ruling and blocks Stage 5. Seven other things are unsettled,
+**One item awaits a ruling and blocks Stage 5. Nine other things are unsettled,
 none of them blocking. They are listed at the end, so this section is the whole of
 what is open.**
 
@@ -2770,6 +2825,8 @@ Two related questions have defined behaviour and are recorded in `SKILL.md` §12
 
 **Unsettled, and not blocking anything.** None of these is a Stop Condition. An implementer proceeds and settles them in passing; they are listed here because a reader looking for what is open should not have to find it inside the body of a ruling.
 
+- **Whether a leader sees a "details to collect" list.** Birthday became optional on 2026-08-24, and an optional field with nothing surfacing it is one that never gets collected. §15's attention-list idiom fits — filtered, never ranked, never colour-graded, shown to the leader who can act — but there is no dashboard to put it on until Stage 2's screens exist. Decide it with them.
+- **Whether "asked, not given" is a state on the Person.** It follows the item above rather than standing alone. Without it, somebody who declined to give their birthday stays on a collect-list forever, which presses on exactly the privacy the optional ruling protects. With it, the next leader learns she was asked rather than rediscovering it by asking again — but it is a new field on `persons`, so it is a ruling and not a detail.
 - **Whether the API runs as more than one instance, and what clock skew revocation may assume.** §6 says any instance can serve any request, and account-wide revocation compares two timestamps both stamped by an API process. On one instance that is one clock; on several it is not, and §24 now requires synchronised clocks without bounding the skew this comparison tolerates. The row lock added for the uncommitted-revocation window orders the two events in the database and does not depend on clocks, so this affects the comparison rather than the ordering. Settle it before the first multi-instance deployment.
 - **The application's database role.** §24 requires least-privilege credentials and none exist: the API connects as the owner of every table, so it holds `TRUNCATE`, which bypasses the no-delete triggers entirely, and `DROP`. The no-delete rule leans on this role to make its `TRUNCATE` exemption safe. Creating it is deployment work with no ruling attached, but until it happens §5's exemption is unprotected.
 - **Whether a revocation may be undone in place.** Nothing addresses setting `revoked_at` back to `NULL`, and the schema permits it on `account_roles` and `capability_grants`. It erases a revocation exactly as a `DELETE` would, one column over — and the Senior Pastor cap depends on `revoked_at` being monotone for the count to mean anything over time.

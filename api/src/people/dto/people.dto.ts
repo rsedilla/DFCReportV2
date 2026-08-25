@@ -59,10 +59,18 @@ export class CreatePersonDto {
   @Length(1, 100)
   last_name!: string;
 
-  /** A plain `YYYY-MM-DD` Asia/Manila date, never a timestamp (section 22). */
+  /**
+   * A plain `YYYY-MM-DD` Asia/Manila date, never a timestamp (section 22).
+   *
+   * Optional, per section 3. A leader registering somebody at first contact may
+   * not have asked, and somebody may decline to give it — and a mandatory field
+   * that people cannot fill is filled with fictions, which for this field means
+   * false Tier 1 matches that then block real people from being recorded.
+   */
+  @IsOptional()
   @Matches(DATE_ONLY, { message: 'must be a plain YYYY-MM-DD date, not a timestamp' })
   @IsDateString({ strict: true })
-  birth_date!: string;
+  birth_date?: string;
 
   @IsIn(SEXES)
   sex!: Sex;

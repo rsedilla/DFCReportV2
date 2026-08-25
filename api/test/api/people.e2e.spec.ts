@@ -184,6 +184,78 @@ describe('people (SKILL.md sections 3, 7 and 8)', () => {
       expect(await db.selectFrom('persons').select('id').execute()).toHaveLength(8);
     });
 
+    it('creates a Person with no birthday, which is the consolidation case', async () => {
+      // Section 3: optional, because a mandatory field people cannot fill is
+      // filled with fictions. A leader meeting somebody for the first time may
+      // not have asked, and somebody may decline to give it.
+      const created = await post(raymondAccount, randomUUID()).send(
+        withoutBirthday({
+          pastoral_leader_id: manuel.id,
+          first_name: 'Ana',
+          last_name: 'Delacruz',
+        }),
+      );
+
+      expect(created.status).toBe(201);
+
+      const stored = await db
+        .selectFrom('persons')
+        .select('birth_date')
+        .where('id', '=', created.body.id)
+        .executeTakeFirstOrThrow();
+
+      // Null, never a placeholder. A fabricated date is indistinguishable from a
+      // fact afterwards, which is the failure the rule exists to prevent.
+      expect(stored.birth_date).toBeNull();
+    });
+
+    it('cannot reach Tier 1 without a birthday, so creation is not gated', async () => {
+      // **The consequence worth pinning.** Both Tier 1 rules rest on the birthday,
+      // and Tier 1 blocks creation — so a Person with none can only ever reach
+      // Tier 2 and is never refused for it.
+      //
+      // Same name as an existing fixture, which with a matching birthday is the
+      // Tier 1 refusal two cases above. Without one it creates.
+      const created = await post(raymondAccount, randomUUID()).send(
+        withoutBirthday({
+          pastoral_leader_id: manuel.id,
+          first_name: 'Manuel',
+          last_name: 'Testfixture',
+        }),
+      );
+
+      expect(created.status).toBe(201);
+    });
+
+    it('lets the leader add the birthday afterwards', async () => {
+      // Section 3: added later by an ordinary edit under `people.edit_basic`. This
+      // endpoint already accepted `birth_date` before the field became optional.
+      const created = await post(raymondAccount, randomUUID()).send(
+        withoutBirthday({
+          pastoral_leader_id: manuel.id,
+          first_name: 'Lita',
+          last_name: 'Ramos',
+        }),
+      );
+      expect(created.status).toBe(201);
+
+      const edited = await request(app.getHttpServer())
+        .patch(`/api/v1/people/${created.body.id}`)
+        .set('Authorization', `Bearer ${raymondAccount.accessToken}`)
+        .set('Idempotency-Key', randomUUID())
+        .send({ birth_date: '1992-03-08' });
+
+      expect(edited.status).toBe(200);
+
+      const stored = await db
+        .selectFrom('persons')
+        .select('birth_date')
+        .where('id', '=', created.body.id)
+        .executeTakeFirstOrThrow();
+
+      expect(stored.birth_date).toBe('1992-03-08');
+    });
+
     it('refuses a leader in the other Network', async () => {
       // A pastoral assignment never crosses Networks (section 5, invariant 5).
       //
@@ -687,6 +759,16 @@ describe('people (SKILL.md sections 3, 7 and 8)', () => {
       .set('Authorization', `Bearer ${actor.accessToken}`);
   }
 });
+
+/**
+ * The create body with the birthday omitted entirely, as a client sends it when a
+ * leader did not ask or the person declined (SKILL.md section 3).
+ */
+function withoutBirthday(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  const body = personBody(overrides);
+  delete body.birth_date;
+  return body;
+}
 
 function personBody(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {

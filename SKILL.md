@@ -185,7 +185,7 @@ Member IDs are assigned by the server from the sequence. Nothing is backdated.
 - First Name — required
 - Middle Name — optional
 - Last Name — required
-- Birthday / date of birth — required
+- Birthday / date of birth — optional, and prompted wherever a Person is created
 - Sex — required, exactly:
   - `MALE`
   - `FEMALE`
@@ -195,6 +195,18 @@ Member IDs are assigned by the server from the sequence. Nothing is backdated.
   - `WIDOWED`
 - Mobile Number — optional
 
+**Birthday is optional, and the reason is the one this section already gives for email.** A mandatory field that people cannot fill is filled with fictions, which corrupts both the data and duplicate matching — and for a birthday the corruption is worse than for most fields, because the Tier 1 rules below rest on it. Two unrelated people carrying the same invented date match each other at Tier 1, and Tier 1 *blocks* creation, so a fabricated birthday does not merely weaken the matcher: it refuses to record real people on the strength of a value nobody meant.
+
+Two situations produce a Person with no birthday, and the second is why this is a rule rather than a convenience. A leader meeting somebody for the first time may simply not have asked. And **somebody may decline to give it** — a first conversation is not the moment to press for personal information, and a church that insists serves least the people most guarded about their details.
+
+**Never fabricate one.** A placeholder is indistinguishable from a fact afterwards, and it is the failure this rule exists to prevent rather than a shortcut around it.
+
+**Absence is honest, and the matcher already accounts for it.** A candidate with no birthday cannot reach Tier 1 — the strongest statement the system can make about two records needs that field — and falls to the Tier 2 rule below that names an absent birthday explicitly. That is correct: less is known, so less is claimed.
+
+**It is added later by an ordinary edit**, under `people.edit_basic` (Section 7), by the leader who holds the person or anyone upline within scope. Nothing else is gated on it. Age is derived from birthday (Section 25) and is therefore unavailable until one is recorded, which is the accepted cost.
+
+**The initial leadership-tree import is the one place a birthday is required** (Section 2). It loads from a central record that already holds them, so a gap there is an omission rather than a person's decision.
+
 ```text
 persons
 - id                  UUID, may be client-generated (Two identifiers, below)
@@ -202,7 +214,7 @@ persons
 - first_name
 - middle_name         nullable
 - last_name
-- birth_date
+- birth_date          nullable; absent where it was not given (Required personal information, above)
 - sex                 MALE | FEMALE
 - civil_status        SINGLE | MARRIED | WIDOWED
 - mobile_number       nullable

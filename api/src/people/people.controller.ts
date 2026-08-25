@@ -70,7 +70,7 @@ export class PeopleController {
         firstName: body.first_name,
         middleName: body.middle_name ?? null,
         lastName: body.last_name,
-        birthDate: body.birth_date,
+        birthDate: body.birth_date ?? null,
         sex: body.sex,
         civilStatus: body.civil_status,
         mobileNumber: body.mobile_number ?? null,
