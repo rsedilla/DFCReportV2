@@ -5,8 +5,8 @@ import {
   bootstrapFirstAdmin,
 } from '../../src/admin/bootstrap/first-admin';
 import { AuditService } from '../../src/audit/audit.service';
-import { AccountTokensService } from '../../src/auth/account-tokens.service';
-import { NetworksService } from '../../src/networks/networks.service';
+import { AccountProvisioningService } from '../../src/auth/account-provisioning.service';
+import { PeopleService } from '../../src/people/people.service';
 import { createTestDb, truncateAll } from '../setup/database';
 import { createPerson, createTestApp } from '../setup/fixtures';
 
@@ -42,14 +42,13 @@ describe('the first Admin account (SKILL.md section 6)', () => {
     return bootstrapFirstAdmin(
       db,
       {
-        tokens: app.get(AccountTokensService),
+        // Through the modules that own the tables (section 2). The real mapping
+        // too: an earlier version took the Network as an argument, so replacing
+        // `networkForSex` with a hardcoded 'MENS' kept every case green while
+        // putting a woman in the Men's Network.
+        people: app.get(PeopleService),
+        accounts: app.get(AccountProvisioningService),
         audit: app.get(AuditService),
-        // The real mapping, not one the test computes. The first version passed
-        // the Network in as an argument, so replacing `networkForSex` with a
-        // hardcoded 'MENS' kept every case green while putting a woman in the
-        // Men's Network — a case whose comment claimed to pin section 4 and
-        // pinned that the module stored its fourth argument.
-        networks: app.get(NetworksService),
       },
       { ...input, ...overrides },
     );
@@ -264,9 +263,9 @@ describe('the first Admin account (SKILL.md section 6)', () => {
     // against no lock at all, which is CLAUDE.md's authorization-case-7 lesson and
     // the one the root-seat work re-learned two commits ago.
     const services = {
-      tokens: app.get(AccountTokensService),
+      people: app.get(PeopleService),
+      accounts: app.get(AccountProvisioningService),
       audit: app.get(AuditService),
-      networks: app.get(NetworksService),
     };
 
     const results = await Promise.allSettled([

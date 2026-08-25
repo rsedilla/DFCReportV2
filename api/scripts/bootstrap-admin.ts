@@ -17,6 +17,19 @@
  * The writing is in `src/admin/bootstrap/first-admin.ts`, because a script cannot
  * be tested and section 6's rules need something that can fail. This file parses
  * arguments, builds the application, and prints.
+ *
+ * **It runs under `ts-node`, not `tsx`, and that is not a preference.** `tsx`
+ * compiles with esbuild, which does not implement `emitDecoratorMetadata` — so
+ * Nest cannot read the constructor parameter *types* it resolves providers by, and
+ * every dependency injected without an explicit `@Inject(...)` arrives
+ * `undefined`. The failure is silent at build time and arrives as
+ * "Cannot read properties of undefined" from inside a service.
+ *
+ * An earlier version of this file ran under `tsx` and appeared to work, because
+ * the three services it happened to use inject everything through explicit
+ * `@Inject(...)`. Routing the writes through `PeopleService`, which does not, is
+ * what surfaced it. `migrate.ts` and `validate-tree-csv.ts` stay on `tsx`: neither
+ * builds a Nest context.
  */
 
 import { NestFactory } from '@nestjs/core';
@@ -25,9 +38,9 @@ import 'dotenv/config';
 import { AppModule } from '../src/app.module';
 import { AlreadyBootstrappedError, bootstrapFirstAdmin } from '../src/admin/bootstrap/first-admin';
 import { AuditService } from '../src/audit/audit.service';
-import { AccountTokensService } from '../src/auth/account-tokens.service';
+import { AccountProvisioningService } from '../src/auth/account-provisioning.service';
 import { DATABASE, type Db } from '../src/database/database.module';
-import { NetworksService } from '../src/networks/networks.service';
+import { PeopleService } from '../src/people/people.service';
 
 import type { BootstrapInput } from '../src/admin/bootstrap/first-admin';
 import type { CivilStatus, Sex } from '../src/database/schema';
@@ -109,9 +122,9 @@ async function main(): Promise<number> {
     const result = await bootstrapFirstAdmin(
       app.get<Db>(DATABASE),
       {
-        tokens: app.get(AccountTokensService),
+        people: app.get(PeopleService),
+        accounts: app.get(AccountProvisioningService),
         audit: app.get(AuditService),
-        networks: app.get(NetworksService),
       },
       input,
     );

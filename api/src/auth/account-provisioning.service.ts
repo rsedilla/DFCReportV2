@@ -378,6 +378,75 @@ export class AccountProvisioningService {
       );
     }
   }
+  /**
+   * Creates the first Admin account, as a system action (SKILL.md section 6).
+   *
+   * **Here because `auth` owns `accounts` and `account_roles`** (section 2,
+   * Modules). The bootstrap wrote both directly for one commit, justified against
+   * section 2's *imports* rule — a different sentence from "a module owns its
+   * tables", which has no exemption.
+   *
+   * **It is not `provision` with the checks removed**, and cannot reuse it: that
+   * path takes an actor and an idempotency claim, neither of which exists before
+   * the first account. The differences are deliberate:
+   *
+   * - **No actor, and `granted_by` is null**, which section 7 permits for the first
+   *   Admin account granted by a system action and for nothing else.
+   * - **No `QUALIFYING_ROLES` check.** The role is `ADMIN`, which qualifies.
+   * - **No archived, merged or existing-account checks on the Person.** The caller
+   *   creates that Person in the same transaction, moments earlier, so there is no
+   *   prior state for any of them to find.
+   *
+   * The caller refuses unless no account exists, which is what makes this
+   * one-time; that check is not repeated here, because the caller holds the lock
+   * that makes it meaningful and this method would only be re-reading inside it.
+   */
+  async createFirstAdminWithin(
+    transaction: Transaction<Database>,
+    input: { personId: string; email: string },
+  ): Promise<{ id: string; email: string; activationToken: string; activationExpiresAt: Date }> {
+    const account = await transaction
+      .insertInto('accounts')
+      .values({
+        person_id: input.personId,
+        email: input.email,
+        // Through `normalizeEmail`, which trims as well as lowercasing. A second
+        // implementation that dropped the trim would store a value no sign-in and
+        // no password reset could match — and the bootstrap refuses to run twice,
+        // so the installation would be unrecoverable.
+        email_normalized: normalizeEmail(input.email),
+        // Section 6: the holder sets their own password, and nobody else ever
+        // knows it — which is why there is an activation token rather than a value.
+        password_hash: null,
+        status: 'PENDING_ACTIVATION',
+      })
+      .returning(['id', 'email'])
+      .executeTakeFirstOrThrow();
+
+    await transaction
+      .insertInto('account_roles')
+      .values({
+        account_id: account.id,
+        role: 'ADMIN',
+        granted_by: null,
+        senior_pastor_slot: null,
+      })
+      .execute();
+
+    const token = await this.tokens.mintWithin(
+      transaction,
+      account.id,
+      'ACTIVATION',
+      ACTIVATION_LIFETIME_MS,
+    );
+
+    return {
+      id: account.id,
+      email: account.email,
+      activationToken: token.token,
+      activationExpiresAt: token.expiresAt,
+    };
+  }
 }
 
 /**

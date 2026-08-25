@@ -22,7 +22,7 @@
     "test": "jest --runInBand",
     "test:watch": "jest --watch",
     "validate:tree": "tsx scripts/validate-tree-csv.ts",
-    "bootstrap:admin": "tsx scripts/bootstrap-admin.ts",
+    "bootstrap:admin": "ts-node scripts/bootstrap-admin.ts",
     "format:check": "prettier --check \"src/**/*.ts\" \"test/**/*.ts\" \"scripts/**/*.ts\" \"*.ts\""
   },
   "dependencies": {

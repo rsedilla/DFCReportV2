@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+
 import { Inject, Injectable } from '@nestjs/common';
 
 import { AuditService } from '../audit/audit.service';
@@ -15,7 +17,8 @@ import { PeopleDuplicatesService } from './people.duplicates.service';
 import { fullProfile, normalizeMobile, type CreatePersonInput } from './people.shared';
 
 import type { CurrentClaim } from '../common/idempotency/current-idempotency.decorator';
-import type { CivilStatus, Json } from '../database/schema';
+import type { CivilStatus, Database, Json, NetworkName, Sex } from '../database/schema';
+import type { Transaction } from 'kysely';
 
 /**
  * Person, Member ID, and the basic edit (SKILL.md section 2, Modules).
@@ -358,5 +361,85 @@ export class PeopleService {
 
       return response;
     });
+  }
+
+  /**
+   * Creates the Person behind the first Admin account, as a system action.
+   *
+   * **Here because `people` owns `persons` and `person_lifecycle`** (section 2,
+   * Modules). The bootstrap wrote both tables directly for one commit, justified
+   * against section 2's *imports* rule — which is a different sentence from "a
+   * module owns its tables", and the ownership rule has no exemption. The
+   * precedent runs the other way: the 2026-08-24 ruling restructured the module
+   * graph rather than let `auth` keep three reads of `persons`.
+   *
+   * **It is not `create` with the checks removed.** It cannot reuse that path,
+   * which requires an actor and an idempotency claim that do not exist before the
+   * first account — so what is shared is the table, and the differences are
+   * deliberate and few:
+   *
+   * - **No actor.** Sections 3 and 4 permit a null `actor_id` for a system action,
+   *   which section 6 names as this and nothing else.
+   * - **No duplicate matching.** Section 3's Tier 1 gate needs a person present to
+   *   acknowledge a candidate, and nobody is. It runs against an empty database by
+   *   construction — the caller refuses unless no account exists — so there is
+   *   nothing to match against. Stated rather than assumed, because "no accounts"
+   *   does not strictly imply "no Persons".
+   * - **No pastoral assignment.** Section 5 invariant 3 permits zero for an
+   *   administrator outside the pastoral structure, and section 6 requires it here:
+   *   at this moment there is no tree to place anybody in.
+   *
+   * The audit entry is the caller's, not this method's: the bootstrap writes three
+   * and section 21 wants them named separately.
+   */
+  async createSystemAdministratorWithin(
+    transaction: Transaction<Database>,
+    input: {
+      firstName: string;
+      middleName: string | null;
+      lastName: string;
+      sex: Sex;
+      civilStatus: CivilStatus;
+      encodedAt: Date;
+    },
+  ): Promise<{ id: string; memberId: string; network: NetworkName }> {
+    const network = this.networks.networkForSex(input.sex);
+
+    const person = await transaction
+      .insertInto('persons')
+      .values({
+        id: randomUUID(),
+        first_name: input.firstName,
+        middle_name: input.middleName,
+        last_name: input.lastName,
+        // Section 3 makes a birthday optional and forbids inventing one. Nothing
+        // here knows it, and a bootstrap is the last place to guess.
+        birth_date: null,
+        sex: input.sex,
+        civil_status: input.civilStatus,
+      })
+      .returning(['id', 'member_id'])
+      .executeTakeFirstOrThrow();
+
+    // Through `networks`, which owns the table and checks the same-Network rules
+    // against it (section 2).
+    await this.networks.assignWithin(transaction, {
+      personId: person.id,
+      network,
+      actorId: null,
+      startedAt: input.encodedAt,
+    });
+
+    await transaction
+      .insertInto('person_lifecycle')
+      .values({
+        person_id: person.id,
+        state: 'CURRENT',
+        actor_id: null,
+        started_at: input.encodedAt,
+      })
+      .execute();
+
+    return { id: person.id, memberId: person.member_id, network };
   }
 }

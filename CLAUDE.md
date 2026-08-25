@@ -3316,6 +3316,29 @@ then exits — so a missing `JWT_SECRET` produced exit code 1 and no output at a
 before any `catch` in the file could run. It is `['error', 'warn']` now, and the
 comment says why rather than leaving the next person to rediscover it.
 
+**And the writes go through the modules that own the tables**, which the first
+version did not. It inserted into `persons`, `person_lifecycle`,
+`network_assignments`, `accounts` and `account_roles` directly, justified against
+§2's *imports* rule — a different sentence from "a module owns its tables. No other
+module reads or writes them directly", which carries no exemption and which this
+repository defended once already at the cost of restructuring the module graph
+(2026-08-24). `people` and `auth` each gained one narrow method with one caller;
+`admin/bootstrap` now writes no table at all, which is greppable rather than
+asserted.
+
+**That change surfaced a second thing, and it is the more useful lesson.** The
+script ran under `tsx`, whose esbuild backend does not implement
+`emitDecoratorMetadata` — so Nest cannot read the constructor parameter types it
+resolves providers by, and every dependency injected without an explicit
+`@Inject(...)` arrives `undefined`. It runs under `ts-node` now.
+
+The first version appeared to work only because the three services it happened to
+use inject everything explicitly. Routing through `PeopleService`, which does not,
+is what exposed it — a whole class of silent failure that no test could see,
+because `ts-jest` compiles the tests properly and only the *script* was affected.
+`migrate.ts` and `validate-tree-csv.ts` stay on `tsx`: neither builds a Nest
+context.
+
 Written to `SKILL.md` §5 (invariant 3) and §6 (*The first Admin account*), and
 verified by grep rather than asserted.
 
