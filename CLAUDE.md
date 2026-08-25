@@ -489,6 +489,7 @@ How a person who moved Cells mid-month appears in monthly reporting; whether a m
 Each was answered twice, and each answer broke reconciliation or reproducibility. They are recorded in `SKILL.md` §12 with the constraints any answer must satisfy, to be settled against real data in Stage 5 and verified by the reconciliation tests. Continuing to specify them in prose was producing rules that read well and did not hold.
 
 ### 2026-08-20 — Nine modules, each owning its tables
+**Partly superseded** on 2026-08-26 by "A module's tables are never written by another" below. "No other module touches them directly" is the half that was narrowed: no other module *writes* them, and one reads them where the query is rooted in a table it owns. Everything else here stands, and the reason the rule exists is unchanged.
 `people`, `networks`, `hierarchy`, `auth`, `cells`, `attendance`, `reporting`, `audit`, `admin`. A module owns its tables and no other module touches them directly; cross-module access goes through the owning service interface.
 
 Named because Principle 13's modular monolith is otherwise just a monolith, and because it is what makes "enforced in the domain layer" real: the five §5 invariants have one home only because `hierarchy` is the only writer of `pastoral_assignments`. Organise by module, never by layer. Written to `SKILL.md` §2.
@@ -3342,9 +3343,93 @@ context.
 Written to `SKILL.md` §5 (invariant 3) and §6 (*The first Admin account*), and
 verified by grep rather than asserted.
 
+### 2026-08-26 — A module's tables are never written by another, and read by one only where the query is rooted elsewhere
+
+§2 said "**A module owns its tables.** No other module reads or writes them
+directly", and the code never matched it. `hierarchy` joins `persons` in two
+queries, and when `people` was split into five services somebody — me —
+narrowed the rule *in `people.module.ts`'s comment*, on the reasoning that a rule
+stated more strongly than the code keeps stops being checkable.
+
+That is right about the danger and was the wrong remedy. Narrowing a rule in one
+module's comment leaves every other module to find that comment or not, and a
+reviewer to discover that the specification and the code disagree with nothing
+saying which governs. Stage 3 builds `cells`, whose author would have found the
+comment before the section.
+
+**So the rule is narrowed where it is the rule.** No other module *writes*, ever,
+and none reaches a table for anything a service interface can answer. One exemption,
+named: a read joined onto a query rooted in a table the reading module owns.
+`hierarchy`'s two joins qualify because both start from `pastoral_assignments`,
+which `people` cannot query — so the join cannot move to the owning module, and
+returning identifiers for the caller to resolve moves it rather than removing it.
+
+**The asymmetry is the point.** A write is what an invariant guards, which is why
+§2 gives the five §5 rules one home only while `hierarchy` is the sole
+writer of `pastoral_assignments`. A join reads rows the owning module would have
+returned anyway.
+
+*The first version of the amendment described the exemption from what it was for
+rather than from the queries, and both halves were false: it placed the joins in
+`hierarchy`'s recursive walks, which select identifiers and join nothing, and
+justified them by "one query into hundreds", which is impossible for
+`directLeaderNameOf` because it returns at most one row. Found by
+`architecture-guardian` on the third pass — in the paragraph added to stop
+exactly that, which is the tenth instance on this project.*
+
+**The exemption list is declared closed with nothing able to fail on it**, and that
+is recorded as open below rather than claimed as settled. This repository gates the
+pure-client boundary, the refused UI packages, the palette token names and the
+module graph; a cross-module table read is greppable in one line and has no gate.
+
+### 2026-08-26 — The bootstrap's two service methods guard themselves, and `ts-node` ships
+
+Three Stop Conditions from the second review of the first-Admin work, decided
+together because they are one failure in three places: a rule holding by convention
+rather than by construction.
+
+**Both new service methods refuse on their own account.**
+`AccountProvisioningService.createFirstAdminWithin` was creating an `ADMIN` with a
+null `granted_by`, no audit entry and no `accounts.manage` check, guarded by a
+docblock asking callers not to — on a service the API already uses.
+`PeopleService.createSystemAdministratorWithin` was creating a Person with zero
+pastoral assignments, which is the capability the 2026-08-25 ruling removed from
+`CreatePersonInput` for being one nobody could justify. Offering it again as an
+unguarded method is that capability once more, with a docblock instead of a type.
+
+Each asks **its own module's table**, which is what keeps them independent.
+`people` cannot ask `auth` whether an account exists: `auth` imports `people` (the
+2026-08-24 seam) and the reverse restores the cycle that ruling removed. It asks
+whether any Person exists. The two are not equivalent — a foreign key makes a
+non-empty `accounts` imply a non-empty `persons` and not the reverse — so
+§6 states both conditions and says a database holding Persons and no account
+is refused deliberately, being a partly-built installation rather than a fresh one.
+
+**The refusal is an `INVARIANT_VIOLATION`, not a bare `Error`.** The whole argument
+for the guards is that these are public on services the API uses, so the caller
+they anticipate is an endpoint — and a bare `Error` reaches
+`ApiExceptionFilter` unrecognised and renders `INTERNAL_ERROR`, the
+500-instead-of-an-answer failure recorded for the self-leader check and the
+duplicate-email `23505`. It carries `details.refused_by` so the three sites are
+distinguishable by something other than a message string.
+
+**`ts-node` moves to `dependencies`.** §6 makes the command the sole path to a
+first Admin, and a host built with `npm ci --omit=dev` had none — so a fresh
+production installation had a migrated database, an importable tree, and nobody who
+could sign in. Two unit cases pin the loader and the dependency against
+`package.json`, which is a weak instrument and the only one that reaches a fact no
+runtime test can: the behaviour lives on a host installed without dev
+dependencies, and the suite runs from a full checkout under `ts-jest`.
+
+**Three layers pinned a disjunction and no member of it.** Every case reached the
+guards through `bootstrapFirstAdmin`, so deleting any one left the suite green
+— the same finding CLAUDE.md records for the identifier work on 2026-08-23,
+with the same remedy: each guard is now called directly, and each was verified red
+on its own.
+
 ### Open — awaiting a ruling
 
-**One item awaits a ruling and blocks Stage 5. Ten other things are unsettled,
+**One item awaits a ruling and blocks Stage 5. Fifteen other things are unsettled,
 none of them blocking. They are listed at the end, so this section is the whole of
 what is open.**
 
@@ -3364,7 +3449,7 @@ Two related questions have defined behaviour and are recorded in `SKILL.md` §12
 
 - **Whether closing a person's only open `network_assignments` row, without opening a replacement, is a legal write.** Escalated by `architecture-guardian` on 2026-08-25 and general rather than root-specific. §4 defines a Network change as an atomic close-and-open pair sharing one instant; §5 forbids `DELETE` on the table; nothing addresses a close alone. No constraint refuses it — `network_assignments_one_open` is partial and permits zero, and the same-Network trigger compares at the closed row's own start, so it passes. The consequence is that `network_as_of` becomes null from that instant and every edge beneath the person is silently unresolvable, which is the outcome the no-delete trigger exists to prevent, reached one column over. The root seat made it visible rather than causing it, and the root case is now refused specifically; the general case is not. The same silence covers a close at T1 reopened at T2, which leaves a gap with no Network at all.
 - **Who may close a Network root's row, and under what capability.** §5 gives each Network exactly one root and says changing who holds one is "a deliberate Network-level decision, not a pastoral reassignment" — and names no capability, no endpoint and no workflow for it. The seat added on 2026-08-25 is partial over open rows, so a successor becomes possible the moment the previous root's row is closed; both write paths that could close it refuse a root outright, so nothing can. §5 now says plainly that a succession is not an operation this system offers, rather than implying one from the seat being freeable. Not blocking: the import creates two roots and neither changes.
-- **Whether the three cases of §5 invariant 3 should be told apart in the data.** §5 permits zero open pastoral assignments for a Person not yet assigned, an archived Person, and an administrator outside the pastoral structure — and nothing records which. The absence of a row is the same absence in all three; the difference is in why, and the schema holds no `why`. So the first attention list that surfaces unassigned Persons shows an administrator among people genuinely waiting for a leader. §5 names the remedy as that list excluding accounts holding `ADMIN`, which needs no new structure and needs the list to exist. Decide it with the first screens. *(§5 claimed this was “recorded as open” from the moment the third case was written on 2026-08-25, and it was not — the fifth false “written to / recorded as” claim on this project, and the first found by a reviewer grepping the open list for it.)*
+- **Whether §2's closed exemption list gets a gate.** §2 was narrowed on 2026-08-26 to permit exactly one cross-module read and declares the list closed — with nothing able to fail on it. This repository gates the pure-client boundary, the refused UI packages, the palette token names and the module graph, each with a check that goes red; a cross-module table read is greppable in one line and has none. Where such a check would live — an ESLint rule, a test over the source, a lint script beside `check-ui-dependencies.mjs` — is the part that needs deciding.
 - **Whether the three cases of §5 invariant 3 should be told apart in the data.** §5 permits zero open pastoral assignments for a Person not yet assigned, an archived Person, and an administrator outside the pastoral structure — and nothing records which. The absence of a row is the same absence in all three; the difference is in why, and the schema holds no `why`. So the first attention list that surfaces unassigned Persons shows an administrator among people genuinely waiting for a leader. §5 names the remedy as that list excluding accounts holding `ADMIN`, which needs no new structure and needs the list to exist. Decide it with the first screens. *(§5 claimed this was “recorded as open” from the moment the third case was written on 2026-08-25, and it was not — the fifth false “written to / recorded as” claim on this project, and the first found by a reviewer grepping the open list for it.)*
 - **How a person's title is displayed, and whether it is stored.** §3 keeps first, middle and last names and has no title field, and since 2026-08-25 says plainly that a name field is not where a title goes — a title inside one is compared as though it were part of the name, so `Bishop Oriel` never matches `Oriel` and a duplicate goes unnoticed. What is unsettled is where it *does* go. A column is the obvious answer and is not effective-dated, so it cannot say what somebody was called in a past period — the mistake the 2026-08-20 structures ruling names. Two of them are derivable from `SENIOR_PASTOR_PERSON_IDS` already. It is a display question; decide it with the first screens.
 - **Whether a leader sees a "details to collect" list.** Birthday became optional on 2026-08-24, and an optional field with nothing surfacing it is one that never gets collected. §15's attention-list idiom fits — filtered, never ranked, never colour-graded, shown to the leader who can act — but there is no dashboard to put it on until Stage 2's screens exist. Decide it with them.

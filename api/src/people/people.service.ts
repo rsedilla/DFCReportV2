@@ -370,7 +370,7 @@ export class PeopleService {
    * **Here because `people` owns `persons` and `person_lifecycle`** (section 2,
    * Modules). The bootstrap wrote both tables directly for one commit, justified
    * against section 2's *imports* rule — which is a different sentence from "a
-   * module owns its tables", and the ownership rule has no exemption. The
+   * module owns its tables", and the ownership rule's one exemption is a read joined onto a query rooted in a table the reading module owns, which a write is not. The
    * precedent runs the other way: the 2026-08-24 ruling restructured the module
    * graph rather than let `auth` keep three reads of `persons`.
    *
@@ -437,6 +437,7 @@ export class PeopleService {
 
     if (anyPerson) {
       throw new AlreadyBootstrappedError(
+        'people',
         'People already exist, so this is not a fresh installation. An administrator ' +
           'is created once, by the bootstrap, before anything else is recorded.',
       );

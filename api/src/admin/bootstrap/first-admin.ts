@@ -10,15 +10,16 @@
  * **It touches no table itself**, which is the whole shape of this file. The first
  * version inserted into `persons`, `person_lifecycle`, `network_assignments`,
  * `accounts` and `account_roles` directly, justified against section 2's *imports*
- * rule — a different sentence from "a module owns its tables. No other module
- * reads or writes them directly", which carries no exemption and which this
- * repository defended once already at the cost of restructuring the module graph
- * (2026-08-24, the authorization seam).
+ * rule — a different sentence from the ownership rule, which this repository
+ * defended once already at the cost of restructuring the module graph (2026-08-24,
+ * the authorization seam). Section 2 has since been narrowed to say that no other
+ * module *writes*, ever, and that its one read exemption is a join onto a query
+ * rooted in a table the reading module owns — which this was not.
  *
  * **It reads no table either**, which the first version of this sentence claimed
- * while the emptiness check read `accounts` eleven lines below it. Section 2 says
- * "reads or writes"; the write half moved and the read half did not, and the claim
- * was true as worded and misleading as placed.
+ * while the emptiness check read `accounts` eleven lines below it. The write half
+ * moved and the read half did not, and the claim was true as worded and misleading
+ * as placed. The emptiness question is `auth`'s to answer now.
  *
  * So each write goes to the module that owns the table:
  * `PeopleService.createSystemAdministratorWithin`, which opens the Network row
@@ -97,8 +98,9 @@ export async function bootstrapFirstAdmin(
     // and both create an Admin, which is the failure the refusal exists to
     // prevent. Transaction-scoped, so a failing path cannot leak it.
     //
-    // **This is a third path that depends on READ COMMITTED** (section 24, which
-    // names only the Network change and the reassignment). The lock statement is
+    // **This is a third path that depends on READ COMMITTED**, and section 24 now
+    // names it beside the other two — the Network change and reassignment, and
+    // the section 7 grant-limit triggers. The lock statement is
     // snapshot-taking, so under REPEATABLE READ the snapshot would be fixed before
     // the lock is granted and the loser would read a pre-lock `accounts` — and
     // there is no unique constraint behind this to catch what follows. Recorded
@@ -115,7 +117,7 @@ export async function bootstrapFirstAdmin(
     // guard — it is here so the operator is told before anything is attempted,
     // rather than learning it from whichever write happens to run first.
     if (await modules.accounts.anyAccountExistsWithin(trx)) {
-      throw new AlreadyBootstrappedError();
+      throw new AlreadyBootstrappedError('bootstrap');
     }
 
     const person = await modules.people.createSystemAdministratorWithin(trx, {

@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+
 import type { INestApplication } from '@nestjs/common';
 
 import {
@@ -151,6 +153,67 @@ describe('the first Admin account (SKILL.md section 6)', () => {
 
     expect(forThisPerson).toEqual([]);
     expect(anyAtAll).toEqual([]);
+  });
+
+  describe('each guard refuses on its own account', () => {
+    /**
+     * **Three layers, and until now the suite pinned the disjunction and no member
+     * of it.** Every case above goes through `bootstrapFirstAdmin`, so deleting any
+     * one of the three checks left all of them green — the bootstrap's own, the one
+     * in `auth`, and the one in `people`. That is the finding CLAUDE.md already
+     * records for the identifier work on 2026-08-23, where the remedy was to call
+     * each check directly, and it is the remedy here.
+     *
+     * The whole argument for adding the two service guards was that a convention
+     * held at a call site is only as reliable as the next caller. A test that can
+     * only reach them through the one caller does not test that argument.
+     */
+    it('auth refuses to create a second first Admin, called directly', async () => {
+      await run();
+
+      await expect(
+        db
+          .transaction()
+          .execute((trx) =>
+            app
+              .get(AccountProvisioningService)
+              .createFirstAdminWithin(trx, { personId: randomUUID(), email: 'x@example.test' }),
+          ),
+      ).rejects.toMatchObject({ code: 'INVARIANT_VIOLATION', details: { refused_by: 'accounts' } });
+    });
+
+    it('people refuses to create a second unassigned administrator, called directly', async () => {
+      // Any Person at all is enough, which is the point: `people` cannot ask `auth`
+      // whether an account exists without restoring the module cycle, so it asks
+      // its own table. Section 6 states both conditions and that they differ.
+      await createPerson(db, { firstName: 'Manuel', network: 'MENS' });
+
+      await expect(
+        db.transaction().execute((trx) =>
+          app.get(PeopleService).createSystemAdministratorWithin(trx, {
+            firstName: 'Bene',
+            middleName: null,
+            lastName: 'Testfixture',
+            sex: 'MALE',
+            civilStatus: 'SINGLE',
+            encodedAt: new Date(),
+          }),
+        ),
+      ).rejects.toMatchObject({ code: 'INVARIANT_VIOLATION', details: { refused_by: 'people' } });
+    });
+
+    it('refuses with an answer rather than a 500, whoever calls it', async () => {
+      // The reason both guards exist is that these are public on services the API
+      // uses — so the caller they anticipate is an endpoint, and a bare `Error`
+      // would reach `ApiExceptionFilter` unrecognised and render `INTERNAL_ERROR`.
+      // Section 22's `INVARIANT_VIOLATION` already means what this refusal means.
+      await run();
+
+      await expect(run({ email: 'second@example.test' })).rejects.toMatchObject({
+        code: 'INVARIANT_VIOLATION',
+        details: { refused_by: 'bootstrap' },
+      });
+    });
   });
 
   it('records three audit entries, every one of them a system action', async () => {

@@ -138,7 +138,9 @@ Principle 13 requires a modular monolith. These are the modules, and the list is
 
 **A module owns its tables. No other module writes them, ever, and no other module reaches them for anything a service interface can answer.** Cross-module access goes through the owning module's service interface, never through its repository.
 
-**One thing is exempt, and it is named rather than left to interpretation: a read joined inside a query the owning module cannot express.** `hierarchy` joins `persons` to name a leader and a disciple in its own recursive walks. Asking `people` per row would turn one query into hundreds, and returning identifiers for the caller to resolve moves the join rather than removing it. Nothing else qualifies today, and adding to this is an amendment rather than a decision taken in a module.
+**One thing is exempt, and it is named rather than left to interpretation: a read joined onto a query rooted in a table the reading module owns.** `hierarchy` joins `persons` in two places — `openDisciplesOf`, to name a leader's open direct disciples, and `directLeaderNameOf`, to name one leader. Both start from `pastoral_assignments`, which `people` does not own and cannot query, so the join cannot move to the owning module; returning identifiers for the caller to resolve moves it rather than removing it, and for `openDisciplesOf` turns one query into one per row. Nothing else qualifies today, and adding to this is an amendment rather than a decision taken in a module.
+
+*A first version of this paragraph said the joins were in `hierarchy`'s recursive walks and that asking `people` per row would “turn one query into hundreds”. Neither is true of the two joins it exempts: `ancestorsOf` and `subtreeOf` select identifiers only and join nothing, and `directLeaderNameOf` returns at most one row. The category was right and the description was written from what the exemption was for rather than from the queries — in the paragraph added to stop exactly that.*
 
 The exemption is deliberately narrow and the asymmetry is the point. A write is what an invariant guards, so the five pastoral-assignment rules have one home only while `hierarchy` is the sole writer of `pastoral_assignments`. A join reads rows the owning module would have returned anyway and changes nothing.
 
@@ -1144,7 +1146,11 @@ Every account is provisioned by somebody holding `accounts.manage`, which only A
 
 The command is the same kind of thing as the import script and rests on the same argument Section 2 already accepts for that one — whoever can run it can already reach the database directly, so it is not authentication. What it buys is that the one write nobody can be named for is performed deliberately, once, and recorded as what it was.
 
-**It refuses to run while any account exists.** That is what makes it one-time rather than a standing privilege, and it takes a lock before it looks, so that two runs cannot both find an empty table.
+**It refuses to run while any account exists, and separately while any Person exists.** The first is what makes it one-time rather than a standing privilege. The second is stricter and is enforced by `people` on its own account, because the module that creates the administrator's Person cannot ask `auth` whether an account exists — `auth` imports `people`, and the reverse would restore a module cycle. Asking whether any Person exists is the same question at the only moment either may run, since this is the first write to an empty database.
+
+The two are not equivalent in general: a foreign key makes a non-empty `accounts` imply a non-empty `persons`, and not the reverse. A database holding Persons and no account is therefore refused, which is deliberate — it is a partly-built or partly-restored installation, not a fresh one, and creating an administrator into it is not what this command is for.
+
+It takes a lock before it looks, so that two runs cannot both find an empty table.
 
 **Its writes are recorded as a system action.** Four columns carry null for it and no other reason: `audit_log.actor_id` (Section 21), `account_roles.granted_by` (Section 7), and `person_lifecycle.actor_id` and `network_assignments.actor_id` (Sections 3 and 4, which gained the allowance for this and mark it on their shapes). This is the only thing in the system permitted to write any of them null.
 
@@ -3502,6 +3508,8 @@ Section 5 requires a Network change and a reassignment to take an advisory lock 
 Some of those cases would fail loudly rather than silently — where the loser's own assignment row was the one that moved, its update would meet a version committed after its snapshot and raise a serialization failure. The dangerous ones are the cases where nothing the loser writes has changed and only the *decision* is stale: a concurrent move of an intermediate ancestor leaves the actor's scope different and every row this request touches untouched, so it commits, and it commits a write the actor was no longer authorized to make.
 
 **A second dependency arrived with the grant limit in Section 7.** Its two constraint triggers take `FOR NO KEY UPDATE` on the account and then read the other table to decide, which is the same shape one statement further in: under `READ COMMITTED` the read after the lock sees the transaction that held it first, while under `REPEATABLE READ` the whole transaction answers from one snapshot taken before the lock — so the triggers would serialize correctly and then decide on stale reads, and because the two writers touch different tables neither raises a serialization failure to warn anybody.
+
+**A third arrived with the first-Admin bootstrap in Section 6.** It takes a transaction-scoped advisory lock and *then* reads whether any account exists, which is the same shape again — the lock statement is snapshot-taking, so under `REPEATABLE READ` the snapshot would be fixed before the lock is granted and the loser would read a pre-lock `accounts`. It is the least forgiving of the three: there is no unique constraint behind it, so two runs would both create an Admin with nothing raised.
 
 The row lock also requires those trigger functions to be `VOLATILE`, which is their default. That is not a silent dependency: PostgreSQL runs a non-volatile function's statements read-only and refuses a row-locking `SELECT` inside one, so marking them otherwise fails at the lock rather than quietly weakening the rule.
 

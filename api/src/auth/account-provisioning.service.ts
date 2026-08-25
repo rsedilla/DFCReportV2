@@ -381,12 +381,36 @@ export class AccountProvisioningService {
     }
   }
   /**
+   * Whether this installation has any account at all — the question that decides
+   * whether a first Admin may be created.
+   *
+   * Here because `auth` owns `accounts` (section 2, Modules). `admin/bootstrap`
+   * read the table itself for one commit, under a docblock quoting section 2's
+   * "reads or writes them directly" three lines above and claiming the rule was
+   * met because nothing was written. True as worded, and it read as though the
+   * rule were satisfied.
+   *
+   * "Any account", not "any Admin": a system already in use by somebody is not a
+   * fresh installation, whatever roles it holds, and a narrower check would let a
+   * bootstrap mint an Admin into a live church's records.
+   */
+  async anyAccountExistsWithin(transaction: Transaction<Database>): Promise<boolean> {
+    const existing = await transaction
+      .selectFrom('accounts')
+      .select('id')
+      .limit(1)
+      .executeTakeFirst();
+
+    return existing !== undefined;
+  }
+
+  /**
    * Creates the first Admin account, as a system action (SKILL.md section 6).
    *
    * **Here because `auth` owns `accounts` and `account_roles`** (section 2,
    * Modules). The bootstrap wrote both directly for one commit, justified against
    * section 2's *imports* rule — a different sentence from "a module owns its
-   * tables", which has no exemption.
+   * tables", whose one exemption is a read joined onto a query rooted in a table the reading module owns.
    *
    * **It is not `provision` with the checks removed**, and cannot reuse it: that
    * path takes an actor and an idempotency claim, neither of which exists before
@@ -412,36 +436,12 @@ export class AccountProvisioningService {
    * familiar developer writing the newest one. The read costs nothing — the caller
    * already holds the advisory lock, so it races with nothing.
    */
-  /**
-   * Whether this installation has any account at all — the question that decides
-   * whether a first Admin may be created.
-   *
-   * Here because `auth` owns `accounts` (section 2, Modules). `admin/bootstrap`
-   * read the table itself for one commit, under a docblock quoting section 2's
-   * "reads or writes them directly" three lines above and claiming the rule was
-   * met because nothing was written. True as worded, and it read as though the
-   * rule were satisfied.
-   *
-   * "Any account", not "any Admin": a system already in use by somebody is not a
-   * fresh installation, whatever roles it holds, and a narrower check would let a
-   * bootstrap mint an Admin into a live church's records.
-   */
-  async anyAccountExistsWithin(transaction: Transaction<Database>): Promise<boolean> {
-    const existing = await transaction
-      .selectFrom('accounts')
-      .select('id')
-      .limit(1)
-      .executeTakeFirst();
-
-    return existing !== undefined;
-  }
-
   async createFirstAdminWithin(
     transaction: Transaction<Database>,
     input: { personId: string; email: string },
   ): Promise<{ id: string; email: string; activationToken: string; activationExpiresAt: Date }> {
     if (await this.anyAccountExistsWithin(transaction)) {
-      throw new AlreadyBootstrappedError();
+      throw new AlreadyBootstrappedError('accounts');
     }
 
     const account = await transaction
