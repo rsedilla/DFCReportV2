@@ -2955,10 +2955,25 @@ in a migration whose own header says "**Re-derived rather than copied**" and cit
 was about a trigger none of them had read.
 
 So both directions are now constrained. `assert_network_not_changed_for_root`
-refuses a write to `network_assignments` while the person holds an open root row,
-which is §4's existing refusal expressed as a constraint rather than as a
-TypeScript check — in a change whose entire thesis is that a TypeScript check is
-the weaker thing.
+refuses a write to `network_assignments` that would leave an open root seat
+disagreeing with its holder — §4's existing refusal expressed as a constraint
+rather than as a TypeScript check, in a change whose entire thesis is that a
+TypeScript check is the weaker thing.
+
+**The first predicate for it was too narrow, and the second review pass found
+that too.** It compared the Network in force at the *written row's* `started_at`
+rather than at the *root row's*, and never checked that the person still held an
+open Network row at all. Two shapes passed: closing the open Network row and
+opening nothing — the UPDATE's own start is still covered by the row it closes, so
+the comparison returned the old Network — and moving an open row's `started_at`
+forward. The first is the worse one: the person then belongs to no Network while
+the index still reads their seat as taken, so that Network has no root and cannot
+be given one.
+
+That is the same fault as the finding it was fixing: three places again claimed a
+guarantee wider than the check delivered. It was widened rather than the sentences
+narrowed, because the wider rule is the one §5 wants. Both shapes are now probed
+in `invariants.spec.ts`.
 
 Zero roots in a Network stays legal, because that is what a fresh database holds
 before the import runs. "Exactly one" is not expressible without forbidding an
@@ -3032,6 +3047,25 @@ against a committed index with the assertion passing regardless. It now polls
 not settled, which is what `person-lock.e2e.spec.ts` does and what pinning
 concurrency actually looks like.
 
+**And that rewrite was itself only nearly right.** The helper filtered on a
+hardcoded `query LIKE '%pastoral_assignments%'` and took an index name it used
+only in the error message, so any backend blocked on any lock touching that table
+satisfied it. Not vacuous — `--runInBand` leaves one candidate — but resting on the
+harness rather than on what it claimed to check. It now watches the waiter's own
+`pg_backend_pid()`.
+
+**Three more from the second pass, all the same shape.** A comment claimed the
+Network trigger "never touches the ordinary case" because a Person's first Network
+row is written before their assignment row — an argument about an *immediate*
+trigger applied to a deferred one, which runs at COMMIT and plainly sees the root
+row. The `IMMEDIATE` justification reasoned from one caller of
+`openAssignmentWithin` rather than from every writer of the table the trigger is on,
+which is the level the question is asked at; re-derived across all four, it holds.
+The service-level second-root case asserted only that *something* threw. And the
+succession language was corrected in §5 but left standing in the migration and in a
+test name, so two files still described an operation §5 had just said the system
+does not offer.
+
 ### Open — awaiting a ruling
 
 **One item awaits a ruling and blocks Stage 5. Ten other things are unsettled,
@@ -3052,6 +3086,7 @@ Two related questions have defined behaviour and are recorded in `SKILL.md` §12
 
 **Unsettled, and not blocking anything.** None of these is a Stop Condition. An implementer proceeds and settles them in passing; they are listed here because a reader looking for what is open should not have to find it inside the body of a ruling.
 
+- **Whether closing a person's only open `network_assignments` row, without opening a replacement, is a legal write.** Escalated by `architecture-guardian` on 2026-08-25 and general rather than root-specific. §4 defines a Network change as an atomic close-and-open pair sharing one instant; §5 forbids `DELETE` on the table; nothing addresses a close alone. No constraint refuses it — `network_assignments_one_open` is partial and permits zero, and the same-Network trigger compares at the closed row's own start, so it passes. The consequence is that `network_as_of` becomes null from that instant and every edge beneath the person is silently unresolvable, which is the outcome the no-delete trigger exists to prevent, reached one column over. The root seat made it visible rather than causing it, and the root case is now refused specifically; the general case is not. The same silence covers a close at T1 reopened at T2, which leaves a gap with no Network at all.
 - **Who may close a Network root's row, and under what capability.** §5 gives each Network exactly one root and says changing who holds one is "a deliberate Network-level decision, not a pastoral reassignment" — and names no capability, no endpoint and no workflow for it. The seat added on 2026-08-25 is partial over open rows, so a successor becomes possible the moment the previous root's row is closed; both write paths that could close it refuse a root outright, so nothing can. §5 now says plainly that a succession is not an operation this system offers, rather than implying one from the seat being freeable. Not blocking: the import creates two roots and neither changes.
 - **Whether a leader sees a "details to collect" list.** Birthday became optional on 2026-08-24, and an optional field with nothing surfacing it is one that never gets collected. §15's attention-list idiom fits — filtered, never ranked, never colour-graded, shown to the leader who can act — but there is no dashboard to put it on until Stage 2's screens exist. Decide it with them.
 - **Whether "asked, not given" is a state on the Person.** It follows the item above rather than standing alone. Without it, somebody who declined to give their birthday stays on a collect-list forever, which presses on exactly the privacy the optional ruling protects. With it, the next leader learns she was asked rather than rediscovering it by asking again — but it is a new field on `persons`, so it is a ruling and not a detail.

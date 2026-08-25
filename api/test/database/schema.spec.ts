@@ -104,6 +104,11 @@ describe('the schema (SKILL.md sections 4, 5, 6 and 7)', () => {
       const trigger = await triggerFacts(db, 'pastoral_assignments_root_network_honest');
 
       expect(trigger.is_constraint_trigger).toBe(true);
+      // Both, not just the second. `DEFERRABLE INITIALLY IMMEDIATE` satisfies
+      // `initially_deferred === false` and could then be deferred by any
+      // `SET CONSTRAINTS ALL DEFERRED` — a statement migration 0008 itself
+      // establishes this codebase uses.
+      expect(trigger.deferrable).toBe(false);
       expect(trigger.initially_deferred).toBe(false);
     });
 

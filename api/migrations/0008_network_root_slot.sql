@@ -55,12 +55,21 @@
 --
 -- So the drift is closed where this migration says such things belong.
 -- `assert_network_not_changed_for_root` refuses a write to `network_assignments`
--- while the person holds an open root row -- section 4's existing rule, "a
--- Network change is refused for a root", expressed as a constraint rather than as
--- a TypeScript refusal. The two checks then cover the two directions: that one
--- stops the person's Network moving out from under the seat, and
--- `assert_root_network_matches` stops the seat being written to a value that
--- disagreed with the person in the first place.
+-- that would leave an open root seat disagreeing with its holder -- section 4's
+-- existing rule, "a Network change is refused for a root", expressed as a
+-- constraint rather than as a TypeScript refusal. The two checks then cover the
+-- two directions: that one stops the person's Network moving out from under the
+-- seat, and `assert_root_network_matches` stops the seat being written to a value
+-- that disagreed with the person in the first place.
+--
+-- **Its first predicate was too narrow, and is recorded here because the mistake
+-- was the same one two paragraphs up.** It compared the Network in force at the
+-- *written row's* `started_at` rather than at the *root row's*, and did not check
+-- that the person still held an open Network row at all. Closing the open row and
+-- opening nothing therefore passed -- leaving one Network with no root in fact,
+-- and unable to take a replacement, because the index still reads the seat as
+-- occupied. What it enforces and what its prose claimed had to be made to agree;
+-- they now do, by widening the check rather than narrowing the sentence.
 --
 -- **What it permits.** Zero roots in a Network, which is every moment before the
 -- import runs and is the state a fresh database is in. "Exactly one" is not
@@ -163,9 +172,11 @@ BEGIN
 END;
 $CHK$;
 
--- Section 5: one root per Network. Partial over open rows, so a root who is
--- succeeded frees the seat exactly as a revoked `senior_pastor_slot` does, and so
--- the closed history keeps every root the Network has ever had.
+-- Section 5: one root per Network. Partial over open rows, so a closed root row
+-- occupies nothing and the closed history keeps every root the Network has ever
+-- had. That the seat is freeable is a property of the index and not an operation:
+-- section 5 says a succession is not something this system offers, because nothing
+-- defines who may close a root's row.
 CREATE UNIQUE INDEX pastoral_assignments_one_root_per_network
   ON pastoral_assignments (root_network)
   WHERE ended_at IS NULL AND root_network IS NOT NULL;
@@ -176,11 +187,17 @@ CREATE UNIQUE INDEX pastoral_assignments_one_root_per_network
 -- which cannot read `network_assignments`.
 --
 -- **Immediate, not deferred**, and the first version of this file gave a reason
--- for deferring it that does not survive reading the caller. It said a root row
+-- for deferring it that does not survive reading the writers. It said a root row
 -- and the `network_assignments` row it is checked against "are written in one
--- transaction, and an immediate trigger would reject whichever landed first" --
--- but the only writer is `PeopleService.create`, where the network row is always
--- written first, so there is no ordering for an immediate check to trip over.
+-- transaction, and an immediate trigger would reject whichever landed first".
+--
+-- Re-derived from every writer of this table rather than from one caller, which is
+-- the level the question is actually asked at: `PeopleService.create` and the test
+-- fixture both write the Network row first; `HierarchyService.reassignWithin`
+-- writes ordinary edges, which return early on `root_network IS NULL`, and its
+-- closing UPDATE on a root row would re-validate data that did not change; and the
+-- reassignment and sex-correction paths refuse a root before writing at all. No
+-- writer needs the deferral.
 -- That reason belongs to `pastoral_assignments_same_network`, which is deferred
 -- because section 4's Network change and the reassignment it forces write both
 -- directions in one atomic operation. Borrowing it for a check that reads only
@@ -239,9 +256,15 @@ CREATE CONSTRAINT TRIGGER pastoral_assignments_root_network_honest
 -- moves and the seat keeps naming the one they left -- see the header above, where
 -- the claim that this could not happen is recorded as the mistake it was.
 --
--- It fires only while an open root row exists, so it never touches the ordinary
--- case: a Person's first Network assignment is written before their assignment
--- row, and every non-root Person has a leader.
+-- It fires for every write to this table and returns early only where the person
+-- holds no open root row, which is every non-root Person.
+--
+-- **It does not return early for root creation**, and an earlier comment here said
+-- it did, reasoning that a Person's first Network row is written before their
+-- assignment row. That is an argument about an immediate trigger applied to a
+-- deferred one: this runs at COMMIT, by which time the root row inserted later in
+-- the same transaction is plainly visible. The check runs and passes on its
+-- merits, which is a different and better thing than not running.
 --
 -- Deferred, matching `network_assignments_keep_edges_same_network` on this same
 -- table, because a Network change writes a close and an open that are one
@@ -250,21 +273,52 @@ CREATE FUNCTION assert_network_not_changed_for_root() RETURNS trigger
 LANGUAGE plpgsql AS $FN$
 DECLARE
   v_root network;
+  v_root_started timestamptz;
+  v_open network;
 BEGIN
-  SELECT pa.root_network INTO v_root
+  -- At most one open root row per person: `pastoral_assignments_one_active` is
+  -- unique over `person_id` where `ended_at IS NULL`, so this is the row rather
+  -- than one of several.
+  SELECT pa.root_network, pa.started_at INTO v_root, v_root_started
     FROM pastoral_assignments pa
    WHERE pa.person_id = NEW.person_id
      AND pa.ended_at IS NULL
-     AND pa.root_network IS NOT NULL
-   LIMIT 1;
+     AND pa.root_network IS NOT NULL;
 
   IF v_root IS NULL THEN
     RETURN NULL;
   END IF;
 
-  IF network_as_of(NEW.person_id, NEW.started_at) IS DISTINCT FROM v_root THEN
+  -- **Anchored at the root row's own start, not at the written row's.** The first
+  -- version compared `network_as_of(person, NEW.started_at)`, which is the Network
+  -- in force at the instant of whatever row was just written -- a quantity the seat
+  -- does not denormalize. Two shapes passed it: closing the open Network row and
+  -- opening nothing (the UPDATE's own start is still covered by the row it is
+  -- closing, so the comparison returned the old Network), and moving an open row's
+  -- `started_at` forward. Both left the seat disagreeing with its own anchor, which
+  -- is the invariant `assert_root_network_matches` exists to hold and which that
+  -- trigger cannot defend, because it fires only on writes to the other table.
+  IF network_as_of(NEW.person_id, v_root_started) IS DISTINCT FROM v_root THEN
     RAISE EXCEPTION
-      'person % holds the % root seat, so their Network cannot be changed '
+      'person % holds the % root seat, and this write leaves their Network at that '
+      'seat''s effective date disagreeing with it (section 5, Network roots).',
+      NEW.person_id, v_root
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  -- And they must still *be* in that Network. The check above reads history, which
+  -- a later change does not rewrite, so on its own it would permit closing the row
+  -- and opening a different one -- or opening none at all, leaving a Network
+  -- rootless in fact while the index still reads its seat as taken, and so unable
+  -- to take a replacement.
+  SELECT na.network INTO v_open
+    FROM network_assignments na
+   WHERE na.person_id = NEW.person_id
+     AND na.ended_at IS NULL;
+
+  IF v_open IS DISTINCT FROM v_root THEN
+    RAISE EXCEPTION
+      'person % holds the % root seat, so their Network cannot be changed or ended '
       '(section 5, Network roots). Changing who holds a root is a Network-level '
       'decision, not a data correction.',
       NEW.person_id, v_root

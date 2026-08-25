@@ -156,10 +156,15 @@ describe('the database enforces the section 5 invariants', () => {
       await expect(assignTo(db, womens.id, null)).resolves.toBeDefined();
     });
 
-    it('frees the seat when a root is closed, so a succession is possible', async () => {
-      // Partial over open rows, exactly as `senior_pastor_slot` is. Section 5 calls
-      // changing who holds a root a Network-level decision — it does not make it
-      // impossible, and the closed row keeps the history of who held it.
+    it('leaves a closed root row occupying no seat', async () => {
+      // Partial over open rows, exactly as `senior_pastor_slot` is, so the closed
+      // row keeps the history of who held the position without holding the seat.
+      //
+      // Deliberately not called "so a succession is possible": section 5 says a
+      // succession is not an operation this system offers, because nothing defines
+      // who may close a root's row. This pins a property of the index, and naming
+      // it after an operation the specification declines to define would be
+      // asserting that operation exists.
       const first = await createPerson(db, { firstName: 'Oriel', network: 'MENS' });
       const firstRow = await assignTo(db, first.id, null);
 
@@ -196,6 +201,11 @@ describe('the database enforces the section 5 invariants', () => {
         await one.query('BEGIN');
         await two.query('BEGIN');
 
+        // The waiter is identified by its own backend, not by a query-text guess.
+        const twoPid = Number(
+          (await two.query<{ pid: string }>('SELECT pg_backend_pid() AS pid')).rows[0].pid,
+        );
+
         await one.query(
           'INSERT INTO pastoral_assignments (person_id, leader_id, root_network, started_at) VALUES ($1, NULL, $2, $3)',
           [a.id, 'MENS', EPOCH],
@@ -218,7 +228,7 @@ describe('the database enforces the section 5 invariants', () => {
           () => (settled = true),
           () => (settled = true),
         );
-        await waitForWaiter(db, 'pastoral_assignments_one_root_per_network');
+        await waitForBlocked(db, twoPid, 'pastoral_assignments_one_root_per_network');
         expect(settled).toBe(false);
 
         await one.query('COMMIT');
@@ -295,11 +305,49 @@ describe('the database enforces the section 5 invariants', () => {
       ).rejects.toThrow(/holds the MENS root seat/);
     });
 
+    it('refuses closing a root holder Network row without opening another', async () => {
+      // **The hole the first version of this trigger left**, and the more damaging
+      // of the two: the person then belongs to no Network from that instant while
+      // the index still reads their seat as occupied — so the Network is rootless
+      // in fact and cannot take a replacement. The first predicate compared the
+      // Network at the *written row's* start, which the row being closed still
+      // covers, so it returned the old Network and passed.
+      const root = await createPerson(db, { firstName: 'Oriel', network: 'MENS' });
+      await assignTo(db, root.id, null);
+
+      await expect(
+        db.transaction().execute(async (trx) => {
+          await trx
+            .updateTable('network_assignments')
+            .set({ ended_at: new Date('2026-06-01T10:00:00+08:00') })
+            .where('person_id', '=', root.id)
+            .where('ended_at', 'is', null)
+            .execute();
+        }),
+      ).rejects.toThrow(/root seat/);
+    });
+
+    it('refuses moving a root holder Network row start past the seat', async () => {
+      // The second hole. It leaves `network_as_of(person, root.started_at)` null
+      // while the seat still names a Network — the disagreement
+      // `assert_root_network_matches` exists to prevent and cannot see, because it
+      // fires only on writes to the other table.
+      const root = await createPerson(db, { firstName: 'Oriel', network: 'MENS' });
+      await assignTo(db, root.id, null);
+
+      await expect(
+        db
+          .updateTable('network_assignments')
+          .set({ started_at: new Date('2030-01-01T10:00:00+08:00') })
+          .where('person_id', '=', root.id)
+          .where('ended_at', 'is', null)
+          .execute(),
+      ).rejects.toThrow(/root seat/);
+    });
+
     it('permits a Network change once the root row is closed', async () => {
-      // The refusal is scoped to an *open* seat, so it never becomes a permanent
-      // bar on a person who used to be a root. It also leaves the ordinary case
-      // untouched: a Person's first Network row is written before their assignment
-      // row, so nothing fires for it.
+      // The refusal is scoped to an *open* seat, so it never becomes a permanent bar
+      // on somebody who used to be a root.
       const former = await createPerson(db, { firstName: 'Oriel', network: 'MENS' });
       const row = await assignTo(db, former.id, null);
 
@@ -1562,28 +1610,35 @@ async function settled(promise: Promise<unknown>): Promise<Error | null> {
 }
 
 /**
- * Waits until some backend is blocked on the named index, so a concurrency case
- * can assert the wait rather than assume it.
+ * Waits until the given backend is blocked, so a concurrency case can assert the
+ * wait rather than assume it.
+ *
+ * **It watches one named PID.** The first version filtered on a hardcoded
+ * `query LIKE '%pastoral_assignments%'`, took an `indexName` it used only in the
+ * error message, and was therefore satisfied by any backend blocked on any lock
+ * whose query text mentioned the table. That was not vacuous — `--runInBand`
+ * leaves one candidate — but it rested on a property of the harness rather than
+ * on what it claimed to check, which is the shape these cases exist to avoid.
  *
  * `pg_stat_activity.wait_event_type = 'Lock'` is how a speculative-insertion wait
  * on a unique index presents. Polling rather than sleeping a fixed interval: a
  * fixed sleep is either flaky or slow, and this is neither.
  */
-async function waitForWaiter(db: Kysely<Database>, indexName: string): Promise<void> {
+async function waitForBlocked(db: Kysely<Database>, pid: number, what: string): Promise<void> {
   for (let attempt = 0; attempt < 100; attempt += 1) {
     const waiting = await sql<{ count: string }>`
       SELECT count(*) AS count
         FROM pg_stat_activity
-       WHERE wait_event_type = 'Lock'
+       WHERE pid = ${pid}
          AND state = 'active'
-         AND query LIKE ${'%' + 'pastoral_assignments%'}
+         AND wait_event_type = 'Lock'
     `.execute(db);
 
     if (Number(waiting.rows[0].count) > 0) return;
     await new Promise((resolve) => setTimeout(resolve, 20));
   }
 
-  throw new Error(`nothing ever blocked on ${indexName}; the case proves nothing`);
+  throw new Error(`backend ${pid} never blocked on ${what}; the case proves nothing`);
 }
 
 async function openClient(): Promise<Client> {

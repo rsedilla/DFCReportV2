@@ -858,8 +858,8 @@ describe('people (SKILL.md sections 3, 7 and 8)', () => {
         .where('ended_at', 'is', null)
         .executeTakeFirstOrThrow();
 
-      // All three facts together. A row with a null leader and no seat is what the
-      // old shape produced; a row with no seat is not a root (section 5).
+      // Both facts together. A row with a null leader and no seat is what the old
+      // shape produced, and a row with no seat is not a root (section 5).
       expect(row.leader_id).toBeNull();
       expect(row.root_network).toBe('WOMENS');
     });
@@ -920,7 +920,7 @@ describe('people (SKILL.md sections 3, 7 and 8)', () => {
           await mintClaim(),
           () => Promise.resolve(true),
         ),
-      ).rejects.toThrow();
+      ).rejects.toThrow(/pastoral_assignments_one_root_per_network/);
     });
 
     it('records in the audit entry which of the two states was created', async () => {
