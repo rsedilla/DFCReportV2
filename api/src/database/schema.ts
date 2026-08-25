@@ -33,7 +33,7 @@ export interface PersonsTable {
   first_name: string;
   middle_name: string | null;
   last_name: string;
-  birth_date: ColumnType<string, string, string>;
+  birth_date: ColumnType<string | null, string | null, string | null>;
   sex: Sex;
   civil_status: CivilStatus;
   mobile_number: string | null;

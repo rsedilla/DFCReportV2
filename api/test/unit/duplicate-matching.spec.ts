@@ -106,6 +106,19 @@ describe('Tier 2 — possible', () => {
     expect(tiersFor(subject({ birthDate: null }))).toEqual([2]);
   });
 
+  it('does not treat two absent birthdays as a matching one', () => {
+    // **The guard that migration 0007 made load-bearing, and which nothing held.**
+    // Section 3 made a birthday optional, so a *candidate* can now carry null too
+    // -- and until this case existed, `birth === cBirth` in place of the null
+    // guard passed all 436 tests while refusing two birthday-less people with
+    // equal names at Tier 1, on a claim that their birthdays matched.
+    //
+    // That is the failure section 3's optional-birthday rule exists to prevent,
+    // reached through absence rather than through a fabricated date. Tier 2 is the
+    // honest answer: the names match and nothing else is known.
+    expect(tiersFor(subject({ birthDate: null }), [{ ...BASE, birthDate: null }])).toEqual([2]);
+  });
+
   it('surfaces a birthday differing by a transposition of digits', () => {
     // The names must be similar but *unequal*. With equal names the earlier rule
     // -- "first and last names equal, birthday differs or is absent" -- fires

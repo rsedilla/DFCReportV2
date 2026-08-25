@@ -38,6 +38,22 @@ describe('the schema (SKILL.md sections 4, 5, 6 and 7)', () => {
     expect(major).toBeGreaterThanOrEqual(16);
   });
 
+  describe('persons', () => {
+    it('lets a birthday be absent, and keeps every other required field', async () => {
+      // Section 3: birthday is optional, because a mandatory field people cannot
+      // fill is filled with fictions — and for this field a fiction produces false
+      // Tier 1 matches, which *block* real people from being recorded.
+      //
+      // The others are asserted alongside it so a later migration cannot relax the
+      // wrong column while this case stays green.
+      expect((await columnFacts(db, 'persons', 'birth_date')).not_null).toBe(false);
+
+      for (const column of ['first_name', 'last_name', 'sex', 'civil_status']) {
+        expect((await columnFacts(db, 'persons', column)).not_null).toBe(true);
+      }
+    });
+  });
+
   describe('pastoral_assignments', () => {
     it('has the partial unique index that permits zero rows and forbids two', async () => {
       const index = await indexDefinition(db, 'pastoral_assignments_one_active');

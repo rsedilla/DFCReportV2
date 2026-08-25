@@ -20,9 +20,10 @@ import type { Database } from './schema';
  * Cell meeting date are facts about a day, not moments in time, and giving them a
  * zone is what makes a report land in the wrong month.
  *
- * This also makes the declared column type true. `PersonsTable.birth_date` has
- * said `string` since the first migration and nothing read it until the `people`
- * module, so the claim went unchallenged.
+ * This also makes the declared column type true. `PersonsTable.birth_date` said
+ * `string` from the first migration until section 3 made a birthday optional, and
+ * nothing read it until the `people` module, so the claim went unchallenged for a
+ * long time. It is `string | null` now, and the parser passes null through.
  *
  * OID 1082 is `date`. `date[]` is deliberately not registered: nothing returns
  * one, and pg's own types do not admit that OID without a cast, which is not

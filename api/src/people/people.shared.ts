@@ -34,7 +34,12 @@ export interface CreatePersonInput {
   firstName: string;
   middleName?: string | null;
   lastName: string;
-  birthDate: string;
+  /**
+   * Null where it was not given (SKILL.md section 3). A leader may not have
+   * asked, or the person may have declined; the import is the one caller that
+   * requires one (section 2).
+   */
+  birthDate: string | null;
   sex: Sex;
   civilStatus: CivilStatus;
   mobileNumber?: string | null;
@@ -104,7 +109,7 @@ export interface PersonRecord {
   first_name: string;
   middle_name: string | null;
   last_name: string;
-  birth_date: string;
+  birth_date: string | null;
   sex: Sex;
   civil_status: CivilStatus;
   mobile_number: string | null;
