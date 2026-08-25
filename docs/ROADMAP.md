@@ -50,7 +50,7 @@ Four rulings were forced by building it, each recorded in `CLAUDE.md` and amende
 - **The domain half of the `SENIOR_PASTOR` rule** (§7): the database caps the count at two, and `auth` checks that the two are the Persons §4 names. The check had no owning stage until now — **done**, and it reads the two Person identifiers from deployment configuration
 - The first real screens, and with them the UI libraries recorded in `CLAUDE.md`, and axe-core in CI over every route (`SKILL.md` §23, WCAG 2.2 AA)
 - **`audit_log`** (§21), **`idempotency_keys`** (§22) and **`settings`** (§7), with the first write endpoint
-- **Import the leadership tree**, through the dry-run, adjudicate, commit flow (`SKILL.md` §2, Initial data load)
+- **Import the leadership tree spine**, through the dry-run, adjudicate, commit flow (`SKILL.md` §2, Initial data load) — the two roots and each root's direct disciples, around thirty people. Everything below is encoded by the leader who holds it, level by level, because no central roster of it exists (ruling of 2026-08-25)
 
 Three tables Stage 1 did not create arrive here rather than later. §5 requires every reassignment to be audit logged, and §22 requires an `Idempotency-Key` on every state-changing request "from the first write endpoint, not added later" — and reassignment *is* the first write endpoint, so neither can wait for the stage that merely makes heavy use of them.
 
@@ -58,9 +58,11 @@ Three tables Stage 1 did not create arrive here rather than later. §5 requires 
 
 **The two items above are ordered, and the order is not obvious from the list.** The `SENIOR_PASTOR` check names its two Persons by identifier, and those identifiers do not exist until the import has created them — so the sequence is import, then read the two ids, then set `SENIOR_PASTOR_PERSON_IDS`, then restart, because the value is read once when the process starts (§7). Until that is done no `SENIOR_PASTOR` account can be provisioned and any such role row grants nothing, which is the deliberate fail-closed default and is correct for every moment before it.
 
-**Done when:** all eleven authorization tests are **green**, including case 7 exercised concurrently, and the real leadership tree is loaded in a development database.
+**Done when:** all eleven authorization tests are **green**, including case 7 exercised concurrently, and the real leadership tree **spine** is loaded in a development database.
 
-**Why import the tree here:** everything built after this point is developed against real names, real depth, and real edge cases, rather than against fixtures that are always tidier than production.
+The criterion says spine rather than tree because the whole tree cannot be loaded here, or at any one moment: below the roots' direct disciples it is encoded by each leader in turn, so it fills in over months rather than arriving in one import (ruling of 2026-08-25). What Stage 2 must demonstrate is that real names, real Networks and real roots pass through the import and the section 5 invariants — which thirty rows do.
+
+**Why import the spine here:** everything built after this point is developed against real names, real Networks and real roots rather than against fixtures, which are always tidier than production. Real *depth* now arrives with the cascade rather than with the import, so the arbitrary-depth screens (§5's tree, §13's attendance grid) are exercised against fixtures for longer than this stage originally assumed.
 
 **Risk:** case 7 passing sequentially. A sequential test passes against application-layer checks alone and tells you nothing about whether the partial unique index exists.
 
