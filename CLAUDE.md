@@ -2776,8 +2776,9 @@ which is honest: less is known, so less is claimed. Fabrication produces false
 confidence. The owner's question about consolidation is what surfaced the
 distinction.
 
-*The first version of this entry said "both Tier 1 rules", in §3 twice, in migration
-0007, in a test comment and in the commit message. §3 makes a matching mobile number
+*The first version of this entry said "both Tier 1 rules", in §3 twice, in the Decisions entry,
+in migration 0007, in a test comment, in that test's title, and in the commit
+message — six, of which five could be corrected and the commit message could not. §3 makes a matching mobile number
 with equal first and last names a Tier 1 as well, and states the generalisation three
 subsections along: "Every Tier 1 rule reads a birthday or a mobile number." The
 argument survives — a fabricated date still produces a false Tier 1 that blocks a
@@ -2794,6 +2795,14 @@ And `@IsOptional()` skips null as well as undefined, so `PATCH {"birth_date": nu
 erased a recorded date, answering 200; before the column was nullable the database
 refused it. Relaxing a constraint turned into a capability nobody decided on, which
 is worth remembering as a class rather than an incident.*
+
+**An explicit null on `birth_date` is refused, and that is a rule rather than a
+patch.** `@ValidateIf` replaces `@IsOptional()` so the edit answers
+`VALIDATION_FAILED`. §3 defines adding a birthday and does not define removing one,
+and a relaxation must not become a capability by omission — so the conservative
+reading is taken and the question is left open rather than answered by a side
+effect. It refuses any explicit null, whether or not one is recorded, because the
+check reads the request and not the stored row; omitting the field is unaffected.
 
 **Two situations produce a Person with no birthday**, and the second decided it. A
 leader may not have asked. Or somebody may **decline** — a first conversation is not
@@ -2816,17 +2825,17 @@ holds them — a gap there is an omission rather than a person's decision.
 works only while no row lacks a birthday, which is true today and false after the
 first person is recorded without one.
 
-Two things are deliberately **not** settled here, and are listed as open below: a
+Three things are deliberately **not** settled here, and are listed as open below: a
 "details to collect" attention list so an optional field is not an invisible one,
-and whether "asked, not given" is a state on the Person distinguishing a decision
-from a gap. Both wait for the first real screens, since an attention list with no
+whether "asked, not given" is a state on the Person distinguishing a decision from a
+gap, and whether a recorded birthday may ever be removed. Both wait for the first real screens, since an attention list with no
 dashboard to live on is a list nobody sees.
 
 Written to `SKILL.md` §3 in the same change.
 
 ### Open — awaiting a ruling
 
-**One item awaits a ruling and blocks Stage 5. Nine other things are unsettled,
+**One item awaits a ruling and blocks Stage 5. Ten other things are unsettled,
 none of them blocking. They are listed at the end, so this section is the whole of
 what is open.**
 
@@ -2845,6 +2854,7 @@ Two related questions have defined behaviour and are recorded in `SKILL.md` §12
 **Unsettled, and not blocking anything.** None of these is a Stop Condition. An implementer proceeds and settles them in passing; they are listed here because a reader looking for what is open should not have to find it inside the body of a ruling.
 
 - **Whether a leader sees a "details to collect" list.** Birthday became optional on 2026-08-24, and an optional field with nothing surfacing it is one that never gets collected. §15's attention-list idiom fits — filtered, never ranked, never colour-graded, shown to the leader who can act — but there is no dashboard to put it on until Stage 2's screens exist. Decide it with them.
+- **Whether a recorded birthday may ever be removed.** §3 defines adding one and, since 2026-08-24, refuses an explicit null on the edit path so that a nullable column does not become an erase capability nobody decided on. The privacy argument that made the field optional cuts toward permitting removal — somebody may withdraw what they earlier gave. Reproducibility cuts the other way: a Tier 1 acknowledgement recorded against a birthday, and every age derived from it, stop being explicable once it is gone. Left refused until decided.
 - **Whether "asked, not given" is a state on the Person.** It follows the item above rather than standing alone. Without it, somebody who declined to give their birthday stays on a collect-list forever, which presses on exactly the privacy the optional ruling protects. With it, the next leader learns she was asked rather than rediscovering it by asking again — but it is a new field on `persons`, so it is a ruling and not a detail.
 - **Whether the API runs as more than one instance, and what clock skew revocation may assume.** §6 says any instance can serve any request, and account-wide revocation compares two timestamps both stamped by an API process. On one instance that is one clock; on several it is not, and §24 now requires synchronised clocks without bounding the skew this comparison tolerates. The row lock added for the uncommitted-revocation window orders the two events in the database and does not depend on clocks, so this affects the comparison rather than the ordering. Settle it before the first multi-instance deployment.
 - **The application's database role.** §24 requires least-privilege credentials and none exist: the API connects as the owner of every table, so it holds `TRUNCATE`, which bypasses the no-delete triggers entirely, and `DROP`. The no-delete rule leans on this role to make its `TRUNCATE` exemption safe. Creating it is deployment work with no ruling attached, but until it happens §5's exemption is unprotected.

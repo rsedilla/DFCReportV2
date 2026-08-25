@@ -23,11 +23,22 @@
 -- the first time may not have asked. Or somebody may decline to give it, which is
 -- a decision rather than a gap, and no later gate may coerce it.
 --
--- Nothing else changes. `Subject.birthDate` and `Candidate.birthDate` in
--- `duplicate-matching.ts` were already `string | null`, section 3 already carried
--- a Tier 2 rule naming an absent birthday, and `PATCH /api/v1/people/{id}` under
--- `people.edit_basic` already accepts `birth_date` — so the matcher and the
--- "added later" path both predate the rule that needed them.
+-- The matcher needed nothing: `Subject.birthDate` and `Candidate.birthDate` in
+-- `duplicate-matching.ts` were already `string | null`, and section 3 already
+-- carried a Tier 2 rule naming an absent birthday.
+--
+-- **The edit path did need something, and this migration is why.** A first version
+-- of this header said nothing else changes, because `PATCH /api/v1/people/{id}`
+-- already accepted `birth_date`. It accepted an explicit null too -- inert while
+-- the column was NOT NULL, since the database refused the write. Relaxing the
+-- column turned that into a working destructive edit which answered 200 and erased
+-- a recorded date. `EditPersonDto` refuses an explicit null now (`@ValidateIf`
+-- rather than `@IsOptional`), because section 3 defines adding a birthday and does
+-- not define removing one.
+--
+-- Worth keeping as a shape rather than an instance: relaxing a constraint can hand
+-- an existing endpoint a capability nobody decided on, and that endpoint's own code
+-- does not change, so nothing draws attention to it.
 --
 -- The initial leadership-tree import still requires one (section 2). It loads
 -- from a central record that holds them, so a gap there is an omission rather
