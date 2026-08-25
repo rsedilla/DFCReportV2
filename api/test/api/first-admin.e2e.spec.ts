@@ -6,6 +6,7 @@ import {
 } from '../../src/admin/bootstrap/first-admin';
 import { AuditService } from '../../src/audit/audit.service';
 import { AccountTokensService } from '../../src/auth/account-tokens.service';
+import { NetworksService } from '../../src/networks/networks.service';
 import { createTestDb, truncateAll } from '../setup/database';
 import { createPerson, createTestApp } from '../setup/fixtures';
 
@@ -35,15 +36,22 @@ describe('the first Admin account (SKILL.md section 6)', () => {
     lastName: 'Testfixture',
     sex: 'MALE',
     civilStatus: 'SINGLE',
-    pastoralLeaderId: null,
   };
 
   function run(overrides: Partial<BootstrapInput> = {}) {
     return bootstrapFirstAdmin(
       db,
-      { tokens: app.get(AccountTokensService), audit: app.get(AuditService) },
+      {
+        tokens: app.get(AccountTokensService),
+        audit: app.get(AuditService),
+        // The real mapping, not one the test computes. The first version passed
+        // the Network in as an argument, so replacing `networkForSex` with a
+        // hardcoded 'MENS' kept every case green while putting a woman in the
+        // Men's Network — a case whose comment claimed to pin section 4 and
+        // pinned that the module stored its fourth argument.
+        networks: app.get(NetworksService),
+      },
       { ...input, ...overrides },
-      overrides.sex === 'FEMALE' ? 'WOMENS' : 'MENS',
     );
   }
 
@@ -132,25 +140,19 @@ describe('the first Admin account (SKILL.md section 6)', () => {
     expect(assignments).toEqual([]);
   });
 
-  it('opens an ordinary edge where the administrator is discipled', async () => {
-    // The other half of the same rule: neither placement is preferred, and an
-    // administrator who *is* part of the church is an ordinary Person under their
-    // own leader. Pinned so the no-assignment path cannot quietly become the only
-    // one.
-    const leader = await createPerson(db, { firstName: 'Manuel', network: 'MENS' });
-    const result = await run({ pastoralLeaderId: leader.id });
+  it('never opens a pastoral edge, whatever it is given', async () => {
+    // The option to place the administrator under a leader was removed rather
+    // than left unused: it opened an edge with none of section 5's checks, and of
+    // the three `assertLeaderIsAssignable` catches, only the cross-Network one has
+    // a constraint behind it — an archived or merged leader is refused by
+    // application code alone, verified by probing this schema.
+    //
+    // Pinned as a property of the module rather than of its arguments, so the
+    // option cannot come back without this failing.
+    await run();
 
-    const assignment = await db
-      .selectFrom('pastoral_assignments')
-      .select(['leader_id', 'root_network', 'ended_at'])
-      .where('person_id', '=', result.personId)
-      .executeTakeFirstOrThrow();
-
-    expect(assignment.leader_id).toBe(leader.id);
-    // Not a root: section 5 gives the seat only to a null-leader row, and the
-    // check constraint refuses a seat on an ordinary edge.
-    expect(assignment.root_network).toBeNull();
-    expect(assignment.ended_at).toBeNull();
+    const edges = await db.selectFrom('pastoral_assignments').select('id').execute();
+    expect(edges).toEqual([]);
   });
 
   it('records three audit entries, every one of them a system action', async () => {
@@ -160,20 +162,60 @@ describe('the first Admin account (SKILL.md section 6)', () => {
     // system action and for nothing else.
     const result = await run();
 
+    // **Not ordered by `occurred_at`.** It defaults to `now()`, which is
+    // `transaction_timestamp()` — identical for all three rows — so ordering by it
+    // imposes nothing and the assertion passed only because a sequential scan
+    // happens to return insertion order. The set is what the rule is about.
     const entries = await db
       .selectFrom('audit_log')
       .select(['action', 'actor_id', 'target_id'])
-      .orderBy('occurred_at')
       .execute();
 
-    expect(entries.map((e) => e.action)).toEqual([
-      'person.created',
-      'account.created',
-      'role.granted',
-    ]);
+    expect(entries.map((e) => e.action).sort()).toEqual(
+      ['account.created', 'person.created', 'role.granted'].sort(),
+    );
     expect(entries.every((e) => e.actor_id === null)).toBe(true);
-    expect(entries[0].target_id).toBe(result.personId);
-    expect(entries[1].target_id).toBe(result.accountId);
+    expect(entries.find((e) => e.action === 'person.created')?.target_id).toBe(result.personId);
+    expect(entries.find((e) => e.action === 'role.granted')?.target_id).toBe(result.accountId);
+  });
+
+  it('records the lifecycle and Network rows as a system action too', async () => {
+    // Sections 3 and 4 leave `actor_id` unmarked on both shapes, which this
+    // repository reads as required (2026-08-20, on `capability_grants.reason`).
+    // They now carry a system-action allowance, and this is what holds it: four
+    // columns are written null here and the first version of section 6 accounted
+    // for two.
+    const result = await run();
+
+    const lifecycle = await db
+      .selectFrom('person_lifecycle')
+      .select('actor_id')
+      .where('person_id', '=', result.personId)
+      .executeTakeFirstOrThrow();
+
+    const network = await db
+      .selectFrom('network_assignments')
+      .select('actor_id')
+      .where('person_id', '=', result.personId)
+      .executeTakeFirstOrThrow();
+
+    expect(lifecycle.actor_id).toBeNull();
+    expect(network.actor_id).toBeNull();
+  });
+
+  it('normalizes the stored email the way sign-in looks it up', async () => {
+    // A second implementation here dropped the trim, which would store a value no
+    // sign-in and no password reset could match — and this command refuses to run
+    // twice, so the installation would be unrecoverable with no way to see why.
+    const result = await run({ email: '  Mixed.Case@Example.Test  ' });
+
+    const account = await db
+      .selectFrom('accounts')
+      .select(['email', 'email_normalized'])
+      .where('id', '=', result.accountId)
+      .executeTakeFirstOrThrow();
+
+    expect(account.email_normalized).toBe('mixed.case@example.test');
   });
 
   it('hands back an activation token that is stored only as a hash', async () => {
@@ -210,6 +252,34 @@ describe('the first Admin account (SKILL.md section 6)', () => {
 
     expect(network.network).toBe('WOMENS');
     expect(network.ended_at).toBeNull();
+  });
+
+  it('serializes two concurrent runs, so only one Admin is ever created', async () => {
+    // **The case the emptiness check cannot cover on its own**, and the reason the
+    // lock is taken *before* the read. Without it both runs take a snapshot of an
+    // empty `accounts` table and both commit — the same failure CLAUDE.md records
+    // for the SENIOR_PASTOR counting trigger on 2026-08-21.
+    //
+    // Written as a genuine race rather than sequentially: a sequential pair passes
+    // against no lock at all, which is CLAUDE.md's authorization-case-7 lesson and
+    // the one the root-seat work re-learned two commits ago.
+    const services = {
+      tokens: app.get(AccountTokensService),
+      audit: app.get(AuditService),
+      networks: app.get(NetworksService),
+    };
+
+    const results = await Promise.allSettled([
+      bootstrapFirstAdmin(db, services, input),
+      bootstrapFirstAdmin(db, services, { ...input, email: 'other@example.test' }),
+    ]);
+
+    expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
+    const rejected = results.find((r) => r.status === 'rejected');
+    expect((rejected as PromiseRejectedResult).reason).toBeInstanceOf(AlreadyBootstrappedError);
+
+    const accounts = await db.selectFrom('accounts').select('id').execute();
+    expect(accounts).toHaveLength(1);
   });
 
   it('writes nothing at all when it refuses', async () => {

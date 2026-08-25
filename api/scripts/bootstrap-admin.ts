@@ -2,8 +2,7 @@
  * Creates the first Admin account (SKILL.md section 6, The first Admin account).
  *
  *   npm run bootstrap:admin -- --email you@example.com --first-name X --last-name Y \
- *                              --sex MALE --civil-status MARRIED [--middle-name Z] \
- *                              [--pastoral-leader <person-uuid>]
+ *                              --sex MALE --civil-status MARRIED [--middle-name Z]
  *
  * **Why this is a command and not an endpoint.** Every account is provisioned by
  * somebody holding `accounts.manage`, which only Admin holds — so the first Admin
@@ -36,15 +35,15 @@ import type { CivilStatus, Sex } from '../src/database/schema';
 const SEXES: readonly string[] = ['MALE', 'FEMALE'];
 const CIVIL_STATUSES: readonly string[] = ['SINGLE', 'MARRIED', 'WIDOWED'];
 
-const USAGE = `usage: npm run bootstrap:admin -- --email <address> --first-name <name> --last-name <name> --sex MALE|FEMALE --civil-status SINGLE|MARRIED|WIDOWED [--middle-name <name>] [--pastoral-leader <person-uuid>]
+const USAGE = `usage: npm run bootstrap:admin -- --email <address> --first-name <name> --last-name <name> --sex MALE|FEMALE --civil-status SINGLE|MARRIED|WIDOWED [--middle-name <name>]
 
 Creates the first Admin account, once, and refuses while any account exists.
 
-  --pastoral-leader   optional. Give it where the administrator is somebody the
-                      church disciples; omit it where they administer the system
-                      without being anybody's disciple, which section 5 permits as
-                      a legitimate permanent state. Never invent one to make a
-                      record look complete.`;
+The administrator is not placed in the pastoral tree. Section 5 permits that as a
+correct permanent state for somebody who administers the system without being
+anybody's disciple, and at the moment this runs there is no tree to place them in.
+An administrator the church does disciple is placed by an ordinary reassignment
+afterwards.`;
 
 function parseArgs(argv: string[]): BootstrapInput | string {
   const values = new Map<string, string>();
@@ -57,15 +56,7 @@ function parseArgs(argv: string[]): BootstrapInput | string {
     i += 1;
   }
 
-  const known = [
-    'email',
-    'first-name',
-    'middle-name',
-    'last-name',
-    'sex',
-    'civil-status',
-    'pastoral-leader',
-  ];
+  const known = ['email', 'first-name', 'middle-name', 'last-name', 'sex', 'civil-status'];
   for (const key of values.keys()) {
     if (!known.includes(key)) return `Unknown option --${key}.`;
   }
@@ -92,9 +83,6 @@ function parseArgs(argv: string[]): BootstrapInput | string {
     lastName: values.get('last-name')!.trim(),
     sex: sex as Sex,
     civilStatus: civilStatus as CivilStatus,
-    // Canonicalized like every identifier a client supplies (section 7): a `uuid`
-    // column compares case-insensitively and TypeScript does not.
-    pastoralLeaderId: values.get('pastoral-leader')?.trim().toLowerCase() || null,
   };
 }
 
@@ -120,9 +108,12 @@ async function main(): Promise<number> {
   try {
     const result = await bootstrapFirstAdmin(
       app.get<Db>(DATABASE),
-      { tokens: app.get(AccountTokensService), audit: app.get(AuditService) },
+      {
+        tokens: app.get(AccountTokensService),
+        audit: app.get(AuditService),
+        networks: app.get(NetworksService),
+      },
       input,
-      app.get(NetworksService).networkForSex(input.sex),
     );
 
     // **Printed rather than emailed, and section 6 says why.** If delivery failed
@@ -130,17 +121,15 @@ async function main(): Promise<number> {
     // back, since this command refuses to run twice. The operator is the holder
     // and is standing at the machine, so the token is not travelling anywhere it
     // should not.
-    const placement = input.pastoralLeaderId === null ? ', no pastoral leader — administrator' : '';
-
     console.log(`
 Created the first Admin account.
 
-  Person    ${result.memberId}  ${input.firstName} ${input.lastName}  (${result.network}${placement})
+  Person    ${result.memberId}  ${input.firstName} ${input.lastName}  (${result.network}, no pastoral leader — administrator)
   Account   ${result.email}  role ADMIN
   Audit     person.created, account.created, role.granted  (actor: system)
 
-Set your password with this activation token. It expires in 7 days and is
-single-use, and it is the only copy — nothing stored it.
+Set your password with this activation token. It expires in 7 days, is single-use,
+and is the only copy — the database holds a hash of it and nothing else.
 
   ${result.activationToken}
 

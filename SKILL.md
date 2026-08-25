@@ -449,7 +449,7 @@ person_lifecycle
 - state              CURRENT | ARCHIVED
 - reason             nullable, from the archive reason list above
 - note               nullable, required where reason is OTHER
-- actor_id
+- actor_id           null only for a system action (Section 6, The first Admin account)
 - started_at
 - ended_at           nullable
 ```
@@ -541,7 +541,7 @@ network_assignments
 - person_id
 - network            MENS | WOMENS
 - reason             nullable, for a correction
-- actor_id
+- actor_id           null only for a system action (Section 6, The first Admin account)
 - started_at
 - ended_at           nullable
 ```
@@ -752,7 +752,9 @@ A person has at most one active pastoral assignment at any moment.
 
 Zero is legitimate in exactly three situations: a Person encoded but not yet assigned, an archived Person whose assignment has ended, and **a Person who administers the system and is not part of the pastoral structure** (Section 6, The first Admin account). Every other Person has exactly one, and a Network root leader is not an exception — their row exists and carries a null `leader_id` (Network roots, above).
 
-The third is different in kind from the first two and is named separately for that reason. Both of those are transient — one is waiting to be assigned, the other used to be — so a Person sitting in either is a Person something will eventually happen to. An administrator who is not discipled by anyone in the church is in the correct and permanent state, and describing them as "not yet assigned" invites somebody to go looking for the missing leader and to attach one, which would place a person in the pastoral tree who does not belong to it and count them in a subtree that does not contain them.
+The third is different in kind from the first two and is named separately for that reason. Both of those are transient — one is waiting to be assigned, the other used to be — so a Person sitting in either is a Person something will eventually happen to. An administrator who is not discipled by anyone in the church is in the correct and permanent state.
+
+**Nothing records which of the three a given Person is in, and this section does not pretend otherwise.** The absence of a row is the same absence in all three cases; the difference is in why, and the schema holds no `why`. So a screen or attention list that surfaces Persons without a pastoral assignment will show an administrator among people genuinely waiting for a leader, and the remedy is for that list to exclude accounts holding `ADMIN` rather than for this section to claim a distinction it cannot make. Whether the three should be told apart in the data is recorded as open rather than answered here.
 
 A reassignment closes the current assignment and opens the new one within a single transaction. It must never leave two open assignments, and must never leave a person who had a leader without one. Enforce with a uniqueness constraint over the person where `ended_at` is null — the constraint permits zero rows and forbids two.
 
@@ -1138,11 +1140,17 @@ The command is the same kind of thing as the import script and rests on the same
 
 **It refuses to run while any account exists.** That is what makes it one-time rather than a standing privilege, and it takes a lock before it looks, so that two runs cannot both find an empty table.
 
-**Its writes are recorded as a system action.** The audit entries carry a null `actor_id` and the role row a null `granted_by` — the two allowances Sections 21 and 7 already make, each justified by this moment and by nothing else. This is the only thing in the system permitted to use them.
+**Its writes are recorded as a system action.** Four columns carry null for it and no other reason: `audit_log.actor_id` (Section 21), `account_roles.granted_by` (Section 7), and `person_lifecycle.actor_id` and `network_assignments.actor_id` (Sections 3 and 4, which gained the allowance for this and mark it on their shapes). This is the only thing in the system permitted to write any of them null.
 
-**The person it creates need not be part of the pastoral tree.** An administrator may be somebody the church disciples, in which case they are an ordinary Person under their own leader; or they may administer the system without being anybody's disciple, in which case they hold no pastoral assignment at all and that is the correct permanent state (Section 5, invariant 3). Neither is preferred. What must not happen is inventing a pastoral leader so that a record looks complete: a person placed in the tree who does not belong to it is counted in a subtree that does not contain them, and no report will ever say so.
+The first two were already provided for, each justified by this moment. The second two were not, and a first version of this section claimed there were "two allowances" while the code wrote four — which is the kind of claim that stands until somebody counts.
 
-**It prints the activation link rather than relying on delivery**, which is a deliberate departure from every other account. Section 6 keeps activation tokens out of API responses because an administrator must not learn another person's token — and here the operator *is* the holder, running the command themselves on the server. The reason for the departure is recovery: if delivery failed for this one account there would be no Admin to re-send it from and no way back, since the command refuses to run a second time. The cost is that the link is in terminal scrollback, and is accepted for a token that is used once, within its expiry, by the person who just typed the command.
+**The person it creates is not placed in the pastoral tree**, and holds no pastoral assignment at all, which Section 5 invariant 3 permits as a correct permanent state.
+
+It does not offer to place them, and the option to do so was written and then removed. It could not work: at the only moment this command may run there are no accounts, and every supported path that creates a Person requires one — so no Person exists to name as a leader. And it opened a pastoral edge without the checks Section 5 requires, of which the database backstops only the same-Network one; an archived or merged leader is refused by application code alone.
+
+An administrator the church does disciple is placed afterwards, by an ordinary reassignment, once there is an actor to perform it and a tree to place them in. What must never happen is inventing a pastoral leader so that a record looks complete: a person placed in a tree they do not belong to is counted in a subtree that does not contain them, and no report will ever say so.
+
+**It prints the activation token rather than relying on delivery**, which is a deliberate departure from every other account. This section keeps activation tokens out of API responses because an administrator must not learn another person's — and here the operator *is* the holder, running the command themselves on the server. The reason for the departure is recovery: if delivery failed for this one account there would be no Admin to re-send it from and no way back, since the command refuses to run a second time. The cost is that the token is in terminal scrollback, and is accepted for one that is single-use, short-lived, and read by the person who just typed the command.
 
 ### Account activation
 
