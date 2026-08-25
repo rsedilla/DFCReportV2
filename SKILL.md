@@ -136,7 +136,15 @@ Principle 13 requires a modular monolith. These are the modules, and the list is
 | `audit` | The audit log |
 | `admin` | Settings, the initial-encoding phase, administrative operations |
 
-**A module owns its tables.** No other module reads or writes them directly. Cross-module access goes through the owning module's service interface, never through its repository or its tables.
+**A module owns its tables. No other module writes them, ever, and no other module reaches them for anything a service interface can answer.** Cross-module access goes through the owning module's service interface, never through its repository.
+
+**One thing is exempt, and it is named rather than left to interpretation: a read joined onto a query rooted in a table the reading module owns.** `hierarchy` joins `persons` in two places — `openDisciplesOf`, to name a leader's open direct disciples, and `directLeaderNameOf`, to name one leader. Both start from `pastoral_assignments`, which `people` does not own and cannot query, so the join cannot move to the owning module; returning identifiers for the caller to resolve moves it rather than removing it, and for `openDisciplesOf` turns one query into one per row. Nothing else qualifies today, and adding to this is an amendment rather than a decision taken in a module.
+
+*A first version of this paragraph said the joins were in `hierarchy`'s recursive walks and that asking `people` per row would “turn one query into hundreds”. Neither is true of the two joins it exempts: `ancestorsOf` and `subtreeOf` select identifiers only and join nothing, and `directLeaderNameOf` returns at most one row. The category was right and the description was written from what the exemption was for rather than from the queries — in the paragraph added to stop exactly that.*
+
+The exemption is deliberately narrow and the asymmetry is the point. A write is what an invariant guards, so the five pastoral-assignment rules have one home only while `hierarchy` is the sole writer of `pastoral_assignments`. A join reads rows the owning module would have returned anyway and changes nothing.
+
+**This was stated as “reads or writes” and the code never matched it.** `people.module.ts` narrowed the rule in a comment when the module was split, on the reasoning that a rule stated more strongly than the code keeps stops being checkable — which is right about the danger and wrong about the remedy. Narrowing a rule in one module's comment leaves every other module to find that comment or not, and a reviewer to discover that the specification and the code disagree. The rule is narrowed here instead, where it is the rule.
 
 This is what makes "enforced in the domain layer" a statement rather than a hope. The five pastoral-assignment invariants (Section 5) have exactly one place to live because `hierarchy` is the only writer of `pastoral_assignments`. Where four modules write a table, an invariant needs checking in four places, and the fourth is the one somebody forgets — which is also why those invariants carry database constraints as a backstop.
 
@@ -449,7 +457,7 @@ person_lifecycle
 - state              CURRENT | ARCHIVED
 - reason             nullable, from the archive reason list above
 - note               nullable, required where reason is OTHER
-- actor_id
+- actor_id           null only for a system action (Section 6, The first Admin account)
 - started_at
 - ended_at           nullable
 ```
@@ -541,7 +549,7 @@ network_assignments
 - person_id
 - network            MENS | WOMENS
 - reason             nullable, for a correction
-- actor_id
+- actor_id           null only for a system action (Section 6, The first Admin account)
 - started_at
 - ended_at           nullable
 ```
@@ -750,7 +758,11 @@ Reject the operation before writing. Recursive subtree queries must additionally
 
 A person has at most one active pastoral assignment at any moment.
 
-Zero is legitimate in exactly two situations: a Person encoded but not yet assigned, and an archived Person whose assignment has ended. Every other Person has exactly one, and a Network root leader is not an exception — their row exists and carries a null `leader_id` (Network roots, above).
+Zero is legitimate in exactly three situations: a Person encoded but not yet assigned, an archived Person whose assignment has ended, and **a Person who administers the system and is not part of the pastoral structure** (Section 6, The first Admin account). Every other Person has exactly one, and a Network root leader is not an exception — their row exists and carries a null `leader_id` (Network roots, above).
+
+The third is different in kind from the first two and is named separately for that reason. Both of those are transient — one is waiting to be assigned, the other used to be — so a Person sitting in either is a Person something will eventually happen to. An administrator who is not discipled by anyone in the church is in the correct and permanent state.
+
+**Nothing records which of the three a given Person is in, and this section does not pretend otherwise.** The absence of a row is the same absence in all three cases; the difference is in why, and the schema holds no `why`. So a screen or attention list that surfaces Persons without a pastoral assignment will show an administrator among people genuinely waiting for a leader, and the remedy is for that list to exclude accounts holding `ADMIN` rather than for this section to claim a distinction it cannot make. Whether the three should be told apart in the data is recorded as open rather than answered here.
 
 A reassignment closes the current assignment and opens the new one within a single transaction. It must never leave two open assignments, and must never leave a person who had a leader without one. Enforce with a uniqueness constraint over the person where `ended_at` is null — the constraint permits zero rows and forbids two.
 
@@ -1125,6 +1137,32 @@ account_tokens
 ```
 
 Single-use: `used_at` is set on redemption and a token with it set is refused. Issuing a new token of a purpose invalidates any outstanding one of the same purpose for that account.
+
+### The first Admin account
+
+Every account is provisioned by somebody holding `accounts.manage`, which only Admin holds (Section 7). The first Admin account therefore cannot be provisioned by anybody, and something has to break the circle.
+
+**A one-time operator-run command breaks it, and nothing else may.** It is not an endpoint. Section 7 keeps a closed list of routes reachable without authentication, and an unauthenticated route that mints the most powerful account in the system is the wrong thing to add to it: if its "no accounts exist yet" check is ever wrong, or two requests race it, whoever reaches the server first holds the church's records.
+
+The command is the same kind of thing as the import script and rests on the same argument Section 2 already accepts for that one — whoever can run it can already reach the database directly, so it is not authentication. What it buys is that the one write nobody can be named for is performed deliberately, once, and recorded as what it was.
+
+**It refuses to run while any account exists, and separately while any Person exists.** The first is what makes it one-time rather than a standing privilege. The second is stricter and is enforced by `people` on its own account, because the module that creates the administrator's Person cannot ask `auth` whether an account exists — `auth` imports `people`, and the reverse would restore a module cycle. Asking whether any Person exists is the same question at the only moment either may run, since this is the first write to an empty database.
+
+The two are not equivalent in general: a foreign key makes a non-empty `accounts` imply a non-empty `persons`, and not the reverse. A database holding Persons and no account is therefore refused, which is deliberate — it is a partly-built or partly-restored installation, not a fresh one, and creating an administrator into it is not what this command is for.
+
+It takes a lock before it looks, so that two runs cannot both find an empty table.
+
+**Its writes are recorded as a system action.** Four columns carry null for it and no other reason: `audit_log.actor_id` (Section 21), `account_roles.granted_by` (Section 7), and `person_lifecycle.actor_id` and `network_assignments.actor_id` (Sections 3 and 4, which gained the allowance for this and mark it on their shapes). This is the only thing in the system permitted to write any of them null.
+
+The first two were already provided for, each justified by this moment. The second two were not, and a first version of this section claimed there were "two allowances" while the code wrote four — which is the kind of claim that stands until somebody counts.
+
+**The person it creates is not placed in the pastoral tree**, and holds no pastoral assignment at all, which Section 5 invariant 3 permits as a correct permanent state.
+
+It does not offer to place them, and the option to do so was written and then removed. It could not work: at the only moment this command may run there are no accounts, and every supported path that creates a Person requires one — so no Person exists to name as a leader. And it opened a pastoral edge without the checks Section 5 requires, of which the database backstops only the same-Network one; an archived or merged leader is refused by application code alone.
+
+An administrator the church does disciple is placed afterwards, by an ordinary reassignment, once there is an actor to perform it and a tree to place them in. What must never happen is inventing a pastoral leader so that a record looks complete: a person placed in a tree they do not belong to is counted in a subtree that does not contain them, and no report will ever say so.
+
+**It prints the activation token rather than relying on delivery**, which is a deliberate departure from every other account. This section keeps activation tokens out of API responses because an administrator must not learn another person's — and here the operator *is* the holder, running the command themselves on the server. The reason for the departure is recovery: if delivery failed for this one account there would be no Admin to re-send it from and no way back, since the command refuses to run a second time. The cost is that the token is in terminal scrollback, and is accepted for one that is single-use, short-lived, and read by the person who just typed the command.
 
 ### Account activation
 
@@ -3470,6 +3508,8 @@ Section 5 requires a Network change and a reassignment to take an advisory lock 
 Some of those cases would fail loudly rather than silently — where the loser's own assignment row was the one that moved, its update would meet a version committed after its snapshot and raise a serialization failure. The dangerous ones are the cases where nothing the loser writes has changed and only the *decision* is stale: a concurrent move of an intermediate ancestor leaves the actor's scope different and every row this request touches untouched, so it commits, and it commits a write the actor was no longer authorized to make.
 
 **A second dependency arrived with the grant limit in Section 7.** Its two constraint triggers take `FOR NO KEY UPDATE` on the account and then read the other table to decide, which is the same shape one statement further in: under `READ COMMITTED` the read after the lock sees the transaction that held it first, while under `REPEATABLE READ` the whole transaction answers from one snapshot taken before the lock — so the triggers would serialize correctly and then decide on stale reads, and because the two writers touch different tables neither raises a serialization failure to warn anybody.
+
+**A third arrived with the first-Admin bootstrap in Section 6.** It takes a transaction-scoped advisory lock and *then* reads whether any account exists, which is the same shape again — the lock statement is snapshot-taking, so under `REPEATABLE READ` the snapshot would be fixed before the lock is granted and the loser would read a pre-lock `accounts`. It is the least forgiving of the three: there is no unique constraint behind it, so two runs would both create an Admin with nothing raised.
 
 The row lock also requires those trigger functions to be `VOLATILE`, which is their default. That is not a silent dependency: PostgreSQL runs a non-volatile function's statements read-only and refuses a row-locking `SELECT` inside one, so marking them otherwise fails at the lock rather than quietly weakening the rule.
 

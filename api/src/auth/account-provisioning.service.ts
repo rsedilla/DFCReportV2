@@ -9,6 +9,8 @@ import { EMAIL_PORT, type EmailPort, type OutboundEmail } from '../email/email.p
 
 import { PeopleReadService } from '../people/people.read.service';
 
+import { AlreadyBootstrappedError } from '../common/errors/already-bootstrapped';
+
 import { AccountTokensService } from './account-tokens.service';
 import { normalizeEmail } from './accounts.repository';
 import { type Actor } from './authorization/authorization.service';
@@ -377,6 +379,115 @@ export class AccountProvisioningService {
         error instanceof Error ? error.stack : undefined,
       );
     }
+  }
+  /**
+   * Whether this installation has any account at all — the question that decides
+   * whether a first Admin may be created.
+   *
+   * Here because `auth` owns `accounts` (section 2, Modules). `admin/bootstrap`
+   * read the table itself for one commit, under a docblock quoting section 2's
+   * "reads or writes them directly" three lines above and claiming the rule was
+   * met because nothing was written. True as worded, and it read as though the
+   * rule were satisfied.
+   *
+   * "Any account", not "any Admin": a system already in use by somebody is not a
+   * fresh installation, whatever roles it holds, and a narrower check would let a
+   * bootstrap mint an Admin into a live church's records.
+   */
+  async anyAccountExistsWithin(transaction: Transaction<Database>): Promise<boolean> {
+    const existing = await transaction
+      .selectFrom('accounts')
+      .select('id')
+      .limit(1)
+      .executeTakeFirst();
+
+    return existing !== undefined;
+  }
+
+  /**
+   * Creates the first Admin account, as a system action (SKILL.md section 6).
+   *
+   * **Here because `auth` owns `accounts` and `account_roles`** (section 2,
+   * Modules). The bootstrap wrote both directly for one commit, justified against
+   * section 2's *imports* rule — a different sentence from "a module owns its
+   * tables", whose one exemption is a read joined onto a query rooted in a table the reading module owns.
+   *
+   * **It is not `provision` with the checks removed**, and cannot reuse it: that
+   * path takes an actor and an idempotency claim, neither of which exists before
+   * the first account. The differences are deliberate:
+   *
+   * - **No actor, and `granted_by` is null**, which section 7 permits for the first
+   *   Admin account granted by a system action and for nothing else.
+   * - **No `QUALIFYING_ROLES` check.** The role is `ADMIN`, which qualifies.
+   * - **No archived, merged or existing-account checks on the Person.** The caller
+   *   creates that Person in the same transaction, moments earlier, so there is no
+   *   prior state for any of them to find.
+   *
+   * **It refuses unless no account exists, and does not take the caller's word
+   * for it.** A first version left that to the bootstrap and said so — "the caller
+   * holds the lock that makes it meaningful" — which is a guarantee about a caller
+   * rather than about this method, and this method is public on a service the API
+   * already uses. Somebody adding a feature would find a method creating an
+   * `ADMIN` account with a null `granted_by`, no audit entry and no
+   * `accounts.manage` check, with a sentence asking them not to as the only guard.
+   *
+   * Section 2 makes the general argument for the capability guard being
+   * declarative: a convention held per call site is only as reliable as the least
+   * familiar developer writing the newest one. The read costs nothing — the caller
+   * already holds the advisory lock, so it races with nothing.
+   */
+  async createFirstAdminWithin(
+    transaction: Transaction<Database>,
+    input: { personId: string; email: string },
+  ): Promise<{ id: string; email: string; activationToken: string; activationExpiresAt: Date }> {
+    if (await this.anyAccountExistsWithin(transaction)) {
+      throw new AlreadyBootstrappedError('accounts');
+    }
+
+    const account = await transaction
+      .insertInto('accounts')
+      .values({
+        person_id: input.personId,
+        // `.trim()`, exactly as `provision` stores it. Hand-writing this column
+        // differently from the method it is aligned to is the same drift the line
+        // below explains at length and then, in a first version, committed.
+        email: input.email.trim(),
+        // Through `normalizeEmail`, which trims as well as lowercasing. A second
+        // implementation that dropped the trim would store a value no sign-in and
+        // no password reset could match — and the bootstrap refuses to run twice,
+        // so the installation would be unrecoverable.
+        email_normalized: normalizeEmail(input.email),
+        // Section 6: the holder sets their own password, and nobody else ever
+        // knows it — which is why there is an activation token rather than a value.
+        password_hash: null,
+        status: 'PENDING_ACTIVATION',
+      })
+      .returning(['id', 'email'])
+      .executeTakeFirstOrThrow();
+
+    await transaction
+      .insertInto('account_roles')
+      .values({
+        account_id: account.id,
+        role: 'ADMIN',
+        granted_by: null,
+        senior_pastor_slot: null,
+      })
+      .execute();
+
+    const token = await this.tokens.mintWithin(
+      transaction,
+      account.id,
+      'ACTIVATION',
+      ACTIVATION_LIFETIME_MS,
+    );
+
+    return {
+      id: account.id,
+      email: account.email,
+      activationToken: token.token,
+      activationExpiresAt: token.expiresAt,
+    };
   }
 }
 

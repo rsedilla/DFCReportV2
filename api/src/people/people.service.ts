@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+
 import { Inject, Injectable } from '@nestjs/common';
 
 import { AuditService } from '../audit/audit.service';
@@ -6,6 +8,7 @@ import { NetworksService } from '../networks/networks.service';
 import { DuplicateAcknowledgementRequiredError, NotFoundError } from '../common/errors/api-error';
 import { IdempotencyService } from '../common/idempotency/idempotency.service';
 import { canonicalId } from '../common/identifiers';
+import { AlreadyBootstrappedError } from '../common/errors/already-bootstrapped';
 import { DATABASE, type Db } from '../database/database.module';
 import { lockPersonsWithin } from '../database/person-lock';
 
@@ -15,7 +18,8 @@ import { PeopleDuplicatesService } from './people.duplicates.service';
 import { fullProfile, normalizeMobile, type CreatePersonInput } from './people.shared';
 
 import type { CurrentClaim } from '../common/idempotency/current-idempotency.decorator';
-import type { CivilStatus, Json } from '../database/schema';
+import type { CivilStatus, Database, Json, NetworkName, Sex } from '../database/schema';
+import type { Transaction } from 'kysely';
 
 /**
  * Person, Member ID, and the basic edit (SKILL.md section 2, Modules).
@@ -358,5 +362,124 @@ export class PeopleService {
 
       return response;
     });
+  }
+
+  /**
+   * Creates the Person behind the first Admin account, as a system action.
+   *
+   * **Here because `people` owns `persons` and `person_lifecycle`** (section 2,
+   * Modules). The bootstrap wrote both tables directly for one commit, justified
+   * against section 2's *imports* rule — which is a different sentence from "a
+   * module owns its tables", and the ownership rule's one exemption is a read joined onto a query rooted in a table the reading module owns, which a write is not. The
+   * precedent runs the other way: the 2026-08-24 ruling restructured the module
+   * graph rather than let `auth` keep three reads of `persons`.
+   *
+   * **It is not `create` with the checks removed.** It cannot reuse that path,
+   * which requires an actor and an idempotency claim that do not exist before the
+   * first account — so what is shared is the table, and the differences are
+   * deliberate and few:
+   *
+   * - **No actor.** Sections 3 and 4 permit a null `actor_id` for a system action,
+   *   which section 6 names as this and nothing else.
+   * - **No duplicate matching.** Section 3's Tier 1 gate needs a person present to
+   *   acknowledge a candidate, and nobody is. There is also nothing to match
+   *   against: the caller refuses unless no account exists, and every supported
+   *   path that creates a Person requires one — `POST /people` is authenticated,
+   *   and the tree import is given an Admin account. So no accounts means no
+   *   Persons.
+   *
+   *   A first version asserted that and then withdrew it in the same sentence
+   *   ("'no accounts' does not strictly imply 'no Persons'"), which left section
+   *   3's gate skipped on a premise the comment disowned. The strong reading is
+   *   the one that holds and the one section 6 relies on elsewhere; if a path is
+   *   ever added that creates a Person without an account, this is what has to be
+   *   revisited.
+   * - **No pastoral assignment.** Section 5 invariant 3 permits zero for an
+   *   administrator outside the pastoral structure, and section 6 requires it here:
+   *   at this moment there is no tree to place anybody in.
+   *
+   * **It refuses unless no Person exists**, and asks its own table rather than
+   * `auth`'s. A first version had no guard and relied on having one caller — but
+   * this is public on a service the API uses, and what it creates is a Person with
+   * **zero pastoral assignments**, which is the capability the 2026-08-25 ruling
+   * removed from `CreatePersonInput` on the grounds that "a variant no caller can
+   * justify is the same thing spelled differently". Offering it again as an
+   * unguarded method is that capability once more, with a docblock instead of a
+   * type.
+   *
+   * **Why `persons` rather than `accounts`.** The account is the thing that makes
+   * a bootstrap a bootstrap, so `accounts` is the more direct question — and
+   * `people` cannot ask it: `auth` imports `people` (the 2026-08-24 seam), so the
+   * reverse restores the cycle that ruling removed. `persons` being empty is
+   * exactly as true at the only moment this may run, because the bootstrap is the
+   * first write to an empty database. Either table being non-empty means this is
+   * not a fresh installation.
+   *
+   * The audit entry is the caller's, not this method's: the bootstrap writes three
+   * and section 21 wants them named separately.
+   */
+  async createSystemAdministratorWithin(
+    transaction: Transaction<Database>,
+    input: {
+      firstName: string;
+      middleName: string | null;
+      lastName: string;
+      sex: Sex;
+      civilStatus: CivilStatus;
+      encodedAt: Date;
+    },
+  ): Promise<{ id: string; memberId: string; network: NetworkName }> {
+    const anyPerson = await transaction
+      .selectFrom('persons')
+      .select('id')
+      .limit(1)
+      .executeTakeFirst();
+
+    if (anyPerson) {
+      throw new AlreadyBootstrappedError(
+        'people',
+        'People already exist, so this is not a fresh installation. An administrator ' +
+          'is created once, by the bootstrap, before anything else is recorded.',
+      );
+    }
+
+    const network = this.networks.networkForSex(input.sex);
+
+    const person = await transaction
+      .insertInto('persons')
+      .values({
+        id: randomUUID(),
+        first_name: input.firstName,
+        middle_name: input.middleName,
+        last_name: input.lastName,
+        // Section 3 makes a birthday optional and forbids inventing one. Nothing
+        // here knows it, and a bootstrap is the last place to guess.
+        birth_date: null,
+        sex: input.sex,
+        civil_status: input.civilStatus,
+      })
+      .returning(['id', 'member_id'])
+      .executeTakeFirstOrThrow();
+
+    // Through `networks`, which owns the table and checks the same-Network rules
+    // against it (section 2).
+    await this.networks.assignWithin(transaction, {
+      personId: person.id,
+      network,
+      actorId: null,
+      startedAt: input.encodedAt,
+    });
+
+    await transaction
+      .insertInto('person_lifecycle')
+      .values({
+        person_id: person.id,
+        state: 'CURRENT',
+        actor_id: null,
+        started_at: input.encodedAt,
+      })
+      .execute();
+
+    return { id: person.id, memberId: person.member_id, network };
   }
 }
