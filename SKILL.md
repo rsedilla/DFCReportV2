@@ -354,6 +354,12 @@ Do not store only one free-form `full_name` as the canonical structure. Keep fir
 
 Validation must support legitimate names containing spaces, hyphens, apostrophes, and Unicode characters. Do not use simplistic "letters only" validation.
 
+**A generational suffix is written into `last_name`, and is not a field of its own.** `Sedilla Jr`, never a fourth name column. The matching rules below already work this way and are stated on the assumption: they strip `Jr`, `Sr`, `II` and `III` when comparing, so `Sedilla Jr` and `Sedilla` compare equal, and they read the suffix back out separately so that a mismatch travels with the candidate as a weak distinguishing signal.
+
+**Never write one into `middle_name`.** The matcher does not look there and middle name is not compared at all, so a suffix recorded there is silently invisible — and a father and son then lose the one signal this section gives for telling them apart, with nothing reporting it. `first_name` would in fact work, since both name fields are stripped and both are read for a suffix, but one stated place beats two working ones: otherwise the same family is recorded two ways and every screen shows it inconsistently.
+
+**The four are a closed list.** A qualification that is not one of them — a degree, a profession, an honorific, a church title — is not a suffix, is not stored in a name field, and has no field of its own. Where such a thing belongs is an open question and is deliberately not answered here; what is settled is that a name field is not the answer, because anything put there is compared as though it were part of the person's name.
+
 ### Duplicate prevention
 
 Before creating a new person, search for possible existing people using normalized/fuzzy combinations of:
