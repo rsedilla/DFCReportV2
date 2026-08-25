@@ -176,6 +176,28 @@ Everything else holds, and three points are stated because they are where a bulk
 
 Member IDs are assigned by the server from the sequence. Nothing is backdated.
 
+### How the tree import runs
+
+Four things the rules above leave open, and an import cannot avoid answering any of them.
+
+**It is an operator-run script, not an endpoint.** It calls the domain services in process, which is what "through the domain services" requires, and it avoids the shape an endpoint would force: Section 22 makes a write endpoint record its idempotency completion inside the transaction that performs the write, so a bulk import over HTTP is a transaction of minutes holding one of the connections Section 24 bounds.
+
+**The actor is named on the command line and verified, and what that is worth is stated rather than assumed.** The script is given an Admin account, and refuses unless that account holds `people.create` and `people.manage_pastoral_assignment` at Whole Church. This is not authentication: whoever can run the script can already reach the database directly and do anything at all. What it buys is that the audit entries name an account that could legitimately have performed the work, and that an operator cannot attribute several thousand records to a Leader. The same reasoning is written into Section 7 for the Senior Pastor identifiers — the check is about the honesty of the record, not about stopping somebody who already holds everything.
+
+The script also refuses unless the initial-encoding phase is open. The phase is what makes the relaxations temporary, so an import that could run after it closed would be a relaxation with no end.
+
+**A row identifies its leader by row identifier, never by name.** The input carries a `row_id` per row and a `leader_row_id` naming another row; the two rows with no `leader_row_id` are the Network roots, and the import refuses unless there are exactly two, one per Network (Section 5). Names are refused as a leader reference outright. Section 3 makes a name not an identity, a congregation of several thousand certainly contains two people who share one, and the failure is the worst available kind — silent, pastoral, and invisible until somebody asks why a person's attendance rolls up under the wrong branch.
+
+**The dry run writes nothing, and adjudication returns as a file.** The dry run validates and reports; it creates no Person, no assignment and no audit entry, so it may be run as often as needed. It emits the duplicate candidates Section 3 requires a person to decide, and that person returns a decisions file saying, per row, whether an existing Person is used or a new one created.
+
+**The decisions file carries a fingerprint of the parsed input, and the commit refuses if it no longer matches.** Otherwise the file can be edited between the dry run and the commit, and decisions about row 41 are applied to a row 41 that is now somebody else. The fingerprint is taken over the parsed and normalized rows in order, never over the file's bytes: re-saving a spreadsheet changes quoting and line endings without changing a single fact, and a byte-level fingerprint would refuse a file nobody meaningfully touched.
+
+**A commit is one transaction, and there is no resume.** A failure writes nothing; the file is corrected and the import run again.
+
+Resuming was rejected for a specific reason rather than for simplicity. A resumed run meets the Persons its own earlier attempt created, each of them a Tier 1 candidate against the row that created it, and Section 3 forbids adjudicating those inline because nobody is present. Escaping that needs the batch and row recorded against every Person created, which is permanent structure for a phase that runs once.
+
+**The dry run therefore carries the validation burden**: cycles, the root count, every `leader_row_id` resolving, sex present and mapping to a Network, and every edge same-Network. A commit should fail for a structural reason only where something changed underneath it, because the dry run already refused everything else.
+
 ---
 
 ## 3. Person Model
