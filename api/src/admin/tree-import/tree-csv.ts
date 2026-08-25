@@ -27,8 +27,9 @@ import { type Candidate, findCandidates, normalizeName } from '../../people/dupl
 
 /**
  * The columns, in order. Section 2's ruling fixes `row_id` and `leader_row_id`;
- * the rest are section 3's required personal information, plus the birthday that
- * section 2 requires here and section 3 makes optional everywhere else.
+ * the rest are section 3's required personal information, plus the birthday, which
+ * section 3 makes optional and which nothing now requires — including this import,
+ * whose earlier requirement rested on a central record that does not exist.
  *
  * `middle_name` and `mobile_number` are section 3 fields and are deliberately
  * **not** columns. Section 2 names what the import loads — "names, sex, and each
@@ -554,13 +555,20 @@ function checkNames(row: TreeRow, add: (finding: Finding) => void): void {
 function checkBirthDate(row: TreeRow, add: (finding: Finding) => void, today: string): void {
   const { birthDate, line, rowId } = row;
   if (birthDate === '') {
+    // **A warning, not an error, and the distinction is the whole rule.** Section 2
+    // required a birthday of the import until it was found to rest on a central
+    // record that does not exist for this church; section 3 governs instead, and
+    // section 3 permits absence. What it forbids is invention — so this reports the
+    // gap, and refusing the file would be the surest way to have it filled with
+    // something. A fabricated birthday matches another fabricated one at Tier 1,
+    // and Tier 1 blocks creation, so the fiction refuses to record a real person.
     add({
-      severity: 'error',
+      severity: 'warning',
       code: 'BIRTH_DATE_MISSING',
       line,
       rowId,
       message:
-        'birth_date is required by the import (section 2). Find it in the central record and never fill it in — a fabricated birthday produces false Tier 1 matches, and Tier 1 blocks creation, so it refuses to record real people.',
+        'birth_date is absent. That is permitted (section 3) and the import will accept it — but never fill one in to silence this. A fabricated birthday produces false Tier 1 matches, and Tier 1 blocks creation, so it refuses to record real people. Add it later by an ordinary edit.',
     });
     return;
   }
