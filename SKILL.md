@@ -620,15 +620,19 @@ A root leader cannot be reassigned by anyone, Admin included, because there is n
 
 Never represent a root as an assignment pointing at itself. A self-referencing row is rejected by the no-self-assignment constraint, and would make the root its own ancestor — a one-node cycle.
 
-**The count is enforced, not assumed.** A root row carries `root_network`, the root seat for its Network, and a partial unique index over it permits no second occupant while the first is open. Closing a root's row frees the seat, which is how a succession is recorded; the closed row keeps the history of who held it.
+**The count is enforced, not assumed.** A root row carries `root_network`, the root seat for its Network, and a partial unique index over it permits no second occupant while the first is open. The index is partial over open rows, so a closed root row occupies nothing and the history of who held the position is preserved.
 
 That is a column on `pastoral_assignments` and a shape amended because a rule needed it, exactly as `account_roles.senior_pastor_slot` was — and for the same two reasons rather than by resemblance. A trigger counting open roots is not a constraint: under `READ COMMITTED` neither of two concurrent transactions sees the other's uncommitted row, so both count zero and both commit. And `pg_restore --disable-triggers` skips a constraint trigger while never skipping a unique index, so a restore could load a second root in silence.
 
-The seat denormalizes a Network onto an assignment row, which is safe here for a reason specific to roots rather than in general: a root's Network cannot change. This section refuses to reassign a root at all, and Section 4 refuses a Network change both for a root and for anyone holding open assignments as leader — which a root does, over their whole Network. A constraint trigger additionally checks the seat against the person's Network as of the row's `started_at`, so the column cannot be set to a value that disagrees with its source.
+**The seat denormalizes a Network onto an assignment row, and two checks keep it honest — because one does not.** The first version of this rule argued that no check was needed on the Network side, since this section refuses to reassign a root and Section 4 refuses a Network change for a root. Both are true of the application and neither was true of the database: the same-Network trigger examines only rows with a non-null `leader_id`, so a root's own row is never looked at on a Network write, and a check comparing the seat against the Network in force at the row's `started_at` reads frozen history and cannot see a later change. Probed, a Network change on an open root committed and left the seat naming the Network the person had left.
+
+So both directions are constrained. A trigger on `pastoral_assignments` refuses a seat that disagrees with the person's Network as of the row's `started_at`, which stops the column being written to a lie. A trigger on `network_assignments` refuses a Network change while the person holds an open root row, which is this section's existing refusal to move a root expressed as a constraint rather than as application code, and stops the person's Network moving out from under a seat already written.
 
 **Zero roots in a Network is a legal database state and is not a legal church state.** It is what a fresh installation holds before the import runs, so the constraint cannot forbid it; the import refuses a file that does not carry exactly two roots, one per Network (Section 2, How the tree import runs).
 
 **A root is created only by the initial import.** No endpoint creates one: `POST /api/v1/people` requires a pastoral leader, and this section makes who holds a root a Network-level decision rather than an encoding one. The service layer states the placement as a choice — under a named leader, or as a Network root — rather than as an identifier that may be null, because a nullable identifier cannot distinguish a root from an unassigned Person and the two are different states this section is at pains to separate.
+
+**How a root position changes hands is not defined here, and is deliberately not implied by the seat being freeable.** The index permits a successor once the previous root's row is closed, but no section defines who may close it or under what capability, and both write paths that could refuse a root outright. Until that is settled, a succession is not an operation this system offers.
 
 ### Recommended historical model
 
@@ -813,7 +817,7 @@ CREATE UNIQUE INDEX pastoral_assignments_one_root_per_network
   WHERE ended_at IS NULL AND root_network IS NOT NULL;
 ```
 
-The seat must also be honest, which the index cannot check because it cannot read `network_assignments`. A second constraint trigger compares `root_network` against the person's own Network as of the row's `started_at`, so a root cannot take the other Network's seat and leave their own free.
+The seat must also be honest, which the index cannot check because it cannot read `network_assignments`. Two constraint triggers cover the two directions: one on `pastoral_assignments` compares `root_network` against the person's own Network as of the row's `started_at`, so a root cannot take the other Network's seat and leave their own free; one on `network_assignments` refuses a Network change while the person holds an open root row, so the person's Network cannot move out from under a seat already written.
 
 No self-assignment — a check constraint covers the degenerate case; the wider rule against re-parenting an upline stays in the domain layer:
 
@@ -843,7 +847,7 @@ A root leader has a null `leader_id` (Network roots, above) and the trigger pass
 
 The same-Network triggers are `DEFERRABLE INITIALLY DEFERRED`, so each sees only what its own transaction can see at commit. That leaves a window neither closes: a transaction opening an edge under a person, with a `started_at` just before a Network change's effective instant and committing just after it, is invisible to the change's comparison, while its own trigger compares at its `started_at`, where that person's Network was still the old one. The edge is then permanently cross-Network and nothing revisits it — which contradicts this section's own requirement that the rule hold on every write.
 
-Every path that opens a pastoral edge takes a transaction-scoped advisory lock on the **leader** it is attaching to, and every path that changes a Network takes one on the person being changed, before reading anything it will rely on. A caller needing more than one takes them in ascending **lock key**, so that two operations moving people under each other cannot deadlock.
+Every path that opens a pastoral edge takes a transaction-scoped advisory lock on the **leader** it is attaching to, and every path that changes a Network takes one on the person being changed, before reading anything it will rely on. Opening a Network root row takes one on the **person**, since it has no leader and the fact it depends on is the person own Network: the row is refused unless its seat agrees with the Network in force at its start, which is exactly what a concurrent Network change would move. A caller needing more than one takes them in ascending **lock key**, so that two operations moving people under each other cannot deadlock.
 
 Ordered by the key rather than by the person id, because the key is what is actually taken: two ids that collided on one key could otherwise be acquired in opposite orders by two callers, which is a real cycle rather than the mere over-serialization a collision is otherwise. The key is computed from the identity and not from its spelling — a UUID is compared case-insensitively everywhere else in the system, so a key derived from the raw text would let the same person named in two cases take two locks that serialize against nothing.
 

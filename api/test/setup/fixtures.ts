@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { type INestApplication, type Type } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { ThrottlerStorage, type ThrottlerStorageService } from '@nestjs/throttler';
-import type { Kysely } from 'kysely';
+import { sql, type Kysely } from 'kysely';
 
 import { AppModule } from '../../src/app.module';
 import { TokensService } from '../../src/auth/tokens.service';
@@ -98,20 +98,21 @@ export async function assignTo(
   startedAt: Date = EPOCH,
 ): Promise<string> {
   // A null leader means a Network root, and a root row carries its Network's root
-  // seat (section 5, migration 0008). Read here rather than asked of every caller:
-  // the seat is derivable from the person, the database refuses a value that
-  // disagrees with it, and a fixture that took it as an argument would let a test
-  // claim the wrong one and then assert on the result.
+  // seat (section 5, migration 0008). Read here rather than asked of every caller,
+  // so that no test can claim the wrong seat and then assert on the result.
+  //
+  // Read with `network_as_of(person, startedAt)` rather than from the currently
+  // open row, because that is what the trigger compares against. The two agree
+  // only for a person whose Network has never changed, so taking the open row
+  // would present a fixture bug as a trigger failure the first time a test writes
+  // a root with a historical `startedAt`.
   const rootNetwork =
     leaderId === null
       ? (
-          await db
-            .selectFrom('network_assignments')
-            .select('network')
-            .where('person_id', '=', personId)
-            .where('ended_at', 'is', null)
-            .executeTakeFirstOrThrow()
-        ).network
+          await sql<{
+            network: 'MENS' | 'WOMENS' | null;
+          }>`SELECT network_as_of(${personId}::uuid, ${startedAt}) AS network`.execute(db)
+        ).rows[0].network
       : null;
 
   const row = await db

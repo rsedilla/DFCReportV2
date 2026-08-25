@@ -2929,16 +2929,36 @@ neither of two concurrent transactions sees the other's uncommitted row, both
 count zero, both commit. And `pg_restore --disable-triggers` skips a constraint
 trigger while never skipping a unique index.
 
-**Where the analogy does not hold is the interesting part.** The slot works partly
-because the state it constrains lives entirely in `account_roles`. A root's
-Network does not — it lives in `network_assignments`, effective-dated — so this
-denormalizes, and a denormalized value can drift. It cannot drift here: §5 refuses
-to reassign a root, and §4 refuses a Network change both for a root and for anyone
-holding open assignments as leader, which a root does over their whole Network. A
-root's Network is immutable for as long as they are a root. A second constraint
-trigger checks the seat against `network_as_of` anyway, because the index cannot
-read `network_assignments` and would happily let a MENS root take the WOMENS seat
-and leave its own free.
+**Where the analogy does not hold is the interesting part, and the first version
+of this entry got it wrong.** The slot works partly because the state it
+constrains lives entirely in `account_roles`. A root's Network does not — it lives
+in `network_assignments`, effective-dated — so this denormalizes, and a
+denormalized value can drift.
+
+I argued it could not drift here, from §5 refusing to reassign a root and §4
+refusing a Network change for a root and for anyone leading disciples. **Both are
+true of the application and neither was true of the database.**
+`assert_network_change_keeps_edges` filters `pa.leader_id IS NOT NULL`, so a root's
+own row is by design never examined on a Network write; and
+`assert_root_network_matches` compares against `network_as_of(person_id,
+started_at)`, frozen history that cannot see a later change however often it fires.
+`architecture-guardian` probed it and a Network change on an open root committed,
+leaving the seat naming the Network the person had left — one Network effectively
+rootless, the other free to take a second root, reached with no pastoral
+reassignment. I reproduced the probe before acting on it.
+
+**That is the ninth instance on this project of a rule written by reasoning from a
+mechanism's purpose instead of reading its `WHERE` clause** — committed, this time,
+in a migration whose own header says "**Re-derived rather than copied**" and cites
+§25 rule 19 for it. The claim was three-times-stated: in the migration header, in
+§5, and in this entry. Nothing checked any of them, because the thing they asserted
+was about a trigger none of them had read.
+
+So both directions are now constrained. `assert_network_not_changed_for_root`
+refuses a write to `network_assignments` while the person holds an open root row,
+which is §4's existing refusal expressed as a constraint rather than as a
+TypeScript check — in a change whose entire thesis is that a TypeScript check is
+the weaker thing.
 
 Zero roots in a Network stays legal, because that is what a fresh database holds
 before the import runs. "Exactly one" is not expressible without forbidding an
@@ -2974,12 +2994,43 @@ nobody updated it — this does.
 Network-level decision rather than an encoding one. Written to `SKILL.md` §5 in the
 same change, and checked by grep rather than asserted.
 
-**One test lesson, caught before it shipped.** The concurrency case was first
-written with two pooled `db.transaction()` calls awaited together, which may simply
-run one after the other — so it would have passed against a counting trigger and
-proved nothing, which is the exact failure CLAUDE.md records for authorization case
-7. It uses two raw connections with explicit `BEGIN`, like the one-active-assignment
-case beside it. Both root cases were then verified red by dropping the index.
+**Four smaller findings from the same review, each the recurring shape.**
+
+The migration justified `DEFERRABLE INITIALLY DEFERRED` on the honesty trigger by
+saying the root row and the `network_assignments` row it checks "are written in one
+transaction, and an immediate trigger would reject whichever landed first". Reading
+the only caller, the network row is always written first, so there was nothing to
+reject. That reason belongs to `pastoral_assignments_same_network`, which is
+deferred for §4's atomic pair. The trigger is now immediate, which is also better:
+deferred, a violation arrives at `COMMIT` as a raw `check_violation`, the
+500-instead-of-an-answer failure recorded here repeatedly.
+
+`SET CONSTRAINTS ALL IMMEDIATE` was justified as flushing pending events for an
+`ALTER TABLE`. It is load-bearing for the `CREATE INDEX` too — both are refused
+while events are pending — and `ALL` does not merely flush, it switches the mode
+for the rest of the transaction, silently including the trigger created further
+down the same file. Narrowed to the one constraint it means.
+
+The migration pre-validated one data condition and left its neighbour to abort raw,
+though the policy names that neighbour by name. It now checks for pre-existing
+duplicate roots as well.
+
+**And the root path had no caller and no test at all.** `kind: 'ROOT'` appeared
+nowhere outside its own definition, so the seat could have been written wrong or
+omitted with the suite green — a §5 rule stated in the specification with nothing
+able to fail on it, which is the pattern this repository keeps refusing to ship.
+Four service-level cases now exercise it.
+
+**The concurrency test proved nothing, twice over.** It was first written with two
+pooled `db.transaction()` calls awaited together, which may simply run in sequence.
+Rewritten to two raw connections with explicit `BEGIN` — copied from the
+one-active-assignment case beside it — it was *still* only pinned by dropping the
+index, which the sequential case above it already pins: nothing awaited the second
+INSERT before the first committed, so it may arrive after the commit and fail
+against a committed index with the assertion passing regardless. It now polls
+`pg_stat_activity` until a backend is genuinely blocked and asserts the write has
+not settled, which is what `person-lock.e2e.spec.ts` does and what pinning
+concurrency actually looks like.
 
 ### Open — awaiting a ruling
 
@@ -3001,6 +3052,7 @@ Two related questions have defined behaviour and are recorded in `SKILL.md` §12
 
 **Unsettled, and not blocking anything.** None of these is a Stop Condition. An implementer proceeds and settles them in passing; they are listed here because a reader looking for what is open should not have to find it inside the body of a ruling.
 
+- **Who may close a Network root's row, and under what capability.** §5 gives each Network exactly one root and says changing who holds one is "a deliberate Network-level decision, not a pastoral reassignment" — and names no capability, no endpoint and no workflow for it. The seat added on 2026-08-25 is partial over open rows, so a successor becomes possible the moment the previous root's row is closed; both write paths that could close it refuse a root outright, so nothing can. §5 now says plainly that a succession is not an operation this system offers, rather than implying one from the seat being freeable. Not blocking: the import creates two roots and neither changes.
 - **Whether a leader sees a "details to collect" list.** Birthday became optional on 2026-08-24, and an optional field with nothing surfacing it is one that never gets collected. §15's attention-list idiom fits — filtered, never ranked, never colour-graded, shown to the leader who can act — but there is no dashboard to put it on until Stage 2's screens exist. Decide it with them.
 - **Whether "asked, not given" is a state on the Person.** It follows the item above rather than standing alone. Without it, somebody who declined to give their birthday stays on a collect-list forever, which presses on exactly the privacy the optional ruling protects. With it, the next leader learns she was asked rather than rediscovering it by asking again — but it is a new field on `persons`, so it is a ruling and not a detail.
 - **Whether a recorded birthday may ever be removed.** §3 defines adding one and, since 2026-08-24, refuses an explicit null on the edit path so that a nullable column does not become an erase capability nobody decided on. The privacy argument that made the field optional cuts toward permitting removal — somebody may withdraw what they earlier gave. Reproducibility cuts the other way: a Tier 1 acknowledgement recorded against a birthday, and every age derived from it, stop being explicable once it is gone. Left refused until decided.

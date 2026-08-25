@@ -122,10 +122,20 @@ export class HierarchyService {
     // the section 5 invariants checkable in one place — an obligation held only by
     // callers is one the next caller can omit with nothing failing.
     //
-    // A root has no leader, so there is nothing to lock against and nothing to
-    // check: section 5 gives them no leader above them, which is the whole of what
-    // being a root is.
-    await lockPersonsWithin(transaction, assignment.root ? [] : [assignment.leaderId]);
+    // **A root locks the person instead of the leader it has none of.** Section 5
+    // states the rule for an edge — lock the leader you are attaching to — and a
+    // root is not an edge, so an earlier version of this took no lock at all and
+    // said there was "nothing to lock against and nothing to check".
+    //
+    // That stopped being true when the row gained a seat. The write now depends on
+    // the person's own Network: the database refuses the row unless `root_network`
+    // agrees with `network_as_of(person, started_at)`, and a concurrent Network
+    // change is exactly what the person lock exists to serialize. Taking the lock
+    // on the subject is the same rule applied to the fact this write actually
+    // reads, rather than an exception to it.
+    await lockPersonsWithin(transaction, [
+      assignment.root ? assignment.personId : assignment.leaderId,
+    ]);
 
     await transaction
       .insertInto('pastoral_assignments')
