@@ -23,9 +23,17 @@
 -- the first time may not have asked. Or somebody may decline to give it, which is
 -- a decision rather than a gap, and no later gate may coerce it.
 --
--- The matcher needed nothing: `Subject.birthDate` and `Candidate.birthDate` in
--- `duplicate-matching.ts` were already `string | null`, and section 3 already
--- carried a Tier 2 rule naming an absent birthday.
+-- The matcher's *code* needed nothing: `Subject.birthDate` and
+-- `Candidate.birthDate` in `duplicate-matching.ts` were already `string | null`,
+-- and section 3 already carried a Tier 2 rule naming an absent birthday.
+--
+-- Its *tests* did. This migration is the first thing that makes a candidate's
+-- birthday null in the database, which turned the null guard on the same-birthday
+-- comparison into the only line preventing two birthday-less people from matching
+-- on a birthday neither has -- and nothing held it. Removing the guard passed the
+-- entire suite while refusing such a pair at Tier 1. Same shape as the edit path
+-- below: relaxing a constraint made an existing line load-bearing without changing
+-- it, so nothing drew attention to it.
 --
 -- **The edit path did need something, and this migration is why.** A first version
 -- of this header said nothing else changes, because `PATCH /api/v1/people/{id}`

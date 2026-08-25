@@ -217,7 +217,7 @@ describe('people (SKILL.md sections 3, 7 and 8)', () => {
       // Not "Tier 1 is unreachable": the third rule reads a mobile number, and
       // equal names on a shared household number are still a Tier 1 refusal
       // (section 3). An earlier version of this comment claimed otherwise, as did
-      // five other places on this branch, this case's own title among them.
+      // six other places on this branch, this case's own title among them.
       //
       // Same name as an existing fixture, which with a matching birthday is the
       // Tier 1 refusal two cases above. Without one it creates.

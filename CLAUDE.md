@@ -2778,7 +2778,11 @@ distinction.
 
 *The first version of this entry said "both Tier 1 rules", in §3 twice, in the Decisions entry,
 in migration 0007, in a test comment, in that test's title, and in the commit
-message — six, of which five could be corrected and the commit message could not. §3 makes a matching mobile number
+message — **seven**, of which six could be corrected and the commit message could
+not. *Two earlier versions of this sentence said five and then six; enumerating the
+list and then not adding it up is the cheapest form of the fault this log keeps
+recording, and it happened here twice in the paragraph written to correct a
+miscount.* §3 makes a matching mobile number
 with equal first and last names a Tier 1 as well, and states the generalisation three
 subsections along: "Every Tier 1 rule reads a birthday or a mobile number." The
 argument survives — a fabricated date still produces a false Tier 1 that blocks a
@@ -2828,8 +2832,9 @@ first person is recorded without one.
 Three things are deliberately **not** settled here, and are listed as open below: a
 "details to collect" attention list so an optional field is not an invisible one,
 whether "asked, not given" is a state on the Person distinguishing a decision from a
-gap, and whether a recorded birthday may ever be removed. Both wait for the first real screens, since an attention list with no
-dashboard to live on is a list nobody sees.
+gap, and whether a recorded birthday may ever be removed. The first two wait for the first real screens, since an attention list with
+no dashboard to live on is a list nobody sees; the third is a specification question
+with no dashboard dependency at all.
 
 Written to `SKILL.md` §3 in the same change.
 
@@ -2854,8 +2859,8 @@ Two related questions have defined behaviour and are recorded in `SKILL.md` §12
 **Unsettled, and not blocking anything.** None of these is a Stop Condition. An implementer proceeds and settles them in passing; they are listed here because a reader looking for what is open should not have to find it inside the body of a ruling.
 
 - **Whether a leader sees a "details to collect" list.** Birthday became optional on 2026-08-24, and an optional field with nothing surfacing it is one that never gets collected. §15's attention-list idiom fits — filtered, never ranked, never colour-graded, shown to the leader who can act — but there is no dashboard to put it on until Stage 2's screens exist. Decide it with them.
-- **Whether a recorded birthday may ever be removed.** §3 defines adding one and, since 2026-08-24, refuses an explicit null on the edit path so that a nullable column does not become an erase capability nobody decided on. The privacy argument that made the field optional cuts toward permitting removal — somebody may withdraw what they earlier gave. Reproducibility cuts the other way: a Tier 1 acknowledgement recorded against a birthday, and every age derived from it, stop being explicable once it is gone. Left refused until decided.
 - **Whether "asked, not given" is a state on the Person.** It follows the item above rather than standing alone. Without it, somebody who declined to give their birthday stays on a collect-list forever, which presses on exactly the privacy the optional ruling protects. With it, the next leader learns she was asked rather than rediscovering it by asking again — but it is a new field on `persons`, so it is a ruling and not a detail.
+- **Whether a recorded birthday may ever be removed.** §3 defines adding one and, since 2026-08-24, refuses an explicit null on the edit path so that a nullable column does not become an erase capability nobody decided on. The privacy argument that made the field optional cuts toward permitting removal — somebody may withdraw what they earlier gave. Reproducibility cuts the other way: a Tier 1 acknowledgement recorded against a birthday, and every age derived from it, stop being explicable once it is gone. Left refused until decided.
 - **Whether the API runs as more than one instance, and what clock skew revocation may assume.** §6 says any instance can serve any request, and account-wide revocation compares two timestamps both stamped by an API process. On one instance that is one clock; on several it is not, and §24 now requires synchronised clocks without bounding the skew this comparison tolerates. The row lock added for the uncommitted-revocation window orders the two events in the database and does not depend on clocks, so this affects the comparison rather than the ordering. Settle it before the first multi-instance deployment.
 - **The application's database role.** §24 requires least-privilege credentials and none exist: the API connects as the owner of every table, so it holds `TRUNCATE`, which bypasses the no-delete triggers entirely, and `DROP`. The no-delete rule leans on this role to make its `TRUNCATE` exemption safe. Creating it is deployment work with no ruling attached, but until it happens §5's exemption is unprotected.
 - **Whether a revocation may be undone in place.** Nothing addresses setting `revoked_at` back to `NULL`, and the schema permits it on `account_roles` and `capability_grants`. It erases a revocation exactly as a `DELETE` would, one column over — and the Senior Pastor cap depends on `revoked_at` being monotone for the count to mean anything over time.
