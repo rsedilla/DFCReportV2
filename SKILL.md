@@ -750,7 +750,9 @@ Reject the operation before writing. Recursive subtree queries must additionally
 
 A person has at most one active pastoral assignment at any moment.
 
-Zero is legitimate in exactly two situations: a Person encoded but not yet assigned, and an archived Person whose assignment has ended. Every other Person has exactly one, and a Network root leader is not an exception — their row exists and carries a null `leader_id` (Network roots, above).
+Zero is legitimate in exactly three situations: a Person encoded but not yet assigned, an archived Person whose assignment has ended, and **a Person who administers the system and is not part of the pastoral structure** (Section 6, The first Admin account). Every other Person has exactly one, and a Network root leader is not an exception — their row exists and carries a null `leader_id` (Network roots, above).
+
+The third is different in kind from the first two and is named separately for that reason. Both of those are transient — one is waiting to be assigned, the other used to be — so a Person sitting in either is a Person something will eventually happen to. An administrator who is not discipled by anyone in the church is in the correct and permanent state, and describing them as "not yet assigned" invites somebody to go looking for the missing leader and to attach one, which would place a person in the pastoral tree who does not belong to it and count them in a subtree that does not contain them.
 
 A reassignment closes the current assignment and opens the new one within a single transaction. It must never leave two open assignments, and must never leave a person who had a leader without one. Enforce with a uniqueness constraint over the person where `ended_at` is null — the constraint permits zero rows and forbids two.
 
@@ -1125,6 +1127,22 @@ account_tokens
 ```
 
 Single-use: `used_at` is set on redemption and a token with it set is refused. Issuing a new token of a purpose invalidates any outstanding one of the same purpose for that account.
+
+### The first Admin account
+
+Every account is provisioned by somebody holding `accounts.manage`, which only Admin holds (Section 7). The first Admin account therefore cannot be provisioned by anybody, and something has to break the circle.
+
+**A one-time operator-run command breaks it, and nothing else may.** It is not an endpoint. Section 7 keeps a closed list of routes reachable without authentication, and an unauthenticated route that mints the most powerful account in the system is the wrong thing to add to it: if its "no accounts exist yet" check is ever wrong, or two requests race it, whoever reaches the server first holds the church's records.
+
+The command is the same kind of thing as the import script and rests on the same argument Section 2 already accepts for that one — whoever can run it can already reach the database directly, so it is not authentication. What it buys is that the one write nobody can be named for is performed deliberately, once, and recorded as what it was.
+
+**It refuses to run while any account exists.** That is what makes it one-time rather than a standing privilege, and it takes a lock before it looks, so that two runs cannot both find an empty table.
+
+**Its writes are recorded as a system action.** The audit entries carry a null `actor_id` and the role row a null `granted_by` — the two allowances Sections 21 and 7 already make, each justified by this moment and by nothing else. This is the only thing in the system permitted to use them.
+
+**The person it creates need not be part of the pastoral tree.** An administrator may be somebody the church disciples, in which case they are an ordinary Person under their own leader; or they may administer the system without being anybody's disciple, in which case they hold no pastoral assignment at all and that is the correct permanent state (Section 5, invariant 3). Neither is preferred. What must not happen is inventing a pastoral leader so that a record looks complete: a person placed in the tree who does not belong to it is counted in a subtree that does not contain them, and no report will ever say so.
+
+**It prints the activation link rather than relying on delivery**, which is a deliberate departure from every other account. Section 6 keeps activation tokens out of API responses because an administrator must not learn another person's token — and here the operator *is* the holder, running the command themselves on the server. The reason for the departure is recovery: if delivery failed for this one account there would be no Admin to re-send it from and no way back, since the command refuses to run a second time. The cost is that the link is in terminal scrollback, and is accepted for a token that is used once, within its expiry, by the person who just typed the command.
 
 ### Account activation
 
