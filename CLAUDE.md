@@ -2779,10 +2779,19 @@ distinction.
 *The first version of this entry said "both Tier 1 rules", in §3 twice, in the Decisions entry,
 in migration 0007, in a test comment, in that test's title, and in the commit
 message — **seven**, of which six could be corrected and the commit message could
-not. *Two earlier versions of this sentence said five and then six; enumerating the
-list and then not adding it up is the cheapest form of the fault this log keeps
-recording, and it happened here twice in the paragraph written to correct a
-miscount.* §3 makes a matching mobile number
+not. *Two earlier versions of this sentence were wrong in two different ways, and a
+third version collapsed them into one.* The first enumerated five places and gave no
+total at all, omitting the Decisions entry and the test's own title — an incomplete
+list. The second enumerated seven and called them six — bad arithmetic over a
+complete list. Saying they "said five and then six" describes neither: the first
+said no number. Two failures, not one repeated, and treating them as one repeated is
+§25 rule 19 applied to the paragraph's own history, exactly as the 2026-08-24 entry
+had to correct "three successive versions" to one.
+
+*One miscount is now itself immutable.* `65a9835`'s commit message carries "it was
+six places and not five, of which five could be corrected", which is wrong on both
+counts and cannot be edited. This paragraph accounted for the immutable false claim
+in `6a6d5a8` and not for that one; it does now.* §3 makes a matching mobile number
 with equal first and last names a Tier 1 as well, and states the generalisation three
 subsections along: "Every Tier 1 rule reads a birthday or a mobile number." The
 argument survives — a fabricated date still produces a false Tier 1 that blocks a
