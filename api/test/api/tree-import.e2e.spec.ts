@@ -13,9 +13,13 @@
  * that reaches them through `commitTreeImport` passes if *either* the orchestration
  * or the service's own refusal is present, so together they pin the disjunction and
  * neither half — the finding CLAUDE.md records for the identifier work and again
- * for the first-Admin bootstrap. `PeopleImportService` refuses on its own account
- * because it is public on a service the injector resolves, and that is pinned here
- * by calling it.
+ * for the first-Admin bootstrap.
+ *
+ * There are two such guards and a first version pinned only one. `PeopleImportService`
+ * refuses an actor without `ADMIN` as well as a closed phase, because it is exported
+ * from `PeopleModule` and anything importing that module can inject Person creation
+ * with no duplicate gate and no idempotency claim. Each is called directly here, and
+ * each was verified red on its own.
  *
  * Fixture names are invented (CLAUDE.md, Secrets).
  */
@@ -41,6 +45,7 @@ import type { INestApplication } from '@nestjs/common';
 import type { Kysely } from 'kysely';
 import type { ImportModules } from '../../src/admin/tree-import/tree-import';
 import type { Actor } from '../../src/auth/authorization/authorization.service';
+import type { ImportActor } from '../../src/people/people.import.service';
 import type { Database } from '../../src/database/schema';
 
 const HEADER = 'row_id,first_name,last_name,birth_date,sex,civil_status,leader_row_id';
@@ -77,6 +82,7 @@ describe('the leadership-tree import (SKILL.md section 2)', () => {
   let db: Kysely<Database>;
   let modules: ImportModules;
   let admin: Actor;
+  let adminImportActor: ImportActor;
 
   async function countEverything() {
     const one = async (table: 'persons' | 'pastoral_assignments' | 'audit_log') =>
@@ -116,6 +122,13 @@ describe('the leadership-tree import (SKILL.md section 2)', () => {
     const person = await createPerson(db, { firstName: 'Adelina', network: 'WOMENS' });
     const account = await createAccount(app, db, { person, roles: ['ADMIN'] });
     admin = { accountId: account.id, personId: person.id };
+    adminImportActor = {
+      accountId: account.id,
+      // The real authority, read the way the import reads it. A hand-built
+      // `{ roles: ['ADMIN'] }` would pass the service's check while proving nothing
+      // about what `authorityFor` actually returns for an ADMIN account.
+      authority: await app.get(AuthorizationService).authorityFor(account.id),
+    };
   });
 
   afterAll(async () => {
@@ -130,14 +143,36 @@ describe('the leadership-tree import (SKILL.md section 2)', () => {
      * An `ACTOR_UNKNOWN` member survived a whole review that way: it was declared,
      * emitted nowhere, and handled in the CLI instead.
      *
-     * `ACTOR_AUTHORITY_UNREADABLE` is the one that cannot be provoked from here —
-     * it needs the grants read to fail, which is a database fault rather than a
-     * state. It is asserted to be reachable by construction instead: it is the
-     * only code raised from the `catch`, and the test below proves that `catch` is
-     * not swallowing ordinary denials.
+     * All four are provoked, `ACTOR_AUTHORITY_UNREADABLE` included. A first version
+     * excluded it, on the claim that it "cannot be provoked from here" because it
+     * needs a database fault — which is wrong twice: `ImportModules` is a
+     * structural interface the suite builds as an object literal, so substituting
+     * an `authorization` whose `authorityFor` rejects is one line; and the same
+     * docblock then justified the exclusion by conflating the two `catch` blocks in
+     * `checkPreconditions`, only one of which raises this code.
      */
     it('are all emitted by something', async () => {
       const emitted = new Set<string>();
+
+      const unreadable = await dryRunTreeImport(
+        {
+          ...modules,
+          authorization: {
+            ...modules.authorization,
+            authorityFor: () => Promise.reject(new Error('connection terminated')),
+          } as unknown as AuthorizationService,
+        },
+        { treeCsv: SPINE, actor: admin },
+      );
+
+      // It stops there rather than continuing: nothing about the account's
+      // authority is known, so the other two actor codes would be guesses.
+      expect(unreadable.preconditions.map((finding) => finding.code)).toEqual([
+        'ACTOR_AUTHORITY_UNREADABLE',
+      ]);
+      for (const finding of unreadable.preconditions) {
+        emitted.add(finding.code);
+      }
 
       const person = await createPerson(db, { firstName: 'Bienvenido', network: 'MENS' });
       const account = await createAccount(app, db, {
@@ -163,10 +198,25 @@ describe('the leadership-tree import (SKILL.md section 2)', () => {
         emitted.add(finding.code);
       }
 
-      expect([...emitted].sort()).toEqual(
-        PRECONDITION_CODES.filter((code) => code !== 'ACTOR_AUTHORITY_UNREADABLE')
-          .slice()
-          .sort(),
+      expect([...emitted].sort()).toEqual(PRECONDITION_CODES.slice().sort());
+    });
+
+    it('does not report an unexpected failure as a missing capability', async () => {
+      // The narrowing this batch added and did not pin: a bare `catch {}` around
+      // `authorize` reported *any* failure as `ACTOR_LACKS_CAPABILITY`, which sends
+      // an operator to fix a grant that is not the problem. Reverting it leaves the
+      // suite green without this.
+      const broken = {
+        ...modules,
+        authorization: {
+          ...modules.authorization,
+          authorityFor: modules.authorization.authorityFor.bind(modules.authorization),
+          authorize: () => Promise.reject(new Error('connection terminated')),
+        } as unknown as AuthorizationService,
+      };
+
+      await expect(dryRunTreeImport(broken, { treeCsv: SPINE, actor: admin })).rejects.toThrow(
+        /connection terminated/,
       );
     });
   });
@@ -368,13 +418,86 @@ describe('the leadership-tree import (SKILL.md section 2)', () => {
               placement: { kind: 'ROOT' },
               encodedAt: new Date(),
             },
-            admin,
+            adminImportActor,
             'batch',
           ),
         ),
       ).rejects.toThrow(/initial-encoding phase is closed/);
 
       expect((await countEverything()).persons).toBe(1);
+    });
+
+    it('refuses a non-Admin actor at the service, not only at the import door', async () => {
+      // The door this file's header is about. `PeopleImportService` is exported
+      // from `PeopleModule`, so any module importing it can inject these methods —
+      // and a first version put the ADMIN check only in `admin/tree-import`, then
+      // said in three places that it was closed "for the whole run".
+      const person = await createPerson(db, { firstName: 'Bienvenido', network: 'MENS' });
+      const account = await createAccount(app, db, {
+        person,
+        roles: ['LEADER'],
+        grantedBy: admin.accountId,
+      });
+      const leaderActor: ImportActor = {
+        accountId: account.id,
+        authority: await app.get(AuthorizationService).authorityFor(account.id),
+      };
+
+      await expect(
+        db.transaction().execute((trx) =>
+          modules.people.createForImportWithin(
+            trx,
+            {
+              firstName: 'Teodoro',
+              middleName: null,
+              lastName: 'Salazar',
+              birthDate: null,
+              sex: 'MALE',
+              civilStatus: 'SINGLE',
+              placement: { kind: 'ROOT' },
+              encodedAt: new Date(),
+            },
+            leaderActor,
+            'batch',
+          ),
+        ),
+      ).rejects.toThrow(/runs as an Admin account/);
+
+      // The phase is open here, so this is the role check refusing and nothing else.
+      expect((await countEverything()).persons).toBe(2);
+    });
+
+    it('refuses authority read for a different account', async () => {
+      // `ActorAuthority` carries the account it was read for so it cannot decide
+      // for another, which is what `AuthorizationService.coversWith` checks and why
+      // the same check is here. Unreachable through any call site, and checked
+      // because this decides authority.
+      const other = await createPerson(db, { firstName: 'Corazon', network: 'WOMENS' });
+      const otherAccount = await createAccount(app, db, {
+        person: other,
+        roles: ['ADMIN'],
+        grantedBy: admin.accountId,
+      });
+
+      await expect(
+        db.transaction().execute((trx) =>
+          modules.people.createForImportWithin(
+            trx,
+            {
+              firstName: 'Teodoro',
+              middleName: null,
+              lastName: 'Salazar',
+              birthDate: null,
+              sex: 'MALE',
+              civilStatus: 'SINGLE',
+              placement: { kind: 'ROOT' },
+              encodedAt: new Date(),
+            },
+            { accountId: otherAccount.id, authority: adminImportActor.authority },
+            'batch',
+          ),
+        ),
+      ).rejects.toThrow(/was offered for an import running as/);
     });
 
     it('is refused by `attachExistingWithin` too', async () => {
@@ -392,7 +515,7 @@ describe('the leadership-tree import (SKILL.md section 2)', () => {
               placement: { kind: 'UNDER', pastoralLeaderId: leader.id },
               encodedAt: new Date(),
             },
-            admin,
+            adminImportActor,
             'batch',
           ),
         ),
@@ -625,6 +748,63 @@ describe('the leadership-tree import (SKILL.md section 2)', () => {
       ]);
     });
 
+    it('records only the Tier 1 candidates, not every candidate on the row', async () => {
+      // The inner filter, which had nothing able to fail on it: the previous case
+      // gave the row exactly one candidate and it was Tier 1, so deleting the
+      // candidate-level filter kept the suite green while writing Tier 2 candidates
+      // into `audit_log` as acknowledged. Section 3 asks nothing of a person
+      // reading a Tier 2 list, so such an entry asserts an acknowledgement that was
+      // neither given nor required.
+      const tier1 = await db
+        .insertInto('persons')
+        .values({
+          first_name: 'Marisol',
+          last_name: 'Ventura',
+          birth_date: '1985-06-15',
+          sex: 'FEMALE',
+          civil_status: 'SINGLE',
+        })
+        .returning('member_id')
+        .executeTakeFirstOrThrow();
+
+      // Same names, no birthday — Tier 2, because section 3 drops a candidate a
+      // tier when less is known rather than claiming more.
+      const tier2 = await db
+        .insertInto('persons')
+        .values({
+          first_name: 'Marisol',
+          last_name: 'Ventura',
+          birth_date: null,
+          sex: 'FEMALE',
+          civil_status: 'SINGLE',
+        })
+        .returning('member_id')
+        .executeTakeFirstOrThrow();
+
+      const report = await dryRunTreeImport(modules, { treeCsv: SPINE, actor: admin });
+      const row = report.matched.find((matched) => matched.rowId === '4')!;
+      // The fixture is only worth anything if it really produced both tiers.
+      expect(row.candidates.map((candidate) => candidate.tier).sort()).toEqual([1, 2]);
+
+      const result = await commitTreeImport(modules, {
+        treeCsv: SPINE,
+        decisionsCsv: decisionsFor(SPINE, '4,CREATE,'),
+        actor: admin,
+      });
+
+      const entries = await db
+        .selectFrom('audit_log')
+        .select('after')
+        .where('batch_id', '=', result.batchId)
+        .execute();
+
+      const marisol = entries.find(
+        (entry) => (entry.after as Record<string, unknown>).first_name === 'Marisol',
+      )!;
+      expect(marisol.after).toHaveProperty('acknowledged_duplicate_member_ids', [tier1.member_id]);
+      expect(JSON.stringify(marisol.after)).not.toContain(tier2.member_id);
+    });
+
     it('catches a Tier 1 candidate created after the dry run', async () => {
       // The gap the fingerprint cannot close, in the half that *is* closed: the
       // fingerprint covers the input file and says nothing about the database, and
@@ -780,32 +960,42 @@ describe('the leadership-tree import (SKILL.md section 2)', () => {
       ).rejects.toThrow(/people\.correct_sex/);
     });
 
-    it('refuses to seat an existing Person as a Network root', async () => {
-      // Section 5 says a root is created only by the initial import, and says a
-      // root cannot be reassigned by anyone; taking somebody who already exists
-      // and seating them is neither clearly inside nor clearly outside those, so
-      // the fail-closed reading is taken and the question is recorded as open.
+    it('seats an existing Person as a Network root, taking the Network from their row', async () => {
+      // Section 2 says a row resolving to an existing Person "receives the pastoral
+      // assignment the tree gives them" and states no exception for a root row;
+      // section 5's "a root is created only by the initial import" is about
+      // creating the root *row*, which is what this does. This was refused for one
+      // commit, on a rule invented in a service.
       //
-      // The case that makes it more than theoretical is the administrator: they
-      // have no pastoral assignment by design (section 5 invariant 3, third case),
-      // so without this they are exactly the kind of Person a root row can absorb.
+      // The Network comes from `network_assignments`, not from sex — the same read
+      // the UNDER branch uses, and the one migration 0008's index compares the seat
+      // against.
       const adminMemberId = await db
         .selectFrom('persons')
         .select('member_id')
         .where('id', '=', admin.personId)
         .executeTakeFirstOrThrow();
 
-      await expect(
-        commitTreeImport(modules, {
-          // Row 2 is the Women's root, and the administrator is FEMALE, so the sex
-          // check passes and the root refusal is what fires.
-          treeCsv: SPINE,
-          decisionsCsv: decisionsFor(SPINE, `2,USE_EXISTING,${adminMemberId.member_id}`),
-          actor: admin,
-        }),
-      ).rejects.toThrow(/root is created by the import/);
+      // Row 2 is the Women's root and the administrator is FEMALE, so the sex check
+      // passes and the seat is legal.
+      const result = await commitTreeImport(modules, {
+        treeCsv: SPINE,
+        decisionsCsv: decisionsFor(SPINE, `2,USE_EXISTING,${adminMemberId.member_id}`),
+        actor: admin,
+      });
 
-      expect((await countEverything()).assignments).toBe(0);
+      expect(result.reused).toEqual([
+        expect.objectContaining({ rowId: '2', memberId: adminMemberId.member_id }),
+      ]);
+
+      const seat = await db
+        .selectFrom('pastoral_assignments')
+        .select(['leader_id', 'root_network'])
+        .where('person_id', '=', admin.personId)
+        .where('ended_at', 'is', null)
+        .executeTakeFirstOrThrow();
+
+      expect(seat).toEqual({ leader_id: null, root_network: 'WOMENS' });
     });
 
     it('refuses a Person with no Network recorded, rather than failing at COMMIT', async () => {

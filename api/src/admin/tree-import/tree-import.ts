@@ -32,13 +32,16 @@ import { CapabilityDeniedError, ScopeDeniedError } from '../../common/errors/api
 import { decisionsTemplate, hasErrors, readDecisionsCsv } from './decisions-csv';
 import { fingerprintOf, validateTreeCsv } from './tree-csv';
 
-import type { AuthorizationService } from '../../auth/authorization/authorization.service';
-import type { Actor } from '../../auth/authorization/authorization.service';
+import type {
+  Actor,
+  ActorAuthority,
+  AuthorizationService,
+} from '../../auth/authorization/authorization.service';
 import type { Db } from '../../database/database.module';
 import type { CivilStatus, Sex } from '../../database/schema';
 import type { Match, Subject } from '../../people/duplicate-matching';
 import type { PeopleDuplicatesService } from '../../people/people.duplicates.service';
-import type { PeopleImportService } from '../../people/people.import.service';
+import type { ImportActor, PeopleImportService } from '../../people/people.import.service';
 import type { SettingsService } from '../settings/settings.service';
 import type { DecisionRow } from './decisions-csv';
 import type { Finding, TreeReport, TreeRow } from './tree-csv';
@@ -108,15 +111,20 @@ export interface CommitResult {
 }
 
 /**
- * Section 2: the actor is named on the command line, and refuses unless that
- * account holds `people.create` and `people.manage_pastoral_assignment` at Whole
- * Church.
+ * The capabilities section 2 names, checked in addition to the `ADMIN` role.
  *
- * **What that is worth is stated rather than assumed.** It is not authentication:
- * whoever can run the script can already reach the database directly and do
- * anything at all. What it buys is that the audit entries name an account that
- * could legitimately have performed the work, and that an operator cannot
- * attribute several thousand records to a Leader.
+ * **The role is the precondition that bites; these are defence in depth.**
+ * `ROLE_DEFAULTS.ADMIN` carries both at Whole Church and authority only ever
+ * widens, so any actor passing the role check passes this loop — which means
+ * `ACTOR_LACKS_CAPABILITY` can now only ever appear beside `ACTOR_NOT_ADMIN`. They
+ * are kept because section 2 states them and because a future edit to the role
+ * defaults would otherwise remove a stated precondition silently.
+ *
+ * **What the check is worth is stated rather than assumed.** It is not
+ * authentication: whoever can run the script can already reach the database
+ * directly and do anything at all. What it buys is that the audit entries name an
+ * account that could legitimately have performed the work, and that an operator
+ * cannot attribute several thousand records to a Leader.
  *
  * The target is `{ kind: 'church' }`, which is the whole of how "at Whole Church"
  * is expressed: `scopeCovers` returns true for a Whole Church grant before it
@@ -133,34 +141,49 @@ const REQUIRED: readonly Capability[] = [
 async function checkPreconditions(
   modules: ImportModules,
   actor: Actor,
-): Promise<Finding<PreconditionCode>[]> {
+): Promise<{ findings: Finding<PreconditionCode>[]; authority: ActorAuthority | null }> {
   const findings: Finding<PreconditionCode>[] = [];
 
   // **The account must hold `ADMIN`, and the capability check does not imply it.**
   //
   // Section 2 says "the script is given an Admin account" and then states the
-  // check in capabilities; those are not the same requirement, and neither of
-  // these two capabilities is in `WHOLE_CHURCH_ONLY` — so an explicit Admin-issued
-  // Whole Church grant of both to a `LEADER` account is representable, and a first
-  // version of this file accepted one.
+  // check in capabilities; those are not the same requirement. Section 7
+  // contemplates Admin issuing authority beyond a role's defaults, and neither of
+  // these capabilities is Admin-only by role, so a Whole Church grant of both to a
+  // `LEADER` account is an ordinary grant — and a first version of this file
+  // accepted one.
   //
-  // What that opened is the escalation section 5 invariant 4 exists to close.
+  // *An earlier version of this comment gave `WHOLE_CHURCH_ONLY` as the reason,
+  // saying the two capabilities are absent from it and are therefore grantable at
+  // Whole Church. That is false and the file says so: `grantCoversNothing` fires
+  // only when a capability is **in** the set and the scope is **narrower** than
+  // Whole Church, and `single-scope.ts` states in terms that "a wider grant is
+  // untouched". Membership never blocks a Whole Church grant, so it explains
+  // nothing here. The conclusion held and the reason did not, which on this
+  // project is the worse half.*
+  //
+  // What the gap opened is the escalation section 5 invariant 4 exists to close.
   // Invariant 4 is the one authorization rule in this system decided by **role**
   // rather than by capability (2026-08-23), precisely so that a Whole Church grant
   // does not satisfy it — and the import opens assignments without consulting it,
-  // because every row of the tree is a first assignment rather than a change. A
-  // Leader holding both grants could therefore name their own Person on a
-  // `USE_EXISTING` row and place themselves anywhere in either tree.
+  // because every row of the tree is a first assignment rather than a change.
   //
-  // Requiring the role closes it at the door, for the whole run, which is better
-  // than re-deriving invariant 4 per row: the roles that hold it — Admin and the
-  // Senior Pastors — are exactly the ones invariant 4 exempts, because they sit
-  // outside the pastoral incentive.
+  // **The reachable harm is a Leader writing the entire spine**, which is exactly
+  // what section 2 gives as the reason for naming an actor at all: "an operator
+  // cannot attribute several thousand records to a Leader." Self-placement on a
+  // `USE_EXISTING` row is the sharper story and is *not* reachable through the API,
+  // because `attachExistingWithin` refuses a Person who already holds an open
+  // assignment and every Person the API creates has one. An earlier version of this
+  // comment claimed it, and the test below builds that state with a direct write.
   //
   // `SENIOR_PASTOR` is deliberately not accepted. Section 2 says an *Admin*
   // account, and section 7 keeps the two Senior Pastors away from administrative
   // operations on purpose; widening this to them would be a decision about the
   // role catalog taken in an import.
+  //
+  // This is the outer door. `PeopleImportService` refuses on its own account too,
+  // because it is exported and another module could inject it — the door this
+  // check does not lock, and which a first version said it did.
   let authority;
   try {
     authority = await modules.authorization.authorityFor(actor.accountId);
@@ -177,7 +200,7 @@ async function checkPreconditions(
         'is known. This is not a refusal — it is a failure to decide.',
       detail: error instanceof Error ? error.message : String(error),
     });
-    return findings;
+    return { findings, authority: null };
   }
 
   if (!authority.roles.includes('ADMIN')) {
@@ -226,7 +249,7 @@ async function checkPreconditions(
     });
   }
 
-  return findings;
+  return { findings, authority };
 }
 
 /**
@@ -248,7 +271,7 @@ export async function dryRunTreeImport(
   modules: ImportModules,
   input: { treeCsv: string; actor: Actor; today?: string },
 ): Promise<DryRunReport> {
-  const preconditions = await checkPreconditions(modules, input.actor);
+  const { findings: preconditions } = await checkPreconditions(modules, input.actor);
   const tree = validateTreeCsv(input.treeCsv, { today: input.today });
 
   if (hasErrors(tree.findings)) {
@@ -370,9 +393,17 @@ export async function commitTreeImport(
   modules: ImportModules,
   input: { treeCsv: string; decisionsCsv: string; actor: Actor; today?: string },
 ): Promise<CommitResult> {
-  const preconditions = await checkPreconditions(modules, input.actor);
+  const { findings: preconditions, authority } = await checkPreconditions(modules, input.actor);
   if (preconditions.length > 0) {
     throw new TreeImportRefused(preconditions);
+  }
+
+  if (authority === null) {
+    // Unreachable: authority is null only where reading it failed, which pushes
+    // `ACTOR_AUTHORITY_UNREADABLE` and is therefore caught above. Narrowed with a
+    // check rather than a non-null assertion, because the invariant is "no findings
+    // implies authority was read" and an assertion states it nowhere.
+    throw new Error('Preconditions passed with no authority read, which cannot happen.');
   }
 
   const tree = validateTreeCsv(input.treeCsv, { today: input.today });
@@ -397,10 +428,18 @@ export async function commitTreeImport(
   return applyWithinOneTransaction(modules, {
     rows: tree.rows,
     decisions: decisions.byRowId,
-    // What each row's decision was taken against, so that a `CREATE` past a Tier 1
-    // candidate leaves a record of who was passed over. Without it section 3's
-    // acknowledgement exists only in the operator's spreadsheet, which is outside
-    // `audit_log` — and that acknowledgement is why section 2 built two phases.
+    // The Tier 1 candidates standing against each row **at commit**, so that a
+    // `CREATE` past one leaves a record of who was passed over. Without it section
+    // 3's acknowledgement exists only in the operator's spreadsheet, which is
+    // outside `audit_log` — and that acknowledgement is why section 2 built two
+    // phases.
+    //
+    // **This is the commit-time set, not the set the adjudicator saw**, and the
+    // difference is exactly the gap stated above: a candidate arriving between the
+    // dry run and the commit for an already-decided row would be recorded here as
+    // acknowledged when no one was asked about them. Recording the adjudicated set
+    // instead is not available — section 2's decisions file carries no candidate
+    // column, which is the same absence that leaves the gap open.
     tier1CandidatesOf: new Map(
       matched
         .filter((row) => row.tier === 1)
@@ -409,7 +448,7 @@ export async function commitTreeImport(
           row.candidates.filter((c) => c.tier === 1).map((c) => c.memberId),
         ]),
     ),
-    actor: input.actor,
+    actor: { accountId: input.actor.accountId, authority },
   });
 }
 
@@ -453,7 +492,7 @@ async function applyWithinOneTransaction(
     decisions: ReadonlyMap<string, DecisionRow>;
     /** Member IDs of the Tier 1 candidates standing against each row, if any. */
     tier1CandidatesOf: ReadonlyMap<string, readonly string[]>;
-    actor: Actor;
+    actor: ImportActor;
   },
 ): Promise<CommitResult> {
   const batchId = randomUUID();

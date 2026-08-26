@@ -294,12 +294,19 @@ Every record carries its own audit entry, linked by the batch identifier
 (section 2).
 
 Where the section 5 invariants were enforced, since "all of them were" would be
-an overclaim: invariant 5 (same-Network) and invariant 3 (one active assignment)
-by the domain layer on every row and by the database besides; invariant 1 by the
-Whole Church precondition on the actor; invariant 2 (no cycles) by the file
-validator over the CSV graph, before any of this ran; and invariant 4 by
-requiring the actor to hold ADMIN, which is the role it exempts, rather than by
-being evaluated per row.
+an overclaim:
+
+  invariant 5  same-Network, by the domain layer on every *edge* and by the
+               constraint trigger besides. The two root rows have no edge, and
+               their Network is checked by assert_root_network_matches instead
+  invariant 3  one active assignment, by the partial unique index, and by the
+               domain layer for a row that names an existing Person
+  invariant 2  no cycles, by the file validator over the CSV graph, before any
+               of this ran
+  invariant 1  by requiring the actor to hold ADMIN at Whole Church
+  invariant 4  by that same requirement, ADMIN being the role it exempts, rather
+               than by being evaluated per row — every row of a tree import is a
+               first assignment, which never reaches it
 
 Next: read the two root Person identifiers out of the database, set
 SENIOR_PASTOR_PERSON_IDS to them, and restart. The value is read once when the

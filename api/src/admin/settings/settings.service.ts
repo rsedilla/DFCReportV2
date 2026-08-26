@@ -26,11 +26,19 @@ export class SettingsService {
   /**
    * Whether the initial-encoding phase is open (section 2).
    *
-   * **Takes an executor rather than reading the pool**, because both callers ask
-   * inside a transaction and a pooled read taken while holding one asks a bounded
-   * pool for a second connection — the liveness hazard section 24 names. The
-   * pattern is `HierarchyService`'s: the executor is the parameter, and there is
-   * no pooled variant to reach for by accident.
+   * **Takes an executor rather than fixing one**, because the two callers need
+   * different ones. `PeopleImportService` asks inside the import's transaction,
+   * where a pooled read would answer from the state the request arrived with and
+   * would ask a bounded pool for a second connection — the liveness hazard section
+   * 24 names. The import's precondition check asks on the pool, deliberately: it
+   * runs before any transaction exists, so that an operator is told the phase is
+   * closed before adjudicating thirty rows rather than after.
+   *
+   * *An earlier version of this said both callers ask inside a transaction, which
+   * was false of the one written in the same commit.*
+   *
+   * The pattern is `HierarchyService`'s: the executor is a parameter, and there is
+   * no pooled variant sitting beside it to reach for by accident.
    *
    * **It refuses a missing row rather than defaulting.** Migration 0002 seeds both
    * keys by a system action so that the application never invents a default, which
