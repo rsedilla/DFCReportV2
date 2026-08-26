@@ -122,13 +122,10 @@ describe('the leadership-tree import (SKILL.md section 2)', () => {
     const person = await createPerson(db, { firstName: 'Adelina', network: 'WOMENS' });
     const account = await createAccount(app, db, { person, roles: ['ADMIN'] });
     admin = { accountId: account.id, personId: person.id };
-    adminImportActor = {
-      accountId: account.id,
-      // The real authority, read the way the import reads it. A hand-built
-      // `{ roles: ['ADMIN'] }` would pass the service's check while proving nothing
-      // about what `authorityFor` actually returns for an ADMIN account.
-      authority: await app.get(AuthorizationService).authorityFor(account.id),
-    };
+    // Just the identifier. The service reads the roles from `account_roles`
+    // itself, which is what makes its refusal a refusal rather than an assertion
+    // about a value the caller handed it.
+    adminImportActor = { accountId: account.id };
   });
 
   afterAll(async () => {
@@ -438,10 +435,7 @@ describe('the leadership-tree import (SKILL.md section 2)', () => {
         roles: ['LEADER'],
         grantedBy: admin.accountId,
       });
-      const leaderActor: ImportActor = {
-        accountId: account.id,
-        authority: await app.get(AuthorizationService).authorityFor(account.id),
-      };
+      const leaderActor: ImportActor = { accountId: account.id };
 
       await expect(
         db.transaction().execute((trx) =>
@@ -467,17 +461,23 @@ describe('the leadership-tree import (SKILL.md section 2)', () => {
       expect((await countEverything()).persons).toBe(2);
     });
 
-    it('refuses authority read for a different account', async () => {
-      // `ActorAuthority` carries the account it was read for so it cannot decide
-      // for another, which is what `AuthorizationService.coversWith` checks and why
-      // the same check is here. Unreachable through any call site, and checked
-      // because this decides authority.
-      const other = await createPerson(db, { firstName: 'Corazon', network: 'WOMENS' });
-      const otherAccount = await createAccount(app, db, {
-        person: other,
-        roles: ['ADMIN'],
-        grantedBy: admin.accountId,
-      });
+    it('reads the role from `account_roles`, not from anything the caller passed', async () => {
+      // The property that makes this a refusal rather than an assertion, and the
+      // one the version before it did not have: `ImportActor` carried the actor's
+      // `ActorAuthority` and the check read the role out of it, so a caller could
+      // hand over `{ roles: ['ADMIN'] }` and satisfy it.
+      //
+      // Revoking the row is what distinguishes the two implementations. The
+      // identifier the caller passes is unchanged and still names an account that
+      // held ADMIN a moment ago; only the table has moved.
+      // `now()` rather than a JS `Date`: `account_roles_period_ordered` requires
+      // `revoked_at > granted_at`, and the row's `granted_at` came from the
+      // server's clock a moment ago.
+      await db
+        .updateTable('account_roles')
+        .set({ revoked_at: sql<Date>`now()` })
+        .where('account_id', '=', admin.accountId)
+        .execute();
 
       await expect(
         db.transaction().execute((trx) =>
@@ -493,11 +493,11 @@ describe('the leadership-tree import (SKILL.md section 2)', () => {
               placement: { kind: 'ROOT' },
               encodedAt: new Date(),
             },
-            { accountId: otherAccount.id, authority: adminImportActor.authority },
+            adminImportActor,
             'batch',
           ),
         ),
-      ).rejects.toThrow(/was offered for an import running as/);
+      ).rejects.toThrow(/runs as an Admin account/);
     });
 
     it('is refused by `attachExistingWithin` too', async () => {

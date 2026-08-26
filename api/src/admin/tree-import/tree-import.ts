@@ -66,6 +66,22 @@ export interface MatchedRow {
   rowId: string;
   /** The name in the file, so a report can show what was being matched. */
   subjectName: string;
+  /**
+   * Whether this row is a Network root — no `leader_row_id`.
+   *
+   * Carried so the dry-run report can warn, because deciding `USE_EXISTING` here
+   * is the one decision in the file that **cannot be undone**. Section 5 says a
+   * succession is not an operation this system offers: `PeopleReassignmentService`
+   * refuses a root, the sex-correction path refuses a root, `DELETE` on
+   * `pastoral_assignments` is refused, and migration 0008 freezes that person's
+   * Network. Every other `USE_EXISTING` mistake produces an ordinary edge that
+   * `PUT /people/{id}/pastoral-leader` can correct.
+   *
+   * An earlier version of this change called seating the wrong Person here "a
+   * mistake an Admin can make, like many others they can make with this file",
+   * which is false in exactly the way that matters — the others are correctable.
+   */
+  isRoot: boolean;
   /** Strongest tier among this row's candidates. */
   tier: 1 | 2;
   candidates: {
@@ -181,9 +197,11 @@ async function checkPreconditions(
   // operations on purpose; widening this to them would be a decision about the
   // role catalog taken in an import.
   //
-  // This is the outer door. `PeopleImportService` refuses on its own account too,
-  // because it is exported and another module could inject it — the door this
-  // check does not lock, and which a first version said it did.
+  // This is the outer door, and it exists so that an operator is told before
+  // adjudicating thirty rows rather than after. `PeopleImportService` makes the
+  // same refusal from `account_roles`, which is the one that decides: it is
+  // exported, so another module could inject it, and a check made only here would
+  // be a check on one path in.
   let authority;
   try {
     authority = await modules.authorization.authorityFor(actor.accountId);
@@ -341,6 +359,7 @@ async function matchAgainstExisting(
       line: row.line,
       rowId: row.rowId,
       subjectName: `${row.firstName} ${row.lastName}`,
+      isRoot: row.leaderRowId === '',
       tier: matches.some((match) => match.tier === 1) ? 1 : 2,
       candidates: matches.map((match) => ({
         memberId: match.candidate.memberId,
@@ -393,17 +412,9 @@ export async function commitTreeImport(
   modules: ImportModules,
   input: { treeCsv: string; decisionsCsv: string; actor: Actor; today?: string },
 ): Promise<CommitResult> {
-  const { findings: preconditions, authority } = await checkPreconditions(modules, input.actor);
+  const { findings: preconditions } = await checkPreconditions(modules, input.actor);
   if (preconditions.length > 0) {
     throw new TreeImportRefused(preconditions);
-  }
-
-  if (authority === null) {
-    // Unreachable: authority is null only where reading it failed, which pushes
-    // `ACTOR_AUTHORITY_UNREADABLE` and is therefore caught above. Narrowed with a
-    // check rather than a non-null assertion, because the invariant is "no findings
-    // implies authority was read" and an assertion states it nowhere.
-    throw new Error('Preconditions passed with no authority read, which cannot happen.');
   }
 
   const tree = validateTreeCsv(input.treeCsv, { today: input.today });
@@ -448,7 +459,7 @@ export async function commitTreeImport(
           row.candidates.filter((c) => c.tier === 1).map((c) => c.memberId),
         ]),
     ),
-    actor: { accountId: input.actor.accountId, authority },
+    actor: { accountId: input.actor.accountId },
   });
 }
 

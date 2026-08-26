@@ -210,7 +210,9 @@ What that admits is the escalation Section 5 invariant 4 exists to close. Invari
 
 **A `SENIOR_PASTOR` account is refused**, though Section 7 gives it both capabilities at Whole Church. This paragraph names an Admin account, and Section 7 keeps the two Senior Pastors away from administrative operations deliberately; admitting them here would be a decision about the role catalog taken inside an import.
 
-**Both checks are made again by the module that performs the writes**, not only by the script. The service offering Person creation without the Section 3 duplicate gate is reachable by anything that can inject it, so a check made only at the script is a check on one path to it.
+**The role check is made again by the module that performs the writes**, not only by the script, and is read from `account_roles` rather than from anything the caller supplies. The service offering Person creation without the Section 3 duplicate gate is reachable by anything that can inject it, so a check made only at the script is a check on one path to it.
+
+**The capabilities are the script's precondition and are not re-checked there.** On the path that exists this costs nothing, because the `ADMIN` role carries both at Whole Church; on a hypothetical path from another module they would not be checked at all. That is stated rather than implied, because an earlier version of this paragraph said "both checks" and the service made one.
 
 The script also refuses unless the initial-encoding phase is open. The phase is what makes the relaxations temporary, so an import that could run after it closed would be a relaxation with no end.
 
@@ -249,6 +251,8 @@ input_fingerprint,row_id,decision,member_id
 The assignment is recorded as `pastoral_assignment.transferred`, carrying a null previous leader — Section 21 requires a reader looking for transfers to find the entry whether it arose from a reassignment or from anything else, and "this person had no leader and now has one" is the same question answered. A Person the import *creates* needs no such entry, because their leader is among the values `person.created` already records.
 
 **This holds for a root row too.** An existing Person named on a row with no `leader_row_id` is seated as that Network's root, and their Network is read from `network_assignments` rather than derived from their sex — the import writes no Network row for them, so what governs is the row they already carry. Section 5's "a root is created only by the initial import" is about creating the root *row*, which is what this does; it is not a bar on the Person having existed beforehand.
+
+**It is the one decision in the file that cannot be undone, and the dry-run report says so on every root row.** Section 5 offers no succession, so a Person seated as a root stays one: reassignment refuses a root, the sex correction refuses a root, the row cannot be deleted, and the Network trigger freezes their Network. Every other `USE_EXISTING` mistake produces an ordinary edge that a reassignment corrects. That asymmetry is why the warning exists rather than being left to the adjudicator to know.
 
 That Person is also refused where the tree's sex disagrees with the recorded one. Sex decides Network (Section 4), so changing it is a correction under `people.correct_sex` — Admin only, audited, and forcing a pastoral reassignment of its own. An import that applied it silently would move somebody between Networks with no reason recorded and nothing to say it happened.
 

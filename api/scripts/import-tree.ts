@@ -208,6 +208,19 @@ Dry run — nothing was written.
   for (const row of report.matched) {
     const subject = redact ? '(redacted)' : row.subjectName;
     console.log(`  line ${row.line}  row ${row.rowId}  Tier ${row.tier}  ${subject}`);
+    if (row.isRoot) {
+      // The one decision in this file that cannot be undone. Section 5 offers no
+      // succession, so a Person seated here by mistake stays seated: reassignment
+      // refuses a root, the sex correction refuses a root, the row cannot be
+      // deleted, and migration 0008 freezes their Network.
+      console.log(
+        '      ⚠  THIS ROW IS A NETWORK ROOT. USE_EXISTING here seats that Person as a root',
+      );
+      console.log(
+        '         permanently — this system offers no succession (section 5), so it cannot be',
+      );
+      console.log('         undone by any operation. CREATE is the reversible choice.');
+    }
     for (const candidate of row.candidates) {
       const who = redact ? '(redacted)' : `${candidate.memberId}  ${candidate.fullName}`;
       console.log(`      Tier ${candidate.tier}  ${who}`);

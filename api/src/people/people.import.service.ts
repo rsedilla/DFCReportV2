@@ -4,10 +4,11 @@ import { Injectable } from '@nestjs/common';
 
 import { SettingsService } from '../admin/settings/settings.service';
 import { AuditService } from '../audit/audit.service';
+import { AuthorizationService } from '../auth/authorization/authorization.service';
 import {
+  CapabilityDeniedError,
   InvariantViolationError,
   NotFoundError,
-  ScopeDeniedError,
 } from '../common/errors/api-error';
 import { HierarchyService } from '../hierarchy/hierarchy.service';
 import { NetworksService } from '../networks/networks.service';
@@ -16,22 +17,32 @@ import { lockPersonsWithin } from '../database/person-lock';
 import { assertLeaderIsAssignable } from './leader-assignability';
 import { composeName, type PersonPlacement } from './people.shared';
 
-import type { ActorAuthority } from '../auth/authorization/authorization.service';
 import type { CivilStatus, Database, NetworkName, Sex } from '../database/schema';
 import type { Transaction } from 'kysely';
 
 /**
- * Who an import is running as, and what that account may do.
+ * Who an import is running as.
  *
- * The authority travels with the identifier rather than being read here, because
- * both write methods run inside the import's single transaction and a pooled read
- * taken while holding one asks a bounded pool for a second connection — the
- * liveness hazard section 24 names. Same split, and the same reason, as
- * `AuthorizationService.coversWith`.
+ * **An account identifier and nothing else, deliberately.** A first version
+ * carried the actor's `ActorAuthority` and checked the role from it, on the
+ * reasoning that reading authority inside a transaction is the section 24 hazard.
+ * The reasoning was right and the shape was wrong: `ActorAuthority` is plain data,
+ * so the module this check exists to defend against could hand over
+ * `{ roles: ['ADMIN'] }` and satisfy it. A check that reads a fact its caller
+ * supplied is not a check.
+ *
+ * The precedent cited for it did not carry either. `createSystemAdministratorWithin`
+ * and `createFirstAdminWithin` each read their own module's table for a fact no
+ * caller supplies, which is the property that makes them guards and is exactly
+ * what the authority-carrying version lacked — section 25 rule 19, in the batch
+ * written to apply it.
+ *
+ * The roles are read through the caller's transaction instead
+ * (`AuthorizationService.honouredRolesWithin`), which answers the section 24
+ * concern without answering it with data.
  */
 export interface ImportActor {
   accountId: string;
-  authority: ActorAuthority;
 }
 
 /**
@@ -67,21 +78,29 @@ export interface ImportActor {
  * was closed "for the whole run" — true of that door, and this module's door was
  * unlocked.
  *
- * The actor arrives as an `ActorAuthority` rather than as an account identifier,
- * which is the shape `AuthorizationService.coversWith` already uses for a decision
- * taken inside a transaction: it carries the account it was read for, so it cannot
- * be applied to a decision about somebody else, and reading it is the caller's job
- * so that nothing here touches the pool while holding a transaction (section 24).
+ * **Neither reads anything its caller handed it**, which is what makes them
+ * refusals rather than assertions: the phase comes from `settings` and the roles
+ * from `account_roles`, both through the caller's transaction. The version between
+ * those two took the actor's `ActorAuthority` as an argument and read the role from
+ * it — see `ImportActor` for why that was not a check at all.
+ *
+ * **The capabilities are not re-checked here**, and section 2 says so rather than
+ * implying otherwise. They are the script's precondition. On the only path that
+ * exists they are implied by the role, since `ROLE_DEFAULTS.ADMIN` carries both at
+ * Whole Church; on a hypothetical path from another module they would not be
+ * checked at all, which is a gap this docblock names rather than papers over.
  *
  * The phase reader is `admin`'s, reached through `SettingsModule` — a sub-module
  * of `admin` that owns `settings` and imports nothing, so this does not close a
  * cycle against the import that calls it. Same seam, and the same reason, as
- * `AuthorizationModule` splitting out of `AuthModule`.
+ * `AuthorizationModule` splitting out of `AuthModule`. The role reader is `auth`'s,
+ * through `AuthorizationModule`, which `PeopleModule` already imports.
  */
 @Injectable()
 export class PeopleImportService {
   constructor(
     private readonly audit: AuditService,
+    private readonly authorization: AuthorizationService,
     private readonly hierarchy: HierarchyService,
     private readonly networks: NetworksService,
     private readonly settings: SettingsService,
@@ -143,7 +162,7 @@ export class PeopleImportService {
     actor: ImportActor,
     batchId: string,
   ): Promise<{ id: string; memberId: string; network: NetworkName }> {
-    this.assertActorMayImport(actor);
+    await this.assertActorMayImport(transaction, actor);
     await this.assertEncodingPhaseOpen(transaction);
 
     const network = this.networks.networkForSex(input.sex);
@@ -376,7 +395,7 @@ export class PeopleImportService {
     actor: ImportActor,
     batchId: string,
   ): Promise<void> {
-    this.assertActorMayImport(actor);
+    await this.assertActorMayImport(transaction, actor);
     await this.assertEncodingPhaseOpen(transaction);
 
     // **Every key in one call, because the ordering guarantee is per call.**
@@ -504,33 +523,43 @@ export class PeopleImportService {
    * committing alongside is seen. The script asks the same question first, for a
    * better message; this is the one that decides.
    */
-  private assertActorMayImport(actor: ImportActor): void {
-    // Section 2 gives the import an Admin account. The capabilities alone are not
-    // enough and the reason is section 5 invariant 4: it is decided by **role**
-    // rather than by capability (2026-08-23), precisely so a Whole Church grant
-    // does not satisfy it — and every assignment this service opens is a *first*
-    // assignment, which never reaches it. Requiring the role is the same check with
-    // no per-row path to forget.
-    //
-    // `SENIOR_PASTOR` is deliberately not accepted: section 2 says an Admin
-    // account, and section 7 keeps the two Senior Pastors away from administrative
-    // operations on purpose.
-    if (!actor.authority.roles.includes('ADMIN')) {
-      throw new ScopeDeniedError(
+  /**
+   * Section 2: the import runs as an Admin account.
+   *
+   * The capabilities alone are not enough, and the reason is section 5 invariant
+   * 4: it is decided by **role** rather than by capability (2026-08-23), precisely
+   * so a Whole Church grant does not satisfy it — and every assignment this service
+   * opens is a *first* assignment, which never reaches it. Requiring the role is
+   * the same check with no per-row path to forget.
+   *
+   * **Read from `account_roles` through the caller's transaction**, not from
+   * anything the caller passed. That is the whole difference between this and the
+   * version it replaces, and it is why `honouredRolesWithin` exists.
+   *
+   * Honoured rather than held: a `SENIOR_PASTOR` row this system refuses to honour
+   * grants nothing (section 7), and would not satisfy this anyway — section 2 says
+   * an Admin account, and section 7 keeps the two Senior Pastors away from
+   * administrative operations on purpose.
+   *
+   * It answers `CAPABILITY_DENIED`. Section 22 splits its two codes over grants and
+   * says nothing about a role requirement, and `SCOPE_DENIED` is the worse fit of
+   * the pair: the 2026-08-20 ruling gives that code to a statement about an actor's
+   * authority over a **target**, and this refusal names none. The 2026-08-24 ruling
+   * points the same way, giving `CAPABILITY_DENIED` where a role row names nothing.
+   */
+  private async assertActorMayImport(
+    transaction: Transaction<Database>,
+    actor: ImportActor,
+  ): Promise<void> {
+    const roles = await this.authorization.honouredRolesWithin(transaction, actor.accountId);
+
+    if (!roles.includes('ADMIN')) {
+      throw new CapabilityDeniedError(
         'The leadership-tree import runs as an Admin account (section 2). Holding ' +
           '`people.create` and `people.manage_pastoral_assignment` at Whole Church is not ' +
           'enough: section 5 invariant 4 is decided by role, and every assignment an import ' +
           'opens is a first assignment that never reaches it.',
         { account_id: actor.accountId },
-      );
-    }
-
-    if (actor.authority.accountId !== actor.accountId) {
-      // Unreachable through any call site, and checked because this decides
-      // authority. `AuthorizationService.coversWith` checks the same thing for the
-      // same reason: authority read for one account must not decide for another.
-      throw new Error(
-        `Authority for account ${actor.authority.accountId} was offered for an import running as ${actor.accountId}.`,
       );
     }
   }
