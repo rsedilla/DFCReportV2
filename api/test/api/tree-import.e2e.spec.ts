@@ -264,6 +264,42 @@ describe('the leadership-tree import (SKILL.md section 2)', () => {
       expect(report.decisionsTemplate).toBe(`${DECISIONS_HEADER}\n${report.fingerprint},4,,\n`);
     });
 
+    it('lists every root row, matched or not', async () => {
+      // The warning printed from this is the only thing telling an adjudicator that
+      // a root decision cannot be undone, and a first version carried the flag on
+      // matched rows alone — so a root row matching nobody was never warned. That
+      // is the reachable case: `readDecisionsCsv` accepts USE_EXISTING for any
+      // row_id with any well-shaped Member ID, candidate or not.
+      const clean = await dryRunTreeImport(modules, { treeCsv: SPINE, actor: admin });
+
+      expect(clean.matched).toEqual([]);
+      expect(clean.rootRows).toEqual([
+        { line: 2, rowId: '1' },
+        { line: 3, rowId: '2' },
+      ]);
+    });
+
+    it('marks a matched root row as one', async () => {
+      // Perlita is row 2, the Women's root. Same names and same birthday is Tier 1.
+      await db
+        .insertInto('persons')
+        .values({
+          first_name: 'Perlita',
+          last_name: 'Batungbakal',
+          birth_date: '1970-09-03',
+          sex: 'FEMALE',
+          civil_status: 'MARRIED',
+        })
+        .execute();
+
+      const report = await dryRunTreeImport(modules, { treeCsv: SPINE, actor: admin });
+      const row = report.matched.find((matched) => matched.rowId === '2');
+
+      expect(row?.isRoot).toBe(true);
+      // And the non-root rows are not marked, so the flag is not simply constant.
+      expect(report.matched.filter((matched) => matched.isRoot)).toHaveLength(1);
+    });
+
     it('stops before the matcher where the file is refused', async () => {
       // Every candidate would be computed against rows whose leader references may
       // not resolve, and the decisions file built from it would key on a
@@ -470,9 +506,10 @@ describe('the leadership-tree import (SKILL.md section 2)', () => {
       // Revoking the row is what distinguishes the two implementations. The
       // identifier the caller passes is unchanged and still names an account that
       // held ADMIN a moment ago; only the table has moved.
-      // `now()` rather than a JS `Date`: `account_roles_period_ordered` requires
-      // `revoked_at > granted_at`, and the row's `granted_at` came from the
-      // server's clock a moment ago.
+      // `now()` rather than a JS `Date`. `account_roles_period_ordered` is
+      // `revoked_at IS NULL OR revoked_at >= granted_at`, so strictness is not the
+      // hazard — what fails is a test machine's clock landing behind the server's,
+      // which puts a JS `Date` before the `granted_at` this row was written with.
       await db
         .updateTable('account_roles')
         .set({ revoked_at: sql<Date>`now()` })

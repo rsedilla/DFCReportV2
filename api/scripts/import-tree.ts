@@ -199,6 +199,29 @@ Dry run — nothing was written.
     console.error('');
   }
 
+  // **Before the candidate list, and independent of it.** A root row that matched
+  // nobody never enters `report.matched`, and `USE_EXISTING` is accepted for any
+  // row_id in the file with any well-shaped Member ID — whether or not that Person
+  // was ever a candidate for that row. Printing this only beside a candidate meant
+  // the sharper case, a hand-typed Member ID on an unmatched root row, happened in
+  // silence.
+  if (report.rootRows.length > 0) {
+    console.log(`The ${report.rootRows.length} Network root row(s) in this file:
+`);
+    for (const row of report.rootRows) {
+      console.log(`  line ${row.line}  row ${row.rowId}`);
+    }
+    console.log(`
+  ⚠  A decision on a root row cannot be undone, whichever way it goes. This system
+     offers no succession (section 5): reassignment refuses a root, the sex
+     correction refuses a root, the row cannot be deleted, and the person's Network
+     is frozen. USE_EXISTING entangles a Person who already exists; CREATE mints a
+     new one into the seat, and if that was a duplicate the real person can never
+     occupy it. Neither is reversible — check the Member ID against the report
+     before deciding either way.
+`);
+  }
+
   if (report.matched.length === 0) {
     console.log('No row matched a Person who already exists, so there is nothing to adjudicate.');
     return;
@@ -209,17 +232,7 @@ Dry run — nothing was written.
     const subject = redact ? '(redacted)' : row.subjectName;
     console.log(`  line ${row.line}  row ${row.rowId}  Tier ${row.tier}  ${subject}`);
     if (row.isRoot) {
-      // The one decision in this file that cannot be undone. Section 5 offers no
-      // succession, so a Person seated here by mistake stays seated: reassignment
-      // refuses a root, the sex correction refuses a root, the row cannot be
-      // deleted, and migration 0008 freezes their Network.
-      console.log(
-        '      ⚠  THIS ROW IS A NETWORK ROOT. USE_EXISTING here seats that Person as a root',
-      );
-      console.log(
-        '         permanently — this system offers no succession (section 5), so it cannot be',
-      );
-      console.log('         undone by any operation. CREATE is the reversible choice.');
+      console.log('      ⚠  THIS ROW IS A NETWORK ROOT — see the warning above.');
     }
     for (const candidate of row.candidates) {
       const who = redact ? '(redacted)' : `${candidate.memberId}  ${candidate.fullName}`;

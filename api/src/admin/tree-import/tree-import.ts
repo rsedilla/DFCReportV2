@@ -32,11 +32,7 @@ import { CapabilityDeniedError, ScopeDeniedError } from '../../common/errors/api
 import { decisionsTemplate, hasErrors, readDecisionsCsv } from './decisions-csv';
 import { fingerprintOf, validateTreeCsv } from './tree-csv';
 
-import type {
-  Actor,
-  ActorAuthority,
-  AuthorizationService,
-} from '../../auth/authorization/authorization.service';
+import type { Actor, AuthorizationService } from '../../auth/authorization/authorization.service';
 import type { Db } from '../../database/database.module';
 import type { CivilStatus, Sex } from '../../database/schema';
 import type { Match, Subject } from '../../people/duplicate-matching';
@@ -69,17 +65,18 @@ export interface MatchedRow {
   /**
    * Whether this row is a Network root — no `leader_row_id`.
    *
-   * Carried so the dry-run report can warn, because deciding `USE_EXISTING` here
-   * is the one decision in the file that **cannot be undone**. Section 5 says a
-   * succession is not an operation this system offers: `PeopleReassignmentService`
-   * refuses a root, the sex-correction path refuses a root, `DELETE` on
-   * `pastoral_assignments` is refused, and migration 0008 freezes that person's
-   * Network. Every other `USE_EXISTING` mistake produces an ordinary edge that
-   * `PUT /people/{id}/pastoral-leader` can correct.
+   * Marks the row in the candidate list. The warning itself is printed from
+   * `rootRows`, which covers root rows this list does not reach.
    *
-   * An earlier version of this change called seating the wrong Person here "a
-   * mistake an Admin can make, like many others they can make with this file",
-   * which is false in exactly the way that matters — the others are correctable.
+   * A decision on such a row cannot be undone **whichever way it goes**. Section 5
+   * says a succession is not an operation this system offers:
+   * `PeopleReassignmentService` refuses a root, the sex-correction path refuses a
+   * root, `DELETE` on `pastoral_assignments` is refused, and migration 0008 freezes
+   * that person's Network — and none of that depends on which decision produced the
+   * row. A first version's warning ended "CREATE is the reversible choice", which
+   * is false and was the worse kind of false: advice, printed at the moment of the
+   * decision, steering toward minting a duplicate into a seat the real person could
+   * then never occupy.
    */
   isRoot: boolean;
   /** Strongest tier among this row's candidates. */
@@ -101,6 +98,18 @@ export interface DryRunReport {
   tier1RowIds: Set<string>;
   /** Null where the tree file was refused. */
   decisionsTemplate: string | null;
+  /**
+   * Every root row in the file, matched or not.
+   *
+   * **Separate from `matched` because the warning has to reach rows that matched
+   * nobody**, and a first version carried `isRoot` on `matched` alone. A root row
+   * with no candidate never enters that list, so it was never warned — and that is
+   * the sharper case, because `readDecisionsCsv` accepts `USE_EXISTING` for any
+   * `row_id` in the file with any well-shaped Member ID, whether or not that Person
+   * was ever a candidate for it. The operator hand-types the Member ID and the
+   * irreversible seating happens in silence.
+   */
+  rootRows: { line: number; rowId: string }[];
   /**
    * Refusals that are not about the file: the actor's authority, and the phase.
    *
@@ -157,7 +166,7 @@ const REQUIRED: readonly Capability[] = [
 async function checkPreconditions(
   modules: ImportModules,
   actor: Actor,
-): Promise<{ findings: Finding<PreconditionCode>[]; authority: ActorAuthority | null }> {
+): Promise<Finding<PreconditionCode>[]> {
   const findings: Finding<PreconditionCode>[] = [];
 
   // **The account must hold `ADMIN`, and the capability check does not imply it.**
@@ -218,7 +227,7 @@ async function checkPreconditions(
         'is known. This is not a refusal — it is a failure to decide.',
       detail: error instanceof Error ? error.message : String(error),
     });
-    return { findings, authority: null };
+    return findings;
   }
 
   if (!authority.roles.includes('ADMIN')) {
@@ -267,7 +276,7 @@ async function checkPreconditions(
     });
   }
 
-  return { findings, authority };
+  return findings;
 }
 
 /**
@@ -289,7 +298,7 @@ export async function dryRunTreeImport(
   modules: ImportModules,
   input: { treeCsv: string; actor: Actor; today?: string },
 ): Promise<DryRunReport> {
-  const { findings: preconditions } = await checkPreconditions(modules, input.actor);
+  const preconditions = await checkPreconditions(modules, input.actor);
   const tree = validateTreeCsv(input.treeCsv, { today: input.today });
 
   if (hasErrors(tree.findings)) {
@@ -299,6 +308,7 @@ export async function dryRunTreeImport(
       matched: [],
       tier1RowIds: new Set(),
       decisionsTemplate: null,
+      rootRows: [],
       preconditions,
     };
   }
@@ -313,6 +323,10 @@ export async function dryRunTreeImport(
     matched,
     tier1RowIds,
     decisionsTemplate: decisionsTemplate(fingerprint, matched),
+    // Every root row, not only the matched ones. See `rootRows`.
+    rootRows: tree.rows
+      .filter((row) => row.leaderRowId === '')
+      .map((row) => ({ line: row.line, rowId: row.rowId })),
     preconditions,
   };
 }
@@ -412,7 +426,7 @@ export async function commitTreeImport(
   modules: ImportModules,
   input: { treeCsv: string; decisionsCsv: string; actor: Actor; today?: string },
 ): Promise<CommitResult> {
-  const { findings: preconditions } = await checkPreconditions(modules, input.actor);
+  const preconditions = await checkPreconditions(modules, input.actor);
   if (preconditions.length > 0) {
     throw new TreeImportRefused(preconditions);
   }

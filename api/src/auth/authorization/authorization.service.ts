@@ -95,10 +95,12 @@ export class AuthorizationService {
    * And authorization is decided by capability and scope everywhere but one place:
    * section 5 invariant 4 names **roles** — "Only Admin or a Senior Pastor may do
    * so" — because that rule is about who sits outside the pastoral incentive rather
-   * than about what anyone was granted. Today they reach `hierarchy` on
-   * `ActorAuthority`, which {@link effective} builds from this — though
-   * `assertMayReparent` takes only a person and a role list, so that is a fact
-   * about its two call sites rather than a seam anything enforces.
+   * than about what anyone was granted. They leave this service by two routes:
+   * `hierarchy` receives them on the `ActorAuthority` that {@link effective} builds
+   * — though `assertMayReparent` takes only a person and a role list, so that is a
+   * fact about its two call sites rather than a seam anything enforces — and
+   * `people` asks {@link honouredRolesWithin} directly, because a check defending
+   * against its own caller must not read a value that caller supplied.
    *
    * Today it refuses exactly one thing: a `SENIOR_PASTOR` row on an account whose
    * Person is not one of the two section 4 names (`senior-pastors.ts`). Such a row

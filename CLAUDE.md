@@ -3707,6 +3707,73 @@ its §2 omission "the fifth written to §x failure"; the fifth is already claime
 the end of this file. It is at least the sixth, and the number is now hedged rather
 than asserted, because counting them by memory is what produced both errors.
 
+### 2026-08-26 — Advice printed at the moment of a decision, and a fix claimed but not made
+
+Fourth review pass. The authorization mechanism from the previous batch is
+confirmed correct; every finding is in what the batch said about itself, and one is
+a fix it claimed and did not make.
+
+**"CREATE is the reversible choice" was false, and it was advice.** The warning
+added on root rows listed four mechanisms that make seating irreversible and then
+told the adjudicator that `CREATE` avoids them. All four apply to a Person the
+import *creates* into that seat exactly as they apply to an existing one —
+reassignment refuses a root, the sex correction refuses a root, `DELETE` is
+refused, migration 0008 freezes the Network — and none of them asks which decision
+produced the row. So the sentence steered toward minting a duplicate into a seat the
+real person could then never occupy, which is the outcome §3's whole duplicate
+apparatus exists to prevent, printed at the moment of the decision.
+
+Neither `SKILL.md` nor the type's docblock made that claim. The CLI added it alone,
+which is its own lesson: the surface furthest from review is the one that talks
+directly to the person deciding.
+
+**The warning did not fire where it was most needed.** It was printed inside the
+candidate list, and a root row matching nobody never enters that list — so the case
+where an operator hand-types a Member ID onto an unwarned root row was silent.
+`readDecisionsCsv` accepts `USE_EXISTING` for any `row_id` in the file with any
+well-shaped Member ID, candidate or not, so that case is reachable and is the
+sharper one. `DryRunReport.rootRows` now carries every root row and the warning is
+printed from it, before the candidate list.
+
+**A fix was claimed and not made.** The previous entry named the orphaned docblock —
+`assertEncodingPhaseOpen`'s block left sitting above a role check inserted beneath
+it — as corrected. It was not: the new block was added *below* the misplaced one, so
+one method carried two docblocks, the first describing a different method, and
+`assertEncodingPhaseOpen` had none. Fifth consecutive batch carrying a false
+statement about itself, and the first where the false statement is that a named
+defect was fixed.
+
+**`CAPABILITY_DENIED` was wrong, on a citation that dropped §7's load-bearing
+qualifier.** §7 gives that code "where nothing else the account holds carries the
+capability" and says twice that the qualifier is load-bearing — and the actor this
+check exists to stop is exactly one who *does* hold both capabilities at Whole
+Church by explicit grant. §22's gloss, "the actor lacks the capability", is false of
+the reachable case, and an administrator reading it is sent to grant what they
+already granted.
+
+It answers `SCOPE_DENIED` instead, because that is what the rule it stands in for
+answers: this check is §5 invariant 4 hoisted to the door, and
+`HierarchyService.assertMayReparent` — invariant 4 where it normally lives — throws
+`ScopeDeniedError` for the same shape, a statement about the actor decided by role.
+Following the nearest rule rather than a stated one; §22 defines no code for a role
+requirement on an actor, and that is listed as open below rather than settled in a
+docblock.
+
+**"Every other `USE_EXISTING` mistake produces an ordinary edge that a reassignment
+corrects" is half true**, and all four passes missed it until the paragraph stated it
+flatly enough to be wrong. `reassignWithin` is the only writer that closes an
+assignment row and it closes-and-opens in one operation, so nothing in this system
+removes a subject from the tree. A wrong Member ID on an *ordinary* row also cannot
+be undone — that Person is permanently placed, counted in a subtree that does not
+contain them, with only their leader correctable. The root case differs in degree,
+not in kind. §2 now says so.
+
+Also: `isRoot` had no test, so it could have been inverted with 642 tests green;
+`checkPreconditions` still returned an `authority` neither caller read; the
+`activeRoles` docblock still described roles leaving the service by one route in the
+batch that added a second; and a test comment quoted `account_roles_period_ordered`
+as `>` when it is `>=`.
+
 ### Open — awaiting a ruling
 
 **One item awaits a ruling and blocks Stage 5. Seventeen other things are unsettled,
@@ -3727,6 +3794,7 @@ Two related questions have defined behaviour and are recorded in `SKILL.md` §12
 
 **Unsettled, and not blocking anything.** None of these is a Stop Condition. An implementer proceeds and settles them in passing; they are listed here because a reader looking for what is open should not have to find it inside the body of a ruling.
 
+- **What error code a refusal for lacking a *role* answers.** §22 splits `CAPABILITY_DENIED` and `SCOPE_DENIED` over grants and defines nothing for a requirement on who the actor *is*. `CAPABILITY_DENIED` is wrong here — §7 gives it only "where nothing else the account holds carries the capability", and the actor this refuses holds both, at Whole Church, by explicit grant. `INVARIANT_VIOLATION` is wrong under the 2026-08-20 ruling, since the refusal depends on who submits. The import answers `SCOPE_DENIED`, following `assertMayReparent` — §5 invariant 4, the same shape of rule — rather than a stated rule, and the first-Admin bootstrap guards answer `INVARIANT_VIOLATION` with `details.refused_by` for a comparable refusal on an exported service method. Two in-repo precedents disagree, which is what makes it a question. No client consequence until an endpoint reaches one of these services; settle it before one does.
 - **Whether a deadlock should be answered as contention.** The import holds every person lock it takes for the whole transaction and acquires them in tree order, so the union across rows is not in key order and a concurrent writer taking two locks sorted can cycle with it. `lockPersonsWithin` guarantees ordering *per call* and cannot reach further. The consequence is that PostgreSQL raises `40P01`, and `isLockTimeout` matches `55P03` only — deliberately, since §22's `RESOURCE_BUSY` says "retry after a short delay" and the existing comment argues a deadlock is not ordinary contention. But a deadlock *is* the case where a retry helps most, and today it renders `INTERNAL_ERROR`. Either `40P01` joins `RESOURCE_BUSY`, or §22 says why it does not. Not urgent while the import is the only long lock-holder and runs once.
 - **Whether a decisions file should bind the candidate set it was adjudicated against.** The fingerprint covers the input file and says nothing about the database, and section 2's decisions file has no candidate column — so a `CREATE` acknowledges a candidate set nothing pins. A Tier 1 candidate arriving between the dry run and the commit is caught where it gives a row its *first* one, because the row is then blank or absent, and is not caught where the row already carries a decision: it is created past an acknowledgement made about somebody else. Closing it means a per-row digest of the candidate identifiers, carried in the file and compared at commit — structure section 2 does not describe. Narrow in practice while the import is thirty rows against a near-empty database, and it is the shape that would matter if this were ever pointed at a larger file. Decide it before any second use of the import.
 - **Whether closing a person's only open `network_assignments` row, without opening a replacement, is a legal write.** Escalated by `architecture-guardian` on 2026-08-25 and general rather than root-specific. §4 defines a Network change as an atomic close-and-open pair sharing one instant; §5 forbids `DELETE` on the table; nothing addresses a close alone. No constraint refuses it — `network_assignments_one_open` is partial and permits zero, and the same-Network trigger compares at the closed row's own start, so it passes. The consequence is that `network_as_of` becomes null from that instant and every edge beneath the person is silently unresolvable, which is the outcome the no-delete trigger exists to prevent, reached one column over. The root seat made it visible rather than causing it, and the root case is now refused specifically; the general case is not. The same silence covers a close at T1 reopened at T2, which leaves a gap with no Network at all.

@@ -6,9 +6,9 @@ import { SettingsService } from '../admin/settings/settings.service';
 import { AuditService } from '../audit/audit.service';
 import { AuthorizationService } from '../auth/authorization/authorization.service';
 import {
-  CapabilityDeniedError,
   InvariantViolationError,
   NotFoundError,
+  ScopeDeniedError,
 } from '../common/errors/api-error';
 import { HierarchyService } from '../hierarchy/hierarchy.service';
 import { NetworksService } from '../networks/networks.service';
@@ -516,14 +516,6 @@ export class PeopleImportService {
   }
 
   /**
-   * Section 2: the import runs inside the initial-encoding phase, and a relaxation
-   * reachable after its phase closed is not a temporary one.
-   *
-   * Read inside the caller's transaction rather than before it, so that a close
-   * committing alongside is seen. The script asks the same question first, for a
-   * better message; this is the one that decides.
-   */
-  /**
    * Section 2: the import runs as an Admin account.
    *
    * The capabilities alone are not enough, and the reason is section 5 invariant
@@ -541,11 +533,25 @@ export class PeopleImportService {
    * an Admin account, and section 7 keeps the two Senior Pastors away from
    * administrative operations on purpose.
    *
-   * It answers `CAPABILITY_DENIED`. Section 22 splits its two codes over grants and
-   * says nothing about a role requirement, and `SCOPE_DENIED` is the worse fit of
-   * the pair: the 2026-08-20 ruling gives that code to a statement about an actor's
-   * authority over a **target**, and this refusal names none. The 2026-08-24 ruling
-   * points the same way, giving `CAPABILITY_DENIED` where a role row names nothing.
+   * **It answers `SCOPE_DENIED`, because that is what the rule it stands in for
+   * answers.** This check is section 5 invariant 4 hoisted to the door — the
+   * docblock above says so — and `HierarchyService.assertMayReparent`, which is
+   * invariant 4 where it is normally enforced, throws `ScopeDeniedError` for the
+   * same shape of refusal: a statement about the actor rather than about the
+   * record, decided by role.
+   *
+   * *`CAPABILITY_DENIED` was chosen first and was wrong, on a citation that dropped
+   * the qualifier section 7 calls load-bearing.* Section 7 gives that code only
+   * "where nothing else the account holds carries the capability" — and the actor
+   * this check exists to stop is precisely one who **does** hold both, at Whole
+   * Church, by explicit grant. Section 22's gloss for the code, "the actor lacks the
+   * capability", is false of the reachable case, and an administrator reading it is
+   * sent to grant what they already granted, which is the failure the two codes are
+   * split to prevent.
+   *
+   * Section 22 defines no code for a role requirement on an actor, so this follows
+   * the nearest rule rather than a stated one, and `CLAUDE.md` records it as
+   * unsettled.
    */
   private async assertActorMayImport(
     transaction: Transaction<Database>,
@@ -554,7 +560,7 @@ export class PeopleImportService {
     const roles = await this.authorization.honouredRolesWithin(transaction, actor.accountId);
 
     if (!roles.includes('ADMIN')) {
-      throw new CapabilityDeniedError(
+      throw new ScopeDeniedError(
         'The leadership-tree import runs as an Admin account (section 2). Holding ' +
           '`people.create` and `people.manage_pastoral_assignment` at Whole Church is not ' +
           'enough: section 5 invariant 4 is decided by role, and every assignment an import ' +
@@ -564,6 +570,14 @@ export class PeopleImportService {
     }
   }
 
+  /**
+   * Section 2: the import runs inside the initial-encoding phase, and a relaxation
+   * reachable after its phase closed is not a temporary one.
+   *
+   * Read inside the caller's transaction rather than before it, so that a close
+   * committing alongside is seen. The script asks the same question first, for a
+   * better message; this is the one that decides.
+   */
   private async assertEncodingPhaseOpen(transaction: Transaction<Database>): Promise<void> {
     if (!(await this.settings.initialEncodingOpenWithin(transaction))) {
       throw new InvariantViolationError(
