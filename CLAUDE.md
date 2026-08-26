@@ -3786,7 +3786,7 @@ as `>` when it is `>=`.
 
 ### Open — awaiting a ruling
 
-**One item awaits a ruling and blocks Stage 5. Seventeen other things are unsettled,
+**One item awaits a ruling and blocks Stage 5. Eighteen other things are unsettled,
 none of them blocking. They are listed at the end, so this section is the whole of
 what is open.**
 

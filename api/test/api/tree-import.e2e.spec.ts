@@ -508,10 +508,19 @@ describe('the leadership-tree import (SKILL.md section 2)', () => {
         ),
         // **The code, not only the message.** Section 7 settles this one —
         // invariant 4's exemption withheld answers `SCOPE_DENIED` — and a code is
-        // client-visible (section 22), so a regex on the message would let anyone
+        // client-visible (section 22), so a message regex alone would let anyone
         // change it back with the suite green. `CAPABILITY_DENIED` stood here for
         // one commit and was wrong.
-      ).rejects.toMatchObject({ code: 'SCOPE_DENIED', message: /runs as an Admin account/ });
+        //
+        // `expect.stringMatching` and not a bare RegExp. Under `toMatchObject` a
+        // RegExp is treated as an object subset, `Object.keys(/…/)` is empty, and
+        // the match is vacuously true — so `message: /…/` constrains nothing at
+        // all. The first version of this assertion used one, which pinned the code
+        // and silently dropped the message constraint the line it replaced had.
+      ).rejects.toMatchObject({
+        code: 'SCOPE_DENIED',
+        message: expect.stringMatching(/runs as an Admin account/),
+      });
 
       // The phase is open here, so this is the role check refusing and nothing else.
       expect((await countEverything()).persons).toBe(2);
