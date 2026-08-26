@@ -292,12 +292,27 @@ describe('the leadership-tree import (SKILL.md section 2)', () => {
         })
         .execute();
 
-      const report = await dryRunTreeImport(modules, { treeCsv: SPINE, actor: admin });
-      const row = report.matched.find((matched) => matched.rowId === '2');
+      // A second matched row that is **not** a root, so the assertion below can
+      // fail against a constant. With Perlita alone `matched` holds one row, and
+      // `isRoot: true` hardcoded would satisfy both assertions — which is what an
+      // earlier version of this test asserted while its comment claimed otherwise.
+      await db
+        .insertInto('persons')
+        .values({
+          first_name: 'Marisol',
+          last_name: 'Ventura',
+          birth_date: '1985-06-15',
+          sex: 'FEMALE',
+          civil_status: 'SINGLE',
+        })
+        .execute();
 
-      expect(row?.isRoot).toBe(true);
-      // And the non-root rows are not marked, so the flag is not simply constant.
-      expect(report.matched.filter((matched) => matched.isRoot)).toHaveLength(1);
+      const report = await dryRunTreeImport(modules, { treeCsv: SPINE, actor: admin });
+
+      expect(report.matched.map((matched) => matched.rowId).sort()).toEqual(['2', '4']);
+      expect(report.matched.find((matched) => matched.rowId === '2')?.isRoot).toBe(true);
+      // Row 4 sits under row 2, so a constant `true` fails here.
+      expect(report.matched.find((matched) => matched.rowId === '4')?.isRoot).toBe(false);
     });
 
     it('stops before the matcher where the file is refused', async () => {
@@ -491,7 +506,12 @@ describe('the leadership-tree import (SKILL.md section 2)', () => {
             'batch',
           ),
         ),
-      ).rejects.toThrow(/runs as an Admin account/);
+        // **The code, not only the message.** Section 7 settles this one —
+        // invariant 4's exemption withheld answers `SCOPE_DENIED` — and a code is
+        // client-visible (section 22), so a regex on the message would let anyone
+        // change it back with the suite green. `CAPABILITY_DENIED` stood here for
+        // one commit and was wrong.
+      ).rejects.toMatchObject({ code: 'SCOPE_DENIED', message: /runs as an Admin account/ });
 
       // The phase is open here, so this is the role check refusing and nothing else.
       expect((await countEverything()).persons).toBe(2);

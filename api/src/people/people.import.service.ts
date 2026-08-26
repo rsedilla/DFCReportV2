@@ -533,12 +533,15 @@ export class PeopleImportService {
    * an Admin account, and section 7 keeps the two Senior Pastors away from
    * administrative operations on purpose.
    *
-   * **It answers `SCOPE_DENIED`, because that is what the rule it stands in for
-   * answers.** This check is section 5 invariant 4 hoisted to the door — the
-   * docblock above says so — and `HierarchyService.assertMayReparent`, which is
-   * invariant 4 where it is normally enforced, throws `ScopeDeniedError` for the
-   * same shape of refusal: a statement about the actor rather than about the
-   * record, decided by role.
+   * **It answers `SCOPE_DENIED`, and section 7 states that rule rather than this
+   * being an inference from it.** Section 7: where an actor holds the capability by
+   * another route "and it is the withheld **exemption** that refuses, that is a
+   * statement about the actor's authority over a target rather than about what they
+   * hold, and it answers `SCOPE_DENIED`, exactly as Section 5 invariant 4 does for
+   * every other actor." That is this refusal — invariant 4's exemption withheld
+   * because the account holds no exempting role — and
+   * `HierarchyService.assertMayReparent`, invariant 4 where it normally lives,
+   * throws the same.
    *
    * *`CAPABILITY_DENIED` was chosen first and was wrong, on a citation that dropped
    * the qualifier section 7 calls load-bearing.* Section 7 gives that code only
@@ -549,9 +552,10 @@ export class PeopleImportService {
    * sent to grant what they already granted, which is the failure the two codes are
    * split to prevent.
    *
-   * Section 22 defines no code for a role requirement on an actor, so this follows
-   * the nearest rule rather than a stated one, and `CLAUDE.md` records it as
-   * unsettled.
+   * *A first correction then called this "the nearest rule rather than a stated
+   * one", which was more tentative than the specification warrants — section 7's
+   * sentence above is the rule, written for the Senior Pastor identity check and
+   * general in its terms.*
    */
   private async assertActorMayImport(
     transaction: Transaction<Database>,

@@ -3751,13 +3751,23 @@ Church by explicit grant. §22's gloss, "the actor lacks the capability", is fal
 the reachable case, and an administrator reading it is sent to grant what they
 already granted.
 
-It answers `SCOPE_DENIED` instead, because that is what the rule it stands in for
-answers: this check is §5 invariant 4 hoisted to the door, and
-`HierarchyService.assertMayReparent` — invariant 4 where it normally lives — throws
-`ScopeDeniedError` for the same shape, a statement about the actor decided by role.
-Following the nearest rule rather than a stated one; §22 defines no code for a role
-requirement on an actor, and that is listed as open below rather than settled in a
-docblock.
+It answers `SCOPE_DENIED` instead, and **§7 states that rule rather than this being
+inferred from it** — a correction to this paragraph's first version, which called it
+"the nearest rule rather than a stated one" and listed it as open. §7: where an actor
+holds the capability by another route "and it is the withheld **exemption** that
+refuses, that is a statement about the actor's authority over a target rather than
+about what they hold, and it answers `SCOPE_DENIED`, exactly as Section 5 invariant 4
+does for every other actor." That is exactly this refusal — invariant 4's exemption
+withheld because the account holds no exempting role — written for the Senior Pastor
+identity check and general in its terms. `HierarchyService.assertMayReparent` throws
+the same.
+
+*The open item this briefly carried also claimed the first-Admin bootstrap guards
+were a competing precedent answering `INVARIANT_VIOLATION`. They are comparable in
+placement and opposite in kind: those refuse on whether an account already exists,
+which is a rule about what may be recorded whoever submits it — §22's
+`INVARIANT_VIOLATION` side, correctly. §22 splits the codes by kind, not by where the
+check sits, so the two precedents never disagreed. The item is withdrawn.*
 
 **"Every other `USE_EXISTING` mistake produces an ordinary edge that a reassignment
 corrects" is half true**, and all four passes missed it until the paragraph stated it
@@ -3794,7 +3804,7 @@ Two related questions have defined behaviour and are recorded in `SKILL.md` §12
 
 **Unsettled, and not blocking anything.** None of these is a Stop Condition. An implementer proceeds and settles them in passing; they are listed here because a reader looking for what is open should not have to find it inside the body of a ruling.
 
-- **What error code a refusal for lacking a *role* answers.** §22 splits `CAPABILITY_DENIED` and `SCOPE_DENIED` over grants and defines nothing for a requirement on who the actor *is*. `CAPABILITY_DENIED` is wrong here — §7 gives it only "where nothing else the account holds carries the capability", and the actor this refuses holds both, at Whole Church, by explicit grant. `INVARIANT_VIOLATION` is wrong under the 2026-08-20 ruling, since the refusal depends on who submits. The import answers `SCOPE_DENIED`, following `assertMayReparent` — §5 invariant 4, the same shape of rule — rather than a stated rule, and the first-Admin bootstrap guards answer `INVARIANT_VIOLATION` with `details.refused_by` for a comparable refusal on an exported service method. Two in-repo precedents disagree, which is what makes it a question. No client consequence until an endpoint reaches one of these services; settle it before one does.
+- **Whether a Person holding an open root row may be absorbed by a Person Merge.** §3 refuses a merge where the absorbed Person leads a Cell and says nothing about a root; §5 leaves succession undefined and forbids reassigning a root. So merging a duplicate root holder into the real person appears permitted — and §3 says a merge "never rewrites historical attendance, pastoral, or audit records to point to a different Person", so the seat row keeps naming the absorbed record. The resolved identity then has two open assignments, which §5 invariant 3 forbids and which no constraint can refuse, because the rows carry different `person_id`s. Raised by the fifth review of the tree import, which is the only thing in the system that creates root rows: the dry-run warning's whole force is that no remedy exists for a mis-seated root, and merge is the one remedy §3 offers for a record created in error. The warning is correct under §3 as written. Settle this before anyone needs it.
 - **Whether a deadlock should be answered as contention.** The import holds every person lock it takes for the whole transaction and acquires them in tree order, so the union across rows is not in key order and a concurrent writer taking two locks sorted can cycle with it. `lockPersonsWithin` guarantees ordering *per call* and cannot reach further. The consequence is that PostgreSQL raises `40P01`, and `isLockTimeout` matches `55P03` only — deliberately, since §22's `RESOURCE_BUSY` says "retry after a short delay" and the existing comment argues a deadlock is not ordinary contention. But a deadlock *is* the case where a retry helps most, and today it renders `INTERNAL_ERROR`. Either `40P01` joins `RESOURCE_BUSY`, or §22 says why it does not. Not urgent while the import is the only long lock-holder and runs once.
 - **Whether a decisions file should bind the candidate set it was adjudicated against.** The fingerprint covers the input file and says nothing about the database, and section 2's decisions file has no candidate column — so a `CREATE` acknowledges a candidate set nothing pins. A Tier 1 candidate arriving between the dry run and the commit is caught where it gives a row its *first* one, because the row is then blank or absent, and is not caught where the row already carries a decision: it is created past an acknowledgement made about somebody else. Closing it means a per-row digest of the candidate identifiers, carried in the file and compared at commit — structure section 2 does not describe. Narrow in practice while the import is thirty rows against a near-empty database, and it is the shape that would matter if this were ever pointed at a larger file. Decide it before any second use of the import.
 - **Whether closing a person's only open `network_assignments` row, without opening a replacement, is a legal write.** Escalated by `architecture-guardian` on 2026-08-25 and general rather than root-specific. §4 defines a Network change as an atomic close-and-open pair sharing one instant; §5 forbids `DELETE` on the table; nothing addresses a close alone. No constraint refuses it — `network_assignments_one_open` is partial and permits zero, and the same-Network trigger compares at the closed row's own start, so it passes. The consequence is that `network_as_of` becomes null from that instant and every edge beneath the person is silently unresolvable, which is the outcome the no-delete trigger exists to prevent, reached one column over. The root seat made it visible rather than causing it, and the root case is now refused specifically; the general case is not. The same silence covers a close at T1 reopened at T2, which leaves a gap with no Network at all.
