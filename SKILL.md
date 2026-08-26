@@ -238,6 +238,10 @@ input_fingerprint,row_id,decision,member_id
 
 **Where a row resolves to an existing Person, that Person receives the pastoral assignment the tree gives them**, and every row naming that `row_id` as its leader resolves to them. No Person is created and no Member ID is drawn from the sequence.
 
+The assignment is recorded as `pastoral_assignment.transferred`, carrying a null previous leader — Section 21 requires a reader looking for transfers to find the entry whether it arose from a reassignment or from anything else, and "this person had no leader and now has one" is the same question answered. A Person the import *creates* needs no such entry, because their leader is among the values `person.created` already records.
+
+That Person is also refused where the tree's sex disagrees with the recorded one. Sex decides Network (Section 4), so changing it is a correction under `people.correct_sex` — Admin only, audited, and forcing a pastoral reassignment of its own. An import that applied it silently would move somebody between Networks with no reason recorded and nothing to say it happened.
+
 **The commit refuses where that Person already holds an active pastoral assignment**, naming the row. Section 5 permits exactly one, so proceeding would mean closing the existing one — which is a reassignment, carrying its own authorization and its own audit entry (Section 5). An import must not perform one as a side effect of a duplicate adjudication, because the person who decided these two records are one person was not asked whether to move anybody.
 
 ### The fingerprint

@@ -138,3 +138,67 @@ same-Network. The dry run additionally matches every row against People already 
 the database, which needs the database, an Admin account, and an open
 initial-encoding phase. A file this validator passes can still meet duplicates
 there.
+
+## Running the import
+
+Two phases, two invocations, with a person deciding in between. Section 2 requires
+the separation: section 3 will not let a Tier 1 duplicate be adjudicated with
+nobody present, and the gap between the two runs is where that person does it.
+
+```bash
+cd api && npm run import:tree -- --file /path/to/tree.csv --actor admin@example.com --dry-run --out decisions.csv
+```
+
+The dry run **writes nothing** — no Person, no assignment, no audit entry — so it
+may be run as often as needed. It validates the file, matches every row against the
+People already recorded, and writes a decisions template naming **only the rows that
+matched something**. A row matching nobody has nothing to decide.
+
+Adjudicate that file. It is a CSV so it can be sorted and emailed to the leader who
+actually knows whether those two records are one person.
+
+```text
+input_fingerprint,row_id,decision,member_id
+<64 hex chars>,4,CREATE,
+<64 hex chars>,7,USE_EXISTING,M-000123
+```
+
+- `decision` is `CREATE` or `USE_EXISTING`, or blank.
+- **Blank means create**, and is refused for a row carrying a Tier 1 candidate:
+  section 3 requires a person to acknowledge one, and silence is not
+  acknowledgement. A row with only Tier 2 candidates may be left blank.
+- `member_id` names the Person for `USE_EXISTING` and must be empty otherwise. The
+  Member ID rather than the UUID, because it is read off the report and retyped.
+- The fingerprint is repeated on every row and every row must agree, which is what
+  catches two decisions files spliced together.
+
+```bash
+cd api && npm run import:tree -- --file /path/to/tree.csv --actor admin@example.com --decisions decisions.csv --commit
+```
+
+The commit is **one transaction and there is no resume**. A failure writes nothing;
+correct the file and run it again.
+
+### What refuses a commit
+
+- The actor does not hold `people.create` and `people.manage_pastoral_assignment`
+  at Whole Church, or no account is registered to that address.
+- The initial-encoding phase is closed.
+- The tree file no longer matches the fingerprint the decisions were taken against
+  — **including a re-sort**, which changes nothing about the decisions and does
+  change the line numbers the adjudicator was reading.
+- A row with a Tier 1 candidate carries no decision, or is absent from the file.
+- A `USE_EXISTING` Person is archived, was absorbed by a merge, is recorded with a
+  different sex from the file, or **already holds an active pastoral assignment**.
+  That last one is not an obstacle to route around: placing them means closing the
+  assignment they have, which is a reassignment carrying its own authorization and
+  its own audit entry, and the person who decided these two records are one person
+  was never asked whether to move anybody.
+
+### Afterwards
+
+Read the two root Person identifiers out of the database, set
+`SENIOR_PASTOR_PERSON_IDS` to them, and **restart**. The value is read once when the
+process starts (section 7), so until that is done no `SENIOR_PASTOR` account can be
+provisioned and any such role row grants nothing — the deliberate fail-closed
+default, and correct for every moment before the two Persons exist.

@@ -197,6 +197,9 @@ npm run dev                          # http://localhost:3000
 | `npm run format:check` | `api` | Prettier |
 | `npm test` | `api` | The suite that must stay green, the eleven authorization cases included. Needs a migrated database |
 | `npm run migrate:up` / `:down` / `:status` | `api` | Applies, reverts one, or lists migrations |
+| `npm run validate:tree -- <file>` | `api` | Checks the leadership-tree CSV against everything decidable from the file alone. No database |
+| `npm run import:tree -- --dry-run` / `--commit` | `api` | The two phases of the tree import (`SKILL.md` §2). `docs/TREE_CSV.md` carries the flags and what refuses a commit |
+| `npm run bootstrap:admin` | `api` | Creates the first Admin account, once, and refuses while any account exists (§6) |
 | `npm run build` | `api`, `web` | Production build |
 
 There is no seed command. Section 2 of `SKILL.md` loads real data through the import flow rather than through fixtures, and test fixtures are built by the tests that need them.
@@ -3427,9 +3430,85 @@ guards through `bootstrapFirstAdmin`, so deleting any one left the suite green
 with the same remedy: each guard is now called directly, and each was verified red
 on its own.
 
+### 2026-08-26 — The tree import, and the one thing the fingerprint cannot bind
+
+The import section 2 specifies, built in the two phases it requires. Most of it is
+section 2 followed rather than decided; four things were not settled by it and are
+recorded here.
+
+**`settings` gets a reader, and it is a sub-module of `admin`.** Migration 0002
+created the table and seeded `initial_encoding_open` on 2026-08-22, and nothing had
+ever read it — so the flag that bounds every relaxation of the encoding phase was,
+until now, a value with no consequence. `SettingsService` lives in
+`src/admin/settings/`, owns the table, and imports nothing.
+
+The seam is not tidiness. `PeopleImportService` refuses unless the phase is open,
+and the import that calls it lives in `admin` — so a phase reader packaged with the
+import would put `people → admin` and `admin → people` in the graph at once. That
+is the same shape, and the same remedy, as the 2026-08-24 authorization seam: what
+`people` needs is a question, not a module full of operations. The 2026-08-24
+intra-module ruling is what makes it admissible, and table ownership is unaffected.
+
+**Only the read exists, deliberately.** Closing the phase is an audited Admin action
+(section 2) under `settings.manage`, which is an endpoint, and `docs/ROADMAP.md`
+puts it in Stage 7. Writing the setter now means writing its authorization as a
+comment.
+
+**A missing setting row raises rather than defaulting.** Migration 0002 seeds both
+keys so the application never invents a default, and the two directions are not
+symmetric: answering `false` presents an unmigrated database as a closed phase, and
+answering `true` presents it as an open one — a relaxation with no end, which is the
+failure the phase flag exists to prevent.
+
+**The per-row writes are their own service, `PeopleImportService`.** What it offers
+is Person creation with **no duplicate gate and no idempotency claim**, which is
+legitimate — section 3 forbids adjudicating a Tier 1 candidate with nobody present,
+and section 2 moves that decision into the decisions file — and is not something to
+put in the file whose job is enforcing section 3. Both write methods refuse on their
+own account, following `createSystemAdministratorWithin` and `createFirstAdminWithin`
+rather than trusting the one caller, because these are public on a service the
+injector resolves.
+
+**`USE_EXISTING` writes `pastoral_assignment.transferred` with a null previous
+leader.** Section 21's list is open and its convention is `<noun>.<past-tense verb>`,
+so a `pastoral_assignment.opened` would conform — and it would split the one question
+a reader asks of this log, *who has led this person*, across two action names for no
+gain. A Person created by the import records its leader inside `person.created`,
+exactly as `PeopleService.create` does; only an existing Person needs an entry of its
+own.
+
+**The fingerprint binds the file and not the database, and the gap that leaves is
+stated rather than closed.** The commit re-runs the matcher, which it must do anyway
+to know which rows carry a Tier 1 candidate. Where that gives a row its *first* such
+candidate, the decisions file is blank or silent for it and the commit refuses — the
+"something changed underneath it" case section 2 leaves room for, and it is pinned by
+a test that creates a Person between the dry run and the commit.
+
+Where the row already carries a decision, it is **not** caught. Section 2's decisions
+file has no candidate column, so a `CREATE` records "I looked at this row's candidates
+and decided create" against a candidate set nothing pins — and a new Tier 1 candidate
+arriving for an already-decided row is created past an acknowledgement made about
+somebody else.
+
+Closing it means adding structure section 2 does not describe: a per-row digest of the
+candidate identifiers, carried in the file and compared at commit. That is not
+obviously wrong and it is not obviously worth it — the import runs once, on a spine of
+thirty rows, against a database whose only other Person is the administrator. It is
+listed as open below rather than decided in passing, and the code says so where
+somebody would otherwise assume the fingerprint covers it.
+
+**Two smaller things, both section 2 read literally.** The walk is breadth-first from
+the roots rather than file order, because a disciple's edge names a leader who must
+already exist and the file is in whatever order a spreadsheet held; a row unreachable
+from a root raises rather than reporting a finding, because the validator has already
+refused cycles, unresolved leaders and a root count other than two, so reaching that
+branch means the validator and the walk disagree. And a dry run given `--decisions` is
+refused rather than ignoring the file, because a run that appears to be checking
+something and is not is worse than one that says no.
+
 ### Open — awaiting a ruling
 
-**One item awaits a ruling and blocks Stage 5. Fifteen other things are unsettled,
+**One item awaits a ruling and blocks Stage 5. Sixteen other things are unsettled,
 none of them blocking. They are listed at the end, so this section is the whole of
 what is open.**
 
@@ -3447,6 +3526,7 @@ Two related questions have defined behaviour and are recorded in `SKILL.md` §12
 
 **Unsettled, and not blocking anything.** None of these is a Stop Condition. An implementer proceeds and settles them in passing; they are listed here because a reader looking for what is open should not have to find it inside the body of a ruling.
 
+- **Whether a decisions file should bind the candidate set it was adjudicated against.** The fingerprint covers the input file and says nothing about the database, and section 2's decisions file has no candidate column — so a `CREATE` acknowledges a candidate set nothing pins. A Tier 1 candidate arriving between the dry run and the commit is caught where it gives a row its *first* one, because the row is then blank or absent, and is not caught where the row already carries a decision: it is created past an acknowledgement made about somebody else. Closing it means a per-row digest of the candidate identifiers, carried in the file and compared at commit — structure section 2 does not describe. Narrow in practice while the import is thirty rows against a near-empty database, and it is the shape that would matter if this were ever pointed at a larger file. Decide it before any second use of the import.
 - **Whether closing a person's only open `network_assignments` row, without opening a replacement, is a legal write.** Escalated by `architecture-guardian` on 2026-08-25 and general rather than root-specific. §4 defines a Network change as an atomic close-and-open pair sharing one instant; §5 forbids `DELETE` on the table; nothing addresses a close alone. No constraint refuses it — `network_assignments_one_open` is partial and permits zero, and the same-Network trigger compares at the closed row's own start, so it passes. The consequence is that `network_as_of` becomes null from that instant and every edge beneath the person is silently unresolvable, which is the outcome the no-delete trigger exists to prevent, reached one column over. The root seat made it visible rather than causing it, and the root case is now refused specifically; the general case is not. The same silence covers a close at T1 reopened at T2, which leaves a gap with no Network at all.
 - **Who may close a Network root's row, and under what capability.** §5 gives each Network exactly one root and says changing who holds one is "a deliberate Network-level decision, not a pastoral reassignment" — and names no capability, no endpoint and no workflow for it. The seat added on 2026-08-25 is partial over open rows, so a successor becomes possible the moment the previous root's row is closed; both write paths that could close it refuse a root outright, so nothing can. §5 now says plainly that a succession is not an operation this system offers, rather than implying one from the seat being freeable. Not blocking: the import creates two roots and neither changes.
 - **Whether §2's closed exemption list gets a gate.** §2 was narrowed on 2026-08-26 to permit exactly one cross-module read and declares the list closed — with nothing able to fail on it. This repository gates the pure-client boundary, the refused UI packages, the palette token names and the module graph, each with a check that goes red; a cross-module table read is greppable in one line and has none. Where such a check would live — an ESLint rule, a test over the source, a lint script beside `check-ui-dependencies.mjs` — is the part that needs deciding.

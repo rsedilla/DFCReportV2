@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 
+import { SettingsModule } from './admin/settings/settings.module';
 import { AuditModule } from './audit/audit.module';
 import { AuthModule } from './auth/auth.module';
 import { AccessTokenGuard } from './auth/authorization/access-token.guard';
@@ -46,6 +47,7 @@ import { PeopleModule } from './people/people.module';
     ThrottlerModule.forRoot([{ name: 'default', ttl: 60_000, limit: 120 }]),
     IdempotencyModule,
     AuditModule,
+    SettingsModule,
     AuthModule,
     AuthorizationModule,
     HierarchyModule,

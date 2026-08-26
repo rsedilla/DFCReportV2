@@ -1,11 +1,13 @@
 import { Module } from '@nestjs/common';
 
+import { SettingsModule } from '../admin/settings/settings.module';
 import { AuthorizationModule } from '../auth/authorization/authorization.module';
 import { HierarchyModule } from '../hierarchy/hierarchy.module';
 import { NetworksModule } from '../networks/networks.module';
 
 import { PeopleController } from './people.controller';
 import { PeopleDuplicatesService } from './people.duplicates.service';
+import { PeopleImportService } from './people.import.service';
 import { PeopleReadService } from './people.read.service';
 import { PeopleReassignmentService } from './people.reassignment.service';
 import { PeopleService } from './people.service';
@@ -56,12 +58,13 @@ import { PeopleSexCorrectionService } from './people.sex-correction.service';
  * it after the lock — and this split neither detected nor prevented that.
  */
 @Module({
-  imports: [HierarchyModule, NetworksModule, AuthorizationModule],
+  imports: [HierarchyModule, NetworksModule, AuthorizationModule, SettingsModule],
   controllers: [PeopleController],
   providers: [
     PeopleService,
     PeopleReadService,
     PeopleDuplicatesService,
+    PeopleImportService,
     PeopleSexCorrectionService,
     PeopleReassignmentService,
   ],
@@ -69,6 +72,7 @@ import { PeopleSexCorrectionService } from './people.sex-correction.service';
     PeopleService,
     PeopleReadService,
     PeopleDuplicatesService,
+    PeopleImportService,
     PeopleSexCorrectionService,
     PeopleReassignmentService,
   ],
