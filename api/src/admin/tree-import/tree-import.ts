@@ -27,6 +27,7 @@
 import { randomUUID } from 'node:crypto';
 
 import { Capability } from '../../auth/authorization/capabilities';
+import { CapabilityDeniedError, ScopeDeniedError } from '../../common/errors/api-error';
 
 import { decisionsTemplate, hasErrors, readDecisionsCsv } from './decisions-csv';
 import { fingerprintOf, validateTreeCsv } from './tree-csv';
@@ -91,8 +92,9 @@ export interface DryRunReport {
 }
 
 export const PRECONDITION_CODES = [
-  'ACTOR_UNKNOWN',
+  'ACTOR_NOT_ADMIN',
   'ACTOR_LACKS_CAPABILITY',
+  'ACTOR_AUTHORITY_UNREADABLE',
   'ENCODING_PHASE_CLOSED',
 ] as const;
 
@@ -134,10 +136,71 @@ async function checkPreconditions(
 ): Promise<Finding<PreconditionCode>[]> {
   const findings: Finding<PreconditionCode>[] = [];
 
+  // **The account must hold `ADMIN`, and the capability check does not imply it.**
+  //
+  // Section 2 says "the script is given an Admin account" and then states the
+  // check in capabilities; those are not the same requirement, and neither of
+  // these two capabilities is in `WHOLE_CHURCH_ONLY` — so an explicit Admin-issued
+  // Whole Church grant of both to a `LEADER` account is representable, and a first
+  // version of this file accepted one.
+  //
+  // What that opened is the escalation section 5 invariant 4 exists to close.
+  // Invariant 4 is the one authorization rule in this system decided by **role**
+  // rather than by capability (2026-08-23), precisely so that a Whole Church grant
+  // does not satisfy it — and the import opens assignments without consulting it,
+  // because every row of the tree is a first assignment rather than a change. A
+  // Leader holding both grants could therefore name their own Person on a
+  // `USE_EXISTING` row and place themselves anywhere in either tree.
+  //
+  // Requiring the role closes it at the door, for the whole run, which is better
+  // than re-deriving invariant 4 per row: the roles that hold it — Admin and the
+  // Senior Pastors — are exactly the ones invariant 4 exempts, because they sit
+  // outside the pastoral incentive.
+  //
+  // `SENIOR_PASTOR` is deliberately not accepted. Section 2 says an *Admin*
+  // account, and section 7 keeps the two Senior Pastors away from administrative
+  // operations on purpose; widening this to them would be a decision about the
+  // role catalog taken in an import.
+  let authority;
+  try {
+    authority = await modules.authorization.authorityFor(actor.accountId);
+  } catch (error) {
+    // Distinguished from a denial rather than folded into it. A first version
+    // caught everything around `authorize` and reported it as a missing
+    // capability, which sends an operator to fix a grant that is not the problem.
+    findings.push({
+      severity: 'error',
+      code: 'ACTOR_AUTHORITY_UNREADABLE',
+      line: 1,
+      message:
+        "The account's roles and grants could not be read, so nothing about its authority " +
+        'is known. This is not a refusal — it is a failure to decide.',
+      detail: error instanceof Error ? error.message : String(error),
+    });
+    return findings;
+  }
+
+  if (!authority.roles.includes('ADMIN')) {
+    findings.push({
+      severity: 'error',
+      code: 'ACTOR_NOT_ADMIN',
+      line: 1,
+      message:
+        'The account running this import does not hold ADMIN. Section 2 gives the import an ' +
+        'Admin account, and the capabilities alone are not enough: section 5 invariant 4 is ' +
+        'decided by role rather than by capability, and every assignment this opens is a ' +
+        'first assignment that never reaches it.',
+    });
+  }
+
   for (const capability of REQUIRED) {
     try {
       await modules.authorization.authorize(actor, capability, { kind: 'church' });
-    } catch {
+    } catch (error) {
+      if (!(error instanceof CapabilityDeniedError) && !(error instanceof ScopeDeniedError)) {
+        throw error;
+      }
+
       findings.push({
         severity: 'error',
         code: 'ACTOR_LACKS_CAPABILITY',
@@ -334,6 +397,18 @@ export async function commitTreeImport(
   return applyWithinOneTransaction(modules, {
     rows: tree.rows,
     decisions: decisions.byRowId,
+    // What each row's decision was taken against, so that a `CREATE` past a Tier 1
+    // candidate leaves a record of who was passed over. Without it section 3's
+    // acknowledgement exists only in the operator's spreadsheet, which is outside
+    // `audit_log` — and that acknowledgement is why section 2 built two phases.
+    tier1CandidatesOf: new Map(
+      matched
+        .filter((row) => row.tier === 1)
+        .map((row) => [
+          row.rowId,
+          row.candidates.filter((c) => c.tier === 1).map((c) => c.memberId),
+        ]),
+    ),
     actor: input.actor,
   });
 }
@@ -376,6 +451,8 @@ async function applyWithinOneTransaction(
   input: {
     rows: readonly TreeRow[];
     decisions: ReadonlyMap<string, DecisionRow>;
+    /** Member IDs of the Tier 1 candidates standing against each row, if any. */
+    tier1CandidatesOf: ReadonlyMap<string, readonly string[]>;
     actor: Actor;
   },
 ): Promise<CommitResult> {
@@ -423,13 +500,7 @@ async function applyWithinOneTransaction(
 
         await modules.people.attachExistingWithin(
           trx,
-          {
-            personId: existing.id,
-            memberId: existing.memberId,
-            placement,
-            network: existing.network,
-            encodedAt,
-          },
+          { personId: existing.id, memberId: existing.memberId, placement, encodedAt },
           input.actor,
           batchId,
         );
@@ -456,6 +527,7 @@ async function applyWithinOneTransaction(
           civilStatus: row.civilStatus as CivilStatus,
           placement,
           encodedAt,
+          acknowledgedDuplicateMemberIds: input.tier1CandidatesOf.get(row.rowId),
         },
         input.actor,
         batchId,

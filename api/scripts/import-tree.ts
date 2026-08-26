@@ -291,7 +291,15 @@ Imported the leadership-tree spine.
   Reused     ${result.reused.length} existing Person(s)
 
 Every record carries its own audit entry, linked by the batch identifier
-(section 2). Section 5 invariants were enforced on every assignment.
+(section 2).
+
+Where the section 5 invariants were enforced, since "all of them were" would be
+an overclaim: invariant 5 (same-Network) and invariant 3 (one active assignment)
+by the domain layer on every row and by the database besides; invariant 1 by the
+Whole Church precondition on the actor; invariant 2 (no cycles) by the file
+validator over the CSV graph, before any of this ran; and invariant 4 by
+requiring the actor to hold ADMIN, which is the role it exempts, rather than by
+being evaluated per row.
 
 Next: read the two root Person identifiers out of the database, set
 SENIOR_PASTOR_PERSON_IDS to them, and restart. The value is read once when the

@@ -14,7 +14,7 @@ import { SettingsService } from './settings.service';
  * `admin`, and nothing outside `admin` touches it.
  *
  * **The seam exists because the alternative is an import cycle.**
- * `PeopleService.createForImportWithin` refuses unless the encoding phase is open,
+ * `PeopleImportService` refuses unless the encoding phase is open,
  * and the tree import in `admin` calls `people`. Were the phase reader part of a
  * module that also carried the import, `people` would import `admin` and `admin`
  * would import `people`. That is the same shape, and the same remedy, as the

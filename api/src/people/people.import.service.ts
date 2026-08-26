@@ -84,6 +84,21 @@ export class PeopleImportService {
       placement: PersonPlacement;
       /** One instant for the whole import, so every row shares an effective date. */
       encodedAt: Date;
+      /**
+       * The Member IDs of the Tier 1 candidates that stood against this row when
+       * the adjudicator decided to create anyway (section 3).
+       *
+       * **Recorded because otherwise the acknowledgement exists only in a
+       * spreadsheet**, which is outside the system and outside `audit_log` — and
+       * that acknowledgement is the entire reason section 2 built a two-phase
+       * import. Section 21 asks for the relevant values, and for this path "who
+       * was on the table and passed over" is the relevant value.
+       *
+       * Member IDs rather than the identifiers `PeopleService.create` records,
+       * because that is what the decisions file is written in: recording a UUID
+       * here would be recording something the adjudicator never saw.
+       */
+      acknowledgedDuplicateMemberIds?: readonly string[];
     },
     actor: { accountId: string },
     batchId: string,
@@ -167,6 +182,11 @@ export class PeopleImportService {
       // The same values `PeopleService.create` records, because section 21 wants
       // what was created rather than that something was — and a reader searching
       // the log should not have to know which path wrote the entry.
+      //
+      // One field differs and the difference is deliberate:
+      // `acknowledged_duplicate_member_ids` rather than
+      // `acknowledged_duplicate_ids`, because the import's acknowledgement is
+      // taken in Member IDs and a reader must not mistake one for the other.
       after: {
         id: person.id,
         member_id: person.member_id,
@@ -181,6 +201,7 @@ export class PeopleImportService {
         pastoral_leader_id:
           input.placement.kind === 'ROOT' ? null : input.placement.pastoralLeaderId,
         network_root: input.placement.kind === 'ROOT',
+        acknowledged_duplicate_member_ids: [...(input.acknowledgedDuplicateMemberIds ?? [])],
         import: true,
       },
       batchId,
@@ -209,7 +230,7 @@ export class PeopleImportService {
     transaction: Transaction<Database>,
     memberId: string,
     expected: { sex: Sex },
-  ): Promise<{ id: string; memberId: string; fullName: string; network: NetworkName }> {
+  ): Promise<{ id: string; memberId: string; fullName: string }> {
     const person = await transaction
       .selectFrom('persons')
       .leftJoin('person_lifecycle', (join) =>
@@ -258,11 +279,16 @@ export class PeopleImportService {
       );
     }
 
+    // **No Network is returned, deliberately.** Deriving one from the sex checked
+    // just above would be right wherever the record and the file agree, and this
+    // method is the thing that establishes they agree — so it reads as safe. It is
+    // not the value the edge is checked against: `attachExistingWithin` writes no
+    // Network row, so what governs is the row already in `network_assignments`,
+    // and that is what it reads.
     return {
       id: person.id,
       memberId: person.member_id,
       fullName: composeName(person),
-      network: this.networks.networkForSex(person.sex),
     };
   }
 
@@ -277,6 +303,19 @@ export class PeopleImportService {
    * one person was never asked whether to move anybody. Handing it back makes it an
    * ordinary reassignment, decided by whoever should decide it.
    *
+   * **It refuses to make an existing Person a Network root.** Section 5 says a root
+   * is created only by the initial import, and `createForImportWithin` is what
+   * creates one; taking somebody who already exists and seating them is a different
+   * act, and section 5 also says a root cannot be reassigned by anyone. Nothing
+   * states which of those governs here, so the fail-closed reading is taken and the
+   * question is recorded as open in `CLAUDE.md` rather than answered by a side
+   * effect.
+   *
+   * The case that makes it more than theoretical: the administrator the first-Admin
+   * bootstrap creates has no pastoral assignment, which section 5 invariant 3 calls
+   * a correct permanent state for somebody outside the pastoral structure — and
+   * without this they could be named on a root row and pulled into it.
+   *
    * The audit entry is `pastoral_assignment.transferred` with a null previous
    * leader, which is what it is: the Person had none. Section 21's list is open and
    * its convention is `<noun>.<past-tense verb>`, so a separate `.opened` action
@@ -289,7 +328,6 @@ export class PeopleImportService {
       personId: string;
       memberId: string;
       placement: PersonPlacement;
-      network: NetworkName;
       encodedAt: Date;
     },
     actor: { accountId: string },
@@ -297,18 +335,40 @@ export class PeopleImportService {
   ): Promise<void> {
     await this.assertEncodingPhaseOpen(transaction);
 
-    // Their own row is what is being decided, so the lock is on them.
-    // `openAssignmentWithin` locks the leader (or, for a root, the subject), which
-    // is the edge's rule and not this one: a Network correction committing
-    // alongside would change which Network their new edge belongs to.
-    await lockPersonsWithin(transaction, [input.personId]);
+    if (input.placement.kind === 'ROOT') {
+      throw new InvariantViolationError(
+        `${input.memberId} names an existing Person for a Network root row. A root is created ` +
+          'by the import and is not a seat an existing Person is moved into (section 5) — ' +
+          'decide CREATE for that row, or take it up as a Network-level decision.',
+        { member_id: input.memberId, person_id: input.personId },
+      );
+    }
 
-    const open = await transaction
-      .selectFrom('pastoral_assignments')
-      .select(['id', 'leader_id'])
-      .where('person_id', '=', input.personId)
-      .where('ended_at', 'is', null)
-      .executeTakeFirst();
+    // Bound once, so the three uses below cannot each re-narrow the union and one
+    // of them get it wrong. Everything past the refusal above is an ordinary edge.
+    const pastoralLeaderId = input.placement.pastoralLeaderId;
+
+    // **Both keys in one call, because the ordering guarantee is per call.**
+    // `lockPersonsWithin` sorts what it is given and issues one statement per key;
+    // two calls therefore acquire in the order they were written, not in key
+    // order. Locking the subject and then the leader is exactly the shape section
+    // 5 names as a deadlock: a concurrent reassignment naming the same pair takes
+    // them sorted, and where the leader's key is the lower one the two run in
+    // opposite orders. That is a deadlock rather than a wait, so the three-second
+    // `lock_timeout` does not bound it — PostgreSQL picks a victim and raises
+    // `40P01`, which nothing here classifies.
+    //
+    // The subject is locked at all because their own row is what is being decided:
+    // a Network correction committing alongside changes which Network their new
+    // edge belongs to. `openAssignmentWithin` will take the leader's lock again,
+    // which is free — the same transaction already holds it.
+    await lockPersonsWithin(transaction, [input.personId, pastoralLeaderId]);
+
+    // Asked of `hierarchy`, which owns `pastoral_assignments` (section 2). A
+    // standalone read rooted in a table this module does not own is not the join
+    // exemption section 2 names, and the interface already answers exactly this —
+    // `PeopleSexCorrectionService` calls the same method with a transaction.
+    const open = await this.hierarchy.openAssignmentOf(transaction, input.personId);
 
     if (open) {
       throw new InvariantViolationError(
@@ -320,32 +380,41 @@ export class PeopleImportService {
       );
     }
 
-    if (input.placement.kind === 'UNDER') {
-      await lockPersonsWithin(transaction, [input.placement.pastoralLeaderId]);
-      await assertLeaderIsAssignable(
-        transaction,
-        input.placement.pastoralLeaderId,
-        input.network,
-        input.encodedAt,
-        this.networks,
+    // **The Network is read, not derived from sex.** `resolveExistingWithin`
+    // checks that the recorded sex agrees with the file, so deriving would give
+    // the right answer wherever the two agree — and this method writes no Network
+    // row, so wherever they disagree the pre-check passes on a value the database
+    // does not hold and the deferred trigger raises a raw `check_violation` at
+    // COMMIT. That is the 500-instead-of-an-answer failure `assertLeaderIsAssignable`
+    // exists to prevent. `PeopleReassignmentService` reads it for the same reason.
+    //
+    // Null is refused rather than attempted (section 5): a Person carrying no open
+    // Network row has no Network for the edge to be checked against, and the
+    // trigger would compare against null and refuse at commit with nothing an
+    // operator can act on.
+    const network = await this.networks.networkAsOf(transaction, input.personId, input.encodedAt);
+    if (network === null) {
+      throw new InvariantViolationError(
+        `${input.memberId} has no Network recorded as of the encoding date, so the tree ` +
+          'cannot place them: a pastoral edge is legal only between two people in the same ' +
+          'Network, and one end of this one has none.',
+        { member_id: input.memberId, person_id: input.personId },
       );
     }
 
-    await this.hierarchy.openAssignmentWithin(
+    await assertLeaderIsAssignable(
       transaction,
-      input.placement.kind === 'ROOT'
-        ? {
-            personId: input.personId,
-            root: true,
-            rootNetwork: input.network,
-            startedAt: input.encodedAt,
-          }
-        : {
-            personId: input.personId,
-            leaderId: input.placement.pastoralLeaderId,
-            startedAt: input.encodedAt,
-          },
+      pastoralLeaderId,
+      network,
+      input.encodedAt,
+      this.networks,
     );
+
+    await this.hierarchy.openAssignmentWithin(transaction, {
+      personId: input.personId,
+      leaderId: pastoralLeaderId,
+      startedAt: input.encodedAt,
+    });
 
     await this.audit.writeWithin(transaction, {
       actorId: actor.accountId,
@@ -356,12 +425,7 @@ export class PeopleImportService {
       // previous is null and is written rather than omitted: an absent key and a
       // null one read the same to a person and differently to a query.
       before: { pastoral_leader_id: null },
-      after: {
-        pastoral_leader_id:
-          input.placement.kind === 'ROOT' ? null : input.placement.pastoralLeaderId,
-        network_root: input.placement.kind === 'ROOT',
-        import: true,
-      },
+      after: { pastoral_leader_id: pastoralLeaderId, network, import: true },
       batchId,
     });
   }

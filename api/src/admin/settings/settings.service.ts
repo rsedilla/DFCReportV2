@@ -8,8 +8,8 @@ import type { Transaction } from 'kysely';
 /**
  * The church-wide operational settings (SKILL.md section 7, `settings.manage`).
  *
- * `admin` owns `settings` (section 2, Modules) and this is its only reader and
- * only writer. Nothing read it before this change: migration 0002 created the
+ * `admin` owns `settings` (section 2, Modules) and this is the only thing that
+ * touches it. Nothing read it before this change: migration 0002 created the
  * table and seeded both keys eighteen months of rulings ago, and the value that
  * bounds the initial-encoding relaxation had never been consulted by anything.
  *

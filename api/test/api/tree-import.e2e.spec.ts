@@ -26,6 +26,7 @@ import { SettingsService } from '../../src/admin/settings/settings.service';
 import {
   commitTreeImport,
   dryRunTreeImport,
+  PRECONDITION_CODES,
   TreeImportRefused,
 } from '../../src/admin/tree-import/tree-import';
 import { fingerprintOf, validateTreeCsv } from '../../src/admin/tree-import/tree-csv';
@@ -122,6 +123,54 @@ describe('the leadership-tree import (SKILL.md section 2)', () => {
     await app.close();
   });
 
+  describe('the precondition codes', () => {
+    /**
+     * Walked from the list rather than from the cases, which is what
+     * `FINDING_CODES` and `DECISION_FINDING_CODES` each get and this list did not.
+     * An `ACTOR_UNKNOWN` member survived a whole review that way: it was declared,
+     * emitted nowhere, and handled in the CLI instead.
+     *
+     * `ACTOR_AUTHORITY_UNREADABLE` is the one that cannot be provoked from here —
+     * it needs the grants read to fail, which is a database fault rather than a
+     * state. It is asserted to be reachable by construction instead: it is the
+     * only code raised from the `catch`, and the test below proves that `catch` is
+     * not swallowing ordinary denials.
+     */
+    it('are all emitted by something', async () => {
+      const emitted = new Set<string>();
+
+      const person = await createPerson(db, { firstName: 'Bienvenido', network: 'MENS' });
+      const account = await createAccount(app, db, {
+        person,
+        roles: ['LEADER'],
+        grantedBy: admin.accountId,
+      });
+      const leader: Actor = { accountId: account.id, personId: person.id };
+
+      for (const finding of (await dryRunTreeImport(modules, { treeCsv: SPINE, actor: leader }))
+        .preconditions) {
+        emitted.add(finding.code);
+      }
+
+      await db
+        .updateTable('settings')
+        .set({ value: sql`'false'::jsonb` })
+        .where('key', '=', 'initial_encoding_open')
+        .execute();
+
+      for (const finding of (await dryRunTreeImport(modules, { treeCsv: SPINE, actor: admin }))
+        .preconditions) {
+        emitted.add(finding.code);
+      }
+
+      expect([...emitted].sort()).toEqual(
+        PRECONDITION_CODES.filter((code) => code !== 'ACTOR_AUTHORITY_UNREADABLE')
+          .slice()
+          .sort(),
+      );
+    });
+  });
+
   describe('the dry run', () => {
     it('writes nothing — no Person, no assignment, no audit entry', async () => {
       const before = await countEverything();
@@ -190,6 +239,56 @@ describe('the leadership-tree import (SKILL.md section 2)', () => {
   });
 
   describe('the actor (section 2)', () => {
+    it('must hold ADMIN, not merely the two capabilities at Whole Church', async () => {
+      // **The escalation this closes.** Neither `people.create` nor
+      // `people.manage_pastoral_assignment` is in `WHOLE_CHURCH_ONLY`, so an
+      // explicit Admin-issued Whole Church grant of both to a LEADER account is
+      // representable — and the capability check alone accepted it. Section 5
+      // invariant 4 is decided by *role* (2026-08-23), and every assignment the
+      // import opens is a first assignment that never reaches it, so such an
+      // account could name its own Person on a USE_EXISTING row and place itself
+      // anywhere in either tree.
+      const person = await createPerson(db, { firstName: 'Bienvenido', network: 'MENS' });
+      const account = await createAccount(app, db, {
+        person,
+        roles: ['LEADER'],
+        grantedBy: admin.accountId,
+      });
+
+      for (const capability of ['people.create', 'people.manage_pastoral_assignment']) {
+        await db
+          .insertInto('capability_grants')
+          .values({
+            account_id: account.id,
+            capability: capability as 'people.create',
+            scope_type: 'WHOLE_CHURCH',
+            scope_network: null,
+            read_only: false,
+            granted_by: admin.accountId,
+            reason: 'Fixture: the grant that made this escalation representable.',
+          })
+          .execute();
+      }
+
+      const granted: Actor = { accountId: account.id, personId: person.id };
+      const report = await dryRunTreeImport(modules, { treeCsv: SPINE, actor: granted });
+
+      // The capabilities pass; the role does not. Both halves asserted, because a
+      // case checking only "refused" would pass against the version that refused
+      // for the capability reason and never grew a role check.
+      expect(report.preconditions.map((finding) => finding.code)).toEqual(['ACTOR_NOT_ADMIN']);
+
+      await expect(
+        commitTreeImport(modules, {
+          treeCsv: SPINE,
+          decisionsCsv: decisionsFor(SPINE),
+          actor: granted,
+        }),
+      ).rejects.toBeInstanceOf(TreeImportRefused);
+
+      expect((await countEverything()).persons).toBe(2);
+    });
+
     it('is refused where they do not hold the capabilities at Whole Church', async () => {
       const person = await createPerson(db, { firstName: 'Bienvenido', network: 'MENS' });
       const account = await createAccount(app, db, {
@@ -199,8 +298,12 @@ describe('the leadership-tree import (SKILL.md section 2)', () => {
       });
       const leader: Actor = { accountId: account.id, personId: person.id };
 
+      // All three, and every one reported rather than the first: an operator
+      // fixing a grant wants the list, and handing them one refusal at a time
+      // turns a two-minute correction into three runs.
       const report = await dryRunTreeImport(modules, { treeCsv: SPINE, actor: leader });
       expect(report.preconditions.map((finding) => finding.code)).toEqual([
+        'ACTOR_NOT_ADMIN',
         'ACTOR_LACKS_CAPABILITY',
         'ACTOR_LACKS_CAPABILITY',
       ]);
@@ -276,6 +379,7 @@ describe('the leadership-tree import (SKILL.md section 2)', () => {
 
     it('is refused by `attachExistingWithin` too', async () => {
       const person = await createPerson(db, { firstName: 'Corazon', network: 'WOMENS' });
+      const leader = await createPerson(db, { firstName: 'Dalisay', network: 'WOMENS' });
       await closePhase();
 
       await expect(
@@ -285,8 +389,7 @@ describe('the leadership-tree import (SKILL.md section 2)', () => {
             {
               personId: person.id,
               memberId: 'M-000001',
-              placement: { kind: 'ROOT' },
-              network: 'WOMENS',
+              placement: { kind: 'UNDER', pastoralLeaderId: leader.id },
               encodedAt: new Date(),
             },
             admin,
@@ -392,6 +495,11 @@ describe('the leadership-tree import (SKILL.md section 2)', () => {
 
       expect(entries).toHaveLength(5);
       expect(entries.every((entry) => entry.action === 'person.created')).toBe(true);
+      // Section 3's acknowledgement has to survive into the system. Nothing
+      // matched here, so the list is empty — the field's presence is what a later
+      // acknowledgement is recorded in, and its absence is what left that decision
+      // living only in an operator's spreadsheet.
+      expect(entries[0].after).toHaveProperty('acknowledged_duplicate_member_ids', []);
       expect(entries.every((entry) => entry.actor_id === admin.accountId)).toBe(true);
       // Section 21 wants the values, not merely that it happened.
       const andres = entries.find(
@@ -477,6 +585,44 @@ describe('the leadership-tree import (SKILL.md section 2)', () => {
           expect.objectContaining({ code: 'TIER1_UNACKNOWLEDGED', rowId: '4' }),
         ]),
       });
+    });
+
+    it('records which Tier 1 candidates a CREATE was decided past', async () => {
+      // Section 3's acknowledgement is the whole reason section 2 built two
+      // phases, and without this it exists only in the operator's spreadsheet —
+      // outside the system and outside `audit_log`. Section 21 asks for the
+      // relevant values, and "who was on the table and passed over" is the
+      // relevant value for this path.
+      const existing = await db
+        .insertInto('persons')
+        .values({
+          first_name: 'Marisol',
+          last_name: 'Ventura',
+          birth_date: '1985-06-15',
+          sex: 'FEMALE',
+          civil_status: 'SINGLE',
+        })
+        .returning('member_id')
+        .executeTakeFirstOrThrow();
+
+      const result = await commitTreeImport(modules, {
+        treeCsv: SPINE,
+        decisionsCsv: decisionsFor(SPINE, '4,CREATE,'),
+        actor: admin,
+      });
+
+      const entries = await db
+        .selectFrom('audit_log')
+        .select('after')
+        .where('batch_id', '=', result.batchId)
+        .execute();
+
+      const marisol = entries.find(
+        (entry) => (entry.after as Record<string, unknown>).first_name === 'Marisol',
+      )!;
+      expect(marisol.after).toHaveProperty('acknowledged_duplicate_member_ids', [
+        existing.member_id,
+      ]);
     });
 
     it('catches a Tier 1 candidate created after the dry run', async () => {
@@ -632,6 +778,76 @@ describe('the leadership-tree import (SKILL.md section 2)', () => {
           actor: admin,
         }),
       ).rejects.toThrow(/people\.correct_sex/);
+    });
+
+    it('refuses to seat an existing Person as a Network root', async () => {
+      // Section 5 says a root is created only by the initial import, and says a
+      // root cannot be reassigned by anyone; taking somebody who already exists
+      // and seating them is neither clearly inside nor clearly outside those, so
+      // the fail-closed reading is taken and the question is recorded as open.
+      //
+      // The case that makes it more than theoretical is the administrator: they
+      // have no pastoral assignment by design (section 5 invariant 3, third case),
+      // so without this they are exactly the kind of Person a root row can absorb.
+      const adminMemberId = await db
+        .selectFrom('persons')
+        .select('member_id')
+        .where('id', '=', admin.personId)
+        .executeTakeFirstOrThrow();
+
+      await expect(
+        commitTreeImport(modules, {
+          // Row 2 is the Women's root, and the administrator is FEMALE, so the sex
+          // check passes and the root refusal is what fires.
+          treeCsv: SPINE,
+          decisionsCsv: decisionsFor(SPINE, `2,USE_EXISTING,${adminMemberId.member_id}`),
+          actor: admin,
+        }),
+      ).rejects.toThrow(/root is created by the import/);
+
+      expect((await countEverything()).assignments).toBe(0);
+    });
+
+    it('refuses a Person with no Network recorded, rather than failing at COMMIT', async () => {
+      // `attachExistingWithin` writes no Network row, so the edge is checked
+      // against the one already recorded. A Person carrying none has no Network
+      // for the edge to be legal in, and deriving one from their sex would let the
+      // pre-check pass on a value the database does not hold — the deferred
+      // trigger then raises a raw `check_violation` at COMMIT.
+      const person = await db
+        .insertInto('persons')
+        .values({
+          first_name: 'Marisol',
+          last_name: 'Ventura',
+          birth_date: '1985-06-15',
+          sex: 'FEMALE',
+          civil_status: 'SINGLE',
+        })
+        .returning('member_id')
+        .executeTakeFirstOrThrow();
+
+      await db
+        .insertInto('person_lifecycle')
+        .values({
+          person_id: (
+            await db
+              .selectFrom('persons')
+              .select('id')
+              .where('member_id', '=', person.member_id)
+              .executeTakeFirstOrThrow()
+          ).id,
+          state: 'CURRENT',
+          started_at: new Date('2020-01-01T00:00:00+08:00'),
+        })
+        .execute();
+
+      await expect(
+        commitTreeImport(modules, {
+          treeCsv: SPINE,
+          decisionsCsv: decisionsFor(SPINE, `4,USE_EXISTING,${person.member_id}`),
+          actor: admin,
+        }),
+      ).rejects.toThrow(/no Network recorded/);
     });
 
     it('refuses a Member ID nobody carries', async () => {

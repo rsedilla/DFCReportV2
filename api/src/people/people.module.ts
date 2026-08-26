@@ -34,16 +34,22 @@ import { PeopleSexCorrectionService } from './people.sex-correction.service';
  * write. The same argument covers `audit_log`, which section 21 makes append-only
  * and which this module was also the first to write.
  *
- * **Five services, one module.** Four are named for operations and one,
+ * **Six services, one module.** Five are named for operations and one,
  * `PeopleReadService`, for the reads; each owns a rule this specification states,
  * and every one still writes through the same owning services.
+ *
+ * `PeopleImportService` is the sixth, added with the tree import. It owns the one
+ * creation path that skips the section 3 duplicate gate — legitimately, because
+ * section 2 moves that decision into the decisions file — and is separate for that
+ * reason: a method that skips a section 3 bound does not belong in the file whose
+ * job is enforcing it.
  *
  * Section 2's "organise by module, never by layer" is about how the application is
  * divided into modules and does not reach inside one — settled deliberately, since
  * this module was the first large enough to need dividing and could not answer the
  * question from the section. So the read seam is a judgement rather than a
  * requirement, and the boundary that is enforced is still table ownership: none of
- * the five can touch a table this module does not own.
+ * the six can touch a table this module does not own.
  *
  * What it buys is that the two operations carrying a section number of their own —
  * the sex correction and the reassignment — can be reviewed alone. **What it does
