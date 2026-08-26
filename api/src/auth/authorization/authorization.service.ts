@@ -95,10 +95,16 @@ export class AuthorizationService {
    * And authorization is decided by capability and scope everywhere but one place:
    * section 5 invariant 4 names **roles** — "Only Admin or a Senior Pastor may do
    * so" — because that rule is about who sits outside the pastoral incentive rather
-   * than about what anyone was granted. Today they reach `hierarchy` on
-   * `ActorAuthority`, which {@link effective} builds from this — though
-   * `assertMayReparent` takes only a person and a role list, so that is a fact
-   * about its two call sites rather than a seam anything enforces.
+   * than about what anyone was granted. Roles leave this service by two mechanisms:
+   * on the `ActorAuthority` that {@link effective} builds, which is what `hierarchy`
+   * receives and what `admin`'s tree import reads for its own precondition — though
+   * `assertMayReparent` takes only a person and a role list, so that is a fact about
+   * its call sites rather than a seam anything enforces; and through
+   * {@link honouredRolesWithin}, which `people` asks directly, because a check
+   * defending against its own caller must not read a value that caller supplied.
+   *
+   * Stated as mechanisms rather than as a list of modules, because the list was
+   * rewritten in the batch that added a third consumer and did not name it.
    *
    * Today it refuses exactly one thing: a `SENIOR_PASTOR` row on an account whose
    * Person is not one of the two section 4 names (`senior-pastors.ts`). Such a row
@@ -107,8 +113,8 @@ export class AuthorizationService {
    * and the reason section 7 puts the identity half on the path every request
    * follows rather than only at the write.
    */
-  private async activeRoles(accountId: string): Promise<ActiveRoles> {
-    const rows = await this.db
+  private async activeRoles(executor: Db, accountId: string): Promise<ActiveRoles> {
+    const rows = await executor
       .selectFrom('account_roles')
       .innerJoin('accounts', 'accounts.id', 'account_roles.account_id')
       .select(['account_roles.role', 'accounts.person_id'])
@@ -154,6 +160,31 @@ export class AuthorizationService {
     return false;
   }
 
+  /**
+   * The roles this system honours for an account, read through a caller's
+   * executor.
+   *
+   * **For a check that must not read a fact its caller supplied.** `authorityFor`
+   * returns an `ActorAuthority`, which is plain data — fine for `coversWith`, whose
+   * caller is the guard that just read it, and not fine for a service refusing a
+   * *caller*: `PeopleImportService` is exported, so a module injecting it could
+   * hand over `{ roles: ['ADMIN'] }` and satisfy any check made against that value.
+   * A check reading `account_roles` cannot be answered by its caller.
+   *
+   * The executor is the parameter rather than the pool because that caller decides
+   * inside its own transaction, where a pooled read asks a bounded pool for a
+   * second connection (section 24) — the split `coversWith` and
+   * `SettingsService.initialEncodingOpenWithin` already use.
+   *
+   * Honoured rather than held, which is the fail-closed half: a `SENIOR_PASTOR` row
+   * this system refuses to honour must not satisfy a role check (section 7). The
+   * *held* list exists for one rule that needs the opposite, and that rule is not
+   * this one.
+   */
+  async honouredRolesWithin(executor: Db, accountId: string): Promise<AccountRole[]> {
+    return (await this.activeRoles(executor, accountId)).honoured;
+  }
+
   async grantsFor(accountId: string): Promise<EffectiveGrant[]> {
     return (await this.effective(accountId)).grants;
   }
@@ -190,7 +221,7 @@ export class AuthorizationService {
     accountId: string,
   ): Promise<{ roles: AccountRole[]; grants: EffectiveGrant[] }> {
     const [roles, grants] = await Promise.all([
-      this.activeRoles(accountId),
+      this.activeRoles(this.db, accountId),
       this.db
         .selectFrom('capability_grants')
         .select(['capability', 'scope_type', 'scope_network', 'read_only'])

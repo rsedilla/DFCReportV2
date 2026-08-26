@@ -23,6 +23,8 @@
  * CLI in `scripts/validate-tree-csv.ts` does the reading and the printing.
  */
 
+import { createHash } from 'node:crypto';
+
 import { type Candidate, findCandidates, normalizeName } from '../../people/duplicate-matching';
 
 /**
@@ -98,10 +100,23 @@ export const FINDING_CODES = [
 
 export type FindingCode = (typeof FINDING_CODES)[number];
 
-export interface Finding {
+/**
+ * Generic over its code so the decisions file can carry the same shape without
+ * borrowing this file's enumeration.
+ *
+ * The two files refuse different things and their codes have nothing to say about
+ * each other, but the *redaction promise* below is one promise and must not be
+ * made twice — `detail` is the only field permitted to carry personal data, and
+ * the CLI redacts a report by dropping that field whatever produced it. A second
+ * shape would be a second place for that rule to be got wrong.
+ *
+ * The default keeps every existing `Finding` and `Finding[]` in this module
+ * meaning exactly what it did.
+ */
+export interface Finding<Code extends string = FindingCode> {
   severity: Severity;
   /** Stable, greppable, and what the report groups by. */
-  code: FindingCode;
+  code: Code;
   /** 1-based line in the file, header included, so it matches an editor. */
   line: number;
   /** The row's own `row_id`, where one was readable. */
@@ -969,4 +984,56 @@ function checkDuplicates(
   }
 
   return { tier1, tier2 };
+}
+
+// ---------------------------------------------------------------------------
+// The fingerprint
+// ---------------------------------------------------------------------------
+
+/**
+ * The digest a decisions file carries on every row (SKILL.md section 2, The
+ * fingerprint).
+ *
+ * It exists so that a file cannot be edited between the dry run and the commit
+ * while the decisions taken against it are still applied — decisions about row 41
+ * landing on a row 41 that is now somebody else.
+ *
+ * Section 2 fixes the construction exactly, and every part of it is load-bearing:
+ *
+ * - **Over the parsed rows, never the file's bytes.** Re-saving a spreadsheet
+ *   changes quoting and line endings without changing a single fact, and a
+ *   byte-level digest would refuse a file nobody meaningfully touched.
+ * - **Trimmed values**, because surrounding whitespace is precisely what a
+ *   spreadsheet adds and removes on its own. `TreeRow` already holds them
+ *   trimmed, which is why this reads the row rather than re-reading the field.
+ * - **JSON-encoded, not delimited.** Section 3 lets a name contain any character,
+ *   so there is no delimiter that cannot occur inside a field — and a digest that
+ *   can be forced to collide by putting a comma in a surname is worse than none,
+ *   because it is trusted.
+ * - **Row order is part of it.** Sorting the input invalidates a decisions file
+ *   even though every decision would still apply correctly, since decisions key
+ *   on `row_id` rather than on position. That is deliberate: the dry-run report
+ *   the adjudicator was reading names *line numbers*, and in a re-sorted file
+ *   those numbers point at other people, so the file they answered is no longer
+ *   the file in front of them.
+ *
+ * The header contributes nothing. It is fixed, and a file whose header differs is
+ * refused by `validateTreeCsv` before any fingerprint is taken.
+ */
+export function fingerprintOf(rows: readonly TreeRow[]): string {
+  const encoded = rows
+    .map((row) =>
+      JSON.stringify([
+        row.rowId,
+        row.firstName,
+        row.lastName,
+        row.birthDate,
+        row.sex,
+        row.civilStatus,
+        row.leaderRowId,
+      ]),
+    )
+    .join('\n');
+
+  return createHash('sha256').update(encoded, 'utf8').digest('hex');
 }

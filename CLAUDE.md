@@ -197,6 +197,9 @@ npm run dev                          # http://localhost:3000
 | `npm run format:check` | `api` | Prettier |
 | `npm test` | `api` | The suite that must stay green, the eleven authorization cases included. Needs a migrated database |
 | `npm run migrate:up` / `:down` / `:status` | `api` | Applies, reverts one, or lists migrations |
+| `npm run validate:tree -- <file>` | `api` | Checks the leadership-tree CSV against everything decidable from the file alone. No database |
+| `npm run import:tree -- --dry-run` / `--commit` | `api` | The two phases of the tree import (`SKILL.md` §2). `docs/TREE_CSV.md` carries the flags and what refuses a commit |
+| `npm run bootstrap:admin` | `api` | Creates the first Admin account, once, and refuses while any account exists (§6) |
 | `npm run build` | `api`, `web` | Production build |
 
 There is no seed command. Section 2 of `SKILL.md` loads real data through the import flow rather than through fixtures, and test fixtures are built by the tests that need them.
@@ -3427,9 +3430,363 @@ guards through `bootstrapFirstAdmin`, so deleting any one left the suite green
 with the same remedy: each guard is now called directly, and each was verified red
 on its own.
 
+### 2026-08-26 — The tree import, and the one thing the fingerprint cannot bind
+
+The import section 2 specifies, built in the two phases it requires. Most of it is
+section 2 followed rather than decided; four things were not settled by it and are
+recorded here.
+
+**`settings` gets a reader, and it is a sub-module of `admin`.** Migration 0002
+created the table and seeded `initial_encoding_open` on 2026-08-22, and nothing had
+ever read it — so the flag that bounds every relaxation of the encoding phase was,
+until now, a value with no consequence. `SettingsService` lives in
+`src/admin/settings/`, owns the table, and imports nothing.
+
+The seam is not tidiness. `PeopleImportService` refuses unless the phase is open,
+and the import that calls it lives in `admin` — so a phase reader packaged with the
+import would put `people → admin` and `admin → people` in the graph at once. That
+is the same shape, and the same remedy, as the 2026-08-24 authorization seam: what
+`people` needs is a question, not a module full of operations. The 2026-08-24
+intra-module ruling is what makes it admissible, and table ownership is unaffected.
+
+**Only the read exists, deliberately.** Closing the phase is an audited Admin action
+(section 2) under `settings.manage`, which is an endpoint, and `docs/ROADMAP.md`
+puts it in Stage 7. Writing the setter now means writing its authorization as a
+comment.
+
+**A missing setting row raises rather than defaulting.** Migration 0002 seeds both
+keys so the application never invents a default, and the two directions are not
+symmetric: answering `false` presents an unmigrated database as a closed phase, and
+answering `true` presents it as an open one — a relaxation with no end, which is the
+failure the phase flag exists to prevent.
+
+**The per-row writes are their own service, `PeopleImportService`.** What it offers
+is Person creation with **no duplicate gate and no idempotency claim**, which is
+legitimate — section 3 forbids adjudicating a Tier 1 candidate with nobody present,
+and section 2 moves that decision into the decisions file — and is not something to
+put in the file whose job is enforcing section 3. Both write methods refuse on their
+own account, following `createSystemAdministratorWithin` and `createFirstAdminWithin`
+rather than trusting the one caller, because these are public on a service the
+injector resolves.
+
+**`USE_EXISTING` writes `pastoral_assignment.transferred` with a null previous
+leader.** Section 21's list is open and its convention is `<noun>.<past-tense verb>`,
+so a `pastoral_assignment.opened` would conform — and it would split the one question
+a reader asks of this log, *who has led this person*, across two action names for no
+gain. A Person created by the import records its leader inside `person.created`,
+exactly as `PeopleService.create` does; only an existing Person needs an entry of its
+own.
+
+**The fingerprint binds the file and not the database, and the gap that leaves is
+stated rather than closed.** The commit re-runs the matcher, which it must do anyway
+to know which rows carry a Tier 1 candidate. Where that gives a row its *first* such
+candidate, the decisions file is blank or silent for it and the commit refuses — the
+"something changed underneath it" case section 2 leaves room for, and it is pinned by
+a test that creates a Person between the dry run and the commit.
+
+Where the row already carries a decision, it is **not** caught. Section 2's decisions
+file has no candidate column, so a `CREATE` records "I looked at this row's candidates
+and decided create" against a candidate set nothing pins — and a new Tier 1 candidate
+arriving for an already-decided row is created past an acknowledgement made about
+somebody else.
+
+Closing it means adding structure section 2 does not describe: a per-row digest of the
+candidate identifiers, carried in the file and compared at commit. That is not
+obviously wrong and it is not obviously worth it — the import runs once, on a spine of
+thirty rows, against a database whose only other Person is the administrator. It is
+listed as open below rather than decided in passing, and the code says so where
+somebody would otherwise assume the fingerprint covers it.
+
+**Two smaller things, both section 2 read literally.** The walk is breadth-first from
+the roots rather than file order, because a disciple's edge names a leader who must
+already exist and the file is in whatever order a spreadsheet held; a row unreachable
+from a root raises rather than reporting a finding, because the validator has already
+refused cycles, unresolved leaders and a root count other than two, so reaching that
+branch means the validator and the walk disagree. And a dry run given `--decisions` is
+refused rather than ignoring the file, because a run that appears to be checking
+something and is not is worse than one that says no.
+
+### 2026-08-26 — The import's actor must hold ADMIN, and four other findings from the review
+
+`architecture-guardian` on the import branch returned five violations, four false
+statements and two Stop Conditions. One was a live privilege escalation.
+
+**The capability check did not imply the role, and §2 now says both.** §2 said "the
+script is given an **Admin** account" and then stated the refusal in capabilities —
+`people.create` and `people.manage_pastoral_assignment` at Whole Church. Those are
+not the same requirement, and §7 lets Admin grant authority beyond a role's
+defaults, so a Whole Church grant of both to a `LEADER` account is an ordinary
+grant. The first version accepted one.
+
+*The reason first recorded here was that neither capability is in
+`WHOLE_CHURCH_ONLY`. That is true and explains nothing: `grantCoversNothing` fires
+only when a capability is **in** the set **and** the scope is narrower than Whole
+Church, and `single-scope.ts` says in terms that "a wider grant is untouched".
+Membership never blocks a Whole Church grant of anything. The conclusion held and
+the reason did not — recorded because a false reason here is worse than none, and
+this is the twelfth instance on this project.*
+
+What the gap opened is the escalation §5 invariant 4 exists to close. Invariant 4
+is the one authorization rule in this system decided by **role** rather than by
+capability (2026-08-23), precisely so a Whole Church grant does not satisfy it —
+and **the import never reaches it**, because every row of the tree is a *first*
+assignment rather than a change.
+
+*The harm was overstated in three places and is corrected here.* The entry said
+such an account "could name their own Person on a `USE_EXISTING` row and place
+themselves anywhere in either tree, root included". That path needs the Leader's
+own Person to hold **no** open assignment, because `attachExistingWithin` refuses
+one who does — and that state is unreachable through the API: `POST /people`
+requires a pastoral leader, and `POST /accounts` refuses `LEADER` outright until
+`cells` exists. The test builds it with a direct write. The **reachable** harm is a
+Leader writing the entire spine, which is exactly the outcome §2 gives as its
+reason for naming an actor at all: "an operator cannot attribute several thousand
+records to a Leader." The fix is right; the story told about it was not.
+
+`SENIOR_PASTOR` is deliberately **not** accepted: §2 says an Admin account, and §7
+keeps the two Senior Pastors away from administrative operations on purpose.
+Widening to them would be a decision about the role catalog taken inside an import.
+
+**The check is made twice, and the first version made it once.** It was put at the
+orchestration door in `admin/tree-import` and then described, in three places, as
+closing the escalation "for the whole run". `PeopleImportService` is *exported* from
+`PeopleModule`, so any module importing it can inject Person creation with no
+duplicate gate, no idempotency claim and — as written — no actor check at all. That
+is verbatim the shape the 2026-08-26 bootstrap ruling closed, in a file whose own
+docblock cites that ruling for the phase check and stopped there. Both checks now
+live in the service, which is what the specification requires; the script's copy
+survives so an operator is told before adjudicating thirty rows.
+
+The actor reaches the service as an `ActorAuthority` rather than an account
+identifier, which is the shape `coversWith` already uses for a decision taken inside
+a transaction: it carries the account it was read for, so it cannot decide for
+another, and reading it is the caller's job so nothing touches the pool while
+holding a transaction (§24).
+
+*This was the Stop Condition the review raised — whether invariant 4 binds an import
+opening a first assignment — and it did not need a ruling: §2's own sentence names an
+Admin account. §2 is amended in the same change, which the first version did not do
+and which is at least this project's **sixth** "written to §x" failure — the fifth is
+already claimed at the end of this file, by the §5 invariant-3 item, and the counter
+here was written without grepping for the others. A miscount inside the entry
+correcting a miscount, which is why the number is now hedged rather than asserted.*
+
+**An existing Person may be seated as a Network root, and refusing it was wrong.**
+The second Stop Condition. The first version refused, citing §5's "a root is created
+only by the initial import" — a rule about creating the root **row**, which is
+exactly what the import does, not about whether the Person existed beforehand. §2
+states the opposite directly: a row resolving to an existing Person "receives the
+pastoral assignment the tree gives them", with no exception for a root row. Read
+together the specification requires the behaviour, and the refusal was a rule
+invented in a service.
+
+The reason offered for it does not survive either. It was the administrator, who
+correctly holds no assignment forever (§5 invariant 3, third case) and would
+therefore be the ideal Person for a root row to absorb — but reaching that needs an
+Admin to write their Member ID against a root row in the decisions file,
+deliberately. That is a mistake an Admin can make, like many others available in
+that file, and not an escalation.
+
+The root branch now reads `network_assignments` for the Network, exactly as the
+`UNDER` branch does — which is the same correction as the one below, and the reason
+the refusal survived a review pass at all: refusing made the root branch dead code,
+so nothing exercised the derived-Network defect inside it. §2 is amended.
+
+**Section 3's acknowledgement was leaving no record in the system.** The import's
+`person.created` entry omitted the acknowledged candidates, so for a row decided
+`CREATE` past a Tier 1 candidate, the acknowledgement — the entire reason §2 built
+a two-phase import — existed only in an operator's spreadsheet, outside
+`audit_log`. It is now `acknowledged_duplicate_member_ids`, deliberately a
+different key from `PeopleService.create`'s `acknowledged_duplicate_ids`: the
+import's acknowledgement is taken in Member IDs, and recording a UUID would be
+recording something the adjudicator never saw.
+
+The docblock had claimed "the same values `PeopleService.create` records ... a
+reader searching the log should not have to know which path wrote the entry",
+directly above the omission. The eleventh instance on this project.
+
+**Three defects of the ordinary kind, each a rule this repository already states.**
+
+`attachExistingWithin` read `pastoral_assignments` directly. §2 permits one
+cross-module read and it is a *join* onto a query rooted in a table the reading
+module owns; this was a standalone read rooted in `hierarchy`'s table, with
+`HierarchyService.openAssignmentOf` already answering it and already called with a
+transaction by a sibling service. It also falsified `people.module.ts`'s "it
+touches no table it does not own", which the branch had not updated.
+
+It took two person locks in **two calls**. The ordering guarantee is per call —
+`lockPersonsWithin` sorts what it is given — so subject-then-leader is exactly the
+cycle §5 names: a concurrent reassignment naming the same pair takes them sorted,
+and where the leader's key is lower the two run in opposite orders. That is a
+deadlock rather than a wait, so the three-second `lock_timeout` does not bound it;
+PostgreSQL picks the victim and raises `40P01`, which nothing classifies.
+
+And it derived the existing Person's Network from their sex. `resolveExistingWithin`
+checks the recorded sex against the file, which makes deriving *look* safe — but
+this method writes no Network row, so what governs is the row already in
+`network_assignments`. Wherever the two disagree, or where the Person carries no
+open Network row at all, the pre-check passes on a value the database does not hold
+and the deferred trigger raises a raw `check_violation` at COMMIT. That is the
+500-instead-of-an-answer failure `assertLeaderIsAssignable` exists to prevent, and
+`PeopleReassignmentService` reads the row for exactly this reason.
+
+**Also corrected, all statements rather than behaviour.** The CLI printed "Section
+5 invariants were enforced on every assignment", which is an overclaim independent
+of the escalation — invariant 2 is enforced by the *file* validator over the CSV
+graph rather than by the domain layer over the resulting database graph, and
+invariant 1 only by the Whole Church precondition. It now names which invariant was
+enforced where. `settings.service.ts` called itself the "only reader and only
+writer" of a table it never writes, in a paragraph whose next sentence says so.
+`settings.module.ts` named a method on the wrong class. And a bare `catch {}` around
+`authorize` reported *any* failure as a missing capability, so a database fault sent
+an operator to fix a grant that was not the problem — it now distinguishes them.
+
+**`PRECONDITION_CODES` declared a member nothing emitted**, which is how it survived
+being written: `FINDING_CODES` and `DECISION_FINDING_CODES` are each walked by a test
+and this list was not. It is walked now.
+
+### 2026-08-26 — A check that reads what its caller handed it is not a check
+
+Third review pass on the import. Five findings, and the first is the one worth
+keeping: **the service's `ADMIN` check was theatre**, and three docblocks plus a
+`SKILL.md` paragraph said it was a guard.
+
+`ImportActor` carried the actor's `ActorAuthority` and the check read
+`authority.roles`. Both are plain data interfaces, so the module the check exists
+to defend against — anything that can inject the exported `PeopleImportService` —
+could hand over `{ roles: ['ADMIN'] }` and satisfy it. On the only real call path
+it was worse than weak: `checkPreconditions` reads the authority, tests the role,
+passes the same object down, and the service tests the identical array. The two
+points could not disagree, so nothing was checked twice.
+
+**The precedent cited for it was the tell.** `createSystemAdministratorWithin` and
+`createFirstAdminWithin` each read *their own module's table* for a fact no caller
+supplies, and that property is the whole of why they are guards. The
+authority-carrying version reused their shape and not their reason — §25 rule 19,
+in the batch written to apply §25 rule 19. The stated justification (a pooled read
+inside a transaction is the §24 hazard) was true and did not force that design: the
+same file's other precondition reads `settings` through the caller's transaction.
+
+`AuthorizationService.honouredRolesWithin(executor, accountId)` is the remedy, and
+`activeRoles` gained an executor parameter to provide it. `ImportActor` collapses
+to an account identifier, because there is now nothing to pass that could be wrong.
+Honoured rather than held: a `SENIOR_PASTOR` row this system refuses to honour must
+not satisfy a role check (§7).
+
+**It answers `CAPABILITY_DENIED`, which no section settles.** §22 splits its two
+codes over grants and says nothing about a role requirement. `SCOPE_DENIED` is the
+worse fit: the 2026-08-20 ruling gives it to a statement about an actor's authority
+over a **target**, and this refusal names none. The 2026-08-24 ruling points the
+same way, giving `CAPABILITY_DENIED` where a role row names nothing. It has no
+client consequence today, because no endpoint reaches this service; it acquires one
+the moment another module injects it, which is the stated reason the check exists.
+
+**Seating a root is irreversible, and the argument that dismissed the cost was
+false.** The previous entry called seating the wrong Person "a mistake an Admin can
+make, like many others they can make with this file". Every *other* `USE_EXISTING`
+mistake produces an ordinary edge that `PUT /people/{id}/pastoral-leader` corrects.
+This one is correctable by nothing: §5 says plainly that a succession is not an
+operation this system offers, reassignment refuses a root, the sex correction
+refuses a root, `DELETE` is refused, and migration 0008 freezes that person's
+Network. "Like many others" was the sentence carrying the whole decision.
+
+The decision stands — §2 requires the behaviour — but the cost is now stated in §2
+and warned on every root row of the dry-run report, because decisions are not read
+during a dry run and an adjudicator would otherwise have no way to know.
+
+**Two more false statements, both introduced by the previous batch.** §2 said "both
+checks are made again by the module that performs the writes" and the service made
+one: it re-checks the role and never inspects the grants, so the capabilities have
+no enforcement on a path that does not go through the script. §2 now says which is
+which. And inserting `assertActorMayImport` between a docblock and its method left
+every sentence of that block false of the method beneath it — the encoding-phase
+block, describing a synchronous role check that reads nothing.
+
+**And a miscount inside the entry correcting a miscount.** The previous batch called
+its §2 omission "the fifth written to §x failure"; the fifth is already claimed at
+the end of this file. It is at least the sixth, and the number is now hedged rather
+than asserted, because counting them by memory is what produced both errors.
+
+### 2026-08-26 — Advice printed at the moment of a decision, and a fix claimed but not made
+
+Fourth review pass. The authorization mechanism from the previous batch is
+confirmed correct; every finding is in what the batch said about itself, and one is
+a fix it claimed and did not make.
+
+**"CREATE is the reversible choice" was false, and it was advice.** The warning
+added on root rows listed four mechanisms that make seating irreversible and then
+told the adjudicator that `CREATE` avoids them. All four apply to a Person the
+import *creates* into that seat exactly as they apply to an existing one —
+reassignment refuses a root, the sex correction refuses a root, `DELETE` is
+refused, migration 0008 freezes the Network — and none of them asks which decision
+produced the row. So the sentence steered toward minting a duplicate into a seat the
+real person could then never occupy, which is the outcome §3's whole duplicate
+apparatus exists to prevent, printed at the moment of the decision.
+
+Neither `SKILL.md` nor the type's docblock made that claim. The CLI added it alone,
+which is its own lesson: the surface furthest from review is the one that talks
+directly to the person deciding.
+
+**The warning did not fire where it was most needed.** It was printed inside the
+candidate list, and a root row matching nobody never enters that list — so the case
+where an operator hand-types a Member ID onto an unwarned root row was silent.
+`readDecisionsCsv` accepts `USE_EXISTING` for any `row_id` in the file with any
+well-shaped Member ID, candidate or not, so that case is reachable and is the
+sharper one. `DryRunReport.rootRows` now carries every root row and the warning is
+printed from it, before the candidate list.
+
+**A fix was claimed and not made.** The previous entry named the orphaned docblock —
+`assertEncodingPhaseOpen`'s block left sitting above a role check inserted beneath
+it — as corrected. It was not: the new block was added *below* the misplaced one, so
+one method carried two docblocks, the first describing a different method, and
+`assertEncodingPhaseOpen` had none. Fifth consecutive batch carrying a false
+statement about itself, and the first where the false statement is that a named
+defect was fixed.
+
+**`CAPABILITY_DENIED` was wrong, on a citation that dropped §7's load-bearing
+qualifier.** §7 gives that code "where nothing else the account holds carries the
+capability" and says twice that the qualifier is load-bearing — and the actor this
+check exists to stop is exactly one who *does* hold both capabilities at Whole
+Church by explicit grant. §22's gloss, "the actor lacks the capability", is false of
+the reachable case, and an administrator reading it is sent to grant what they
+already granted.
+
+It answers `SCOPE_DENIED` instead, and **§7 states that rule rather than this being
+inferred from it** — a correction to this paragraph's first version, which called it
+"the nearest rule rather than a stated one" and listed it as open. §7: where an actor
+holds the capability by another route "and it is the withheld **exemption** that
+refuses, that is a statement about the actor's authority over a target rather than
+about what they hold, and it answers `SCOPE_DENIED`, exactly as Section 5 invariant 4
+does for every other actor." That is exactly this refusal — invariant 4's exemption
+withheld because the account holds no exempting role — written for the Senior Pastor
+identity check and general in its terms. `HierarchyService.assertMayReparent` throws
+the same.
+
+*The open item this briefly carried also claimed the first-Admin bootstrap guards
+were a competing precedent answering `INVARIANT_VIOLATION`. They are comparable in
+placement and opposite in kind: those refuse on whether an account already exists,
+which is a rule about what may be recorded whoever submits it — §22's
+`INVARIANT_VIOLATION` side, correctly. §22 splits the codes by kind, not by where the
+check sits, so the two precedents never disagreed. The item is withdrawn.*
+
+**"Every other `USE_EXISTING` mistake produces an ordinary edge that a reassignment
+corrects" is half true**, and all four passes missed it until the paragraph stated it
+flatly enough to be wrong. `reassignWithin` is the only writer that closes an
+assignment row and it closes-and-opens in one operation, so nothing in this system
+removes a subject from the tree. A wrong Member ID on an *ordinary* row also cannot
+be undone — that Person is permanently placed, counted in a subtree that does not
+contain them, with only their leader correctable. The root case differs in degree,
+not in kind. §2 now says so.
+
+Also: `isRoot` had no test, so it could have been inverted with 642 tests green;
+`checkPreconditions` still returned an `authority` neither caller read; the
+`activeRoles` docblock still described roles leaving the service by one route in the
+batch that added a second; and a test comment quoted `account_roles_period_ordered`
+as `>` when it is `>=`.
+
 ### Open — awaiting a ruling
 
-**One item awaits a ruling and blocks Stage 5. Fifteen other things are unsettled,
+**One item awaits a ruling and blocks Stage 5. Eighteen other things are unsettled,
 none of them blocking. They are listed at the end, so this section is the whole of
 what is open.**
 
@@ -3447,6 +3804,9 @@ Two related questions have defined behaviour and are recorded in `SKILL.md` §12
 
 **Unsettled, and not blocking anything.** None of these is a Stop Condition. An implementer proceeds and settles them in passing; they are listed here because a reader looking for what is open should not have to find it inside the body of a ruling.
 
+- **Whether a Person holding an open root row may be absorbed by a Person Merge.** §3 refuses a merge where the absorbed Person leads a Cell and says nothing about a root; §5 leaves succession undefined and forbids reassigning a root. So merging a duplicate root holder into the real person appears permitted — and §3 says a merge "never rewrites historical attendance, pastoral, or audit records to point to a different Person", so the seat row keeps naming the absorbed record. The resolved identity then has two open assignments, which §5 invariant 3 forbids and which no constraint can refuse, because the rows carry different `person_id`s. Raised by the fifth review of the tree import, which is the only thing in the system that creates root rows: the dry-run warning's whole force is that no remedy exists for a mis-seated root, and merge is the one remedy §3 offers for a record created in error. The warning is correct under §3 as written. Settle this before anyone needs it.
+- **Whether a deadlock should be answered as contention.** The import holds every person lock it takes for the whole transaction and acquires them in tree order, so the union across rows is not in key order and a concurrent writer taking two locks sorted can cycle with it. `lockPersonsWithin` guarantees ordering *per call* and cannot reach further. The consequence is that PostgreSQL raises `40P01`, and `isLockTimeout` matches `55P03` only — deliberately, since §22's `RESOURCE_BUSY` says "retry after a short delay" and the existing comment argues a deadlock is not ordinary contention. But a deadlock *is* the case where a retry helps most, and today it renders `INTERNAL_ERROR`. Either `40P01` joins `RESOURCE_BUSY`, or §22 says why it does not. Not urgent while the import is the only long lock-holder and runs once.
+- **Whether a decisions file should bind the candidate set it was adjudicated against.** The fingerprint covers the input file and says nothing about the database, and section 2's decisions file has no candidate column — so a `CREATE` acknowledges a candidate set nothing pins. A Tier 1 candidate arriving between the dry run and the commit is caught where it gives a row its *first* one, because the row is then blank or absent, and is not caught where the row already carries a decision: it is created past an acknowledgement made about somebody else. Closing it means a per-row digest of the candidate identifiers, carried in the file and compared at commit — structure section 2 does not describe. Narrow in practice while the import is thirty rows against a near-empty database, and it is the shape that would matter if this were ever pointed at a larger file. Decide it before any second use of the import.
 - **Whether closing a person's only open `network_assignments` row, without opening a replacement, is a legal write.** Escalated by `architecture-guardian` on 2026-08-25 and general rather than root-specific. §4 defines a Network change as an atomic close-and-open pair sharing one instant; §5 forbids `DELETE` on the table; nothing addresses a close alone. No constraint refuses it — `network_assignments_one_open` is partial and permits zero, and the same-Network trigger compares at the closed row's own start, so it passes. The consequence is that `network_as_of` becomes null from that instant and every edge beneath the person is silently unresolvable, which is the outcome the no-delete trigger exists to prevent, reached one column over. The root seat made it visible rather than causing it, and the root case is now refused specifically; the general case is not. The same silence covers a close at T1 reopened at T2, which leaves a gap with no Network at all.
 - **Who may close a Network root's row, and under what capability.** §5 gives each Network exactly one root and says changing who holds one is "a deliberate Network-level decision, not a pastoral reassignment" — and names no capability, no endpoint and no workflow for it. The seat added on 2026-08-25 is partial over open rows, so a successor becomes possible the moment the previous root's row is closed; both write paths that could close it refuse a root outright, so nothing can. §5 now says plainly that a succession is not an operation this system offers, rather than implying one from the seat being freeable. Not blocking: the import creates two roots and neither changes.
 - **Whether §2's closed exemption list gets a gate.** §2 was narrowed on 2026-08-26 to permit exactly one cross-module read and declares the list closed — with nothing able to fail on it. This repository gates the pure-client boundary, the refused UI packages, the palette token names and the module graph, each with a check that goes red; a cross-module table read is greppable in one line and has none. Where such a check would live — an ESLint rule, a test over the source, a lint script beside `check-ui-dependencies.mjs` — is the part that needs deciding.

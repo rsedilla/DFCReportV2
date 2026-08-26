@@ -23,7 +23,8 @@
     "test:watch": "jest --watch",
     "validate:tree": "tsx scripts/validate-tree-csv.ts",
     "bootstrap:admin": "ts-node scripts/bootstrap-admin.ts",
-    "format:check": "prettier --check \"src/**/*.ts\" \"test/**/*.ts\" \"scripts/**/*.ts\" \"*.ts\""
+    "format:check": "prettier --check \"src/**/*.ts\" \"test/**/*.ts\" \"scripts/**/*.ts\" \"*.ts\"",
+    "import:tree": "ts-node scripts/import-tree.ts"
   },
   "dependencies": {
     "@nestjs/common": "^11.2.1",
