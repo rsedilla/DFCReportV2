@@ -46,8 +46,12 @@ export function RequireSession({ children }: { children: ReactNode }) {
   }, [present, router]);
 
   if (!present) {
+    // **The wider of the two page widths, not a third one.** This renders first
+    // on every screen behind it, so a narrower box here means each of them opens
+    // at 448px and jumps to 768 or 1024 once the session resolves — a layout
+    // shift on every navigation, from the one component none of them chose.
     return (
-      <main id="main" className="mx-auto max-w-md px-5 py-12">
+      <main id="main" className="mx-auto max-w-5xl px-5 py-8 sm:py-12">
         <p className="text-muted text-sm" role="status">
           Loading…
         </p>

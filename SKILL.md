@@ -3397,6 +3397,14 @@ idempotency_keys
 
 The two are separate codes deliberately. They demand opposite client behaviour — never retry, and retry shortly — and clients branch on the code alone (above), so a single code covering both would send a client into an endless retry of a permanent conflict.
 
+**A key belongs to a body, not to a screen or an attempt.** A client mints one key and holds it for as long as what it will send is unchanged; the moment the body changes, that is a different logical write and takes a new key. Only a bare retry of an unchanged body reuses one.
+
+This follows from the two rules above and is stated because getting it backwards is not a degraded retry — it is a dead end. A stored 4xx ends that key's usefulness for anything else, so a client that holds one key across a change to its own request meets `IDEMPOTENCY_KEY_REUSED`, which is permanent, with nothing it can do next.
+
+The duplicate-acknowledgement flow (Section 3) is where this bites first and hardest, and it is worth naming because the sequence looks like one write and is two. The refusal asking for acknowledgement is a 409, so it is **stored** against the key. The resubmission adds `acknowledged_duplicate_ids` — a different body — so reusing that key is refused permanently and the Person can never be created, which is precisely the block Section 3 says must never happen. Any refusal that leaves a field to be corrected behaves the same way: a `SCOPE_DENIED` on the pastoral leader, a cross-Network refusal, a validation failure on one field.
+
+Three client surfaces consume this API and none of the native ones can be force-updated (Section 2), so this is written here rather than left for each to rediscover.
+
 This is required from the first write endpoint, not added later. A leader recording attendance on an unreliable connection will retry, and a retry must never create a second record.
 
 #### Filtering and sorting

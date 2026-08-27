@@ -3,7 +3,15 @@ import { expect, test } from '@playwright/test';
 import { readdir } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 
-import { mockAccepted, mockSignInRefused, mockSignedIn } from './mock-api';
+import {
+  PERSON_IN_SCOPE,
+  mockAccepted,
+  mockDuplicateRefusal,
+  mockPeople,
+  mockPossibleMatches,
+  mockSignInRefused,
+  mockSignedIn,
+} from './mock-api';
 
 /**
  * axe-core over every route, in both themes, with a violation failing the build.
@@ -80,6 +88,121 @@ const SCANS = [
       // client's guard on it is a truthiness check that fails silent.
       await expect(page.getByText('Welcome, Marilou')).toBeVisible();
       await expect(page.getByRole('table')).toBeVisible();
+    },
+  },
+  {
+    name: 'people, before searching',
+    route: '/people',
+    async before(page: import('@playwright/test').Page) {
+      await mockSignedIn(page);
+      await mockPeople(page);
+    },
+    async arrange(page: import('@playwright/test').Page) {
+      await expect(page.getByRole('button', { name: 'Search' })).toBeVisible();
+    },
+  },
+  {
+    // The state the whole screen exists for: one row the viewer pastors and one
+    // they do not, so section 8's redaction is scanned rather than assumed.
+    name: 'people, with results',
+    route: '/people',
+    async before(page: import('@playwright/test').Page) {
+      await mockSignedIn(page);
+      await mockPeople(page);
+    },
+    async arrange(page: import('@playwright/test').Page) {
+      await page.getByLabel('Search by name').fill('an');
+      await page.getByRole('button', { name: 'Search' }).click();
+      await expect(page.getByText('Marilou Reyes Santos')).toBeVisible();
+      await expect(page.getByText('Details visible to their own leaders')).toBeVisible();
+    },
+  },
+  {
+    name: 'person profile',
+    route: `/people/${PERSON_IN_SCOPE.id}`,
+    pattern: '/people/[id]',
+    async before(page: import('@playwright/test').Page) {
+      await mockSignedIn(page);
+      await mockPeople(page);
+    },
+    async arrange(page: import('@playwright/test').Page) {
+      await expect(page.getByRole('heading', { name: 'Marilou Reyes Santos' })).toBeVisible();
+    },
+  },
+  {
+    name: 'edit a person',
+    route: `/people/${PERSON_IN_SCOPE.id}/edit`,
+    pattern: '/people/[id]/edit',
+    async before(page: import('@playwright/test').Page) {
+      await mockSignedIn(page);
+      await mockPeople(page);
+    },
+    async arrange(page: import('@playwright/test').Page) {
+      await expect(page.getByRole('button', { name: 'Save changes' })).toBeVisible();
+    },
+  },
+  {
+    name: 'add a person',
+    route: '/people/new',
+    async before(page: import('@playwright/test').Page) {
+      await mockSignedIn(page);
+      await mockPeople(page);
+    },
+    async arrange(page: import('@playwright/test').Page) {
+      await expect(page.getByRole('heading', { name: 'Add a person' })).toBeVisible();
+    },
+  },
+  {
+    // The pre-flight lookup (section 3, section 9 step 1) — the only surface a
+    // Tier 2 candidate has, since creation can refuse on Tier 1 alone. One
+    // candidate carries reasons and one is withheld by section 8.
+    name: 'add a person, possible matches',
+    route: '/people/new',
+    pattern: '/people/new',
+    async before(page: import('@playwright/test').Page) {
+      await mockSignedIn(page);
+      await mockPeople(page);
+      await mockPossibleMatches(page);
+    },
+    async arrange(page: import('@playwright/test').Page) {
+      await page.getByLabel('First name').fill('Marilou');
+      await page.getByLabel('Last name').fill('Santos');
+      await expect(
+        page.getByRole('heading', { name: 'Someone similar is already recorded' }),
+      ).toBeVisible();
+      await expect(page.getByText('Same first and last name')).toBeVisible();
+      // Two withheld candidates, and the second carries a tier as well as the
+      // flag. It must still read as withheld — which only `possible_match` can
+      // decide, so this is what pins the client reading the flag rather than
+      // inferring the same fact from an absent tier.
+      await expect(
+        page.getByText('Their details are visible to the leaders who pastor them.'),
+      ).toHaveCount(2);
+    },
+  },
+  {
+    // The duplicate refusal, which is the reason the create screen has the shape
+    // it has. One candidate carries reasons and one is withheld.
+    name: 'add a person, duplicate candidates',
+    route: '/people/new',
+    pattern: '/people/new',
+    async before(page: import('@playwright/test').Page) {
+      await mockSignedIn(page);
+      await mockDuplicateRefusal(page);
+      await mockPeople(page);
+    },
+    async arrange(page: import('@playwright/test').Page) {
+      await page.getByLabel('First name').fill('Marilou');
+      await page.getByLabel('Last name').fill('Santos');
+      await page.getByRole('radio', { name: 'Female' }).check();
+      await page.getByRole('radio', { name: 'Married' }).check();
+      await page.getByLabel('Search for a leader by name').fill('an');
+      await page.getByRole('button', { name: 'Find' }).click();
+      await page.getByRole('button', { name: 'Choose' }).first().click();
+      await page.getByRole('button', { name: 'Add person' }).click();
+      await expect(
+        page.getByRole('heading', { name: 'Is this someone already recorded?' }),
+      ).toBeVisible();
     },
   },
   {
@@ -179,6 +302,28 @@ const TARGET_SWEEP = [
     minimum: 2,
   },
   { name: 'session', route: '/session', settle: 'Sign out on every device', minimum: 2 },
+  // The search box, the Search button and the "Add a person" link. The nav lives
+  // in the header, outside `<main>`, and is counted on no route.
+  { name: 'people, before searching', route: '/people', settle: 'Search', minimum: 3 },
+  // 5 Field inputs, 5 radios (2 sex + 3 civil status), the leader search input,
+  // its Find button, and the submit button.
+  { name: 'add a person', route: '/people/new', settle: 'Find', minimum: 13 },
+  {
+    name: 'person profile',
+    route: `/people/${PERSON_IN_SCOPE.id}`,
+    // A link, not a button: this screen's controls are all navigation, which is
+    // what they should be.
+    settleRole: 'link' as const,
+    settle: 'Edit details',
+    minimum: 2,
+  },
+  {
+    name: 'edit a person',
+    route: `/people/${PERSON_IN_SCOPE.id}/edit`,
+    settle: 'Save changes',
+    // Back link, 5 Field inputs, 3 civil-status radios, Save, Cancel.
+    minimum: 11,
+  },
 ] as const;
 
 /**
@@ -190,6 +335,26 @@ const TARGET_SWEEP = [
  * prevent one list over.
  */
 const TARGET_EXEMPT: { name: string; why: string }[] = [
+  {
+    name: 'people, with results',
+    why:
+      'Adds result rows and pagination controls to the measured /people state. Each row is a ' +
+      'link carrying min-h-11, and the controls are the same Button primitive; the search form ' +
+      'itself is measured under "people, before searching".',
+  },
+  {
+    name: 'add a person, possible matches',
+    why:
+      'Adds an advisory panel to the measured "add a person" state. Its only controls are ' +
+      '"Open this record" links carrying min-h-11 explicitly; every form control on the page ' +
+      'is measured there.',
+  },
+  {
+    name: 'add a person, duplicate candidates',
+    why:
+      'Two Buttons, which are the measured primitive, and an "Open this record" link carrying ' +
+      'min-h-11 explicitly. The form it replaces is measured under "add a person".',
+  },
   {
     name: 'landing',
     why: 'It renders no interactive target at all: a heading and a status line, while it redirects.',
@@ -221,10 +386,14 @@ const TARGET_EXEMPT: { name: string; why: string }[] = [
 
 test('every interactive target meets the 24px minimum', async ({ page }) => {
   await mockSignedIn(page);
+  await mockPeople(page);
 
-  for (const { route, settle, minimum } of TARGET_SWEEP) {
+  for (const entry of TARGET_SWEEP) {
+    const { route, settle, minimum } = entry;
+    const settleRole = 'settleRole' in entry ? entry.settleRole : 'button';
+
     await page.goto(route);
-    await expect(page.getByRole('button', { name: settle })).toBeVisible();
+    await expect(page.getByRole(settleRole, { name: settle })).toBeVisible();
 
     const targets = page.locator('main button, main a[href], main input, main select, main textarea');
     const count = await targets.count();
@@ -243,7 +412,19 @@ test('every interactive target meets the 24px minimum', async ({ page }) => {
       // control focus changes nothing about its box.
       await target.focus().catch(() => {});
 
-      const box = await target.boundingBox();
+      // **The target is what you can hit, not what you can see.** A checkbox or
+      // radio wrapped in a `<label>` is activated by clicking anywhere in that
+      // label, so the label is the target 2.5.8 measures. Measuring the input
+      // instead reported a failure for a control that is already conformant, and
+      // the obvious way to satisfy it — growing the visible dot to 24px — makes
+      // the form worse to look at while changing nothing you can actually tap.
+      const measured = await target.evaluate((node) => {
+        const label = node.closest('label');
+        const box = (label ?? node).getBoundingClientRect();
+        return { width: box.width, height: box.height };
+      });
+
+      const box = measured.width > 0 || measured.height > 0 ? measured : await target.boundingBox();
       const description = await target.evaluate(
         (node) => `${node.tagName.toLowerCase()}: ${(node.textContent ?? '').trim().slice(0, 40)}`,
       );
@@ -254,6 +435,96 @@ test('every interactive target meets the 24px minimum', async ({ page }) => {
     }
   }
 });
+
+/**
+ * Nothing scrolls sideways on any screen these leaders actually use.
+ *
+ * SKILL.md section 23 makes mobile web a **current** surface rather than
+ * preparation for one. A page that scrolls horizontally is the ordinary way that
+ * goes wrong, and it is invisible at desktop width — the people search shipped
+ * with its search box squeezed to 107px beside two buttons, on the one control
+ * the screen exists for, and every desktop check passed.
+ *
+ * **Five widths, chosen because each is a different state rather than a
+ * different device.** Listing twenty phones would run the same layout twenty
+ * times; what matters is a breakpoint, a content cap first binding, or an
+ * extreme. The device names below say which real screen lands on each — they are
+ * not the reason it is in the list.
+ *
+ * `sm` at 640 is the only breakpoint this application uses. There is no `md:`,
+ * `lg:` or `xl:` utility anywhere in `web/`, so above 640 nothing rearranges and
+ * the remaining widths differ only in which content cap binds.
+ *
+ * - **320** — the narrowest in real use, and the only width below `sm` here.
+ *   Overflow is hardest at the narrowest width, so every phone from 344 (a
+ *   folded Z Fold) through 360, 375, 393, 412 and 430 inherits it.
+ * - **690** — the first width *above* `sm`, where stacked layouts become rows. A
+ *   row that fits at 1280 can still overflow here, and no narrow test sees it.
+ * - **768** — `PAGE_WIDTH.READING` exactly: the width at which a form stops
+ *   growing, still filling the viewport edge to edge. An iPad mini portrait.
+ * - **820** — the first width at which `READING` is capped *and centred, with
+ *   margin on both sides*, which is a layout 768 does not produce. A standard
+ *   iPad portrait lands here.
+ * - **1024** — `PAGE_WIDTH.INDEX` exactly, so the list screens stop growing too:
+ *   the narrowest laptop, an iPad landscape, an iPad Pro 12.9 portrait. **The
+ *   last width where anything can break**, because nothing widens past it —
+ *   1366, 1440, 1512, 1920 and a 4K panel all render what this renders, with
+ *   more margin.
+ */
+const VIEWPORT_WIDTHS = [
+  { name: '320px, the narrowest phone in use', width: 320, height: 568 },
+  { name: '690px, a foldable opened out', width: 690, height: 829 },
+  { name: '768px, where READING stops growing', width: 768, height: 1024 },
+  { name: '820px, where READING first centres', width: 820, height: 1180 },
+  // **The narrowest laptop, an iPad landscape, an iPad Pro 12.9 portrait — and
+  // the last width where anything can break.** The widest content constraint in
+  // the application is `PAGE_WIDTH.INDEX` at 1024px, so above this the layout
+  // stops changing: a wider display adds margin rather than rearranging
+  // anything, and 1366, 1440, 1512, 1920 and a 4K panel all render what this
+  // width renders.
+  { name: '1024px, a laptop or an iPad landscape', width: 1024, height: 768 },
+];
+
+for (const viewport of VIEWPORT_WIDTHS) {
+  test.describe(`at ${viewport.name}`, () => {
+    test.use({ viewport: { width: viewport.width, height: viewport.height } });
+
+    for (const scan of SCANS) {
+      test(`${scan.name} does not scroll sideways`, async ({ page }) => {
+        if ('before' in scan && scan.before) {
+          await scan.before(page);
+        }
+
+        await page.goto(scan.route);
+
+        if ('arrange' in scan && scan.arrange) {
+          await scan.arrange(page);
+        }
+
+        const { scrollWidth, clientWidth, widest } = await page.evaluate(() => {
+          const root = document.documentElement;
+          // Name the widest offender, so a failure says which element to fix
+          // rather than only that something overflows.
+          let widest = '';
+          let max = 0;
+          for (const node of Array.from(document.querySelectorAll('body *'))) {
+            const right = node.getBoundingClientRect().right;
+            if (right > max) {
+              max = right;
+              widest = `${node.tagName.toLowerCase()}.${String(node.className).slice(0, 40)}`;
+            }
+          }
+          return { scrollWidth: root.scrollWidth, clientWidth: root.clientWidth, widest };
+        });
+
+        expect(
+          scrollWidth,
+          `${scan.name} overflows ${scrollWidth - clientWidth}px past ${viewport.width}px; widest element is ${widest}`,
+        ).toBeLessThanOrEqual(clientWidth);
+      });
+    }
+  });
+}
 
 /**
  * The skip link, measured on its own because it is the one target that lives
@@ -347,7 +618,48 @@ test('every route in the app directory is scanned', async () => {
     return found;
   }
 
-  const declared = new Set(SCANS.map((scan) => scan.route.split('?')[0]));
+  // A scan visits a concrete URL; the walker emits the router's own path, which
+  // for a dynamic segment is the literal `[id]`. An entry says which pattern it
+  // stands for — otherwise every dynamic route reads as unscanned and the guard
+  // cries wolf until somebody silences it.
+  //
+  // **The pattern is checked against the route rather than believed.** Free text
+  // compared against nothing reintroduces the hole this walker exists to close,
+  // one indirection out: an entry claiming `pattern: '/people/[id]'` while
+  // visiting `/people` would mark the dynamic route covered by a scan that never
+  // loads it. A pattern must match its own route segment for segment, with
+  // `[…]` matching any single segment.
+  const declared = new Set<string>();
+  for (const scan of SCANS) {
+    const path = scan.route.split('?')[0];
+    const pattern = 'pattern' in scan && scan.pattern ? scan.pattern : path;
+
+    const patternSegments = pattern.split('/');
+    const pathSegments = path.split('/');
+
+    expect(
+      patternSegments.length,
+      `"${scan.name}" declares pattern ${pattern}, which has a different number of segments from the route it visits (${path}).`,
+    ).toBe(pathSegments.length);
+
+    patternSegments.forEach((segment, index) => {
+      if (/^\[.+\]$/.test(segment)) {
+        expect(
+          pathSegments[index].length,
+          `"${scan.name}" declares a dynamic segment ${segment} but visits an empty one.`,
+        ).toBeGreaterThan(0);
+        return;
+      }
+
+      expect(
+        pathSegments[index],
+        `"${scan.name}" declares pattern ${pattern}, which does not match the route it visits (${path}).`,
+      ).toBe(segment);
+    });
+
+    declared.add(pattern);
+  }
+
   const actual = await routesUnder(appDirectory, '');
 
   expect(actual.length).toBeGreaterThan(0);

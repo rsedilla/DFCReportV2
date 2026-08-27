@@ -1,12 +1,12 @@
 'use client';
 
-import Link from 'next/link';
 import { useState } from 'react';
 
 import { AuthCard } from '@/components/auth-card';
 import { Button } from '@/components/ui/button';
 import { FailureNotice } from '@/components/ui/failure-notice';
 import { Field } from '@/components/ui/field';
+import { TextLink } from '@/components/ui/text-link';
 import { apiRequest } from '@/lib/api-client';
 import { describeFailure, type Failure } from '@/lib/messages';
 
@@ -55,12 +55,7 @@ export default function ForgotPasswordPage() {
       title="Reset your password"
       intro={sent ? undefined : 'We will email you a link to choose a new one.'}
       footer={
-        <Link
-          href="/sign-in"
-          className="text-accent focus-visible:outline-accent inline-flex min-h-11 items-center rounded-md underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2"
-        >
-          Back to sign in
-        </Link>
+        <TextLink href="/sign-in">Back to sign in</TextLink>
       }
     >
       {sent ? (

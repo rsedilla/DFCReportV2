@@ -7,6 +7,7 @@ import { useState } from 'react';
 import { Button, buttonClasses } from '@/components/ui/button';
 import { FailureNotice } from '@/components/ui/failure-notice';
 import { Field } from '@/components/ui/field';
+import { TextLink } from '@/components/ui/text-link';
 import { apiRequest } from '@/lib/api-client';
 import { describeFailure, fieldErrorFor, type Failure } from '@/lib/messages';
 import { cn } from '@/lib/utils';
@@ -97,9 +98,17 @@ export function SetPasswordForm({
         />
         <p className="text-muted mt-4 text-sm leading-relaxed">
           Ask for a new link, or{' '}
-          <Link href="/forgot-password" className="text-accent underline underline-offset-4">
+          {/*
+            `inline`, because this sits in a sentence — 2.5.8 exempts a target
+            "in a sentence or whose size is otherwise constrained by the
+            line-height of non-target text", and a 44px box here would open a
+            button-sized gap mid-paragraph. It is the one link in the
+            application that variant exists for, and it was the one still
+            carrying no focus ring.
+          */}
+          <TextLink href="/forgot-password" inline>
             request a password reset
-          </Link>
+          </TextLink>
           .
         </p>
       </div>

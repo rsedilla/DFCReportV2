@@ -4,7 +4,7 @@ import { useMutation, useQuery } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { useSyncExternalStore } from 'react';
 
-import { RequireSession } from '@/components/require-session';
+import { AppShell, PAGE_WIDTH } from '@/components/app-shell';
 import { Button } from '@/components/ui/button';
 import { FailureNotice } from '@/components/ui/failure-notice';
 import { describeFailure } from '@/lib/messages';
@@ -59,10 +59,14 @@ interface SessionDescription {
  * request, and no control is hidden on the strength of it.
  */
 export default function SessionPage() {
+  // `AppShell`, not a bare `RequireSession`. The navigation lists this screen as
+  // one of its two destinations, and it was rendering no navigation — so
+  // arriving here left no way back except the browser's own button. `AppShell`
+  // includes `RequireSession`, so nothing is lost by using it.
   return (
-    <RequireSession>
+    <AppShell>
       <SessionDetail />
-    </RequireSession>
+    </AppShell>
   );
 }
 
@@ -85,7 +89,7 @@ function SessionDetail() {
   });
 
   return (
-    <main id="main" className="mx-auto max-w-2xl px-5 py-10 sm:py-14">
+    <main id="main" className={PAGE_WIDTH.READING}>
       <h1 className="text-2xl font-semibold tracking-tight">Your session</h1>
 
       {/*
