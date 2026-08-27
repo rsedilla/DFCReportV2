@@ -1,7 +1,6 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 
 import { ApiError, ApiErrorCode } from '../common/errors/api-error';
-import { DATABASE, type Db } from '../database/database.module';
 import { PeopleReadService } from '../people/people.read.service';
 
 import { AccountsRepository } from './accounts.repository';
@@ -22,7 +21,6 @@ export class AuthService {
   private readonly logger = new Logger(AuthService.name);
 
   constructor(
-    @Inject(DATABASE) private readonly db: Db,
     private readonly accounts: AccountsRepository,
     private readonly passwords: PasswordService,
     private readonly tokens: TokensService,
@@ -172,7 +170,7 @@ export class AuthService {
   async describe(actor: Actor): Promise<Record<string, unknown>> {
     const account = await this.accounts.findById(actor.accountId);
     const grants = await this.authorization.grantsFor(actor.accountId);
-    const person = await this.people.forDecisionWithin(this.db, actor.personId);
+    const person = await this.people.forDecision(actor.personId);
 
     return {
       account_id: actor.accountId,

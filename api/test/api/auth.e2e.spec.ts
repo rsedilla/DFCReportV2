@@ -101,6 +101,12 @@ describe('authentication (SKILL.md section 6)', () => {
       expect(response.status).toBe(200);
       expect(response.body.account_id).toBe(account.id);
       expect(response.body.person_id).toBe(account.personId);
+
+      // The caller's own given name, so a client can greet them without
+      // fetching their Person record. Asserted because the field is otherwise
+      // deletable with the whole suite green — it is read by one screen and
+      // guarded there by a truthiness check that fails silent.
+      expect(response.body.first_name).toBe('Raymond');
       expect(response.body.capabilities).toContainEqual(
         expect.objectContaining({
           capability: 'people.view_subtree',

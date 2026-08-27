@@ -28,8 +28,9 @@ import { TokensService } from './tokens.service';
     AuditModule,
     AuthorizationModule,
     EmailModule,
-    // **`auth` reads no table it does not own.** Provisioning and the reset flow
-    // both need a Person's name and lifecycle, and section 2 gives `persons` to
+    // **`auth` reads no table it does not own.** Provisioning, the reset flow and
+    // the session description all need a Person's name or lifecycle, and section
+    // 2 gives `persons` to
     // `people` — so they ask `people` rather than joining its table. This import
     // is only possible because the authorization seam moved out: `people` needs
     // `AuthorizationService`, and importing `AuthModule` for it made this a cycle.

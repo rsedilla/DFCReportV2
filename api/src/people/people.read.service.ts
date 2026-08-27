@@ -35,8 +35,14 @@ export interface PersonForDecision {
    *
    * It is supplied here for the same reason `fullName` is composed here: section
    * 3 gives `people` the name shape, so a caller that needs a part of a name asks
-   * for that part rather than splitting the whole one. Section 3 also puts a
-   * generational suffix in `last_name`, so this is never `Jr`.
+   * for that part rather than splitting the whole one.
+   *
+   * **It is whatever was encoded, and nothing validates it.** Section 3 directs a
+   * generational suffix into `last_name`, but that is a convention rather than an
+   * invariant: `CreatePersonDto` accepts any string of 1 to 100 characters, the
+   * tree import takes a spreadsheet column verbatim, and `duplicate-matching.ts`
+   * reads a suffix out of the *first* name precisely because it can be there. A
+   * caller rendering this is rendering what somebody typed.
    */
   firstName: string;
   mergedIntoId: string | null;
@@ -73,9 +79,17 @@ export class PeopleReadService {
    * join them, in three places, until the authorization seam moved into its own
    * module and made this import possible without a cycle.
    *
-   * It takes an executor because every caller so far is deciding inside its own
-   * transaction, and a pooled read there answers from the state the request
-   * arrived with.
+   * It takes an executor **so that a caller deciding inside a transaction reads
+   * that transaction's state**, rather than the state the request arrived with.
+   * That is what provisioning needs, and it is the reason the parameter is
+   * required rather than optional: a caller inside a transaction that forgot to
+   * pass one would read from the pool and decide on stale rows, which is
+   * invisible at the call site.
+   *
+   * A caller that is *not* deciding inside a transaction has nothing to hand it
+   * and should use `forDecision` below, which supplies this module's own pool.
+   * Requiring an executor from those callers achieved nothing except to make
+   * another module take a database handle in order to give one back.
    */
   async forDecisionWithin(executor: Db, personId: string): Promise<PersonForDecision | null> {
     const person = await executor
@@ -107,6 +121,16 @@ export class PeopleReadService {
       mergedIntoId: person.merged_into_id,
       isArchived: person.state === 'ARCHIVED',
     };
+  }
+
+  /**
+   * The same read, for a caller that is not inside a transaction.
+   *
+   * It exists so that such a caller does not have to hold a database handle
+   * purely to hand this module the pool it already has.
+   */
+  async forDecision(personId: string): Promise<PersonForDecision | null> {
+    return this.forDecisionWithin(this.db, personId);
   }
 
   /**

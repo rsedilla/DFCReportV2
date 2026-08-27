@@ -75,6 +75,10 @@ const SCANS = [
     },
     async arrange(page: import('@playwright/test').Page) {
       await expect(page.getByRole('heading', { name: 'Your session' })).toBeVisible();
+      // The greeting, asserted rather than assumed: settling on the heading and
+      // the table would scan and pass on a page where it never rendered, and the
+      // client's guard on it is a truthiness check that fails silent.
+      await expect(page.getByText('Welcome, Marilou')).toBeVisible();
       await expect(page.getByRole('table')).toBeVisible();
     },
   },
