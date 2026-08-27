@@ -19,6 +19,7 @@ const SESSION = {
   account_id: '4f8c1d6a-0f1e-4b2a-9c3d-5e6f7a8b9c0d',
   person_id: '9a1b2c3d-4e5f-4061-8273-8495a6b7c8d9',
   email: 'admin@example.invalid',
+  first_name: 'Marilou',
   capabilities: [],
 };
 

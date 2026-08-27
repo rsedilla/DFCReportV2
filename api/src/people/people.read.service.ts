@@ -29,6 +29,16 @@ export interface PersonForDecision {
   id: string;
   /** Composed here, because `people` owns name shape (section 3). */
   fullName: string;
+  /**
+   * The given name on its own, for addressing somebody rather than identifying
+   * them — a greeting, or the salutation of an email.
+   *
+   * It is supplied here for the same reason `fullName` is composed here: section
+   * 3 gives `people` the name shape, so a caller that needs a part of a name asks
+   * for that part rather than splitting the whole one. Section 3 also puts a
+   * generational suffix in `last_name`, so this is never `Jr`.
+   */
+  firstName: string;
   mergedIntoId: string | null;
   isArchived: boolean;
 }
@@ -93,6 +103,7 @@ export class PeopleReadService {
     return {
       id: person.id,
       fullName: composeName(person),
+      firstName: person.first_name,
       mergedIntoId: person.merged_into_id,
       isArchived: person.state === 'ARCHIVED',
     };

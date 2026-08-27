@@ -26,13 +26,21 @@ export function AuthCard({
 }) {
   return (
     <main id="main" className="mx-auto flex min-h-dvh max-w-md flex-col justify-center px-5 py-12">
-      <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
+      <h1 className="text-center text-2xl font-semibold tracking-tight">{title}</h1>
 
-      {intro ? <p className="text-muted mt-2 text-sm leading-relaxed">{intro}</p> : null}
+      {intro ? <p className="text-muted mt-2 text-center text-sm leading-relaxed">{intro}</p> : null}
 
+      {/*
+        The heading and the footer are centred; the form is not. Labels and
+        validation messages stay left-aligned because a centred label leaves the
+        eye no fixed edge to return to down a column of fields, which costs most
+        on the small screens section 23 treats as a current surface.
+      */}
       <div className="mt-8">{children}</div>
 
-      {footer ? <div className="border-line mt-8 border-t pt-6 text-sm">{footer}</div> : null}
+      {footer ? (
+        <div className="border-line mt-8 border-t pt-6 text-center text-sm">{footer}</div>
+      ) : null}
     </main>
   );
 }

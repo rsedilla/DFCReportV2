@@ -61,7 +61,6 @@ export default function SignInPage() {
   return (
     <AuthCard
       title="Sign in"
-      intro="G12 Church Management. Accounts arrive with Cell leadership."
       footer={
         <Link
           href="/forgot-password"

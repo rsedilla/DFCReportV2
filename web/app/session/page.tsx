@@ -29,6 +29,7 @@ interface SessionDescription {
   account_id: string;
   person_id: string;
   email: string | null;
+  first_name: string | null;
   capabilities: GrantSummary[];
 }
 
@@ -86,6 +87,17 @@ function SessionDetail() {
   return (
     <main id="main" className="mx-auto max-w-2xl px-5 py-10 sm:py-14">
       <h1 className="text-2xl font-semibold tracking-tight">Your session</h1>
+
+      {/*
+        The greeting comes from `/auth/me`, so it names the person the server
+        believes is signed in rather than anything this client remembered. It is
+        rendered only once that has arrived — a greeting that says "Welcome," on
+        its own while a request is in flight is worse than no greeting.
+      */}
+      {session.data?.first_name ? (
+        <p className="mt-1 text-lg">Welcome, {session.data.first_name}</p>
+      ) : null}
+
       <p className="text-muted mt-2 text-sm leading-relaxed">
         What the API reports about the account you are signed in as. Nothing on this screen
         decides what you may do — that is answered by the server on every request.
