@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { Client } from 'pg';
 import request from 'supertest';
 
+import { REFRESH_RETRY_GRACE_SECONDS } from '../../src/auth/auth.service';
 import { PasswordService } from '../../src/auth/password.service';
 import { ACCESS_TOKEN_TTL_SECONDS, TokensService } from '../../src/auth/tokens.service';
 import { createTestDb, truncateAll } from '../setup/database';
@@ -153,11 +154,32 @@ describe('authentication (SKILL.md section 6)', () => {
       expect(original.replaced_by_id).not.toBeNull();
     });
 
+    /**
+     * **This case now establishes a fork, and that is the whole change.**
+     *
+     * It used to present the first token again with its replacement never
+     * touched — which is, exactly and unavoidably, what a client looks like when
+     * its refresh request succeeded and the *response* was lost. `fetch` reports
+     * those two situations identically, so revoking on that shape signed a leader
+     * out of every device for a dropped connection.
+     *
+     * Theft leaves a trace a lost response cannot: the real client goes on using
+     * the replacement, so two chains advance from one token. That is what this
+     * builds by rotating the replacement onward before replaying the original,
+     * and it is what section 6 keys the reuse signal on.
+     */
     it('treats a replayed token as a copy in circulation and revokes the account', async () => {
       const issued = await tokens.issueRefreshToken(account.id, 'Test phone');
-      await request(app.getHttpServer())
+
+      const first = await request(app.getHttpServer())
         .post('/api/v1/auth/refresh')
         .send({ refresh_token: issued.token });
+
+      // The fork: the legitimate client carries on, so the replacement is used.
+      // Without this the presentation below is a retry, not a replay.
+      await request(app.getHttpServer())
+        .post('/api/v1/auth/refresh')
+        .send({ refresh_token: first.body.refresh_token });
 
       const replay = await request(app.getHttpServer())
         .post('/api/v1/auth/refresh')
@@ -166,6 +188,75 @@ describe('authentication (SKILL.md section 6)', () => {
       expect(replay.status).toBe(401);
 
       // Not just this token: every session the account holds.
+      const live = await db
+        .selectFrom('refresh_tokens')
+        .select('id')
+        .where('account_id', '=', account.id)
+        .where('revoked_at', 'is', null)
+        .execute();
+
+      expect(live).toHaveLength(0);
+    });
+
+    /**
+     * The case the rule above exists to spare: a retry after a lost response.
+     *
+     * The client presented its token, the server rotated it, and the answer never
+     * arrived — so the client still holds the old token and nobody has ever used
+     * the replacement. It presents the old one again. Nothing forked, so this is
+     * not the reuse signal, and the session survives.
+     */
+    it('serves a re-presentation whose replacement was never used, and keeps the session', async () => {
+      const issued = await tokens.issueRefreshToken(account.id, 'Test phone');
+
+      const rotated = await request(app.getHttpServer())
+        .post('/api/v1/auth/refresh')
+        .send({ refresh_token: issued.token });
+
+      expect(rotated.status).toBe(200);
+
+      const retry = await request(app.getHttpServer())
+        .post('/api/v1/auth/refresh')
+        .send({ refresh_token: issued.token });
+
+      expect(retry.status).toBe(200);
+      expect(retry.body.refresh_token).not.toBe(issued.token);
+      expect(retry.body.refresh_token).not.toBe(rotated.body.refresh_token);
+
+      // The account was not revoked, and the caller holds a usable token again.
+      const usable = await request(app.getHttpServer())
+        .post('/api/v1/auth/refresh')
+        .send({ refresh_token: retry.body.refresh_token });
+
+      expect(usable.status).toBe(200);
+    });
+
+    /**
+     * The bound. Outside the window the same shape is read as reuse again,
+     * because a retry follows its failed request by seconds — and without a bound
+     * a token stolen long afterwards, whose owner never came back, would find an
+     * unused replacement waiting for it.
+     */
+    it('treats the same shape as reuse once the retry window has passed', async () => {
+      const issued = await tokens.issueRefreshToken(account.id, 'Test phone');
+
+      await request(app.getHttpServer())
+        .post('/api/v1/auth/refresh')
+        .send({ refresh_token: issued.token });
+
+      // Age the rotation past the window rather than waiting for it.
+      await db
+        .updateTable('refresh_tokens')
+        .set({ revoked_at: new Date(Date.now() - (REFRESH_RETRY_GRACE_SECONDS + 60) * 1000) })
+        .where('id', '=', issued.id)
+        .execute();
+
+      const replay = await request(app.getHttpServer())
+        .post('/api/v1/auth/refresh')
+        .send({ refresh_token: issued.token });
+
+      expect(replay.status).toBe(401);
+
       const live = await db
         .selectFrom('refresh_tokens')
         .select('id')

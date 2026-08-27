@@ -15,6 +15,18 @@ export interface SessionTokens {
   expires_in: number;
 }
 
+/**
+ * How long after a rotation a re-presentation of the old token may be read as a
+ * retry rather than as reuse (SKILL.md section 6).
+ *
+ * A retry follows its failed request by seconds — it is a client discovering
+ * that a response never arrived — so this is seconds rather than minutes. The
+ * bound is what stops the allowance weakening theft detection over time: with no
+ * window, a token stolen from a device long afterwards, whose owner never came
+ * back, would find an unused replacement waiting and be served.
+ */
+export const REFRESH_RETRY_GRACE_SECONDS = 60;
+
 @Injectable()
 export class AuthService {
   private readonly logger = new Logger(AuthService.name);
@@ -61,6 +73,19 @@ export class AuthService {
     }
 
     if (row.revoked_at !== null) {
+      const retry = row.replaced_by_id === null ? null : await this.lostResponseRetryFor(row);
+
+      if (retry !== null) {
+        // A retry of a request whose answer never arrived, not a replay. See
+        // `lostResponseRetryFor`. The chain advances from the replacement, so
+        // nothing forks and the caller ends up holding a token again.
+        this.logger.debug(
+          `Refresh token ${row.id} was re-presented within the retry window and its replacement ` +
+            `was never used; rotating ${retry.id} forward instead of revoking account ${row.account_id}.`,
+        );
+        return this.rotateFrom(retry, deviceLabel);
+      }
+
       if (row.replaced_by_id !== null) {
         this.logger.warn(
           `Refresh token ${row.id} was presented after rotation; revoking every session for account ${row.account_id}.`,
@@ -75,6 +100,76 @@ export class AuthService {
       throw new ApiError(ApiErrorCode.UNAUTHENTICATED, 'Your session has ended. Sign in again.');
     }
 
+    return this.rotateFrom(row, deviceLabel);
+  }
+
+  /**
+   * Whether a rotated token being presented again is a **retry** rather than a
+   * replay, and if so the row the chain should advance from.
+   *
+   * SKILL.md section 6 defines the reuse signal and, since this change, the one
+   * situation that looks identical to it from the client and is not. A client
+   * whose refresh request failed in transit cannot tell whether the request never
+   * arrived or arrived, rotated the row, and lost its response — `fetch` rejects
+   * the same way for both. In the second, the token it still holds is spent.
+   *
+   * **The two cases leave different traces, and that is what makes them
+   * separable here.** Theft *forks the chain*: the attacker presents the old
+   * token while the real client has already moved on to the replacement, so two
+   * chains advance. A lost response forks nothing, because the client never
+   * received the replacement and cannot ever have used it.
+   *
+   * So the signature of a lost response is precisely: the presented token was
+   * rotated, its replacement exists, and that replacement has **never been used**
+   * — neither revoked nor itself rotated. Anything else is the case section 6
+   * already describes, and still revokes the account.
+   *
+   * **The window is what stops this weakening theft detection over time.** With
+   * no bound, a token stolen from a device months later, whose owner never came
+   * back, would find an unused replacement waiting and be served. A retry follows
+   * its failed request by seconds, so the window is seconds; outside it the
+   * presentation is treated as reuse exactly as before.
+   *
+   * This is the same argument section 6 accepted on 2026-08-21 for simultaneous
+   * presentation — what an ordinary mobile client does on a poor connection, on
+   * surfaces section 2 says cannot be force-updated — one step further out.
+   */
+  private async lostResponseRetryFor(row: {
+    id: string;
+    revoked_at: Date | null;
+    replaced_by_id: string | null;
+  }): Promise<{ id: string; account_id: string; issued_at: Date; expires_at: Date } | null> {
+    if (row.revoked_at === null || row.replaced_by_id === null) {
+      return null;
+    }
+
+    if (row.revoked_at.getTime() + REFRESH_RETRY_GRACE_SECONDS * 1000 <= Date.now()) {
+      return null;
+    }
+
+    const replacement = await this.tokens.findRefreshTokenById(row.replaced_by_id);
+
+    // Never used: not signed out, not rotated onward. Either would mean somebody
+    // received it, which is the fork that makes this a replay.
+    if (!replacement || replacement.revoked_at !== null || replacement.replaced_by_id !== null) {
+      return null;
+    }
+
+    if (replacement.expires_at.getTime() <= Date.now()) {
+      return null;
+    }
+
+    return replacement;
+  }
+
+  /**
+   * The account checks and the rotation itself, shared by an ordinary refresh and
+   * by the retry path above so that neither can drift from the other.
+   */
+  private async rotateFrom(
+    row: { id: string; account_id: string; issued_at: Date },
+    deviceLabel: string | null,
+  ): Promise<SessionTokens> {
     const account = await this.accounts.findById(row.account_id);
     if (!account || account.status !== 'ACTIVE') {
       throw new ApiError(ApiErrorCode.UNAUTHENTICATED, 'Your session has ended. Sign in again.');
