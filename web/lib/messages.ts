@@ -1,4 +1,5 @@
 import { ApiRequestError } from './api-client';
+import { SessionHaltedError } from './session';
 
 /**
  * What to tell a leader when something fails, and whether it is about them.
@@ -21,21 +22,51 @@ import { ApiRequestError } from './api-client';
  * token is used by whoever writes the next screen, on whatever it seems to fit".
  *
  * So the flag is set here, once, from the code — rather than being implied by
- * which component happens to render the message.
+ * which component happens to render the message. **It is true only where the
+ * failure is a refusal of something the person typed into the form in front of
+ * them**, which is narrower than "the request was refused" in three ways worth
+ * naming, because the first version of this file got all three wrong:
  *
- * It is true for a **refusal of what was submitted** and false otherwise. In
- * particular it is false for `SCOPE_DENIED` and `CAPABILITY_DENIED`: those are
+ * - `UNAUTHENTICATED` means two unrelated things. On a credential form it is a
+ *   refusal of what was typed; on any other request it means the session ended.
+ *   Only a caller passing `credentialRefusal` is the first, so only that caller
+ *   gets the colour — otherwise a failed page load painted "Your session could
+ *   not be loaded" in `field-invalid` on a screen with no form on it.
+ * - A `VALIDATION_FAILED` that **names a field** has already been offered to
+ *   `fieldErrorFor`, which puts it on that field where the form renders one.
+ *   Reaching here means it named a field this form does not have — for these
+ *   screens, `field: 'token'` for a spent or expired link, which is a fact about
+ *   the link and not about anything typed.
+ * - `DUPLICATE_ACKNOWLEDGEMENT_REQUIRED` is not a refusal at all. Section 3
+ *   makes it a request for acknowledgement, and `api-error.ts` says in terms
+ *   that it is deliberately not `VALIDATION_FAILED` because "a client branching
+ *   on a validation code would render a duplicate as a field error".
+ *
+ * It is false for `SCOPE_DENIED` and `CAPABILITY_DENIED` too: those are
  * statements about an actor's authority, and a person is not a form field.
- * Sections 13, 17 and 19 forbid rendering a judgement about a person in colour,
- * and "you may not do this" is nearer to that than to a mistyped date.
+ * Sections 13, 17 and 19 forbid rendering a judgement about one in colour.
  */
 export interface Failure {
   message: string;
-  /** True where the failure is a refusal of what the person just submitted. */
+  /** True where the failure is a refusal of what the person just typed. */
   aboutInput: boolean;
 }
 
-export function describeFailure(error: unknown, refusalMessage: string): Failure {
+export function describeFailure(
+  error: unknown,
+  options: {
+    /**
+     * Set **only** by a form whose own credentials are being checked. It is the
+     * wording used for `UNAUTHENTICATED`, and passing it is what marks that code
+     * as a refusal of this form's input rather than an ended session.
+     */
+    credentialRefusal?: string;
+  } = {},
+): Failure {
+  if (error instanceof SessionHaltedError) {
+    return { message: error.message, aboutInput: false };
+  }
+
   if (!(error instanceof ApiRequestError)) {
     // A network failure, a DNS failure, or the client being offline. None of
     // these came from the API and none carries a code.
@@ -47,15 +78,20 @@ export function describeFailure(error: unknown, refusalMessage: string): Failure
 
   switch (error.code) {
     case 'UNAUTHENTICATED':
-      // The API's wording is deliberately not used on a credential form: a
+      // On a credential form the API's own wording is deliberately not used: a
       // message distinguishing "no such account" from "wrong password" is an
       // account enumeration oracle, and section 6 already requires the reset
       // path to answer identically whether or not the address exists.
-      return { message: refusalMessage, aboutInput: true };
+      return options.credentialRefusal === undefined
+        ? { message: 'Your session has ended. Sign in again.', aboutInput: false }
+        : { message: options.credentialRefusal, aboutInput: true };
 
     case 'VALIDATION_FAILED':
+      // Named a field this form does not render — see the note above.
+      return { message: error.message, aboutInput: error.details.field === undefined };
+
     case 'DUPLICATE_ACKNOWLEDGEMENT_REQUIRED':
-      return { message: error.message, aboutInput: true };
+      return { message: error.message, aboutInput: false };
 
     case 'RATE_LIMITED':
       return { message: 'Too many attempts. Wait a minute and try again.', aboutInput: false };
@@ -75,12 +111,12 @@ export function describeFailure(error: unknown, refusalMessage: string): Failure
 }
 
 /**
- * The message the API attached to one field, where it named one.
+ * The message the API attached to one field, where the form renders that field.
  *
  * Section 22's error envelope carries `details`, and the password rules in
- * section 6 answer `VALIDATION_FAILED` with `details.field`. Where that names
- * the field being edited, the message belongs *on* that field — which is the
- * case section 23 settles `field-invalid` for, and the only one.
+ * section 6 answer `VALIDATION_FAILED` with `details.field`. Where that names a
+ * field being edited, the message belongs *on* that field — which is the case
+ * section 23 settles `field-invalid` for, and the only one.
  */
 export function fieldErrorFor(error: unknown, field: string): string | null {
   if (!(error instanceof ApiRequestError) || error.code !== 'VALIDATION_FAILED') {

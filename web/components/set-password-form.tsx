@@ -126,7 +126,7 @@ export function SetPasswordForm({
       if (onField !== null) {
         setPasswordError(onField);
       } else {
-        setFailure(describeFailure(cause, 'This link is no longer valid. Ask for a new one.'));
+        setFailure(describeFailure(cause));
       }
       setSubmitting(false);
     }

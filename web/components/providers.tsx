@@ -5,6 +5,7 @@ import type { ReactNode } from 'react';
 import { useState } from 'react';
 
 import { ApiRequestError } from '@/lib/api-client';
+import { SessionHaltedError } from '@/lib/session';
 
 /**
  * Server state, and the one retry rule worth setting deliberately.
@@ -35,9 +36,21 @@ export function Providers({ children }: { children: ReactNode }) {
               if (failureCount >= 2) {
                 return false;
               }
+              // A halted session is a decision, not a transient failure. It is
+              // raised without a network call and retrying cannot change it —
+              // only `resumeSession`, wired to a control the person presses,
+              // can. Retrying here would also make the halt look transient in
+              // the interface, which is the opposite of what it is.
+              if (error instanceof SessionHaltedError) {
+                return false;
+              }
               if (error instanceof ApiRequestError) {
                 return error.status >= 500;
               }
+              // A transport failure. Retrying the *query* is fine; what must not
+              // be retried automatically is presenting a refresh token whose
+              // outcome is unknown, and `lib/session.ts` refuses that itself
+              // rather than relying on this policy staying as it is.
               return true;
             },
             staleTime: 30_000,

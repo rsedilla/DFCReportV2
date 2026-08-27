@@ -109,18 +109,133 @@ test('sign-out presents the refresh token held after a rotation, not before it',
  *
  * Only a 401 discards the credential.
  */
-test('a refresh that fails in transit leaves the stored token alone', async ({ page }) => {
+test('a refresh that fails in transit is presented once, and the token is kept', async ({
+  page,
+}) => {
   await page.addInitScript(() => {
     window.localStorage.setItem('dfc.refresh_token', 'refresh-0');
   });
 
-  await page.route('**/api/v1/auth/refresh', (route) => route.abort('failed'));
+  const presented: string[] = [];
+  await page.route('**/api/v1/auth/refresh', (route) => {
+    const body = route.request().postDataJSON() as { refresh_token: string };
+    presented.push(body.refresh_token);
+    return route.abort('failed');
+  });
 
   await page.goto('/session');
-  await expect(page.getByRole('alert').filter({ hasText: 'connection' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Try again' })).toBeVisible();
 
+  // **The count is the point of this test.** `fetch` rejects identically whether
+  // the request never arrived or arrived, rotated the row, and lost the
+  // response. In the second case a second presentation is section 6's reuse
+  // signal and revokes the account on every device — so the client must not make
+  // one on its own initiative. The query layer retries, which is what turned
+  // this into three presentations before the halt existed.
+  expect(presented, 're-presented a refresh token whose outcome was unknown').toEqual(['refresh-0']);
+
+  // And it is kept, not discarded: section 23 makes an unreliable connection the
+  // expected case, and a tunnel is not a revoked session.
   const stored = await page.evaluate(() => window.localStorage.getItem('dfc.refresh_token'));
   expect(stored, 'a transport failure discarded the refresh token').toBe('refresh-0');
+});
+
+/**
+ * The halt is not a dead end: pressing *Try again* is the person choosing to
+ * present the token a second time, knowing the first attempt's outcome is
+ * unknown. That is a different act from the client doing it unprompted, and it
+ * is the only thing that clears the halt.
+ */
+test('a halted session is resumable by a deliberate retry', async ({ page }) => {
+  await page.addInitScript(() => {
+    window.localStorage.setItem('dfc.refresh_token', 'refresh-0');
+  });
+
+  let failNext = true;
+  const presented: string[] = [];
+  await page.route('**/api/v1/auth/refresh', (route) => {
+    const body = route.request().postDataJSON() as { refresh_token: string };
+    presented.push(body.refresh_token);
+
+    if (failNext) {
+      failNext = false;
+      return route.abort('failed');
+    }
+
+    return route.fulfill(tokens('access-1', 'refresh-1'));
+  });
+
+  await page.route('**/api/v1/auth/me', (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(SESSION) }),
+  );
+
+  await page.goto('/session');
+  await page.getByRole('button', { name: 'Try again' }).click();
+
+  // The fixture carries no capabilities, so the page renders its empty state
+  // rather than a table. The email is what proves `/auth/me` was reached.
+  await expect(page.getByText('admin@example.invalid')).toBeVisible();
+  expect(presented).toEqual(['refresh-0', 'refresh-0']);
+});
+
+/**
+ * **The cross-tab lock, which nothing else here reaches.**
+ *
+ * `inFlight` collapses concurrent refreshes within one tab. It cannot help
+ * across tabs: `localStorage` is shared per origin while `inFlight` is per
+ * JavaScript context, so two tabs opening together each read the same token and
+ * each POST it. The second arrives after the first has rotated — sequential at
+ * the server, so the 2026-08-21 simultaneous exemption does not apply — and
+ * section 6 revokes every session on the account.
+ *
+ * This is the only case that fails if `withSessionLock` is removed, which is why
+ * it exists: every other case in this file passes against a client with no lock
+ * at all, because they each drive a single tab.
+ *
+ * The delay widens the window deliberately. Without it the first rotation may
+ * complete before the second tab reads, and the test would pass against an
+ * unlocked client roughly as often as not — the test-that-passes-for-the-wrong-
+ * reason this repository keeps recording.
+ */
+test('two tabs never present the same refresh token', async ({ context }) => {
+  await context.addInitScript(() => {
+    window.localStorage.setItem('dfc.refresh_token', 'refresh-0');
+  });
+
+  let rotations = 0;
+  const presented: string[] = [];
+
+  await context.route('**/api/v1/auth/refresh', async (route) => {
+    const body = route.request().postDataJSON() as { refresh_token: string };
+    presented.push(body.refresh_token);
+
+    await new Promise((resolve) => setTimeout(resolve, 400));
+
+    rotations += 1;
+    await route.fulfill(tokens(`access-${rotations}`, `refresh-${rotations}`));
+  });
+
+  await context.route('**/api/v1/auth/me', (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(SESSION) }),
+  );
+
+  const first = await context.newPage();
+  const second = await context.newPage();
+
+  await Promise.all([first.goto('/session'), second.goto('/session')]);
+
+  await expect(first.getByText('admin@example.invalid')).toBeVisible();
+  await expect(second.getByText('admin@example.invalid')).toBeVisible();
+
+  // Both tabs really did refresh — otherwise this passes by one of them never
+  // having needed a token at all.
+  expect(presented.length, 'only one tab refreshed, so nothing was serialized').toBeGreaterThanOrEqual(2);
+
+  // The assertion that matters: no value was presented twice.
+  expect(
+    new Set(presented).size,
+    `a refresh token was presented more than once across tabs: ${presented.join(', ')}`,
+  ).toBe(presented.length);
 });
 
 /**

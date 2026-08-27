@@ -46,8 +46,13 @@ export default function SignInPage() {
       await signIn(email, password, 'Web browser');
       router.replace('/session');
     } catch (cause) {
+      // The one caller that passes `credentialRefusal`: this form is the only
+      // place where `UNAUTHENTICATED` means "what you typed was refused" rather
+      // than "your session ended".
       setFailure(
-        describeFailure(cause, 'That email address and password do not match an account.'),
+        describeFailure(cause, {
+          credentialRefusal: 'That email address and password do not match an account.',
+        }),
       );
       setSubmitting(false);
     }

@@ -121,9 +121,11 @@ for (const theme of THEMES) {
  * of the four that *is* partly measurable, and this repository's standing
  * complaint about itself is rules with nothing able to fail on them.
  *
- * Inline links inside a sentence are exempt under the criterion's own
- * "inline" exception; nothing in these screens relies on that, so the exception
- * is not implemented and every target is measured.
+ * **One state relies on the criterion's own inline exception**, and it is named
+ * in `TARGET_EXEMPT` below rather than quietly skipped. The exception is not
+ * implemented as a rule — deciding whether a link is "inline" from the DOM is
+ * guesswork — so a state that needs it is listed, with its reason, and the guard
+ * beneath makes the list exhaustive.
  */
 /**
  * Each route, the control that proves it has finished rendering, and how many
@@ -141,11 +143,52 @@ for (const theme of THEMES) {
  * measured separately below, in the state it is offered in.
  */
 const TARGET_SWEEP = [
-  { route: '/sign-in', settle: 'Sign in', minimum: 4 },
-  { route: '/forgot-password', settle: 'Email me a link', minimum: 3 },
-  { route: '/activate?token=example', settle: 'Activate account', minimum: 2 },
-  { route: '/session', settle: 'Sign out on every device', minimum: 2 },
+  { name: 'sign-in', route: '/sign-in', settle: 'Sign in', minimum: 4 },
+  { name: 'forgot-password', route: '/forgot-password', settle: 'Email me a link', minimum: 3 },
+  {
+    name: 'activate',
+    route: '/activate?token=example-activation-token',
+    settle: 'Activate account',
+    minimum: 2,
+  },
+  {
+    name: 'reset-password',
+    route: '/reset-password?token=example-reset-token',
+    settle: 'Save new password',
+    minimum: 2,
+  },
+  { name: 'session', route: '/session', settle: 'Sign out on every device', minimum: 2 },
 ] as const;
+
+/**
+ * States deliberately not measured, each with the reason it is exempt.
+ *
+ * Nothing may leave `SCANS` without appearing in one of these two lists — the
+ * guard below enforces it, so this cannot decay into "every state somebody
+ * remembered", which is the failure the route walker further down was written to
+ * prevent one list over.
+ */
+const TARGET_EXEMPT: { name: string; why: string }[] = [
+  {
+    name: 'landing',
+    why: 'It renders no interactive target at all: a heading and a status line, while it redirects.',
+  },
+  {
+    name: 'forgot-password, sent',
+    why: 'Its only target is the "Back to sign in" link, measured on /forgot-password itself.',
+  },
+  {
+    name: 'sign-in, refused',
+    why: 'Same targets as /sign-in, which is measured; the refusal adds text, not controls.',
+  },
+  {
+    name: 'activate, link missing its token',
+    why:
+      'Its one control is a "request a password reset" link inside a sentence, which is exempt ' +
+      'under 2.5.8\'s own inline exception. Giving it a 44px box would put a button-sized gap in ' +
+      'the middle of a paragraph.',
+  },
+];
 
 test('every interactive target meets the 24px minimum', async ({ page }) => {
   await mockSignedIn(page);
@@ -206,6 +249,39 @@ test('the skip link is hidden until focused, and a full target once it is', asyn
   const shown = await skipLink.boundingBox();
   expect(shown!.height, 'the focused skip link is below the 24px minimum').toBeGreaterThanOrEqual(24);
   expect(shown!.width, 'the focused skip link is below the 24px minimum').toBeGreaterThanOrEqual(24);
+});
+
+/**
+ * The guard that keeps the 2.5.8 sweep honest.
+ *
+ * `SCANS` has a route walker holding it to the router's own directory. Without
+ * an equivalent here, `TARGET_SWEEP` degrades into whichever states somebody
+ * remembered — and a state added to `SCANS` would be scanned by axe, which
+ * cannot see target size, and measured by nothing.
+ */
+test('every scanned state is either measured for target size or exempt with a reason', () => {
+  // Keyed by the scan's name, not its route: two states share `/sign-in`, and
+  // `/activate` differs from `/activate?token=…` in exactly the way that matters
+  // here. A route comparison would call one of each pair covered by the other.
+  const measured = new Set<string>(TARGET_SWEEP.map((entry) => entry.name));
+  const exempt = new Set(TARGET_EXEMPT.map((entry) => entry.name));
+
+  for (const scan of SCANS) {
+    const covered = measured.has(scan.name) || exempt.has(scan.name);
+    expect(
+      covered,
+      `"${scan.name}" (${scan.route}) is scanned by axe but neither measured for WCAG 2.5.8 ` +
+        `nor listed in TARGET_EXEMPT with a reason.`,
+    ).toBe(true);
+  }
+
+  // An exemption for a state that no longer exists is a reason nobody can check.
+  for (const entry of TARGET_EXEMPT) {
+    expect(
+      SCANS.some((scan) => scan.name === entry.name),
+      `TARGET_EXEMPT lists "${entry.name}", which is not a scanned state.`,
+    ).toBe(true);
+  }
 });
 
 /**

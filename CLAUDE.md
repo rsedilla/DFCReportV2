@@ -3790,11 +3790,87 @@ Also: `isRoot` had no test, so it could have been inverted with 642 tests green;
 batch that added a second; and a test comment quoted `account_roles_period_ordered`
 as `>` when it is `>=`.
 
+### 2026-08-27 — What the web client does with a refresh token, pending three rulings
+
+Stage 2's screens are the first code to hold a refresh token, and section 6 does not
+reach three of the situations one is actually held in. Two `architecture-guardian`
+passes found the same thing from opposite directions: the first that the client
+discarded a live credential on any failure, the second that the fix re-presented one
+up to three times a page load. Both are section 6 questions the specification does
+not answer, so what is recorded here is the **interim client behaviour**, and the
+questions are listed as open below rather than settled in a component.
+
+`SKILL.md` is deliberately **not** amended. These are not rules yet, and writing them
+into the specification would settle by implementation what the log says must be
+settled by decision — the failure this file's own preamble names in one line.
+
+**A presentation whose outcome is unknown halts the client.** `fetch` rejects
+identically whether a request never arrived or arrived, rotated the row, and lost the
+response. The second makes the stored token spent, so presenting it again is section
+6's reuse signal and revokes every session on the account. The client therefore
+neither discards the token — section 23 makes an unreliable connection the expected
+case, and a tunnel is not a revoked session — nor presents it again on its own
+initiative. It stops and says so, and only a person pressing *Try again* presents it
+a second time. That makes the risk theirs to take knowingly, which is the most a
+client can honestly do while the question is open.
+
+**Refresh is serialized per origin, by a Web Lock.** `localStorage` is shared across
+tabs while an in-flight guard is per JavaScript context, so two tabs opening together
+each read one token and the later POST lands after the earlier has rotated —
+sequential, so the 2026-08-21 simultaneous exemption does not cover it. Whether two
+tabs *should* be one session is open; the lock does not decide it, because tabs
+already share the credential. It stops the sharing being unsafe.
+
+**A refusal discards; a failure does not.** A 401 means the credential is spent,
+revoked or expired. A `VALIDATION_FAILED` means the stored value is not a token at
+all, and is discarded too — otherwise `hasStoredSession()` keeps reporting a session
+that can never be renewed and nothing redirects to sign-in. A rate limit or a 5xx
+refused the attempt without spending the token, so it is kept.
+
+**Section 23's `field-invalid` is decided from the error code, in one place.** Three
+codes reach a screen without being a refusal of anything typed: `UNAUTHENTICATED` on
+any request that is not a credential form, a `VALIDATION_FAILED` naming a field the
+form does not render — `field: 'token'` for a spent link — and
+`DUPLICATE_ACKNOWLEDGEMENT_REQUIRED`, which `api-error.ts` says in terms is not a
+validation code precisely so that a client does not render it as a field error. All
+three had acquired the colour by being rendered through the same component, which is
+the drift section 23 predicts: a token is used by whoever writes the next screen, on
+whatever it seems to fit.
+
 ### Open — awaiting a ruling
 
-**One item awaits a ruling and blocks Stage 5. Eighteen other things are unsettled,
+**Four items await a ruling. Three are new on 2026-08-27 and concern the web client's
+handling of refresh tokens; one blocks Stage 5. Eighteen other things are unsettled,
 none of them blocking. They are listed at the end, so this section is the whole of
 what is open.**
+
+**What a client does with a refresh token whose presentation failed in transit.**
+`SKILL.md` §6 defines rotation, the reuse signal, and the 2026-08-21 exemption for
+simultaneous presentation. It says nothing about a presentation whose outcome is
+unknown — which is not a corner case but the ordinary condition of a leader on a
+phone. `fetch` cannot distinguish a request that never arrived from one that arrived,
+rotated the row, and lost its response. The two available answers have opposite
+costs: discarding a possibly-live credential signs one device out for nothing, and
+keeping it risks a sequential replay that revokes every session on the account. The
+interim client behaviour is the ruling above — halt, and let a person choose — and it
+is a stance, not an answer. Settle it before the native clients are built, because
+they will each need the same rule and will not be force-updatable.
+
+**Whether several tabs of one browser are one session or several.** §6 tracks a
+refresh token "per device or per session" and §2 requires several concurrent sessions
+per account; neither says which a second tab is. Today they are one, because
+`localStorage` is per origin, and a Web Lock makes that sharing safe. Where
+`navigator.locks` is absent the serialization is per tab only and two tabs can still
+race. The answer decides whether that gap needs closing or whether tabs should hold
+separate credentials.
+
+**Whether a `VALIDATION_FAILED` naming a field the form does not render is "a form
+field failing validation".** §23 settles `field-invalid` as the only token of its
+kind and argues it from what such a message is — made to the person who just typed
+it, resolved by them in seconds. A spent activation link is not that, and the API
+models it as `field: 'token'`. The client currently keys on §23's justification
+rather than on the API's `details.field`, which is the conservative reading. What
+§23 does not say is which of the two decides it.
 
 Nine items that stood here on 2026-08-22 were settled that day and are recorded
 above. Seven were Stop Conditions for Stage 2, and the last two were opened and

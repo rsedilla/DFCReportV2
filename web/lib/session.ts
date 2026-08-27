@@ -1,5 +1,5 @@
 /**
- * Where this client keeps its tokens, and the one rule that decides the shape.
+ * Where this client keeps its tokens, and the rules that decide the shape.
  *
  * SKILL.md section 6: sessions are tokens rather than browser sessions, several
  * devices may hold one at once, and a refresh token **rotates** on every use.
@@ -16,8 +16,7 @@
  * a presentation that lands *after* another has committed is the reuse signal,
  * whatever the client intended.
  *
- * **So the stored token is read only while holding a lock, never before.** Two
- * layers, because they close different windows:
+ * Three mechanisms follow, each closing a different window.
  *
  * - `inFlight` collapses concurrent refreshes **within one tab**, so several
  *   requests meeting a 401 together make one round trip.
@@ -26,21 +25,26 @@
  *   context. Without it, two tabs each read the same token and the second POST
  *   arrives after the first has rotated — sequential at the server, and
  *   therefore account-wide revocation for having two tabs open.
+ * - `unknownOutcome` stops this client re-presenting a token **whose fate it
+ *   does not know**. See below; it is the subtlest of the three.
  *
  * Every read of the stored token that precedes a network call happens *inside*
- * that lock, which is what makes the pair sufficient rather than merely
- * well-intentioned. An earlier version of this file claimed a funnel and then
- * read the token in `signOut` before the funnel ran, which sent a token that had
- * already been rotated — revoking nothing, while the person was shown a
- * signed-out screen.
+ * the lock, which is what makes the arrangement sufficient rather than merely
+ * well-intentioned.
  *
  * **The access token is held in memory and never persisted; the refresh token
- * is in `localStorage`.** A pure client has no server of its own (section 2), so
- * an `httpOnly` cookie is not available at any price — there is nothing to set
- * it. Given that, persisting only the rotating credential is the better half of
- * the trade: it survives a reload, and if it is read by anything else, its next
- * use is detectable as reuse and ends every session. A persisted access token
- * would be usable for its whole lifetime with nothing raised.
+ * is in `localStorage` and mirrored in memory.** A pure client has no server of
+ * its own (section 2), so an `httpOnly` cookie is not available at any price.
+ * Given that, persisting only the rotating credential is the better half of the
+ * trade: it survives a reload, and if it is read by anything else, its next use
+ * is detectable as reuse and ends every session. A persisted access token would
+ * be usable for its whole lifetime with nothing raised.
+ *
+ * The in-memory mirror exists because `localStorage` can be *unavailable* —
+ * private browsing and blocked site data both throw. Without it, a rotation
+ * whose write silently failed left a freshly-issued refresh token live for
+ * thirty days that this client could no longer name and therefore could never
+ * revoke.
  */
 import { ApiRequestError, apiRequest } from './api-client';
 
@@ -57,22 +61,79 @@ const REFRESH_STORAGE_KEY = 'dfc.refresh_token';
 const SESSION_LOCK = 'dfc.session';
 
 /**
- * Held in memory only, and deliberately not exported. Everything that needs it
- * goes through `authenticatedRequest`, so there is no call site that can send it
- * without the refresh-and-retry behaviour below.
+ * How long a request made while holding the session lock may run.
+ *
+ * A Web Lock is held until its callback settles and is scoped to the **origin**,
+ * so one tab waiting on a stalled socket blocks every refresh in every tab of
+ * the application — for as long as the browser's own network timeout, which is
+ * minutes. The 2026-08-23 `RESOURCE_BUSY` ruling reached the same conclusion
+ * about the person lock on the server, and bounded it for the same reason: an
+ * unbounded wait inside something that holds an exclusive resource presents to
+ * everything else as a dead application.
+ *
+ * Ten seconds is far longer than either call needs and short enough that a
+ * stalled one does not read as a freeze.
  */
+const LOCK_HELD_REQUEST_TIMEOUT_MS = 10_000;
+
+/** Held in memory only, and deliberately not exported. */
 let accessToken: string | null = null;
 
-/** The single in-flight refresh for *this tab*. See the note at the top. */
+/**
+ * The refresh token this client currently holds, mirroring storage.
+ *
+ * Read in preference to storage, so that a rotation whose write failed is still
+ * a token this client can name and revoke.
+ */
+let refreshToken: string | null = null;
+
+/**
+ * False once a write to `localStorage` has been refused.
+ *
+ * It is what tells `currentRefreshToken` whether the store is authoritative. A
+ * store that works is shared with every other tab and must win; a store that
+ * throws tells this tab nothing, and the mirror is all there is.
+ */
+let storageUsable = true;
+
+/** The single in-flight refresh for *this tab*. */
 let inFlight: Promise<string> | null = null;
+
+/**
+ * A refresh token this client presented without learning the outcome.
+ *
+ * `fetch` rejects identically for two situations that are not alike: the request
+ * never reached the server, and the request reached the server, rotated the row,
+ * and the *response* was lost. In the second, the stored token is already spent
+ * — so presenting it again is the section 6 reuse signal, and the account is
+ * revoked on every device.
+ *
+ * So a transport failure does not discard the credential (section 23 makes an
+ * unreliable connection the expected case, and discarding a live token because a
+ * train went into a tunnel signs a leader out of a session the server never
+ * ended) and it does not re-present it either. The client stops, and says so.
+ * Only a deliberate act by the person — `resumeSession`, wired to a *Try again*
+ * control — presents it a second time, which makes the risk theirs to take
+ * knowingly rather than one this client runs on their behalf three times a page
+ * load.
+ *
+ * **What ought to happen instead is not settled.** Section 6 defines rotation,
+ * the reuse signal, and the simultaneous exemption, and says nothing about a
+ * presentation whose outcome is unknown. The two available answers — discard a
+ * possibly-live credential, or keep it and risk a sequential replay — have
+ * opposite costs, one bounded at one device and one at the whole account. This
+ * is the conservative interim stance recorded in `CLAUDE.md` under *Open —
+ * awaiting a ruling*, not an answer to that question.
+ */
+let unknownOutcome: string | null = null;
 
 /**
  * The fallback funnel, used where the Web Locks API is absent.
  *
  * It serializes within this tab only, which is exactly what this file did before
  * the lock existed. It is a narrower guarantee and is not silently equivalent:
- * where `navigator.locks` is missing, two tabs can still race, and that is the
- * open question recorded in `CLAUDE.md` rather than something this promise
+ * where `navigator.locks` is missing, two tabs can still race. That is listed in
+ * `CLAUDE.md` under *Open — awaiting a ruling*, and is not something this promise
  * chain closes.
  */
 let fallbackChain: Promise<unknown> = Promise.resolve();
@@ -96,9 +157,18 @@ export function subscribe(listener: () => void): () => void {
 /**
  * Run `work` with exclusive use of this origin's session credential.
  *
- * Web Locks are not reentrant, so nothing called from inside `work` may call
- * this again. `refreshWithinLock` exists for that reason: it is the body of a
- * refresh with no lock of its own.
+ * **Not reentrant**, which is a property of Web Locks rather than a choice here:
+ * requesting a held lock from inside its own callback waits for a release that
+ * cannot happen. `refreshWithinLock` and `postLogout` exist for that reason —
+ * they are the lock-free bodies, and they are the only things called from inside
+ * a callback.
+ *
+ * No runtime guard enforces it, deliberately. The obvious one — a flag set while
+ * a callback runs — cannot tell reentrancy from ordinary contention, because a
+ * second tab or a second caller legitimately arriving while the first holds the
+ * lock looks identical at the point of call. It would throw on the case that must
+ * queue. Keeping both lock-free bodies private, and unexported, is what actually
+ * holds this.
  */
 async function withSessionLock<T>(work: () => Promise<T>): Promise<T> {
   if (typeof navigator !== 'undefined' && navigator.locks) {
@@ -128,7 +198,22 @@ function readStoredRefreshToken(): string | null {
   }
 }
 
+/**
+ * What this client holds. **Storage wins wherever storage works.**
+ *
+ * The mirror is a fallback for a store that refuses, never a cache in front of
+ * one that works: `localStorage` is how a rotation in another tab becomes
+ * visible here, so preferring the mirror would make this tab present the token
+ * it last saw rather than the current one — which is the sequential replay the
+ * lock exists to prevent, reintroduced one line further in.
+ */
+function currentRefreshToken(): string | null {
+  return storageUsable ? readStoredRefreshToken() : refreshToken;
+}
+
 function writeStoredRefreshToken(token: string | null): void {
+  refreshToken = token;
+
   if (typeof window === 'undefined') {
     return;
   }
@@ -139,7 +224,11 @@ function writeStoredRefreshToken(token: string | null): void {
       window.localStorage.setItem(REFRESH_STORAGE_KEY, token);
     }
   } catch {
-    // As above. The session then lasts until the tab is closed.
+    // As above. The mirror still names the token, so it remains revocable for
+    // this page view even though the session will not survive a reload — and
+    // from here the mirror is what `currentRefreshToken` reads, because this
+    // store is telling us nothing.
+    storageUsable = false;
   }
 }
 
@@ -151,12 +240,27 @@ function writeStoredRefreshToken(token: string | null): void {
  * principle 4), and nothing here is consulted for it.
  */
 export function hasStoredSession(): boolean {
-  return accessToken !== null || readStoredRefreshToken() !== null;
+  return accessToken !== null || currentRefreshToken() !== null;
+}
+
+/**
+ * True where a presentation's outcome is unknown and this client has stopped
+ * rather than re-present the token. Wired to a *Try again* control.
+ */
+export function isHalted(): boolean {
+  return unknownOutcome !== null && unknownOutcome === currentRefreshToken();
+}
+
+/** Permit one further presentation of a token whose outcome is unknown. */
+export function resumeSession(): void {
+  unknownOutcome = null;
+  announce();
 }
 
 function adopt(tokens: SessionTokens): string {
   accessToken = tokens.access_token;
   writeStoredRefreshToken(tokens.refresh_token);
+  unknownOutcome = null;
   announce();
   return tokens.access_token;
 }
@@ -165,6 +269,7 @@ function adopt(tokens: SessionTokens): string {
 export function forgetSession(): void {
   accessToken = null;
   inFlight = null;
+  unknownOutcome = null;
   writeStoredRefreshToken(null);
   announce();
 }
@@ -182,39 +287,64 @@ export async function signIn(
   adopt(tokens);
 }
 
+/** Raised locally, without a network call, where `unknownOutcome` blocks one. */
+export class SessionHaltedError extends Error {
+  constructor() {
+    super('The last attempt did not complete, so this session is not being retried on its own.');
+    this.name = 'SessionHaltedError';
+  }
+}
+
 /**
  * One rotation. **The caller must already hold the session lock.**
  *
  * The stored token is read here rather than by the caller, so that what is
- * presented is whatever is current at the moment the lock was acquired — which
- * is the point of taking it. A token read before the lock may have been rotated
- * by another tab while this one waited.
+ * presented is whatever is current at the moment the lock was acquired — a token
+ * read before the lock may have been rotated by another tab while this one
+ * waited.
  */
 async function refreshWithinLock(): Promise<string> {
-  const stored = readStoredRefreshToken();
+  const stored = currentRefreshToken();
   if (stored === null) {
     throw new Error('No stored session.');
+  }
+  if (unknownOutcome === stored) {
+    throw new SessionHaltedError();
   }
 
   try {
     const tokens = await apiRequest<SessionTokens>('/api/v1/auth/refresh', {
       method: 'POST',
       body: { refresh_token: stored },
+      signal: AbortSignal.timeout(LOCK_HELD_REQUEST_TIMEOUT_MS),
     });
     return adopt(tokens);
   } catch (cause) {
-    // **Only a refusal discards the credential.** A refused refresh token cannot
-    // be retried and cannot be repaired: the stored value is spent, revoked or
-    // expired, and keeping it would mean presenting it again, which is the one
-    // thing section 6 makes expensive.
-    //
-    // A transport failure is a different fact and is not treated as one. Section
-    // 23 makes an unreliable connection the expected case for this application,
-    // and discarding a live credential because a train went into a tunnel signs
-    // a leader out of a session the server never ended.
-    if (cause instanceof ApiRequestError && cause.status === 401) {
-      forgetSession();
+    if (cause instanceof ApiRequestError) {
+      // The server answered, so the outcome is known either way.
+      //
+      // 401 is a refusal of the credential: spent, revoked or expired. It cannot
+      // be retried and cannot be repaired, and keeping it would mean presenting
+      // it again, which is the one thing section 6 makes expensive.
+      //
+      // `VALIDATION_FAILED` means the stored value is not even a well-formed
+      // token, which is a corrupted store rather than a session. Discarding it
+      // matters because `hasStoredSession()` would otherwise keep reporting a
+      // session that can never be renewed, and nothing would redirect to sign-in.
+      //
+      // Anything else — a rate limit, a 5xx — refused this attempt without
+      // spending the token, so it is kept.
+      if (cause.status === 401 || cause.code === 'VALIDATION_FAILED') {
+        forgetSession();
+      }
+      throw cause;
     }
+
+    // No answer: a transport failure, or the ten-second bound above. The token
+    // may or may not have been spent, so it is neither discarded nor presented
+    // again without a deliberate act. See `unknownOutcome`.
+    unknownOutcome = stored;
+    announce();
     throw cause;
   }
 }
@@ -293,9 +423,17 @@ export async function authenticatedRequest<T>(
 export async function signOut(): Promise<void> {
   try {
     await withSessionLock(async () => {
-      // Inside the lock, so nothing rotates underneath what is read next.
+      if (currentRefreshToken() === null) {
+        return;
+      }
+
+      // Settled inside the lock, so nothing rotates underneath what is read
+      // next. `currentRefreshToken()` prefers the in-memory mirror, so the token
+      // a rotation just issued is nameable even where the write to storage was
+      // refused — without which a sign-out could mint a live thirty-day token
+      // and abandon it.
       const token = accessToken ?? (await refreshWithinLock());
-      const stored = readStoredRefreshToken();
+      const stored = currentRefreshToken();
       if (stored === null) {
         return;
       }
@@ -308,9 +446,9 @@ export async function signOut(): Promise<void> {
         }
 
         // The access token expired between being settled and being used. Rotate
-        // once, then present whatever the rotation just stored.
+        // once, then present whatever the rotation just issued.
         const renewed = await refreshWithinLock();
-        const current = readStoredRefreshToken();
+        const current = currentRefreshToken();
         if (current !== null) {
           await postLogout(current, renewed);
         }
@@ -321,12 +459,13 @@ export async function signOut(): Promise<void> {
   }
 }
 
-function postLogout(refreshToken: string, token: string): Promise<void> {
+function postLogout(token: string, accessTokenForCall: string): Promise<void> {
   return apiRequest<void>('/api/v1/auth/logout', {
     method: 'POST',
-    body: { refresh_token: refreshToken },
-    accessToken: token,
+    body: { refresh_token: token },
+    accessToken: accessTokenForCall,
     idempotencyKey: crypto.randomUUID(),
+    signal: AbortSignal.timeout(LOCK_HELD_REQUEST_TIMEOUT_MS),
   });
 }
 

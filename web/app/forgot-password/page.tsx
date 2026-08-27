@@ -45,7 +45,7 @@ export default function ForgotPasswordPage() {
       });
       setSent(true);
     } catch (cause) {
-      setFailure(describeFailure(cause, 'Could not send the link. Try again shortly.'));
+      setFailure(describeFailure(cause));
       setSubmitting(false);
     }
   }

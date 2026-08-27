@@ -7,7 +7,7 @@ import { RequireSession } from '@/components/require-session';
 import { Button } from '@/components/ui/button';
 import { FailureNotice } from '@/components/ui/failure-notice';
 import { describeFailure } from '@/lib/messages';
-import { authenticatedRequest, signOut, signOutEverywhere } from '@/lib/session';
+import { authenticatedRequest, resumeSession, signOut, signOutEverywhere } from '@/lib/session';
 
 interface GrantSummary {
   capability: string;
@@ -89,10 +89,24 @@ function SessionDetail() {
             the error code rather than leaving it to whichever component renders
             the message.
           */}
-          <FailureNotice
-            failure={describeFailure(session.error, 'Your session could not be loaded.')}
-          />
-          <Button className="mt-4" variant="secondary" onClick={() => session.refetch()}>
+          <FailureNotice failure={describeFailure(session.error)} />
+          {/*
+            `resumeSession` first, because a refresh whose outcome was unknown
+            has halted this client deliberately: it will not present that token
+            again on its own initiative, since it cannot tell a request that
+            never arrived from one whose response was lost, and the second is
+            the section 6 reuse signal. Pressing this is the person choosing to
+            take that risk, which is a different thing from the client taking it
+            for them three times a page load.
+          */}
+          <Button
+            className="mt-4"
+            variant="secondary"
+            onClick={() => {
+              resumeSession();
+              void session.refetch();
+            }}
+          >
             Try again
           </Button>
         </div>
