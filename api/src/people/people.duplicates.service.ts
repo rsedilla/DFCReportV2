@@ -5,6 +5,7 @@ import { DATABASE, type Db } from '../database/database.module';
 
 import {
   findCandidates,
+  fullNameOf,
   normalizeName,
   type Candidate,
   type Match,
@@ -23,10 +24,27 @@ import {
  * section 3, and section 8's redaction).
  *
  * Its own service because the section 8 rule is subtle enough to be got wrong
- * three times already, and because two surfaces need it: the pre-flight lookup
- * that shows Tier 2 candidates, and creation, which can only ever refuse on Tier
- * 1. Both go through here so a third caller cannot be added that runs the matcher
- * once and leaks.
+ * four times already, and because two surfaces answer a viewer whose scope may
+ * be narrower than the church: the pre-flight lookup that shows Tier 2
+ * candidates, and creation, which can only ever refuse on Tier 1. Both go
+ * through `visibleDuplicatesFor`, so they cannot answer differently.
+ *
+ * Not "two surfaces return candidates" — the tree import returns them too, to
+ * an administrator, and the paragraph below is what says why that is sound.
+ *
+ * **`findDuplicates` is the unredacted primitive and is public**, so that is a
+ * guarantee about these two surfaces rather than about the class. Its callers
+ * outside this class each owe their own answer to section 8, and neither borrows
+ * this one:
+ * the creation gate in `people.service.ts` pairs its tier test with
+ * `canSeeReasons`, and the tree import returns unredacted candidates into its
+ * dry-run report, which is sound only because the actor is Admin at Whole Church
+ * (section 2) and the redaction would be a no-op — the argument is made where
+ * it is relied on, in `tree-import.ts`.
+ *
+ * So this is not "everything returning candidates comes through here". It is that
+ * every surface where the redaction could *bite* comes through here, and a third
+ * one must either come through here or argue its exemption as the import does.
  */
 @Injectable()
 export class PeopleDuplicatesService {
@@ -55,11 +73,13 @@ export class PeopleDuplicatesService {
    *
    * ---
    *
-   * The candidates a viewer may be shown, membership and fields both redacted.
+   * The candidates a viewer may be shown — membership, fields and order all
+   * redacted (section 3, which states the rule in three parts).
    *
    * Runs the matcher twice: once on the subject as given, and once on a subject
    * stripped of everything section 8 protects. The second run decides which
-   * out-of-scope candidates may appear at all — see `visibleCandidates`.
+   * out-of-scope candidates may appear at all, and which of them `only` keeps —
+   * see `visibleCandidates`.
    *
    * Here rather than at the call sites so that the pre-flight lookup and the
    * creation refusal cannot answer differently, and so that a third surface
@@ -78,7 +98,7 @@ export class PeopleDuplicatesService {
      * The redaction is the same either way, which is the point of the filter
      * living here rather than at the call site.
      */
-    only: (match: Match) => boolean = () => true,
+    only: (match: VisibleMatch) => boolean = () => true,
   ): Promise<Record<string, unknown>[]> {
     const [matches, publishable] = await Promise.all([
       this.findDuplicates(subject),
@@ -92,10 +112,23 @@ export class PeopleDuplicatesService {
       }),
     ]);
 
+    // **`only` is not applied here, and that is the fix rather than a
+    // refactor.** Applying it to `matches` — scored against the full subject —
+    // decided *membership* from a tier the viewer may not be told. For the
+    // creation refusal `only` is `tier === 1`, and every Tier 1 rule reads a
+    // birthday or a mobile number, so an out-of-scope candidate appeared in the
+    // payload exactly when their birthday equalled the one submitted. That is
+    // the oracle section 3's three redaction rulings closed, reached a fourth
+    // way: the fields were redacted and the membership was not.
+    //
+    // It is applied inside `visibleCandidates` instead, against the match the
+    // viewer is entitled to — the full one in scope, the publishable one
+    // otherwise.
     return visibleCandidates(
-      matches.filter(only),
-      new Set(publishable.map((match) => match.candidate.id)),
+      matches,
+      new Map(publishable.map((match) => [match.candidate.id, match])),
       inScope,
+      only,
     );
   }
 
@@ -188,15 +221,41 @@ function comparisonForm(value: string): string {
 }
 
 /**
- * The candidates a caller may be shown, membership included.
+ * What a predicate narrowing the list is allowed to see.
  *
- * **Two separate redactions, and the first is the one that took three attempts.**
+ * **The tier and the identifier, and deliberately nothing else.** `Match` carries
+ * the whole `Candidate`, birthday and mobile number included — the publishable
+ * run strips those from the *subject*, never from the candidate — so a predicate
+ * taking a `Match` could read a field section 8 protects and decide membership on
+ * it, which is the defect this file exists to prevent, one caller out.
+ *
+ * Narrowed here rather than trusted to whoever writes the next predicate, on the
+ * standard this project sets for `describeCandidate`'s required `inScope` and for
+ * `completeWithin`'s transaction parameter: the one mistake available at the call
+ * site is a compile error rather than an invisible one.
+ */
+interface VisibleMatch {
+  tier: Match['tier'];
+  candidateId: string;
+}
+
+/**
+ * The candidates a caller may be shown — membership and order included.
+ *
+ * **Three separate redactions, and each was found only after the one before it
+ * had been closed** (section 3). Every time by the same mistake: reasoning about
+ * what the response contained rather than what it was a function of. The fields
+ * were redacted and the tier still answered; the tier was withheld and membership
+ * still answered; membership was scoped and the `only` filter and the ordering
+ * still answered.
  *
  * *Which candidates appear.* A candidate outside the viewer's pastoral scope is
  * surfaced only if they would **still** have matched a subject carrying nothing
- * section 8 protects — no birthday, no mobile number. `publishableIds` is that
- * second run of the matcher, and membership out of scope is therefore a function
- * of the names and sex alone.
+ * section 8 protects — no birthday, no mobile number. `publishableById` is that
+ * second run of the matcher, keyed by candidate so the match itself is available
+ * and not merely the fact of it — membership out of scope, and every later
+ * decision about a withheld candidate, is therefore a function of the names and
+ * sex alone.
  *
  * This is why **membership is itself the disclosure**: with a first name that
  * matches nothing, "this person is in the result" is exactly "their birthday
@@ -220,27 +279,128 @@ function comparisonForm(value: string): string {
  * duplicate whose surname changed on marriage is no longer surfaced to a leader
  * outside that branch, because that rule reads a birthday.
  *
+ * *In what order they appear.* In scope first, strongest match first. Withheld
+ * candidates follow in name order, because strongest-first is itself the tier and
+ * a position beside a candidate whose tier is shown reads the withheld one back.
+ *
  * One function, used by every surface that returns candidates, so the pre-flight
- * lookup and the creation refusal cannot answer differently.
+ * lookup and the creation refusal cannot answer differently — and `only` is
+ * applied here rather than by a caller because a filter on the tier is a
+ * membership decision, which section 3 requires be taken on the match the viewer
+ * is entitled to. The predicate is handed a `VisibleMatch` so it cannot be
+ * written against anything else.
  */
 async function visibleCandidates(
   matches: readonly Match[],
-  publishableIds: ReadonlySet<string>,
+  publishableById: ReadonlyMap<string, Match>,
   inScope: (personId: string) => Promise<boolean>,
+  only: (match: VisibleMatch) => boolean,
 ): Promise<Record<string, unknown>[]> {
-  const visible: Record<string, unknown>[] = [];
+  const kept: { match: Match; withinScope: boolean }[] = [];
 
   for (const match of matches) {
     const withinScope = await inScope(match.candidate.id);
+    const publishable = publishableById.get(match.candidate.id);
 
-    if (!withinScope && !publishableIds.has(match.candidate.id)) {
+    if (!withinScope && !publishable) {
       continue;
     }
 
-    visible.push(describeCandidate(match, withinScope));
+    // **The predicate reads what the caller may be told, not what the matcher
+    // knows.** In scope that is the full match. Out of scope it is the
+    // publishable one — scored without the birthday and the mobile number — so
+    // no decision about whether this candidate appears can vary with a field
+    // section 8 protects.
+    //
+    // A consequence worth stating rather than discovering: no publishable match
+    // is ever Tier 1, because every Tier 1 rule reads one of those two fields. So
+    // an out-of-scope candidate never appears in the creation refusal at all.
+    //
+    // That is a *new* rule rather than a restatement of the 2026-08-23 one.
+    // Gating and appearing in the body are different decisions: the gate has
+    // always been in-scope-only, because `people.service.ts` pairs its tier test
+    // with `canSeeReasons`, and that ruling argues the status varying between 409
+    // and 201. What leaked was the payload of a refusal that had already fired
+    // correctly.
+    if (!only(visibleForm(withinScope ? match : publishable!))) {
+      continue;
+    }
+
+    kept.push({ match, withinScope });
   }
 
-  return visible;
+  // **Order discloses nothing.** `findCandidates` returns tier-sorted, and a
+  // withheld candidate's tier is withheld precisely because it is derived from
+  // which rule fired — so position beside a candidate whose tier *is* shown
+  // reads the withheld one back. In-scope candidates keep their tier order,
+  // which is what makes the strongest match easiest to see; out-of-scope ones
+  // follow, in name order, which is a function of nothing section 8 protects.
+  const inScopeFirst = kept.filter((entry) => entry.withinScope);
+  const withheld = kept
+    .filter((entry) => !entry.withinScope)
+    .sort((a, b) => compareOrderKeys(orderKeyOf(a.match), orderKeyOf(b.match)));
+
+  return [...inScopeFirst, ...withheld].map((entry) =>
+    describeCandidate(entry.match, entry.withinScope),
+  );
+}
+
+/**
+ * The order key for a withheld candidate: their full name, then their Member ID.
+ *
+ * **Total, which is the property the rule needs and a name alone does not have.**
+ * A withheld candidate is publishable, which requires an equal first *and* last
+ * name — so every withheld candidate in one response already shares a name with
+ * the others, and two carrying no middle name share the whole of it. A comparator
+ * returning 0 there leaves `Array.prototype.sort`'s stability to decide, and what
+ * it preserves is `findCandidates`'s tier order: position reads the withheld tier
+ * back, which is exactly the channel the ordering rule closes. Section 3 states
+ * the tie-break for that reason.
+ *
+ * Both components are things section 8 already publishes to a viewer outside the
+ * scope — the full name and the Member ID are two of the five fields it lists —
+ * so the order remains a function of nothing protected. The Member ID also
+ * encodes nothing and is unique (section 3), which is what makes the key total.
+ *
+ * The name is `fullNameOf`, the same function `describeCandidate` composes the
+ * returned `full_name` with, so the key cannot drift from the name the viewer is
+ * actually shown — the argument for this ordering rests on their being the same
+ * string.
+ */
+function orderKeyOf(match: Match): [string, string] {
+  // `normalizeName`, which is the form section 3 defines for comparison:
+  // casefolded, diacritics stripped, hyphens and apostrophes treated as
+  // separators, spacing collapsed, and the suffixes Jr, Sr, II and III dropped.
+  // Not `comparisonKey`, which removes spacing entirely — that one exists to
+  // decide name *equality* for matching, and is a stronger collapse than an
+  // ordering needs.
+  //
+  // Suffix stripping is a second tie generator beside a shared name with no
+  // middle name: `Pedro Cruz Jr` and `Pedro Cruz Sr` are distinct published names
+  // that collide here. Every such tie is resolved by the Member ID below, which
+  // is why the key has to be total rather than merely usually distinct.
+  //
+  // Codepoint order rather than `localeCompare`, which with no locale resolves
+  // against the host's default — so two API instances could order the same
+  // two names differently, and section 22 makes this ordering client-visible and
+  // `/api/v1` additive-only.
+  return [normalizeName(fullNameOf(match.candidate)), match.candidate.memberId];
+}
+
+function compareOrderKeys(a: [string, string], b: [string, string]): number {
+  if (a[0] !== b[0]) {
+    return a[0] < b[0] ? -1 : 1;
+  }
+
+  if (a[1] === b[1]) {
+    return 0;
+  }
+
+  return a[1] < b[1] ? -1 : 1;
+}
+
+function visibleForm(match: Match): VisibleMatch {
+  return { tier: match.tier, candidateId: match.candidate.id };
 }
 
 /**
@@ -270,9 +430,7 @@ function describeCandidate(match: Match, inScope: boolean): Record<string, unkno
   const identity = {
     id: match.candidate.id,
     member_id: match.candidate.memberId,
-    full_name: [match.candidate.firstName, match.candidate.middleName, match.candidate.lastName]
-      .filter((part) => part !== null && part !== '')
-      .join(' '),
+    full_name: fullNameOf(match.candidate),
     sex: match.candidate.sex,
   };
 

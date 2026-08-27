@@ -437,7 +437,7 @@ Whitespace normalization carries unusual weight here. `Dela Cruz`, `DelaCruz`, a
 
 **Tier 2 candidates need somewhere to appear.** A creation workflow can only ever refuse on Tier 1, so if candidates were surfaced only at the moment of creation, every Tier 2 match would be computed and discarded. They are presented before creation instead, by a pre-flight lookup the encoder makes with the details they have so far — which is also what Section 9 asks for as the first step of registering a VIP: search existing People first.
 
-That lookup reads the whole directory, as Section 8's church-wide search does and for the same reason. What it may say about a candidate depends on whether that candidate is inside the viewer's pastoral scope, and the rule has two parts — of which the first is the one that is easy to get wrong.
+That lookup reads the whole directory, as Section 8's church-wide search does and for the same reason. What it may say about a candidate depends on whether that candidate is inside the viewer's pastoral scope, and the rule has three parts — of which the first is the one that is easy to get wrong, and the third was found only after the first two had each been got right.
 
 **Which candidates appear.** A candidate outside the viewer's scope is surfaced only if they would **still** have matched a subject carrying nothing Section 8 protects — no birthday, no mobile number. Membership out of scope is therefore a function of the names and sex alone.
 
@@ -445,9 +445,23 @@ The test is whether a publishable rule *would* have matched, not which rule actu
 
 This is not a refinement of the field rule below, it is the load-bearing half. **Membership of the list is itself a disclosure**: submit a first name that matches nobody and a surname Section 8 already makes readable, and the only rule that can fire is the one comparing birthdays — so "this person is in the result" *is* "their birthday equals the value I submitted", answered identically every time and writing nothing. No redaction of the returned object reaches that, because the object is not where the answer is.
 
+**Any further narrowing of the list is a membership decision too, and is decided on the match the viewer is entitled to** — the full match in scope, the publishable one out of scope. The refusal below narrows to the candidates it is refusing on, which is a filter on the tier; applied to the full match it decided a stranger's presence from a tier the viewer is never told, and every Tier 1 rule reads a birthday or a mobile number. That the tier was then withheld from the object changes nothing, for the reason the paragraph above gives.
+
+It follows that no publishable match is ever Tier 1, so **an out-of-scope candidate never appears in the refusal at all**. That is a rule of its own and not a restatement of “only a candidate the viewer can be shown in full may gate creation” below: gating and appearing in the body are different decisions, the gate has always been in-scope-only, and the rule below is argued entirely in terms of the response varying between refused and created. What leaked was the payload of a refusal that had already fired correctly.
+
+The predicate that narrows the list is therefore given the tier and the identifier and nothing else. Handing it the whole candidate would leave the next one that is written able to read a birthday, with nothing to fail on it.
+
 **What an appearing candidate carries.** In scope, the tier and the reasons it matched. Out of scope, neither. The reasons name the field, and the tier is derived from which rule fired — with an equal first and last name, Tier 1 means the birthday matched and Tier 2 means it did not, so returning the tier church-wide is the same oracle one step removed.
 
-Both parts apply wherever candidates are returned, including the refusal that asks for a Tier 1 acknowledgement.
+**In what order they appear.** Candidates in scope come first, strongest match first, which is what keeps the one the viewer can actually act on at the top. Withheld candidates follow, ordered by **full name and then Member ID** — both of them fields Section 8 already publishes to a viewer outside the scope. Strongest-first is itself the tier, so a withheld candidate placed above one whose tier *is* shown reads its withheld tier back off its position, and with an equal name that reads back the birthday.
+
+**The tie-break is not a detail, it is the rule.** Name order alone is not a *total* order, and where it ties the sort falls back to whatever order the matcher produced — which is tier order, so the channel reopens exactly where it is most reachable. A withheld candidate is one a publishable rule matched, and that requires an equal first **and** last name, so every withheld candidate in a response already shares a name with the others; two carrying no middle name share the whole of it. **And the normalized form generates ties of its own**, which is the half that is easy to miss: it drops the suffixes, so `Pedro Cruz Jr` and `Pedro Cruz Sr` are two visibly distinct published names that collide on the key — and they are publishable together for the same reason. Member ID makes the key total, encodes nothing, and is already disclosed (Section 3, Member ID generation; Section 8).
+
+Compare the name in **the normalized form the matching rules above define**, all of it, rather than by the host's default collation, which can differ between two instances serving the same API. Not the stricter form those rules use to decide name *equality*, which removes spacing entirely; that one is a stronger collapse than an ordering needs. The form is defined once above and is deliberately not restated here — a partial restatement is what produced the omission this paragraph now names.
+
+All three parts apply wherever candidates are returned, including the refusal that asks for a Tier 1 acknowledgement.
+
+**Each of the three was found only after the one before it had been closed**, and every time by the same mistake: reasoning about what the response *contained* rather than what the response was a *function of*. The fields were redacted and the tier still answered; the tier was withheld and membership still answered; membership was scoped and the filter and the ordering still answered. Treat any new decision this list is subjected to — a narrowing, a sort, a page boundary, a count — as a disclosure until it is shown to be a function of what the viewer may already know.
 
 **Only a candidate the viewer can be shown in full may gate creation**, which means one inside their pastoral scope. Two reasons, and the second is the one that is easy to miss.
 

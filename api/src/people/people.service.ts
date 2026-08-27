@@ -149,7 +149,7 @@ export class PeopleService {
         await this.duplicates.visibleDuplicatesFor(
           subject,
           canSeeReasons,
-          (match) => match.tier === 1 && !acknowledged.has(canonicalId(match.candidate.id)),
+          (match) => match.tier === 1 && !acknowledged.has(canonicalId(match.candidateId)),
         ),
       );
     }

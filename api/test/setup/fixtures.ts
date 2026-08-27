@@ -47,6 +47,27 @@ export async function createPerson(
     firstName: string;
     network: NetworkName;
     lastName?: string;
+    /**
+     * Optional because most cases do not care, and because two that do care very
+     * much: the duplicate matcher tiers on an equal birthday, and the section 8
+     * redaction is asserted by two candidates differing in nothing else. A
+     * shared default would make those cases unwritable.
+     *
+     * **`null` and omission differ here**, deliberately: omitted takes the shared
+     * default, and an explicit `null` is a Person with no birthday, which
+     * section 3 permits and which drops every Tier 1 rule that reads one. The
+     * distinction is spelled out because this project has already shipped one
+     * defect from `@IsOptional()` treating the two alike.
+     */
+    birthDate?: string | null;
+    /**
+     * The one name field the matcher never compares. It tiers on the first and
+     * last names, the birthday and the mobile number; sex only annotates
+     * (section 3). So this is how a case gives two otherwise identical candidates
+     * a distinguishable `full_name` to be ordered by, without changing which of
+     * them match or at what tier.
+     */
+    middleName?: string;
     startedAt?: Date;
     archived?: boolean;
   },
@@ -59,8 +80,9 @@ export async function createPerson(
     .values({
       id: randomUUID(),
       first_name: options.firstName,
+      middle_name: options.middleName ?? null,
       last_name: options.lastName ?? 'Testfixture',
-      birth_date: '1985-06-15',
+      birth_date: options.birthDate === undefined ? '1985-06-15' : options.birthDate,
       sex,
       civil_status: 'SINGLE',
     })
