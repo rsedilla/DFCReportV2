@@ -80,7 +80,7 @@ export class CredentialsService {
         );
 
       // Through `people`, which owns `persons` (section 2).
-      const person = await this.people.forDecisionWithin(this.db, account.person_id);
+      const person = await this.people.forDecision(account.person_id);
 
       await this.email.send({
         kind: 'PASSWORD_RESET',

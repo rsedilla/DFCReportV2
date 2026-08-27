@@ -132,3 +132,37 @@ jobs:
 
       - name: Build
         run: npm run build
+
+      # SKILL.md section 23 commits the web application to WCAG 2.2 Level AA, and
+      # CLAUDE.md makes that checkable in three parts. The palette check runs in
+      # `lint` above and needs no browser. This is the second: axe-core over every
+      # route, in both themes, with a violation failing the build.
+      #
+      # It arrives with the first real screens, which is the condition CLAUDE.md
+      # attached to it -- a browser harness over a placeholder page checks nothing.
+      # The third part cannot be automated at all and is stated by the pull request
+      # that adds a screen: keyboard operable end to end with focus visible and
+      # never entirely obscured (2.4.7, 2.4.11), targets at least 24 by 24 CSS
+      # pixels (2.5.8), and paste and password managers unobstructed on the
+      # sign-in path (3.3.8).
+      #
+      # No database and no API process: the harness intercepts `/api/v1` in the
+      # browser (`web/e2e/mock-api.ts`). axe inspects rendered DOM and cannot tell
+      # where the JSON came from, so a full stack would buy nothing here and cost a
+      # service dependency in a job that has to stay fast enough to keep.
+      - name: Install browser
+        run: npx playwright install --with-deps chromium
+
+      # Two suites: axe-core over every route in both themes, and the section 6
+      # refresh-token rules, which are invisible from the screen -- a sign-out
+      # that revokes nothing looks exactly like one that works.
+      - name: Browser tests (axe-core, and the section 6 session rules)
+        run: npm run test:browser
+
+      - name: Upload failure traces
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-traces
+          path: web/test-results/
+          retention-days: 7

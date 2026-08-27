@@ -56,8 +56,14 @@
   --color-accent: var(--accent);
   --color-field-invalid: var(--field-invalid);
 
+  /*
+   * `--font-inter` is minted by `next/font` in `app/layout.tsx` and self-hosted
+   * from this origin. The rest of the stack is what renders if that face never
+   * arrives, which is a leader on a poor connection rather than a hypothetical.
+   */
   --font-sans:
-    system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    var(--font-inter), system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial,
+    sans-serif;
 }
 
 :root {

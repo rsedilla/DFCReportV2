@@ -1125,6 +1125,12 @@ One account may hold several valid sessions simultaneously — a leader recordin
 
 Signing out on one device ends that session only.
 
+**Every tab of one browser profile is one session, not several.** They share the credential, because `localStorage` is scoped to the origin rather than to the tab, and signing out in one tab ends the session in all of them — which is what "this device" means to the person holding it.
+
+It follows that a browser client must **serialize refresh across tabs**, and that this is a requirement rather than an optimisation. Rotation makes the previous token spent, so two tabs each reading the stored token and presenting it independently produces a presentation that lands *after* another has committed — sequential, so the exemption below for simultaneous presentation does not reach it, and the reuse signal revokes every session on the account because somebody had two tabs open. An in-process guard does not close this: it is per JavaScript context, and the credential is shared across them. The web client uses a Web Lock; anything giving the same guarantee is equivalent.
+
+Per-tab credentials were considered and rejected. They remove the race by giving each tab its own chain, and they make opening the application from a bookmark in a new tab demand a password every time — while duplicating a tab copies session-scoped storage anyway, which reintroduces the race with none of the protection.
+
 Revocation, by contrast, is account-wide. Where account access is disabled — at archive, at merge, or by an authorized administrative action — **every** refresh token for that account is revoked and every active session becomes invalid immediately, on all devices. Access already granted must not outlive the revocation by the remaining life of an access token that happens to be long; keep access-token lifetime short enough that immediate means immediate in practice.
 
 ### What a password must be
@@ -3401,6 +3407,14 @@ idempotency_keys
 
 The two are separate codes deliberately. They demand opposite client behaviour — never retry, and retry shortly — and clients branch on the code alone (above), so a single code covering both would send a client into an endless retry of a permanent conflict.
 
+**A key belongs to a body, not to a screen or an attempt.** A client mints one key and holds it for as long as what it will send is unchanged; the moment the body changes, that is a different logical write and takes a new key. Only a bare retry of an unchanged body reuses one.
+
+This follows from the two rules above and is stated because getting it backwards is not a degraded retry — it is a dead end. A stored 4xx ends that key's usefulness for anything else, so a client that holds one key across a change to its own request meets `IDEMPOTENCY_KEY_REUSED`, which is permanent, with nothing it can do next.
+
+The duplicate-acknowledgement flow (Section 3) is where this bites first and hardest, and it is worth naming because the sequence looks like one write and is two. The refusal asking for acknowledgement is a 409, so it is **stored** against the key. The resubmission adds `acknowledged_duplicate_ids` — a different body — so reusing that key is refused permanently and the Person can never be created, which is precisely the block Section 3 says must never happen. Any refusal that leaves a field to be corrected behaves the same way: a `SCOPE_DENIED` on the pastoral leader, a cross-Network refusal, a validation failure on one field.
+
+Three client surfaces consume this API and none of the native ones can be force-updated (Section 2), so this is written here rather than left for each to rediscover.
+
 This is required from the first write endpoint, not added later. A leader recording attendance on an unreliable connection will retry, and a retry must never create a second record.
 
 #### Filtering and sorting
@@ -3464,6 +3478,12 @@ This reaches names, not colour. Colour for structure, hierarchy and legibility i
 The name is the whole ruling. `field-invalid` describes the state of an input — this field does not yet hold something the system can accept — and says nothing about the person filling it in or about any figure. `error` and `danger` were rejected for the reason the paragraph above gives: a token is used by whoever writes the next screen, on whatever it seems to fit, and a token called `error` will eventually colour a Cell that reported `NOT_HELD`. `field-` is a prefix that does not travel, because a Cell is not a field.
 
 This is a different question from judging a leader, and it is settled narrowly on purpose. Validation is a statement about an input, made to the person who just typed it, and resolved by them in the next few seconds. Sections 13, 17 and 19 are about durable judgements rendered about other people, and nothing here touches them: no meeting status, no coverage figure, and no leader is ever rendered in `field-invalid`, whatever it would seem to fit.
+
+**`field-invalid` follows the field, not the error code.** Where the form does not render the field the failure names, there is nothing on screen to mark invalid and the message is form-level, carrying no colour.
+
+This is the rule for a case that arises constantly and has an obvious wrong answer. Section 22's error envelope carries `details.field`, and a client that keys the colour on that field alone will paint messages red that point at nothing the reader can fix — a reset link that expired answers `VALIDATION_FAILED` with `field: 'token'`, on a screen whose only input is a new password, and the password is fine. `details.field` is a hint for binding a message to an input; where there is no such input, the hint does not apply and the failure is not a statement that anything was mistyped.
+
+The test is therefore what the message is to the person reading it, which is the same test the name itself was settled on. A failure that is not a refusal of something they typed into the form in front of them carries no colour, whatever code it arrived under. That reaches a server error, a dropped connection, an expired link, and a session that ended while the page was open.
 
 Two constraints come with it, and both are conformance rather than taste:
 

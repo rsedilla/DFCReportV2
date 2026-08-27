@@ -3790,6 +3790,154 @@ Also: `isRoot` had no test, so it could have been inverted with 642 tests green;
 batch that added a second; and a test comment quoted `account_roles_period_ordered`
 as `>` when it is `>=`.
 
+### 2026-08-27 — What the web client does with a refresh token, pending three rulings
+
+Stage 2's screens are the first code to hold a refresh token, and section 6 does not
+reach three of the situations one is actually held in. Two `architecture-guardian`
+passes found the same thing from opposite directions: the first that the client
+discarded a live credential on any failure, the second that the fix re-presented one
+up to three times a page load. Both are section 6 questions the specification does
+not answer, so what is recorded here is the **interim client behaviour**, and the
+questions are listed as open below rather than settled in a component.
+
+`SKILL.md` is deliberately **not** amended. These are not rules yet, and writing them
+into the specification would settle by implementation what the log says must be
+settled by decision — the failure this file's own preamble names in one line.
+
+**All three questions this entry raised are now settled**, and each is recorded
+under its own heading below: tabs are one session (§6), `field-invalid` follows the
+field rather than the error code (§23), and — last, because it needed the API
+change this entry could only scope — a re-presentation whose replacement was never
+used is a retry rather than reuse (§6). All three are in `SKILL.md`.
+
+The interim client behaviour described here therefore stops being interim. The client
+still halts on a presentation whose outcome is unknown, and *Try again* is now safe
+rather than a risk somebody is asked to weigh: inside the window, the server
+recognises the replay as the retry it is.
+
+**A presentation whose outcome is unknown halts the client.** `fetch` rejects
+identically whether a request never arrived or arrived, rotated the row, and lost the
+response. The second makes the stored token spent, so presenting it again is section
+6's reuse signal and revokes every session on the account. The client therefore
+neither discards the token — section 23 makes an unreliable connection the expected
+case, and a tunnel is not a revoked session — nor presents it again on its own
+initiative. It stops and says so, and only a person pressing *Try again* presents it
+a second time. That makes the risk theirs to take knowingly, which is the most a
+client can honestly do while the question is open.
+
+**Refresh is serialized per origin, by a Web Lock.** `localStorage` is shared across
+tabs while an in-flight guard is per JavaScript context, so two tabs opening together
+each read one token and the later POST lands after the earlier has rotated —
+sequential, so the 2026-08-21 simultaneous exemption does not cover it. Whether two
+tabs *should* be one session is open; the lock does not decide it, because tabs
+already share the credential. It stops the sharing being unsafe.
+
+**A refusal discards; a failure does not.** A 401 means the credential is spent,
+revoked or expired. A `VALIDATION_FAILED` means the stored value is not a token at
+all, and is discarded too — otherwise `hasStoredSession()` keeps reporting a session
+that can never be renewed and nothing redirects to sign-in. A rate limit or a 5xx
+refused the attempt without spending the token, so it is kept.
+
+**Section 23's `field-invalid` is decided from the error code, in one place.** Three
+codes reach a screen without being a refusal of anything typed: `UNAUTHENTICATED` on
+any request that is not a credential form, a `VALIDATION_FAILED` naming a field the
+form does not render — `field: 'token'` for a spent link — and
+`DUPLICATE_ACKNOWLEDGEMENT_REQUIRED`, which `api-error.ts` says in terms is not a
+validation code precisely so that a client does not render it as a field error. All
+three had acquired the colour by being rendered through the same component, which is
+the drift section 23 predicts: a token is used by whoever writes the next screen, on
+whatever it seems to fit.
+
+### 2026-08-27 — Every tab of one browser profile is one session
+
+Ruled the day it was raised. `SKILL.md` §6 tracked a refresh token "per device or per
+session" and §2 requires several concurrent sessions per account, and neither said
+which a second browser tab is.
+
+**One.** Tabs share the credential because `localStorage` is scoped to the origin
+rather than to the tab, and signing out in one tab ends the session in all of them,
+which is what "this device" means to the person holding it.
+
+The consequence is the part worth writing down: a browser client **must** serialize
+refresh across tabs, as a requirement and not an optimisation. Rotation makes the
+previous token spent, so two tabs each reading the stored token and presenting it
+independently produces a presentation landing *after* another has committed —
+sequential, so the 2026-08-21 exemption does not reach it, and §6 revokes every
+session on the account because somebody had two tabs open. An in-process guard cannot
+close it, being per JavaScript context while the credential is shared across them.
+The web client uses a Web Lock; anything giving the same guarantee is equivalent.
+
+Per-tab credentials were rejected rather than merely not chosen. They remove the race
+by giving each tab its own chain, and they make opening the application from a
+bookmark in a new tab demand a password every time — while duplicating a tab copies
+session-scoped storage anyway, reintroducing the race with none of the protection.
+
+**The residual gap is where `navigator.locks` is absent**, and it closes for free if
+the transit-failure item below is answered as proposed: with a server-side grace
+window, a cross-tab race produces exactly the lost-response signature — the previous
+token replayed, its replacement never used — and stops being a revocation event at
+all. Two questions, one answer.
+
+Written to `SKILL.md` §6, and pinned by a two-tab case in
+`web/e2e/session.spec.ts` verified against a client with the lock removed.
+
+### 2026-08-27 — `field-invalid` follows the field, not the error code
+
+The question §23 left open once a real form existed. §22's envelope carries
+`details.field`, and a client keying the colour on that alone paints messages red
+that point at nothing the reader can fix.
+
+**Where the form does not render the field the failure names, the message is
+form-level and carries no colour.** A reset link that expired answers
+`VALIDATION_FAILED` with `field: 'token'` on a screen whose only input is a new
+password, and the password is fine.
+
+`details.field` is a hint for binding a message to an input. Where there is no such
+input the hint does not apply, and the failure is not a statement that anything was
+mistyped. The test is what the message is to the person reading it — which is the
+test the token's name was settled on in the first place — so it reaches a server
+error, a dropped connection, an expired link, and a session that ended while the page
+was open, whatever code each arrived under.
+
+Chosen partly because it is the cheapest to reverse: one predicate in
+`web/lib/messages.ts`, no schema and no API change, so if it reads wrong on a real
+screen it flips in a line. Written to `SKILL.md` §23.
+
+### 2026-08-27 — An idempotency key belongs to a body, not to an attempt
+
+Escalated by the second review of the people screens, and it is a rule §22
+implied and never stated — which is how the first fix for it inverted into a
+permanent block on creating a Person.
+
+**A client holds one key for as long as what it will send is unchanged. A changed
+body is a different logical write and takes a new key. Only a bare retry of an
+unchanged body reuses one.**
+
+The reasoning is entirely inside §22 already: a 4xx is stored against the key,
+and the same key with a different body is `IDEMPOTENCY_KEY_REUSED`, which §22
+makes permanent and never to be retried. Put together, a client that holds one
+key across a change to its own request locks itself out with nothing it can do
+next.
+
+**The duplicate-acknowledgement flow is where it bites first, and it looks like
+one write when it is two.** The refusal asking for acknowledgement is a 409, so
+it is stored; the resubmission adds `acknowledged_duplicate_ids`, so the
+fingerprint differs and the second request is refused for ever. The Person can
+never be created — which is exactly the block §3 says must never happen, and
+which the 2026-08-23 ruling calls worse than the duplicate it guards against.
+
+Every refusal that leaves something to correct behaves the same way: a
+`SCOPE_DENIED` on the pastoral leader, a cross-Network refusal, a validation
+failure on one field. The client mints a new key on each of them.
+
+**Recorded as a rule rather than a fix because it is not discoverable from a
+green test suite.** The defect was invisible to 79 browser tests: the mock
+answers 409 to every POST and models no idempotency store, so the second request
+never reaches the outcome that fails. Three client surfaces consume this API and
+the native ones cannot be force-updated, so each would have rebuilt it.
+
+Written to `SKILL.md` §22, checked by grep rather than asserted.
+
 ### 2026-08-27 — A re-presentation whose replacement was never used is a retry
 
 Raised by the first web screens, which are the first code to hold a refresh token.
@@ -3840,9 +3988,15 @@ Written to `SKILL.md` §6, checked by grep rather than asserted.
 
 ### Open — awaiting a ruling
 
-**One item awaits a ruling and blocks Stage 5. Eighteen other things are unsettled,
-none of them blocking. They are listed at the end, so this section is the whole of
-what is open.**
+**One item awaits a ruling, and it blocks Stage 5. Eighteen other things are
+unsettled, none of them blocking. They are listed at the end, so this section is the
+whole of what is open.**
+
+The refresh-token question that stood here since 2026-08-27 — what a client does
+with a presentation whose outcome is unknown — left this list the same week, settled
+by the ruling above: a rotated token presented again, whose replacement was never
+used, is a retry rather than reuse, inside a bounded window. The client behaviour it
+describes stops being interim with it.
 
 Nine items that stood here on 2026-08-22 were settled that day and are recorded
 above. Seven were Stop Conditions for Stage 2, and the last two were opened and
