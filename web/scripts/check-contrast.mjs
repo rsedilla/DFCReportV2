@@ -60,6 +60,12 @@ const TEXT_PAIRS = [
   ['muted', 'raised'],
   ['accent', 'surface'],
   ['accent', 'raised'],
+  // A filled button puts text *on* accent rather than beside it, which is a
+  // position no pair here covered. `surface` is the foreground for it in both
+  // themes, and the pair is listed because the palette comment says a
+  // combination nobody lists is one this check cannot see: `bg-accent text-ink`
+  // is 2.14:1 and would have passed lint unnoticed.
+  ['surface', 'accent'],
 ];
 
 /** The boundary of a control. WCAG 1.4.11 asks 3:1. */

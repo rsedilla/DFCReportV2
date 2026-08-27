@@ -13,16 +13,24 @@
     "start": "next start",
     "lint": "eslint . && node scripts/check-client-boundary.mjs && node scripts/check-ui-dependencies.mjs && node scripts/check-contrast.mjs",
     "typecheck": "tsc --noEmit",
+    "test:a11y": "playwright test",
     "check:boundary": "node scripts/check-client-boundary.mjs",
     "check:ui-deps": "node scripts/check-ui-dependencies.mjs",
     "check:contrast": "node scripts/check-contrast.mjs"
   },
   "dependencies": {
+    "@radix-ui/react-label": "^2.1.15",
+    "@tanstack/react-query": "^5.102.6",
+    "clsx": "^2.1.1",
+    "lucide-react": "^1.34.0",
     "next": "^16.3.1",
     "react": "^19.2.8",
-    "react-dom": "^19.2.8"
+    "react-dom": "^19.2.8",
+    "tailwind-merge": "^3.6.0"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.13.0",
+    "@playwright/test": "^1.62.1",
     "@tailwindcss/postcss": "^4.3.3",
     "@types/node": "^22.20.1",
     "@types/react": "^19.2.18",
