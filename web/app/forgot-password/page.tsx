@@ -5,10 +5,10 @@ import { useState } from 'react';
 
 import { AuthCard } from '@/components/auth-card';
 import { Button } from '@/components/ui/button';
+import { FailureNotice } from '@/components/ui/failure-notice';
 import { Field } from '@/components/ui/field';
-import { FormError } from '@/components/ui/form-error';
 import { apiRequest } from '@/lib/api-client';
-import { messageFor } from '@/lib/messages';
+import { describeFailure, type Failure } from '@/lib/messages';
 
 /**
  * Requesting a password reset link (SKILL.md section 6).
@@ -29,13 +29,13 @@ import { messageFor } from '@/lib/messages';
  */
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState('');
-  const [error, setError] = useState<string | null>(null);
+  const [failure, setFailure] = useState<Failure | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [sent, setSent] = useState(false);
 
   async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setError(null);
+    setFailure(null);
     setSubmitting(true);
 
     try {
@@ -45,7 +45,7 @@ export default function ForgotPasswordPage() {
       });
       setSent(true);
     } catch (cause) {
-      setError(messageFor(cause, 'Could not send the link. Try again shortly.'));
+      setFailure(describeFailure(cause, 'Could not send the link. Try again shortly.'));
       setSubmitting(false);
     }
   }
@@ -73,7 +73,7 @@ export default function ForgotPasswordPage() {
         </div>
       ) : (
         <form onSubmit={onSubmit} className="flex flex-col gap-5" noValidate>
-          <FormError>{error}</FormError>
+          <FailureNotice failure={failure} />
 
           <Field
             label="Email address"

@@ -5,10 +5,10 @@ import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 
 import { AuthCard } from '@/components/auth-card';
-import { FormError } from '@/components/ui/form-error';
 import { Button } from '@/components/ui/button';
+import { FailureNotice } from '@/components/ui/failure-notice';
 import { Field } from '@/components/ui/field';
-import { messageFor } from '@/lib/messages';
+import { describeFailure, type Failure } from '@/lib/messages';
 import { signIn } from '@/lib/session';
 
 /**
@@ -34,19 +34,21 @@ export default function SignInPage() {
   const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [error, setError] = useState<string | null>(null);
+  const [failure, setFailure] = useState<Failure | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setError(null);
+    setFailure(null);
     setSubmitting(true);
 
     try {
       await signIn(email, password, 'Web browser');
       router.replace('/session');
     } catch (cause) {
-      setError(messageFor(cause, 'That email address and password do not match an account.'));
+      setFailure(
+        describeFailure(cause, 'That email address and password do not match an account.'),
+      );
       setSubmitting(false);
     }
   }
@@ -65,7 +67,7 @@ export default function SignInPage() {
       }
     >
       <form onSubmit={onSubmit} className="flex flex-col gap-5" noValidate>
-        <FormError>{error}</FormError>
+        <FailureNotice failure={failure} />
 
         <Field
           label="Email address"

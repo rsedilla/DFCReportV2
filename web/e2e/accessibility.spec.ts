@@ -125,15 +125,38 @@ for (const theme of THEMES) {
  * "inline" exception; nothing in these screens relies on that, so the exception
  * is not implemented and every target is measured.
  */
+/**
+ * Each route, the control that proves it has finished rendering, and how many
+ * targets it owns.
+ *
+ * **The count is stated per route rather than asserted to be non-zero**, and
+ * that is the whole of what makes this test non-vacuous. The skip link lives in
+ * the root layout, so it matches on *every* route: a `> 0` guard is satisfied by
+ * the layout alone and can never fail. Worse, `/session` renders `Loading…` with
+ * no controls until `RequireSession` settles, so a sweep that measured
+ * immediately would have passed on the skip link and never measured either
+ * sign-out button.
+ *
+ * Targets are counted inside `<main>`, which excludes the skip link; it is
+ * measured separately below, in the state it is offered in.
+ */
+const TARGET_SWEEP = [
+  { route: '/sign-in', settle: 'Sign in', minimum: 4 },
+  { route: '/forgot-password', settle: 'Email me a link', minimum: 3 },
+  { route: '/activate?token=example', settle: 'Activate account', minimum: 2 },
+  { route: '/session', settle: 'Sign out on every device', minimum: 2 },
+] as const;
+
 test('every interactive target meets the 24px minimum', async ({ page }) => {
   await mockSignedIn(page);
 
-  for (const route of ['/sign-in', '/forgot-password', '/activate?token=t', '/session']) {
+  for (const { route, settle, minimum } of TARGET_SWEEP) {
     await page.goto(route);
+    await expect(page.getByRole('button', { name: settle })).toBeVisible();
 
-    const targets = page.locator('button, a[href], input, select, textarea');
+    const targets = page.locator('main button, main a[href], main input, main select, main textarea');
     const count = await targets.count();
-    expect(count, `${route} renders no interactive targets`).toBeGreaterThan(0);
+    expect(count, `${route} renders fewer targets than it owns`).toBeGreaterThanOrEqual(minimum);
 
     for (let index = 0; index < count; index += 1) {
       const target = targets.nth(index);
@@ -161,6 +184,31 @@ test('every interactive target meets the 24px minimum', async ({ page }) => {
 });
 
 /**
+ * The skip link, measured on its own because it is the one target that lives
+ * outside `<main>` and the one whose size depends on being focused.
+ *
+ * It is `sr-only` until focus reaches it. Every visual class sits behind
+ * `focus:` deliberately: a padding utility written outside the variant overrides
+ * `sr-only`'s `padding: 0` while the clip stays, which left an 18px box in the
+ * layout rather than a hidden one. That is what this pins.
+ */
+test('the skip link is hidden until focused, and a full target once it is', async ({ page }) => {
+  await page.goto('/sign-in');
+
+  const skipLink = page.getByRole('link', { name: 'Skip to main content' });
+
+  const hidden = await skipLink.boundingBox();
+  expect(hidden, 'the skip link has no box').not.toBeNull();
+  expect(hidden!.height, 'the skip link is not visually hidden before focus').toBeLessThanOrEqual(2);
+
+  await skipLink.focus();
+
+  const shown = await skipLink.boundingBox();
+  expect(shown!.height, 'the focused skip link is below the 24px minimum').toBeGreaterThanOrEqual(24);
+  expect(shown!.width, 'the focused skip link is below the 24px minimum').toBeGreaterThanOrEqual(24);
+});
+
+/**
  * The guard that keeps "every route" true.
  *
  * Without it, adding a route adds a screen nothing scans, and the commitment
@@ -182,7 +230,11 @@ test('every route in the app directory is scanned', async () => {
         // A route group `(name)` organises files without appearing in the URL.
         const segment = /^\(.*\)$/.test(entry.name) ? prefix : `${prefix}/${entry.name}`;
         found.push(...(await routesUnder(join(directory, entry.name), segment)));
-      } else if (/^page\.tsx?$/.test(entry.name)) {
+        // Every extension Next resolves, not only the two this repository
+        // happens to use. A `page.js` added later would otherwise emit no route,
+        // fail no assertion, and never be scanned — the one way this walker can
+        // fail *open*.
+      } else if (/^page\.(tsx|ts|jsx|js|mjs)$/.test(entry.name)) {
         found.push(prefix === '' ? '/' : prefix);
       }
     }

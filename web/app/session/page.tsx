@@ -5,8 +5,8 @@ import { useRouter } from 'next/navigation';
 
 import { RequireSession } from '@/components/require-session';
 import { Button } from '@/components/ui/button';
-import { FormError } from '@/components/ui/form-error';
-import { messageFor } from '@/lib/messages';
+import { FailureNotice } from '@/components/ui/failure-notice';
+import { describeFailure } from '@/lib/messages';
 import { authenticatedRequest, signOut, signOutEverywhere } from '@/lib/session';
 
 interface GrantSummary {
@@ -83,7 +83,15 @@ function SessionDetail() {
         <p className="text-muted mt-8 text-sm">Loading your session…</p>
       ) : session.isError ? (
         <div className="mt-8">
-          <FormError>{messageFor(session.error, 'Your session could not be loaded.')}</FormError>
+          {/*
+            A failed page load is not a refusal of anything typed, so it carries
+            no `field-invalid` (section 23). `describeFailure` decides that from
+            the error code rather than leaving it to whichever component renders
+            the message.
+          */}
+          <FailureNotice
+            failure={describeFailure(session.error, 'Your session could not be loaded.')}
+          />
           <Button className="mt-4" variant="secondary" onClick={() => session.refetch()}>
             Try again
           </Button>

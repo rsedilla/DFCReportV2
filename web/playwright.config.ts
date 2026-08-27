@@ -1,11 +1,17 @@
 import { defineConfig, devices } from '@playwright/test';
 
 /**
- * The browser harness that discharges SKILL.md section 23.
+ * The browser harness. It carries two suites, and only the first is section 23's.
  *
- * `CLAUDE.md` (Definition of Done, Accessibility) commits to axe-core running in
- * CI over every route from the first real screen, with a violation failing the
- * build. This is that, and it arrives with the screens rather than after them.
+ * `e2e/accessibility.spec.ts` discharges SKILL.md section 23: `CLAUDE.md`
+ * (Definition of Done, Accessibility) commits to axe-core running in CI over
+ * every route from the first real screen, with a violation failing the build.
+ * This is that, and it arrives with the screens rather than after them.
+ *
+ * `e2e/session.spec.ts` pins two section 6 rules about refresh tokens that no
+ * amount of looking at the screen would reveal — a sign-out that revokes nothing
+ * and a dropped connection that discards a live credential both look exactly
+ * like an application that works.
  *
  * **It runs against the production build, not `next dev`.** Development mode
  * injects overlays and error affordances of its own, and an accessibility check

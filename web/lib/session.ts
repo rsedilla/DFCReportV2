@@ -8,15 +8,31 @@
  *
  * That last sentence is the whole design constraint. A client that accidentally
  * presents one token twice in sequence signs its user out everywhere, and the
- * user has done nothing wrong. So refreshing is funnelled through a single
- * in-flight promise (`inFlight` below) and there is no path that reads the
- * stored token and posts it without going through that funnel.
+ * user has done nothing wrong.
  *
  * The 2026-08-21 ruling makes *simultaneous* presentation harmless — one caller
  * wins the rotation and the other is refused, with no revocation. That is the
- * safety net rather than the design: it covers two devices racing, not one
- * client racing itself, and React strict mode double-invokes effects in
- * development, which is exactly how a client races itself.
+ * safety net rather than the design, and it covers only the simultaneous case:
+ * a presentation that lands *after* another has committed is the reuse signal,
+ * whatever the client intended.
+ *
+ * **So the stored token is read only while holding a lock, never before.** Two
+ * layers, because they close different windows:
+ *
+ * - `inFlight` collapses concurrent refreshes **within one tab**, so several
+ *   requests meeting a 401 together make one round trip.
+ * - A **Web Lock serializes across tabs**, which `inFlight` cannot reach:
+ *   `localStorage` is shared per origin while `inFlight` is per JavaScript
+ *   context. Without it, two tabs each read the same token and the second POST
+ *   arrives after the first has rotated — sequential at the server, and
+ *   therefore account-wide revocation for having two tabs open.
+ *
+ * Every read of the stored token that precedes a network call happens *inside*
+ * that lock, which is what makes the pair sufficient rather than merely
+ * well-intentioned. An earlier version of this file claimed a funnel and then
+ * read the token in `signOut` before the funnel ran, which sent a token that had
+ * already been rotated — revoking nothing, while the person was shown a
+ * signed-out screen.
  *
  * **The access token is held in memory and never persisted; the refresh token
  * is in `localStorage`.** A pure client has no server of its own (section 2), so
@@ -37,6 +53,9 @@ export interface SessionTokens {
 
 const REFRESH_STORAGE_KEY = 'dfc.refresh_token';
 
+/** Names the cross-tab lock. Scoped to this origin by the Web Locks API. */
+const SESSION_LOCK = 'dfc.session';
+
 /**
  * Held in memory only, and deliberately not exported. Everything that needs it
  * goes through `authenticatedRequest`, so there is no call site that can send it
@@ -44,8 +63,19 @@ const REFRESH_STORAGE_KEY = 'dfc.refresh_token';
  */
 let accessToken: string | null = null;
 
-/** The single in-flight refresh. See the note at the top of the file. */
+/** The single in-flight refresh for *this tab*. See the note at the top. */
 let inFlight: Promise<string> | null = null;
+
+/**
+ * The fallback funnel, used where the Web Locks API is absent.
+ *
+ * It serializes within this tab only, which is exactly what this file did before
+ * the lock existed. It is a narrower guarantee and is not silently equivalent:
+ * where `navigator.locks` is missing, two tabs can still race, and that is the
+ * open question recorded in `CLAUDE.md` rather than something this promise
+ * chain closes.
+ */
+let fallbackChain: Promise<unknown> = Promise.resolve();
 
 const subscribers = new Set<() => void>();
 
@@ -61,6 +91,27 @@ export function subscribe(listener: () => void): () => void {
   return () => {
     subscribers.delete(listener);
   };
+}
+
+/**
+ * Run `work` with exclusive use of this origin's session credential.
+ *
+ * Web Locks are not reentrant, so nothing called from inside `work` may call
+ * this again. `refreshWithinLock` exists for that reason: it is the body of a
+ * refresh with no lock of its own.
+ */
+async function withSessionLock<T>(work: () => Promise<T>): Promise<T> {
+  if (typeof navigator !== 'undefined' && navigator.locks) {
+    return navigator.locks.request(SESSION_LOCK, work) as Promise<T>;
+  }
+
+  const run = fallbackChain.then(work, work);
+  // The chain must not reject, or every later caller inherits the rejection.
+  fallbackChain = run.then(
+    () => undefined,
+    () => undefined,
+  );
+  return run;
 }
 
 function readStoredRefreshToken(): string | null {
@@ -132,38 +183,54 @@ export async function signIn(
 }
 
 /**
- * Exchange the stored refresh token for a new pair, at most once at a time.
+ * One rotation. **The caller must already hold the session lock.**
  *
- * Every concurrent caller awaits the same promise and receives the same access
- * token. Two posts of one refresh token would be the reuse signal described at
- * the top of this file.
+ * The stored token is read here rather than by the caller, so that what is
+ * presented is whatever is current at the moment the lock was acquired — which
+ * is the point of taking it. A token read before the lock may have been rotated
+ * by another tab while this one waited.
+ */
+async function refreshWithinLock(): Promise<string> {
+  const stored = readStoredRefreshToken();
+  if (stored === null) {
+    throw new Error('No stored session.');
+  }
+
+  try {
+    const tokens = await apiRequest<SessionTokens>('/api/v1/auth/refresh', {
+      method: 'POST',
+      body: { refresh_token: stored },
+    });
+    return adopt(tokens);
+  } catch (cause) {
+    // **Only a refusal discards the credential.** A refused refresh token cannot
+    // be retried and cannot be repaired: the stored value is spent, revoked or
+    // expired, and keeping it would mean presenting it again, which is the one
+    // thing section 6 makes expensive.
+    //
+    // A transport failure is a different fact and is not treated as one. Section
+    // 23 makes an unreliable connection the expected case for this application,
+    // and discarding a live credential because a train went into a tunnel signs
+    // a leader out of a session the server never ended.
+    if (cause instanceof ApiRequestError && cause.status === 401) {
+      forgetSession();
+    }
+    throw cause;
+  }
+}
+
+/**
+ * Exchange the stored refresh token for a new pair, at most once at a time
+ * within this tab and at most once at a time across tabs.
  */
 function refreshSession(): Promise<string> {
   if (inFlight) {
     return inFlight;
   }
 
-  const stored = readStoredRefreshToken();
-  if (stored === null) {
-    return Promise.reject(new Error('No stored session.'));
-  }
-
-  const attempt = apiRequest<SessionTokens>('/api/v1/auth/refresh', {
-    method: 'POST',
-    body: { refresh_token: stored },
-  })
-    .then(adopt)
-    .catch((cause: unknown) => {
-      // A refused refresh token cannot be retried and cannot be repaired: the
-      // stored value is spent, revoked, or expired. Keeping it would mean
-      // presenting it again on the next request, which is the one thing section
-      // 6 makes expensive.
-      forgetSession();
-      throw cause;
-    })
-    .finally(() => {
-      inFlight = null;
-    });
+  const attempt = withSessionLock(refreshWithinLock).finally(() => {
+    inFlight = null;
+  });
 
   inFlight = attempt;
   return attempt;
@@ -204,6 +271,15 @@ export async function authenticatedRequest<T>(
 /**
  * End this device's session, and no other (section 6).
  *
+ * **The refresh token is read inside the lock, after the access token is
+ * settled.** `POST /auth/logout` revokes the row it is handed only while that
+ * row is still live — `revokeRefreshToken` carries `revoked_at is null`
+ * deliberately, so that a sign-out cannot touch a token that was already
+ * rotated. So a token read before a refresh revokes *nothing*: the replacement
+ * stays valid for its full life while the person is shown a signed-out screen.
+ * That was a real defect here, and it is why the ordering below is not
+ * incidental.
+ *
  * `logout` is authenticated and state-changing, so it carries an
  * `Idempotency-Key` like every other authenticated write. The 2026-08-22 ruling
  * refused to exempt the session endpoints: section 7's carve-out is from the
@@ -212,25 +288,55 @@ export async function authenticatedRequest<T>(
  *
  * The tokens are forgotten whatever the API answers. A failed sign-out that
  * leaves the user apparently signed in is the worse outcome of the two on a
- * shared phone, and the refresh token is discarded rather than reused.
+ * shared phone.
  */
 export async function signOut(): Promise<void> {
-  const stored = readStoredRefreshToken();
-
   try {
-    if (stored !== null) {
-      await authenticatedRequest<void>('/api/v1/auth/logout', {
-        method: 'POST',
-        body: { refresh_token: stored },
-        idempotencyKey: crypto.randomUUID(),
-      });
-    }
+    await withSessionLock(async () => {
+      // Inside the lock, so nothing rotates underneath what is read next.
+      const token = accessToken ?? (await refreshWithinLock());
+      const stored = readStoredRefreshToken();
+      if (stored === null) {
+        return;
+      }
+
+      try {
+        await postLogout(stored, token);
+      } catch (cause) {
+        if (!(cause instanceof ApiRequestError) || cause.status !== 401) {
+          throw cause;
+        }
+
+        // The access token expired between being settled and being used. Rotate
+        // once, then present whatever the rotation just stored.
+        const renewed = await refreshWithinLock();
+        const current = readStoredRefreshToken();
+        if (current !== null) {
+          await postLogout(current, renewed);
+        }
+      }
+    });
   } finally {
     forgetSession();
   }
 }
 
-/** End every session this account holds, on every device (section 6). */
+function postLogout(refreshToken: string, token: string): Promise<void> {
+  return apiRequest<void>('/api/v1/auth/logout', {
+    method: 'POST',
+    body: { refresh_token: refreshToken },
+    accessToken: token,
+    idempotencyKey: crypto.randomUUID(),
+  });
+}
+
+/**
+ * End every session this account holds, on every device (section 6).
+ *
+ * This one needs no stored refresh token: the server resolves the account from
+ * the access token and revokes all of them, so there is no stale-token hazard
+ * of the kind `signOut` has.
+ */
 export async function signOutEverywhere(): Promise<void> {
   try {
     await authenticatedRequest<void>('/api/v1/auth/logout-all', {

@@ -5,10 +5,10 @@ import { useSearchParams } from 'next/navigation';
 import { useState } from 'react';
 
 import { Button, buttonClasses } from '@/components/ui/button';
+import { FailureNotice } from '@/components/ui/failure-notice';
 import { Field } from '@/components/ui/field';
-import { FormError } from '@/components/ui/form-error';
 import { apiRequest } from '@/lib/api-client';
-import { messageFor } from '@/lib/messages';
+import { describeFailure, fieldErrorFor, type Failure } from '@/lib/messages';
 import { cn } from '@/lib/utils';
 
 /**
@@ -55,7 +55,8 @@ export function SetPasswordForm({
 }) {
   const token = useSearchParams().get('token');
   const [password, setPassword] = useState('');
-  const [error, setError] = useState<string | null>(null);
+  const [failure, setFailure] = useState<Failure | null>(null);
+  const [passwordError, setPasswordError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [done, setDone] = useState(false);
 
@@ -82,10 +83,18 @@ export function SetPasswordForm({
   if (!token) {
     return (
       <div>
-        <FormError>
-          This link is missing its token, so it cannot be used. Links expire, and some mail
-          clients shorten them.
-        </FormError>
+        {/*
+          Not `field-invalid`: a link that arrived without its token is a fact
+          about the link, not a refusal of anything the person typed. Section 23
+          scopes that token to a form field failing validation.
+        */}
+        <FailureNotice
+          failure={{
+            message:
+              'This link is missing its token, so it cannot be used. Links expire, and some mail clients shorten them.',
+            aboutInput: false,
+          }}
+        />
         <p className="text-muted mt-4 text-sm leading-relaxed">
           Ask for a new link, or{' '}
           <Link href="/forgot-password" className="text-accent underline underline-offset-4">
@@ -99,21 +108,33 @@ export function SetPasswordForm({
 
   async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setError(null);
+    setFailure(null);
+    setPasswordError(null);
     setSubmitting(true);
 
     try {
       await apiRequest<void>(path, { method: 'POST', body: { token, password } });
       setDone(true);
     } catch (cause) {
-      setError(messageFor(cause, 'This link is no longer valid. Ask for a new one.'));
+      // **A refusal the API attached to the password goes on the password.**
+      // That is the one case section 23 settles `field-invalid` for, and the
+      // only one this form can produce: section 6's length rule answers
+      // `VALIDATION_FAILED` naming the field. Anything else — a spent link, a
+      // server error, a dropped connection — is not about the input and is
+      // shown without that colour.
+      const onField = fieldErrorFor(cause, 'password');
+      if (onField !== null) {
+        setPasswordError(onField);
+      } else {
+        setFailure(describeFailure(cause, 'This link is no longer valid. Ask for a new one.'));
+      }
       setSubmitting(false);
     }
   }
 
   return (
     <form onSubmit={onSubmit} className="flex flex-col gap-5" noValidate>
-      <FormError>{error}</FormError>
+      <FailureNotice failure={failure} />
 
       <Field
         label="New password"
@@ -122,6 +143,7 @@ export function SetPasswordForm({
         autoComplete="new-password"
         required
         value={password}
+        error={passwordError}
         onChange={(event) => setPassword(event.target.value)}
         description="At least 12 characters. There is no requirement to include a digit, a symbol or a capital — length is what matters, and a password manager is the easiest way to hold a long one."
       />

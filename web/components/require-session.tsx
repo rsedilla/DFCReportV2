@@ -30,11 +30,20 @@ export function RequireSession({ children }: { children: ReactNode }) {
   const router = useRouter();
   const present = useSyncExternalStore(subscribe, hasStoredSession, () => false);
 
+  // **Depends on `present`, so it runs again when the session ends underneath
+  // the page** — a refused refresh discards the credential, and an effect that
+  // only ran on mount left the person on `Loading…` indefinitely with no way
+  // back to sign in.
+  //
+  // It reads `hasStoredSession()` rather than `present`, because during
+  // hydration the rendered value is still the server's `false` while
+  // `localStorage` already says otherwise, and redirecting on that frame would
+  // sign out somebody who is signed in.
   useEffect(() => {
     if (!hasStoredSession()) {
       router.replace('/sign-in');
     }
-  }, [router]);
+  }, [present, router]);
 
   if (!present) {
     return (
