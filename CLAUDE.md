@@ -184,6 +184,12 @@ cd api && npm ci && cp .env.example .env
 npm run migrate:up
 npm run start:dev                    # http://localhost:3001/api/v1
 
+# Two databases, not one. `npm test` truncates every table before every case, so
+# the one it uses must never be the one holding data — the imported leadership
+# tree, above all. Set TEST_DATABASE_URL to a scratch database and migrate it too:
+#   DATABASE_URL=<the scratch url> npm run migrate:up
+# Left empty it falls back to DATABASE_URL, which is right for CI and wrong here.
+
 cd ../web && npm ci && cp .env.example .env.local
 npm run dev                          # http://localhost:3000
 ```
@@ -195,7 +201,7 @@ npm run dev                          # http://localhost:3000
 | `npm run lint` | `api`, `web` | ESLint. In `web` it also fails on an API route or a server action |
 | `npm run typecheck` | `api`, `web` | `tsc --noEmit` |
 | `npm run format:check` | `api` | Prettier |
-| `npm test` | `api` | The suite that must stay green, the eleven authorization cases included. Needs a migrated database |
+| `npm test` | `api` | The suite that must stay green, the eleven authorization cases included. Needs a migrated database, and **truncates it before every case** — point `TEST_DATABASE_URL` at a scratch one |
 | `npm run migrate:up` / `:down` / `:status` | `api` | Applies, reverts one, or lists migrations |
 | `npm run validate:tree -- <file>` | `api` | Checks the leadership-tree CSV against everything decidable from the file alone. No database |
 | `npm run import:tree -- --dry-run` / `--commit` | `api` | The two phases of the tree import (`SKILL.md` §2). `docs/TREE_CSV.md` carries the flags and what refuses a commit |
