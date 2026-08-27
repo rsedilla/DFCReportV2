@@ -1,12 +1,18 @@
 import { expect, test } from '@playwright/test';
 
 /**
- * Two rules from SKILL.md section 6 that are invisible in a passing UI.
+ * The section 6 rules this client has to keep, none of which is visible in a
+ * passing UI.
  *
- * Both were defects found by review on this branch, and both look identical to a
- * working application from the outside: the screen says "signed out" either way,
- * and a dropped connection looks like a session that ended. So they are pinned
- * here rather than left to the docblocks that assert them.
+ * Every one of them was a defect found by review on this branch, and every one
+ * looks identical to a working application from the outside: the screen says
+ * "signed out" whether or not anything was revoked, a dropped connection looks
+ * like a session that ended, and a token presented twice looks like a token
+ * presented once until the account is revoked on every device.
+ *
+ * They are pinned here rather than left to the docblocks that assert them,
+ * because on this branch the docblocks have twice asserted a property the code
+ * did not have.
  */
 
 const SESSION = {
@@ -124,7 +130,7 @@ test('a refresh that fails in transit is presented once, and the token is kept',
   });
 
   await page.goto('/session');
-  await expect(page.getByRole('button', { name: 'Try again' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Try again anyway' })).toBeVisible();
 
   // **The count is the point of this test.** `fetch` rejects identically whether
   // the request never arrived or arrived, rotated the row, and lost the
@@ -138,6 +144,65 @@ test('a refresh that fails in transit is presented once, and the token is kept',
   // expected case, and a tunnel is not a revoked session.
   const stored = await page.evaluate(() => window.localStorage.getItem('dfc.refresh_token'));
   expect(stored, 'a transport failure discarded the refresh token').toBe('refresh-0');
+});
+
+/**
+ * **A halt survives a page reload, because the token it guards does.**
+ *
+ * The guard was a module variable and the token is in `localStorage`. Those have
+ * different lifetimes, and the shorter one was the guard — so reloading cleared
+ * it, the client presented the token, and the server read that as reuse and
+ * revoked every session on the account. No concurrency needed, and no test saw
+ * it, because no case reloaded.
+ */
+test('a halt survives a reload, and the token is not presented again', async ({ page }) => {
+  await page.addInitScript(() => {
+    window.localStorage.setItem('dfc.refresh_token', 'refresh-0');
+  });
+
+  const presented: string[] = [];
+  await page.route('**/api/v1/auth/refresh', (route) => {
+    presented.push((route.request().postDataJSON() as { refresh_token: string }).refresh_token);
+    return route.abort('failed');
+  });
+
+  await page.goto('/session');
+  await expect(page.getByRole('button', { name: 'Try again anyway' })).toBeVisible();
+
+  await page.reload();
+
+  // The reload must not present it again, and the page must still know it is
+  // halted rather than looking like an ordinary failure.
+  await expect(page.getByRole('button', { name: 'Try again anyway' })).toBeVisible();
+  expect(presented, 'a reload re-presented the token the halt was protecting').toEqual([
+    'refresh-0',
+  ]);
+});
+
+/**
+ * The same guard, across tabs. A second tab is a second JavaScript context and
+ * reads the same `localStorage`, so an in-memory halt is no guard at all there.
+ */
+test('a halt in one tab stops a second tab presenting the same token', async ({ context }) => {
+  await context.addInitScript(() => {
+    window.localStorage.setItem('dfc.refresh_token', 'refresh-0');
+  });
+
+  const presented: string[] = [];
+  await context.route('**/api/v1/auth/refresh', (route) => {
+    presented.push((route.request().postDataJSON() as { refresh_token: string }).refresh_token);
+    return route.abort('failed');
+  });
+
+  const first = await context.newPage();
+  await first.goto('/session');
+  await expect(first.getByRole('button', { name: 'Try again anyway' })).toBeVisible();
+
+  const second = await context.newPage();
+  await second.goto('/session');
+  await expect(second.getByRole('button', { name: 'Try again anyway' })).toBeVisible();
+
+  expect(presented, 'a second tab re-presented a halted token').toEqual(['refresh-0']);
 });
 
 /**
@@ -170,7 +235,7 @@ test('a halted session is resumable by a deliberate retry', async ({ page }) => 
   );
 
   await page.goto('/session');
-  await page.getByRole('button', { name: 'Try again' }).click();
+  await page.getByRole('button', { name: 'Try again anyway' }).click();
 
   // The fixture carries no capabilities, so the page renders its empty state
   // rather than a table. The email is what proves `/auth/me` was reached.
@@ -192,10 +257,12 @@ test('a halted session is resumable by a deliberate retry', async ({ page }) => 
  * it exists: every other case in this file passes against a client with no lock
  * at all, because they each drive a single tab.
  *
- * The delay widens the window deliberately. Without it the first rotation may
- * complete before the second tab reads, and the test would pass against an
- * unlocked client roughly as often as not — the test-that-passes-for-the-wrong-
- * reason this repository keeps recording.
+ * **The first response is held until the second tab has actually loaded**, rather
+ * than for a fixed delay. A timer makes the race probabilistic: on a loaded CI
+ * runner the second tab may start late, the first rotation completes before it
+ * reads, and the test then passes against a client with no lock at all. A
+ * barrier makes the window certain, so a failure means the lock is missing
+ * rather than that the machine was fast.
  */
 test('two tabs never present the same refresh token', async ({ context }) => {
   await context.addInitScript(() => {
@@ -205,11 +272,21 @@ test('two tabs never present the same refresh token', async ({ context }) => {
   let rotations = 0;
   const presented: string[] = [];
 
+  let releaseFirst: () => void;
+  const firstMayAnswer = new Promise<void>((resolve) => {
+    releaseFirst = resolve;
+  });
+
   await context.route('**/api/v1/auth/refresh', async (route) => {
     const body = route.request().postDataJSON() as { refresh_token: string };
     presented.push(body.refresh_token);
 
-    await new Promise((resolve) => setTimeout(resolve, 400));
+    // Hold the first rotation open until the second tab is up. Without the lock
+    // that tab reads the same stored token and presents it; with the lock it
+    // waits here and then reads the rotated one.
+    if (presented.length === 1) {
+      await firstMayAnswer;
+    }
 
     rotations += 1;
     await route.fulfill(tokens(`access-${rotations}`, `refresh-${rotations}`));
@@ -222,7 +299,16 @@ test('two tabs never present the same refresh token', async ({ context }) => {
   const first = await context.newPage();
   const second = await context.newPage();
 
-  await Promise.all([first.goto('/session'), second.goto('/session')]);
+  const loads = Promise.all([first.goto('/session'), second.goto('/session')]);
+
+  // Both tabs are now past the point where an unlocked client would have read
+  // the stored token. Release the first rotation and let them settle.
+  await expect
+    .poll(() => presented.length, { message: 'the first tab never presented a token' })
+    .toBeGreaterThanOrEqual(1);
+  await second.waitForLoadState('domcontentloaded');
+  releaseFirst!();
+  await loads;
 
   await expect(first.getByText('admin@example.invalid')).toBeVisible();
   await expect(second.getByText('admin@example.invalid')).toBeVisible();

@@ -27,8 +27,10 @@
  *   therefore account-wide revocation for having two tabs open. Section 6 makes
  *   every tab of one browser profile one session and requires this
  *   serialization by name; it is not an optimisation.
- * - `unknownOutcome` stops this client re-presenting a token **whose fate it
- *   does not know**. See below; it is the subtlest of the three.
+ * - **The halt** stops this client re-presenting a token **whose fate it does
+ *   not know**. It is stored beside the token rather than held in memory, for
+ *   the same reason the second point exists. See `HALT_STORAGE_KEY`; it is the
+ *   subtlest of the three.
  *
  * Every read of the stored token that precedes a network call happens *inside*
  * the lock, which is what makes the arrangement sufficient rather than merely
@@ -59,6 +61,20 @@ export interface SessionTokens {
 
 const REFRESH_STORAGE_KEY = 'dfc.refresh_token';
 
+/**
+ * The halt, stored beside the token it guards.
+ *
+ * **It has to live where the credential lives.** A module variable is per
+ * JavaScript context and `localStorage` is per origin, so a guard held in memory
+ * is cleared by a page reload, a discarded tab, or a second tab opening — while
+ * the token it was protecting is still there to be presented. That is the same
+ * argument this file already makes about `inFlight` twenty lines above, and the
+ * first version of the halt made exactly the mistake it warns about: reload the
+ * page after a halt and the client presented the token, which the server reads
+ * as reuse.
+ */
+const HALT_STORAGE_KEY = 'dfc.halted_token';
+
 /** Names the cross-tab lock. Scoped to this origin by the Web Locks API. */
 const SESSION_LOCK = 'dfc.session';
 
@@ -82,21 +98,23 @@ const LOCK_HELD_REQUEST_TIMEOUT_MS = 10_000;
 let accessToken: string | null = null;
 
 /**
- * The refresh token this client currently holds, mirroring storage.
+ * The refresh token whose write to `localStorage` was refused, if any.
  *
- * Read in preference to storage, so that a rotation whose write failed is still
- * a token this client can name and revoke.
- */
-let refreshToken: string | null = null;
-
-/**
- * False once a write to `localStorage` has been refused.
+ * This is the in-memory mirror and the "storage is behind" signal at once, which
+ * is why there is no second variable: the only value the mirror is ever needed
+ * for is one the store does not hold.
  *
- * It is what tells `currentRefreshToken` whether the store is authoritative. A
- * store that works is shared with every other tab and must win; a store that
- * throws tells this tab nothing, and the mirror is all there is.
+ * It names **one token** rather than latching a flag, and that is the fix rather
+ * than a detail. A flag cannot tell "this value never reached the store" from
+ * "this tab has given up on storage for ever", and a single `QuotaExceededError`
+ * — which any other page on the origin can cause — used to mean the second. From
+ * then on the tab read its own copy and ignored every rotation another tab
+ * persisted, which is the stale-token replay `currentRefreshToken` exists to
+ * prevent.
+ *
+ * Cleared by the next write that succeeds.
  */
-let storageUsable = true;
+let unpersisted: string | null = null;
 
 /** The single in-flight refresh for *this tab*. */
 let inFlight: Promise<string> | null = null;
@@ -127,7 +145,7 @@ let inFlight: Promise<string> | null = null;
  * is the conservative interim stance recorded in `CLAUDE.md` under *Open —
  * awaiting a ruling*, not an answer to that question.
  */
-let unknownOutcome: string | null = null;
+let haltedInMemory: string | null = null;
 
 /**
  * The fallback funnel, used where the Web Locks API is absent.
@@ -203,22 +221,25 @@ function readStoredRefreshToken(): string | null {
 }
 
 /**
- * What this client holds. **Storage wins wherever storage works.**
+ * What this client holds. **Storage wins wherever storage holds it.**
  *
- * The mirror is a fallback for a store that refuses, never a cache in front of
- * one that works: `localStorage` is how a rotation in another tab becomes
+ * The mirror is a fallback for a value the store refused, never a cache in front
+ * of one it accepted: `localStorage` is how a rotation in another tab becomes
  * visible here, so preferring the mirror would make this tab present the token
  * it last saw rather than the current one — which is the sequential replay the
  * lock exists to prevent, reintroduced one line further in.
+ *
+ * The mirror is consulted only for a token `unpersisted` names, which is the
+ * narrow case where storage genuinely cannot answer: this tab holds a token no
+ * other tab can see, because the write that would have shown them was refused.
  */
 function currentRefreshToken(): string | null {
-  return storageUsable ? readStoredRefreshToken() : refreshToken;
+  return unpersisted ?? readStoredRefreshToken();
 }
 
 function writeStoredRefreshToken(token: string | null): void {
-  refreshToken = token;
-
   if (typeof window === 'undefined') {
+    unpersisted = token;
     return;
   }
   try {
@@ -227,12 +248,45 @@ function writeStoredRefreshToken(token: string | null): void {
     } else {
       window.localStorage.setItem(REFRESH_STORAGE_KEY, token);
     }
+    unpersisted = null;
   } catch {
     // As above. The mirror still names the token, so it remains revocable for
     // this page view even though the session will not survive a reload — and
-    // from here the mirror is what `currentRefreshToken` reads, because this
-    // store is telling us nothing.
-    storageUsable = false;
+    // until a write succeeds, the mirror is what `currentRefreshToken` reads,
+    // because the store does not hold this value.
+    unpersisted = token;
+  }
+}
+
+/** The halted token, read from where it was stored. See `HALT_STORAGE_KEY`. */
+function readHaltedToken(): string | null {
+  if (typeof window === 'undefined') {
+    return haltedInMemory;
+  }
+  try {
+    return window.localStorage.getItem(HALT_STORAGE_KEY) ?? haltedInMemory;
+  } catch {
+    return haltedInMemory;
+  }
+}
+
+function writeHaltedToken(token: string | null): void {
+  haltedInMemory = token;
+
+  if (typeof window === 'undefined') {
+    return;
+  }
+  try {
+    if (token === null) {
+      window.localStorage.removeItem(HALT_STORAGE_KEY);
+    } else {
+      window.localStorage.setItem(HALT_STORAGE_KEY, token);
+    }
+  } catch {
+    // The in-memory copy above is then the whole of the guard, which is the
+    // behaviour this replaced. It is weaker and it is not silently so: a store
+    // that refuses this write also refused the token's, so the session does not
+    // survive a reload either and there is nothing left to guard.
   }
 }
 
@@ -248,23 +302,27 @@ export function hasStoredSession(): boolean {
 }
 
 /**
- * True where a presentation's outcome is unknown and this client has stopped
- * rather than re-present the token. Wired to a *Try again* control.
+ * True where this token's last presentation had no known outcome and the client
+ * has stopped rather than present it again.
+ *
+ * Keyed by the token, so a halt recorded against a value that has since been
+ * replaced — by another tab, or by a sign-in — blocks nothing.
  */
 export function isHalted(): boolean {
-  return unknownOutcome !== null && unknownOutcome === currentRefreshToken();
+  const halted = readHaltedToken();
+  return halted !== null && halted === currentRefreshToken();
 }
 
 /** Permit one further presentation of a token whose outcome is unknown. */
 export function resumeSession(): void {
-  unknownOutcome = null;
+  writeHaltedToken(null);
   announce();
 }
 
 function adopt(tokens: SessionTokens): string {
   accessToken = tokens.access_token;
   writeStoredRefreshToken(tokens.refresh_token);
-  unknownOutcome = null;
+  writeHaltedToken(null);
   announce();
   return tokens.access_token;
 }
@@ -273,7 +331,7 @@ function adopt(tokens: SessionTokens): string {
 export function forgetSession(): void {
   accessToken = null;
   inFlight = null;
-  unknownOutcome = null;
+  writeHaltedToken(null);
   writeStoredRefreshToken(null);
   announce();
 }
@@ -291,7 +349,7 @@ export async function signIn(
   adopt(tokens);
 }
 
-/** Raised locally, without a network call, where `unknownOutcome` blocks one. */
+/** Raised locally, without a network call, where the halt blocks one. */
 export class SessionHaltedError extends Error {
   constructor() {
     super('The last attempt did not complete, so this session is not being retried on its own.');
@@ -312,7 +370,7 @@ async function refreshWithinLock(): Promise<string> {
   if (stored === null) {
     throw new Error('No stored session.');
   }
-  if (unknownOutcome === stored) {
+  if (readHaltedToken() === stored) {
     throw new SessionHaltedError();
   }
 
@@ -346,8 +404,8 @@ async function refreshWithinLock(): Promise<string> {
 
     // No answer: a transport failure, or the ten-second bound above. The token
     // may or may not have been spent, so it is neither discarded nor presented
-    // again without a deliberate act. See `unknownOutcome`.
-    unknownOutcome = stored;
+    // again without a deliberate act. See `HALT_STORAGE_KEY`.
+    writeHaltedToken(stored);
     announce();
     throw cause;
   }
@@ -431,10 +489,23 @@ export async function signOut(): Promise<void> {
         return;
       }
 
+      // **A halt does not block signing out, and that is a decision rather than
+      // an oversight.** Elsewhere the halt exists because re-presenting a token
+      // whose outcome is unknown risks the reuse signal, which ends every session
+      // on the account. Here the person has just asked to end their session, so
+      // the worst case of the risk is a larger version of what they requested —
+      // and the alternative is a *Sign out* control that silently revokes
+      // nothing and abandons a live thirty-day token on the device.
+      //
+      // `POST /auth/logout` cannot raise the signal itself: `revokeRefreshToken`
+      // carries `revoked_at is null` and never inspects `replaced_by_id`. The
+      // rotation below can, and that is the risk being accepted.
+      writeHaltedToken(null);
+
       // Settled inside the lock, so nothing rotates underneath what is read
-      // next. `currentRefreshToken()` prefers the in-memory mirror, so the token
-      // a rotation just issued is nameable even where the write to storage was
-      // refused — without which a sign-out could mint a live thirty-day token
+      // next. `currentRefreshToken()` falls back to the in-memory mirror for a
+      // token storage refused, so the token a rotation just issued is nameable
+      // even then — without which a sign-out could mint a live thirty-day token
       // and abandon it.
       const token = accessToken ?? (await refreshWithinLock());
       const stored = currentRefreshToken();
@@ -476,12 +547,18 @@ function postLogout(token: string, accessTokenForCall: string): Promise<void> {
 /**
  * End every session this account holds, on every device (section 6).
  *
- * This one needs no stored refresh token: the server resolves the account from
- * the access token and revokes all of them, so there is no stale-token hazard
- * of the kind `signOut` has.
+ * This one presents no refresh token of its own: the server resolves the account
+ * from the access token and revokes all of them, so there is no stale-token
+ * hazard of the kind `signOut` has. It still needs *an* access token, which on a
+ * page that has not yet obtained one means a rotation — so, like `signOut`, it
+ * clears a halt first rather than being a control that cannot do what it says.
+ *
+ * The risk that clearing accepts is account-wide revocation, which is what this
+ * function does on purpose.
  */
 export async function signOutEverywhere(): Promise<void> {
   try {
+    writeHaltedToken(null);
     await authenticatedRequest<void>('/api/v1/auth/logout-all', {
       method: 'POST',
       idempotencyKey: crypto.randomUUID(),

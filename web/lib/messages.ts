@@ -32,13 +32,15 @@ import { SessionHaltedError } from './session';
  *   Only a caller passing `credentialRefusal` is the first, so only that caller
  *   gets the colour — otherwise a failed page load painted "Your session could
  *   not be loaded" in `field-invalid` on a screen with no form on it.
- * - A `VALIDATION_FAILED` that **names a field** has already been offered to
- *   `fieldErrorFor`, which puts it on that field where the form renders one.
- *   Reaching here means it named a field this form does not have — for these
- *   screens, `field: 'token'` for a spent or expired link, which is a fact about
- *   the link and not about anything typed. Section 23 settles this: the token
- *   follows the field, not the error code, and where the form renders no such
- *   field there is nothing on screen to mark invalid.
+ * - A `VALIDATION_FAILED` is about input only where it carries `details.fields`,
+ *   the plural list the global `ValidationPipe` emits when a DTO refuses what was
+ *   submitted. A **singular** `details.field` has already been offered to
+ *   `fieldErrorFor`, so reaching here means it named a field this form does not
+ *   have — `field: 'token'` for a spent link, a fact about the link rather than
+ *   about anything typed. And a `VALIDATION_FAILED` naming *neither* is a
+ *   malformed request rather than a mistyped one: a missing `Idempotency-Key`,
+ *   or a body nested past the depth bound. Section 23 settles all three the same
+ *   way — the token follows the field, not the error code.
  * - `DUPLICATE_ACKNOWLEDGEMENT_REQUIRED` is not a refusal at all. Section 3
  *   makes it a request for acknowledgement, and `api-error.ts` says in terms
  *   that it is deliberately not `VALIDATION_FAILED` because "a client branching
@@ -89,8 +91,20 @@ export function describeFailure(
         : { message: options.credentialRefusal, aboutInput: true };
 
     case 'VALIDATION_FAILED':
-      // Named a field this form does not render — see the note above.
-      return { message: error.message, aboutInput: error.details.field === undefined };
+      // **Field-less is not the same as about-input, and treating it as the
+      // residue was wrong.** The API answers `VALIDATION_FAILED` for things that
+      // are not about anything typed: a missing or malformed `Idempotency-Key`
+      // (`details.header`) and a body nested past the depth bound both carry no
+      // field at all. Colouring those would be §23's rule failing on exactly the
+      // class it was written for.
+      //
+      // The positive signal is `details.fields`, plural, which is what the
+      // global `ValidationPipe` emits when a DTO refuses what was submitted —
+      // that is a refusal of this form's input, whether or not any single field
+      // is named. `details.field`, singular, has already been offered to
+      // `fieldErrorFor`; reaching here means it named a field this form does not
+      // render, which §23 settles as form-level and colourless.
+      return { message: error.message, aboutInput: Array.isArray(error.details.fields) };
 
     case 'DUPLICATE_ACKNOWLEDGEMENT_REQUIRED':
       return { message: error.message, aboutInput: false };

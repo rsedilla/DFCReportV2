@@ -2,12 +2,20 @@
 
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
+import { useSyncExternalStore } from 'react';
 
 import { RequireSession } from '@/components/require-session';
 import { Button } from '@/components/ui/button';
 import { FailureNotice } from '@/components/ui/failure-notice';
 import { describeFailure } from '@/lib/messages';
-import { authenticatedRequest, resumeSession, signOut, signOutEverywhere } from '@/lib/session';
+import {
+  authenticatedRequest,
+  isHalted,
+  resumeSession,
+  signOut,
+  signOutEverywhere,
+  subscribe,
+} from '@/lib/session';
 
 interface GrantSummary {
   capability: string;
@@ -60,6 +68,10 @@ export default function SessionPage() {
 function SessionDetail() {
   const router = useRouter();
 
+  // Read through the store rather than called once, so that a halt arriving
+  // while this page is open changes what the button says.
+  const halted = useSyncExternalStore(subscribe, isHalted, () => false);
+
   const session = useQuery({
     queryKey: ['auth', 'me'],
     queryFn: () => authenticatedRequest<SessionDescription>('/api/v1/auth/me'),
@@ -90,15 +102,30 @@ function SessionDetail() {
             the message.
           */}
           <FailureNotice failure={describeFailure(session.error)} />
+
           {/*
-            `resumeSession` first, because a refresh whose outcome was unknown
-            has halted this client deliberately: it will not present that token
-            again on its own initiative, since it cannot tell a request that
-            never arrived from one whose response was lost, and the second is
-            the section 6 reuse signal. Pressing this is the person choosing to
-            take that risk, which is a different thing from the client taking it
-            for them three times a page load.
+            **A halt is told apart from an ordinary failure, because pressing the
+            button means something different in each.**
+
+            After an ordinary failure, retrying costs a request. After a halt it
+            re-presents a token whose fate is unknown — and if the earlier attempt
+            did reach the server, that is section 6's reuse signal, which ends
+            every session on every device. The justification for halting at all is
+            that it makes the risk the person's to take knowingly, and a risk taken
+            knowingly has to be stated rather than hidden behind the same three
+            words.
+
+            Section 1, principle 7: say what will happen, in the words a leader
+            would use.
           */}
+          {halted ? (
+            <p className="text-muted mt-3 text-sm leading-relaxed">
+              Trying again may sign you out on every device, including your phone. That happens
+              only if the earlier attempt reached the server after all, and you would need to
+              sign in again everywhere.
+            </p>
+          ) : null}
+
           <Button
             className="mt-4"
             variant="secondary"
@@ -107,7 +134,7 @@ function SessionDetail() {
               void session.refetch();
             }}
           >
-            Try again
+            {halted ? 'Try again anyway' : 'Try again'}
           </Button>
         </div>
       ) : (

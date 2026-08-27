@@ -78,6 +78,23 @@ const SCANS = [
       await expect(page.getByRole('table')).toBeVisible();
     },
   },
+  {
+    // The halt: a failure notice, a warning paragraph, and a control that says
+    // something different from the one on any other screen. It renders new
+    // content, so it is its own entry — which is the rule this list already
+    // states and which the commit that added the state did not follow.
+    name: 'session, halted',
+    route: '/session',
+    async before(page: import('@playwright/test').Page) {
+      await page.addInitScript(() => {
+        window.localStorage.setItem('dfc.refresh_token', 'test-refresh-token');
+      });
+      await page.route('**/api/v1/auth/refresh', (route) => route.abort('failed'));
+    },
+    async arrange(page: import('@playwright/test').Page) {
+      await expect(page.getByRole('button', { name: 'Try again anyway' })).toBeVisible();
+    },
+  },
 ] as const;
 
 for (const theme of THEMES) {
@@ -180,6 +197,14 @@ const TARGET_EXEMPT: { name: string; why: string }[] = [
   {
     name: 'sign-in, refused',
     why: 'Same targets as /sign-in, which is measured; the refusal adds text, not controls.',
+  },
+  {
+    name: 'session, halted',
+    why:
+      'Its three controls are the same Button primitive measured on /session and /sign-in — the ' +
+      'two sign-out buttons are literally the /session entry\'s, and "Try again anyway" differs ' +
+      'from "Try again" only in its label. The state is still axe-scanned, which is what the ' +
+      'extra paragraph and the changed control name are worth checking for.',
   },
   {
     name: 'activate, link missing its token',
