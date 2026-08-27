@@ -9,8 +9,15 @@ import { AppShell } from '@/components/app-shell';
 import { Button } from '@/components/ui/button';
 import { FailureNotice } from '@/components/ui/failure-notice';
 import { Field } from '@/components/ui/field';
+import { RadioGroup } from '@/components/ui/radio-group';
 import { describeFailure, fieldErrorFor, type Failure } from '@/lib/messages';
-import { editPerson, getPerson, type PersonEdit, type PersonFull } from '@/lib/people';
+import {
+  CIVIL_STATUS_OPTIONS,
+  editPerson,
+  getPerson,
+  type PersonEdit,
+  type PersonFull,
+} from '@/lib/people';
 
 /**
  * Editing a person's own descriptive fields (SKILL.md sections 3 and 7).
@@ -92,14 +99,28 @@ function Fields({ person, id }: { person: PersonFull; id: string }) {
     first_name: person.first_name,
     middle_name: person.middle_name ?? '',
     last_name: person.last_name,
+    civil_status: person.civil_status,
     birth_date: person.birth_date ?? '',
     mobile_number: person.mobile_number ?? '',
   });
   const [failure, setFailure] = useState<Failure | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string | null>>({});
 
+  /**
+   * One key for this save, not one per request (section 23). Minted inside the
+   * request function, a retry after a lost response would present a body the
+   * store has never seen — so the write would be applied twice rather than
+   * replayed. Replaced when the values change, because that is a different write.
+   */
+  const [writeKey, setWriteKey] = useState(() => crypto.randomUUID());
+
+  function edit<K extends keyof typeof values>(key: K, value: (typeof values)[K]) {
+    setValues((current) => ({ ...current, [key]: value }));
+    setWriteKey(crypto.randomUUID());
+  }
+
   const save = useMutation({
-    mutationFn: (changes: PersonEdit) => editPerson(id, changes),
+    mutationFn: (changes: PersonEdit) => editPerson(id, changes, writeKey),
     onSuccess: () => router.push(`/people/${id}`),
     onError: (error) => {
       const next: Record<string, string | null> = {};
@@ -120,6 +141,7 @@ function Fields({ person, id }: { person: PersonFull; id: string }) {
       first_name: values.first_name.trim(),
       middle_name: values.middle_name.trim() || null,
       last_name: values.last_name.trim(),
+      civil_status: values.civil_status,
       mobile_number: values.mobile_number.trim() || null,
     };
 
@@ -146,14 +168,14 @@ function Fields({ person, id }: { person: PersonFull; id: string }) {
             required
             value={values.first_name}
             error={fieldErrors.first_name}
-            onChange={(event) => setValues((v) => ({ ...v, first_name: event.target.value }))}
+            onChange={(event) => edit('first_name', event.target.value)}
           />
           <Field
             label="Middle name"
             name="middle_name"
             autoComplete="off"
             value={values.middle_name}
-            onChange={(event) => setValues((v) => ({ ...v, middle_name: event.target.value }))}
+            onChange={(event) => edit('middle_name', event.target.value)}
             description="Optional."
           />
           <Field
@@ -163,8 +185,22 @@ function Fields({ person, id }: { person: PersonFull; id: string }) {
             required
             value={values.last_name}
             error={fieldErrors.last_name}
-            onChange={(event) => setValues((v) => ({ ...v, last_name: event.target.value }))}
+            onChange={(event) => edit('last_name', event.target.value)}
           />
+          {/*
+            Section 7 gives `people.edit_basic` six fields, and civil status is
+            the sixth. It belongs here for an ordinary reason: a marriage or a
+            bereavement is a correction to somebody's own descriptive record, and
+            leaving it out gave that change no path through this client at all.
+          */}
+          <RadioGroup
+            legend="Civil status"
+            name="civil_status"
+            options={CIVIL_STATUS_OPTIONS}
+            value={values.civil_status}
+            onChange={(next) => edit('civil_status', next)}
+          />
+
           <Field
             label="Birthday"
             type="date"
@@ -172,7 +208,7 @@ function Fields({ person, id }: { person: PersonFull; id: string }) {
             autoComplete="off"
             value={values.birth_date}
             error={fieldErrors.birth_date}
-            onChange={(event) => setValues((v) => ({ ...v, birth_date: event.target.value }))}
+            onChange={(event) => edit('birth_date', event.target.value)}
             description={
               person.birth_date
                 ? 'A recorded birthday cannot be removed here — only corrected.'
@@ -186,7 +222,7 @@ function Fields({ person, id }: { person: PersonFull; id: string }) {
             autoComplete="off"
             value={values.mobile_number}
             error={fieldErrors.mobile_number}
-            onChange={(event) => setValues((v) => ({ ...v, mobile_number: event.target.value }))}
+            onChange={(event) => edit('mobile_number', event.target.value)}
             description="Optional."
           />
 

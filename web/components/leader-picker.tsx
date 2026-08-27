@@ -4,8 +4,10 @@ import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 
 import { Button } from '@/components/ui/button';
+import { FailureNotice } from '@/components/ui/failure-notice';
 import { Field } from '@/components/ui/field';
-import { searchPeople, type Person } from '@/lib/people';
+import { describeFailure } from '@/lib/messages';
+import { MINIMUM_SEARCH_LENGTH, searchPeople, type Person } from '@/lib/people';
 
 /**
  * Choosing the pastoral leader a new Person is placed under (SKILL.md sections 5
@@ -78,7 +80,7 @@ export function LeaderPicker({
         />
         <Button
           variant="secondary"
-          disabled={term.trim().length === 0}
+          disabled={term.trim().length < MINIMUM_SEARCH_LENGTH}
           onClick={() => setSubmitted(term)}
         >
           Find
@@ -88,7 +90,7 @@ export function LeaderPicker({
       {submitted.trim().length === 0 ? null : results.isPending ? (
         <p className="text-muted mt-3 text-sm">Searching…</p>
       ) : results.isError ? (
-        <p className="text-muted mt-3 text-sm">That search could not be completed.</p>
+        <FailureNotice failure={describeFailure(results.error)} />
       ) : results.data.data.length === 0 ? (
         <p className="text-muted mt-3 text-sm">Nobody matches “{submitted}”.</p>
       ) : (

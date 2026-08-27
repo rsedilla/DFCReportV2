@@ -7,19 +7,25 @@ import { useParams } from 'next/navigation';
 import { AppShell } from '@/components/app-shell';
 import { buttonClasses } from '@/components/ui/button';
 import { FailureNotice } from '@/components/ui/failure-notice';
+import { ApiRequestError } from '@/lib/api-client';
 import { describeFailure } from '@/lib/messages';
-import { ageFrom, civilStatusLabel, getPerson, sexLabel } from '@/lib/people';
+import { NEGATIVE_AGE, ageFrom, civilStatusLabel, getPerson, sexLabel } from '@/lib/people';
 import { cn } from '@/lib/utils';
 
 /**
  * One person's record (SKILL.md sections 3 and 8).
  *
  * **Reaching this screen for somebody outside your pastoral scope is a refusal,
- * not a redaction.** `GET /people/{id}` is guarded on the target, so the API
- * answers `NOT_FOUND` — section 8's search returns an identity-only row for such
- * a person, and this endpoint returns nothing at all. The screen therefore says
- * the record is not available *to you* rather than that it does not exist, which
- * is what search has already shown the viewer to be false.
+ * not a redaction, and the code is `SCOPE_DENIED`.** `GET /people/{id}` is
+ * guarded on the target, so the guard refuses with 403 — deliberately *not*
+ * `NOT_FOUND`, which section 22 declines to substitute here "because Section 8
+ * already discloses minimal identity church-wide by design". Search has already
+ * shown this viewer that the person exists; pretending otherwise on the next
+ * screen would contradict it.
+ *
+ * So the explanation below is shown for that code and no other. Rendering it on
+ * every failure asserted a domain fact for a mistyped id, a merged-away record,
+ * a server error and a dropped connection alike — and it is false of all four.
  *
  * **Age is derived here and never stored.** Section 3 keeps the birthday as the
  * authoritative value precisely because it cannot go stale, and the API returns
@@ -64,13 +70,14 @@ function PersonDetail() {
         <p className="text-muted mt-6 text-sm">Loading…</p>
       ) : person.isError ? (
         <div className="mt-6">
-          <FailureNotice
-            failure={describeFailure(person.error)}
-          />
-          <p className="text-muted mt-4 max-w-xl text-sm leading-relaxed">
-            If you found this person by searching, their record exists — their details are
-            visible to the leaders who pastor them. Ask the leader named on the search result.
-          </p>
+          <FailureNotice failure={describeFailure(person.error)} />
+
+          {person.error instanceof ApiRequestError && person.error.code === 'SCOPE_DENIED' ? (
+            <p className="text-muted mt-4 max-w-xl text-sm leading-relaxed">
+              This person&rsquo;s record exists — their details are visible to the leaders who
+              pastor them. Ask the leader named on the search result.
+            </p>
+          ) : null}
         </div>
       ) : (
         <>
@@ -98,11 +105,11 @@ function PersonDetail() {
             />
             <Detail
               label="Age"
-              value={
-                ageFrom(person.data.birth_date) === null
-                  ? null
-                  : `${ageFrom(person.data.birth_date)}`
-              }
+              value={ageLabel(person.data.birth_date)}
+              // Only where no birthday is recorded. A birthday that *is*
+              // recorded but cannot yield an age says so instead — see
+              // `ageLabel` — because "needs a birthday" beside a displayed
+              // birthday contradicts the line above it.
               absent="Needs a birthday"
             />
             <Detail label="Mobile number" value={person.data.mobile_number} absent="Not recorded" />
@@ -111,6 +118,24 @@ function PersonDetail() {
       )}
     </main>
   );
+}
+
+/**
+ * The age, or why there is not one.
+ *
+ * Three outcomes rather than two: an age, no birthday at all, and a birthday
+ * that cannot produce an age because it is in the future. The third is a
+ * mis-keyed year, and calling it "needs a birthday" beside the date it was
+ * derived from tells the reader something the record disproves.
+ */
+function ageLabel(birthDate: string | null): string | null {
+  const age = ageFrom(birthDate);
+
+  if (age === null) {
+    return null;
+  }
+
+  return age === NEGATIVE_AGE ? 'Birthday is in the future — check the year' : `${age}`;
 }
 
 function Detail({

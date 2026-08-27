@@ -60,6 +60,16 @@ export interface PersonPage {
  * Section 22 uses cursors and returns no total count, so no screen here offers
  * "page 3 of 12" or a result count, both of which it would have to invent.
  */
+/**
+ * The shortest search the API accepts.
+ *
+ * `SearchPeopleDto.q` is `@Length(2, 100)`, so a single character is refused
+ * with `VALIDATION_FAILED`. Stated here rather than left to the screens, which
+ * were enabling the Search button at one character and then rendering the pipe's
+ * raw refusal as a form-level error.
+ */
+export const MINIMUM_SEARCH_LENGTH = 2;
+
 export async function searchPeople(
   q: string,
   cursor: string | null,
@@ -89,11 +99,27 @@ export interface PersonInput {
   acknowledged_duplicate_ids?: string[];
 }
 
-export async function createPerson(input: PersonInput): Promise<PersonFull> {
+/**
+ * **The key is supplied by the caller, not minted here.**
+ *
+ * Section 23 requires a client-generated idempotency key on every write so that
+ * "a retry must never create a second record". Minting one inside this function
+ * defeats that exactly: no two attempts at the same logical write ever share a
+ * key, so a retry after a lost response presents a body the store has never seen
+ * and creates a second Person.
+ *
+ * The lost response is the case that matters, and it is indistinguishable from a
+ * request that never arrived — which is why the caller holds one key for the
+ * whole attempt, including across a duplicate-acknowledgement round trip.
+ */
+export async function createPerson(
+  input: PersonInput,
+  idempotencyKey: string,
+): Promise<PersonFull> {
   return authenticatedRequest<PersonFull>('/api/v1/people', {
     method: 'POST',
     body: input,
-    idempotencyKey: crypto.randomUUID(),
+    idempotencyKey,
   });
 }
 
@@ -101,11 +127,16 @@ export type PersonEdit = Partial<
   Pick<PersonInput, 'first_name' | 'middle_name' | 'last_name' | 'birth_date' | 'mobile_number'>
 > & { civil_status?: CivilStatus };
 
-export async function editPerson(id: string, changes: PersonEdit): Promise<PersonFull> {
+/** The key is the caller's, for the reason given on `createPerson`. */
+export async function editPerson(
+  id: string,
+  changes: PersonEdit,
+  idempotencyKey: string,
+): Promise<PersonFull> {
   return authenticatedRequest<PersonFull>(`/api/v1/people/${id}`, {
     method: 'PATCH',
     body: changes,
-    idempotencyKey: crypto.randomUUID(),
+    idempotencyKey,
   });
 }
 
@@ -125,8 +156,25 @@ export interface DuplicateCandidate {
   id: string;
   member_id: string;
   full_name: string;
+  sex: Sex;
+  /**
+   * The API's own flag for a withheld candidate. **Read this rather than
+   * inferring the same fact from a missing `tier` or empty `reasons`.**
+   *
+   * The inference happens to hold today, because every matching rule pushes at
+   * least one reason — so the first rule that matches without one would render
+   * "their details are visible to their own leaders" for somebody the viewer
+   * actually pastors. A client deciding a redaction question by reading the
+   * shape of a payload is guessing at a rule the API already states.
+   */
+  possible_match?: boolean;
   tier?: 1 | 2;
   reasons?: string[];
+}
+
+/** True where section 8 withheld this candidate's tier and reasons. */
+export function isWithheld(candidate: DuplicateCandidate): boolean {
+  return candidate.possible_match === true || candidate.tier === undefined;
 }
 
 /**
@@ -183,8 +231,18 @@ export function ageFrom(birthDate: string | null): number | null {
     age -= 1;
   }
 
-  return age >= 0 ? age : null;
+  // A future birthday is a mis-keyed year rather than an absent one, and the two
+  // must not render the same. Returning null here put "Needs a birthday" beside
+  // a birthday the screen was displaying, which is a statement the record
+  // contradicts one line above.
+  return age >= 0 ? age : NEGATIVE_AGE;
 }
+
+/**
+ * What `ageFrom` returns for a birthday in the future: a recorded date that
+ * cannot yield an age, which is different from no date at all.
+ */
+export const NEGATIVE_AGE = -1;
 
 export function networkLabel(network: Network | null): string {
   if (network === 'MENS') {
@@ -195,6 +253,25 @@ export function networkLabel(network: Network | null): string {
   }
   return 'No Network recorded';
 }
+
+/**
+ * The two closed enumerations these forms offer, written once.
+ *
+ * Section 4 makes the sexes a total mapping onto the Networks and section 3
+ * fixes the three civil statuses. Both are closed lists in the specification, so
+ * they live here rather than inline on each screen, where a fourth could be
+ * added without anybody noticing it was an amendment.
+ */
+export const SEX_OPTIONS = [
+  { value: 'MALE', label: 'Male' },
+  { value: 'FEMALE', label: 'Female' },
+] as const satisfies readonly { value: Sex; label: string }[];
+
+export const CIVIL_STATUS_OPTIONS = [
+  { value: 'SINGLE', label: 'Single' },
+  { value: 'MARRIED', label: 'Married' },
+  { value: 'WIDOWED', label: 'Widowed' },
+] as const satisfies readonly { value: CivilStatus; label: string }[];
 
 export function civilStatusLabel(status: CivilStatus): string {
   return { SINGLE: 'Single', MARRIED: 'Married', WIDOWED: 'Widowed' }[status];

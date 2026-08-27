@@ -11,7 +11,13 @@ import { Button } from '@/components/ui/button';
 import { FailureNotice } from '@/components/ui/failure-notice';
 import { Field } from '@/components/ui/field';
 import { describeFailure } from '@/lib/messages';
-import { networkLabel, searchPeople, sexLabel, type Person } from '@/lib/people';
+import {
+  MINIMUM_SEARCH_LENGTH,
+  networkLabel,
+  searchPeople,
+  sexLabel,
+  type Person,
+} from '@/lib/people';
 import { cn } from '@/lib/utils';
 
 /**
@@ -94,7 +100,7 @@ function PeopleSearch() {
           className="min-w-0 sm:flex-1"
         />
         <div className="flex gap-3">
-          <Button type="submit" disabled={term.trim().length === 0}>
+          <Button type="submit" disabled={term.trim().length < MINIMUM_SEARCH_LENGTH}>
             Search
           </Button>
           <Link href="/people/new" className={cn(buttonClasses('secondary'))}>
@@ -169,8 +175,11 @@ function PersonRow({ person }: { person: Person }) {
     <Link
       href={`/people/${person.id}`}
       className={
-        'focus-visible:outline-accent hover:bg-raised flex flex-wrap items-baseline gap-x-3 ' +
-        'gap-y-1 rounded-md px-2 py-3 focus-visible:outline-2 focus-visible:outline-offset-2'
+        // `min-h-11` rather than relying on `py-3` plus however many lines the
+        // name happens to wrap to. A row's height was incidental, which made the
+        // 2.5.8 exemption for this state true only by accident.
+        'focus-visible:outline-accent hover:bg-raised flex min-h-11 flex-wrap items-baseline ' +
+        'gap-x-3 gap-y-1 rounded-md px-2 py-3 focus-visible:outline-2 focus-visible:outline-offset-2'
       }
     >
       <span className="text-base font-medium">{person.full_name}</span>

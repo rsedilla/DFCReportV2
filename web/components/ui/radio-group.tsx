@@ -56,8 +56,13 @@ export function RadioGroup<T extends string>({
     [description ? descriptionId : null, error ? errorId : null].filter(Boolean).join(' ') ||
     undefined;
 
+  // `aria-describedby` belongs on the `<fieldset>`, which carries an implicit
+  // `group` role. It was on the inner `<div>` — a plain container with no role
+  // and nothing focusable — so neither the description nor the error was
+  // announced when focus reached an option. axe cannot see this: the ids
+  // resolve, so `aria-valid-attr-value` passes and the sweep stays green.
   return (
-    <fieldset className="flex flex-col gap-1.5">
+    <fieldset className="flex flex-col gap-1.5" aria-describedby={describedBy}>
       <legend className="text-sm font-medium">{legend}</legend>
 
       {description ? (
@@ -66,7 +71,7 @@ export function RadioGroup<T extends string>({
         </p>
       ) : null}
 
-      <div className="mt-1 flex flex-col gap-2 sm:flex-row sm:flex-wrap" aria-describedby={describedBy}>
+      <div className="mt-1 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
         {options.map((option) => {
           const checked = value === option.value;
 

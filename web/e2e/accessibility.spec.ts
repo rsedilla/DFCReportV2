@@ -8,6 +8,7 @@ import {
   mockAccepted,
   mockDuplicateRefusal,
   mockPeople,
+  mockPossibleMatches,
   mockSignInRefused,
   mockSignedIn,
 } from './mock-api';
@@ -110,7 +111,7 @@ const SCANS = [
       await mockPeople(page);
     },
     async arrange(page: import('@playwright/test').Page) {
-      await page.getByLabel('Search by name').fill('a');
+      await page.getByLabel('Search by name').fill('an');
       await page.getByRole('button', { name: 'Search' }).click();
       await expect(page.getByText('Marilou Reyes Santos')).toBeVisible();
       await expect(page.getByText('Details visible to their own leaders')).toBeVisible();
@@ -152,6 +153,30 @@ const SCANS = [
     },
   },
   {
+    // The pre-flight lookup (section 3, section 9 step 1) — the only surface a
+    // Tier 2 candidate has, since creation can refuse on Tier 1 alone. One
+    // candidate carries reasons and one is withheld by section 8.
+    name: 'add a person, possible matches',
+    route: '/people/new',
+    pattern: '/people/new',
+    async before(page: import('@playwright/test').Page) {
+      await mockSignedIn(page);
+      await mockPeople(page);
+      await mockPossibleMatches(page);
+    },
+    async arrange(page: import('@playwright/test').Page) {
+      await page.getByLabel('First name').fill('Marilou');
+      await page.getByLabel('Last name').fill('Santos');
+      await expect(
+        page.getByRole('heading', { name: 'Someone similar is already recorded' }),
+      ).toBeVisible();
+      await expect(page.getByText('Same first and last name')).toBeVisible();
+      await expect(
+        page.getByText('Their details are visible to the leaders who pastor them.'),
+      ).toBeVisible();
+    },
+  },
+  {
     // The duplicate refusal, which is the reason the create screen has the shape
     // it has. One candidate carries reasons and one is withheld.
     name: 'add a person, duplicate candidates',
@@ -167,7 +192,7 @@ const SCANS = [
       await page.getByLabel('Last name').fill('Santos');
       await page.getByRole('radio', { name: 'Female' }).check();
       await page.getByRole('radio', { name: 'Married' }).check();
-      await page.getByLabel('Search for a leader by name').fill('a');
+      await page.getByLabel('Search for a leader by name').fill('an');
       await page.getByRole('button', { name: 'Find' }).click();
       await page.getByRole('button', { name: 'Choose' }).first().click();
       await page.getByRole('button', { name: 'Add person' }).click();
@@ -276,7 +301,9 @@ const TARGET_SWEEP = [
   // The search box, the Search button and the "Add a person" link. The nav lives
   // in the header, outside `<main>`, and is counted on no route.
   { name: 'people, before searching', route: '/people', settle: 'Search', minimum: 3 },
-  { name: 'add a person', route: '/people/new', settle: 'Find', minimum: 10 },
+  // 5 Field inputs, 5 radios (2 sex + 3 civil status), the leader search input,
+  // its Find button, and the submit button.
+  { name: 'add a person', route: '/people/new', settle: 'Find', minimum: 13 },
   {
     name: 'person profile',
     route: `/people/${PERSON_IN_SCOPE.id}`,
@@ -290,7 +317,8 @@ const TARGET_SWEEP = [
     name: 'edit a person',
     route: `/people/${PERSON_IN_SCOPE.id}/edit`,
     settle: 'Save changes',
-    minimum: 7,
+    // Back link, 5 Field inputs, 3 civil-status radios, Save, Cancel.
+    minimum: 11,
   },
 ] as const;
 
@@ -306,15 +334,22 @@ const TARGET_EXEMPT: { name: string; why: string }[] = [
   {
     name: 'people, with results',
     why:
-      'Adds result rows and pagination controls to the measured /people state. The rows are ' +
-      'links padded to 44px and the controls are the same Button primitive; the search form ' +
+      'Adds result rows and pagination controls to the measured /people state. Each row is a ' +
+      'link carrying min-h-11, and the controls are the same Button primitive; the search form ' +
       'itself is measured under "people, before searching".',
+  },
+  {
+    name: 'add a person, possible matches',
+    why:
+      'Adds an advisory panel to the measured "add a person" state. Its only controls are ' +
+      '"Open this record" links carrying min-h-11 explicitly; every form control on the page ' +
+      'is measured there.',
   },
   {
     name: 'add a person, duplicate candidates',
     why:
-      'Its controls are two Buttons and an "Open this record" link, all the measured ' +
-      'primitives. The form it replaces is measured under "add a person".',
+      'Two Buttons, which are the measured primitive, and an "Open this record" link carrying ' +
+      'min-h-11 explicitly. The form it replaces is measured under "add a person".',
   },
   {
     name: 'landing',
@@ -559,11 +594,46 @@ test('every route in the app directory is scanned', async () => {
 
   // A scan visits a concrete URL; the walker emits the router's own path, which
   // for a dynamic segment is the literal `[id]`. An entry says which pattern it
-  // stands for, and the pattern is what is compared — otherwise every dynamic
-  // route reads as unscanned and the guard cries wolf until somebody silences it.
-  const declared = new Set(
-    SCANS.map((scan) => ('pattern' in scan && scan.pattern ? scan.pattern : scan.route.split('?')[0])),
-  );
+  // stands for — otherwise every dynamic route reads as unscanned and the guard
+  // cries wolf until somebody silences it.
+  //
+  // **The pattern is checked against the route rather than believed.** Free text
+  // compared against nothing reintroduces the hole this walker exists to close,
+  // one indirection out: an entry claiming `pattern: '/people/[id]'` while
+  // visiting `/people` would mark the dynamic route covered by a scan that never
+  // loads it. A pattern must match its own route segment for segment, with
+  // `[…]` matching any single segment.
+  const declared = new Set<string>();
+  for (const scan of SCANS) {
+    const path = scan.route.split('?')[0];
+    const pattern = 'pattern' in scan && scan.pattern ? scan.pattern : path;
+
+    const patternSegments = pattern.split('/');
+    const pathSegments = path.split('/');
+
+    expect(
+      patternSegments.length,
+      `"${scan.name}" declares pattern ${pattern}, which has a different number of segments from the route it visits (${path}).`,
+    ).toBe(pathSegments.length);
+
+    patternSegments.forEach((segment, index) => {
+      if (/^\[.+\]$/.test(segment)) {
+        expect(
+          pathSegments[index].length,
+          `"${scan.name}" declares a dynamic segment ${segment} but visits an empty one.`,
+        ).toBeGreaterThan(0);
+        return;
+      }
+
+      expect(
+        pathSegments[index],
+        `"${scan.name}" declares pattern ${pattern}, which does not match the route it visits (${path}).`,
+      ).toBe(segment);
+    });
+
+    declared.add(pattern);
+  }
+
   const actual = await routesUnder(appDirectory, '');
 
   expect(actual.length).toBeGreaterThan(0);

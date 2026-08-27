@@ -113,12 +113,52 @@ export const PERSON_WITHHELD = {
 
 /** The people endpoints, for the screens that read them. */
 export async function mockPeople(page: Page): Promise<void> {
+  // Registered before the search route, because Playwright matches the most
+  // recently added first and `/people?*` would otherwise swallow this.
+  await page.route('**/api/v1/people/duplicate-candidates*', (route) =>
+    route.fulfill(json({ data: [] })),
+  );
+
   await page.route('**/api/v1/people?*', (route) =>
     route.fulfill(json({ data: [PERSON_IN_SCOPE, PERSON_WITHHELD], next_cursor: null })),
   );
 
   await page.route(`**/api/v1/people/${PERSON_IN_SCOPE.id}`, (route) =>
     route.fulfill(json(PERSON_IN_SCOPE)),
+  );
+}
+
+/**
+ * The pre-flight lookup with something to show — a Tier 2 candidate the viewer
+ * pastors, and one whose details section 8 withholds.
+ *
+ * The withheld one carries `possible_match` and no tier, which is what the API
+ * sends. A fixture that omitted it would let the client's inference-from-shape
+ * pass unnoticed, which is the drift this file claims not to permit.
+ */
+export async function mockPossibleMatches(page: Page): Promise<void> {
+  await page.route('**/api/v1/people/duplicate-candidates*', (route) =>
+    route.fulfill(
+      json({
+        data: [
+          {
+            id: PERSON_IN_SCOPE.id,
+            member_id: PERSON_IN_SCOPE.member_id,
+            full_name: PERSON_IN_SCOPE.full_name,
+            sex: PERSON_IN_SCOPE.sex,
+            tier: 2,
+            reasons: ['Same first and last name'],
+          },
+          {
+            id: PERSON_WITHHELD.id,
+            member_id: PERSON_WITHHELD.member_id,
+            full_name: PERSON_WITHHELD.full_name,
+            sex: PERSON_WITHHELD.sex,
+            possible_match: true,
+          },
+        ],
+      }),
+    ),
   );
 }
 
@@ -155,6 +195,11 @@ export async function mockDuplicateRefusal(page: Page): Promise<void> {
                   id: PERSON_WITHHELD.id,
                   member_id: PERSON_WITHHELD.member_id,
                   full_name: PERSON_WITHHELD.full_name,
+                  sex: PERSON_WITHHELD.sex,
+                  // The API's own flag for a withheld candidate. Present here so
+                  // that a client inferring the same fact from a missing tier
+                  // does not pass the harness unnoticed.
+                  possible_match: true,
                 },
               ],
             },

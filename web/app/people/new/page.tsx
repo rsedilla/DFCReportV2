@@ -6,13 +6,22 @@ import { useState } from 'react';
 
 import { AppShell } from '@/components/app-shell';
 import { LeaderPicker } from '@/components/leader-picker';
+import { PossibleMatches } from '@/components/possible-matches';
 import { Button } from '@/components/ui/button';
 import { FailureNotice } from '@/components/ui/failure-notice';
 import { Field } from '@/components/ui/field';
 import { RadioGroup } from '@/components/ui/radio-group';
 import { ApiRequestError } from '@/lib/api-client';
 import { describeFailure, fieldErrorFor, type Failure } from '@/lib/messages';
-import { createPerson, type CivilStatus, type DuplicateCandidate, type Sex } from '@/lib/people';
+import {
+  CIVIL_STATUS_OPTIONS,
+  SEX_OPTIONS,
+  createPerson,
+  isWithheld,
+  type CivilStatus,
+  type DuplicateCandidate,
+  type Sex,
+} from '@/lib/people';
 
 /**
  * Adding a person (SKILL.md sections 3 and 9).
@@ -46,25 +55,6 @@ export default function NewPersonPage() {
   );
 }
 
-/**
- * The labels for the two closed enumerations this form offers.
- *
- * Section 4 makes the sexes a total mapping onto the Networks, and section 3
- * fixes the three civil statuses. Both are closed lists in the specification,
- * so they are written once here rather than inline where a fourth could be
- * added without anybody noticing it was an amendment.
- */
-const SEXES = [
-  { value: 'MALE', label: 'Male' },
-  { value: 'FEMALE', label: 'Female' },
-] as const satisfies readonly { value: Sex; label: string }[];
-
-const CIVIL_STATUSES = [
-  { value: 'SINGLE', label: 'Single' },
-  { value: 'MARRIED', label: 'Married' },
-  { value: 'WIDOWED', label: 'Widowed' },
-] as const satisfies readonly { value: CivilStatus; label: string }[];
-
 const EMPTY = {
   first_name: '',
   middle_name: '',
@@ -84,23 +74,49 @@ function NewPersonForm() {
   const [failure, setFailure] = useState<Failure | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string | null>>({});
 
+  /**
+   * **Accumulated, never replaced.** Each refusal carries only the Tier 1
+   * candidates still unacknowledged, so acknowledging the newest set alone drops
+   * the earlier ones and the next attempt is refused on those again. With a
+   * second candidate appearing between two attempts — which section 2 names
+   * initial encoding across many hands as the likeliest source of — the button
+   * alternates for ever, and section 3's rule that the system never blocks
+   * creation is broken by the screen meant to satisfy it.
+   */
+  const [acknowledged, setAcknowledged] = useState<string[]>([]);
+
+  /**
+   * One key for the whole attempt, including across the acknowledgement round
+   * trip (section 23). Minted per call, a retry after a lost response would
+   * present a body the store has never seen and create a second Person — which
+   * is the duplicate the header exists to prevent.
+   *
+   * It is replaced only when the person edits the record they are creating, at
+   * which point it is a different write.
+   */
+  const [writeKey, setWriteKey] = useState(() => crypto.randomUUID());
+
   function set(key: keyof typeof EMPTY, value: string) {
     setValues((current) => ({ ...current, [key]: value }));
+    setWriteKey(crypto.randomUUID());
   }
 
   const create = useMutation({
-    mutationFn: (acknowledged: string[]) =>
-      createPerson({
-        first_name: values.first_name.trim(),
-        middle_name: values.middle_name.trim() || null,
-        last_name: values.last_name.trim(),
-        sex: values.sex as Sex,
-        civil_status: values.civil_status as CivilStatus,
-        birth_date: values.birth_date || null,
-        mobile_number: values.mobile_number.trim() || null,
-        pastoral_leader_id: leaderId as string,
-        acknowledged_duplicate_ids: acknowledged.length > 0 ? acknowledged : undefined,
-      }),
+    mutationFn: (acknowledgedIds: string[]) =>
+      createPerson(
+        {
+          first_name: values.first_name.trim(),
+          middle_name: values.middle_name.trim() || null,
+          last_name: values.last_name.trim(),
+          sex: values.sex as Sex,
+          civil_status: values.civil_status as CivilStatus,
+          birth_date: values.birth_date || null,
+          mobile_number: values.mobile_number.trim() || null,
+          pastoral_leader_id: leaderId as string,
+          acknowledged_duplicate_ids: acknowledgedIds.length > 0 ? acknowledgedIds : undefined,
+        },
+        writeKey,
+      ),
     onSuccess: (person) => router.push(`/people/${person.id}`),
     onError: (error) => {
       if (error instanceof ApiRequestError && error.code === 'DUPLICATE_ACKNOWLEDGEMENT_REQUIRED') {
@@ -142,24 +158,26 @@ function NewPersonForm() {
               <p className="font-medium">{candidate.full_name}</p>
               <p className="text-muted font-mono text-sm">{candidate.member_id}</p>
 
-              {candidate.reasons?.length ? (
+              {/*
+                Withheld is read from the API's own flag, not inferred from a
+                missing tier: section 8 protects every field the matching rules
+                read, and the API already states which candidates it redacted.
+                Guessing that from the shape of the payload would render
+                "visible to their own leaders" for somebody the viewer pastors,
+                the first time a rule matches without pushing a reason.
+              */}
+              {isWithheld(candidate) ? (
+                <p className="text-muted mt-2 text-sm leading-relaxed">
+                  A possible match. Their details are visible to the leaders who pastor them —
+                  ask before adding a second record.
+                </p>
+              ) : candidate.reasons?.length ? (
                 <ul className="text-muted mt-2 list-inside list-disc text-sm">
                   {candidate.reasons.map((reason) => (
                     <li key={reason}>{reason}</li>
                   ))}
                 </ul>
-              ) : (
-                /*
-                  No tier and no reasons: this candidate is outside the viewer's
-                  pastoral scope, and section 8 protects the fields every match
-                  rule reads. Saying "a possible match" is the most that can be
-                  said without answering a question about somebody's birthday.
-                */
-                <p className="text-muted mt-2 text-sm leading-relaxed">
-                  A possible match. Their details are visible to the leaders who pastor them —
-                  ask before adding a second record.
-                </p>
-              )}
+              ) : null}
 
               <a
                 href={`/people/${candidate.id}`}
@@ -174,7 +192,14 @@ function NewPersonForm() {
         <div className="mt-6 flex flex-wrap gap-3">
           <Button
             disabled={create.isPending}
-            onClick={() => create.mutate(candidates.map((candidate) => candidate.id))}
+            onClick={() => {
+              // Union, not replace. See `acknowledged` above.
+              const union = Array.from(
+                new Set([...acknowledged, ...candidates.map((candidate) => candidate.id)]),
+              );
+              setAcknowledged(union);
+              create.mutate(union);
+            }}
           >
             {create.isPending ? 'Adding…' : 'These are different people — add anyway'}
           </Button>
@@ -232,7 +257,7 @@ function NewPersonForm() {
           name="sex"
           required
           description="This decides their Network: men join the Men’s Network and women the Women’s. Correcting it later is a separate, recorded action."
-          options={SEXES}
+          options={SEX_OPTIONS}
           value={values.sex}
           onChange={(next) => set('sex', next)}
         />
@@ -241,7 +266,7 @@ function NewPersonForm() {
           legend="Civil status"
           name="civil_status"
           required
-          options={CIVIL_STATUSES}
+          options={CIVIL_STATUS_OPTIONS}
           value={values.civil_status}
           onChange={(next) => set('civil_status', next)}
         />
@@ -265,6 +290,24 @@ function NewPersonForm() {
           error={fieldErrors.mobile_number}
           onChange={(event) => set('mobile_number', event.target.value)}
           description="Optional."
+        />
+
+        {/*
+          **The pre-flight lookup, which is why section 3 has that endpoint.**
+          Creation can only ever refuse on Tier 1, so without this every Tier 2
+          match would be "computed and discarded" — section 3's own words for the
+          failure it exists to prevent, and section 9 makes it the first step of
+          registering a VIP.
+
+          Advisory, never blocking: section 3 says the system never blocks
+          creation, and a weaker match is something for the encoder to look at
+          rather than something to answer.
+        */}
+        <PossibleMatches
+          firstName={values.first_name}
+          lastName={values.last_name}
+          birthDate={values.birth_date}
+          mobileNumber={values.mobile_number}
         />
 
         <LeaderPicker
