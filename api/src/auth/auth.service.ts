@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 
 import { ApiError, ApiErrorCode } from '../common/errors/api-error';
+import { PeopleReadService } from '../people/people.read.service';
 
 import { AccountsRepository } from './accounts.repository';
 import { AuthorizationService, type Actor } from './authorization/authorization.service';
@@ -24,6 +25,7 @@ export class AuthService {
     private readonly passwords: PasswordService,
     private readonly tokens: TokensService,
     private readonly authorization: AuthorizationService,
+    private readonly people: PeopleReadService,
   ) {}
 
   async login(email: string, password: string, deviceLabel: string | null): Promise<SessionTokens> {
@@ -168,11 +170,26 @@ export class AuthService {
   async describe(actor: Actor): Promise<Record<string, unknown>> {
     const account = await this.accounts.findById(actor.accountId);
     const grants = await this.authorization.grantsFor(actor.accountId);
+    const person = await this.people.forDecision(actor.personId);
 
     return {
       account_id: actor.accountId,
       person_id: actor.personId,
       email: account?.email ?? null,
+      // **The caller's own first name, and only theirs.** A client greets the
+      // person it just signed in, and had no way to learn what to call them
+      // short of fetching their Person record — a second request, needing a
+      // capability, to read a field this response is already describing the
+      // owner of.
+      //
+      // It discloses nothing: section 8 makes names church-wide visible, and
+      // this is the name of the account making the request. It is read through
+      // `people`'s own reader rather than by joining `persons`, which section 2
+      // reserves to that module, and that reader cannot hand back a birthday or
+      // a mobile number.
+      //
+      // Additive, which section 22 permits within `v1`.
+      first_name: person?.firstName ?? null,
       // **A grant that covers nothing is not advertised.** Section 7 gives some
       // capabilities Whole Church and nothing narrower, and a narrower grant of one
       // authorizes no request at all — so publishing it invites a client to render

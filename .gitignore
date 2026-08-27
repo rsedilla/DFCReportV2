@@ -15,6 +15,13 @@ out/
 .env.*
 !.env.example
 
+# accessibility harness output (web/playwright.config.ts)
+# Traces are retained on failure and carry full page snapshots, so they are
+# working artefacts of a run rather than anything to keep.
+test-results/
+playwright-report/
+.playwright/
+
 # logs
 *.log
 npm-debug.log*

@@ -60,6 +60,20 @@ const TEXT_PAIRS = [
   ['muted', 'raised'],
   ['accent', 'surface'],
   ['accent', 'raised'],
+  // A filled button puts text *on* accent rather than beside it, which is a
+  // position no pair here covered. `surface` is the foreground for it in both
+  // themes, and the pair is listed because the palette comment says a
+  // combination nobody lists is one this check cannot see: `bg-accent text-ink`
+  // is 2.14:1 and would have passed lint unnoticed.
+  ['surface', 'accent'],
+  // `field-invalid` is *also* body text: the message beside an invalid field,
+  // and the form-level refusal on sign-in, both render in it at `text-sm`.
+  // 1.4.3 puts that at 4.5:1, and listing the token only as a control boundary
+  // held it to 3:1 — so an adjustment toward that floor could drop the error
+  // text below AA with this check still green. It clears 4.5:1 today; what was
+  // missing is anything holding it there.
+  ['field-invalid', 'surface'],
+  ['field-invalid', 'raised'],
 ];
 
 /** The boundary of a control. WCAG 1.4.11 asks 3:1. */
