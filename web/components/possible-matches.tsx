@@ -1,8 +1,9 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import Link from 'next/link';
 import { useEffect, useId, useState } from 'react';
+
+import { TextLink } from '@/components/ui/text-link';
 
 import {
   MINIMUM_SEARCH_LENGTH,
@@ -158,12 +159,9 @@ export function PossibleMatches({
               </ul>
             ) : null}
 
-            <Link
-              href={`/people/${candidate.id}`}
-              className="text-accent focus-visible:outline-accent mt-1 inline-flex min-h-11 items-center rounded-md text-sm underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2"
-            >
+            <TextLink href={`/people/${candidate.id}`} className="mt-1 text-sm">
               Open this record
-            </Link>
+            </TextLink>
           </li>
         ))}
       </ul>

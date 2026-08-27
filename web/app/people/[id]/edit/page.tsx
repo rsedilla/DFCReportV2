@@ -1,15 +1,15 @@
 'use client';
 
 import { useMutation, useQuery } from '@tanstack/react-query';
-import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useState } from 'react';
 
-import { AppShell } from '@/components/app-shell';
+import { AppShell, PAGE_WIDTH } from '@/components/app-shell';
 import { Button } from '@/components/ui/button';
 import { FailureNotice } from '@/components/ui/failure-notice';
 import { Field } from '@/components/ui/field';
 import { RadioGroup } from '@/components/ui/radio-group';
+import { TextLink } from '@/components/ui/text-link';
 import { describeFailure, fieldErrorFor, type Failure } from '@/lib/messages';
 import {
   CIVIL_STATUS_OPTIONS,
@@ -59,14 +59,9 @@ function EditPersonForm() {
   });
 
   return (
-    <main id="main" className="mx-auto max-w-3xl px-5 py-8 sm:py-12">
+    <main id="main" className={PAGE_WIDTH.READING}>
       <p className="text-sm">
-        <Link
-          href={`/people/${id}`}
-          className="text-accent focus-visible:outline-accent inline-flex min-h-11 items-center rounded-md underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2"
-        >
-          Back to this person
-        </Link>
+        <TextLink href={`/people/${id}`}>Back to this person</TextLink>
       </p>
 
       <h1 className="mt-6 text-2xl font-semibold tracking-tight">Edit details</h1>
@@ -230,9 +225,9 @@ function Fields({ person, id }: { person: PersonFull; id: string }) {
             <Button type="submit" disabled={save.isPending}>
               {save.isPending ? 'Saving…' : 'Save changes'}
             </Button>
-            <Link href={`/people/${id}`} className="inline-flex min-h-11 items-center text-sm">
+            <TextLink href={`/people/${id}`} className="text-ink no-underline">
               Cancel
-            </Link>
+            </TextLink>
           </div>
         </form>
       )}

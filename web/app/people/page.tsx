@@ -5,7 +5,7 @@ import { Lock } from 'lucide-react';
 import Link from 'next/link';
 import { useState } from 'react';
 
-import { AppShell } from '@/components/app-shell';
+import { AppShell, PAGE_WIDTH } from '@/components/app-shell';
 import { buttonClasses } from '@/components/ui/button';
 import { Button } from '@/components/ui/button';
 import { FailureNotice } from '@/components/ui/failure-notice';
@@ -74,7 +74,7 @@ function PeopleSearch() {
   }
 
   return (
-    <main id="main" className="mx-auto max-w-5xl px-5 py-8 sm:py-12">
+    <main id="main" className={PAGE_WIDTH.INDEX}>
       <h1 className="text-2xl font-semibold tracking-tight">People</h1>
       <p className="text-muted mt-2 max-w-2xl text-sm leading-relaxed">
         Search everyone in the church by name. You will see the details of people you pastor;

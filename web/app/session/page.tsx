@@ -4,6 +4,7 @@ import { useMutation, useQuery } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { useSyncExternalStore } from 'react';
 
+import { PAGE_WIDTH } from '@/components/app-shell';
 import { RequireSession } from '@/components/require-session';
 import { Button } from '@/components/ui/button';
 import { FailureNotice } from '@/components/ui/failure-notice';
@@ -85,7 +86,7 @@ function SessionDetail() {
   });
 
   return (
-    <main id="main" className="mx-auto max-w-2xl px-5 py-10 sm:py-14">
+    <main id="main" className={PAGE_WIDTH.READING}>
       <h1 className="text-2xl font-semibold tracking-tight">Your session</h1>
 
       {/*

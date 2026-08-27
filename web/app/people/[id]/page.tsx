@@ -4,9 +4,10 @@ import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 
-import { AppShell } from '@/components/app-shell';
+import { AppShell, PAGE_WIDTH } from '@/components/app-shell';
 import { buttonClasses } from '@/components/ui/button';
 import { FailureNotice } from '@/components/ui/failure-notice';
+import { TextLink } from '@/components/ui/text-link';
 import { ApiRequestError } from '@/lib/api-client';
 import { describeFailure } from '@/lib/messages';
 import { NEGATIVE_AGE, ageFrom, civilStatusLabel, getPerson, sexLabel } from '@/lib/people';
@@ -56,14 +57,9 @@ function PersonDetail() {
   });
 
   return (
-    <main id="main" className="mx-auto max-w-3xl px-5 py-8 sm:py-12">
+    <main id="main" className={PAGE_WIDTH.READING}>
       <p className="text-sm">
-        <Link
-          href="/people"
-          className="text-accent focus-visible:outline-accent inline-flex min-h-11 items-center rounded-md underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2"
-        >
-          Back to people
-        </Link>
+        <TextLink href="/people">Back to people</TextLink>
       </p>
 
       {person.isPending ? (

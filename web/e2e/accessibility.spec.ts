@@ -437,7 +437,7 @@ test('every interactive target meets the 24px minimum', async ({ page }) => {
 });
 
 /**
- * Nothing scrolls sideways on the phones these leaders actually hold.
+ * Nothing scrolls sideways on any screen these leaders actually use.
  *
  * SKILL.md section 23 makes mobile web a **current** surface rather than
  * preparation for one. A page that scrolls horizontally is the ordinary way that
@@ -445,25 +445,47 @@ test('every interactive target meets the 24px minimum', async ({ page }) => {
  * with its search box squeezed to 107px beside two buttons, on the one control
  * the screen exists for, and every desktop check passed.
  *
- * **Two widths, and neither is arbitrary.**
+ * **Five widths, chosen because each is a different layout rather than a
+ * different device.** Listing twenty phones would run the same layout twenty
+ * times; what matters is a breakpoint, a content cap, or an extreme.
  *
- * **320** is the narrowest width in real use: an iPhone SE, and near enough the
- * 344 of a folded Galaxy Z Fold. For a layout that reflows, overflow is hardest
- * at the narrowest width, so this is the binding constraint and everything from
- * 360 (most budget Android — Samsung A-series, OPPO, Vivo, Realme) through 393,
- * 412 and 430 inherits it.
- *
- * **690** is a Galaxy Z Fold opened out, and it is here because it is *above* the
- * `sm` breakpoint at 640 where these layouts stop stacking and become rows. A
- * row that fits at 1280 can still overflow at 690, and no narrow test would ever
- * see it — the widths either side of a breakpoint are two different layouts.
+ * - **320** — the narrowest in real use. Overflow is hardest at the narrowest
+ *   width, so every phone from 344 (a folded Z Fold) through 360, 375, 393, 412
+ *   and 430 inherits this one.
+ * - **690** — above the `sm` breakpoint at 640, where these layouts stop
+ *   stacking and become rows. A row that fits at 1280 can still overflow here,
+ *   and no narrow test would ever see it.
+ * - **768** — the `md` breakpoint *and* `PAGE_WIDTH.READING` exactly, so a form
+ *   both changes layout and stops growing. Two boundaries on one number, and an
+ *   iPad mini in portrait.
+ * - **820** — a standard iPad portrait, between those boundaries.
+ * - **1024** — `PAGE_WIDTH.INDEX` exactly: the narrowest laptop, an iPad in
+ *   landscape, an iPad Pro 12.9 in portrait. **The last width where anything
+ *   can break**, because nothing widens past it — 1366, 1440, 1512, 1920 and a
+ *   4K panel all render what this renders, with more margin.
  */
-const PHONE_WIDTHS = [
+const VIEWPORT_WIDTHS = [
   { name: '320px, the narrowest phone in use', width: 320, height: 568 },
   { name: '690px, a foldable opened out', width: 690, height: 829 },
+  // An iPad mini portrait, and exactly Tailwind's `md` breakpoint — where a
+  // layout can change — and exactly `PAGE_WIDTH.READING`, where a form stops
+  // growing and starts centring. Two boundaries on one number, so it is the
+  // tablet width most likely to expose something.
+  { name: '768px, an iPad mini and the md breakpoint', width: 768, height: 1024 },
+  // The common iPad portrait width: iPad 10.9, Air, and near enough the Pro 11's
+  // 834. Structurally between the two boundaries either side of it, and here
+  // because it is what most tablet users will actually be holding.
+  { name: '820px, a standard iPad portrait', width: 820, height: 1180 },
+  // **The narrowest laptop, an iPad landscape, an iPad Pro 12.9 portrait — and
+  // the last width where anything can break.** The widest content constraint in
+  // the application is `PAGE_WIDTH.INDEX` at 1024px, so above this the layout
+  // stops changing: a wider display adds margin rather than rearranging
+  // anything, and 1366, 1440, 1512, 1920 and a 4K panel all render what this
+  // width renders.
+  { name: '1024px, a laptop or an iPad landscape', width: 1024, height: 768 },
 ];
 
-for (const viewport of PHONE_WIDTHS) {
+for (const viewport of VIEWPORT_WIDTHS) {
   test.describe(`at ${viewport.name}`, () => {
     test.use({ viewport: { width: viewport.width, height: viewport.height } });
 

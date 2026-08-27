@@ -4,13 +4,14 @@ import { useMutation } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 
-import { AppShell } from '@/components/app-shell';
+import { AppShell, PAGE_WIDTH } from '@/components/app-shell';
 import { LeaderPicker } from '@/components/leader-picker';
 import { PossibleMatches } from '@/components/possible-matches';
 import { Button } from '@/components/ui/button';
 import { FailureNotice } from '@/components/ui/failure-notice';
 import { Field } from '@/components/ui/field';
 import { RadioGroup } from '@/components/ui/radio-group';
+import { TextLink } from '@/components/ui/text-link';
 import { ApiRequestError } from '@/lib/api-client';
 import { describeFailure, fieldErrorFor, type Failure } from '@/lib/messages';
 import {
@@ -164,7 +165,7 @@ function NewPersonForm() {
 
   if (candidates) {
     return (
-      <main id="main" className="mx-auto max-w-3xl px-5 py-8 sm:py-12">
+      <main id="main" className={PAGE_WIDTH.READING}>
         <h1 className="text-2xl font-semibold tracking-tight">Is this someone already recorded?</h1>
         <p className="text-muted mt-2 max-w-2xl text-sm leading-relaxed">
           Before {values.first_name} {values.last_name} is added, check these. Recording one
@@ -199,12 +200,9 @@ function NewPersonForm() {
                 </ul>
               ) : null}
 
-              <a
-                href={`/people/${candidate.id}`}
-                className="text-accent focus-visible:outline-accent mt-2 inline-flex min-h-11 items-center rounded-md text-sm underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2"
-              >
+              <TextLink href={`/people/${candidate.id}`} className="mt-2 text-sm">
                 Open this record
-              </a>
+              </TextLink>
             </li>
           ))}
         </ul>
@@ -236,7 +234,7 @@ function NewPersonForm() {
   }
 
   return (
-    <main id="main" className="mx-auto max-w-3xl px-5 py-8 sm:py-12">
+    <main id="main" className={PAGE_WIDTH.READING}>
       <h1 className="text-2xl font-semibold tracking-tight">Add a person</h1>
 
       <form onSubmit={onSubmit} className="mt-8 flex flex-col gap-5" noValidate>
