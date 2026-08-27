@@ -1,6 +1,5 @@
 'use client';
 
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 
@@ -8,6 +7,7 @@ import { AuthCard } from '@/components/auth-card';
 import { Button } from '@/components/ui/button';
 import { FailureNotice } from '@/components/ui/failure-notice';
 import { Field } from '@/components/ui/field';
+import { TextLink } from '@/components/ui/text-link';
 import { describeFailure, type Failure } from '@/lib/messages';
 import { signIn } from '@/lib/session';
 
@@ -62,12 +62,7 @@ export default function SignInPage() {
     <AuthCard
       title="Sign in"
       footer={
-        <Link
-          href="/forgot-password"
-          className="text-accent focus-visible:outline-accent inline-flex min-h-11 items-center rounded-md underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2"
-        >
-          I have forgotten my password
-        </Link>
+        <TextLink href="/forgot-password">I have forgotten my password</TextLink>
       }
     >
       <form onSubmit={onSubmit} className="flex flex-col gap-5" noValidate>
