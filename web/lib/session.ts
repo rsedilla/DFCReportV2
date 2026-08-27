@@ -24,7 +24,9 @@
  *   `localStorage` is shared per origin while `inFlight` is per JavaScript
  *   context. Without it, two tabs each read the same token and the second POST
  *   arrives after the first has rotated — sequential at the server, and
- *   therefore account-wide revocation for having two tabs open.
+ *   therefore account-wide revocation for having two tabs open. Section 6 makes
+ *   every tab of one browser profile one session and requires this
+ *   serialization by name; it is not an optimisation.
  * - `unknownOutcome` stops this client re-presenting a token **whose fate it
  *   does not know**. See below; it is the subtlest of the three.
  *
@@ -132,9 +134,11 @@ let unknownOutcome: string | null = null;
  *
  * It serializes within this tab only, which is exactly what this file did before
  * the lock existed. It is a narrower guarantee and is not silently equivalent:
- * where `navigator.locks` is missing, two tabs can still race. That is listed in
- * `CLAUDE.md` under *Open — awaiting a ruling*, and is not something this promise
- * chain closes.
+ * where `navigator.locks` is missing, two tabs can still race, and section 6
+ * requires serialization across them. Nothing this promise chain does closes
+ * that; what closes it is the server-side grace window proposed under *Open —
+ * awaiting a ruling* in `CLAUDE.md`, after which a cross-tab race carries the
+ * lost-response signature rather than the theft one.
  */
 let fallbackChain: Promise<unknown> = Promise.resolve();
 

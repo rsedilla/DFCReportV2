@@ -36,7 +36,9 @@ import { SessionHaltedError } from './session';
  *   `fieldErrorFor`, which puts it on that field where the form renders one.
  *   Reaching here means it named a field this form does not have — for these
  *   screens, `field: 'token'` for a spent or expired link, which is a fact about
- *   the link and not about anything typed.
+ *   the link and not about anything typed. Section 23 settles this: the token
+ *   follows the field, not the error code, and where the form renders no such
+ *   field there is nothing on screen to mark invalid.
  * - `DUPLICATE_ACKNOWLEDGEMENT_REQUIRED` is not a refusal at all. Section 3
  *   makes it a request for acknowledgement, and `api-error.ts` says in terms
  *   that it is deliberately not `VALIDATION_FAILED` because "a client branching
