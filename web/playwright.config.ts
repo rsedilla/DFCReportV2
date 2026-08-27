@@ -37,7 +37,41 @@ export default defineConfig({
     trace: 'retain-on-failure',
   },
 
-  projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
+  /**
+   * **Two engines, and the second one is iOS.**
+   *
+   * `chromium` runs everything, at all five widths. It is also what covers Edge:
+   * Edge is Chromium, so it shares this rendering engine, and a project of its
+   * own would re-run the same layout code against the same engine.
+   *
+   * `webkit` exists because **iOS forces WebKit on every browser it hosts**.
+   * Chrome on an iPhone is WebKit, so "we tested Chrome" is not a statement about
+   * any iPhone -- and roughly half the device list this application is sized for
+   * is iPhones. WebKit is also where the differences are: date inputs, sticky
+   * positioning, flex and grid corners, and focus behaviour.
+   *
+   * It runs the two widths tagged `@cross-browser` rather than all five, and the
+   * cost is the reason. This job builds the application and scans every route in
+   * two themes; a second engine over five widths roughly doubles it, and the
+   * comment above says in terms that it must stay fast enough that nobody is
+   * tempted to skip it. The two chosen are the ones that bind -- the narrowest
+   * width, where overflow is hardest, and the widest at which anything changes.
+   * An engine difference appearing at neither end is the accepted cost, stated
+   * rather than discovered.
+   *
+   * Firefox is deliberately absent. Gecko is a third engine and no phone or
+   * tablet in use here runs it, so it would buy a desktop-only check at the same
+   * price as the one that covers every iPhone.
+   *
+   * **The tag lives on the viewport list**, not in a title match here. A `grep`
+   * against describe titles silently runs nothing when somebody rewords one, and
+   * a browser project that quietly scans zero pages reports the same green as one
+   * that scanned everything.
+   */
+  projects: [
+    { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
+    { name: 'webkit', use: { ...devices['Desktop Safari'] }, grep: /@cross-browser/ },
+  ],
 
   webServer: {
     // The build is part of the command, not a step somebody runs first.
@@ -53,7 +87,17 @@ export default defineConfig({
       // Never reached: every request is intercepted before it leaves the page.
       // It is set because `lib/api-client.ts` refuses to construct a URL without
       // it, which is the behaviour that stops a real deployment shipping unset.
-      NEXT_PUBLIC_API_URL: 'http://127.0.0.1:9',
+      //
+      // **The port is 9999 and not 9, and that is not cosmetic.** Port 9 is the
+      // discard protocol and is on the browsers' blocked-port list, and WebKit
+      // enforces that *before* route interception can see the request: it is
+      // refused at the network layer, the mock never fires, and every scan
+      // needing a signed-in session renders the signed-out page instead.
+      // Chromium intercepts earlier, so the same value worked there and hid it.
+      //
+      // The comment above was written from Chromium's behaviour and was true of
+      // it. A port nobody blocks makes it true of both.
+      NEXT_PUBLIC_API_URL: 'http://127.0.0.1:9999',
     },
   },
 });

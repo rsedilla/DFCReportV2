@@ -150,13 +150,21 @@ jobs:
       # browser (`web/e2e/mock-api.ts`). axe inspects rendered DOM and cannot tell
       # where the JSON came from, so a full stack would buy nothing here and cost a
       # service dependency in a job that has to stay fast enough to keep.
-      - name: Install browser
-        run: npx playwright install --with-deps chromium
+      # **Two engines, because iOS forces WebKit on every browser it hosts.**
+      # Chrome on an iPhone is WebKit, so a Chromium-only run says nothing about
+      # any iPhone -- and roughly half the devices this application is sized for
+      # are iPhones. Edge needs nothing of its own: it is Chromium.
+      #
+      # WebKit runs the two widths tagged `@cross-browser` rather than all five,
+      # which keeps the whole job under a minute. Firefox is deliberately absent:
+      # no phone or tablet in use here runs Gecko.
+      - name: Install browsers
+        run: npx playwright install --with-deps chromium webkit
 
       # Two suites: axe-core over every route in both themes, and the section 6
       # refresh-token rules, which are invisible from the screen -- a sign-out
       # that revokes nothing looks exactly like one that works.
-      - name: Browser tests (axe-core, and the section 6 session rules)
+      - name: Browser tests (axe-core in two engines, and the section 6 session rules)
         run: npm run test:browser
 
       - name: Upload failure traces

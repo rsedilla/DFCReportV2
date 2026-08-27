@@ -11,13 +11,14 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint . && node scripts/check-client-boundary.mjs && node scripts/check-ui-dependencies.mjs && node scripts/check-contrast.mjs",
+    "lint": "eslint . && node scripts/check-client-boundary.mjs && node scripts/check-ui-dependencies.mjs && node scripts/check-contrast.mjs && node scripts/check-breakpoints.mjs",
     "typecheck": "tsc --noEmit",
     "test:browser": "playwright test",
     "test:a11y": "playwright test e2e/accessibility.spec.ts",
     "check:boundary": "node scripts/check-client-boundary.mjs",
     "check:ui-deps": "node scripts/check-ui-dependencies.mjs",
-    "check:contrast": "node scripts/check-contrast.mjs"
+    "check:contrast": "node scripts/check-contrast.mjs",
+    "check:breakpoints": "node scripts/check-breakpoints.mjs"
   },
   "dependencies": {
     "@radix-ui/react-label": "^2.1.15",
