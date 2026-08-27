@@ -40,18 +40,25 @@ const LINKS = [
  * So content stops widening and the page centres it — the same layout from a
  * 1024px laptop to a 4K display, with more margin rather than more line.
  *
- * Two values, not four. Slice 2 arrived with `max-w-md`, `2xl`, `3xl` and `5xl`
- * across six screens, three of them arbitrary.
+ * Two values for a page of content, where there were four.
  *
  * - `READING` (`max-w-3xl`, 768px) for anything read or filled in: a profile, a
- *   form, the session description. It keeps a line of prose near the 60–75
- *   characters that is comfortable to read.
+ *   form, the session description.
  * - `INDEX` (`max-w-5xl`, 1024px) for a list or a table, where the extra width
  *   buys columns rather than longer lines.
  *
- * The sign-in card keeps its own narrower width in `auth-card.tsx`: it is a
- * centred card on an empty page rather than a page of content, and it is the one
- * screen with no navigation around it.
+ * **`READING` is not a reading measure**, and it was described as one here in
+ * error. Less its padding it is a 728px column, which at the body size is
+ * nearer 90 characters than the 60–75 that is comfortable. Prose is kept short
+ * by the `max-w-xl`/`max-w-2xl` on the paragraphs themselves, which is where a
+ * measure belongs — a page width also has to hold a form and a definition list.
+ *
+ * **The unauthenticated screens are a third width and are not counted here.**
+ * `auth-card.tsx` and the landing screen are centred cards on an empty page
+ * rather than pages of content. `require-session.tsx` deliberately uses the
+ * wider of the two above rather than a card width: it renders first on every
+ * screen behind it, so a narrow box there means each of them opens at one width
+ * and jumps to another.
  */
 export const PAGE_WIDTH = {
   READING: 'mx-auto max-w-3xl px-5 py-8 sm:py-12',

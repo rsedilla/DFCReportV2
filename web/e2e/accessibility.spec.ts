@@ -445,37 +445,37 @@ test('every interactive target meets the 24px minimum', async ({ page }) => {
  * with its search box squeezed to 107px beside two buttons, on the one control
  * the screen exists for, and every desktop check passed.
  *
- * **Five widths, chosen because each is a different layout rather than a
+ * **Five widths, chosen because each is a different state rather than a
  * different device.** Listing twenty phones would run the same layout twenty
- * times; what matters is a breakpoint, a content cap, or an extreme.
+ * times; what matters is a breakpoint, a content cap first binding, or an
+ * extreme. The device names below say which real screen lands on each — they are
+ * not the reason it is in the list.
  *
- * - **320** — the narrowest in real use. Overflow is hardest at the narrowest
- *   width, so every phone from 344 (a folded Z Fold) through 360, 375, 393, 412
- *   and 430 inherits this one.
- * - **690** — above the `sm` breakpoint at 640, where these layouts stop
- *   stacking and become rows. A row that fits at 1280 can still overflow here,
- *   and no narrow test would ever see it.
- * - **768** — the `md` breakpoint *and* `PAGE_WIDTH.READING` exactly, so a form
- *   both changes layout and stops growing. Two boundaries on one number, and an
- *   iPad mini in portrait.
- * - **820** — a standard iPad portrait, between those boundaries.
- * - **1024** — `PAGE_WIDTH.INDEX` exactly: the narrowest laptop, an iPad in
- *   landscape, an iPad Pro 12.9 in portrait. **The last width where anything
- *   can break**, because nothing widens past it — 1366, 1440, 1512, 1920 and a
- *   4K panel all render what this renders, with more margin.
+ * `sm` at 640 is the only breakpoint this application uses. There is no `md:`,
+ * `lg:` or `xl:` utility anywhere in `web/`, so above 640 nothing rearranges and
+ * the remaining widths differ only in which content cap binds.
+ *
+ * - **320** — the narrowest in real use, and the only width below `sm` here.
+ *   Overflow is hardest at the narrowest width, so every phone from 344 (a
+ *   folded Z Fold) through 360, 375, 393, 412 and 430 inherits it.
+ * - **690** — the first width *above* `sm`, where stacked layouts become rows. A
+ *   row that fits at 1280 can still overflow here, and no narrow test sees it.
+ * - **768** — `PAGE_WIDTH.READING` exactly: the width at which a form stops
+ *   growing, still filling the viewport edge to edge. An iPad mini portrait.
+ * - **820** — the first width at which `READING` is capped *and centred, with
+ *   margin on both sides*, which is a layout 768 does not produce. A standard
+ *   iPad portrait lands here.
+ * - **1024** — `PAGE_WIDTH.INDEX` exactly, so the list screens stop growing too:
+ *   the narrowest laptop, an iPad landscape, an iPad Pro 12.9 portrait. **The
+ *   last width where anything can break**, because nothing widens past it —
+ *   1366, 1440, 1512, 1920 and a 4K panel all render what this renders, with
+ *   more margin.
  */
 const VIEWPORT_WIDTHS = [
   { name: '320px, the narrowest phone in use', width: 320, height: 568 },
   { name: '690px, a foldable opened out', width: 690, height: 829 },
-  // An iPad mini portrait, and exactly Tailwind's `md` breakpoint — where a
-  // layout can change — and exactly `PAGE_WIDTH.READING`, where a form stops
-  // growing and starts centring. Two boundaries on one number, so it is the
-  // tablet width most likely to expose something.
-  { name: '768px, an iPad mini and the md breakpoint', width: 768, height: 1024 },
-  // The common iPad portrait width: iPad 10.9, Air, and near enough the Pro 11's
-  // 834. Structurally between the two boundaries either side of it, and here
-  // because it is what most tablet users will actually be holding.
-  { name: '820px, a standard iPad portrait', width: 820, height: 1180 },
+  { name: '768px, where READING stops growing', width: 768, height: 1024 },
+  { name: '820px, where READING first centres', width: 820, height: 1180 },
   // **The narrowest laptop, an iPad landscape, an iPad Pro 12.9 portrait — and
   // the last width where anything can break.** The widest content constraint in
   // the application is `PAGE_WIDTH.INDEX` at 1024px, so above this the layout

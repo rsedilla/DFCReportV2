@@ -4,12 +4,15 @@ import { useMutation, useQuery } from '@tanstack/react-query';
 import { useParams, useRouter } from 'next/navigation';
 import { useState } from 'react';
 
+import Link from 'next/link';
+
 import { AppShell, PAGE_WIDTH } from '@/components/app-shell';
-import { Button } from '@/components/ui/button';
+import { Button, buttonClasses } from '@/components/ui/button';
 import { FailureNotice } from '@/components/ui/failure-notice';
 import { Field } from '@/components/ui/field';
 import { RadioGroup } from '@/components/ui/radio-group';
 import { TextLink } from '@/components/ui/text-link';
+import { cn } from '@/lib/utils';
 import { describeFailure, fieldErrorFor, type Failure } from '@/lib/messages';
 import {
   CIVIL_STATUS_OPTIONS,
@@ -225,9 +228,23 @@ function Fields({ person, id }: { person: PersonFull; id: string }) {
             <Button type="submit" disabled={save.isPending}>
               {save.isPending ? 'Saving…' : 'Save changes'}
             </Button>
-            <TextLink href={`/people/${id}`} className="text-ink no-underline">
+            {/*
+              A link styled as a secondary button, which is the pattern already
+              used for "Edit details" and "Add a person": it navigates, so it is
+              a link, and it sits in a control row beside Save, so it looks like
+              a control.
+
+              It was briefly a `TextLink` with `text-ink no-underline`, which
+              removed both the colour and the underline and left an interactive
+              thing indistinguishable from plain text — and lost `text-sm`, so it
+              was a different size from the button beside it. Whether a bare text
+              link may carry no visual affordance at all is a question section 23
+              does not answer; this avoids asking it by using an affordance the
+              application already has.
+            */}
+            <Link href={`/people/${id}`} className={cn(buttonClasses('secondary'))}>
               Cancel
-            </TextLink>
+            </Link>
           </div>
         </form>
       )}
