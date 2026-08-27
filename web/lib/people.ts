@@ -109,8 +109,14 @@ export interface PersonInput {
  * and creates a second Person.
  *
  * The lost response is the case that matters, and it is indistinguishable from a
- * request that never arrived — which is why the caller holds one key for the
- * whole attempt, including across a duplicate-acknowledgement round trip.
+ * request that never arrived.
+ *
+ * **One key per body, though, not one per attempt.** Section 22 makes a key
+ * presented with a *different* body `IDEMPOTENCY_KEY_REUSED`, which it defines
+ * as permanent and never to be retried — so a caller that holds one key across a
+ * change to what it sends does not merely fail to help, it locks itself out. The
+ * duplicate-acknowledgement resubmission adds a field, so it is a different body
+ * and takes a new key; a bare retry of an unchanged body keeps the old one.
  */
 export async function createPerson(
   input: PersonInput,
@@ -158,21 +164,30 @@ export interface DuplicateCandidate {
   full_name: string;
   sex: Sex;
   /**
-   * The API's own flag for a withheld candidate. **Read this rather than
-   * inferring the same fact from a missing `tier` or empty `reasons`.**
-   *
-   * The inference happens to hold today, because every matching rule pushes at
-   * least one reason — so the first rule that matches without one would render
-   * "their details are visible to their own leaders" for somebody the viewer
-   * actually pastors. A client deciding a redaction question by reading the
-   * shape of a payload is guessing at a rule the API already states.
+   * The API's own flag for a withheld candidate, and what `isWithheld` reads.
+   * Present only when section 8 withheld this candidate's details.
    */
   possible_match?: boolean;
   tier?: 1 | 2;
   reasons?: string[];
 }
 
-/** True where section 8 withheld this candidate's tier and reasons. */
+/**
+ * True where section 8 withheld this candidate's tier and reasons.
+ *
+ * **The flag decides it; the missing tier is a second, fail-closed check rather
+ * than an inference.** Reading the shape of a payload to answer a redaction
+ * question means guessing at a rule the API already states, and the guess breaks
+ * the first time a match arrives without a reason. So `possible_match` is what
+ * this reads.
+ *
+ * The `tier === undefined` disjunct stays because the two failure directions are
+ * not symmetric. Treating a withheld candidate as visible would have a client
+ * render "a possible match" for somebody the viewer actually pastors — or, worse
+ * on some future surface, print a tier the API refused to send. Treating a
+ * visible one as withheld says less than it could. For a rule about what the
+ * church may see, the second is the direction to fail in.
+ */
 export function isWithheld(candidate: DuplicateCandidate): boolean {
   return candidate.possible_match === true || candidate.tier === undefined;
 }

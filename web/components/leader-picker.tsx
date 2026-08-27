@@ -87,11 +87,20 @@ export function LeaderPicker({
         </Button>
       </div>
 
+      {/*
+        Mounted always, contents conditional — which is what `FailureNotice`'s
+        own docblock requires and what rendering it inside an `isError` branch
+        defeats. A live region inserted at the same moment as its text is
+        frequently not announced, so the message becomes invisible to exactly the
+        person who most needs it, and neither a screenshot nor axe can see that.
+      */}
+      <div className="mt-3">
+        <FailureNotice failure={results.isError ? describeFailure(results.error) : null} />
+      </div>
+
       {submitted.trim().length === 0 ? null : results.isPending ? (
         <p className="text-muted mt-3 text-sm">Searching…</p>
-      ) : results.isError ? (
-        <FailureNotice failure={describeFailure(results.error)} />
-      ) : results.data.data.length === 0 ? (
+      ) : results.isError ? null : results.data.data.length === 0 ? (
         <p className="text-muted mt-3 text-sm">Nobody matches “{submitted}”.</p>
       ) : (
         <ul className="divide-line mt-3 divide-y">

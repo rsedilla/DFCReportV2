@@ -156,6 +156,20 @@ export async function mockPossibleMatches(page: Page): Promise<void> {
             sex: PERSON_WITHHELD.sex,
             possible_match: true,
           },
+          {
+            // **`possible_match` *with* a tier**, which the API does not send —
+            // and that is the point. Both other fixtures carry the flag and no
+            // tier, so `isWithheld` answers the same whether it reads the flag
+            // or falls back to the missing tier, and the fix for reading the
+            // flag is pinned by nothing. This one separates them: it must be
+            // treated as withheld, which only the flag can decide.
+            id: '22222222-3333-4444-8555-666666666666',
+            member_id: 'M-000207',
+            full_name: 'Zenaida Cruz Ocampo',
+            sex: 'FEMALE',
+            possible_match: true,
+            tier: 2,
+          },
         ],
       }),
     ),

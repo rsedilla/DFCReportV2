@@ -171,9 +171,13 @@ const SCANS = [
         page.getByRole('heading', { name: 'Someone similar is already recorded' }),
       ).toBeVisible();
       await expect(page.getByText('Same first and last name')).toBeVisible();
+      // Two withheld candidates, and the second carries a tier as well as the
+      // flag. It must still read as withheld — which only `possible_match` can
+      // decide, so this is what pins the client reading the flag rather than
+      // inferring the same fact from an absent tier.
       await expect(
         page.getByText('Their details are visible to the leaders who pastor them.'),
-      ).toBeVisible();
+      ).toHaveCount(2);
     },
   },
   {

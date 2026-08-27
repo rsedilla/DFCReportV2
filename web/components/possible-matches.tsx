@@ -2,8 +2,32 @@
 
 import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
+import { useEffect, useId, useState } from 'react';
 
-import { duplicateCandidates, isWithheld, type DuplicateCandidate } from '@/lib/people';
+import {
+  MINIMUM_SEARCH_LENGTH,
+  duplicateCandidates,
+  isWithheld,
+  type DuplicateCandidate,
+} from '@/lib/people';
+
+/**
+ * The value after it has stopped changing for `delay` milliseconds.
+ *
+ * Written here rather than pulled in: it is eight lines, and the 2026-08-21
+ * ruling's whole argument is that this repository owns its primitives.
+ */
+function useDebounced<T>(value: T, delay: number): T {
+  const [settled, setSettled] = useState(value);
+  const serialised = JSON.stringify(value);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setSettled(JSON.parse(serialised) as T), delay);
+    return () => clearTimeout(timer);
+  }, [serialised, delay]);
+
+  return settled;
+}
 
 /**
  * People who may already be recorded, shown **before** the record is submitted
@@ -23,8 +47,9 @@ import { duplicateCandidates, isWithheld, type DuplicateCandidate } from '@/lib/
  * **A withheld candidate says only that they are a possible match**, because
  * section 8 protects every field the matching rules read and three rulings
  * record three attempts at redacting this without leaking the same birthday one
- * field further out. The API marks such a candidate itself; this does not infer
- * it from a missing tier.
+ * field further out. The API marks such a candidate itself, and `isWithheld`
+ * reads that flag — with a fail-closed fallback for a candidate carrying no
+ * tier, which says less rather than more.
  */
 export function PossibleMatches({
   firstName,
@@ -37,22 +62,47 @@ export function PossibleMatches({
   birthDate: string;
   mobileNumber: string;
 }) {
+  const headingId = useId();
   const first = firstName.trim();
   const last = lastName.trim();
 
-  // Both names, because the API needs them and because asking on a single
-  // letter would search the directory on every keystroke of a surname.
-  const ready = first.length > 0 && last.length > 0;
+  /**
+   * **Two characters in each name, and a pause, before anything is asked.**
+   *
+   * The comment this replaces claimed a single letter was avoided and then
+   * allowed it: `length > 0` is one character, and the API accepts it. That
+   * matters more here than on the search screens, because a one-letter surname
+   * makes `findDuplicates` load every surname starting with that letter into
+   * memory and score it — twice, once for the subject and once for the
+   * publishable run — and there was no debounce, so every keystroke of a surname
+   * issued one.
+   *
+   * The delay is what makes this a lookup rather than a search-as-you-type. It
+   * costs the encoder nothing: the panel is advisory and they are still typing.
+   */
+  const debounced = useDebounced(
+    { first, last, birthDate, mobileNumber: mobileNumber.trim() },
+    400,
+  );
+  const ready =
+    debounced.first.length >= MINIMUM_SEARCH_LENGTH &&
+    debounced.last.length >= MINIMUM_SEARCH_LENGTH;
 
   const matches = useQuery({
-    queryKey: ['duplicate-candidates', first, last, birthDate, mobileNumber.trim()],
+    queryKey: [
+      'duplicate-candidates',
+      debounced.first,
+      debounced.last,
+      debounced.birthDate,
+      debounced.mobileNumber,
+    ],
     queryFn: ({ signal }) =>
       duplicateCandidates(
         {
-          first_name: first,
-          last_name: last,
-          birth_date: birthDate || undefined,
-          mobile_number: mobileNumber.trim() || undefined,
+          first_name: debounced.first,
+          last_name: debounced.last,
+          birth_date: debounced.birthDate || undefined,
+          mobile_number: debounced.mobileNumber || undefined,
         },
         signal,
       ),
@@ -67,8 +117,8 @@ export function PossibleMatches({
   }
 
   return (
-    <section aria-labelledby="possible-matches" className="border-line rounded-md border p-4">
-      <h2 id="possible-matches" className="text-sm font-medium">
+    <section aria-labelledby={headingId} className="border-line rounded-md border p-4">
+      <h2 id={headingId} className="text-sm font-medium">
         Someone similar is already recorded
       </h2>
       <p className="text-muted mt-1 text-sm leading-relaxed">
@@ -76,8 +126,22 @@ export function PossibleMatches({
         the two back together is harder than avoiding it.
       </p>
 
+      {/*
+        **Rendered in name order, not the order the API returned.** The API sorts
+        candidates by tier, and a withheld candidate's tier is withheld precisely
+        because it is derived from which rule fired — so with two withheld
+        candidates sharing the submitted names, the one listed first is the one
+        whose birthday matched. Position would answer the question the redaction
+        exists to refuse, which is the same oracle section 3's three rulings
+        closed, one field further out.
+
+        This removes the channel from *this* client. The sort itself is in the
+        API and reaches every client, so it is raised separately.
+      */}
       <ul className="divide-line mt-3 divide-y">
-        {matches.data.data.map((candidate: DuplicateCandidate) => (
+        {[...matches.data.data]
+          .sort((a, b) => a.full_name.localeCompare(b.full_name))
+          .map((candidate: DuplicateCandidate) => (
           <li key={candidate.id} className="py-3">
             <p className="text-sm font-medium">{candidate.full_name}</p>
             <p className="text-muted font-mono text-sm">{candidate.member_id}</p>

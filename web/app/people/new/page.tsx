@@ -86,23 +86,43 @@ function NewPersonForm() {
   const [acknowledged, setAcknowledged] = useState<string[]>([]);
 
   /**
-   * One key for the whole attempt, including across the acknowledgement round
-   * trip (section 23). Minted per call, a retry after a lost response would
-   * present a body the store has never seen and create a second Person — which
-   * is the duplicate the header exists to prevent.
+   * The idempotency key for the write as it currently stands.
    *
-   * It is replaced only when the person edits the record they are creating, at
-   * which point it is a different write.
+   * **One key per body, not one key per attempt** — and the difference is the
+   * whole rule. A key exists so that a *bare retry of an unchanged body* replays
+   * the stored answer instead of writing twice (section 23). A body that has
+   * changed is a different logical write, and section 22 makes reusing a key
+   * with a different body `IDEMPOTENCY_KEY_REUSED`, which it defines as
+   * permanent and never to be retried.
+   *
+   * Holding one key across the acknowledgement round trip therefore does not
+   * merely fail to help — it makes creation past a Tier 1 candidate impossible.
+   * The refusal is a 409, section 22 stores a 4xx against the key, and the
+   * resubmission adds `acknowledged_duplicate_ids`, so the fingerprint differs
+   * and the second request is refused permanently with no way forward. That was
+   * a real defect here, introduced by the fix for the opposite one.
+   *
+   * So every change to what will be sent mints a new key: the fields, the two
+   * radio groups, the pastoral leader, and the acknowledgement set.
    */
   const [writeKey, setWriteKey] = useState(() => crypto.randomUUID());
 
-  function set(key: keyof typeof EMPTY, value: string) {
-    setValues((current) => ({ ...current, [key]: value }));
+  /** Call wherever the body changes. See `writeKey`. */
+  function beginNewWrite() {
     setWriteKey(crypto.randomUUID());
   }
 
+  function set(key: keyof typeof EMPTY, value: string) {
+    setValues((current) => ({ ...current, [key]: value }));
+    beginNewWrite();
+  }
+
   const create = useMutation({
-    mutationFn: (acknowledgedIds: string[]) =>
+    // The key travels with the attempt rather than being read from state.
+    // `setWriteKey` does not apply until the next render, so a mutation started
+    // in the same handler that reset the key would still send the old one —
+    // which is exactly the permanent refusal this is here to avoid.
+    mutationFn: ({ acknowledgedIds, key }: { acknowledgedIds: string[]; key: string }) =>
       createPerson(
         {
           first_name: values.first_name.trim(),
@@ -115,7 +135,7 @@ function NewPersonForm() {
           pastoral_leader_id: leaderId as string,
           acknowledged_duplicate_ids: acknowledgedIds.length > 0 ? acknowledgedIds : undefined,
         },
-        writeKey,
+        key,
       ),
     onSuccess: (person) => router.push(`/people/${person.id}`),
     onError: (error) => {
@@ -139,7 +159,7 @@ function NewPersonForm() {
     setFailure(null);
     setFieldErrors({});
     setCandidates(null);
-    create.mutate([]);
+    create.mutate({ acknowledgedIds: [], key: writeKey });
   }
 
   if (candidates) {
@@ -198,7 +218,11 @@ function NewPersonForm() {
                 new Set([...acknowledged, ...candidates.map((candidate) => candidate.id)]),
               );
               setAcknowledged(union);
-              create.mutate(union);
+              // A new key, because this body differs from the one the refusal
+              // was stored against. See `writeKey`.
+              const key = crypto.randomUUID();
+              setWriteKey(key);
+              create.mutate({ acknowledgedIds: union, key });
             }}
           >
             {create.isPending ? 'Adding…' : 'These are different people — add anyway'}
@@ -316,6 +340,11 @@ function NewPersonForm() {
           onSelect={(person) => {
             setLeaderId(person?.id ?? null);
             setLeaderName(person?.full_name ?? null);
+            // The leader is in the body, so changing it is a different write.
+            // Without this, a `SCOPE_DENIED` or a cross-Network refusal — both
+            // 4xx, both stored — left the key spent, and picking a valid leader
+            // then met `IDEMPOTENCY_KEY_REUSED` with no way to finish the record.
+            beginNewWrite();
           }}
         />
 

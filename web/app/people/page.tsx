@@ -109,14 +109,21 @@ function PeopleSearch() {
         </div>
       </form>
 
+      {/*
+        The live region is mounted always and only its contents change, per
+        `FailureNotice`'s own rule: one inserted together with its text is
+        frequently not announced at all.
+      */}
       <div className="mt-8">
+        <FailureNotice failure={results.isError ? describeFailure(results.error) : null} />
+      </div>
+
+      <div className="mt-4">
         {submitted.trim().length === 0 ? (
           <p className="text-muted text-sm">Type a name to begin.</p>
         ) : results.isPending ? (
           <p className="text-muted text-sm">Searching…</p>
-        ) : results.isError ? (
-          <FailureNotice failure={describeFailure(results.error)} />
-        ) : results.data.data.length === 0 ? (
+        ) : results.isError ? null : results.data.data.length === 0 ? (
           <div>
             <p className="text-sm">Nobody matches “{submitted}”.</p>
             <p className="text-muted mt-2 text-sm leading-relaxed">
