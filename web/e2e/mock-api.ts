@@ -80,6 +80,92 @@ export async function mockSignedIn(page: Page): Promise<void> {
   );
 }
 
+/**
+ * A person the viewer pastors, and one they do not.
+ *
+ * Both shapes are here deliberately: section 8's redaction is the thing the
+ * search screen has to render correctly, and a fixture with only full profiles
+ * would scan a screen nobody will see.
+ */
+export const PERSON_IN_SCOPE = {
+  scope: 'FULL',
+  id: '11111111-2222-4333-8444-555555555555',
+  member_id: 'M-000042',
+  first_name: 'Marilou',
+  middle_name: 'Reyes',
+  last_name: 'Santos',
+  full_name: 'Marilou Reyes Santos',
+  birth_date: '1988-04-17',
+  sex: 'FEMALE',
+  civil_status: 'MARRIED',
+  mobile_number: '0917 555 0142',
+};
+
+export const PERSON_WITHHELD = {
+  scope: 'IDENTITY_ONLY',
+  id: '66666666-7777-4888-8999-000000000000',
+  member_id: 'M-000108',
+  full_name: 'Teresa Aquino Lim',
+  sex: 'FEMALE',
+  network: 'WOMENS',
+  direct_leader_name: 'Corazon Batac',
+};
+
+/** The people endpoints, for the screens that read them. */
+export async function mockPeople(page: Page): Promise<void> {
+  await page.route('**/api/v1/people?*', (route) =>
+    route.fulfill(json({ data: [PERSON_IN_SCOPE, PERSON_WITHHELD], next_cursor: null })),
+  );
+
+  await page.route(`**/api/v1/people/${PERSON_IN_SCOPE.id}`, (route) =>
+    route.fulfill(json(PERSON_IN_SCOPE)),
+  );
+}
+
+/**
+ * Creation refused because a Tier 1 candidate needs acknowledging (section 3).
+ *
+ * One candidate carries reasons and one does not — the second is outside the
+ * viewer's scope, where section 8 withholds the tier and the reasons both,
+ * because either would answer a question about a birthday.
+ */
+export async function mockDuplicateRefusal(page: Page): Promise<void> {
+  await page.route('**/api/v1/people', (route) => {
+    if (route.request().method() !== 'POST') {
+      return route.fallback();
+    }
+
+    return route.fulfill(
+      json(
+        {
+          error: {
+            code: 'DUPLICATE_ACKNOWLEDGEMENT_REQUIRED',
+            message:
+              'This may be someone already recorded. Review the candidates, then resubmit acknowledging them.',
+            details: {
+              candidates: [
+                {
+                  id: PERSON_IN_SCOPE.id,
+                  member_id: PERSON_IN_SCOPE.member_id,
+                  full_name: PERSON_IN_SCOPE.full_name,
+                  tier: 1,
+                  reasons: ['Same first and last name', 'Same birthday'],
+                },
+                {
+                  id: PERSON_WITHHELD.id,
+                  member_id: PERSON_WITHHELD.member_id,
+                  full_name: PERSON_WITHHELD.full_name,
+                },
+              ],
+            },
+          },
+        },
+        409,
+      ),
+    );
+  });
+}
+
 /** A sign-in that is refused, for scanning the form-level error state. */
 export async function mockSignInRefused(page: Page): Promise<void> {
   await page.route('**/api/v1/auth/login', (route) =>

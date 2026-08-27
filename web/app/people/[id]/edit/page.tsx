@@ -1,0 +1,205 @@
+'use client';
+
+import { useMutation, useQuery } from '@tanstack/react-query';
+import Link from 'next/link';
+import { useParams, useRouter } from 'next/navigation';
+import { useState } from 'react';
+
+import { AppShell } from '@/components/app-shell';
+import { Button } from '@/components/ui/button';
+import { FailureNotice } from '@/components/ui/failure-notice';
+import { Field } from '@/components/ui/field';
+import { describeFailure, fieldErrorFor, type Failure } from '@/lib/messages';
+import { editPerson, getPerson, type PersonEdit, type PersonFull } from '@/lib/people';
+
+/**
+ * Editing a person's own descriptive fields (SKILL.md sections 3 and 7).
+ *
+ * **Only what `people.edit_basic` covers.** Section 7 scopes that capability to
+ * "corrections to a person's own descriptive fields", and three things that look
+ * like they belong on this form deliberately do not:
+ *
+ * - **Sex** has its own capability and its own screen. Correcting it moves the
+ *   person between Networks and forces a pastoral reassignment, which is why
+ *   section 7 keeps it Admin-only — and why leaving it here would be a route to
+ *   moving people between Networks without ever holding
+ *   `people.manage_pastoral_assignment`.
+ * - **The pastoral leader** is a reassignment, with its own authority rules and
+ *   its own audit entry (section 5).
+ * - **Member ID** is server-assigned and immutable (section 3).
+ *
+ * **A birthday can be added and not removed.** Section 3 defines adding one and
+ * does not define removing one, so the API refuses an explicit null and the
+ * question is recorded as open rather than answered by a side effect. This form
+ * therefore sends the field only when it has a value, and says so where somebody
+ * would otherwise clear the box and expect it to take.
+ */
+export default function EditPersonPage() {
+  return (
+    <AppShell>
+      <EditPersonForm />
+    </AppShell>
+  );
+}
+
+function EditPersonForm() {
+  const params = useParams<{ id: string }>();
+  const id = params.id;
+
+  const person = useQuery({
+    queryKey: ['person', id],
+    queryFn: ({ signal }) => getPerson(id, signal),
+  });
+
+  return (
+    <main id="main" className="mx-auto max-w-3xl px-5 py-8 sm:py-12">
+      <p className="text-sm">
+        <Link
+          href={`/people/${id}`}
+          className="text-accent focus-visible:outline-accent inline-flex min-h-11 items-center rounded-md underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2"
+        >
+          Back to this person
+        </Link>
+      </p>
+
+      <h1 className="mt-6 text-2xl font-semibold tracking-tight">Edit details</h1>
+
+      {person.isPending ? (
+        <p className="text-muted mt-6 text-sm">Loading…</p>
+      ) : person.isError ? (
+        <div className="mt-6">
+          <FailureNotice failure={describeFailure(person.error)} />
+        </div>
+      ) : (
+        /*
+          The fields are seeded from the loaded record by `useState`'s initial
+          value, in a child that only exists once the record has arrived. Copying
+          server state into local state inside an effect is the pattern React
+          warns about and ESLint refuses: it renders once with empty inputs and
+          again with the real ones, and it needs a flag to stop a later refetch
+          discarding whatever the person has typed since.
+        */
+        <Fields person={person.data} id={id} />
+      )}
+    </main>
+  );
+}
+
+function Fields({ person, id }: { person: PersonFull; id: string }) {
+  const router = useRouter();
+
+  const [values, setValues] = useState({
+    first_name: person.first_name,
+    middle_name: person.middle_name ?? '',
+    last_name: person.last_name,
+    birth_date: person.birth_date ?? '',
+    mobile_number: person.mobile_number ?? '',
+  });
+  const [failure, setFailure] = useState<Failure | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string | null>>({});
+
+  const save = useMutation({
+    mutationFn: (changes: PersonEdit) => editPerson(id, changes),
+    onSuccess: () => router.push(`/people/${id}`),
+    onError: (error) => {
+      const next: Record<string, string | null> = {};
+      for (const field of ['first_name', 'last_name', 'birth_date', 'mobile_number']) {
+        next[field] = fieldErrorFor(error, field);
+      }
+      setFieldErrors(next);
+      setFailure(Object.values(next).some(Boolean) ? null : describeFailure(error));
+    },
+  });
+
+  function onSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setFailure(null);
+    setFieldErrors({});
+
+    const changes: PersonEdit = {
+      first_name: values.first_name.trim(),
+      middle_name: values.middle_name.trim() || null,
+      last_name: values.last_name.trim(),
+      mobile_number: values.mobile_number.trim() || null,
+    };
+
+    // Sent only when it has a value. The API refuses an explicit null, because
+    // section 3 never defined removing a birthday and a nullable column must not
+    // become an erase capability nobody decided on.
+    if (values.birth_date) {
+      changes.birth_date = values.birth_date;
+    }
+
+    save.mutate(changes);
+  }
+
+  return (
+    <>
+      {(
+        <form onSubmit={onSubmit} className="mt-8 flex flex-col gap-5" noValidate>
+          <FailureNotice failure={failure} />
+
+          <Field
+            label="First name"
+            name="first_name"
+            autoComplete="off"
+            required
+            value={values.first_name}
+            error={fieldErrors.first_name}
+            onChange={(event) => setValues((v) => ({ ...v, first_name: event.target.value }))}
+          />
+          <Field
+            label="Middle name"
+            name="middle_name"
+            autoComplete="off"
+            value={values.middle_name}
+            onChange={(event) => setValues((v) => ({ ...v, middle_name: event.target.value }))}
+            description="Optional."
+          />
+          <Field
+            label="Last name"
+            name="last_name"
+            autoComplete="off"
+            required
+            value={values.last_name}
+            error={fieldErrors.last_name}
+            onChange={(event) => setValues((v) => ({ ...v, last_name: event.target.value }))}
+          />
+          <Field
+            label="Birthday"
+            type="date"
+            name="birth_date"
+            autoComplete="off"
+            value={values.birth_date}
+            error={fieldErrors.birth_date}
+            onChange={(event) => setValues((v) => ({ ...v, birth_date: event.target.value }))}
+            description={
+              person.birth_date
+                ? 'A recorded birthday cannot be removed here — only corrected.'
+                : 'Optional. Leave it blank rather than guessing.'
+            }
+          />
+          <Field
+            label="Mobile number"
+            type="tel"
+            name="mobile_number"
+            autoComplete="off"
+            value={values.mobile_number}
+            error={fieldErrors.mobile_number}
+            onChange={(event) => setValues((v) => ({ ...v, mobile_number: event.target.value }))}
+            description="Optional."
+          />
+
+          <div className="flex flex-wrap gap-3">
+            <Button type="submit" disabled={save.isPending}>
+              {save.isPending ? 'Saving…' : 'Save changes'}
+            </Button>
+            <Link href={`/people/${id}`} className="inline-flex min-h-11 items-center text-sm">
+              Cancel
+            </Link>
+          </div>
+        </form>
+      )}
+    </>
+  );
+}
