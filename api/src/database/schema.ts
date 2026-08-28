@@ -178,7 +178,20 @@ export type AuditAction =
   // `<noun>.<past-tense verb>`, and "password_reset" is a noun phrase. The noun is
   // the thing the action happened to.
   | 'password.reset'
-  | 'role.granted';
+  | 'role.granted'
+  // Section 21's convention, `<noun>.<past-tense verb>`. Two entries rather than
+  // one, on the same reasoning as the account pair above: creating a Cell and
+  // opening the leadership assignment that makes somebody a current Cell Leader
+  // (section 11) are separately auditable facts, and a reader searching for who
+  // began leading a Cell must find that entry whether it arose from the
+  // initial-encoding path or from an approval.
+  | 'cell.created'
+  | 'cell_leadership.opened'
+  // Section 21 lists this as an action in its own right: "Cell leadership assignment
+  // left with account provisioning pending". It names a state rather than an actor,
+  // and every Cell created outside an approval is in it until somebody provisions
+  // the account (section 6, section 7).
+  | 'cell_leadership.account_pending';
 
 export interface AuditLogTable {
   id: Generated<string>;

@@ -16,6 +16,7 @@ import { DatabaseModule } from './database/database.module';
 import { HealthController } from './health/health.controller';
 import { HierarchyModule } from './hierarchy/hierarchy.module';
 import { NetworksModule } from './networks/networks.module';
+import { CellsModule } from './cells/cells.module';
 import { PeopleModule } from './people/people.module';
 
 /**
@@ -53,6 +54,7 @@ import { PeopleModule } from './people/people.module';
     HierarchyModule,
     NetworksModule,
     PeopleModule,
+    CellsModule,
   ],
   controllers: [HealthController],
   providers: [
