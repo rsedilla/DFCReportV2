@@ -804,7 +804,7 @@ The third is different in kind from the first two and is named separately for th
 
 A reassignment closes the current assignment and opens the new one within a single transaction. It must never leave two open assignments, and must never leave a person who had a leader without one. Enforce with a uniqueness constraint over the person where `ended_at` is null — the constraint permits zero rows and forbids two.
 
-Every effective-dated table carries the same shape of constraint, and each is required rather than optional (Database enforcement, below): one open row per person for `person_lifecycle`, `network_assignments` and `cell_memberships`; one open row per Cell for `cell_categories` and `cell_schedules`; one open row per Cell for `cell_leaderships`, since a Cell has one leader at a time; one `PENDING` row per prospective leader for `cell_creation_requests`; and one active row per account per role for `account_roles`. `account_roles` carries two further uniqueness constraints of its own, both named in Section 7 rather than here because each states a rule about authority rather than about effective dating: one occupant per Senior Pastor slot, and at most one of `SENIOR_PASTOR` and `ADMIN` per account. `capability_grants` is deliberately exempt: an account may hold the same capability at more than one scope, and the widest applicable grant governs.
+Every effective-dated table carries the same shape of constraint, and each is required rather than optional (Database enforcement, below): one open row per person for `person_lifecycle`, `network_assignments` and `cell_memberships`; one open row per Cell for `cell_categories` and `cell_schedules`; one open row per Cell for `cell_leaderships`, since a Cell has one leader at a time — that index carries *at most one*, and Section 11 adds a deferred constraint trigger for *at least one* on an `ACTIVE` Cell, which is a constraint on an absent row and so is not expressible as an index; one `PENDING` row per prospective leader for `cell_creation_requests`; and one active row per account per role for `account_roles`. `account_roles` carries two further uniqueness constraints of its own, both named in Section 7 rather than here because each states a rule about authority rather than about effective dating: one occupant per Senior Pastor slot, and at most one of `SENIOR_PASTOR` and `ADMIN` per account. `capability_grants` is deliberately exempt: an account may hold the same capability at more than one scope, and the widest applicable grant governs.
 
 Two concurrently open assignments would place one person in two branches at once and double-count them in every subtree total, violating the unique-people rule in Section 20.
 
@@ -1342,6 +1342,7 @@ The capabilities are exactly:
 - `cell.correct_subtree`
 - `cell.manage_membership`
 - `cell.manage_leadership`
+- `cell.manage_configuration`
 - `cell.request_creation`
 - `cell.approve_creation`
 - `cell.manage_lifecycle`
@@ -1357,6 +1358,8 @@ Each capability guards one endpoint family, and the boundaries are not left to i
 
 - `dcc.*` guards everything under `/api/v1/dcc` — rosters, submissions, corrections, and DCC figures reached directly
 - `cell.*` guards everything under `/api/v1/cells`, including meeting records, membership, leadership, and outstanding-record lists
+- `cell.manage_leadership` appears in this list and **no section says what it may do**. Section 6 pairs it with `accounts.manage` where designating a Cell Leader would create an account, and Section 2 has Admin exercise it during initial encoding; neither is a definition. Every write to `cell_leaderships` this specification actually describes happens inside an approval or a closure, each with its own capability, so what this one adds is undefined and is recorded as open in `CLAUDE.md`. It stays in the list rather than being removed, because Section 6 names it in a rule that stands
+- `cell.manage_configuration` governs a Cell's category and its schedule (Section 10). One capability rather than two: both are effective-dated edits to how a Cell is configured, both are audited the same way, and an administrator granting one and withholding the other would be expressing a distinction no rule makes. It confers no power to create or close a Cell, each of which has its own capability, nor to change who leads one
 - `reports.view_subtree` guards `/api/v1/reports` — the aggregate reporting surface, Network Summary, and the notification content derived from it (Section 13). It never substitutes for `dcc.view_subtree` or `cell.view_subtree` on the domain endpoints, and neither of those substitutes for it
 - `dcc.correct_subtree` and `cell.correct_subtree` guard amendment of an already-submitted record (Section 14), separately from `take_attendance`, which guards the first submission
 
@@ -1398,6 +1401,7 @@ Three roles exist. Each carries the default capabilities and scopes below. Anyth
 | `cell.correct_subtree` | Whole Church | Whole Church | own/subtree |
 | `cell.manage_membership` | Whole Church | Whole Church | own/subtree |
 | `cell.manage_leadership` | Whole Church | Whole Church | own/subtree |
+| `cell.manage_configuration` | Whole Church | Whole Church | own/subtree |
 | `cell.request_creation` | subtree, excl. self | subtree, excl. self | subtree, excl. self |
 | `cell.approve_creation` | — | Whole Church | — |
 | `cell.manage_lifecycle` | Whole Church | Whole Church | own/subtree |
@@ -1469,7 +1473,7 @@ settings
 
 The key set is fixed by this specification, not open. Today it holds the Cell attention threshold (Section 15) and the initial-encoding phase flag (Section 2).
 
-`records.backdate_effective_date` governs setting an effective date in the past on any effective-dated relationship: pastoral assignment (Section 5), Network (Section 4), Cell membership (Section 10), and Cell leadership (Section 11). It is Admin-only and always requires a reason. It is never granted to ordinary leaders, because backdating changes totals for periods that have already been reported (Section 3).
+`records.backdate_effective_date` governs setting an effective date in the past on any effective-dated relationship: pastoral assignment (Section 5), Network (Section 4), Cell membership (Section 10), Cell leadership (Section 11), and a Cell's category and schedule (Section 10). It also governs amending attendance after a month has closed (Sections 9 and 13), which is not an effective-dated relationship — so this is a list of what the capability reaches, not a rule from which the next item can be derived. It is Admin-only and always requires a reason. It is never granted to ordinary leaders, because backdating changes totals for periods that have already been reported (Section 3).
 
 Being an Associate Pastor, or being part of a Senior Pastor's direct 12, does not by itself grant Whole Church or Network-level reporting scope. Pastoral hierarchy position and system authorization are separate concepts (Section 1, Principle 3). Any leader other than a Senior Pastor who needs reporting visibility beyond their own pastoral subtree must receive that scope through an explicit, Admin-issued grant.
 
@@ -1591,7 +1595,7 @@ Those conditions are enforced in the owning module's domain layer — `hierarchy
 
 A grant is revoked by setting `revoked_at`, never by deleting the row. The history of who could do what, and when, is part of the audit record.
 
-**`read_only` is valid only on a read capability.** The twenty-six divide cleanly:
+**`read_only` is valid only on a read capability.** The twenty-seven divide cleanly:
 
 - **Read:** `people.view_subtree`, `dcc.view_subtree`, `cell.view_subtree`, `reports.view_subtree`, `audit.view`
 - **Write:** every other capability in the list
@@ -2018,6 +2022,8 @@ Cell category is editable over time, e.g. Youth -> Young Pro.
 - Historical reports must use the category valid at the time being reported.
 - Audit category changes.
 
+The capability is `cell.manage_configuration` (Section 7), which governs a Cell's schedule on the same terms. Unlike a schedule change, a category change takes effect on the date it is made: nothing derives a count of scheduled meetings from a category, so there is no figure a mid-month change would silently rewrite.
+
 ### Schedule changes
 
 Day and time are editable over time, and are effective-dated exactly as category is:
@@ -2046,11 +2052,19 @@ A Cell needing to move a **single** meeting at short notice — a lost venue, a 
 Two invariants here are expressible as database constraints and must exist as constraints, not only in service code (Section 5, Database enforcement):
 
 - one active schedule per Cell — a partial unique index on `cell_id` where `ended_at` is null
-- a schedule row starts on the first day of a month — a trigger, not a check constraint, because the rule admits an exception a row-level check cannot see
+- **a schedule row starts either on the first day of a month in Asia/Manila, or at the Cell's `created_at`** — a trigger, not a check constraint, because the second half compares against a column on another table
 
-The second admits one exception: a Cell created part-way through a month opens its first schedule row at approval. Only `records.backdate_effective_date` may open a schedule row on any other date, and doing so is a correction, audited as one.
+The exception is the Cell created part-way through a month, which opens its first schedule row at approval. **The test is the Cell's `created_at`, not whether the row is the first one**, and the difference is not pedantic: correcting a first schedule row entered wrongly closes it and opens the right one at the same instant (Section 5), so the corrective row is the Cell's *second* and still belongs at approval. A first-row test refuses it; a `created_at` test admits it, and admits any number of later corrections to the same instant.
 
-Audit schedule changes as category changes are audited.
+**The two halves are in different frames, and the zone is not optional.** "First day of a month" is a calendar-day test, and Section 20 makes every date derivation Asia/Manila — so a legitimate row starts at Manila 00:00 on the 1st, stored as 16:00 UTC on the last day of the *previous* month. A trigger comparing `date_trunc('month', started_at)` in UTC refuses every schedule change there is, while a Cell *created* during a working day on the 1st passes by accident: the defect hides in exactly the rows the rule is not about. `created_at` is an instant and needs no conversion.
+
+**The schedule row and the Cell are written from one expression.** Equality with a column on another table is exact: `created_at DEFAULT now()` beside an application-computed `started_at` differs by microseconds and aborts every Cell creation, with a failure that reads as a clock problem rather than as a rule. Section 4 records the same trap for the Network change and the reassignment it forces, and it is written here for the same reason — an implementer meeting the violation separates the two timestamps, which does not fix the write.
+
+**Backdating needs no exception of its own.** Every other legitimate row starts on a first of month, a correction included: a schedule change takes effect at the start of the following month, so correcting one recorded against the wrong month still lands on a first of month. `records.backdate_effective_date` governs how far *back* an effective date may be set, which is a question about the actor and lives in the domain layer as it does everywhere else. It does not govern what kind of date is legal, which is this trigger's business alone.
+
+An earlier draft made the trigger advisory, on the reasoning that it could not see the backdate exception. It does not need to. One operation is still unreconciled with the rule and is recorded as open rather than assumed away: reversing a closure (Cell lifecycle, below).
+
+Changing a Cell's schedule is governed by `cell.manage_configuration` (Section 7), and is audited as a category change is.
 
 ### Creating a Cell
 
@@ -2175,6 +2189,8 @@ A closed Cell is not reopened as an ordinary action. Where a ministry restarts, 
 
 Reversing a closure recorded in error is an Admin correction requiring a reason and an audit entry, not a control available to a leader.
 
+**What that correction does to the Cell's leadership, category and schedule is undefined, and it must be settled before this path is built.** Closure ended all three rows. Section 11 now requires an `ACTIVE` Cell to hold exactly one leadership assignment, and the schedule rule above admits a row only on the first of a month or at the Cell's `created_at`, so a reversal as things stand aborts at COMMIT rather than answering. Three answers are open, including refusing the reversal outright and requiring a new Cell, which is what this section already prescribes one paragraph above for a ministry that restarts. `CLAUDE.md` carries the question.
+
 ### Cell Membership
 
 Cell membership is a distinct, explicit relationship from Cell Leadership (Section 11) and Cell Attendance (Section 12).
@@ -2262,6 +2278,18 @@ cell_leaderships
 ```
 
 A person is a current Cell Leader when they have at least one active Cell leadership assignment on an `ACTIVE` Cell (Section 10). Closing a Cell ends its leadership assignment on the closure effective date; a leader whose only Cell closes is no longer a current Cell Leader from that date, and this is recorded rather than inferred.
+
+**An `ACTIVE` Cell has exactly one active leadership assignment, and a `CLOSED` Cell has none.** Not at most one: a Cell with no leader is not a state this system has, and it must be impossible rather than merely unusual.
+
+Three rules lose their subject at once if it is possible. `cell.manage_membership` is held first of all by the Cell's current leader (Section 10), and there would be nobody. A Cell takes its Network from its leader, which is what the same-Network rule on membership compares against and what approval revalidates (Section 10) — and it would be underivable. And Cell attendance is recorded by a leader against their own Cell (Section 12), with no one to record it.
+
+Enforce it as a **deferred** constraint trigger, on both tables. Deferred is what lets a Cell change hands at all: ending one assignment and opening another leaves the Cell momentarily with none, and a check firing at COMMIT sees only the state the transaction ends in. Any operation that replaces a Cell's leader is therefore a single transaction, whatever workflow authorizes it. The partial unique index over `cell_id` where `ended_at` is null still carries the *at most one* half (Section 5); this carries the *at least one*.
+
+**A trigger is the weaker mechanism, and it is chosen knowing that.** This system has twice replaced a constraint trigger with a denormalized column under a partial unique index — the Senior Pastor slot and the Network root seat — because `pg_restore --disable-triggers` skips a trigger and never skips an index, and a restore is exactly when nobody is watching. Both of those enforce *at most one of something*, which is what a unique index expresses.
+
+This rule is the opposite shape. "At least one" is a statement about a row that is **absent**, and no unique index constrains an absence: a `cells` row carrying its leader as a column would need that column to be non-null, which forbids the momentary state a change of leader passes through, and it would still need a two-table check to keep the column honest against `cell_leaderships`. The restore weakness is accepted rather than designed around, and what makes it tolerable is that a leaderless Cell is visible: every screen that names a Cell names its leader.
+
+**Two operations are not yet reconciled with this rule, and both are recorded as open rather than assumed away** (`CLAUDE.md`). Reversing a closure recorded in error (Section 10, Reopening) makes a Cell `ACTIVE` again with its leadership already ended, and satisfies neither cause above. And no section defines how a Cell passes from one leader to another while it stays open — `cell.manage_leadership` exists in Section 7 and no section says what it may do. Both must be settled before either is built.
 
 The leadership assignment record itself is preserved in full. History shows that the person led that Cell for that period.
 

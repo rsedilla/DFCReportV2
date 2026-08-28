@@ -24,6 +24,7 @@ export const Capability = {
   CellCorrectSubtree: 'cell.correct_subtree',
   CellManageMembership: 'cell.manage_membership',
   CellManageLeadership: 'cell.manage_leadership',
+  CellManageConfiguration: 'cell.manage_configuration',
   CellRequestCreation: 'cell.request_creation',
   CellApproveCreation: 'cell.approve_creation',
   CellManageLifecycle: 'cell.manage_lifecycle',

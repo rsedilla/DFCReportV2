@@ -88,6 +88,22 @@ The criterion says spine rather than tree because the whole tree cannot be loade
 
 ## Stage 3 — Cells
 
+**Three Stop Conditions were settled before any of this was built**, on 2026-08-28, by
+reading Sections 10, 11, 7 and 26 whole rather than by meeting them at a keyboard: an
+`ACTIVE` Cell has exactly one leader and a `CLOSED` Cell has none, enforced by a
+deferred constraint trigger; `cell.manage_configuration` is the twenty-seventh
+capability and governs a Cell's category and schedule; and the schedule trigger is
+strict, admitting a row on the first of a month in Asia/Manila or at the Cell's
+`created_at`, with no exception for backdating.
+
+**Two are open and block part of this stage.** How a Cell passes from one leader to
+another while it stays open — no section defines it, and Section 3 offers it as one
+of two ways to unblock archiving a Person who leads a Cell. And what reversing a
+closure does to the leadership, category and schedule rows the closure ended. Neither
+blocks the Cell entity, the categories and schedules, membership, or the creation
+workflow; both must be settled before the handover or the reversal is built. The
+decisions log carries the reasoning and the candidate answers.
+
 - Cell entity, Cell ID sequence, lifecycle (§10)
 - Categories and schedules, both effective-dated
 - Membership, with single-transaction moves

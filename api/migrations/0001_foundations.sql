@@ -76,6 +76,7 @@ CREATE TYPE capability AS ENUM (
   'cell.correct_subtree',
   'cell.manage_membership',
   'cell.manage_leadership',
+  'cell.manage_configuration',
   'cell.request_creation',
   'cell.approve_creation',
   'cell.manage_lifecycle',
