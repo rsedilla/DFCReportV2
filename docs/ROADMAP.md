@@ -41,7 +41,17 @@ Four rulings were forced by building it, each recorded in `CLAUDE.md` and amende
 
 ---
 
-## Stage 2 — People and the pastoral tree
+## Stage 2 — People and the pastoral tree — **complete**
+
+Closed on 2026-08-28. Both exit criteria are met: the eleven authorization cases are
+green, case 7 among them and exercised concurrently rather than sequentially, and the
+real leadership-tree spine — thirty people, both Network roots — is loaded in a
+development database.
+
+The screens landed in two slices (#31, #33), and three defects they surfaced were
+fixed rather than carried forward: the refresh-token grace window (#32), the
+duplicate-candidate membership and order disclosure (#34), and a browser suite that
+tested no iPhone (#35).
 
 - Person: core fields, mobile number, Member ID sequence, duplicate matching (`SKILL.md` §3)
 - Networks, effective-dated (§4)
@@ -51,6 +61,13 @@ Four rulings were forced by building it, each recorded in `CLAUDE.md` and amende
 - The first real screens, and with them the UI libraries recorded in `CLAUDE.md`, and axe-core in CI over every route (`SKILL.md` §23, WCAG 2.2 AA)
 - **`audit_log`** (§21), **`idempotency_keys`** (§22) and **`settings`** (§7), with the first write endpoint
 - **Import the leadership tree spine**, through the dry-run, adjudicate, commit flow (`SKILL.md` §2, Initial data load) — the two roots and each root's direct disciples, around thirty people. Everything below is encoded by the leader who holds it, level by level, because no central roster of it exists (ruling of 2026-08-25). **The import is built** — `npm run import:tree`, documented in `docs/TREE_CSV.md` — and the stage's exit criterion is the *spine loaded in a development database*, which is a separate act from having the tool
+- **The pastoral path** (§8): `GET /api/v1/people/{id}/pastoral-path`, the chain from
+  the top of the person's upline down to the person, which §8 asks be shown when a
+  profile is opened. Topmost rather than root, because a chain terminates at whoever
+  holds no open assignment and §5 invariant 3 makes that legitimate for three kinds of
+  Person — so each node says whether it is a Network root. Guarded on the target,
+  which is what makes returning the whole chain safe rather than a redaction inside
+  the payload
 - **`settings` gets its first reader** with the import, which is what makes the initial-encoding phase flag a value with a consequence. It was seeded by migration 0002 on 2026-08-22 and read by nothing until then
 
 Three tables Stage 1 did not create arrive here rather than later. §5 requires every reassignment to be audit logged, and §22 requires an `Idempotency-Key` on every state-changing request "from the first write endpoint, not added later" — and reassignment *is* the first write endpoint, so neither can wait for the stage that merely makes heavy use of them.

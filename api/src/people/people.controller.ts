@@ -4,7 +4,8 @@ import { CurrentActor } from '../auth/current-actor.decorator';
 import { RequiresCapability } from '../auth/authorization/authorization.decorators';
 import { Capability } from '../auth/authorization/capabilities';
 import { type Actor } from '../auth/authorization/authorization.service';
-import { NotFoundError } from '../common/errors/api-error';
+import { InvariantViolationError, NotFoundError } from '../common/errors/api-error';
+import { HierarchyService } from '../hierarchy/hierarchy.service';
 import {
   CurrentIdempotency,
   type CurrentClaim,
@@ -31,9 +32,23 @@ import { fullProfile, normalizeMobile, type SearchCursor } from './people.shared
  * The interesting rule here is section 8, not section 7. A leader may search the
  * church-wide directory — that is what makes duplicate prevention possible at all
  * — but for a person outside their pastoral scope they see only enough to
- * recognise an existing record. Everything else is withheld, and the withholding
- * is done in one place so that adding a field to the full profile does not
- * silently widen what the church can see.
+ * recognise an existing record. Everything else is withheld, and `fullProfile`
+ * and `minimalIdentity` are where that decision is made, so adding a field to
+ * the full profile does not silently widen what the church can see.
+ *
+ * **One payload is assembled outside those two**, and it is worth naming rather
+ * than leaving as an exception somebody discovers. A path node carries four
+ * fields: the Member ID and the full name, which are two of the five section 8
+ * permits church-wide; the identifier, which is a handle rather than a fact about
+ * the person, exactly as `minimalIdentity` carries one; and `network_root`, which
+ * section 8 declares for this endpoint because section 5 requires that
+ * distinction be surfaced. A node is not a profile, which is why it has a shape
+ * of its own rather than reusing a helper.
+ *
+ * What holds it to those four is a test asserting the exact key set, not this
+ * paragraph — the same instrument the church-wide search uses one describe
+ * below, and for the same reason: a field added later must not leak here
+ * unnoticed.
  */
 @Controller('people')
 export class PeopleController {
@@ -43,6 +58,10 @@ export class PeopleController {
     private readonly duplicates: PeopleDuplicatesService,
     private readonly sexCorrection: PeopleSexCorrectionService,
     private readonly reassignment: PeopleReassignmentService,
+    // The path is a hierarchy question answered on a `people` route, so it is
+    // taken from the owning module's service rather than re-walked here
+    // (section 2). `PeopleModule` already imports `HierarchyModule`.
+    private readonly hierarchy: HierarchyService,
   ) {}
 
   /**
@@ -144,6 +163,94 @@ export class PeopleController {
     );
 
     return { data: visible.slice(0, limit), next_cursor: null };
+  }
+
+  /**
+   * The person's pastoral path, root first (section 8).
+   *
+   * **Guarded on the target, and that is what makes returning the whole chain
+   * safe.** Section 8 holds a person outside the viewer's scope to five fields,
+   * of which the direct leader's name is one, so a chain of ancestors would
+   * exceed it. Every scope a grant may carry keeps this inside that rule, and the
+   * two that matter do it for different reasons.
+   *
+   * Under `OWN_SUBTREE` or `SUBTREE_EXCL_SELF`, resolved by `isWithinSubtree`,
+   * which walks the same `ancestorsOf` this path is built from: the actor is
+   * provably *on* the returned chain, so everything below them is their subtree
+   * and everything above is their own upline. That depends on the guard and this
+   * handler sharing one walk -- change either, and it has to be re-argued.
+   *
+   * Under `NETWORK` the actor need not be on the chain at all, so that argument
+   * does not apply and is not what carries it. `people.view_subtree` is not in
+   * `WHOLE_CHURCH_ONLY`, so a Network grant is legal, and `scopeCovers` resolves
+   * it by comparing the target's Network rather than by walking anything. What
+   * keeps it safe is section 5: a cross-Network edge is forbidden absolutely, so
+   * every node of one chain is in one Network and the grant covers each of them
+   * individually.
+   *
+   * `WHOLE_CHURCH` covers everything by construction.
+   *
+   * **`network_root` is section 5's distinction, not decoration.** A Network root
+   * and a Person with no assignment both produce a one-element path, and section 5
+   * says a Person with no row "is therefore never a root; surface them as such
+   * rather than silently rendering them as a second root of the tree". Without
+   * the flag the two payloads are identical and a client draws an unassigned
+   * Person as the top of a tree. It is false on every node but the first, since
+   * only the first can hold a null-leader row.
+   *
+   * Section 22's collection envelope, with a `next_cursor` that is always null. A
+   * path is bounded by the depth of the tree and has no page after it -- but the
+   * two collections on this resource should not answer in two shapes, and
+   * `duplicate-candidates` next door already answers in this one.
+   */
+  @Get(':id/pastoral-path')
+  @RequiresCapability(Capability.PeopleViewSubtree, { kind: 'person', from: 'params.id' })
+  async pastoralPath(
+    @Param('id') id: string,
+  ): Promise<{ data: Record<string, unknown>[]; next_cursor: string | null }> {
+    // Asked before the path, so an unknown identifier is a 404 rather than a
+    // one-element path naming a person who does not exist. The guard resolved
+    // scope against this id and does not establish that the row is there.
+    const person = await this.read.findById(id);
+    if (!person) {
+      throw new NotFoundError('No such person.');
+    }
+
+    const { ids, topIsRoot } = await this.hierarchy.pastoralPathOf(id);
+    const names = await this.read.namesOf(ids);
+
+    return {
+      data: ids.map((personId, index) => {
+        const named = names.get(personId);
+
+        if (named === undefined) {
+          // **The same kind of defect `rejectCycle` handles in the walk this path
+          // is built from, answered the same way.** A bare `Error` renders
+          // `INTERNAL_ERROR`, which is the 500-instead-of-an-answer failure this
+          // project records for the self-leader check and the duplicate-email
+          // `23505`.
+          //
+          // Both foreign keys point at `persons` and `namesOf` filters nothing,
+          // so no assignment row can reach here. The live route is an identifier
+          // whose case this map lookup compares and the SQL beside it does not,
+          // which the global canonicalizing pipe closes -- it fails closed either
+          // way. Refused rather than skipped, because a gap in a path reads as a
+          // shorter chain.
+          throw new InvariantViolationError(
+            'This pastoral path names a person who does not exist. Report it; retrying will not help.',
+            { person_id: id, missing_person_id: personId },
+          );
+        }
+
+        return {
+          id: personId,
+          member_id: named.memberId,
+          full_name: named.fullName,
+          network_root: index === 0 && topIsRoot,
+        };
+      }),
+      next_cursor: null,
+    };
   }
 
   @Get(':id')

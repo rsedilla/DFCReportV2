@@ -740,6 +740,147 @@ describe('people (SKILL.md sections 3, 7 and 8)', () => {
     });
   });
 
+  describe('the pastoral path (SKILL.md section 8)', () => {
+    it('returns the chain root first, ending with the person', async () => {
+      // Section 8's own example is a chain from the top: Oriel -> Raymond ->
+      // Manuel. Root first rather than nearest first, because that is the order
+      // it is read in.
+      //
+      // **Four nodes rather than the fixture's three, and built deepest first.**
+      // Not because insertion order defeats a mutation -- it does not: the walk
+      // is a chain, so each iteration of the recursive query produces one row and
+      // the output is depth-ordered whether or not `ORDER BY depth` is there.
+      // What a longer chain buys is that reversing it is distinguishable from
+      // leaving it alone, which for two nodes it is not, and a four-node chain
+      // whose insertion order matches neither direction cannot be satisfied by
+      // any accident of how the rows come back.
+      const deep = await createPerson(db, { firstName: 'Delfin', network: 'MENS' });
+      const middle = await createPerson(db, { firstName: 'Melchor', network: 'MENS' });
+      const top = await createPerson(db, { firstName: 'Tomas', network: 'MENS' });
+      await assignTo(db, top.id, oriel.id);
+      await assignTo(db, middle.id, top.id);
+      await assignTo(db, deep.id, middle.id);
+
+      const response = await path(adminAccount, deep.id);
+
+      expect(response.status).toBe(200);
+      expect(response.body.data.map((node: { id: string }) => node.id)).toEqual([
+        oriel.id,
+        top.id,
+        middle.id,
+        deep.id,
+      ]);
+      expect(response.body.next_cursor).toBeNull();
+      expect(response.body.data[0]).toMatchObject({
+        member_id: expect.any(String),
+        full_name: expect.stringContaining('Oriel'),
+      });
+    });
+
+    it('carries four fields and no more, whoever is asking', async () => {
+      // **Section 8's field rule, with something that can fail on it.** Every
+      // other assertion here uses `objectContaining`, so a birthday or a mobile
+      // number added to a node would leave them all green -- and a path names
+      // people outside the viewer's own subtree, so a field added here is
+      // disclosed church-wide. This is the instrument the church-wide search
+      // already uses one describe below, for the same reason.
+      //
+      // Asked as a Leader rather than as Admin, because the Leader is the actor
+      // the field rule exists for.
+      const response = await path(raymondAccount, manuel.id);
+
+      for (const node of response.body.data as Record<string, unknown>[]) {
+        expect(Object.keys(node).sort()).toEqual(['full_name', 'id', 'member_id', 'network_root']);
+      }
+    });
+
+    it('refuses a person the actor does not oversee', async () => {
+      // **The check that makes returning the whole chain safe.** Section 8 holds
+      // an out-of-scope person to five fields, of which the direct leader's name
+      // is one -- so a chain of ancestors would exceed it, and the guard is what
+      // stops that rather than a redaction inside the payload.
+      //
+      // Juan sits under Rico, a branch Raymond does not oversee.
+      const response = await path(raymondAccount, juan.id);
+
+      expect(response.status).toBe(403);
+      expect(response.body.error.code).toBe('SCOPE_DENIED');
+      expect(response.body).not.toHaveProperty('data');
+    });
+
+    it('marks a Network root as the top of the tree', async () => {
+      // A root is **not** one of section 5 invariant 3's three zero-assignment
+      // cases -- section 5 says so in terms. Their row exists and carries a null
+      // `leader_id`, which is what makes "is this person a root" answerable at
+      // all, and their path is themselves rather than empty.
+      const response = await path(adminAccount, oriel.id);
+
+      expect(response.status).toBe(200);
+      expect(response.body.data).toEqual([
+        expect.objectContaining({ id: oriel.id, network_root: true }),
+      ]);
+    });
+
+    it('does not render an unassigned Person as a second root', async () => {
+      // Section 5: "A Person with no active assignment row at all is therefore
+      // never a root; they are unassigned -- surface them as such rather than
+      // silently rendering them as a second root of the tree."
+      //
+      // This is the case that forced `network_root` onto the node. Both produce a
+      // one-element path, so without it the two payloads are byte-identical and a
+      // client draws this person as the top of a tree they are not in.
+      const unassigned = await createPerson(db, { firstName: 'Perla', network: 'WOMENS' });
+
+      const response = await path(adminAccount, unassigned.id);
+
+      expect(response.status).toBe(200);
+      expect(response.body.data).toEqual([
+        expect.objectContaining({ id: unassigned.id, network_root: false }),
+      ]);
+
+      // Asserted against the root case rather than only in isolation: the rule is
+      // that the two are distinguishable, and only comparing them says so.
+      const root = await path(adminAccount, oriel.id);
+      expect(response.body.data[0].network_root).not.toEqual(root.body.data[0].network_root);
+    });
+
+    it('marks no node but the first as a root', async () => {
+      const response = await path(raymondAccount, manuel.id);
+
+      expect(
+        response.body.data.map((node: { network_root: boolean }) => node.network_root),
+      ).toEqual([true, false, false]);
+    });
+
+    it('answers 404 for an identifier naming nobody', async () => {
+      // The guard resolves scope against the identifier and does not establish
+      // that a row is there, so without the read this would answer 200 with a
+      // one-element path naming a person who does not exist.
+      const response = await path(adminAccount, randomUUID());
+
+      expect(response.status).toBe(404);
+    });
+
+    it('names the same record however the identifier is spelled', async () => {
+      // Section 7's canonical-comparison rule, on a route that takes a path
+      // parameter the guard does resolve against.
+      const response = await path(raymondAccount, manuel.id.toUpperCase());
+
+      expect(response.status).toBe(200);
+      expect(response.body.data.map((node: { id: string }) => node.id)).toEqual([
+        oriel.id,
+        raymond.id,
+        manuel.id,
+      ]);
+    });
+
+    function path(actor: TestAccount, id: string) {
+      return request(app.getHttpServer())
+        .get(`/api/v1/people/${id}/pastoral-path`)
+        .set('Authorization', `Bearer ${actor.accessToken}`);
+    }
+  });
+
   describe('church-wide search (SKILL.md section 8)', () => {
     it('returns the full profile for someone in the searcher scope', async () => {
       const response = await search(raymondAccount, 'Manuel');

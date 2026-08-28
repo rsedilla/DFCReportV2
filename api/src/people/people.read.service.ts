@@ -166,6 +166,43 @@ export class PeopleReadService {
   }
 
   /**
+   * Identifying names for a set of Persons, keyed by id.
+   *
+   * Exists so that a module holding a list of person identifiers does not read
+   * `persons` to put names on them (section 2). `hierarchy` walks the pastoral
+   * path and returns identifiers; this turns them into the two fields section 8
+   * permits church-wide.
+   *
+   * **A Person absorbed by a merge is deliberately not filtered out, where the
+   * other reads in this file filter one.** The difference is what an absence
+   * would mean. On a lookup a filtered row is simply not found; on a path it is a
+   * hole, and a path with a hole reads as a shorter chain rather than as an
+   * error. Section 3 also says a merge never rewrites pastoral records to point
+   * at a different Person, so an absorbed ancestor genuinely stays on the chain
+   * and the real question is whether to render them or the survivor. That is
+   * Person Merge's to answer, for every surface at once, and merge is Stage 3 --
+   * so nothing today can reach it, and it is recorded as open rather than decided
+   * here.
+   */
+  async namesOf(
+    personIds: readonly string[],
+  ): Promise<Map<string, { memberId: string; fullName: string }>> {
+    if (personIds.length === 0) {
+      return new Map();
+    }
+
+    const rows = await this.db
+      .selectFrom('persons')
+      .select(['id', 'member_id', 'first_name', 'middle_name', 'last_name'])
+      .where('id', 'in', [...personIds])
+      .execute();
+
+    return new Map(
+      rows.map((row) => [row.id, { memberId: row.member_id, fullName: composeName(row) }]),
+    );
+  }
+
+  /**
    * Church-wide search by name (section 8), cursor-paginated (section 22).
    *
    * Keyset rather than offset, because rows inserted while a client is paging
