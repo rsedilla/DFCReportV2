@@ -2030,12 +2030,18 @@ Day and time are editable over time, and are effective-dated exactly as category
 
 ```text
 cell_schedules
+- id
 - cell_id
-- day_of_week
-- time_of_day
+- day_of_week          ISO 8601: 1 is Monday, 7 is Sunday (Section 20)
+- time_of_day          wall-clock time in Asia/Manila, with no offset of its own
+- actor_id
 - started_at
 - ended_at nullable
 ```
+
+`day_of_week` is stored as the ISO day number rather than as an enumeration, because every use of it is arithmetic against a calendar: a month's scheduled meetings are derived by comparing it against `EXTRACT(ISODOW ...)`, and Section 20 already begins a week on Monday. `time_of_day` carries no offset, because a standing weekly schedule means the same wall-clock time each week rather than a fixed instant; Section 20 supplies the zone.
+
+`id` and `actor_id` were added to this shape on 2026-08-28, with migration 0009. Every other effective-dated table in this specification has a primary key and this one had no natural one, and a schedule change is audited as a category change is — so it carries the actor `cell_categories` carries. `cell_memberships` deliberately does not, and the reason is below.
 
 This is not optional bookkeeping. Scheduled meetings for a month are derived by running the Cell's configured day against the calendar (Sections 12 and 13), so a report for a past month must use the schedule that was in force **during that month**, never the current one.
 
@@ -2248,6 +2254,8 @@ cell_memberships
 - ended_at nullable
 - source/reason (optional)
 ```
+
+**This shape carries no `actor_id`, and that is a decision rather than an omission.** Every membership change is audit logged with actor, person, Cell and effective date (below, and Section 21), so the actor is recorded — in `audit_log`, where it is recorded for every other operation too. `pastoral_assignments` is the closest analogue in this specification, is the most heavily authorized and audited relationship in the system, and carries no actor column for the same reason. `cell_categories` and `cell_schedules` differ because each states a configuration decision about a Cell rather than a relationship between two Persons, and Section 10 gives each of them an actor in its own shape.
 
 A person currently belongs to a Cell when they have an active (not ended) Cell membership record for that Cell.
 

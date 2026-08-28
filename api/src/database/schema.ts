@@ -200,6 +200,126 @@ export interface AuditLogTable {
   occurred_at: ServerTimestamp;
 }
 
+export type CellState = 'ACTIVE' | 'CLOSED';
+export type CellCategory = 'YOUTH' | 'YOUNG_PRO' | 'COUPLE';
+export type CellClosureReason =
+  | 'MERGED_INTO_ANOTHER_CELL'
+  | 'LEADER_STEPPED_DOWN'
+  | 'MEMBERS_DISPERSED'
+  | 'CREATED_IN_ERROR'
+  | 'OTHER';
+export type CellRequestKind = 'NEW_CELL' | 'HANDOVER';
+export type CellRequestState = 'PENDING' | 'APPROVED' | 'DECLINED';
+export type CellDeclineReason =
+  | 'LEADER_DEVELOPMENT_CONTINUING'
+  | 'TIMING_DEFERRED'
+  | 'DUPLICATE_REQUEST'
+  | 'SUBMITTED_IN_ERROR'
+  | 'OTHER';
+
+/**
+ * ISO 8601 day number: 1 is Monday, 7 is Sunday, matching `EXTRACT(ISODOW ...)`
+ * and the Monday week boundary of SKILL.md section 20. Not a union of literals:
+ * the value is arithmetic against a calendar, and a check constraint holds the
+ * range in the database.
+ */
+export type IsoDayOfWeek = number;
+
+/**
+ * Leader, category and schedule are deliberately not columns here. Each carries
+ * history the specification guarantees and lives in its own effective-dated table
+ * (SKILL.md section 10, section 26).
+ */
+export interface CellsTable {
+  id: Generated<string>;
+  cell_id: Generated<string>;
+  state: Generated<CellState>;
+  /** The closure's effective date, and the date its leadership and memberships ended on. */
+  closed_at: ColumnType<Date | null, Date | string | null, Date | string | null>;
+  closure_reason: CellClosureReason | null;
+  /** Required where the reason is `OTHER`, and forbidden where there is no reason. */
+  closure_note: string | null;
+  created_at: ServerTimestamp;
+}
+
+export interface CellCategoriesTable {
+  id: Generated<string>;
+  cell_id: string;
+  category: CellCategory;
+  actor_id: string | null;
+  started_at: ColumnType<Date, Date | string, Date | string>;
+  ended_at: ColumnType<Date | null, Date | string | null, Date | string | null>;
+}
+
+/**
+ * `id` and `actor_id` are beyond the shape section 10 first gave, and were added
+ * to it in the same change as migration 0009: every other effective-dated table
+ * here has a primary key, and section 10 says a schedule change is audited as a
+ * category change is.
+ */
+export interface CellSchedulesTable {
+  id: Generated<string>;
+  cell_id: string;
+  day_of_week: IsoDayOfWeek;
+  /** Wall-clock time in Asia/Manila (section 20), with no offset of its own. */
+  time_of_day: string;
+  actor_id: string | null;
+  started_at: ColumnType<Date, Date | string, Date | string>;
+  ended_at: ColumnType<Date | null, Date | string | null, Date | string | null>;
+}
+
+export interface CellLeadershipsTable {
+  id: Generated<string>;
+  person_id: string;
+  cell_id: string;
+  started_at: ColumnType<Date, Date | string, Date | string>;
+  ended_at: ColumnType<Date | null, Date | string | null, Date | string | null>;
+}
+
+export interface CellMembershipsTable {
+  id: Generated<string>;
+  person_id: string;
+  cell_id: string;
+  /** Section 10's optional "source/reason"; free text, explaining an ordinary move. */
+  reason: string | null;
+  /**
+   * No `actor_id`. Section 10 puts the actor in the audit entry rather than on the
+   * row, and `pastoral_assignments` -- the closest analogue here -- does the same.
+   */
+  started_at: ColumnType<Date, Date | string, Date | string>;
+  ended_at: ColumnType<Date | null, Date | string | null, Date | string | null>;
+}
+
+/**
+ * One table, two kinds (SKILL.md section 10, Creating a Cell). `kind` decides
+ * which columns are required, and `cell_id` is the one column meaning something
+ * different in each: for a handover it names the Cell at request, and for a
+ * creation nothing names it until approval mints it.
+ *
+ * `requested_by` and `decided_by` are accounts, as every actor column here is.
+ * The prohibition on naming yourself therefore cannot be a check constraint --
+ * `prospective_leader_id` is a Person -- and is a domain check in `cells`.
+ */
+export interface CellLeadershipRequestsTable {
+  id: Generated<string>;
+  kind: CellRequestKind;
+  prospective_leader_id: string;
+  requested_by: string;
+  /** Required where the kind is `NEW_CELL`, and absent on a handover. */
+  category: CellCategory | null;
+  day_of_week: IsoDayOfWeek | null;
+  time_of_day: string | null;
+  state: Generated<CellRequestState>;
+  decline_reason: CellDeclineReason | null;
+  /** Required where the decline reason is `OTHER`. */
+  note: string | null;
+  decided_by: string | null;
+  /** Required for a handover; null on a new Cell until approval sets it. */
+  cell_id: string | null;
+  requested_at: ServerTimestamp;
+  decided_at: ColumnType<Date | null, Date | string | null, Date | string | null>;
+}
+
 export type IdempotencyState = 'IN_FLIGHT' | 'COMPLETED';
 
 export interface IdempotencyKeysTable {
@@ -249,6 +369,12 @@ export interface Database {
   capability_grants: CapabilityGrantsTable;
   refresh_tokens: RefreshTokensTable;
   account_tokens: AccountTokensTable;
+  cells: CellsTable;
+  cell_categories: CellCategoriesTable;
+  cell_schedules: CellSchedulesTable;
+  cell_leaderships: CellLeadershipsTable;
+  cell_memberships: CellMembershipsTable;
+  cell_leadership_requests: CellLeadershipRequestsTable;
   audit_log: AuditLogTable;
   idempotency_keys: IdempotencyKeysTable;
   settings: SettingsTable;
