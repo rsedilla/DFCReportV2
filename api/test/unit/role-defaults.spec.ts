@@ -84,6 +84,11 @@ const TABLE: Record<Capability, Record<AccountRole, string | null>> = {
     ADMIN: 'WHOLE_CHURCH',
     LEADER: 'OWN_SUBTREE',
   },
+  'cell.manage_configuration': {
+    SENIOR_PASTOR: 'WHOLE_CHURCH',
+    ADMIN: 'WHOLE_CHURCH',
+    LEADER: 'OWN_SUBTREE',
+  },
   'cell.request_creation': {
     SENIOR_PASTOR: 'SUBTREE_EXCL_SELF',
     ADMIN: 'SUBTREE_EXCL_SELF',

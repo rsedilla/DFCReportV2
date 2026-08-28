@@ -29,6 +29,7 @@ describe('the capability enumeration (SKILL.md section 7)', () => {
     'cell.correct_subtree',
     'cell.manage_membership',
     'cell.manage_leadership',
+    'cell.manage_configuration',
     'cell.request_creation',
     'cell.approve_creation',
     'cell.manage_lifecycle',
@@ -41,7 +42,7 @@ describe('the capability enumeration (SKILL.md section 7)', () => {
     'audit.view',
   ];
 
-  it('is exactly the twenty-six the specification names', () => {
+  it('is exactly the twenty-seven the specification names', () => {
     expect([...ALL_CAPABILITIES]).toEqual(SPECIFIED);
   });
 
@@ -49,7 +50,7 @@ describe('the capability enumeration (SKILL.md section 7)', () => {
     expect(new Set(ALL_CAPABILITIES).size).toBe(ALL_CAPABILITIES.length);
   });
 
-  it('divides into five reads and twenty-one writes', () => {
+  it('divides into five reads and twenty-two writes', () => {
     expect([...READ_CAPABILITIES]).toEqual([
       'people.view_subtree',
       'dcc.view_subtree',
@@ -59,7 +60,7 @@ describe('the capability enumeration (SKILL.md section 7)', () => {
     ]);
 
     const writes = ALL_CAPABILITIES.filter((capability) => !isReadCapability(capability));
-    expect(writes).toHaveLength(21);
+    expect(writes).toHaveLength(22);
   });
 });
 
