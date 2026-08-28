@@ -123,6 +123,32 @@ export class TokensService {
   }
 
   /**
+   * The same row, found by identity rather than by the secret.
+   *
+   * Used to answer one question and no other: has the replacement a rotated token
+   * points at ever been used? Section 6's retry window turns on that, and the
+   * caller cannot ask it through `findRefreshToken`, which needs the raw token —
+   * and the raw token of a replacement nobody received is, by construction,
+   * something nobody has.
+   */
+  async findRefreshTokenById(id: string): Promise<{
+    id: string;
+    account_id: string;
+    issued_at: Date;
+    expires_at: Date;
+    revoked_at: Date | null;
+    replaced_by_id: string | null;
+  } | null> {
+    const row = await this.db
+      .selectFrom('refresh_tokens')
+      .select(['id', 'account_id', 'issued_at', 'expires_at', 'revoked_at', 'replaced_by_id'])
+      .where('id', '=', id)
+      .executeTakeFirst();
+
+    return row ?? null;
+  }
+
+  /**
    * Revokes a token, and reports whether this call is the one that did it.
    *
    * Sign-out only. It never sets `replaced_by_id`, which is what keeps the two
