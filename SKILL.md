@@ -1042,6 +1042,16 @@ Reuse is a presentation of a token **after** it has been used, which is the case
 
 The cost is accepted deliberately and stated so it is not mistaken for an oversight: an attacker racing a stolen token within the same instant is not detected at that moment. They are detected on the next presentation, because the token they hold is by then revoked and replaced.
 
+**A re-presentation whose replacement was never used is a retry, not reuse.** Where a rotated token is presented again, and the replacement it points at has never been used — neither signed out nor itself rotated — and the rotation happened within a short window, the chain is advanced from that replacement and the account is not revoked. Outside the window, or where the replacement has been used, the presentation is reuse and Section 6's revocation stands.
+
+This exists because a client cannot always know whether its own request succeeded. A refresh whose response is lost in transit leaves the client holding a token the server has already spent, and the browser reports that identically to a request that never arrived at all. Without this rule the client's only options are to discard a credential that may still be live, or to present it again and be treated as a thief — and the second signs a leader out of every device for a dropped connection, which is the same cost the simultaneous-presentation rule above exists to avoid, one step further out.
+
+**The two cases are separable because theft forks the chain and a lost response does not.** An attacker presents the old token while the real client has moved on to the replacement, so two chains advance from one token, and the replacement is used. A client that never received the replacement cannot ever have used it. So "replacement never used" is the signature of a lost response, and "replacement used" is the signature of a copy in circulation. This is a statement about what the rows show, not about intent.
+
+**The window is what keeps the allowance from weakening the signal.** A retry follows its failed request by seconds. With no bound, a token stolen from a device long afterwards — whose owner never returned, so the replacement sits unused — would find that replacement waiting and be served. The window is measured from the rotation, and is a small number of seconds rather than minutes.
+
+Two consequences are accepted rather than glossed. An attacker who steals a token and presents it *before* the real client retries is served, and is then detected one step later, when the client's own retry finds the chain advanced — the same shape as the simultaneous case above. And nothing is served twice: the retry advances the chain and revokes what it advanced from, so only one party ever holds the newest token.
+
 **Retention: a token row outlives what can still be presented.** `refresh_tokens` and `account_tokens` are the one exception to the no-deletion rule (Section 5), because they hold operational state rather than history. They may be pruned, and the floor is not their expiry.
 
 A row may be deleted only once its `expires_at` is **more than 30 days past**. Retention is therefore always longer than the life of the token the row describes.

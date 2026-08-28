@@ -3804,12 +3804,16 @@ questions are listed as open below rather than settled in a component.
 into the specification would settle by implementation what the log says must be
 settled by decision — the failure this file's own preamble names in one line.
 
-**Two of the three questions this entry raised were ruled on the same day** and are
-recorded under their own headings below: tabs are one session (§6), and
-`field-invalid` follows the field rather than the error code (§23). Both are now in
-`SKILL.md`. The third — what a client does with a presentation whose outcome is
-unknown — stands as the interim behaviour described here, with the real remedy
-scoped as an API change and listed as open.
+**All three questions this entry raised are now settled**, and each is recorded
+under its own heading below: tabs are one session (§6), `field-invalid` follows the
+field rather than the error code (§23), and — last, because it needed the API
+change this entry could only scope — a re-presentation whose replacement was never
+used is a retry rather than reuse (§6). All three are in `SKILL.md`.
+
+The interim client behaviour described here therefore stops being interim. The client
+still halts on a presentation whose outcome is unknown, and *Try again* is now safe
+rather than a risk somebody is asked to weigh: inside the window, the server
+recognises the replay as the retry it is.
 
 **A presentation whose outcome is unknown halts the client.** `fetch` rejects
 identically whether a request never arrived or arrived, rotated the row, and lost the
@@ -3934,41 +3938,65 @@ the native ones cannot be force-updated, so each would have rebuilt it.
 
 Written to `SKILL.md` §22, checked by grep rather than asserted.
 
+### 2026-08-27 — A re-presentation whose replacement was never used is a retry
+
+Raised by the first web screens, which are the first code to hold a refresh token.
+§6 defined rotation, the reuse signal, and the 2026-08-21 exemption for simultaneous
+presentation, and said nothing about the case a client actually meets most often on a
+phone: a refresh whose **response** was lost.
+
+The client cannot tell that apart from a request that never arrived — `fetch` reports
+both identically — and it is then holding a token the server has already spent. Its
+only two options were to discard a credential that may still be live, or to present it
+again and be treated as a thief. The second signs a leader out of every device for a
+dropped connection, which is the cost the simultaneous-presentation rule already
+refused to accept, one step further out.
+
+**The server can tell them apart, because theft forks the chain and a lost response
+does not.** An attacker presents the old token while the real client has moved on to
+the replacement, so two chains advance and the replacement is used. A client that
+never received the replacement cannot ever have used it. So *rotated token presented,
+replacement exists, replacement never used* is the signature of a lost response, and a
+used replacement is the signature of a copy in circulation. That is a statement about
+what the rows show rather than about intent, which is what makes it checkable.
+
+**A window bounds it, and the bound is the part that keeps the signal.** A retry
+follows its failed request by seconds. With none, a token stolen from a device long
+afterwards — whose owner never returned, so the replacement sits unused — would find
+that replacement waiting. Sixty seconds, measured from the rotation.
+
+*The window was not in the proposal this was approved from, and is an addition rather
+than a detail.* Without it the rule is strictly weaker than §6 was, because it hands
+an attacker every abandoned chain in the system. It is recorded here rather than left
+in a constant so that raising it later is visibly a security decision.
+
+**Two costs, accepted in writing.** An attacker who presents a stolen token *before*
+the real client retries is served, and is detected one step later when the client's own
+retry finds the chain advanced — the same shape the simultaneous case already accepts.
+And nothing is served twice: the retry advances the chain and revokes what it advanced
+from, so only one party ever holds the newest token.
+
+**The existing reuse test was changed deliberately, and that is the part to check.**
+It presented the first token again with its replacement untouched — which is exactly
+the lost-response shape, so under this rule it is served rather than revoked. Weakening
+its assertion would have been the obvious wrong move. It now establishes the fork by
+rotating the replacement onward first, which is the genuine theft signature, and two
+cases were added either side: the retry is served, and the same shape outside the window
+revokes as before.
+
+Written to `SKILL.md` §6, checked by grep rather than asserted.
+
 ### Open — awaiting a ruling
 
-**Two items await a ruling: one new on 2026-08-27, and one that blocks Stage 5.
-Eighteen other things are unsettled, none of them blocking. They are listed at the
-end, so this section is the whole of what is open.**
+**One item awaits a ruling, and it blocks Stage 5. Eighteen other things are
+unsettled, none of them blocking. They are listed at the end, so this section is the
+whole of what is open.**
 
-**What a client does with a refresh token whose presentation failed in transit.**
-`SKILL.md` §6 defines rotation, the reuse signal, and the 2026-08-21 exemption for
-simultaneous presentation. It says nothing about a presentation whose outcome is
-unknown — which is not a corner case but the ordinary condition of a leader on a
-phone. `fetch` cannot distinguish a request that never arrived from one that arrived,
-rotated the row, and lost its response. The two available answers have opposite
-costs: discarding a possibly-live credential signs one device out for nothing, and
-keeping it risks a sequential replay that revokes every session on the account.
-
-**The client behaviour is settled and the remedy is not.** The client halts — it
-neither discards the token nor presents it again unprompted, and only a person
-pressing *Try again* presents it a second time. That is the ruling above, and it is a
-stance rather than an answer: it moves the risk to somebody who can weigh it, and
-does not remove it.
-
-**The remedy proposed, and scoped as an API change rather than a client one.** The
-client cannot tell the two cases apart; the server can, because they leave different
-traces. Theft *forks the chain* — the attacker presents the old token while the real
-client has already used its replacement, so two chains advance. A lost response forks
-nothing, because the client never received the replacement and never will. So *old
-token presented, revoked, carrying a `replaced_by_id`, and that replacement never
-used* is the lost-response signature, and *replacement used* is theft, exactly as §6
-says today. This is the same argument §6 accepted on 2026-08-21 for simultaneous
-presentation — what an ordinary mobile client does, on surfaces §2 says cannot be
-force-updated — one step further out. It needs its own change against §6 and does not
-ride along with the screens.
-
-Settle it before the native clients are built: each will need the same rule, and none
-of them can be force-updated afterwards.
+The refresh-token question that stood here since 2026-08-27 — what a client does
+with a presentation whose outcome is unknown — left this list the same week, settled
+by the ruling above: a rotated token presented again, whose replacement was never
+used, is a retry rather than reuse, inside a bounded window. The client behaviour it
+describes stops being interim with it.
 
 Nine items that stood here on 2026-08-22 were settled that day and are recorded
 above. Seven were Stop Conditions for Stage 2, and the last two were opened and
