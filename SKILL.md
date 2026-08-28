@@ -1685,6 +1685,36 @@ Oriel
 
 Search results and profile fields must respect authorization and pastoral scope.
 
+The path is returned **topmost first**, ending with the person. Each node carries the
+Member ID and the full name — two of the five fields this section already publishes
+church-wide — the identifier, which is a handle rather than a fact about them, and
+**whether that node is a Network root**.
+
+Topmost rather than root-first, because the chain terminates at whoever holds no open
+assignment and that need not be a root: invariant 3 makes zero assignments legitimate
+for three kinds of Person, and nothing requires a leader to hold one.
+
+The root marker is what carries that distinction, and it is not decoration. A Network
+root and a Person with no assignment at all both produce a path of one node, and
+Section 5 says a Person with no row "is therefore never a root; surface them as such
+rather than silently rendering them as a second root of the tree". Without the marker
+the two are the same payload and the rule has nothing carrying it.
+
+**The whole chain is returned, and the endpoint is scoped on the person asked about
+rather than redacting the nodes.** Every scope a grant may carry keeps that inside
+this section's field rule, and the two that do so keep it for different reasons.
+
+Under a subtree scope the path *passes through the viewer*: everything above them is
+their own upline and everything below is already theirs, so there is no third kind of
+node. That argument depends on subtree membership being decided by the same walk the
+path is built from, and a change to either has to re-establish it.
+
+Under a Network scope the viewer need not be on the chain at all, so that argument
+does not apply and a different one does: Section 5 forbids a cross-Network edge
+absolutely, so every node of a chain belongs to one Network, and a grant covering the
+subject covers each of them individually. Whole Church covers everything by
+construction.
+
 ### Church-wide search and duplicate prevention
 
 Leaders may search the church-wide Person directory by name, primarily for identity resolution and duplicate prevention (see Section 3, Duplicate prevention).

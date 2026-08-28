@@ -4106,9 +4106,60 @@ That is this project's recurring fault in its cheapest form, and it is the
 argument for the second engine restated: a claim about a mechanism, verified
 against the part of it being looked at. Nothing about the screens was wrong.
 
+### 2026-08-28 — A pastoral path says which end is a root
+
+`GET /api/v1/people/{id}/pastoral-path` is the last Stage 2 endpoint, and building it
+turned one sentence of Section 5 into a question no section answered.
+
+Section 5 settled on 2026-08-23 that a root **is a row** — an open assignment carrying
+a null `leader_id` — precisely so "is this person a root" is answerable in the
+database, and it closes with: a Person with no row at all "is therefore never a root;
+they are unassigned — surface them as such rather than silently rendering them as a
+second root of the tree."
+
+Both produce a path of exactly one node. The first implementation returned the same
+payload for each, which is the rendering that sentence forbids, and no section said
+what shape carries the distinction.
+
+**Each node carries `network_root`.** True only on the first, since only the first can
+hold a null-leader row. Written to Section 8 with the rest of the path's shape.
+
+The alternatives were a top-level discriminator, which puts a fact about one node
+outside the node, and refusing an unassigned subject, which turns a legitimate state
+— Section 5 invariant 3 names three of them — into an error on a read.
+
+**What is deliberately not claimed is which of invariant 3's three cases an
+unassigned Person is in.** Section 5 says the schema holds no `why` and that the
+remedy is for a list to exclude accounts holding `ADMIN` rather than for the
+specification to claim a distinction it cannot make. `network_root: false` says the
+person is not the top of a tree, and nothing more.
+
+**The review of this endpoint corrected two things worth keeping.** The first draft
+resolved names by reading `persons` from `hierarchy`, and Section 2 permits exactly
+one cross-module read shape — a join rooted in a table the reading module owns —
+naming the two queries that qualify and closing the list. A bare id lookup is a third,
+and it was avoidable: the walk returns identifiers and `people` puts the names on
+them. The docblock had meanwhile asserted it was a join, was rooted correctly, and
+could not be moved, none of which was true.
+
+And the docblock misquoted invariant 3, listing a Network root as one of its three
+zero-assignment cases when Section 5 names a root as explicitly **not** one — the
+three are a Person not yet assigned, an archived Person, and an administrator outside
+the pastoral structure. Two test comments repeated it, and one asserted that a root
+and an unassigned Person were indistinguishable in the data and that this was
+correct, which is the opposite of the rule this ruling exists to satisfy.
+
+**One review finding was rejected rather than fixed.** It reported that nothing
+exercises the recursive walk's cycle rejection, making the endpoint's claim to inherit
+it unfalsifiable. `api/test/database/cycle-safety.spec.ts` writes a two-person cycle
+directly and asserts both `subtreeOf` and `ancestorsOf` reject it, and
+`pastoralPathOf` calls `ancestorsOf`. The rejection rests on that file existing and
+nothing else: how the finding was arrived at is not something this log can observe,
+and an entry asserting it would be the fault the entry above it records.
+
 ### Open — awaiting a ruling
 
-**One item awaits a ruling, and it blocks Stage 5. Nineteen other things are
+**One item awaits a ruling, and it blocks Stage 5. Twenty other things are
 unsettled, none of them blocking. They are listed at the end, so this section is the
 whole of what is open.**
 
@@ -4133,6 +4184,7 @@ Two related questions have defined behaviour and are recorded in `SKILL.md` §12
 **Unsettled, and not blocking anything.** None of these is a Stop Condition. An implementer proceeds and settles them in passing; they are listed here because a reader looking for what is open should not have to find it inside the body of a ruling.
 
 - **What the duplicate-candidate lookup does when its list exceeds `limit`.** `GET /people/duplicate-candidates` computes every candidate, returns `visible.slice(0, limit)`, and answers `next_cursor: null` — which §22's pagination rule reads as "this is the last page" over a set that was truncated, with no cursor to reach the rest. The `slice` is pre-existing; the ordering rule settled on 2026-08-28 (below) is what makes it consequential. In-scope candidates now always precede withheld ones, so the withheld tail is the **first** thing a truncation removes — the cross-branch duplicate §3 says the church-wide lookup exists to catch — and the client chooses `limit`, down to 1. Not *exactly* those: at a `limit` below the in-scope count it drops in-scope candidates too, and the point is which candidates it reaches first. Three answers are defensible and none is derivable: page the list honestly, refuse to truncate it at all, or state in §3 and §22 that the list is truncated and which candidates may be dropped. **The in-scope group's own internal order has to be settled in the same ruling**, because a page boundary over an unordered set is not pageable. `findDuplicates` issues its population query with no `ORDER BY` and `findCandidates` sorts by tier alone, so within one tier the in-scope order is PostgreSQL's physical row order. That is no disclosure — everything in that group is fully visible to the viewer — but it means that below the in-scope count, *which* in-scope candidates survive a truncation can differ between two identical requests. Raised by `architecture-guardian` on `fix/duplicate-candidate-oracle`, twice, and by the ordering rule itself: §3 now asks that any new decision the list is subjected to — it names a narrowing, a sort, a page boundary and a count — be treated as a disclosure until it is shown to be a function of what the viewer may already know. This is the one page boundary that exists, and nothing has shown it. Not blocking while the default limit of 50 exceeds any candidate list this church produces.
+- **Whether a pastoral path renders an absorbed Person or the survivor.** Every other `persons` read in the application filters `merged_into_id`; the path's name lookup deliberately does not, because on a lookup a filtered row is simply not found while on a path it is a *hole*, and a path with a hole reads as a shorter chain rather than as an error. Section 3 also says a merge never rewrites pastoral records to point at a different Person, so an absorbed ancestor genuinely stays on the chain and the real question is whether to show them or the survivor who now carries the identity. That is Person Merge's to answer for every surface at once rather than this endpoint's to decide, and merge is Stage 3, so nothing today can reach it. Settle it with the merge.
 - **Whether a Person holding an open root row may be absorbed by a Person Merge.** §3 refuses a merge where the absorbed Person leads a Cell and says nothing about a root; §5 leaves succession undefined and forbids reassigning a root. So merging a duplicate root holder into the real person appears permitted — and §3 says a merge "never rewrites historical attendance, pastoral, or audit records to point to a different Person", so the seat row keeps naming the absorbed record. The resolved identity then has two open assignments, which §5 invariant 3 forbids and which no constraint can refuse, because the rows carry different `person_id`s. Raised by the fifth review of the tree import, which is the only thing in the system that creates root rows: the dry-run warning's whole force is that no remedy exists for a mis-seated root, and merge is the one remedy §3 offers for a record created in error. The warning is correct under §3 as written. Settle this before anyone needs it.
 - **Whether a deadlock should be answered as contention.** The import holds every person lock it takes for the whole transaction and acquires them in tree order, so the union across rows is not in key order and a concurrent writer taking two locks sorted can cycle with it. `lockPersonsWithin` guarantees ordering *per call* and cannot reach further. The consequence is that PostgreSQL raises `40P01`, and `isLockTimeout` matches `55P03` only — deliberately, since §22's `RESOURCE_BUSY` says "retry after a short delay" and the existing comment argues a deadlock is not ordinary contention. But a deadlock *is* the case where a retry helps most, and today it renders `INTERNAL_ERROR`. Either `40P01` joins `RESOURCE_BUSY`, or §22 says why it does not. Not urgent while the import is the only long lock-holder and runs once.
 - **Whether a decisions file should bind the candidate set it was adjudicated against.** The fingerprint covers the input file and says nothing about the database, and section 2's decisions file has no candidate column — so a `CREATE` acknowledges a candidate set nothing pins. A Tier 1 candidate arriving between the dry run and the commit is caught where it gives a row its *first* one, because the row is then blank or absent, and is not caught where the row already carries a decision: it is created past an acknowledgement made about somebody else. Closing it means a per-row digest of the candidate identifiers, carried in the file and compared at commit — structure section 2 does not describe. Narrow in practice while the import is thirty rows against a near-empty database, and it is the shape that would matter if this were ever pointed at a larger file. Decide it before any second use of the import.

@@ -75,6 +75,47 @@ export class HierarchyService {
   }
 
   /**
+   * The person's pastoral path, root first, ending with the person themselves
+   * (section 8: "when an authorized user opens a person, show their pastoral
+   * path").
+   *
+   * **Identifiers only, and that is a module rule rather than a style.** Section 2
+   * lets one module read another's table in exactly one shape -- a read joined
+   * onto a query rooted in a table the reading module owns -- and names the two
+   * queries in this file that qualify, closing the list. Resolving names here
+   * would be a third: a bare lookup in `persons`, rooted in nothing this module
+   * owns, answering a question `people` answers already. The caller composes the
+   * names through `PeopleReadService`.
+   *
+   * **`topIsRoot` is the distinction section 5 requires be surfaced.** A Network
+   * root holds an open assignment row carrying a null `leader_id`; a Person with
+   * no row at all is unassigned and "is therefore never a root -- surface them as
+   * such rather than silently rendering them as a second root of the tree". Both
+   * produce a one-element path, so without this the two are the same payload and
+   * a client draws an unassigned Person as the top of a tree.
+   *
+   * `ancestorsOf` discards it -- a root's row is selected and then dropped, since
+   * its `leader_id` is null -- so it is read back here rather than inferred.
+   */
+  async pastoralPathOf(personId: string): Promise<{ ids: string[]; topIsRoot: boolean }> {
+    // The ancestors, nearest first, by the same walk every other upline question
+    // uses -- so a cycle is refused here exactly as it is there rather than
+    // hanging this endpoint.
+    const ancestors = await this.ancestorsOf(this.db, personId);
+
+    // Root first, then down to the person. `ancestorsOf` returns nearest first.
+    const ids = [...ancestors].reverse();
+    ids.push(personId);
+
+    const top = await this.openAssignmentOf(this.db, ids[0]);
+
+    // A row whose `leader_id` is null is what makes someone a root (section 5).
+    // The walk stops at the same place either way, so the row has to be asked
+    // for; its absence is what "unassigned" means.
+    return { ids, topIsRoot: top !== null && top.leaderId === null };
+  }
+
+  /**
    * Everyone recursively below the person, the person included at depth 0.
    *
    * Direct leaders and descendants are different things and are never conflated
@@ -348,9 +389,7 @@ export class HierarchyService {
     return rows.map((row) => ({
       personId: row.id,
       memberId: row.member_id,
-      fullName: [row.first_name, row.middle_name, row.last_name]
-        .filter((part): part is string => part !== null && part.trim() !== '')
-        .join(' '),
+      fullName: composeName(row),
     }));
   }
 
@@ -534,4 +573,24 @@ export class HierarchyService {
       );
     }
   }
+}
+
+/**
+ * A person's full name, from the columns this module reads on its joins.
+ *
+ * Local rather than imported from `people.shared.ts`, which composes the same
+ * string: `people` depends on this module, and pointing an import back the other
+ * way for one pure function is how a cycle starts. It applies the same rule as
+ * that one and as `fullNameOf` in the matcher -- a whitespace-only middle name
+ * counts as absent -- and the three are kept in step by review rather than by the
+ * compiler, which is the accepted cost of not creating that edge.
+ */
+function composeName(row: {
+  first_name: string;
+  middle_name: string | null;
+  last_name: string;
+}): string {
+  return [row.first_name, row.middle_name, row.last_name]
+    .filter((part): part is string => part !== null && part.trim() !== '')
+    .join(' ');
 }
