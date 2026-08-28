@@ -3465,6 +3465,8 @@ Controllers/routes should delegate to authorization and application/domain servi
 
 Web UI must be responsive from the beginning. Leaders will use the web application on phones before any native app exists, so mobile is a current surface, not a future one (Section 2).
 
+**Two rendering engines are supported, and they are what the conformance claim below is tested against: Blink and WebKit.** Blink covers Chrome, Edge and every Chromium browser; WebKit covers Safari, and with it *every* browser on iOS, since iOS permits no other engine — so Chrome on an iPhone is WebKit and a Chromium-only check says nothing about any iPhone. Gecko is not supported: no phone or tablet in use here runs it, and no leader has asked for Firefox. Supporting it later is an ordinary decision and not an amendment to this section; claiming iOS works without testing WebKit is what this rule forbids.
+
 ### Accessibility
 
 **The web application conforms to WCAG 2.2 Level AA.** This is a requirement, not an aspiration, and the things that make it checkable are in `CLAUDE.md` under Definition of Done.

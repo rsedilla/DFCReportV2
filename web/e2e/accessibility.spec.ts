@@ -472,7 +472,7 @@ test('every interactive target meets the 24px minimum', async ({ page }) => {
  *   more margin.
  */
 const VIEWPORT_WIDTHS = [
-  { name: '320px, the narrowest phone in use', width: 320, height: 568 },
+  { name: '320px, the narrowest phone in use', width: 320, height: 568, crossBrowser: true },
   { name: '690px, a foldable opened out', width: 690, height: 829 },
   { name: '768px, where READING stops growing', width: 768, height: 1024 },
   { name: '820px, where READING first centres', width: 820, height: 1180 },
@@ -482,11 +482,65 @@ const VIEWPORT_WIDTHS = [
   // stops changing: a wider display adds margin rather than rearranging
   // anything, and 1366, 1440, 1512, 1920 and a 4K panel all render what this
   // width renders.
-  { name: '1024px, a laptop or an iPad landscape', width: 1024, height: 768 },
+  { name: '1024px, a laptop or an iPad landscape', width: 1024, height: 768, crossBrowser: true },
 ];
 
+/**
+ * **`crossBrowser` is what the `webkit` project selects on.**
+ *
+ * The widths above are an argument about layout, and layout is only half of what
+ * a browser decides. iOS forces WebKit on every browser it hosts, so Chrome on an
+ * iPhone is WebKit and a Chromium-only suite says nothing about any iPhone --
+ * which is most of the device list this application is sized for. Edge needs no
+ * project of its own, being Chromium.
+ *
+ * Two widths rather than five, because a second engine over every width roughly
+ * doubles a job the harness comment says must stay fast enough that nobody skips
+ * it. These two are the ones that bind: overflow is hardest at the narrowest
+ * width, and 1024 is the last width at which anything changes. The gap is an
+ * engine difference appearing at neither end, which is possible and is accepted.
+ *
+ * The flag lives here rather than as a title match in the config, so rewording a
+ * viewport's name cannot silently leave WebKit scanning nothing.
+ */
+const CROSS_BROWSER_TAG = '@cross-browser';
+
+/**
+ * The tag is the whole of what the `webkit` project selects on, so it needs
+ * something that fails when it goes missing.
+ *
+ * Removing it from every width no longer compiles, because nothing then declares
+ * the property. Removing it from *one* does compile, and leaves WebKit quietly
+ * scanning the other -- a browser project that scans half of what it claims
+ * reports the same green as one that scanned all of it. This case carries the tag
+ * itself, so it is among the tests WebKit still runs, and it goes red.
+ *
+ * It asserts the property rather than a count: the narrowest width, where
+ * overflow is hardest, and the widest at which anything changes. A sixth width
+ * added in between leaves it green, which is correct -- widening the
+ * cross-browser set is a decision, and only the two ends are load-bearing.
+ */
+test('the cross-browser widths are the narrowest and the widest', { tag: [CROSS_BROWSER_TAG] }, () => {
+  const widths = VIEWPORT_WIDTHS.map((viewport) => viewport.width);
+  const tagged = VIEWPORT_WIDTHS.filter((viewport) => viewport.crossBrowser).map(
+    (viewport) => viewport.width,
+  );
+
+  expect(
+    tagged,
+    'the narrowest width is not tagged, so WebKit never scans the width where overflow is hardest',
+  ).toContain(Math.min(...widths));
+
+  expect(
+    tagged,
+    'the widest width is not tagged, so WebKit never scans the last width at which anything changes',
+  ).toContain(Math.max(...widths));
+});
+
 for (const viewport of VIEWPORT_WIDTHS) {
-  test.describe(`at ${viewport.name}`, () => {
+  const tag = viewport.crossBrowser ? [CROSS_BROWSER_TAG] : [];
+
+  test.describe(`at ${viewport.name}`, { tag }, () => {
     test.use({ viewport: { width: viewport.width, height: viewport.height } });
 
     for (const scan of SCANS) {
