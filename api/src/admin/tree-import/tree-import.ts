@@ -35,6 +35,8 @@ import { fingerprintOf, validateTreeCsv } from './tree-csv';
 import type { Actor, AuthorizationService } from '../../auth/authorization/authorization.service';
 import type { Db } from '../../database/database.module';
 import type { CivilStatus, Sex } from '../../database/schema';
+import { fullNameOf } from '../../people/duplicate-matching';
+
 import type { Match, Subject } from '../../people/duplicate-matching';
 import type { PeopleDuplicatesService } from '../../people/people.duplicates.service';
 import type { ImportActor, PeopleImportService } from '../../people/people.import.service';
@@ -377,9 +379,7 @@ async function matchAgainstExisting(
       tier: matches.some((match) => match.tier === 1) ? 1 : 2,
       candidates: matches.map((match) => ({
         memberId: match.candidate.memberId,
-        fullName: [match.candidate.firstName, match.candidate.middleName, match.candidate.lastName]
-          .filter((part) => part !== null && part !== '')
-          .join(' '),
+        fullName: fullNameOf(match.candidate),
         tier: match.tier,
         reasons: match.reasons,
       })),

@@ -58,6 +58,31 @@ export interface Match {
  */
 
 /**
+ * A candidate's full name as every surface displays it.
+ *
+ * Here rather than beside either caller — the redaction, which uses it as half of
+ * the order key section 3 defines, and the tree import's dry-run report — because
+ * `Candidate` is defined here and neither caller owns it.
+ *
+ * `people.shared.ts` was the other candidate and is where `composeName` lives.
+ * It would work: that file takes a structural type rather than importing one.
+ * This is the closer home only because the argument is about a `Candidate`
+ * specifically, and section 2 does not reach a seam inside one module
+ * (2026-08-24), so either would have been defensible.
+ *
+ * A whitespace-only middle name counts as absent, matching `composeName` in
+ * `people.shared.ts`, which does the same job for a row's snake_case fields. Two
+ * shapes, and deliberately not four compositions: the redaction's argument for
+ * ordering on the name rests on the sort key and the displayed name being the
+ * same string, which is not a property that survives being written out twice.
+ */
+export function fullNameOf(candidate: Candidate): string {
+  return [candidate.firstName, candidate.middleName, candidate.lastName]
+    .filter((part): part is string => part !== null && part.trim() !== '')
+    .join(' ');
+}
+
+/**
  * Section 3 closes with: "Thresholds and edit distances must be calibrated
  * against real data rather than fixed here."
  *

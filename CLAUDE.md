@@ -3804,12 +3804,16 @@ questions are listed as open below rather than settled in a component.
 into the specification would settle by implementation what the log says must be
 settled by decision — the failure this file's own preamble names in one line.
 
-**Two of the three questions this entry raised were ruled on the same day** and are
-recorded under their own headings below: tabs are one session (§6), and
-`field-invalid` follows the field rather than the error code (§23). Both are now in
-`SKILL.md`. The third — what a client does with a presentation whose outcome is
-unknown — stands as the interim behaviour described here, with the real remedy
-scoped as an API change and listed as open.
+**All three questions this entry raised are now settled**, and each is recorded
+under its own heading below: tabs are one session (§6), `field-invalid` follows the
+field rather than the error code (§23), and — last, because it needed the API
+change this entry could only scope — a re-presentation whose replacement was never
+used is a retry rather than reuse (§6). All three are in `SKILL.md`.
+
+The interim client behaviour described here therefore stops being interim. The client
+still halts on a presentation whose outcome is unknown, and *Try again* is now safe
+rather than a risk somebody is asked to weigh: inside the window, the server
+recognises the replay as the retry it is.
 
 **A presentation whose outcome is unknown halts the client.** `fetch` rejects
 identically whether a request never arrived or arrived, rotated the row, and lost the
@@ -3934,6 +3938,126 @@ the native ones cannot be force-updated, so each would have rebuilt it.
 
 Written to `SKILL.md` §22, checked by grep rather than asserted.
 
+### 2026-08-27 — A re-presentation whose replacement was never used is a retry
+
+Raised by the first web screens, which are the first code to hold a refresh token.
+§6 defined rotation, the reuse signal, and the 2026-08-21 exemption for simultaneous
+presentation, and said nothing about the case a client actually meets most often on a
+phone: a refresh whose **response** was lost.
+
+The client cannot tell that apart from a request that never arrived — `fetch` reports
+both identically — and it is then holding a token the server has already spent. Its
+only two options were to discard a credential that may still be live, or to present it
+again and be treated as a thief. The second signs a leader out of every device for a
+dropped connection, which is the cost the simultaneous-presentation rule already
+refused to accept, one step further out.
+
+**The server can tell them apart, because theft forks the chain and a lost response
+does not.** An attacker presents the old token while the real client has moved on to
+the replacement, so two chains advance and the replacement is used. A client that
+never received the replacement cannot ever have used it. So *rotated token presented,
+replacement exists, replacement never used* is the signature of a lost response, and a
+used replacement is the signature of a copy in circulation. That is a statement about
+what the rows show rather than about intent, which is what makes it checkable.
+
+**A window bounds it, and the bound is the part that keeps the signal.** A retry
+follows its failed request by seconds. With none, a token stolen from a device long
+afterwards — whose owner never returned, so the replacement sits unused — would find
+that replacement waiting. Sixty seconds, measured from the rotation.
+
+*The window was not in the proposal this was approved from, and is an addition rather
+than a detail.* Without it the rule is strictly weaker than §6 was, because it hands
+an attacker every abandoned chain in the system. It is recorded here rather than left
+in a constant so that raising it later is visibly a security decision.
+
+**Two costs, accepted in writing.** An attacker who presents a stolen token *before*
+the real client retries is served, and is detected one step later when the client's own
+retry finds the chain advanced — the same shape the simultaneous case already accepts.
+And nothing is served twice: the retry advances the chain and revokes what it advanced
+from, so only one party ever holds the newest token.
+
+**The existing reuse test was changed deliberately, and that is the part to check.**
+It presented the first token again with its replacement untouched — which is exactly
+the lost-response shape, so under this rule it is served rather than revoked. Weakening
+its assertion would have been the obvious wrong move. It now establishes the fork by
+rotating the replacement onward first, which is the genuine theft signature, and two
+cases were added either side: the retry is served, and the same shape outside the window
+revokes as before.
+
+Written to `SKILL.md` §6, checked by grep rather than asserted.
+
+### 2026-08-28 — Membership and order disclose as loudly as fields did
+
+The fourth door into one oracle, and the first three were each closed by a ruling
+of their own: the reasons were withheld (2026-08-22), then the tier (2026-08-22),
+then membership was scoped to what a publishable rule would have matched
+(2026-08-23). This settles the two channels those left, and states the rule at a
+level that covers the next one.
+
+**A filter that narrows the candidate list is a membership decision, and is taken
+on the match the viewer is entitled to** — the full match in scope, the publishable
+one otherwise. The creation refusal narrows to the candidates it is refusing on,
+which is a filter on the tier; it was applied to the match scored against the
+*full* subject, so an out-of-scope candidate appeared in the refusal payload
+exactly when their birthday equalled the one submitted. Every Tier 1 rule reads a
+birthday or a mobile number, which is what makes that filter a protected field
+wearing a different name.
+
+It follows that no publishable match is ever Tier 1, so an out-of-scope candidate
+never appears in a refusal at all. **That is a new rule and not the 2026-08-23 one
+restated**, and getting this wrong twice in writing is what made it worth saying:
+the *gate* has always been in-scope-only, because the creation path pairs its tier
+test with `canSeeReasons`, and the 2026-08-23 ruling is argued entirely on the
+status varying between 409 and 201. What leaked was the payload of a refusal that
+had already fired correctly.
+
+**The predicate is handed the tier and the identifier and nothing else.** A `Match`
+carries the whole candidate — the publishable run strips the protected fields from
+the *subject*, never from the candidate — so a predicate taking one could read a
+birthday directly, with nothing to fail on it. The narrowed parameter makes the
+one mistake available at that call site a compile error, which is the standard §2
+sets for the capability guard and §22 for `completeWithin`'s transaction argument.
+
+**Withheld candidates are ordered by full name, then Member ID.** Position is the
+same disclosure as the tier: the matcher returns strongest first, so a withheld
+candidate sitting above one whose tier *is* shown reads its withheld tier back,
+and with an equal name a tier is the birthday.
+
+**The tie-break is the rule, not a detail of it**, and the first implementation did
+not have one — which reopened the channel exactly where it is most reachable. A
+withheld candidate is one a publishable rule matched, and that needs an equal
+first *and* last name, so withheld candidates already share a name by
+construction; two with no middle name share all of it, and a comparator returning
+zero there leaves sort stability to restore tier order. Suffix stripping is a
+second generator nobody would guess at: `Pedro Cruz Jr` and `Pedro Cruz Sr` are
+distinct published names that collide on the key. Member ID is total, encodes
+nothing (§3), and is already among the five fields §8 publishes out of scope, so
+it costs no disclosure to break a tie with.
+
+The name is compared in §3's normalized form rather than by the host's collation,
+because `localeCompare` with no locale resolves against the runtime's default and
+§22 makes this ordering client-visible on an API that is additive-only. And the
+sort key is composed by the same function that composes the `full_name` the viewer
+is shown, because the argument for ordering on the name rests on their being the
+same string.
+
+**What is worth carrying forward is the pattern rather than the rule.** Each of the
+four was found only after the one before it was closed, and every time by
+reasoning about what the response *contained* rather than what the response was a
+*function of*. §3 now says so in terms, and asks that any new decision the list is
+subjected to — a narrowing, a sort, a page boundary, a count — be treated as a
+disclosure until it is shown to be a function of what the viewer may already know.
+The one page boundary that exists is `limit`, and nothing has shown it; it is
+listed as open below rather than settled here.
+
+Three `architecture-guardian` passes, and the shape of what they found is itself
+the argument for the last paragraph: the first found the mechanism sound and the
+ordering half still open at a tie; the second and third found nothing further
+wrong with the mechanism and eleven other things, of which nine were statements
+false of the code or of the specification, one was a miscount, and one was this
+ruling's own absence. Written to `SKILL.md`
+§3, and verified by grep rather than asserted.
+
 ### 2026-08-28 — Two engines, and the width argument gets something that can fail
 
 The accessibility suite scanned five widths in **one** engine, and both halves of
@@ -3984,39 +4108,15 @@ against the part of it being looked at. Nothing about the screens was wrong.
 
 ### Open — awaiting a ruling
 
-**Two items await a ruling: one new on 2026-08-27, and one that blocks Stage 5.
-Eighteen other things are unsettled, none of them blocking. They are listed at the
-end, so this section is the whole of what is open.**
+**One item awaits a ruling, and it blocks Stage 5. Nineteen other things are
+unsettled, none of them blocking. They are listed at the end, so this section is the
+whole of what is open.**
 
-**What a client does with a refresh token whose presentation failed in transit.**
-`SKILL.md` §6 defines rotation, the reuse signal, and the 2026-08-21 exemption for
-simultaneous presentation. It says nothing about a presentation whose outcome is
-unknown — which is not a corner case but the ordinary condition of a leader on a
-phone. `fetch` cannot distinguish a request that never arrived from one that arrived,
-rotated the row, and lost its response. The two available answers have opposite
-costs: discarding a possibly-live credential signs one device out for nothing, and
-keeping it risks a sequential replay that revokes every session on the account.
-
-**The client behaviour is settled and the remedy is not.** The client halts — it
-neither discards the token nor presents it again unprompted, and only a person
-pressing *Try again* presents it a second time. That is the ruling above, and it is a
-stance rather than an answer: it moves the risk to somebody who can weigh it, and
-does not remove it.
-
-**The remedy proposed, and scoped as an API change rather than a client one.** The
-client cannot tell the two cases apart; the server can, because they leave different
-traces. Theft *forks the chain* — the attacker presents the old token while the real
-client has already used its replacement, so two chains advance. A lost response forks
-nothing, because the client never received the replacement and never will. So *old
-token presented, revoked, carrying a `replaced_by_id`, and that replacement never
-used* is the lost-response signature, and *replacement used* is theft, exactly as §6
-says today. This is the same argument §6 accepted on 2026-08-21 for simultaneous
-presentation — what an ordinary mobile client does, on surfaces §2 says cannot be
-force-updated — one step further out. It needs its own change against §6 and does not
-ride along with the screens.
-
-Settle it before the native clients are built: each will need the same rule, and none
-of them can be force-updated afterwards.
+The refresh-token question that stood here since 2026-08-27 — what a client does
+with a presentation whose outcome is unknown — left this list the same week, settled
+by the ruling above: a rotated token presented again, whose replacement was never
+used, is a retry rather than reuse, inside a bounded window. The client behaviour it
+describes stops being interim with it.
 
 Nine items that stood here on 2026-08-22 were settled that day and are recorded
 above. Seven were Stop Conditions for Stage 2, and the last two were opened and
@@ -4032,6 +4132,7 @@ Two related questions have defined behaviour and are recorded in `SKILL.md` §12
 
 **Unsettled, and not blocking anything.** None of these is a Stop Condition. An implementer proceeds and settles them in passing; they are listed here because a reader looking for what is open should not have to find it inside the body of a ruling.
 
+- **What the duplicate-candidate lookup does when its list exceeds `limit`.** `GET /people/duplicate-candidates` computes every candidate, returns `visible.slice(0, limit)`, and answers `next_cursor: null` — which §22's pagination rule reads as "this is the last page" over a set that was truncated, with no cursor to reach the rest. The `slice` is pre-existing; the ordering rule settled on 2026-08-28 (below) is what makes it consequential. In-scope candidates now always precede withheld ones, so the withheld tail is the **first** thing a truncation removes — the cross-branch duplicate §3 says the church-wide lookup exists to catch — and the client chooses `limit`, down to 1. Not *exactly* those: at a `limit` below the in-scope count it drops in-scope candidates too, and the point is which candidates it reaches first. Three answers are defensible and none is derivable: page the list honestly, refuse to truncate it at all, or state in §3 and §22 that the list is truncated and which candidates may be dropped. **The in-scope group's own internal order has to be settled in the same ruling**, because a page boundary over an unordered set is not pageable. `findDuplicates` issues its population query with no `ORDER BY` and `findCandidates` sorts by tier alone, so within one tier the in-scope order is PostgreSQL's physical row order. That is no disclosure — everything in that group is fully visible to the viewer — but it means that below the in-scope count, *which* in-scope candidates survive a truncation can differ between two identical requests. Raised by `architecture-guardian` on `fix/duplicate-candidate-oracle`, twice, and by the ordering rule itself: §3 now asks that any new decision the list is subjected to — it names a narrowing, a sort, a page boundary and a count — be treated as a disclosure until it is shown to be a function of what the viewer may already know. This is the one page boundary that exists, and nothing has shown it. Not blocking while the default limit of 50 exceeds any candidate list this church produces.
 - **Whether a Person holding an open root row may be absorbed by a Person Merge.** §3 refuses a merge where the absorbed Person leads a Cell and says nothing about a root; §5 leaves succession undefined and forbids reassigning a root. So merging a duplicate root holder into the real person appears permitted — and §3 says a merge "never rewrites historical attendance, pastoral, or audit records to point to a different Person", so the seat row keeps naming the absorbed record. The resolved identity then has two open assignments, which §5 invariant 3 forbids and which no constraint can refuse, because the rows carry different `person_id`s. Raised by the fifth review of the tree import, which is the only thing in the system that creates root rows: the dry-run warning's whole force is that no remedy exists for a mis-seated root, and merge is the one remedy §3 offers for a record created in error. The warning is correct under §3 as written. Settle this before anyone needs it.
 - **Whether a deadlock should be answered as contention.** The import holds every person lock it takes for the whole transaction and acquires them in tree order, so the union across rows is not in key order and a concurrent writer taking two locks sorted can cycle with it. `lockPersonsWithin` guarantees ordering *per call* and cannot reach further. The consequence is that PostgreSQL raises `40P01`, and `isLockTimeout` matches `55P03` only — deliberately, since §22's `RESOURCE_BUSY` says "retry after a short delay" and the existing comment argues a deadlock is not ordinary contention. But a deadlock *is* the case where a retry helps most, and today it renders `INTERNAL_ERROR`. Either `40P01` joins `RESOURCE_BUSY`, or §22 says why it does not. Not urgent while the import is the only long lock-holder and runs once.
 - **Whether a decisions file should bind the candidate set it was adjudicated against.** The fingerprint covers the input file and says nothing about the database, and section 2's decisions file has no candidate column — so a `CREATE` acknowledges a candidate set nothing pins. A Tier 1 candidate arriving between the dry run and the commit is caught where it gives a row its *first* one, because the row is then blank or absent, and is not caught where the row already carries a decision: it is created past an acknowledgement made about somebody else. Closing it means a per-row digest of the candidate identifiers, carried in the file and compared at commit — structure section 2 does not describe. Narrow in practice while the import is thirty rows against a near-empty database, and it is the shape that would matter if this were ever pointed at a larger file. Decide it before any second use of the import.

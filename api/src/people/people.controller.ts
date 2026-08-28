@@ -112,6 +112,14 @@ export class PeopleController {
    * does. The envelope is that shape regardless, because section 22 makes
    * `/api/v1` additive-only — a collection shipped without one can never grow a
    * cursor once a phone depends on it.
+   *
+   * **The `slice` below is a truncation and section 22 reads a null cursor as
+   * “this is the last page”, which is an open question rather than a settled
+   * rule** (CLAUDE.md, Open). Since section 3's ordering puts in-scope candidates
+   * first, the withheld tail is what a truncation reaches first — and that tail
+   * is the cross-branch duplicate this endpoint exists to catch. It is recorded
+   * rather than worked around here, because either answer is a rule about what
+   * the API promises and neither is derivable.
    */
   @Get('duplicate-candidates')
   @RequiresCapability(Capability.PeopleViewSubtree, { kind: 'actor' })

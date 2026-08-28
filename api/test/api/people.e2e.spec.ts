@@ -560,6 +560,184 @@ describe('people (SKILL.md sections 3, 7 and 8)', () => {
       expect(inScope).toHaveProperty('reasons');
       expect(inScope).toHaveProperty('tier');
     });
+
+    it('names no out-of-scope candidate in a Tier 1 refusal, whatever their birthday', async () => {
+      // **The fourth door into the same oracle, and the one three redaction
+      // rulings left open.** The refusal narrows its payload to the candidates it
+      // is refusing on, and that filter is itself a membership decision — so
+      // running it against the *full* match decided whether a stranger appeared
+      // from a tier the viewer is never told. Every Tier 1 rule reads a birthday
+      // or a mobile number (section 3), so the stranger appeared exactly when
+      // their birthday equalled the one submitted: one bit per request, on a path
+      // that writes nothing.
+      //
+      // The two strangers below differ in nothing but the birthday, so the
+      // property is proven inside a single response: if presence could vary with
+      // a protected field, these two would not be treated alike.
+      const ours = await createPerson(db, {
+        firstName: 'Pedro',
+        middleName: 'Zuniga',
+        network: 'MENS',
+      });
+      await assignTo(db, ours.id, manuel.id);
+
+      const strangerSameBirthday = await createPerson(db, {
+        firstName: 'Pedro',
+        middleName: 'Abad',
+        birthDate: '1985-06-15',
+        network: 'MENS',
+      });
+      const strangerOtherBirthday = await createPerson(db, {
+        firstName: 'Pedro',
+        middleName: 'Bayani',
+        birthDate: '1970-01-01',
+        network: 'MENS',
+      });
+      await assignTo(db, strangerSameBirthday.id, juan.id);
+      await assignTo(db, strangerOtherBirthday.id, juan.id);
+
+      const refused = await post(raymondAccount, randomUUID()).send(
+        personBody({
+          pastoral_leader_id: manuel.id,
+          first_name: 'Pedro',
+          last_name: 'Testfixture',
+          birth_date: '1985-06-15',
+        }),
+      );
+
+      expect(refused.status).toBe(409);
+      expect(refused.body.error.code).toBe('DUPLICATE_ACKNOWLEDGEMENT_REQUIRED');
+
+      // Exact rather than two `not.toContain`s. Both strangers are publishable on
+      // their names, so they survive the section 8 membership test and are held
+      // out by this rule alone — and an assertion that only says who is *absent*
+      // passes just as well against a regression that empties the payload, which
+      // is the failure the neighbouring case above records.
+      const candidates = refused.body.error.details.candidates as { id: string }[];
+      expect(candidates.map((candidate) => candidate.id)).toEqual([ours.id]);
+    });
+
+    it('returns withheld candidates in name order, after the ones in scope', async () => {
+      // **Order is the same disclosure as the tier, one step out.**
+      // `findCandidates` returns strongest first, and a withheld candidate's tier
+      // is withheld precisely because it is derived from which rule fired — so
+      // sitting a withheld candidate above one whose tier *is* shown reads the
+      // withheld tier back, and with an equal name that reads back the birthday.
+      //
+      // Zamora is Tier 1 on the full match and Abad is Tier 2, so tier order and
+      // name order disagree here. That disagreement is what lets the case fail:
+      // against tier order the withheld pair comes back Zamora first.
+      const ours = await createPerson(db, {
+        firstName: 'Pedro',
+        middleName: 'Zuniga',
+        network: 'MENS',
+      });
+      await assignTo(db, ours.id, manuel.id);
+
+      const zamora = await createPerson(db, {
+        firstName: 'Pedro',
+        middleName: 'Zamora',
+        birthDate: '1985-06-15',
+        network: 'MENS',
+      });
+      const abad = await createPerson(db, {
+        firstName: 'Pedro',
+        middleName: 'Abad',
+        birthDate: '1970-01-01',
+        network: 'MENS',
+      });
+      await assignTo(db, zamora.id, juan.id);
+      await assignTo(db, abad.id, juan.id);
+
+      const response = await request(app.getHttpServer())
+        .get('/api/v1/people/duplicate-candidates')
+        .query({ first_name: 'Pedro', last_name: 'Testfixture', birth_date: '1985-06-15' })
+        .set('Authorization', `Bearer ${raymondAccount.accessToken}`);
+
+      expect(response.status).toBe(200);
+
+      const candidates = response.body.data as {
+        id: string;
+        full_name: string;
+        possible_match?: boolean;
+      }[];
+
+      // Asserted present, and by id, before anything is asserted about position.
+      // Both are held out of the ordering rule by the membership rule the case
+      // above pins, and an empty tail would satisfy every ordering assertion
+      // below it.
+      const withheld = candidates.filter((candidate) => candidate.possible_match === true);
+      expect(withheld.map((candidate) => candidate.id).sort()).toEqual([abad.id, zamora.id].sort());
+
+      expect(withheld.map((candidate) => candidate.full_name)).toEqual([
+        'Pedro Abad Testfixture',
+        'Pedro Zamora Testfixture',
+      ]);
+
+      // In scope first, which is what keeps the strongest match the viewer may
+      // actually act on at the top of the list.
+      const firstWithheld = candidates.findIndex((candidate) => candidate.possible_match === true);
+      expect(
+        candidates.slice(firstWithheld).every((candidate) => candidate.possible_match === true),
+      ).toBe(true);
+      // At the head, not merely somewhere in the prefix: "strongest match first"
+      // is half the ordering rule, and `ours` is the only Tier 1 candidate in
+      // scope here — Raymond and Manuel match at Tier 2 on the shared birthday.
+      // Asserting mere membership of the prefix leaves the in-scope half of the
+      // rule with nothing that can fail on it.
+      expect(candidates[0]).toMatchObject({ id: ours.id, tier: 1 });
+      expect(candidates.slice(0, firstWithheld)).toContainEqual(
+        expect.objectContaining({ id: ours.id }),
+      );
+    });
+
+    it('breaks a tie in the withheld order by Member ID, not by the withheld tier', async () => {
+      // **The case the name sort alone does not cover, and it is the ordinary
+      // one.** A withheld candidate is publishable, which needs an equal first
+      // *and* last name — so every withheld candidate in a response already
+      // shares a name with the others, and two carrying no middle name share the
+      // whole of it. A comparator returning 0 there leaves the sort's stability
+      // to decide, and what it preserves is tier order: position reads the
+      // withheld tier straight back, which with an equal name reads back the
+      // birthday.
+      //
+      // The two below are created in the order Tier 2 then Tier 1, so Member ID
+      // order and tier order disagree. Section 3 makes the Member ID the
+      // tie-break because section 8 already publishes it to a viewer outside the
+      // scope, and because it is unique, which is what makes the key total.
+      const secondByTier = await createPerson(db, {
+        firstName: 'Pedro',
+        birthDate: '1970-01-01',
+        network: 'MENS',
+      });
+      const firstByTier = await createPerson(db, {
+        firstName: 'Pedro',
+        birthDate: '1985-06-15',
+        network: 'MENS',
+      });
+      await assignTo(db, secondByTier.id, juan.id);
+      await assignTo(db, firstByTier.id, juan.id);
+
+      const response = await request(app.getHttpServer())
+        .get('/api/v1/people/duplicate-candidates')
+        .query({ first_name: 'Pedro', last_name: 'Testfixture', birth_date: '1985-06-15' })
+        .set('Authorization', `Bearer ${raymondAccount.accessToken}`);
+
+      expect(response.status).toBe(200);
+
+      const withheld = (
+        response.body.data as { id: string; member_id: string; full_name: string }[]
+      ).filter((candidate) => (candidate as { possible_match?: boolean }).possible_match === true);
+
+      // The premise of the case: the name half of the key genuinely ties, so what
+      // is being asserted below is the tie-break and not the name sort.
+      expect(new Set(withheld.map((candidate) => candidate.full_name)).size).toBe(1);
+
+      expect(withheld.map((candidate) => candidate.id)).toEqual([secondByTier.id, firstByTier.id]);
+      expect(withheld.map((candidate) => candidate.member_id)).toEqual(
+        [...withheld].map((candidate) => candidate.member_id).sort(),
+      );
+    });
   });
 
   describe('church-wide search (SKILL.md section 8)', () => {
