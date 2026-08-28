@@ -29,7 +29,7 @@ describe('the grant-making pair (section 7)', () => {
     // `records.backdate_effective_date`, `people.merge` and `people.correct_sex`
     // are withheld by section 7 on a stated ground — each moves totals for periods
     // already reported — and each use is one audited operation whose authority an
-    // Admin can still revoke. `settings.manage` and `cell.approve_creation` the
+    // Admin can still revoke. `settings.manage` and `cell.approve_leadership` the
     // table withholds and section 7 argues nowhere.
     //
     // `people.correct_sex` is listed first because a first version of this branch
@@ -40,7 +40,7 @@ describe('the grant-making pair (section 7)', () => {
       Capability.PeopleMerge,
       Capability.RecordsBackdateEffectiveDate,
       Capability.SettingsManage,
-      Capability.CellApproveCreation,
+      Capability.CellApproveLeadership,
     ]) {
       expect(isGrantMaking(capability)).toBe(false);
     }

@@ -968,7 +968,7 @@ describe('the database enforces the section 3 and section 7 rules it can', () =>
       | 'people.merge'
       | 'people.correct_sex'
       | 'settings.manage'
-      | 'cell.approve_creation'
+      | 'cell.approve_leadership'
       | 'records.backdate_effective_date',
   ) {
     return db
@@ -1040,7 +1040,7 @@ describe('the database enforces the section 3 and section 7 rules it can', () =>
       'people.correct_sex',
       'records.backdate_effective_date',
       'settings.manage',
-      'cell.approve_creation',
+      'cell.approve_leadership',
     ] as const) {
       await expect(grant(oriel, capability)).resolves.toBeDefined();
     }
