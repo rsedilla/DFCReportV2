@@ -53,7 +53,7 @@ export const WHOLE_CHURCH_ONLY: ReadonlySet<Capability> = new Set([
   Capability.SettingsManage,
   Capability.AccountsManage,
   Capability.RolesManage,
-  Capability.CellApproveCreation,
+  Capability.CellApproveLeadership,
 ]);
 
 /**

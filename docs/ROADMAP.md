@@ -96,18 +96,24 @@ capability and governs a Cell's category and schedule; and the schedule trigger 
 strict, admitting a row on the first of a month in Asia/Manila or at the Cell's
 `created_at`, with no exception for backdating.
 
-**Two are open and block part of this stage.** How a Cell passes from one leader to
-another while it stays open — no section defines it, and Section 3 offers it as one
-of two ways to unblock archiving a Person who leads a Cell. And what reversing a
-closure does to the leadership, category and schedule rows the closure ended. Neither
-blocks the Cell entity, the categories and schedules, membership, or the creation
-workflow; both must be settled before the handover or the reversal is built. The
-decisions log carries the reasoning and the candidate answers.
+**The remaining two were settled the same day, so nothing in this stage is blocked.**
+A Cell changes hands through the same request-and-approve workflow that creates one,
+with the capability pair renamed to `cell.request_leadership` and
+`cell.approve_leadership`, the guard resolving against the incoming leader and the
+Cell checked in the domain layer, and one pending request per prospective leader for a
+new Cell and one per Cell for a handover. And a closure is never reversed: a Cell
+closed by mistake is corrected by creating a new one, which is what this section
+already prescribed for a ministry that restarts.
+
+Five rulings in total, all before a line of Cells code. The decisions log carries the
+reasoning, including the one that was drafted, withdrawn, and landed a day later once
+the three questions it could not answer were answered.
 
 - Cell entity, Cell ID sequence, lifecycle (§10)
 - Categories and schedules, both effective-dated
 - Membership, with single-transaction moves
 - The creation workflow: request, approve, decline (§10, Creating a Cell)
+- **The handover workflow**, which is the same two steps against an existing Cell (§10). It is what a leader stepping down means where the Cell continues; `LEADER_STEPPED_DOWN` closes a Cell only where nobody takes it on
 - Cell leadership assignments (§11)
 - **The Cell half of a Network change** (§4, last paragraph). A Network change must not leave a person holding Cell relationships the homogeneous-network rule no longer permits. Stage 2's sex-correction route enforces the pastoral half and cannot enforce this one, because neither table exists; the precondition in `networks` grows a second half here.
 

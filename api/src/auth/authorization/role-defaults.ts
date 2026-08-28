@@ -45,7 +45,7 @@ const SENIOR_PASTOR: RoleDefaults = {
   [Capability.CellManageConfiguration]: ScopeType.WholeChurch,
   // Held at subtree scope by every role: naming oneself on a request is
   // prohibited for everyone (section 10).
-  [Capability.CellRequestCreation]: ScopeType.SubtreeExclSelf,
+  [Capability.CellRequestLeadership]: ScopeType.SubtreeExclSelf,
   [Capability.CellManageLifecycle]: ScopeType.WholeChurch,
   [Capability.ReportsViewSubtree]: ScopeType.WholeChurch,
   [Capability.AuditView]: ScopeType.WholeChurch,
@@ -72,8 +72,8 @@ const ADMIN: RoleDefaults = {
   [Capability.CellManageMembership]: ScopeType.WholeChurch,
   [Capability.CellManageLeadership]: ScopeType.WholeChurch,
   [Capability.CellManageConfiguration]: ScopeType.WholeChurch,
-  [Capability.CellRequestCreation]: ScopeType.SubtreeExclSelf,
-  [Capability.CellApproveCreation]: ScopeType.WholeChurch,
+  [Capability.CellRequestLeadership]: ScopeType.SubtreeExclSelf,
+  [Capability.CellApproveLeadership]: ScopeType.WholeChurch,
   [Capability.CellManageLifecycle]: ScopeType.WholeChurch,
   [Capability.ReportsViewSubtree]: ScopeType.WholeChurch,
   [Capability.AuditView]: ScopeType.WholeChurch,
@@ -100,7 +100,7 @@ const LEADER: RoleDefaults = {
   [Capability.CellManageMembership]: ScopeType.OwnSubtree,
   [Capability.CellManageLeadership]: ScopeType.OwnSubtree,
   [Capability.CellManageConfiguration]: ScopeType.OwnSubtree,
-  [Capability.CellRequestCreation]: ScopeType.SubtreeExclSelf,
+  [Capability.CellRequestLeadership]: ScopeType.SubtreeExclSelf,
   [Capability.CellManageLifecycle]: ScopeType.OwnSubtree,
   [Capability.ReportsViewSubtree]: ScopeType.OwnSubtree,
 };

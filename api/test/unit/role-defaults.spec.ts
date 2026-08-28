@@ -89,12 +89,12 @@ const TABLE: Record<Capability, Record<AccountRole, string | null>> = {
     ADMIN: 'WHOLE_CHURCH',
     LEADER: 'OWN_SUBTREE',
   },
-  'cell.request_creation': {
+  'cell.request_leadership': {
     SENIOR_PASTOR: 'SUBTREE_EXCL_SELF',
     ADMIN: 'SUBTREE_EXCL_SELF',
     LEADER: 'SUBTREE_EXCL_SELF',
   },
-  'cell.approve_creation': { SENIOR_PASTOR: null, ADMIN: 'WHOLE_CHURCH', LEADER: null },
+  'cell.approve_leadership': { SENIOR_PASTOR: null, ADMIN: 'WHOLE_CHURCH', LEADER: null },
   'cell.manage_lifecycle': {
     SENIOR_PASTOR: 'WHOLE_CHURCH',
     ADMIN: 'WHOLE_CHURCH',
@@ -167,11 +167,11 @@ describe('the role catalog (SKILL.md section 7)', () => {
     });
   });
 
-  it('holds cell.request_creation at subtree scope for every role', () => {
+  it('holds cell.request_leadership at subtree scope for every role', () => {
     // Naming oneself on a request is prohibited for everyone, Senior Pastors and
     // Admin included (section 10).
     for (const role of ROLES) {
-      expect(ROLE_DEFAULTS[role]['cell.request_creation']).toBe('SUBTREE_EXCL_SELF');
+      expect(ROLE_DEFAULTS[role]['cell.request_leadership']).toBe('SUBTREE_EXCL_SELF');
     }
   });
 });

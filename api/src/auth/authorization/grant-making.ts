@@ -12,7 +12,7 @@ import { Capability } from './capabilities';
  * `people.merge` and `people.correct_sex` are withheld on a different ground that
  * section 7 states — each moves totals for periods already reported — and each use
  * is one audited operation whose authority an Admin can still revoke.
- * `settings.manage` and `cell.approve_creation` section 7 withholds in its table
+ * `settings.manage` and `cell.approve_leadership` section 7 withholds in its table
  * and argues nowhere.
  *
  * So the other five stay ordinary Admin-issued grants. A capability joins this set

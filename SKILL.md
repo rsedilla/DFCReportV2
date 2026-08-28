@@ -178,7 +178,7 @@ This is the rule this section already applies to Cell members, applied to the tr
 
 The sequence matters. The tree must exist before leaders can be assigned, accounts provisioned, or Cells attached in the right place.
 
-**Admin creates the initial Cells and their leadership assignments.** A leader cannot create their own first Cell: an account is provisioned when a person becomes a Cell Leader (Section 6), and a person becomes a Cell Leader only through an active leadership assignment on an existing Cell (Section 11). Admin therefore creates the Cell and the leadership assignment directly, exercising `cell.approve_creation` and `cell.manage_leadership` at Whole Church scope, which is also what allows the leader's account to be provisioned. During initial encoding there is nothing to request, because the Cells already exist and are not in dispute; approval is not bypassed, since Admin is the approver.
+**Admin creates the initial Cells and their leadership assignments.** A leader cannot create their own first Cell: an account is provisioned when a person becomes a Cell Leader (Section 6), and a person becomes a Cell Leader only through an active leadership assignment on an existing Cell (Section 11). Admin therefore creates the Cell and the leadership assignment directly, exercising `cell.approve_leadership` and `cell.manage_leadership` at Whole Church scope, which is also what allows the leader's account to be provisioned. During initial encoding there is nothing to request, because the Cells already exist and are not in dispute; approval is not bypassed, since Admin is the approver.
 
 One rule is relaxed for this phase: **the request step is skipped**, and Admin creates Cells directly (Section 10). Approval is not bypassed, since Admin is the approver.
 
@@ -520,7 +520,7 @@ Archiving and restoring are RBAC-controlled capabilities (Section 7). Ordinary l
 
 A Person holding an active Cell leadership assignment (Section 11) cannot be archived while that assignment stands. The archive is rejected, naming what must be resolved first — for example, that the Person leads `CELL-000482`, which has nine members.
 
-Resolve it deliberately, in one of two ways: reassign the Cell to another leader, or close the Cell (Section 10, Cell lifecycle). Either is an explicit, authorized, audited action.
+Resolve it deliberately, in one of two ways: hand the Cell to another leader, or close the Cell (Section 10). Both are explicit, authorized and audited. A handover is requested and approved, so it is not something the archiver completes alone; a closure is a single authorized action, and Admin and the Senior Pastors hold `cell.manage_lifecycle` at Whole Church, so the archive is never blocked for want of a route.
 
 Two alternatives were considered and rejected. Allowing the archive and leaving the leadership assignment in place produces a Cell whose leader is not a current Person, which corrupts Current Cell Leaders and every metric derived from it. Allowing the archive and automatically closing the Cell silently ends nine people's Cell membership, dropping them out of Cell reporting with no decision recorded about where they go.
 
@@ -804,7 +804,7 @@ The third is different in kind from the first two and is named separately for th
 
 A reassignment closes the current assignment and opens the new one within a single transaction. It must never leave two open assignments, and must never leave a person who had a leader without one. Enforce with a uniqueness constraint over the person where `ended_at` is null — the constraint permits zero rows and forbids two.
 
-Every effective-dated table carries the same shape of constraint, and each is required rather than optional (Database enforcement, below): one open row per person for `person_lifecycle`, `network_assignments` and `cell_memberships`; one open row per Cell for `cell_categories` and `cell_schedules`; one open row per Cell for `cell_leaderships`, since a Cell has one leader at a time — that index carries *at most one*, and Section 11 adds a deferred constraint trigger for *at least one* on an `ACTIVE` Cell, which is a constraint on an absent row and so is not expressible as an index; one `PENDING` row per prospective leader for `cell_creation_requests`; and one active row per account per role for `account_roles`. `account_roles` carries two further uniqueness constraints of its own, both named in Section 7 rather than here because each states a rule about authority rather than about effective dating: one occupant per Senior Pastor slot, and at most one of `SENIOR_PASTOR` and `ADMIN` per account. `capability_grants` is deliberately exempt: an account may hold the same capability at more than one scope, and the widest applicable grant governs.
+Every effective-dated table carries the same shape of constraint, and each is required rather than optional (Database enforcement, below): one open row per person for `person_lifecycle`, `network_assignments` and `cell_memberships`; one open row per Cell for `cell_categories` and `cell_schedules`; one open row per Cell for `cell_leaderships`, since a Cell has one leader at a time — that index carries *at most one*, and Section 11 adds a deferred constraint trigger for *at least one* on an `ACTIVE` Cell, which is a constraint on an absent row and so is not expressible as an index; one `PENDING` `NEW_CELL` row per prospective leader and one `PENDING` `HANDOVER` row per Cell for `cell_leadership_requests`, which are two rules rather than one and are argued separately in Section 10; and one active row per account per role for `account_roles`. `account_roles` carries two further uniqueness constraints of its own, both named in Section 7 rather than here because each states a rule about authority rather than about effective dating: one occupant per Senior Pastor slot, and at most one of `SENIOR_PASTOR` and `ADMIN` per account. `capability_grants` is deliberately exempt: an account may hold the same capability at more than one scope, and the widest applicable grant governs.
 
 Two concurrently open assignments would place one person in two branches at once and double-count them in every subtree total, violating the unique-people rule in Section 20.
 
@@ -1343,8 +1343,8 @@ The capabilities are exactly:
 - `cell.manage_membership`
 - `cell.manage_leadership`
 - `cell.manage_configuration`
-- `cell.request_creation`
-- `cell.approve_creation`
+- `cell.request_leadership`
+- `cell.approve_leadership`
 - `cell.manage_lifecycle`
 - `reports.view_subtree`
 - `people.merge`
@@ -1358,7 +1358,7 @@ Each capability guards one endpoint family, and the boundaries are not left to i
 
 - `dcc.*` guards everything under `/api/v1/dcc` — rosters, submissions, corrections, and DCC figures reached directly
 - `cell.*` guards everything under `/api/v1/cells`, including meeting records, membership, leadership, and outstanding-record lists
-- `cell.manage_leadership` appears in this list and **no section says what it may do**. Section 6 pairs it with `accounts.manage` where designating a Cell Leader would create an account, and Section 2 has Admin exercise it during initial encoding; neither is a definition. Every write to `cell_leaderships` this specification actually describes happens inside an approval or a closure, each with its own capability, so what this one adds is undefined and is recorded as open in `CLAUDE.md`. It stays in the list rather than being removed, because Section 6 names it in a rule that stands
+- `cell.manage_leadership` governs writing `cell_leaderships`. Every such write happens inside an approval, a closure, or the direct creation of the initial-encoding phase (Sections 10 and 2), so it is exercised alongside the capability authorizing that operation rather than on its own. It is named separately because Section 6 requires one actor to hold it **and** `accounts.manage` against the same target where the write would mint a Cell Leader, and provides for an actor holding only the first, who records the assignment and leaves the account step pending. What it does not confer is the decision that a person should lead: outside initial encoding that is made by request and approval, for a new Cell and for a handover alike
 - `cell.manage_configuration` governs a Cell's category and its schedule (Section 10). One capability rather than two: both are effective-dated edits to how a Cell is configured, both are audited the same way, and an administrator granting one and withholding the other would be expressing a distinction no rule makes. It confers no power to create or close a Cell, each of which has its own capability, nor to change who leads one
 - `reports.view_subtree` guards `/api/v1/reports` — the aggregate reporting surface, Network Summary, and the notification content derived from it (Section 13). It never substitutes for `dcc.view_subtree` or `cell.view_subtree` on the domain endpoints, and neither of those substitutes for it
 - `dcc.correct_subtree` and `cell.correct_subtree` guard amendment of an already-submitted record (Section 14), separately from `take_attendance`, which guards the first submission
@@ -1402,8 +1402,8 @@ Three roles exist. Each carries the default capabilities and scopes below. Anyth
 | `cell.manage_membership` | Whole Church | Whole Church | own/subtree |
 | `cell.manage_leadership` | Whole Church | Whole Church | own/subtree |
 | `cell.manage_configuration` | Whole Church | Whole Church | own/subtree |
-| `cell.request_creation` | subtree, excl. self | subtree, excl. self | subtree, excl. self |
-| `cell.approve_creation` | — | Whole Church | — |
+| `cell.request_leadership` | subtree, excl. self | subtree, excl. self | subtree, excl. self |
+| `cell.approve_leadership` | — | Whole Church | — |
 | `cell.manage_lifecycle` | Whole Church | Whole Church | own/subtree |
 | `reports.view_subtree` | Whole Church | Whole Church | own/subtree |
 | `audit.view` | Whole Church | Whole Church | — |
@@ -1440,7 +1440,7 @@ Authorization is expressed as two independent dimensions that combine to form Ac
 
 The four scope values are a closed enumeration. A guard cannot fail closed against an open one, so do not add a fifth without amending this specification.
 
-`SUBTREE_EXCL_SELF` is used by `cell.request_creation` alone, where the only prohibited object is the target itself (Section 10). Everywhere else `OWN_SUBTREE` includes the actor, deliberately — a leader edits their own basic details and records their own attendance. Where a rule forbids acting on oneself but the grant must still reach oneself as a *source* — pastoral reassignment, Section 5 invariant 4 — the prohibition is a domain check, not a scope value (How grants are held, below).
+`SUBTREE_EXCL_SELF` is used by `cell.request_leadership` alone, where the object the scope is about — the prospective leader — is also the one object the actor may not be (Section 10). A handover carries a second object, the Cell, and that one is a domain check rather than part of the scope, on the rule below. Everywhere else `OWN_SUBTREE` includes the actor, deliberately — a leader edits their own basic details and records their own attendance. Where a rule forbids acting on oneself but the grant must still reach oneself as a *source* — pastoral reassignment, Section 5 invariant 4 — the prohibition is a domain check, not a scope value (How grants are held, below).
 
 Scope resolves against a target. Where the target is a Person, it resolves through their pastoral position. Where it is not:
 
@@ -1453,7 +1453,7 @@ Scope resolves against a target. Where the target is a Person, it resolves throu
 
 A capability without an explicit scope grant is not usable; a scope grant without an explicit capability grants nothing.
 
-Senior Pastors (Bishop Oriel Ballano, Pastora Geraldine Ballano) receive Whole Church scope by role/policy, built in, on every capability their role carries — this does not require a separate Admin-issued grant. The one exception is visible in the catalog: `cell.request_creation` is held at subtree scope by every role, because naming oneself on a request is prohibited for everyone (Section 10).
+Senior Pastors (Bishop Oriel Ballano, Pastora Geraldine Ballano) receive Whole Church scope by role/policy, built in, on every capability their role carries — this does not require a separate Admin-issued grant. The one exception is visible in the catalog: `cell.request_leadership` is held at subtree scope by every role, because naming oneself on a request is prohibited for everyone (Section 10).
 
 `people.manage_pastoral_assignment` is a management capability, not a reporting one. Admin holds it per explicit administrative permission. A leader holds it at own/subtree scope, over their own pastoral subtree only. Senior Pastors hold it at Whole Church scope and may therefore reassign within either Network. It is never conferred by a read-only reporting scope grant. The invariants governing its use are defined in Section 5, Changing a person's pastoral leader.
 
@@ -1514,7 +1514,7 @@ It is self-perpetuating, which is why it is a constraint rather than a caution: 
 
 **`roles.manage` and `accounts.manage` are never held by an account holding `SENIOR_PASTOR`, by role or by explicit grant.** A grant of either against such an account is rejected, and so is a `SENIOR_PASTOR` row on an account already carrying one. An endpoint that issues a grant or a role answers `INVARIANT_VIOLATION` (Section 22) rather than letting the constraint surface as an unhandled error. No endpoint issues a capability grant at all today, and the one that issues a role does so only on an account created in the same transaction, which can carry no grants — so this is the contract the first endpoint to reach it owes.
 
-**The stopping point is two rather than the seven this section withholds, and the seven are not alike.** This pair is what makes the combination self-perpetuating: a holder can grant themselves the remaining five and revoke everybody else's roles, so the second party this section requires is present when the grant is issued and never again, and no Admin can undo it afterwards. `records.backdate_effective_date`, `people.merge` and `people.correct_sex` are withheld on a different ground, stated above — each moves totals for periods already reported — and each use is a single audited operation whose authority an Admin can still revoke. `settings.manage` and `cell.approve_creation` are withheld by the table and argued nowhere above.
+**The stopping point is two rather than the seven this section withholds, and the seven are not alike.** This pair is what makes the combination self-perpetuating: a holder can grant themselves the remaining five and revoke everybody else's roles, so the second party this section requires is present when the grant is issued and never again, and no Admin can undo it afterwards. `records.backdate_effective_date`, `people.merge` and `people.correct_sex` are withheld on a different ground, stated above — each moves totals for periods already reported — and each use is a single audited operation whose authority an Admin can still revoke. `settings.manage` and `cell.approve_leadership` are withheld by the table and argued nowhere above.
 
 So the other five remain ordinary Admin-issued grants: explained, audited, revocable, and requiring a second party every time. Only the pair that removes the second party permanently is refused outright. **A capability joins that pair by amending this section**, which is where the argument for refusing it rather than auditing it has to be made.
 
@@ -1591,7 +1591,7 @@ A request is allowed where **any** active role default or active grant for that 
 
 Those conditions are enforced in the owning module's domain layer — `hierarchy` for Section 5, `cells` for the Section 10 workflow — and are additional to the guard, never a substitute for it and never expressible as a scope value. A developer who implements the guard and believes the rule is implemented has built half of it.
 
-`SUBTREE_EXCL_SELF` exists for the one case where a scope value genuinely does the work: `cell.request_creation`, where the only prohibited object *is* the target (Section 10).
+`SUBTREE_EXCL_SELF` exists for the one case where a scope value genuinely does the work: `cell.request_leadership`, where the object the scope resolves against *is* the object the actor may not be (Section 10).
 
 A grant is revoked by setting `revoked_at`, never by deleting the row. The history of who could do what, and when, is part of the audit record.
 
@@ -1647,7 +1647,7 @@ two codes.
 The rule is general rather than named per capability, because the hole is. It was
 first closed for `people.correct_sex` alone, and the same shape was open on
 `accounts.manage`, `roles.manage`, `people.merge`, `records.backdate_effective_date`,
-`settings.manage`, `people.manage_lifecycle` and `cell.approve_creation`.
+`settings.manage`, `people.manage_lifecycle` and `cell.approve_leadership`.
 
 **`audit.view` is deliberately not among them**, and the two lines above say why:
 an audit entry resolves through its target, which is machinery with no purpose
@@ -2062,7 +2062,7 @@ The exception is the Cell created part-way through a month, which opens its firs
 
 **Backdating needs no exception of its own.** Every other legitimate row starts on a first of month, a correction included: a schedule change takes effect at the start of the following month, so correcting one recorded against the wrong month still lands on a first of month. `records.backdate_effective_date` governs how far *back* an effective date may be set, which is a question about the actor and lives in the domain layer as it does everywhere else. It does not govern what kind of date is legal, which is this trigger's business alone.
 
-An earlier draft made the trigger advisory, on the reasoning that it could not see the backdate exception. It does not need to. One operation is still unreconciled with the rule and is recorded as open rather than assumed away: reversing a closure (Cell lifecycle, below).
+An earlier draft made the trigger advisory, on the reasoning that it could not see the backdate exception. It does not need to: every row this specification describes starts on a first of month or at the Cell's creation, and a closure is never reversed (Cell lifecycle, below), so no operation opens a schedule row anywhere else.
 
 Changing a Cell's schedule is governed by `cell.manage_configuration` (Section 7), and is audited as a category change is.
 
@@ -2072,21 +2072,37 @@ A Cell is created through a two-step workflow: the prospective leader's upline *
 
 Outside initial encoding (Section 2), this is the only path by which a Cell comes into existence. `cell.manage_lifecycle` governs closure and confers no power to create one (Cell lifecycle, below).
 
-**Step one — the request.** A leader upline of the prospective Cell Leader submits a request naming that person, the Cell's category, and its day and time. The capability is `cell.request_creation` (Section 7), held over the actor's subtree **excluding themselves**. In practice this is a leader saying that one of their own disciples is ready to lead.
+**The same two steps govern handing an existing Cell to a new leader**, and the reason is Section 10's own rather than an analogy. What the workflow controls is not the Cell, it is the decision that a person is ready to lead one: no leader decides alone that one of their own disciples should lead. That is as true of a handover as of a creation, and it is the half that holds whether or not the incoming leader is already leading something else.
+
+Without it, `cell.manage_leadership` at own/subtree scope would let a leader hand a Cell to their own disciple with nobody else involved — the outcome the creation workflow exists to prevent, reached by the one route it did not cover.
+
+A handover is what a leader stepping down means where the Cell continues. Where nobody takes it on, the Cell is closed instead, which is what `LEADER_STEPPED_DOWN` is for (Cell lifecycle, below).
+
+**Step one — the request.** A leader upline of the prospective Cell Leader submits a request naming that person. For a new Cell it also carries the category, the day and the time; for a handover it names the existing Cell instead. The capability is `cell.request_leadership` (Section 7), held over the actor's subtree **excluding themselves**. In practice this is a leader saying that one of their own disciples is ready to lead.
+
+**The guard resolves against the incoming leader, and the Cell is checked in the domain layer.** A creation has one object and a handover has two — the leader taking the Cell on and the leader giving it up — and they need not share a branch, since Cell membership does not mirror pastoral assignment (Cell Membership, below). The prospective leader is what the scope is about, because the thing being decided is whether that person should lead; so the guard resolves against them, exactly as it does for a creation.
+
+The Cell is the second object and carries its own rule: **the actor must have the Cell within their authorized scope**, on the same terms that govern closing it — its current leader, any leader upline of them acting within their own subtree, Admin, or a Senior Pastor. Without it an unrelated upline could give away a Cell belonging to a branch they have nothing to do with. Section 7 settles the shape: the guard checks one target, and a rule about a second object is a check in the owning module.
 
 No holder of the capability, at any scope, may name themselves. Without that exclusion a leader whose only Cell has closed — who keeps their account (Section 11) — could restore their own Current Cell Leader status, re-enter New Cell Leaders for the period, and restore their upline's Leaders-with-12+ count, with no upline involved and with Admin, who has no pastoral basis to judge readiness, as the only reviewer. Section 5, invariant 4 writes the same prohibition for pastoral assignment, for the same reason.
 
-**Step two — Admin approves.** The capability is `cell.approve_creation`, held by Admin only and granted to no other role.
+**Step two — Admin approves.** The capability is `cell.approve_leadership`, held by Admin only and granted to no other role.
 
 The enforceable control is the per-request rule stated above: **no actor may approve a request they submitted.** That is what must be checked on every approval, and it holds even where one person happens to hold both capabilities. Do not rely instead on the two capabilities never meeting in one actor — Admin holds both by default, and separation expressed only through role defaults is separation an Admin-issued grant can undo (Section 7).
 
 Admin holds approval because approving a new Cell Leader means provisioning their account, and Section 6 requires one actor to hold both `cell.manage_leadership` and `accounts.manage` against the same target. Admin is the only role holding `accounts.manage` (Section 7), so approval and the account land with one authorized actor rather than stalling between two.
 
-**Approval revalidates the target.** The state at approval governs, never the state at request. Reject the request, creating nothing, where the prospective leader has since been archived (Section 3), absorbed by a Merge (Section 3), moved outside the requester's authorized subtree, or had their Network changed (Section 4). Approval must also confirm that the prospective leader and their pastoral leader share a Network, because a Cell inherits its leader's Network and Section 5 forbids a cross-Network edge.
+**Approval revalidates the target.** The state at approval governs, never the state at request.
+
+**The prospective leader**, for both kinds. Reject the request, creating nothing, where they have since been archived (Section 3), absorbed by a Merge (Section 3), moved outside the requester's authorized subtree, or had their Network changed (Section 4). For a new Cell, approval must also confirm that they and their pastoral leader share a Network, because a Cell inherits its leader's Network and Section 5 forbids a cross-Network edge.
+
+**The Cell, for a handover.** Reject where it has since been closed; where the incoming leader and the Cell's current leader do not share a Network, for the same reason; where the Cell's leader is now the person the request names, since a handover that changes nothing is refused (above); and **where the Cell has moved outside the requester's authorized scope**.
+
+That last one is not hypothetical, and it is why both objects are revalidated rather than only the one the guard resolved against. The Cell's leader may be pastorally reassigned while the request sits pending, which carries the Cell out of the requester's subtree; approving anyway would complete a handover of a Cell they no longer oversee, which is exactly the harm the scope rule was written for.
 
 Without revalidation, approval creates an active leadership assignment for an archived Person and proceeds to provision their credentials — precisely the outcome Section 3's archive guard exists to prevent.
 
-**On approval**, in a single transaction:
+**On approving a new Cell**, in a single transaction:
 
 - the Cell is created as `ACTIVE`, with a server-assigned Cell ID (above)
 - its category history row opens (Category changes, above)
@@ -2096,28 +2112,50 @@ Without revalidation, approval creates an active leadership assignment for an ar
 
 The category and schedule rows are not optional extras. A Cell created without a schedule row has no derivable set of scheduled meetings, and therefore no coverage figure for its first month (Section 12).
 
+**On approving a handover**, in a single transaction: the outgoing leadership assignment ends, the incoming one opens at the same instant, and the account step for the new leader proceeds (Section 6). One transaction is not a preference — Section 11 requires an `ACTIVE` Cell to hold exactly one leadership assignment, and the two writes pass through a state that satisfies neither on its own.
+
+Nothing else about the Cell changes. It keeps its Cell ID, its category history and its schedule history, because none of those is a fact about who leads it. Its members stay where they are: they belong to the Cell, not to the person who was leading it.
+
+**A handover may leave the outgoing leader with no Cell at all**, and where that was their only one they stop being a current Cell Leader from that instant (Section 11), exactly as a closure would leave them — and they keep their account, on the rule this section already states for the leader whose only Cell has closed.
+
 **Everything takes effect at approval, never at request.** New Cell Leaders is defined by when a leadership assignment starts (Section 16), so a request submitted on 30 September and approved on 2 October belongs to October. Nothing about a request is backdated to when it was made.
 
 **Direct creation during initial encoding.** While initial encoding is open (Section 2), Admin may create a Cell and its leadership assignment directly, without a request. That path closes with the phase and is not available afterwards.
 
 ```text
-cell_creation_requests
+cell_leadership_requests
 - id
+- kind                    NEW_CELL | HANDOVER
 - prospective_leader_id
 - requested_by
-- category                YOUTH | YOUNG_PRO | COUPLE
-- day_of_week
-- time_of_day
+- category                YOUTH | YOUNG_PRO | COUPLE, required where kind is NEW_CELL
+- day_of_week             required where kind is NEW_CELL
+- time_of_day             required where kind is NEW_CELL
 - state                   PENDING | APPROVED | DECLINED
 - decline_reason          nullable, from the fixed list below
 - note                    nullable, required where the reason is OTHER
 - decided_by              nullable
-- cell_id                 nullable, set on approval
+- cell_id                 required where kind is HANDOVER; for NEW_CELL, null until approval sets it
 - requested_at
 - decided_at              nullable
 ```
 
-**Request states.** A request is `PENDING`, `APPROVED`, or `DECLINED`. Never add another. A `PENDING` request creates no Cell, holds no members, records no attendance, and appears in no count or metric. At most one `PENDING` request may exist for a given prospective leader. Enforce it with a partial unique index on the prospective leader where the state is `PENDING`, exactly as pastoral assignment and Cell membership do for their own single-active rules (Section 5, Section 10). Without it two uplines may each submit, both may be approved, and nothing downstream catches the duplicate, because a leader may legitimately lead many Cells.
+`kind` is a **closed enumeration**. A third value is an amendment to this section, not a convenience.
+
+`cell_id` is required where the kind is `HANDOVER`, as a check constraint rather than as a note: the per-Cell uniqueness rule below is a partial unique index, and a null does not conflict in one, so a `HANDOVER` row with no Cell would escape the rule entirely.
+
+**A handover naming the Cell's current leader is refused.** The scope rules do not prevent it — that person may well be the actor's own disciple — and the approval would end and reopen one leadership at a single instant, leaving an audited operation that changed nothing and a boundary in the history where nothing happened. Section 4 refuses a sex correction that changes nothing and Section 5 refuses a reassignment to the leader a person already has, both on that reasoning; this is the same case.
+
+**One table rather than two**, and the name says what the workflow is about. Both kinds carry the same state machine, the same decline reasons, the same approver and the same two steps; splitting them would duplicate all four and let them drift. `kind` decides which columns are required, and `cell_id` is the one column meaning something different in each: for a handover it names the Cell at request, and for a creation nothing names it until approval mints it.
+
+**Request states.** A request is `PENDING`, `APPROVED`, or `DECLINED`. Never add another. A `PENDING` request creates no Cell, holds no members, records no attendance, changes no leadership, and appears in no count or metric.
+
+**Two uniqueness rules, one per kind, and they are not the same rule.** Each answers the ambiguity its own kind actually has.
+
+- **At most one `PENDING` `NEW_CELL` request per prospective leader.** Two of them are indistinguishable downstream: both may be approved, and nothing catches the duplicate, because a leader may legitimately lead many Cells. A partial unique index on the prospective leader where the state is `PENDING` and the kind is `NEW_CELL`.
+- **At most one `PENDING` `HANDOVER` request per Cell.** Two handovers of one Cell to two different people are contradictory rather than indistinguishable: both may be approved, and the second silently ends the leadership the first opened. A partial unique index on `cell_id` where the state is `PENDING` and the kind is `HANDOVER`.
+
+**Neither is widened to cover both kinds, and that is deliberate.** A pending new Cell for a person and a pending handover of some other Cell to the same person are different questions about different Cells, both legitimate — this section says in terms that one leader may lead many. Widening the first rule across kinds would make the second unsubmittable rather than declinable, and `DUPLICATE_REQUEST` exists in the list below precisely so that a person adjudicates a case like that rather than an index refusing it.
 
 Declined requests are retained — they are part of the record of how a leader was developed.
 
@@ -2163,7 +2201,7 @@ Exactly:
 - `CREATED_IN_ERROR`
 - `OTHER` — requires a note
 
-Multiplication is deliberately absent, and must not be added. When a Cell multiplies, a disciple opens a new Cell and the original continues under the same leader. Multiplication creates Cells; it never closes one. A leader who hands their Cells to disciples and stops leading has stepped down, which the list already covers.
+Multiplication is deliberately absent, and must not be added. When a Cell multiplies, a disciple opens a new Cell and the original continues under the same leader. Multiplication creates Cells; it never closes one. A leader who hands a Cell to a disciple and stops leading has not closed anything: that is a handover (Creating a Cell, above), and the Cell continues under its new leader. `LEADER_STEPPED_DOWN` is for the case where nobody takes it on.
 
 Keep every reason factual and free of judgement (Section 1, Principle 7). A closure is an operational fact about a Cell, never an assessment of its leader.
 
@@ -2187,9 +2225,13 @@ Attendance already recorded against a closed Cell remains exactly as recorded, a
 
 A closed Cell is not reopened as an ordinary action. Where a ministry restarts, create a new Cell.
 
-Reversing a closure recorded in error is an Admin correction requiring a reason and an audit entry, not a control available to a leader.
+**A closure is not reversed, including one recorded in error.** A Cell that was closed by mistake is corrected the same way a ministry that restarts is served: create a new Cell. The mistaken closure stands in the record, with the reason and the audit entry it carried.
 
-**What that correction does to the Cell's leadership, category and schedule is undefined, and it must be settled before this path is built.** Closure ended all three rows. Section 11 now requires an `ACTIVE` Cell to hold exactly one leadership assignment, and the schedule rule above admits a row only on the first of a month or at the Cell's `created_at`, so a reversal as things stand aborts at COMMIT rather than answering. Three answers are open, including refusing the reversal outright and requiring a new Cell, which is what this section already prescribes one paragraph above for a ministry that restarts. `CLAUDE.md` carries the question.
+Three answers were weighed and this is the one that needs no exception to a rule stated elsewhere. **Reopening the ended rows** conflicts with Section 5, which never overwrites a row in place, and it moves months already reported: a Cell closed through March and April had no recorded meetings and no members, and un-ending its schedule and membership rows retroactively gives those months a denominator, against Section 3's reproducibility guarantee. **Opening new rows at the reversal date** is honest about the period the Cell spent closed and forces a third case into the schedule rule above, which exists to keep a month holding exactly one schedule.
+
+Refusing costs something real and it is stated rather than discovered: a Cell closed by mistake keeps its closed record, and its history is split across two Cell IDs. That is tolerable because this section already accepts that a Cell ID is never reused, that gaps are expected, and that the ID encodes nothing — and because closure is not an easy accident. It needs a capability, a reason from a fixed list, and an explicit recorded decision about every member.
+
+It also follows the shape this specification uses wherever two rules meet: reject and require the conflict resolved, rather than resolving it silently (Section 4 for a Network change, Section 3 for archiving a Cell Leader).
 
 ### Cell Membership
 
@@ -2289,7 +2331,7 @@ Enforce it as a **deferred** constraint trigger, on both tables. Deferred is wha
 
 This rule is the opposite shape. "At least one" is a statement about a row that is **absent**, and no unique index constrains an absence: a `cells` row carrying its leader as a column would need that column to be non-null, which forbids the momentary state a change of leader passes through, and it would still need a two-table check to keep the column honest against `cell_leaderships`. The restore weakness is accepted rather than designed around, and what makes it tolerable is that a leaderless Cell is visible: every screen that names a Cell names its leader.
 
-**Two operations are not yet reconciled with this rule, and both are recorded as open rather than assumed away** (`CLAUDE.md`). Reversing a closure recorded in error (Section 10, Reopening) makes a Cell `ACTIVE` again with its leadership already ended, and satisfies neither cause above. And no section defines how a Cell passes from one leader to another while it stays open — `cell.manage_leadership` exists in Section 7 and no section says what it may do. Both must be settled before either is built.
+Both causes are defined operations rather than possibilities left open. A closure is Section 10's, and a Cell changing hands is Section 10's request-and-approve workflow, whose approval performs the two writes in one transaction for exactly this reason. A closure is never reversed (Section 10, Reopening), so there is no third path by which an `ACTIVE` Cell could find itself without a leader.
 
 The leadership assignment record itself is preserved in full. History shows that the person led that Cell for that period.
 
@@ -2485,7 +2527,7 @@ Where a leader cannot conduct their own meeting and another person runs it — a
 - **facilitator** — who conducted this meeting
 - **submitter** — who entered the record (Section 14)
 
-Facilitating is never leadership. It does not touch `cell_leaderships`, never makes the facilitator a current Cell Leader, never counts toward New Cell Leaders (Section 16), and never moves Cell members into the facilitator's counts. A genuine handover of a Cell is a separate, deliberate change to `cell_leaderships`. There is no threshold at which repeated facilitation becomes leadership.
+Facilitating is never leadership. It does not touch `cell_leaderships`, never makes the facilitator a current Cell Leader, never counts toward New Cell Leaders (Section 16), and never moves Cell members into the facilitator's counts. A genuine handover of a Cell is a separate, deliberate change to `cell_leaderships`, made through the request-and-approve workflow of Section 10 and never as a side effect of who conducted a meeting. There is no threshold at which repeated facilitation becomes leadership.
 
 ### Submission window
 
@@ -2953,7 +2995,7 @@ A dashboard of counts tells a leader nothing to act on. Dashboard is the first i
 - meetings awaiting a record, for the user's own Cells (Section 13)
 - Cells needing attention within their scope (Section 15)
 - people with no active Cell membership within their scope (Section 10)
-- the outcome of a Cell creation request the user submitted (Section 10)
+- the outcome of a Cell leadership request the user submitted, of either kind (Section 10)
 
 Each entry carries the action that resolves it.
 
@@ -2993,7 +3035,7 @@ Keep navigation similarly compact. Senior Pastors have whole-church scope for th
 
 Admin focuses on platform operations:
 
-- Pending Cell creation requests (Section 10)
+- Pending Cell leadership requests, of either kind (Section 10). Both belong on the queue for the same reason: a request nobody can see is a request nobody acts on, and a pending one changes nothing until it is decided. A new Cell additionally holds up an account (Section 6), which a handover does only where the incoming leader does not already lead one
 - People management
 - Networks / pastoral assignments
 - DCC Attendance administration
@@ -3064,7 +3106,6 @@ Stored figures are invalidated and recomputed whenever the records they derive f
 - **An Admin amends attendance in a closed month** (Sections 9 and 13). Invalidates that month.
 - **A Person Merge** (Section 3). Invalidates **every** period, not one month. Identity resolution applies to all periods, and a merge deliberately lowers the unique-people total for periods already reported.
 - **A backdated effective date** on any effective-dated relationship (Section 5). Invalidates every period the effective date reaches back into, because it changes which subtree a person belonged to during those periods.
-- **An Admin reversal of a Cell closure** (Section 10). Invalidates the periods affected.
 
 Prefer not to enumerate these in code at all. Key each stored figure to a version of the source records it derives from, and treat any change to those records as invalidating.
 
@@ -3124,13 +3165,13 @@ Audit important actions, including:
 - Role/permission changes
 - Attendance submission on behalf
 - Attendance corrections
-- Cell creation requested
-- Cell creation approved
-- Cell creation declined, with reason
+- Cell leadership requested, with the kind
+- Cell leadership request approved, with the kind
+- Cell leadership request declined, with the kind and the reason
+- Cell leadership opened, ended, or changed, carrying the outgoing and the incoming leader where each exists — a reader asking who led a Cell before a handover must find it here, which is the same requirement Section 5 makes of a pastoral transfer
 - Cell created directly by Admin during initial encoding
 - Initial encoding closed
-- Cell creation
-- Cell leader assignment
+- Cell created
 - Cell category change
 - Cell schedule change, day or time, with effective date
 - Cell meeting rescheduled
@@ -3138,7 +3179,6 @@ Audit important actions, including:
 - Cell meeting facilitator recorded
 - Cell membership added, moved, or ended
 - Cell closed, with reason and the decision taken about its members
-- Cell closure reversed by Admin, with reason
 - DCC event removed from the calendar, with reason
 - Person archive
 - Person restore
@@ -3747,7 +3787,7 @@ Shapes are given in the section that owns each rule; this is the index.
 | `cell_schedules` | `cells` | Section 10 |
 | `cell_memberships` | `cells` | Section 10 |
 | `cell_leaderships` | `cells` | Section 11 |
-| `cell_creation_requests` | `cells` | Section 10 |
+| `cell_leadership_requests` | `cells` | Section 10 |
 | `dcc_events` | `attendance` | Section 9 |
 | `dcc_attendance` | `attendance` | Section 9 |
 | `cell_meetings` | `attendance` | Section 13 |

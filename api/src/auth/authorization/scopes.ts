@@ -9,7 +9,7 @@ import type { NetworkName } from '../../database/schema';
 export const ScopeType = {
   /** The actor's pastoral subtree, including the actor. */
   OwnSubtree: 'OWN_SUBTREE',
-  /** The same, excluding the actor. Used by `cell.request_creation` alone. */
+  /** The same, excluding the actor. Used by `cell.request_leadership` alone. */
   SubtreeExclSelf: 'SUBTREE_EXCL_SELF',
   /** One Network, named on the grant. */
   Network: 'NETWORK',

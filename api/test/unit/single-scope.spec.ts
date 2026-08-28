@@ -19,7 +19,7 @@ describe('capabilities held only at Whole Church (section 7)', () => {
     expect([...WHOLE_CHURCH_ONLY].sort()).toEqual(
       [
         Capability.AccountsManage,
-        Capability.CellApproveCreation,
+        Capability.CellApproveLeadership,
         Capability.PeopleCorrectSex,
         Capability.PeopleManageLifecycle,
         Capability.PeopleMerge,
