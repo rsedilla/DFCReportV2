@@ -14,9 +14,15 @@ export const LOCK_NOT_AVAILABLE = '55P03';
 /**
  * Whether a thrown value is PostgreSQL reporting an elapsed lock wait.
  *
- * Narrow on purpose. A deadlock is `40P01` and a statement timeout is `57014`;
- * neither is ordinary contention and neither should be answered as though a retry
- * would help.
+ * Narrow on purpose today, and **section 5 has since overruled half of it**: a
+ * deadlock victim answers `RESOURCE_BUSY` like an elapsed wait, because the two
+ * differ in cause rather than in what the caller should do. This predicate has not
+ * been widened yet — that lands with the closure endpoint, which is the first
+ * operation that can produce `40P01` in ordinary practice. Until then `40P01`
+ * renders `INTERNAL_ERROR`, which is a known gap rather than the rule.
+ *
+ * A statement timeout is `57014` and stays out: it is not contention, and nothing
+ * says a retry helps.
  */
 export function isLockTimeout(error: unknown): boolean {
   return (

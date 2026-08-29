@@ -57,6 +57,14 @@ const LOCK_TIMEOUT = '3s';
  * One statement per key rather than one statement locking many: the ordering
  * guarantee comes from issuing them in sequence, and `ORDER BY` does not promise
  * that a set-returning statement acquires locks in the order it sorts.
+ *
+ * **An empty list returns before the timeout is set, and that is a hole in a
+ * guarantee stated elsewhere.** Section 5 makes `lock_timeout` cover the whole
+ * transaction, including the row locks a caller takes after its person locks — and
+ * an operation with nobody to lock reaches those row locks with no bound at all.
+ * Section 10's Cell closure is the case that will meet it: a Cell with no members to
+ * disperse takes no person lock and still takes Cell row locks. A caller that takes
+ * row locks must set the bound itself where its person list can be empty.
  */
 export async function lockPersonsWithin(
   transaction: Transaction<Database>,
