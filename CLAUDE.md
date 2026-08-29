@@ -5780,14 +5780,23 @@ mutations were run and reddened; the fourth — deleting only
 green. The fixture could not reach it: `alpha` and `twin` share *both* names, so that
 disjunct selects nobody at either cursor, and the other two decide every boundary.
 
-**Three members were not enough and the reason is worth keeping.** A fourth, `Santos,
-Berta`, gives a boundary that crosses on the first name within an equal last name. But
-adding her in creation order is still not enough: Member IDs come off a sequence, so a
-member created after the two Anas holds a higher Member ID and the *tie-break* reaches
-her, leaving the middle disjunct dead exactly as before. She is created **second**, so
-she sorts after both Anas by name and before them by Member ID — and only then does
-deleting the middle disjunct redden. Two inversions in one fixture, each killing a
-different mutation, and each is now asserted rather than assumed.
+**Three members were not enough**, and a fourth — `Santos, Berta` — gives a boundary that
+crosses on the first name within an equal last name, which is the only boundary the
+middle disjunct decides.
+
+***The rest of what this paragraph said was false and is corrected below.*** It claimed a
+second inversion was needed: that a member created after the two Anas holds a higher
+Member ID, so the tie-break would reach her and leave the middle disjunct dead unless she
+were created second. The tie-break requires `first_name = key.firstName`, and hers is
+`Berta` against a key of `Ana` — so it excludes her on the name before a Member ID is
+compared, and her creation position cannot affect any mutation. One inversion is
+load-bearing, `omega`'s, and it kills exactly one of the four mutations: `member_id >`
+alone. The other three redden on the names whatever the Member IDs are.
+
+The claim was made in four places at once — two test comments, an assertion whose stated
+purpose was to pin it, this entry, and the commit message — and the assertion pinned
+nothing, which is how a false reason gets four witnesses and no test. Found by the
+seventh pass, which reproduced it both ways round.
 
 That is the third consecutive batch on this branch to ship a disjunction pinned with a
 member missing. The other two are recorded above; what they share is that the mutation
@@ -5824,6 +5833,48 @@ processes beneath it, and two jest runs truncating the same database interleave 
 duplicate-root violations. The lesson is the diagnostic order — a local failure on a
 commit CI passed is an environment claim until proven otherwise, and the cheapest proof
 is to run the committed state.
+
+### 2026-08-29 — Five on the sixth fix batch, all of them what the batch said about itself
+
+Seventh `architecture-guardian` pass, scoped to the sixth batch. **The mechanism is sound
+and was confirmed by execution**: every disjunct is reachable, none is dead, and all four
+claimed mutations redden. Every finding is a statement — in the batch whose own heading is
+*"Every sentence saying which assertion catches which mutation was wrong."*
+
+**A fixture inversion was called load-bearing in four places and is load-bearing in none.**
+The correction is written into the sixth-pass entry above, where the claim was made. What
+is worth carrying separately is the shape: the reason `omega`'s inversion has its shape —
+Member IDs come off a sequence — was carried to a second member without re-deriving
+whether it does any work there, which is section 25 rule 19 applied to a *test fixture*
+rather than to code. The fixture was simplified rather than re-explained: an inversion
+that pins nothing is removed, not annotated.
+
+**Two more claims about which mutation lands where.** `last_name >` alone was said to land
+on the same member as the dropped tie-break; it selects only `Zamora`, so the two land on
+different people and only one of them could ever have been right. And "every mutation
+below is caught by one of these inversions rather than by the names alone" was false for
+three of the four.
+
+**A fix that half-closed on one word.** The batch replaced *derived* with *measured* in
+four files and left two occurrences in a fifth — `roster-cursor.spec.ts`, four lines above
+the paragraph it was adding — so two files edited in one commit contradicted each other on
+the single word the commit existed to correct.
+
+**And the bound's new thesis had nothing that could fail on it.** `common/cursor.ts` argues
+the constant "still refuses a query string built to be enormous", and every assertion that
+moved with it was a payload-fits check — reddening when it was *lowered*, never when it
+was raised. It could have been four million with the suite green. One character over the
+bound is now sent and refused, verified by raising the DTO's bound above the constant.
+
+Two smaller ones: the docblock said "the create and edit DTOs" where three import the
+constant, so an audit from the docblock stops one DTO short; and `SearchPeopleDto.q` kept a
+bare literal `100`, the ninth site of the number the batch had just removed from eight —
+now the name bound, since the term is matched against names and a bound below it would
+leave a full-length name searchable only by prefix.
+
+**Seven passes: 12, 10, 10, 7, 5, 4, 5.** The last two found nothing wrong with the
+mechanism. What they found is that this branch's residual defect rate is entirely in prose
+about itself, and that the prose gets a review pass of its own or it is wrong.
 
 ### Open — awaiting a ruling
 

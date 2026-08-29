@@ -5,6 +5,7 @@ import { Client } from 'pg';
 import request from 'supertest';
 
 import { CellsMembershipService } from '../../src/cells/cells.membership.service';
+import { CURSOR_MAX_LENGTH } from '../../src/common/cursor';
 import { createTestDb, truncateAll } from '../setup/database';
 import {
   assignTo,
@@ -681,26 +682,27 @@ describe('cell membership (section 10)', () => {
       //   3 Santos, Berta (berta)  <- 2→3 crosses on the first name within an equal last
       //   4 Zamora, Zosimo (omega) <- 3→4 crosses on the last name
       //
-      // **Creation order is not name order, and both inversions are load-bearing.**
-      // Member IDs come off a sequence in creation order, so creating in name order
-      // makes the tie-break agree with the ordering by accident and a `member_id`-only
+      // **One inversion, and it is load-bearing: `omega` is created first.** Member IDs
+      // come off a sequence in creation order, so creating everyone in name order makes
+      // the tie-break agree with the ordering by accident and a `member_id`-only
       // comparison pages the fixture perfectly — that mutation was run against an
-      // earlier version of this case and passed. `omega` is created first, so it holds
-      // the lowest Member ID while sorting last. `berta` is created second, so she
-      // holds a *lower* Member ID than the two Anas while sorting after them — without
-      // which the tie-break disjunct alone still reaches her and the middle disjunct
-      // stays dead.
+      // earlier version of this case and passed. Created first, `omega` holds the lowest
+      // Member ID while sorting last, which is what breaks that agreement.
+      //
+      // *A previous version created `berta` second as a second inversion and claimed, in
+      // four places, that without it the tie-break would reach her and the middle
+      // disjunct would stay dead. That is false: the tie-break requires
+      // `first_name = key.firstName`, and hers is `Berta` against a key of `Ana`, so it
+      // excludes her on the name before a Member ID is compared. Her creation position
+      // cannot affect any mutation, and the inversion was removed rather than left with
+      // a corrected comment — what made three members insufficient was the absence of a
+      // distinct first name within an equal last name, not an ordering trick.*
       //
       // A member silently skipped here is a Cell whose closure can never name its
       // membership exactly, and therefore a Cell nobody can close.
       const omega = await createPerson(db, {
         firstName: 'Zosimo',
         lastName: 'Zamora',
-        network: 'MENS',
-      });
-      const berta = await createPerson(db, {
-        firstName: 'Berta',
-        lastName: 'Santos',
         network: 'MENS',
       });
       const alpha = await createPerson(db, {
@@ -713,15 +715,21 @@ describe('cell membership (section 10)', () => {
         lastName: 'Santos',
         network: 'MENS',
       });
+      const berta = await createPerson(db, {
+        firstName: 'Berta',
+        lastName: 'Santos',
+        network: 'MENS',
+      });
 
       for (const person of [alpha, twin, berta, omega]) {
         await assignTo(db, person.id, mark.id);
         await addMember(admin, markCell.id, person.id).expect(201);
       }
 
-      // Asserted rather than assumed, because every mutation below is caught by one of
-      // these inversions rather than by the names alone. Member IDs are `M-` plus ASCII
-      // digits, so this comparison is identical under every collation.
+      // Asserted rather than assumed. **Only one mutation below depends on an ordering
+      // rather than on the names** — `member_id >` alone — and `omega`'s position is what
+      // kills it; the other three redden on the names whatever the Member IDs are. The
+      // comparison is `M-` plus ASCII digits, so it is identical under every collation.
       const ids = new Map(
         (
           await db
@@ -737,11 +745,11 @@ describe('cell membership (section 10)', () => {
 
       // The tie-break's direction: two identical names, `alpha` first.
       expect(before(alpha, twin)).toBeLessThan(0);
-      // Sorts last by name, lowest Member ID — kills a `member_id`-only comparison.
+      // Sorts last by name, lowest Member ID — kills a `member_id`-only comparison. This
+      // is the only ordering property any mutation depends on, so it is the only one
+      // asserted; an assertion about `berta`'s position was removed with the claim that
+      // it pinned something.
       expect(before(omega, alpha)).toBeLessThan(0);
-      // Sorts after both Anas by name, lower Member ID than either — kills a comparison
-      // that drops the middle disjunct and leans on the tie-break to reach her.
-      expect(before(berta, alpha)).toBeLessThan(0);
 
       const first = await request(app.getHttpServer())
         .get(`/api/v1/cells/${markCell.id}/members?limit=1`)
@@ -767,8 +775,10 @@ describe('cell membership (section 10)', () => {
           .expect(200);
 
       // **1 → 2 crosses on the tie-break**: `alpha` and `twin` share both names, so only
-      // the third disjunct separates them. Reddens if the tie-break is dropped, and
-      // reddens under `last_name >` alone — both skip `twin` and land on `berta`.
+      // the third disjunct separates them. Reddens if the tie-break is dropped, which
+      // lands on `berta`; and under `last_name >` alone, which selects only `Zamora` and
+      // so lands on `omega`. *The two were previously described as landing on the same
+      // person — they do not, and only one of them can.*
       const second = await page(first.body.next_cursor as string);
       expect(second.body.data).toHaveLength(1);
       expect(second.body.data[0].person_id).toBe(twin.id);
@@ -776,9 +786,9 @@ describe('cell membership (section 10)', () => {
 
       // **2 → 3 crosses on the first name within an equal last name**, which is the
       // only boundary the middle disjunct decides — and the reason a three-member
-      // fixture was not enough. `berta` holds a lower Member ID than `twin`, so the
-      // tie-break cannot reach her and a comparison missing this disjunct skips
-      // straight to `omega`.
+      // fixture was not enough. The tie-break cannot reach `berta` whatever her Member
+      // ID, because it requires the first name to be *equal* and hers is not, so a
+      // comparison missing this disjunct skips straight to `omega`.
       const third = await page(second.body.next_cursor as string);
       expect(third.body.data).toHaveLength(1);
       expect(third.body.data[0].person_id).toBe(berta.id);
@@ -817,6 +827,17 @@ describe('cell membership (section 10)', () => {
       // disagreed on an empty one. Both bind `@Length(1, …)` now.
       await request(app.getHttpServer())
         .get(`/api/v1/cells/${markCell.id}/members?cursor=`)
+        .set('Authorization', `Bearer ${admin.accessToken}`)
+        .expect(422);
+
+      // **And the upper bound, which is the half that had nothing to fail on it.**
+      // `common/cursor.ts` argues that the constant is a request-size guard that "still
+      // refuses a query string built to be enormous" — and every assertion that moved
+      // with it was a payload-fits check, so it reddened when the constant was *lowered*
+      // and never when it was raised. The bound could have been four million with the
+      // whole suite green.
+      await request(app.getHttpServer())
+        .get(`/api/v1/cells/${markCell.id}/members?cursor=${'A'.repeat(CURSOR_MAX_LENGTH + 1)}`)
         .set('Authorization', `Bearer ${admin.accessToken}`)
         .expect(422);
     });

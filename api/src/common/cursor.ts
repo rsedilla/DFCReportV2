@@ -33,7 +33,10 @@
  *
  * 4096 is therefore chosen as a guard: it is about four times the worst case any
  * validated path can reach, it covers names far longer than the import will ever carry,
- * and it still refuses a query string built to be enormous. Past it a client is refused
+ * and it still refuses a query string built to be enormous — which
+ * `cell-membership.e2e.spec.ts` pins by sending one character over, because every other
+ * assertion that moves with this constant is a payload-fits check and so reddens only
+ * when it is *lowered*. Past it a client is refused
  * rather than served, which is the failure this whole file exists to avoid — so if the
  * open item is ever settled with a bound on names, this becomes derivable and should be
  * derived.
@@ -41,8 +44,10 @@
 export const CURSOR_MAX_LENGTH = 4096;
 
 /**
- * The maximum a name field may hold **on the paths that validate one** — the create and
- * edit DTOs, which import this rather than repeating the number.
+ * The maximum a name field may hold **on the paths that validate one** — the create, the
+ * edit and the duplicate-candidate DTOs, eight fields across three classes, all of which
+ * import this rather than repeating the number. Named exactly, because a reader auditing
+ * the conversion from a docblock saying "create and edit" stops one DTO short of it.
  *
  * Deliberately not called the maximum a name may hold: the column is bare `text` and the
  * tree import enforces nothing, which is the open item above.

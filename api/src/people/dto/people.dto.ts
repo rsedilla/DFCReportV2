@@ -298,7 +298,12 @@ export class DuplicateCandidatesDto {
 
 export class SearchPeopleDto {
   @IsString()
-  @Length(2, 100)
+  // The upper bound is the name bound rather than a coincidence that matches it: this
+  // term is matched against `first_name`, `last_name` and the two joined, so a bound
+  // below `NAME_FIELD_MAX_LENGTH` would leave a full-length name searchable only by
+  // prefix, and would do so silently if that constant were ever raised. The minimum is
+  // its own rule — two characters, so a one-letter probe cannot page the directory.
+  @Length(2, NAME_FIELD_MAX_LENGTH)
   q!: string;
 
   /**

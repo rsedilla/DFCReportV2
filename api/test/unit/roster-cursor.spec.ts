@@ -39,7 +39,7 @@ describe('the roster cursor', () => {
     // so the server could emit a value its own DTO refuses, which on this route means a
     // Cell over the page size that nobody can close.
     //
-    // Derived rather than assumed: `class-validator` counts UTF-16 units, so the
+    // Measured rather than assumed: `class-validator` counts UTF-16 units, so the
     // costliest 100 units is 100 three-byte characters. A four-byte character costs two
     // units and therefore buys 200 bytes rather than 300, which is why this uses CJK
     // rather than an emoji — the intuitive worst case is not the worst case.
@@ -50,7 +50,7 @@ describe('the roster cursor', () => {
       lastName: costliest,
       firstName: costliest,
       // The longest third key either cursor carries is a UUID, not a Member ID, so the
-      // bound is derived against that and covers both.
+      // bound is measured against that and covers both.
       memberId: '00000000-0000-4000-8000-000000000000',
     }) as string;
 
