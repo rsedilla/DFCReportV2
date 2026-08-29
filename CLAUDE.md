@@ -5010,36 +5010,25 @@ has no such consequence and is closed for consistency — the two rows open toge
 approval and an ACTIVE Cell must hold one of each, so ending one of a pair needs a
 reason that does not exist.
 
-**The closure effective date has a floor: the latest of every open row's `started_at`
-and every already-closed row's `ended_at`, across all four tables the closure ends —
-memberships, leaderships, categories and schedules — bounded below by the Cell's own
-`created_at`.** Reachable the moment a Cell has changed hands once, or has changed its
-schedule or category.
+**The closure effective date floor was ruled on three times, refuted three times, and
+is withdrawn.** What is settled is that a floor is *needed*: a closure ends every open
+row at the effective date, `period_ordered` refuses a period ending before it starts, so
+some dates are satisfiable by no write and an operator meets a constraint violation
+rather than an answer. What the floor **is** is not settled.
 
-*This ruling was written naming two tables, in the same commit that made closure end
-four.* The category and schedule checks are immediate rather than deferred, so they
-raise at the statement; and because a schedule row starts on the first of a month and a
-category row on the day it is made, either can be the latest row on a Cell whose
-memberships are much older. So the two-table floor admitted dates a constraint refused,
-which is the failure the floor exists to prevent, introduced seventeen lines below the
-paragraph that caused it. Found by `architecture-guardian`, which was asked to look for
-exactly this and did.
+The first version named two tables and the same commit made a closure end four. The
+second widened it to four and thereby made a Cell with a pending schedule change
+**unclosable by anybody** — a schedule change takes effect at the start of the following
+month, so its rows carry future timestamps, the floor sat in the future, and a
+forward-dated closure is not an operation this system defines. The third excluded rows
+that had not started yet and missed that the *outgoing* row has started and ends in the
+future too, so the Cell stayed unclosable by the same mechanism.
 
-**Its reason is this section's own writes, and that had to be re-derived rather than
-borrowed** (Section 25 rule 19). Section 4's floor reaches both directions because
-`assert_network_change_keeps_edges` selects edges either way; Section 5's exists because
-the same-Network trigger compares `network_as_of` at the assignment's start. Neither
-carries. Here it is that a closure ends every open row *at* the effective date while
-`period_ordered` is `>=`, and that the outlive-closure checks scan **all** rows rather
-than only open ones — so a row closed by an earlier handover binds the floor as much as
-a live one does. Below the latest of those the closure is satisfiable by no write at
-all, and permitting the attempt means a raw `check_violation` where the operator needed
-a date.
-
-The refusal names the earliest legal date, and names none where that falls on the
-current day — Section 4's shape, adopted for its reason rather than its resemblance: an
-administrator handed a raw bound must work out which day to submit, and the day
-containing it is the one guaranteed to be refused again.
+It also cannot be settled independently: it turns on whether the rule that no row of a
+closed Cell may end after the Cell did reaches category and schedule rows, or only the
+two the database constrains today — which is itself an open item. Section 10 now records
+the gap, names the schedule-change difficulty, and leaves the floor to the closure
+endpoint, which settles it against the schema.
 
 **A deadlock is answered as `RESOURCE_BUSY`, and the locks are ordered so it should not
 arise.** The `FOR SHARE` migration 0009 takes on the `cells` row makes `40P01` reachable
@@ -5171,52 +5160,48 @@ attendance already works and rejected for handing that vector to every leader in
 period where it does most damage. The closer may always date a closure today, so nothing
 is blocked; what they give up is a few days of denominator accuracy.
 
-**Person advisory locks are taken before Cell row locks, and Section 5 says so.** The
-closure paragraph had prescribed Cell locks in ascending identifier and claimed the
-ordering removed the cycle. It removes the cycle between two closures and creates one
-against an ordinary membership move, which takes the person lock first and the Cell row
-lock at commit — so a closure holding its Cell rows and reaching for a person holds what
-that move wants and wants what it holds. Neither existing rule could see it: Section 5
-ordered advisory locks among themselves, Section 10 ordered row locks among themselves,
-and nothing ordered the classes.
+**The lock ordering was rewritten three times and is withdrawn.** A closure needs both
+lock classes — advisory locks on people, row locks on Cells — and nothing orders them
+against each other. Three orderings were written. The first prescribed Cell locks alone
+and removed only the closure-versus-closure cycle. The second put people first and
+claimed only closure changed, which was false: a move writes two membership rows in two
+Cells, so its deferred trigger takes two Cell locks in write order. The third permitted
+a closure to re-read its member list under its row locks and take person locks for what
+appeared — and `architecture-guardian` **reproduced a deadlock against PostgreSQL 16**
+for it, in the exact shape the rule four lines above forbids.
 
-It lives in Section 5 because it spans two classes and Section 5 owns the locking
-discipline.
-
-*Two claims made when this was first written were false, and the review that produced
-them found both on the next pass.* **"Only closure changes" was wrong**: a move writes
-two membership rows in two Cells, so the deferred trigger takes two Cell locks at commit
-in write order rather than in ascending identifier, and a closure dispersing into the
-Cell a move is leaving still cycles with it. The rule now says *every* row lock, taken
-*explicitly and up front*, which is the only way it binds what a trigger does after the
-fact — and a move takes both its Cells sorted like everything else. Section 10 also now
-names the **strength** of each lock, which it had omitted and which decides whether two
-operations meeting on a row wait or deadlock: a closure takes its own Cell exclusively
-and its destinations shared, a move takes both shared.
-
-**And the stale-read reason was wrong in the direction that mattered.** The reordering
-*created* that staleness — under the previous order the Cell lock excluded new members
-before the list was read — and the reason given, that the row lock serializes against
-anybody adding in between, reaches only a writer still in flight. One that **committed**
-between the read and the lock is in no lock set at all, and both exits were blocked: not
-re-reading meets a raw constraint violation at commit, and re-reading needs a person lock
-after a row lock, which the new rule forbade. Section 5 now permits exactly that
-re-acquisition, and says why it is not a hole: the ordering rule guards a cycle between
-operations competing for their *first* locks, and an operation already holding its row
-lock has excluded everyone who could still add to its list.
+The lesson is about the instrument rather than the answer. Each version read as sound;
+one of them deadlocked. Two properties defeat reasoning on paper — a deferred trigger
+takes row locks at commit in write order, which no rule reaches after the fact, and an
+operation cannot know which people to lock until it has read a list that another
+transaction can invalidate. Section 5 now records the gap and requires an operation
+needing both classes to demonstrate its ordering against concurrent writers rather than
+assert it.
 
 Written to `SKILL.md` Sections 5, 7, 10 and 22, and verified by grep rather than
 asserted.
 
+**Four review passes, and the two withdrawals are the honest outcome rather than a
+retreat.** Passes returned 8, 7, 5 and 5 findings, and from the second onward the
+majority were defects the previous batch's *fixes* had introduced — a floor broken by its
+own neighbouring ruling, then a Cell nobody could close, then a reproducible deadlock.
+Every one came from the same two rulings. The five that verified sound and never
+regressed are kept; the two that never converged are recorded as gaps for the endpoint
+that can test them. `CLAUDE.md`'s preamble names writing an under-specified rule into the
+source of truth as the failure it exists to prevent, and the 2026-08-28 handover ruling
+is the precedent: drafted, withdrawn, and landed once its questions were answerable.
+
 
 ### Open — awaiting a ruling
 
-**One item awaits a ruling, and it blocks Stage 5. Twenty-eight other things are
-unsettled, none of them blocking. They are listed at the end, so this section is the
-whole of what is open.**
+**One item awaits a ruling, and it blocks Stage 5. Thirty other things are unsettled,
+none of them blocking. They are listed at the end, so this section is the whole of what
+is open.**
 
-*Twenty-eight distinct items across twenty-eight bullets — the deadlock item's
-cross-reference went with it when the closure pre-flight settled it. It said "twenty" from the day it was
+*Thirty distinct items across thirty bullets. Six left when the closure pre-flight
+settled them and two came back when four review passes refuted the closure floor and the
+lock ordering three times each — both now wait for the endpoint that can test them
+rather than for a fourth attempt in prose. It said "twenty" from the day it was
 written through six commits that added fourteen bullets without touching it, which is
 the miscount this log keeps recording, committed against the sentence whose only job
 is the number. Anyone adding a bullet updates it here, and counts rather than
@@ -5244,6 +5229,8 @@ Two related questions have defined behaviour and are recorded in `SKILL.md` §12
 
 **Unsettled, and not blocking anything.** None of these is a Stop Condition. An implementer proceeds and settles them in passing; they are listed here because a reader looking for what is open should not have to find it inside the body of a ruling.
 
+- **What floor a Cell closure's effective date has.** A closure ends every open row on the Cell at the effective date, and `period_ordered` on all four tables refuses a period ending before it starts — so some dates are satisfiable by no write at all, and an operator submitting one meets a raw `check_violation` rather than the earliest legal date Sections 4 and 5 would give them. That a floor is needed is settled; what it is is not. Three formulations were written and refuted on the closure pre-flight branch, the second of which made a Cell with a pending schedule change **unclosable by anybody**: a schedule change takes effect at the start of the following month, so both the incoming row and the outgoing row it closes carry future timestamps, and a forward-dated closure is undefined. Excluding not-yet-started rows does not reach the outgoing row, which has started. **It cannot be settled before the CLOSED-side category and schedule question below**, since it turns on whether the outlive-closure rule reaches those two tables. Settle both with the closure endpoint, against the schema rather than in prose.
+- **How an operation orders advisory locks against row locks.** Every path taking an advisory lock today takes only advisory locks, so Section 5's ascending-lock-key rule covers all of them. A Cell closure is the first operation needing both classes — it changes a Cell's state and writes a membership row per dispersed person — and an ordinary membership move takes them in the opposite order, so the two can cycle. Three orderings were written on the pre-flight branch and each was refuted, the last by `architecture-guardian` **reproducing a deadlock against PostgreSQL 16**. Two properties defeat reasoning on paper: a deferred constraint trigger takes row locks at commit in the order rows were written, which no rule reaches after the fact; and an operation cannot know which people to lock until it has read a list another transaction can invalidate before the row lock is taken. Needs a mechanism demonstrated against concurrent writers, not a rule. Three sub-questions travel with it — the ordering, the **strength** of each Cell row lock (which decides whether a meeting is a wait or a cycle), and what bounds each wait, since `lockPersonsWithin` sets no `lock_timeout` when its list is empty and a closure with nobody to disperse is exactly that case.
 - **Whether the archived-and-merged refusals should be database constraints.** Section 10 gained three refusals on 2026-08-29 — an archived Person, a merged Person, and somebody already in the Cell — and the first two are the same rule `assertLeaderIsAssignable` enforces for a pastoral edge. Both are application-layer checks: contrary to what Section 10 said when the question was first written, `pastoral_assignments` carries **no** constraint for archived-or-merged either, so there is no asymmetry and the question is whether *either* should become one. The Definition of Done says an invariant expressible as a constraint exists as one, and this one is expressible — a membership under an archived Person is the corruption Section 3 refuses when archiving somebody who leads a Cell, reached one relationship over. What argues the other way is that both facts live in `people`'s tables while the constraint would sit on `cells`', so it is a trigger reading across a module boundary rather than an index. Not blocking: the checks refuse today and answer `INVARIANT_VIOLATION`; what a constraint would add is enforcement under a restore, which is the argument the Senior Pastor slot and the root seat both turned on.
 - **Whether a path identifier should be validated as strictly as one in a body.** `class-validator`'s `@IsUUID()` pins the version and variant nibbles and is on every DTO; `isUuid` — the repository's own predicate, used by the guard and by `UuidParamPipe` — does not. So `POST /cells/{id}/members` refuses as `person_id` a value the `DELETE` beside it accepts in the path. Every identifier in the database is a v4 and PostgreSQL's `uuid` takes both, so nothing is broken; what is unsettled is which predicate the API means, and Section 3's provision for a client-generated Person UUID is the case that would decide it.
 - **Whether the nil UUID should be reserved.** The capability guard hands `authorize` `00000000-0000-0000-0000-000000000000` as the target of a Cell it cannot place, so that an absent Cell refuses exactly as an out-of-scope one does. Nothing today can create a Person with that identifier — no endpoint accepts a client-supplied `id`, and every column defaults to `gen_random_uuid()` — but nothing forbids it either, and a Person holding it inside an actor's subtree would make every unplaceable Cell "covered" for that actor. The sentinel-free equivalent is to let the port's null reach `scopeCovers` the way `personBehind` already does for an absent Account. Settle it if Section 3's client-generated identifier is ever built.
