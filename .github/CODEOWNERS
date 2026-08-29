@@ -6,11 +6,22 @@
 # single-owner file would deadlock every change to these paths.
 
 /SKILL.md       @rsedilla @raneenicole
-/CLAUDE.md      @rsedilla @raneenicole
 /README.md      @rsedilla @raneenicole
 /docs/          @rsedilla @raneenicole
 /.claude/       @rsedilla @raneenicole
 /.github/       @rsedilla @raneenicole
+
+# Agent instruction files are deliberately NOT anchored to the repository root.
+# A leading slash matches only the root file, so `web/CLAUDE.md` -- which every
+# agent working in `web/` reads -- would merge with neither owner seeing it. The
+# risk is the file's standing rather than today's contents: it is a surface
+# somebody eventually appends a project rule to, and that rule would land
+# unreviewed in a repository whose governance rests on these files being read.
+#
+# Unanchored, so they cover an app directory before it exists. `AGENTS.md` is
+# listed although no root one exists yet, for the same reason.
+CLAUDE.md       @rsedilla @raneenicole
+AGENTS.md       @rsedilla @raneenicole
 
 # Migrations carry the constraints SKILL.md guarantees, and touch the history it
 # says is preserved. They are reviewed on the same terms as the specification.
