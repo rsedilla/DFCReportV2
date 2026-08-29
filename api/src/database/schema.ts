@@ -229,7 +229,26 @@ export type AuditAction =
   // exception for leadership. A closure writes one with a null incoming leader, which
   // is what distinguishes it from a handover in the log. The opened half arrives with
   // the handover workflow.
-  | 'cell_leadership.ended';
+  | 'cell_leadership.ended'
+  // Section 21 names three request actions: "Cell leadership requested, with the
+  // kind", "Cell leadership request approved, with the kind", and "Cell leadership
+  // request declined, with the kind and the reason".
+  //
+  // **One noun for all three, and section 21's first line phrases it differently.**
+  // Read literally that line gives `cell_leadership.requested`, which would put the
+  // three actions of one workflow under two nouns — and a reader asking how a leader
+  // was developed, which is exactly what section 10 calls the retained decline record,
+  // would have to know both to find the whole of it. The convention is
+  // `<noun>.<past-tense verb>` and the noun is the thing the action happened to: a
+  // request is submitted, approved and declined, whereas no leadership exists to be
+  // "requested" and none at all is touched by a decline. Section 21's list opens with
+  // "including", so the convention governs rather than the wording.
+  //
+  // `approved` is deliberately absent until the approval endpoint emits it. A member
+  // of a closed union that nothing writes is the shape this repository has already
+  // removed once, from `PRECONDITION_CODES`.
+  | 'cell_leadership_request.submitted'
+  | 'cell_leadership_request.declined';
 
 export interface AuditLogTable {
   id: Generated<string>;

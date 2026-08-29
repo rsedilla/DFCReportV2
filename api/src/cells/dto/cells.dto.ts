@@ -17,9 +17,26 @@ import { Max, Min, ValidateIf } from 'class-validator';
 
 import { CURSOR_MAX_LENGTH } from '../../common/cursor';
 
-import type { CellCategory, CellClosureReason } from '../../database/schema';
+import type {
+  CellCategory,
+  CellClosureReason,
+  CellDeclineReason,
+  CellRequestKind,
+} from '../../database/schema';
 
 const CATEGORIES: CellCategory[] = ['YOUTH', 'YOUNG_PRO', 'COUPLE'];
+
+/** Section 10: `kind` is a closed enumeration; a third value is an amendment. */
+const REQUEST_KINDS: CellRequestKind[] = ['NEW_CELL', 'HANDOVER'];
+
+/** Section 10, *Declining*. Fixed, and not administrator-configurable. */
+const DECLINE_REASONS: CellDeclineReason[] = [
+  'LEADER_DEVELOPMENT_CONTINUING',
+  'TIMING_DEFERRED',
+  'DUPLICATE_REQUEST',
+  'SUBMITTED_IN_ERROR',
+  'OTHER',
+];
 
 /**
  * Section 10, *Closure reasons*, and the list is closed.
@@ -75,6 +92,98 @@ export class CreateCellDto {
     message: 'time_of_day must be HH:MM or HH:MM:SS, in Asia/Manila wall-clock time',
   })
   time_of_day!: string;
+}
+
+/**
+ * `POST /api/v1/cells/leadership-requests` (SKILL.md section 10, *Creating a Cell*).
+ *
+ * **One shape for both kinds, because section 10 makes it one workflow.** Both carry
+ * the same state machine, the same decline reasons, the same approver and the same two
+ * steps, and section 10 says in terms that splitting them "would duplicate all four and
+ * let them drift". `kind` decides which of the remaining fields are required, exactly as
+ * it decides which columns migration 0009 requires.
+ *
+ * `cell_id` is the one field meaning something different in each: for a handover it
+ * names the Cell at request, and for a new Cell nothing names one until approval mints
+ * it. It is refused rather than ignored on a `NEW_CELL` request — the database has a
+ * check constraint saying a `PENDING` `NEW_CELL` names no Cell, and a client that sent
+ * one meant something the workflow cannot do.
+ */
+export class CreateLeadershipRequestDto {
+  @IsIn(REQUEST_KINDS)
+  kind!: CellRequestKind;
+
+  /**
+   * The person the request says is ready to lead.
+   *
+   * **The guard resolves scope against this field**, at subtree-excluding-self — the
+   * one place in the system where a scope value does that work, because the object the
+   * scope is about is also the one object the actor may not be (section 7, section 10).
+   */
+  @IsUUID()
+  prospective_leader_id!: string;
+
+  /** Required for a new Cell, refused for a handover: a handover changes no schedule. */
+  @ValidateIf((dto: CreateLeadershipRequestDto) => dto.kind === 'NEW_CELL')
+  @IsIn(CATEGORIES)
+  category?: CellCategory;
+
+  /** ISO 8601 day number, 1 Monday to 7 Sunday, as `CreateCellDto` (section 20). */
+  @ValidateIf((dto: CreateLeadershipRequestDto) => dto.kind === 'NEW_CELL')
+  @IsInt()
+  @Min(1)
+  @Max(7)
+  day_of_week?: number;
+
+  /** Asia/Manila wall-clock time with no offset of its own, as `CreateCellDto`. */
+  @ValidateIf((dto: CreateLeadershipRequestDto) => dto.kind === 'NEW_CELL')
+  @Matches(/^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/, {
+    message: 'time_of_day must be HH:MM or HH:MM:SS, in Asia/Manila wall-clock time',
+  })
+  time_of_day?: string;
+
+  /**
+   * The Cell being handed over. Required for a handover, and refused for a new Cell.
+   *
+   * `@ValidateIf` on the *`NEW_CELL`* branch as well as the handover one, because the
+   * two say different things: on a handover it must be present and a UUID, and on a new
+   * Cell it must be absent. `forbidNonWhitelisted` cannot express the second — the field
+   * is whitelisted on this DTO — so the refusal is a validator of its own.
+   */
+  @ValidateIf((dto: CreateLeadershipRequestDto) => dto.kind === 'HANDOVER')
+  @IsUUID()
+  cell_id?: string;
+}
+
+/**
+ * `POST /api/v1/cells/leadership-requests/{request_id}/decline`
+ * (SKILL.md section 10, *Declining*).
+ *
+ * The list is fixed and not administrator-configurable (section 10). It is short and
+ * neutral by design: a decline is a durable record about a named person, and an
+ * unconstrained free-text field is exactly where a judgmental label would be written
+ * (section 1, principle 7). A decline records that a Cell was not opened at this time
+ * and never an assessment of the person.
+ */
+export class DeclineLeadershipRequestDto {
+  @IsIn(DECLINE_REASONS)
+  reason!: CellDeclineReason;
+
+  /**
+   * Required where the reason is `OTHER`, and refused otherwise.
+   *
+   * **Trimmed, then required to be non-empty**, because the database compares
+   * `btrim(coalesce(note, '')) <> ''` — a `@MinLength(1)` alone accepts two spaces and
+   * turns a documented refusal into a constraint violation rendered `INTERNAL_ERROR`.
+   * That is the half-closed fix the closure DTO had to correct, and it is not repeated
+   * here.
+   */
+  @ValidateIf((dto: DeclineLeadershipRequestDto) => dto.reason === 'OTHER')
+  @IsString()
+  @Transform(({ value }: { value: unknown }) => (typeof value === 'string' ? value.trim() : value))
+  @MinLength(1)
+  @MaxLength(500)
+  note?: string;
 }
 
 /**

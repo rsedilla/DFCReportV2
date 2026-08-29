@@ -9,6 +9,7 @@ import { PeopleModule } from '../people/people.module';
 import { CellsController } from './cells.controller';
 import { CellsClosureService } from './cells.closure.service';
 import { CellsConfigurationService } from './cells.configuration.service';
+import { CellsLeadershipRequestService } from './cells.leadership-request.service';
 import { CellsMembershipService } from './cells.membership.service';
 import { CellsReadService } from './cells.read.service';
 import { CellsService } from './cells.service';
@@ -50,6 +51,7 @@ import { CellsService } from './cells.service';
   controllers: [CellsController],
   providers: [
     CellsService,
+    CellsLeadershipRequestService,
     CellsMembershipService,
     CellsConfigurationService,
     CellsClosureService,
