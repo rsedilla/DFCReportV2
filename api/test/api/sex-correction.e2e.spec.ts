@@ -627,8 +627,10 @@ describe('sex correction (SKILL.md sections 4, 5, 7, 21, 22)', () => {
       // request that was legal when it arrived was refused for ever, for having
       // waited.
       //
-      // The reassignment path has always stamped after its lock and records why. The
-      // two were written from one skeleton and drifted on this step.
+      // The reassignment path was moved to stamp after its lock by `216be37` on
+      // 2026-08-23, and this one was not — although both methods sat in a single file
+      // three hundred lines apart at that commit. A defect fixed on one member of a
+      // class with the class left unswept, rather than two copies drifting.
       //
       // Asserting the instant rather than a status, because the status is 200 either
       // way here: only a *second* writer produces the refusal, and staging that
@@ -678,8 +680,8 @@ describe('sex correction (SKILL.md sections 4, 5, 7, 21, 22)', () => {
 
         // `>=` rather than `>`: both instants come from the same clock and can land in
         // one millisecond. What discriminates is the ordering, not a margin. Under the
-        // defect the stamp is the handler's first statement — after dispatch, before
-        // the transaction — so it necessarily precedes the backend becoming blocked,
+        // defect the stamp is taken early in the handler — after dispatch and before the
+        // transaction, third statement rather than first — so it necessarily precedes the backend becoming blocked,
         // which precedes `waitForBlockedBy` observing it, which precedes this read.
         // Strictly ordered by construction rather than by a timing margin; an earlier
         // version of this comment said "before the request is dispatched", which the

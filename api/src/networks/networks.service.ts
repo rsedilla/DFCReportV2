@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 
-import { InvariantViolationError, ResourceBusyError } from '../common/errors/api-error';
+import { InvariantViolationError } from '../common/errors/api-error';
 import { manilaDayAfter, startOfManilaDay } from '../common/time/manila';
 import { type Db } from '../database/database.module';
 import { lockPersonsWithin } from '../database/person-lock';
@@ -280,7 +280,7 @@ export class NetworksService {
      * no pastoral assignment that they had stranded one.
      */
     kind: 'edges' | 'network-row',
-  ): InvariantViolationError | ResourceBusyError {
+  ): InvariantViolationError {
     const earliest = manilaDayAfter(bound);
     const submittable = startOfManilaDay(earliest).getTime() <= Date.now();
 
@@ -289,22 +289,24 @@ export class NetworksService {
       // instant this correction is taking — a Person encoded and corrected within
       // the same millisecond. There is no date to offer and none was asked for.
       //
-      // **`RESOURCE_BUSY` rather than a 409**, matching
-      // `PeopleReassignmentService.reassignmentTooEarly`, which was written for this
-      // exact case and whose reasoning carries unchanged: contention reaches no
-      // decision, and section 22 stores a 4xx against the idempotency key and
-      // replays it for the whole retention. A 409 here would pin a transient failure
-      // to the key for a day while telling the caller to retry — the message and the
-      // status on opposite sides of that split, which is what this branch said
-      // before.
+      // **This is a 409 and should very likely be a 503, and that is deliberately not
+      // changed here.** Section 22 stores a 4xx against the idempotency key and
+      // replays it for the whole retention, so a 409 pins a transient failure to the
+      // key for a day while this message tells the caller to retry — the status and
+      // the advice on opposite sides of that split. `reassignmentTooEarly` answers
+      // `RESOURCE_BUSY` for the same case on the sibling path, since `216be37`.
       //
-      // The sibling path got this on 2026-08-23 in `216be37` and this one did not,
-      // although both methods sat in one file three hundred lines apart. Same
-      // omission as the stamp this commit moves, and the same remedy: sweep the
-      // class rather than the instance.
-      // The standard message rather than a bespoke one, exactly as the sibling does:
-      // section 22 fixes what `RESOURCE_BUSY` means, and a caller branches on the code.
-      return new ResourceBusyError({ person_id: change.personId });
+      // It is left alone because changing it is a ruling rather than a fix: section 4
+      // says an undated correction "always succeeds" and has no floor to clear, which
+      // this branch contradicts; and section 22 defines `RESOURCE_BUSY` as a wait that
+      // timed out or a deadlock victim, which this is neither — the lock was acquired
+      // cleanly and the collision is with a committed row. Both sections need
+      // amending, and that belongs in its own change with its own Decisions entry.
+      // Recorded as open in `CLAUDE.md` rather than settled in a fix batch.
+      return new InvariantViolationError(
+        'This change cannot take effect at this instant, because a record for this person was written at it. Retry in a moment.',
+        { person_id: change.personId },
+      );
     }
 
     if (!submittable) {
