@@ -288,6 +288,24 @@ export class NetworksService {
       // Reached only where a record for this person was written at the same
       // instant this correction is taking — a Person encoded and corrected within
       // the same millisecond. There is no date to offer and none was asked for.
+      //
+      // **This is a 409 and should very likely be a 503, and that is deliberately not
+      // changed here.** Section 22 stores a 4xx against the idempotency key and
+      // replays it for the whole retention, so a 409 pins a transient failure to the
+      // key for a day while this message tells the caller to retry — the status and
+      // the advice on opposite sides of that split. `reassignmentTooEarly` answers
+      // `RESOURCE_BUSY` for the same case on the sibling path, since `216be37`.
+      //
+      // It is left alone because changing it is a ruling rather than a fix, and needs
+      // two amendments neither of which is derivable. Section 4 says an undated
+      // correction "always succeeds" and has no floor to clear, which **this branch of
+      // this method** contradicts — the contradiction is long-standing rather than
+      // introduced by any recent change, and issue #16 records it as pre-existing on
+      // `main`. And section 22 defines `RESOURCE_BUSY` as a wait that timed out or a
+      // deadlock victim, which this is neither: the lock was acquired cleanly and the
+      // collision is with a committed row.
+      //
+      // Recorded as open in `CLAUDE.md` rather than settled in a fix batch.
       return new InvariantViolationError(
         'This change cannot take effect at this instant, because a record for this person was written at it. Retry in a moment.',
         { person_id: change.personId },
