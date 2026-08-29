@@ -9,6 +9,7 @@ import { startOfManilaDay, startOfNextManilaMonth } from '../../src/common/time/
 import { createTestDb, truncateAll } from '../setup/database';
 import {
   assignTo,
+  closeCellDirectly,
   createAccount,
   createCell,
   createPerson,
@@ -99,35 +100,6 @@ describe('cell configuration (section 10)', () => {
       .set('Authorization', `Bearer ${actor.accessToken}`)
       .set('Idempotency-Key', randomUUID())
       .send({ day_of_week: dayOfWeek, time_of_day: timeOfDay });
-
-  const closeCellDirectly = (cellUuid: string) =>
-    db.transaction().execute(async (trx) => {
-      const at = (await sql<{ now: Date }>`SELECT now() AS now`.execute(trx)).rows[0].now;
-
-      await trx
-        .updateTable('cells')
-        .set({ state: 'CLOSED', closed_at: at, closure_reason: 'MEMBERS_DISPERSED' })
-        .where('id', '=', cellUuid)
-        .execute();
-      await trx
-        .updateTable('cell_leaderships')
-        .set({ ended_at: at })
-        .where('cell_id', '=', cellUuid)
-        .where('ended_at', 'is', null)
-        .execute();
-      await trx
-        .updateTable('cell_categories')
-        .set({ ended_at: at })
-        .where('cell_id', '=', cellUuid)
-        .where('ended_at', 'is', null)
-        .execute();
-      await trx
-        .updateTable('cell_schedules')
-        .set({ ended_at: at })
-        .where('cell_id', '=', cellUuid)
-        .where('ended_at', 'is', null)
-        .execute();
-    });
 
   const categoryRows = (cellUuid: string) =>
     db
@@ -254,7 +226,7 @@ describe('cell configuration (section 10)', () => {
     });
 
     it('refuses a closed Cell, for being closed', async () => {
-      await closeCellDirectly(markCell.id);
+      await closeCellDirectly(db, markCell.id, { reason: 'MEMBERS_DISPERSED' });
 
       const response = await changeCategory(admin, markCell.id, 'YOUNG_PRO').expect(409);
       expect(response.body.error.code).toBe('INVARIANT_VIOLATION');
@@ -421,7 +393,7 @@ describe('cell configuration (section 10)', () => {
     });
 
     it('refuses a closed Cell, for being closed', async () => {
-      await closeCellDirectly(markCell.id);
+      await closeCellDirectly(db, markCell.id, { reason: 'MEMBERS_DISPERSED' });
 
       const response = await changeSchedule(admin, markCell.id, 7, '16:00').expect(409);
       expect(response.body.error.code).toBe('INVARIANT_VIOLATION');
@@ -527,14 +499,14 @@ describe('cell configuration (section 10)', () => {
 
   describe('concurrency (section 5)', () => {
     // **Both of this slice's live fixes were unpinned**, and a review found that
-    // rather than a test. Reverting `.forUpdate()` to `.forShare()`, or deleting the
+    // rather than a test. Reverting `.forNoKeyUpdate()` to `.forShare()`, or deleting the
     // `lock_timeout` bound, left all twenty cases green — in the batch whose own
     // headline was that three rules had nothing able to fail on them.
 
     it('waits for a Cell row held by another transaction', async () => {
       // **The blocker holds `FOR SHARE`, and that is what discriminates.** A shared
       // lock does not conflict with another shared lock, so a service still using
-      // `.forShare()` sails past and answers immediately. Only `FOR UPDATE` waits.
+      // `.forShare()` sails past and answers immediately. Only a lock that conflicts with `FOR SHARE` waits.
       //
       // That is the defect this pins: shared, two configuration changes both read the
       // open row, and the loser's `UPDATE` re-matches the row the winner just closed

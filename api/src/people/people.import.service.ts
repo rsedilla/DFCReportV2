@@ -411,12 +411,10 @@ export class PeopleImportService {
     // whole tree in one transaction and holds every lock to commit, so the union of
     // keys across rows is still acquired in tree order rather than in key order. A
     // concurrent writer taking two person locks sorted can still cycle with it.
-    // The consequence is unchanged, and it is **settled** rather than open since the
-    // closure pre-flight of 2026-08-29: section 5 now says a deadlock victim answers
-    // `RESOURCE_BUSY`. The predicate below has not been widened yet, so today:
-    // PostgreSQL raises `40P01`, `isLockTimeout` matches `55P03` only, and a deadlock
-    // therefore renders `INTERNAL_ERROR`. That narrowness is now a known gap rather
-    // than the rule -- see `postgres-errors.ts`, corrected in the same change.
+    // The consequence is unchanged and the answer to it is settled: section 5 says a
+    // deadlock victim answers `RESOURCE_BUSY`, and `isLostLockWait` matches `40P01`
+    // alongside `55P03` since the closure endpoint landed. So a cycle here is a 503
+    // the operator can retry rather than an `INTERNAL_ERROR` reading as a defect.
     //
     // The subject is locked at all because their own row is what is being decided:
     // a Network correction committing alongside changes which Network their new

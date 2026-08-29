@@ -5,9 +5,11 @@ import { Client } from 'pg';
 import request from 'supertest';
 
 import { CellsMembershipService } from '../../src/cells/cells.membership.service';
+import { CURSOR_MAX_LENGTH } from '../../src/common/cursor';
 import { createTestDb, truncateAll } from '../setup/database';
 import {
   assignTo,
+  closeCellDirectly,
   createAccount,
   createCell,
   createPerson,
@@ -85,34 +87,6 @@ describe('cell membership (section 10)', () => {
       .set('Authorization', `Bearer ${actor.accessToken}`)
       .set('Idempotency-Key', randomUUID())
       .send();
-
-  /**
-   * Closes a Cell the way section 10 says a closure happens, so a case can reach the
-   * state without a closure endpoint existing yet: the state, the leadership and any
-   * memberships end at one instant, which is what migration 0009 requires.
-   */
-  const closeCellDirectly = (cellUuid: string) =>
-    db.transaction().execute(async (trx) => {
-      const at = (await sql<{ now: Date }>`SELECT now() AS now`.execute(trx)).rows[0].now;
-
-      await trx
-        .updateTable('cells')
-        .set({ state: 'CLOSED', closed_at: at, closure_reason: 'MEMBERS_DISPERSED' })
-        .where('id', '=', cellUuid)
-        .execute();
-      await trx
-        .updateTable('cell_leaderships')
-        .set({ ended_at: at })
-        .where('cell_id', '=', cellUuid)
-        .where('ended_at', 'is', null)
-        .execute();
-      await trx
-        .updateTable('cell_memberships')
-        .set({ ended_at: at })
-        .where('cell_id', '=', cellUuid)
-        .where('ended_at', 'is', null)
-        .execute();
-    });
 
   const openMembership = (personId: string) =>
     db
@@ -212,7 +186,7 @@ describe('cell membership (section 10)', () => {
       // correction. The refusal here is about the Cell being closed rather than about
       // scope, which is what shows the scope resolved.
       const closing = await createCell(db, { leader: mark, category: 'COUPLE' });
-      await closeCellDirectly(closing.id);
+      await closeCellDirectly(db, closing.id, { reason: 'MEMBERS_DISPERSED' });
 
       const account = await createAccount(app, db, {
         person: mark,
@@ -605,6 +579,336 @@ describe('cell membership (section 10)', () => {
       expect(new Date(response.body.started_at as string).getTime()).toBeGreaterThanOrEqual(
         releasedAt.getTime(),
       );
+    } finally {
+      await blocker.end();
+    }
+  });
+
+  describe('reading a Cell’s members', () => {
+    it('lists the current members, with names', async () => {
+      // **The route the closure made necessary.** Section 10 requires the members to
+      // be "presented at the point of closure", and the closure refuses any decision
+      // list that is not exactly the current membership — so without this the closure
+      // is unusable by any client. Section 22 has documented the path since before
+      // either existed.
+      await addMember(admin, markCell.id, juan.id).expect(201);
+
+      const response = await request(app.getHttpServer())
+        .get(`/api/v1/cells/${markCell.id}/members`)
+        .set('Authorization', `Bearer ${admin.accessToken}`)
+        .expect(200);
+
+      expect(response.body.next_cursor).toBeNull();
+      expect(response.body.data).toHaveLength(1);
+      const memberId = await db
+        .selectFrom('persons')
+        .select('member_id')
+        .where('id', '=', juan.id)
+        .executeTakeFirstOrThrow();
+
+      expect(response.body.data[0]).toMatchObject({
+        person_id: juan.id,
+        member_id: memberId.member_id,
+      });
+      expect(response.body.data[0].full_name).toContain('Juan');
+
+      // **Section 8's protected fields are not here.** Names and the Member ID are
+      // published church-wide; the birthday and the mobile number are not, and a
+      // roster is not a route to them.
+      expect(response.body.data[0]).not.toHaveProperty('birth_date');
+      expect(response.body.data[0]).not.toHaveProperty('mobile_number');
+    });
+
+    it('is refused to a leader whose scope does not reach the Cell', async () => {
+      // The same target rule as the write routes: the Cell, resolved through its
+      // leader (section 7). Everyone who may act on the list may read it, and nobody
+      // else.
+      const outsider = await createPerson(db, { firstName: 'Ben', network: 'MENS' });
+      await assignTo(db, outsider.id, root.id);
+      const account = await createAccount(app, db, { person: outsider, roles: ['LEADER'] });
+
+      await request(app.getHttpServer())
+        .get(`/api/v1/cells/${markCell.id}/members`)
+        .set('Authorization', `Bearer ${account.accessToken}`)
+        .expect(403);
+    });
+
+    it('answers NOT_FOUND for a Cell that is not there', async () => {
+      // **Section 22's Cell worked case, and an earlier version answered 200 with an
+      // empty list.** Its stated reason was that distinguishing the two would
+      // reintroduce the existence oracle, which is the opposite of what that ruling
+      // says: the oracle is closed by the guard's uniform `SCOPE_DENIED` for every
+      // narrow scope, and `NOT_FOUND` is then provided for an actor whose scope
+      // *would* have covered the Cell. Only a Whole Church actor gets here for an
+      // absent Cell, because `scopeCovers` returns true before the target is read.
+      //
+      // It also left `POST /cells/{id}/closure` and this route giving two answers for
+      // one fact.
+      const response = await request(app.getHttpServer())
+        .get(`/api/v1/cells/${randomUUID()}/members`)
+        .set('Authorization', `Bearer ${admin.accessToken}`)
+        .expect(404);
+
+      expect(response.body.error.code).toBe('NOT_FOUND');
+    });
+
+    it('pages: a cursor reaches the second page, and it is the whole key', async () => {
+      // **The case the pagination shipped without, and it was a 500.** The cursor was
+      // the Member ID alone and the comparison looked the other two ordering keys up
+      // in a scalar subquery, which compiles to a row constructor against a
+      // single-column subquery — `subquery has too few columns`, refused by PostgreSQL
+      // at analysis before a row is read, and `42601` is not a code
+      // `postgres-errors.ts` classifies, so it rendered `INTERNAL_ERROR`.
+      //
+      // Nothing could fail against it: `limit` is a documented parameter but no case
+      // supplied a `cursor`, and the `$if` guard meant the broken SQL was never even
+      // built. `tsc` was clean throughout.
+      //
+      // It was not cosmetic. `POST /cells/{id}/closure` requires a member list that is
+      // exactly the current membership, and this route is the only way to obtain one —
+      // so any Cell with more members than the page was closable by nobody.
+      // **Four members, so that each of the three disjuncts decides exactly one
+      // boundary and none is dead.** Two members with distinct last names pin only that
+      // *some* filter exists, and three sharing a full name still leave the middle
+      // disjunct unreachable — `last_name = X AND first_name > Y` selects nobody when
+      // the two candidates share both names. The keyset's whole justification is that a
+      // lexicographic comparison needs every key it orders by, and section 3 says
+      // plainly that a congregation of several thousand holds two people who share a
+      // name.
+      //
+      // Name order, which is the page order:
+      //   1 Santos, Ana   (alpha)
+      //   2 Santos, Ana   (twin)   <- 1→2 crosses on the tie-break: both names equal
+      //   3 Santos, Berta (berta)  <- 2→3 crosses on the first name within an equal last
+      //   4 Zamora, Zosimo (omega) <- 3→4 crosses on the last name
+      //
+      // **One inversion, and it is load-bearing: `omega` is created first.** Member IDs
+      // come off a sequence in creation order, so creating everyone in name order makes
+      // the tie-break agree with the ordering by accident and a `member_id`-only
+      // comparison pages the fixture perfectly — that mutation was run against an
+      // earlier version of this case and passed. Created first, `omega` holds the lowest
+      // Member ID while sorting last, which is what breaks that agreement.
+      //
+      // *A previous version created `berta` second as a second inversion and claimed, in
+      // four places, that without it the tie-break would reach her and the middle
+      // disjunct would stay dead. That is false: the tie-break requires
+      // `first_name = key.firstName`, and hers is `Berta` against a key of `Ana`, so it
+      // excludes her on the name before a Member ID is compared. Her creation position
+      // cannot affect any mutation, and the inversion was removed rather than left with
+      // a corrected comment — what made three members insufficient was the absence of a
+      // distinct first name within an equal last name, not an ordering trick.*
+      //
+      // A member silently skipped here is a Cell whose closure can never name its
+      // membership exactly, and therefore a Cell nobody can close.
+      const omega = await createPerson(db, {
+        firstName: 'Zosimo',
+        lastName: 'Zamora',
+        network: 'MENS',
+      });
+      const alpha = await createPerson(db, {
+        firstName: 'Ana',
+        lastName: 'Santos',
+        network: 'MENS',
+      });
+      const twin = await createPerson(db, {
+        firstName: 'Ana',
+        lastName: 'Santos',
+        network: 'MENS',
+      });
+      const berta = await createPerson(db, {
+        firstName: 'Berta',
+        lastName: 'Santos',
+        network: 'MENS',
+      });
+
+      for (const person of [alpha, twin, berta, omega]) {
+        await assignTo(db, person.id, mark.id);
+        await addMember(admin, markCell.id, person.id).expect(201);
+      }
+
+      // Asserted rather than assumed. **Only one mutation below depends on an ordering
+      // rather than on the names** — `member_id >` alone — and `omega`'s position is what
+      // kills it; the other three redden on the names whatever the Member IDs are. The
+      // comparison is `M-` plus ASCII digits, so it is identical under every collation.
+      const ids = new Map(
+        (
+          await db
+            .selectFrom('persons')
+            .select(['id', 'member_id'])
+            .where('id', 'in', [alpha.id, twin.id, berta.id, omega.id])
+            .execute()
+        ).map((row) => [row.id, row.member_id]),
+      );
+
+      const before = (a: TestPerson, b: TestPerson): number =>
+        ids.get(a.id)!.localeCompare(ids.get(b.id)!);
+
+      // The tie-break's direction: two identical names, `alpha` first.
+      expect(before(alpha, twin)).toBeLessThan(0);
+      // Sorts last by name, lowest Member ID — kills a `member_id`-only comparison. This
+      // is the only ordering property any mutation depends on, so it is the only one
+      // asserted; an assertion about `berta`'s position was removed with the claim that
+      // it pinned something.
+      expect(before(omega, alpha)).toBeLessThan(0);
+
+      const first = await request(app.getHttpServer())
+        .get(`/api/v1/cells/${markCell.id}/members?limit=1`)
+        .set('Authorization', `Bearer ${admin.accessToken}`)
+        .expect(200);
+
+      expect(first.body.data).toHaveLength(1);
+      expect(first.body.data[0].person_id).toBe(alpha.id);
+      expect(first.body.next_cursor).not.toBeNull();
+
+      // **Opaque, which section 22 requires and the first version was not.** It emitted
+      // a bare Member ID — six digits off a sequence (section 3), published church-wide
+      // (section 8), and therefore constructible by a client, which is exactly what
+      // section 22 says a cursor must never be.
+      for (const memberId of ids.values()) {
+        expect(first.body.next_cursor).not.toBe(memberId);
+      }
+
+      const page = async (cursor: string): Promise<request.Response> =>
+        request(app.getHttpServer())
+          .get(`/api/v1/cells/${markCell.id}/members?limit=1&cursor=${encodeURIComponent(cursor)}`)
+          .set('Authorization', `Bearer ${admin.accessToken}`)
+          .expect(200);
+
+      // **1 → 2 crosses on the tie-break**: `alpha` and `twin` share both names, so only
+      // the third disjunct separates them. Reddens if the tie-break is dropped, which
+      // lands on `berta`; and under `last_name >` alone, which selects only `Zamora` and
+      // so lands on `omega`. *The two were previously described as landing on the same
+      // person — they do not, and only one of them can.*
+      const second = await page(first.body.next_cursor as string);
+      expect(second.body.data).toHaveLength(1);
+      expect(second.body.data[0].person_id).toBe(twin.id);
+      expect(second.body.next_cursor).not.toBeNull();
+
+      // **2 → 3 crosses on the first name within an equal last name**, which is the
+      // only boundary the middle disjunct decides — and the reason a three-member
+      // fixture was not enough. The tie-break cannot reach `berta` whatever her Member
+      // ID, because it requires the first name to be *equal* and hers is not, so a
+      // comparison missing this disjunct skips straight to `omega`.
+      const third = await page(second.body.next_cursor as string);
+      expect(third.body.data).toHaveLength(1);
+      expect(third.body.data[0].person_id).toBe(berta.id);
+      expect(third.body.next_cursor).not.toBeNull();
+
+      // **3 → 4 crosses on the last name**, then ends. `Zamora` sorts after `Santos`.
+      const fourth = await page(third.body.next_cursor as string);
+      expect(fourth.body.data).toHaveLength(1);
+      expect(fourth.body.data[0].person_id).toBe(omega.id);
+      expect(fourth.body.next_cursor).toBeNull();
+    });
+
+    it('treats an unreadable cursor as absent rather than refusing it', async () => {
+      // Matches `GET /api/v1/people`, which is the only other paginated collection and
+      // the only behaviour this repository has chosen. **Section 22 does not settle
+      // what a collection endpoint does with a forged, stale or unparseable cursor**,
+      // and that is recorded as open in `CLAUDE.md` rather than decided here — two
+      // endpoints on one API answering differently is the thing worth avoiding until
+      // it is.
+      //
+      // It discloses nothing either way: the worst a tampered value does is start the
+      // page elsewhere in a roster this reader may already see in full.
+      await addMember(admin, markCell.id, juan.id).expect(201);
+
+      const response = await request(app.getHttpServer())
+        .get(`/api/v1/cells/${markCell.id}/members?cursor=not-a-real-cursor`)
+        .set('Authorization', `Bearer ${admin.accessToken}`)
+        .expect(200);
+
+      expect(response.body.data).toHaveLength(1);
+      expect(response.body.data[0].person_id).toBe(juan.id);
+
+      // **An empty `cursor=` is refused rather than treated as absent**, which is where
+      // the consistency claim was broader than the code: the decoder returned null for
+      // `''` while `/people`'s DTO refused it, so the two agreed on a forged cursor and
+      // disagreed on an empty one. Both bind `@Length(1, …)` now.
+      await request(app.getHttpServer())
+        .get(`/api/v1/cells/${markCell.id}/members?cursor=`)
+        .set('Authorization', `Bearer ${admin.accessToken}`)
+        .expect(422);
+
+      // **And the upper bound, which is the half that had nothing to fail on it.**
+      // `common/cursor.ts` argues that the constant is a request-size guard that "still
+      // refuses a query string built to be enormous" — and every assertion that moved
+      // with it was a payload-fits check, so it reddened when the constant was *lowered*
+      // and never when it was raised. The bound could have been four million with the
+      // whole suite green.
+      await request(app.getHttpServer())
+        .get(`/api/v1/cells/${markCell.id}/members?cursor=${'A'.repeat(CURSOR_MAX_LENGTH + 1)}`)
+        .set('Authorization', `Bearer ${admin.accessToken}`)
+        .expect(422);
+    });
+
+    it('answers an empty list rather than a refusal for a Cell with no members', async () => {
+      const response = await request(app.getHttpServer())
+        .get(`/api/v1/cells/${markCell.id}/members`)
+        .set('Authorization', `Bearer ${admin.accessToken}`)
+        .expect(200);
+
+      expect(response.body.data).toEqual([]);
+      expect(response.body.next_cursor).toBeNull();
+    });
+  });
+
+  it('refuses an add whose Cell was handed away while it waited', async () => {
+    // **Section 10 requires scope over every Cell an operation touches to be
+    // re-decided inside the transaction**, and until the closure slice this endpoint
+    // did that for the *source* Cell of a move and left the destination to the
+    // guard's answer from before the request queued. Section 10 named that half as
+    // owed; this is the case that makes it fail without it.
+    //
+    // Every other case here is decided the same way by the guard, so deleting the
+    // re-check left them all green -- the disjunction-with-one-member shape this
+    // repository keeps recording. The only thing that separates the two layers is
+    // making the guard's answer go stale on purpose, which the person lock provides
+    // a place to do: the request blocks there, holding no Cell row, and the Cell
+    // changes hands underneath it.
+    const leader = await createAccount(app, db, { person: mark, roles: ['LEADER'] });
+    const ben = await createPerson(db, { firstName: 'Ben', network: 'MENS' });
+    await assignTo(db, ben.id, root.id);
+    const blocker = await openClient();
+
+    try {
+      await blocker.query('BEGIN');
+      const { rows } = await blocker.query<{ key: string }>(
+        'SELECT hashtextextended($1::uuid::text, 0) AS key',
+        [juan.id],
+      );
+      const lockKey = rows[0].key;
+      await blocker.query('SELECT pg_advisory_xact_lock($1::bigint)', [lockKey]);
+
+      const pending = addMember(leader, markCell.id, juan.id).then((r) => r);
+      await waitForBlockedOn(lockKey);
+
+      // Ben is Mark's sibling under the root, so the Cell leaves Mark's subtree.
+      // One transaction, because section 11 makes a leaderless Cell impossible.
+      await db.transaction().execute(async (trx) => {
+        // One instant for both rows: section 11 requires a handover to be contiguous,
+        // and two `clock_timestamp()` calls are microseconds apart.
+        const at = (await sql<{ at: Date }>`SELECT clock_timestamp() AS at`.execute(trx)).rows[0]
+          .at;
+
+        await trx
+          .updateTable('cell_leaderships')
+          .set({ ended_at: at })
+          .where('cell_id', '=', markCell.id)
+          .where('ended_at', 'is', null)
+          .execute();
+        await trx
+          .insertInto('cell_leaderships')
+          .values({ person_id: ben.id, cell_id: markCell.id, started_at: at })
+          .execute();
+      });
+
+      await blocker.query('COMMIT');
+
+      const response = await pending;
+
+      expect(response.status).toBe(403);
+      expect(response.body.error.code).toBe('SCOPE_DENIED');
     } finally {
       await blocker.end();
     }

@@ -20,6 +20,7 @@ import { NetworksService } from '../networks/networks.service';
 import { PeopleReadService } from '../people/people.read.service';
 
 import { CellsReadService } from './cells.read.service';
+import { decodeRosterCursor, encodeRosterCursor } from './roster-cursor';
 
 import type { CurrentClaim } from '../common/idempotency/current-idempotency.decorator';
 import type { Database } from '../database/schema';
@@ -175,6 +176,17 @@ export class CellsMembershipService {
         });
       }
 
+      // **The destination, re-decided here rather than left to the guard's earlier
+      // answer.** Section 10 requires scope over every Cell an operation touches to be
+      // checked again inside the transaction: the guard resolves a Cell through its
+      // leader on the pool, before the request queued, so a handover committing in
+      // between leaves that answer describing authority the actor no longer holds.
+      //
+      // Section 10 named this half as owed and unbuilt until the closure endpoint
+      // built the mechanism. This is that half; `CellsClosureService` makes the same
+      // check about the Cell it is closing and about each dispersal destination.
+      await this.assertActorMayChangeMembershipOf(trx, actor, authority, cellId);
+
       if (current) {
         await this.assertActorMayChangeMembershipOf(trx, actor, authority, current.cell_uuid);
       }
@@ -232,6 +244,97 @@ export class CellsMembershipService {
 
       return response;
     });
+  }
+
+  /**
+   * This Cell's current members, for the screen that decides a closure.
+   *
+   * **A read, so it takes no idempotency claim and opens no transaction.** It is here
+   * rather than on `CellsReadService` because that service exists for the reads *other
+   * modules* need — `auth` asking whether a Person is a current Cell Leader, the guard
+   * resolving a Cell's leader — and this one is `cells` answering its own controller.
+   * The query itself lives there, because `cells.read.service.ts` is where this
+   * module's `SELECT`s are written.
+   *
+   * **`NOT_FOUND` for a Cell that is not there, and an earlier version answered 200
+   * with an empty list.** Its stated reason was that distinguishing the two would
+   * reintroduce the existence oracle — which is the opposite of what section 22
+   * settles. That ruling closes the oracle through the guard's uniform `SCOPE_DENIED`
+   * for every narrow scope, and then provides `NOT_FOUND` for an actor whose scope
+   * *would* have covered the Cell, "for whom absence is genuinely absence". Only a
+   * Whole Church actor reaches this handler for a Cell that does not exist, because
+   * `scopeCovers` returns true before the target is read. Answering an empty list left
+   * `POST /cells/{id}/closure` and this route giving two answers for one fact.
+   *
+   * **Section 22's collection envelope, and its pagination rather than only its
+   * shape.** A first version returned `{ data, next_cursor: null }` and bound no
+   * `limit`, which is the truncation-without-a-cursor shape `CLAUDE.md` already
+   * carries as open for `/people/duplicate-candidates`, arrived at deliberately. The
+   * reason given — that a Cell's membership is small and the closure refuses a list
+   * over 500 — bounds the closure *request* rather than a Cell's membership, and a
+   * Cell over that is then closable by nobody *and* silently truncated here.
+   *
+   * `next_cursor` is null for every Cell this church has, because a page of 50 holds
+   * what one leader can pastor. It is a fact about the data rather than a promise.
+   *
+   * **A client that meets a cursor can follow it, which was false when that sentence
+   * was first written.** The cursor was the Member ID alone and the comparison looked
+   * the other two keys up in a subquery, which PostgreSQL refuses at analysis — so the
+   * second page was a 500 on every Cell large enough to have one, and the closure
+   * endpoint, whose member list must be exactly the current membership, was therefore
+   * unsatisfiable for any Cell over the page size. `roster-cursor.ts` carries the fix
+   * and the reasoning.
+   */
+  async membersOf(
+    cellId: string,
+    page: { limit?: number; cursor?: string } = {},
+  ): Promise<{
+    data: Record<string, unknown>[];
+    next_cursor: string | null;
+  }> {
+    const cell = await this.db
+      .selectFrom('cells')
+      .select('id')
+      .where('id', '=', cellId)
+      .executeTakeFirst();
+
+    if (!cell) {
+      throw new NotFoundError('No such Cell.');
+    }
+
+    const limit = page.limit ?? 50;
+
+    // One more than asked for, so whether another page exists is answered by the read
+    // rather than by a second count — and the extra row is dropped before it is
+    // returned, so a client never sees `limit + 1`.
+    const members = await this.cells.membersOfWithin(this.db, cellId, {
+      limit: limit + 1,
+      after: decodeRosterCursor(page.cursor),
+    });
+
+    const visible = members.slice(0, limit);
+    const last = visible.at(-1);
+
+    return {
+      data: visible.map((member) => ({
+        person_id: member.person_id,
+        member_id: member.member_id,
+        full_name: member.full_name,
+        started_at: member.started_at.toISOString(),
+      })),
+      // The whole ordering key of the last row shown, opaquely encoded. All three,
+      // because a lexicographic keyset needs every key it orders by and because a
+      // member renamed between two pages would otherwise move a key looked up by
+      // Member ID — skipping or repeating rows (`roster-cursor.ts`).
+      next_cursor:
+        members.length > limit && last !== undefined
+          ? encodeRosterCursor({
+              lastName: last.last_name,
+              firstName: last.first_name,
+              memberId: last.member_id,
+            })
+          : null,
+    };
   }
 
   /**

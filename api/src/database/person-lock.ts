@@ -1,7 +1,7 @@
 import { sql } from 'kysely';
 
 import { ResourceBusyError } from '../common/errors/api-error';
-import { isLockTimeout } from '../common/errors/postgres-errors';
+import { isLostLockWait } from '../common/errors/postgres-errors';
 
 import type { Database } from './schema';
 import type { Transaction } from 'kysely';
@@ -106,7 +106,7 @@ export async function lockPersonsWithin(
     try {
       await sql`SELECT pg_advisory_xact_lock(${key}::bigint)`.execute(transaction);
     } catch (error) {
-      if (isLockTimeout(error)) {
+      if (isLostLockWait(error)) {
         // Transient, and carrying no decision: the caller's transaction rolls back
         // having written nothing, and the client retries. `ResourceBusyError` says
         // there why it is a 5xx.

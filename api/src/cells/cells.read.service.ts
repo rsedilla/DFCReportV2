@@ -2,6 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 
 import { DATABASE, type Db } from '../database/database.module';
 
+import type { RosterCursor } from './roster-cursor';
 import type { Database } from '../database/schema';
 import type { Transaction } from 'kysely';
 
@@ -75,6 +76,184 @@ export class CellsReadService {
       .orderBy('started_at', 'desc')
       .orderBy('ended_at', (ob) => ob.desc().nullsFirst())
       .orderBy('id', 'desc')
+      .executeTakeFirst();
+
+    return row?.person_id ?? null;
+  }
+
+  /**
+   * A Cell's current members, which is the list a closure has to be decided against
+   * (SKILL.md section 10, *What closing does*).
+   *
+   * Section 10 requires the members to be "presented at the point of closure" and the
+   * closure endpoint refuses any decision list that is not exactly this one, so
+   * without a route serving it the closure is unusable by any client. That is why it
+   * arrives here rather than with the rest of the read surface.
+   *
+   * **It discloses an association section 8 protects in a *search*, and section 8 now
+   * says why that is right rather than an exception.** A first version of this
+   * docblock argued that names and Member IDs are published church-wide "so nothing
+   * here exceeds what a directory search already shows". That was false in the half
+   * that mattered: the names are publishable and the *association* between them and
+   * this Cell is on section 8's forbidden list. What reconciles them is direction — a
+   * search starts from a person and this starts from a Cell, and everyone who can read
+   * this roster is somebody section 10 authorizes to change it.
+   *
+   * The rest of section 8's list is not here: no birthday, no contact detail, no
+   * attendance, no classification. Names because a closure screen listing UUIDs would
+   * be asking a leader to make a pastoral decision about rows they cannot recognise.
+   */
+  async membersOfWithin(
+    executor: Db | Transaction<Database>,
+    cellId: string,
+    page: { limit: number; after?: RosterCursor | null } = { limit: 50 },
+  ): Promise<
+    {
+      person_id: string;
+      member_id: string;
+      full_name: string;
+      // The other two ordering keys travel with the row so the caller can build the
+      // next cursor from what it was given, rather than looking them up again — which
+      // is the lookup that made the first version unrunnable (`roster-cursor.ts`).
+      last_name: string;
+      first_name: string;
+      started_at: Date;
+    }[]
+  > {
+    const after = page.after ?? null;
+
+    const rows = await executor
+      .selectFrom('cell_memberships')
+      .innerJoin('persons', 'persons.id', 'cell_memberships.person_id')
+      .select([
+        'cell_memberships.person_id as person_id',
+        'persons.member_id as member_id',
+        'persons.first_name as first_name',
+        'persons.middle_name as middle_name',
+        'persons.last_name as last_name',
+        'cell_memberships.started_at as started_at',
+      ])
+      .where('cell_memberships.cell_id', '=', cellId)
+      .where('cell_memberships.ended_at', 'is', null)
+      // Ordered so two identical requests answer identically. Member ID is total and
+      // encodes nothing (section 3), which is what makes it a safe tie-break.
+      //
+      // **The keyset is spelled out rather than expressed as a row comparison against a
+      // looked-up key.** The looked-up form is what a first version wrote, and it did
+      // not run at all: a row constructor compared against a single-column subquery is
+      // `subquery has too few columns`, refused at analysis before any row is read, so
+      // every request following a cursor was a 500. `roster-cursor.ts` records why the
+      // key travels in the cursor instead. A keyset rather than an offset, which
+      // section 22 forbids for the reason it gives: a member added mid-paging would
+      // shift every subsequent page by one.
+      .$if(after !== null, (query) =>
+        query.where((eb) => {
+          const key = after as RosterCursor;
+
+          return eb.or([
+            eb('persons.last_name', '>', key.lastName),
+            eb.and([
+              eb('persons.last_name', '=', key.lastName),
+              eb('persons.first_name', '>', key.firstName),
+            ]),
+            eb.and([
+              eb('persons.last_name', '=', key.lastName),
+              eb('persons.first_name', '=', key.firstName),
+              eb('persons.member_id', '>', key.memberId),
+            ]),
+          ]);
+        }),
+      )
+      .orderBy('persons.last_name')
+      .orderBy('persons.first_name')
+      .orderBy('persons.member_id')
+      .limit(page.limit)
+      .execute();
+
+    return rows.map((row) => ({
+      person_id: row.person_id,
+      member_id: row.member_id,
+      full_name: [row.first_name, row.middle_name, row.last_name]
+        .filter((part): part is string => part !== null && part !== '')
+        .join(' '),
+      last_name: row.last_name,
+      first_name: row.first_name,
+      started_at: row.started_at,
+    }));
+  }
+
+  /**
+   * The Cell's leader **as of an instant**, which is a different question from
+   * `leaderForScopeWithin` above and must not be answered by it.
+   *
+   * That one answers *who may act on this Cell now* — the current leader, falling back
+   * to the last where the Cell is closed. This answers *who led it then*: the
+   * assignment row covering the instant, which is the predicate
+   * `assert_membership_same_network` uses.
+   *
+   * **Section 7 says "as of the period being viewed", and an earlier version of this
+   * paragraph paraphrased that as "ignoring dates entirely", which is the opposite.**
+   * The fallback to the last leader is scoped to a *closed* Cell rather than being a
+   * general licence. What settles which of the two a write uses is section 7 as
+   * amended for a backdated write: authority is decided as of now, because the actor
+   * is acting now — otherwise a leader whose Cell was handed away yesterday could
+   * reclaim authority over it by dating the action far enough back. The relationship
+   * being recorded is decided as of its own effective date, because that is the
+   * period it describes.
+   *
+   * **The two coincide for every membership written at `clock_timestamp()` and part
+   * company the moment one is backdated**, which is how a closure reached a raw
+   * `check_violation`. A closure backdated to February that disperses a member into a
+   * Cell created in August has a destination with no leader in February; the scope
+   * rule answers with the current leader, the trigger finds no row, and the caller
+   * gets `INTERNAL_ERROR` at COMMIT instead of an answer. `CellsMembershipService`
+   * records that these two rules agree "in every state migration 0009 permits" and
+   * that keeping them agreeing is something to watch rather than something the code
+   * guarantees — a backdated closure is the state where they stop.
+   *
+   * Returns null where the Cell had no leader then, including where it did not exist.
+   * A caller comparing Networks owes an answer for that rather than letting the
+   * deferred trigger raise.
+   *
+   * **Only that null answer is observable today, and it is stated here rather than
+   * left for somebody to find by deleting the date filter.** Which row is selected
+   * cannot change a Network comparison, because `cell_leaderships_stay_in_network`
+   * makes every leader a Cell ever has belong to one Network — so a case pinning the
+   * *selection* would pass against a method that ignored dates, and one was written
+   * before this was noticed. The filter is written correctly anyway, on the same
+   * reasoning `isCurrentCellLeaderWithin` gives below: the rule that makes the two
+   * agree is a constraint trigger, and `pg_restore --disable-triggers` skips one.
+   *
+   * The closure's audit entry for the ended leadership uses this too, and there the
+   * answer is provably the open row: the floor's second term puts every *closed*
+   * leadership `ended_at` at or below the effective date, so no earlier stint can be
+   * covering it.
+   */
+  async leaderAsOfWithin(
+    executor: Db | Transaction<Database>,
+    cellId: string,
+    at: Date,
+  ): Promise<string | null> {
+    const row = await executor
+      .selectFrom('cell_leaderships')
+      .select('person_id')
+      .where('cell_id', '=', cellId)
+      .where('started_at', '<=', at)
+      .where((eb) => eb.or([eb('ended_at', 'is', null), eb('ended_at', '>', at)]))
+      // **Ordered, and with a real tie-break rather than the one word.** Leadership
+      // periods are a contiguous non-overlapping chain, so at most one row covers any
+      // instant — but contiguity is a **trigger**, and `pg_restore --disable-triggers`
+      // skips a trigger. In exactly that state two rows can share a `started_at`: the
+      // pair a section 5 correction leaves. So `started_at DESC` alone chooses
+      // arbitrarily there, which a first version of this comment called a tie-break
+      // while having none. These are the three keys `leaderForScopeWithin` above
+      // documents at length and settles on; `assert_membership_same_network` carries
+      // only the first, which is a narrower guarantee than this needs rather than a
+      // reason to match it.
+      .orderBy('started_at', 'desc')
+      .orderBy('ended_at', (ob) => ob.desc().nullsFirst())
+      .orderBy('id', 'desc')
+      .limit(1)
       .executeTakeFirst();
 
     return row?.person_id ?? null;

@@ -5256,20 +5256,651 @@ grepping for the rule rather than reading the sentence asserting it was there. T
 have been the seventh, made knowingly.
 
 
+### 2026-08-29 — The closure ordering and the closure floor, settled by running the database
+
+The two rulings withdrawn from the closure pre-flight (#42), and the reason they are
+recorded here rather than re-argued: each had been written three times in prose and
+refuted three times, the last by `architecture-guardian` reproducing a deadlock. The
+standing instruction was to build the mechanism first and let `SKILL.md` record what
+survived, so the branch opened with a harness and no endpoint.
+
+**The harness measured the unfixed world first, and that is what made it useful.** Two
+of its four cases asserted that a deadlock *occurs*. Applying the candidate ordering
+turned both red — the second closure waits at the bound instead of cycling — and only
+then were they rewritten as the cases the ordering must keep green. A harness written
+against the fixed world could not have shown the fix worked.
+
+**The ordering has three clauses and each is held by a case that fails without it.**
+
+*Advisory locks on people first, then the `cells` rows.* A membership write already
+takes that pair in that order, so it was fixed by an existing writer rather than free
+to choose. The reverse was staged and PostgreSQL answered `40P01`.
+
+*Every `cells` row up front, in one order.* Ascending canonical identifier, because a
+`uuid` comparison is case-insensitive and two callers naming one Cell in different
+cases would otherwise sort it to different positions — the third place on this project
+that defect has been reachable.
+
+*Each row taken once, at the final strength.* **This is the clause every prose version
+missed.** Both parties taking every row shared and then upgrading their own to
+exclusive deadlock exactly as if nothing had been sorted, because the upgrade is not
+sorted. So the closing Cell is taken `FOR NO KEY UPDATE` — what its own `UPDATE`
+takes — and a destination `FOR SHARE`, which is all the closure needs and which
+`FOR UPDATE` would have made expensive: that conflicts with the `FOR KEY SHARE` a
+`cell_memberships` insert takes through its foreign key, so closing one Cell would
+block every concurrent add into every Cell it disperses into.
+
+**What unblocked it was not a better ordering but a different reading of the
+operation.** Every earlier attempt assumed a closure must read its member list before
+knowing whom to lock, which is a read another transaction can invalidate. It does not:
+Section 10 already requires an explicit decision about every member, so the client
+sends the list and the people are an input. What the operation then owes is a check
+that the list is the Cell's actual membership, made after the locks — Section 14's
+version check reached through a membership list. A member added or removed since the
+client read the roster refuses the closure and asks for it to be re-read.
+
+**The floor was blocked behind a question, and the question had to be answered by
+narrowing a rule rather than reusing it.** Section 10 says no row of a closed Cell may
+end after the Cell did, and whether that reached category and schedule rows was open.
+It does — expressed as **in force at or after the closure** rather than **ends after
+it**, which differ on exactly one case: a zero-length row, in force at no instant.
+
+Admitting that case is what makes a Cell closable at all. A schedule change takes
+effect at the start of the following month, so a Cell with one queued holds two rows
+carrying next month's timestamps, and neither can be ended at an earlier closure
+because `period_ordered` refuses a period ending before it starts. Under the literal
+wording such a Cell is closable by nobody. The closure instead ends each row at the
+later of the closure and the row's own start, so a change that will never take effect
+goes inert.
+
+That is also what makes the floor statable: category and schedule rows contribute **no
+term**, because that write is satisfiable for any date. A floor including them sat in
+the future for every rescheduled Cell, which is how two of the three withdrawn
+formulations died. What remains is two terms over two tables — the start of every open
+leadership and membership row, and the end of every closed one — and the bound is
+**inclusive**, unlike Section 4's, because a closure at exactly an open row's start
+closes a relationship that genuinely had no duration.
+
+Reusing Section 10's own neighbouring wording verbatim is what produced the unclosable
+Cell, which is Section 25 rule 19 met in the one place the pre-flight had been warned
+about it. The reason that rule has its shape — a leadership or membership row can
+always be ended at the closure instant — is exactly the reason it does not carry.
+
+**Two rules were unpinned when first written, and both are recorded rather than
+quietly fixed.** Term (b) of the floor could be deleted with the whole suite green,
+because every floor case bound on an *open* row — the identical gap Section 5's own
+backdate floor had on 2026-08-23. And the in-transaction scope re-check Section 10
+requires could be deleted with everything green, because every case was decided the
+same way by the guard; separating the two layers needs the guard's answer made stale
+on purpose, which is a concurrent handover. The harness's own sort had the same
+problem: removing it left all five cases passing, because nothing interleaved the two
+acquisitions.
+
+**And one thing Section 10 had promised was still owed.** It said the destination of an
+ordinary membership move would be re-checked inside its transaction "with the closure
+endpoint, which builds the mechanism". The mechanism is built, so that half is built
+too — the membership endpoint had been re-checking only the source Cell, which the
+guard never resolved, and leaving the destination on an answer taken before the request
+queued.
+
+Written to `SKILL.md` Sections 5, 10 and 22, and to migration `0010`. Verified by
+grepping for each rule rather than by asserting it here, this log having recorded at
+least six false "written to Section x" claims.
+
+### 2026-08-29 — Twelve findings on the closure, and the three the review escalated
+
+`architecture-guardian` on the closure branch. **It could not construct a cycle**, and
+said so having traced every pair — two closures crossing, closure against a move in
+either direction, closure against an add into the closing Cell and into a destination,
+closure against a configuration change, and the row locks the deferred triggers in 0009
+and 0010 take at COMMIT. The property carrying it is that no `cells` row is ever held
+while an advisory lock is waited for, and that every lock a commit-time trigger takes is
+already held at equal or greater strength. That half of the work stood.
+
+Everything it found was elsewhere, and two were live 500s.
+
+**A backdated dispersal into a Cell created later was a raw `check_violation`.** The
+destination check resolved the Cell's leader with `leaderForScopeWithin`, which is
+section 7's rule for a *scope* — current, falling back to last, ignoring dates —
+while `assert_membership_same_network` resolves the row *covering* the membership's
+`started_at`. `CellsMembershipService` already records that the two "coincide in every
+state migration 0009 permits" and that keeping them agreeing is something to watch
+rather than something the code guarantees. A backdated closure is the state where they
+stop: a membership dated February in a Cell created in August has no leader to compare
+against, the scope rule answers with the current one, and the deferred trigger raises at
+COMMIT. `leaderAsOfWithin` is the second question asked properly.
+
+**A closure reasoned `OTHER` with no note was a 500**, because the DTO's docblock
+described conditional validation the decorators did not carry — a rule stated in a
+comment and enforced nowhere, which is the shape this log keeps recording. The same
+block also claimed a note was "refused otherwise", which was false in the other
+direction.
+
+**Three statements were false of the code**, and one was a promise a file made about
+itself. `postgres-errors.ts` said its narrowness "lands with the closure endpoint,
+which is the first operation that can produce `40P01` in ordinary practice"; the
+endpoint landed and the predicate was not widened, so a deadlock still rendered
+`INTERNAL_ERROR` against section 5's own rule. `cell-lock.ts` then asserted the
+opposite of that. And the closure service cited a test file that does not exist —
+`api/test/cells/closure-floor.e2e.spec.ts`, for cases living in
+`api/test/api/cell-closure.e2e.spec.ts`.
+
+**Section 21 requires an audit entry for the leadership ending and the closure wrote
+none**, on the reasoning that it "is not a separate decision, and its date is the
+closure's". That is the reasoning the same commit *rejects* twelve lines earlier for
+memberships — a dispersal is a move and must be findable as one whichever operation
+performed it — and section 21 makes no exception for leadership.
+
+**Section 5's own new lock-strength rule was broken by an existing writer.**
+`CellsConfigurationService` took `FOR UPDATE` on a `cells` row it does not write, which
+the rule this branch added refuses: `FOR NO KEY UPDATE` conflicts with itself, which is
+all that service needs, and does not conflict with the `FOR KEY SHARE` a membership
+insert takes through its foreign key. Writing a rule and leaving the neighbouring caller
+non-compliant is how a rule becomes advisory.
+
+**And the `ResourceBusyError` branch of the floor refusal is unreachable**, with a
+comment claiming a reachability the strict comparison above it excludes. It was copied
+from `PeopleReassignmentService`, where the identical shape **is** reachable because
+section 5 lets Admin backdate a pastoral row; Cell leadership and membership rows cannot
+be backdated, so the reason does not carry. Section 25 rule 19, in the branch whose own
+entry is about rule 19. Kept as a fail-safe with an honest comment rather than deleted,
+because the floor is read from rows rather than guaranteed by a constraint.
+
+**Three Stop Conditions, all three settled here.**
+
+*What reason a backdated closure requires.* The note, not the closure reason. Every
+closure carries a reason from the fixed list, so reading section 7's "always requires a
+reason" as satisfied by it makes the requirement vacuous. What is owed is an explanation
+of the backdating, which is what section 5 requires of a backdated reassignment and for
+the reason section 10 gives: a backdated closure erases the scheduled-meeting count a
+coverage line is read against.
+
+*Whether a closure may rewrite an already-closed configuration row's `ended_at`.* It
+may, and section 10 now says so rather than leaving the code to do it silently. This is
+the one write in the system that shortens a closed effective-dated period in place. It
+is confined — the value replaced always reaches beyond the closure, so what is removed
+is a period the Cell no longer existed for — and the alternatives are all worse: leaving
+the row is the forbidden state, refusing makes a rescheduled Cell unclosable, opening a
+replacement records a schedule for a Cell that has none.
+
+*Whether an explicit effective date of today is backdating.* It is not. Section 10 says
+"earlier than the current day", and the code asked for the capability on any supplied
+date — stricter than the specification, with the difference unrecorded, and refusing a
+leader `SCOPE_DENIED` for a request section 10 permits. The floor is what actually
+refuses such a date, which is the more useful answer.
+
+**One thing the review found that needed building rather than fixing.** Making the
+member list mandatory turned `GET /api/v1/cells/{id}/members` from a documented-but-
+unbuilt route into a blocker: the closure refuses any list that is not exactly the
+current membership, so no client could construct a valid request. It is built, guarded
+by `cell.manage_membership` against the Cell — the same target the write routes declare,
+and a derivation rather than a new rule, since section 7's capability list is closed.
+The cost is escalated rather than hidden and is listed as open below.
+
+### 2026-08-29 — Ten more on the fixes, and the one the fixes introduced
+
+Second `architecture-guardian` pass, scoped to the fix batch. The lock ordering was
+confirmed again and every defect was in what the batch had done to everything else —
+which is this repository's recorded rate for a fix batch rather than a surprise.
+
+**The relaxation broke the rule it was relaxing.** Deciding "earlier than the current
+day" moved the test onto `manilaDayOf(new Date())` at handler entry — a different clock
+and a different moment from the `clock_timestamp()` the write is stamped with, read
+after up to three seconds of lock waiting. A request arriving at 23:59:59.7 and waiting
+past Manila midnight ends its rows at *yesterday's* midnight with no capability asked,
+no note required and no `effective_date.backdated` entry. It fails open, on the endpoint
+section 7 says backdating must not be reachable from without the grant.
+
+That is section 5's own rule about the effective instant, applied one field over: an
+operation reads what it will rely on **after** the lock. Issue #16 was the same fault on
+the instant itself. The decision and the capability check both moved inside the
+transaction; `coversWith` takes the executor, and the two error codes are chosen at the
+call site because it collapses them.
+
+**And the comment arguing for the strict version was left in place**, ten lines below
+the code that now does what it forbids — two contradictory comments on one branch, with
+the stale one surviving. Its stated reason was the live hazard above, discarded without
+being answered.
+
+**Section 7 was misquoted, and the misquote was load-bearing.** §7 resolves a Cell
+"as of the period being viewed"; the batch paraphrased that as "ignoring dates
+entirely", which is what licensed resolving a dispersal destination's scope through its
+current leader. Corrected, and the question it papered over is settled below.
+
+**The note fix was half-closed.** `@MinLength(1)` accepts two spaces and
+`cells_other_requires_note` compares `btrim(...) <> ''`, so the same `INTERNAL_ERROR`
+was still reachable — and a whitespace note satisfied the new backdating requirement,
+so a backdated closure could carry a blank explanation.
+
+**The new roster route ignored two things §22 settles.** It returned a bare `members`
+array rather than the collection envelope, on an API §22 makes additive-only — the
+moment before the first client is the only moment to fix that. And it answered 200 with
+an empty list for a Cell that does not exist, while `POST /cells/{id}/closure` answers
+`NOT_FOUND` in the same state, with a docblock justifying it by inverting §22's Cell
+ruling: that ruling closes the oracle through the guard's uniform `SCOPE_DENIED` and
+then *provides* `NOT_FOUND` for an in-scope actor.
+
+**Three more statements were false of the code**: the DTO's `effective_date` docblock
+still described the rule the same commit replaced, migration 0010 named a lock strength
+the same commit changed ten lines above the sentence, and two configuration test
+comments named `FOR UPDATE` after the service stopped taking it.
+
+**Three fixes had nothing that could fail on them**, and the `40P01` widening had now
+been promised twice in a docblock and delivered once. `test/unit/lost-lock-wait.spec.ts`
+holds it. `isLockTimeout` also kept a name that no longer said what it matched, which is
+the ground this repository renamed `cells_relationships_match_state` on one slice ago.
+
+**And one thing the fixes introduced that the review did not find.** The case written to
+pin `leaderAsOfWithin`'s row selection does not pin it: mutating the method to ignore
+dates leaves it green, because `cell_leaderships_stay_in_network` makes every leader a
+Cell ever has one Network, so which row is selected cannot change a Network comparison.
+Only the *null* answer is observable, which is what the defect actually was. The test's
+own comment claimed otherwise. Corrected in the test and stated in the read service,
+rather than left as a green case asserting more than it holds — the fault this log
+records more than any other, committed inside the batch correcting six instances of it.
+
+**Two Stop Conditions, both settled.**
+
+*What "the period being viewed" is for a write carrying a past effective date.* **Now.**
+Authority resolves through the Cell's current leader whatever date the write is applied
+at; the relationship being recorded resolves as of its own effective date. The direction
+is forced: resolving authority as of the effective date would let a leader whose Cell
+was handed away yesterday reclaim it by dating the action back far enough — privilege
+recovered through a date field, which is §5 invariant 4's shape reached another way.
+Nothing is lost the other way, since the leader who did hold it then is not thereby
+entitled to act on it now. Written to §7.
+
+*Whether a Cell roster may disclose the Cell membership of a person outside the reader's
+pastoral scope.* **It may, and §8 now says why rather than being silently excepted.**
+§8's forbidden list bounds the church-wide *directory* — it is written about searching,
+and reading it as a general rule would forbid a Cell Leader their own roster. The
+distinction is direction: a search starts from a person and would let any leader
+assemble a profile of anyone; a roster starts from the Cell and is shown only to those
+§10 authorizes to *change* that membership. §10 independently requires the members to be
+presented at closure, so the disclosure is required rather than tolerated. The rest of
+§8's list — birthday, contact details, attendance, classification — is no more visible on
+a roster than in a search.
+
+The route's own justification had been wrong in the half that mattered: it argued that
+names and Member IDs are published church-wide, which is true, while the thing §8
+protects is the **association** between them and the Cell.
+
+### 2026-08-29 — Ten on the second fix batch, and the rule written with nothing that could fail on it
+
+Third `architecture-guardian` pass, scoped to the fixes. The mechanism the batch was
+mostly about — the backdating check moved inside the transaction — was confirmed
+correct: `coversWith` plus `grantCoversNothing` reproduces `authorize`'s split for every
+actor the role catalog admits, and a `church` target short-circuits before the executor
+is used. Everything found was again in what the batch said, and in what it left unpinned.
+
+**The rule the batch wrote into section 7 had nothing that could fail on it.** Section 7
+gained "a closure backdated across a destination's handover is scoped against the leader
+who holds that Cell today", and mutating the code to resolve as of the effective date
+left the whole suite green — every destination case either closed as Admin, whose Whole
+Church grant returns true before the target is read, or named a Cell that never changed
+hands. That is this branch's own headline fault, committed on the rule it added to the
+source of truth.
+
+**And the case written for it took two attempts.** The first used an undated closure, so
+both readings resolved to the same leader; the second dated it *after* the destination's
+handover, which does the same. It discriminates only with a Leader holding an explicit
+Whole Church grant of `records.backdate_effective_date` — because an undated closure
+takes effect now and only Admin can otherwise backdate — closing at a date *before* the
+handover. Three versions, two of which passed against the mutation they named.
+
+**Section 8's new paragraph forbade what section 12 requires.** It said a member's
+attendance is "no more visible on a roster than in a search", and section 12's *roster
+view* is defined as listing every member **with their attendance for the month**, to the
+identical reader set. The amendment was written about `GET /cells/{id}/members` and used
+the word section 12 had already bound. Corrected by saying what each surface carries
+rather than what "a roster" does.
+
+**The day question moved in one place and not the other.** `closureTooEarly` still chose
+between "the earliest legal date is X" and "this cannot be backdated" on `Date.now()`,
+one method below the block moved for exactly that reason — and the commit message
+asserted "both halves of that comparison moved". One had.
+
+**Section 7's new paragraphs were inserted inside a bullet list**, terminating the closed
+enumeration of what a scope resolves against and leaving five target kinds in a second
+list, with three paragraphs about one member of it reading as though they governed all
+seven. Moved to a subsection of their own.
+
+**Three more statements false of the code**: `capability.guard.ts` said whether a Cell's
+existence is a `NOT_FOUND` case "is escalated in CLAUDE.md — section 22 settles it for a
+Person and for nothing else", which section 22 had settled for a Cell by name and which
+the same batch cited one file away; the new `ORDER BY started_at DESC` was called "the
+tie-break the trigger has", when neither it nor the trigger has one and the restore state
+its own reason invokes is exactly where two rows share a `started_at`; and the roster's
+docblock claimed section 22 compliance while binding no `limit`, which is the
+truncation-without-a-cursor shape this log already carries as open for
+`/people/duplicate-candidates`, arrived at deliberately.
+
+**Two Stop Conditions, both settled.**
+
+*A write carrying a **forward** effective date.* Section 7's paragraph settled only past
+dates, and `CellsConfigurationService.changeSchedule` is the one write in the system
+whose effective date is in the future. The rule generalises rather than needing a second:
+authority is decided when the write is made, whichever direction the date points, so a
+schedule change is authorized by who holds the Cell now and not by whoever may hold it
+next month. Written to section 7.
+
+*What a backdated closure with `reason: OTHER` owes.* One note, carrying both. That
+reason already requires a note, so for it alone the backdating rule adds no field — which
+is a weaker outcome than for the other four and is accepted in writing rather than taken
+silently, as the code had been taking it. The alternative is a second free-text field,
+which is structure nothing else in this specification has and section 26 would have to
+index, to obtain a distinction nothing can enforce. Written to section 10.
+
+### 2026-08-29 — Seven on the third fix batch, and a 500 on a documented parameter
+
+Fourth `architecture-guardian` pass, scoped to the third fix batch alone. The mechanism
+that batch was about — the backdating check moved inside the transaction — was confirmed
+correct for a second time, and `closureTooEarly`'s day decision was confirmed to have
+moved with it. Everything found was elsewhere, and two were live.
+
+**The pagination this branch added to satisfy section 22 could not run.** The cursor
+carried the Member ID alone and the comparison looked the other two ordering keys up in
+a scalar subquery, which compiles to a row constructor against a single-column subquery:
+`subquery has too few columns`. It is an analysis error, so it fires before a row is
+read, on every Cell and every cursor value — and `42601` is not a code
+`postgres-errors.ts` classifies, so it rendered `INTERNAL_ERROR`. A 500 on `limit`, which
+section 22 documents. I reproduced it against `dfc_ci` before acting on it.
+
+It was not confined to a read. `POST /cells/{id}/closure` refuses any member list that is
+not exactly the current membership, and this route is the only way to obtain one — so a
+Cell with more members than the page was **closable by nobody**, which is the failure the
+pagination was added to prevent, reached at 200 members instead of 500.
+
+Nothing could fail against it, for a reason worth keeping: the `$if` guard meant the
+broken SQL was never *built* unless a cursor was present, and no case supplied one.
+`tsc` was clean throughout. A green suite and a clean typecheck over a query that cannot
+be planned is the sharpest form of this branch's recurring fault.
+
+**The fix is section 25 rule 19 applied where the batch had skipped it.**
+`people.read.service.ts` already pages this shape and carries its whole key in the
+cursor, and the reason is not incidental: a lexicographic keyset needs every key it
+orders by. Carrying one key forces the lookup, and it also makes the boundary unstable —
+a member renamed between two pages moves the key the lookup would have found, so rows are
+skipped or repeated. The batch reused the `limit + 1` half and the envelope half and
+re-derived neither of the other two.
+
+The cursor is now base64url of all three keys, which also closes the second half: what it
+emitted was a bare Member ID, six digits off a sequence (section 3) and published
+church-wide (section 8), so a client could construct one — precisely what section 22 says
+a cursor must never be.
+
+**The rule this branch wrote into section 7 was written into section 8.** The three
+paragraphs were correctly lifted out of section 7's target-resolution bullet list, where
+they were terminating a closed enumeration, and reinserted eighty lines further down —
+past the section boundary. Section 7 line 1475 was left saying a Cell resolves through its
+leader "as of the period being viewed" with nothing in section 7 qualifying it, which is
+the exact ambiguity the rule exists to close, while four citations in two services and in
+this log all pointed at section 7. This is the seventh false "written to section x" claim
+recorded here and the first where the section is off by one — the failure mode the others
+share is that nobody greps, and a heading in the wrong section survives a grep for the
+*rule*.
+
+**Three unpinned rules and two false statements**, all the classes this branch has been
+recording:
+
+The `SCOPE_DENIED` case added by the previous batch pins one of the two things its comment
+claims. It does pin the error split — deleting it and throwing `CAPABILITY_DENIED`
+unconditionally reddens it, verified. It does not pin the `{ kind: 'church' }` target, and
+**nothing can**: `coversWith` discards a grant `grantCoversNothing` voids before reaching
+`scopeCovers`, so a narrower grant of a `WHOLE_CHURCH_ONLY` capability is skipped whatever
+target it is given, and a Whole Church grant returns true on `scopeCovers`'s first line
+before the target is read. Only `ADMIN` holds `records.backdate_effective_date`, at Whole
+Church, so both routes bypass the argument. The mutation was run and the case stayed green.
+The choice is right on section 7's terms and unfalsifiable, which is now said in both
+places rather than implied by a green case. `people.sex-correction.service.ts` already
+recorded this fact about the same capability, one module over, in a comment correcting an
+earlier version of itself.
+
+Section 10's new backdated-`OTHER` rule — one note carries both — had nothing that could
+fail on it: all fourteen backdated cases paired a date with one of the other four
+reasons, and all four `OTHER` cases were undated, so a service demanding a second
+explanation passed the whole suite. *This entry first said seventeen, which is the number
+of `effective_date` occurrences in that file — three of them are the two dated today and
+the one dated 2099, none of which is a backdate. Counting the grep rather than the thing
+the grep was standing in for, in the paragraph about a rule nothing could fail against.* Section 7's forward-dated clause is unfalsifiable by
+construction, `changeSchedule` being its only subject and no leadership row existing at a
+future instant; that one is now said in the docblock, as its two neighbours already do.
+
+And a comment the batch inserted into a *pre-existing* case described the case below it:
+Rosalio's placement under the root is what makes the Leader-actor case discriminate, and
+the case it was written into closes as Admin, whose Whole Church grant returns true before
+any target is read.
+
+**What this pass did not find is worth recording too**, because three passes running had
+found a live defect in the previous batch's own mechanism and this one did not: nothing
+reads a host clock or an authority outside the transaction that relies on it, in either
+service.
+
+**The Stop Condition is listed as open rather than answered.** Section 22 does not define
+what a collection endpoint does with a forged, stale or unparseable cursor. The roster
+now matches `GET /api/v1/people` — treated as absent — because two endpoints on one API
+answering differently is the thing worth avoiding until the rule exists, and because it
+discloses nothing: the worst a tampered value does is start the page elsewhere in a roster
+the reader may already see in full. That is consistency with the only implementation this
+repository has, not a ruling.
+
+### 2026-08-29 — Five on the fourth fix batch, and a bound that moved underneath its payload
+
+Fifth `architecture-guardian` pass, scoped to the fourth batch alone. The mechanism that
+batch was about — the three-key cursor and the keyset consuming it — was traced and
+executed and is correct: the comparison is total, since all three keys are `NOT NULL`
+with not-blank checks on the names, it uses the same operators and collation as the
+`ORDER BY` so it cannot disagree with the ordering, and `limit + 1` emits a cursor iff a
+further row exists. One live defect, one unpinned rule, three statements broader than the
+code.
+
+**A bound on a cursor is a bound on its payload, and this one changed underneath its
+bound.** `@MaxLength(200)` was written when the cursor was a bare Member ID of eight
+characters. The batch that made it carry two names rewrote the docblock directly above
+the decorator and left the number — so the server can emit a cursor its own DTO refuses,
+answering `VALIDATION_FAILED` on a value the client was handed. On this route that is the
+defect the batch had just fixed, one status code milder: the closure needs a member list
+that is exactly the current membership, this route is the only way to build one, so a
+Cell over the page size is closable by nobody.
+
+**The precedent cited for the fix was carrying the same defect**, which is the part worth
+keeping. `people.dto.ts` bounds its cursor at 500 and was named — by the review and by
+`roster-cursor.ts` — as comfortably fitting the payload. It does not: measured, the
+roster's worst case is 870 and `/people`'s is 899, because its third key is a UUID rather
+than a Member ID. Copying 500 would have been section 25 rule 19 for the third time on
+this branch, in the fix for a finding whose own heading is rule 19.
+
+So the bound is **measured rather than borrowed**, and the arithmetic is the interesting
+half: `class-validator` counts UTF-16 units, so the costliest 100 units is 100
+three-byte characters — a four-byte character costs two units and buys 200 bytes rather
+than 300, which makes the intuitive worst case not the worst case. It lives in
+`common/cursor.ts` because both modules use it and a bound copied into two DTOs drifts,
+and `roster-cursor.spec.ts` computes the worst payload and asserts it fits with real
+headroom, so lowering it reddens rather than waiting for a name long enough to find it.
+
+***It was first written as a derivation, and that word was wrong.*** The measurement
+covers the paths that validate a name, and `persons` stores names as bare `text` while
+the tree import writes through the services rather than a DTO and bounds nothing — so a
+300-character name is representable today and produces a 2,470-character cursor. No
+finite constant is provably sufficient while no rule states a maximum name length, and
+section 3 states none. The constant is therefore a request-size guard set about four
+times clear of any validated path, its docblock says so, and the missing rule is listed
+as open below. Found by checking my own premise rather than by the review — the premise
+being one this batch had just written into three files. `/people` is fixed in
+the same change, on the precedent this repository set on 2026-08-23: a pre-existing defect
+of the identical class is closed with it, because leaving it means a reader checking the
+citation finds the defect still in it.
+
+**The paging case pinned that a filter existed, not that it was lexicographic** — and the
+fixture is why. Two members with distinct last names page correctly under
+`last_name >` alone, and under `member_id >` alone. The property every one of the four
+places that justify this change names — a lexicographic keyset needs every key it orders
+by — had nothing that could fail on it, and section 3 says plainly that a congregation of
+several thousand holds two people who share a name.
+
+**The corrected fixture took two attempts, and the second is the lesson.** Three members,
+two sharing a full name, so each disjunct decides a boundary. Created in name order, the
+Member IDs come off the sequence in that same order — so the tie-break agrees with the
+ordering by accident and a `member_id`-only comparison still pages perfectly. That
+mutation was run and passed. They are now created in reverse, so the member sorting last
+by name holds the lowest Member ID, and all three mutations redden.
+
+**Three statements broader than the code**, all of one kind: a consistency claim that
+held for one step of three. "Matches `GET /api/v1/people`" was true of the decoder and
+false of the validation in front of it — different length bounds, and `/people` refusing
+an empty `cursor=` while the roster answered page one. Both now bind the same
+`@Length(1, …)`, which is the cheaper fix than narrowing a sentence that is the whole
+justification for the behaviour. And the open list's two count sentences disagreed,
+because the instruction to recount lives in the italic and the batch updated only that;
+the bolded twin, which is what a reader meets first, said thirty-one. Both now say it and
+both say they move together.
+
+The fourth finding — "seventeen backdated cases" — was already corrected in `d6833aa`
+before this pass reported, by the same method the entry recommends: counting the set
+rather than the grep that stood in for it. Fourteen.
+
+**What five passes cost, and what they bought.** 12, 10, 10, 7, 5. Every pass but the
+last found a live defect in the batch before it, and three of the five found one in the
+mechanism the previous batch had just built. The two the fourth and fifth passes found
+were both invisible to a green suite and a clean typecheck — a query that cannot be
+planned, and a bound nothing reaches until a name is long enough.
+
+### 2026-08-29 — Four on the fifth fix batch, and a disjunction pinned with a member missing
+
+Sixth `architecture-guardian` pass, scoped to the fifth batch. First pass on this branch
+where **no finding is a defect the previous batch introduced into a mechanism it had just
+built** — the keyset itself was traced and executed and confirmed again, as were the
+arithmetic, the empty-cursor alignment, the collation-safety of the fixture and the
+cross-module change. The yield across six passes is 12, 10, 10, 7, 5, 4.
+
+**The middle keyset disjunct had nothing that could fail on it**, and the batch before
+had claimed the opposite in a commit message, a test comment and this log. Three
+mutations were run and reddened; the fourth — deleting only
+`last_name = key AND first_name > key` — was not run, and it leaves the whole suite
+green. The fixture could not reach it: `alpha` and `twin` share *both* names, so that
+disjunct selects nobody at either cursor, and the other two decide every boundary.
+
+**Three members were not enough**, and a fourth — `Santos, Berta` — gives a boundary that
+crosses on the first name within an equal last name, which is the only boundary the
+middle disjunct decides.
+
+***The rest of what this paragraph said was false and is corrected below.*** It claimed a
+second inversion was needed: that a member created after the two Anas holds a higher
+Member ID, so the tie-break would reach her and leave the middle disjunct dead unless she
+were created second. The tie-break requires `first_name = key.firstName`, and hers is
+`Berta` against a key of `Ana` — so it excludes her on the name before a Member ID is
+compared, and her creation position cannot affect any mutation. One inversion is
+load-bearing, `omega`'s, and it kills exactly one of the four mutations: `member_id >`
+alone. The other three redden on the names whatever the Member IDs are.
+
+The claim was made in four places at once — two test comments, an assertion whose stated
+purpose was to pin it, this entry, and the commit message — and the assertion pinned
+nothing, which is how a false reason gets four witnesses and no test. Found by the
+seventh pass, which reproduced it both ways round.
+
+That is the third consecutive batch on this branch to ship a disjunction pinned with a
+member missing. The other two are recorded above; what they share is that the mutation
+actually run was the one the author had in mind rather than the one the code permits.
+
+**Every sentence saying which assertion catches which mutation was wrong**, in the batch
+whose own heading is about statements broader than the code. `Zamora` was said to sort
+before `Santos`; the `last_name >` mutation was attributed to the page it does not fail
+at. The comments now name the boundary each disjunct decides, and each was checked
+against the fixture rather than against the intention.
+
+**`NAME_FIELD_MAX_LENGTH` was not what any DTO enforced.** The constant existed, was read
+only by the unit case, and the eight name fields carried the literal `100` — so the drift
+the file argues against was live one field over, and widening `first_name` would have left
+the case green at 100 characters while the emitted cursor doubled. The DTOs import it now,
+which is what makes the bound's premise falsifiable: the mutation is a name field
+widening, and it reddens.
+
+**And a re-export nothing imported**, displacing the module's docblock onto itself.
+Removed on the 2026-08-24 ground that removed `rolesFor`: code with no caller.
+
+**The premise defect the pass ranked fifth had already been found and fixed**, by checking
+my own claim rather than by review — that `1024` was called a *derivation* from a
+100-character name limit which only two DTOs enforce, while the column is bare `text` and
+the tree import bounds nothing. It is a request-size guard now, says so, and the missing
+rule is on the open list.
+
+**One local incident, recorded because it cost the most time in this batch and was not a
+defect.** Twenty tests failed, including tests untouched for weeks. Stashing to the
+committed state reproduced thirteen failures on a commit CI had already passed, which is
+what showed it was environmental: an orphaned `npm test` was still running against the
+scratch database, because stopping a background task kills the shell and not the node
+processes beneath it, and two jest runs truncating the same database interleave into
+duplicate-root violations. The lesson is the diagnostic order — a local failure on a
+commit CI passed is an environment claim until proven otherwise, and the cheapest proof
+is to run the committed state.
+
+### 2026-08-29 — Five on the sixth fix batch, all of them what the batch said about itself
+
+Seventh `architecture-guardian` pass, scoped to the sixth batch. **The mechanism is sound
+and was confirmed by execution**: every disjunct is reachable, none is dead, and all four
+claimed mutations redden. Every finding is a statement — in the batch whose own heading is
+*"Every sentence saying which assertion catches which mutation was wrong."*
+
+**A fixture inversion was called load-bearing in four places and is load-bearing in none.**
+The correction is written into the sixth-pass entry above, where the claim was made. What
+is worth carrying separately is the shape: the reason `omega`'s inversion has its shape —
+Member IDs come off a sequence — was carried to a second member without re-deriving
+whether it does any work there, which is section 25 rule 19 applied to a *test fixture*
+rather than to code. The fixture was simplified rather than re-explained: an inversion
+that pins nothing is removed, not annotated.
+
+**Two more claims about which mutation lands where.** `last_name >` alone was said to land
+on the same member as the dropped tie-break; it selects only `Zamora`, so the two land on
+different people and only one of them could ever have been right. And "every mutation
+below is caught by one of these inversions rather than by the names alone" was false for
+three of the four.
+
+**A fix that half-closed on one word.** The batch replaced *derived* with *measured* in
+four files and left two occurrences in a fifth — `roster-cursor.spec.ts`, four lines above
+the paragraph it was adding — so two files edited in one commit contradicted each other on
+the single word the commit existed to correct.
+
+**And the bound's new thesis had nothing that could fail on it.** `common/cursor.ts` argues
+the constant "still refuses a query string built to be enormous", and every assertion that
+moved with it was a payload-fits check — reddening when it was *lowered*, never when it
+was raised. It could have been four million with the suite green. One character over the
+bound is now sent and refused, verified by raising the DTO's bound above the constant.
+
+Two smaller ones: the docblock said "the create and edit DTOs" where three import the
+constant, so an audit from the docblock stops one DTO short; and `SearchPeopleDto.q` kept a
+bare literal `100`, the ninth site of the number the batch had just removed from eight —
+now the name bound, since the term is matched against names and a bound below it would
+leave a full-length name searchable only by prefix.
+
+**Seven passes: 12, 10, 10, 7, 5, 4, 5.** The last two found nothing wrong with the
+mechanism. What they found is that this branch's residual defect rate is entirely in prose
+about itself, and that the prose gets a review pass of its own or it is wrong.
+
 ### Open — awaiting a ruling
 
-**One item awaits a ruling, and it blocks Stage 5. Thirty-two other things are
+**One item awaits a ruling, and it blocks Stage 5. Thirty-three other things are
 unsettled, none of them blocking. They are listed at the end, so this section is the
 whole of what is open.**
 
-*Thirty-two distinct items across thirty-two bullets. Six left when the closure
-pre-flight settled them, two came back when the review passes refuted the closure floor
-and the lock ordering three times each, and one was added when closure was found to end
-the category row a past-month report reads. It said "twenty" from the day it was
-written through six commits that added fourteen bullets without touching it, which is
-the miscount this log keeps recording, committed against the sentence whose only job
-is the number. Anyone adding a bullet updates it here, and counts rather than
-remembers: `awk '/^### Open — awaiting a ruling/,0' CLAUDE.md | grep -c '^- \*\*'`.*
+*Both numbers here are the same number and have to move together — this bolded sentence
+and the italic below it. The batch that added the thirty-second bullet updated the italic
+alone, because the instruction to recount lives only in the italic, and the bolded twin
+is what a reader meets first. Anyone adding a bullet updates both.*
+
+*Thirty-three distinct items across thirty-three bullets. Three arrived with the closure
+endpoint's reviews — whether a Cell roster read deserves a capability of its own, what a
+collection endpoint does with a cursor it cannot resolve, and whether a name has a
+maximum length — and
+two left on 2026-08-29. Those two are the
+pair that had come back: the closure effective-date floor and the cross-class lock
+ordering, each written three times in prose and refuted three times, both settled by
+the closure endpoint running the database rather than by a fourth formulation. The
+outlive-closure question left with the floor, having been the thing the floor was
+blocked behind. It said "twenty" from the day it was written through six commits that
+added fourteen bullets without touching it, which is the miscount this log keeps
+recording, committed against the sentence whose only job is the number. Anyone adding
+a bullet updates it here, and counts rather than remembers:
+`awk '/^### Open — awaiting a ruling/,0' CLAUDE.md | grep -c '^- \*\*'`.*
 
 The two Stage 3 questions that stood here — how a Cell changes hands, and what reversing a closure does — were settled the same day by the ruling above: a handover goes through request-and-approve, and a closure is never reversed. Nothing in Stage 3 is now blocked.
 
@@ -5293,9 +5924,10 @@ Two related questions have defined behaviour and are recorded in `SKILL.md` §12
 
 **Unsettled, and not blocking anything.** None of these is a Stop Condition. An implementer proceeds and settles them in passing; they are listed here because a reader looking for what is open should not have to find it inside the body of a ruling.
 
+- **What a collection endpoint does with a cursor it cannot resolve.** Section 22 fixes the cursor as opaque and requires pagination on every collection, and says nothing about a forged, stale or unparseable one — three lines mention `cursor` and none addresses it. Two endpoints exist and both now choose "treated as absent": `GET /api/v1/people`, which argues for it in a docblock, and `GET /api/v1/cells/{id}/members`, which was changed to match it on the fourth closure review rather than by decision. The consistency is deliberate and is not the ruling; what is unsettled is whether absent is right at all. Refusing is defensible — a client holding a cursor the server cannot read is in a state it should probably learn about rather than silently restart from the top — and the argument against it is that a stale cursor then strands a client with no way back, over a value that discloses nothing either way, since the worst a tampered one does is start a page elsewhere in a collection the reader may already see in full. Settle it before a third paginated collection is built, because a third one copying whichever it happened to read is how the two would diverge. Not blocking: both endpoints agree today, and `roster-cursor.ts` and `people.controller.ts` each say the question is open.
+- **Whether a name has a maximum length.** Section 3 says a name may hold any character and is silent on how many. `persons.first_name`, `middle_name` and `last_name` are bare `text` with only not-blank checks; the create and edit DTOs bound each at 100 UTF-16 units, and the tree import — which writes through the services rather than through a DTO — bounds nothing. So 100 is an implementation choice on two paths rather than a property of the data. It surfaced because a pagination cursor carries two names, so its length is unbounded exactly where the name's is: no finite bound on `CURSOR_MAX_LENGTH` is provable, and the constant is a request-size guard rather than a derivation, which its docblock now says. Not blocking — the guard sits about four times clear of anything a validated path produces, and far beyond what the spine import carries. What would settle it is a stated maximum in section 3, enforced as a `CHECK` constraint (the Definition of Done: an invariant expressible as a constraint exists as one) and applied to the import; that is a domain rule with a migration attached, which is why it is not decided in a pagination file. Whoever settles it should also say whether the limit counts characters or UTF-16 units, since section 6 already had to make that distinction for a password and got it wrong once.
+- **Whether reading a Cell's roster deserves a read capability of its own.** `GET /api/v1/cells/{id}/members` is guarded by `cell.manage_membership`, resolved against the Cell — the same target its write routes declare, chosen because §7 declares its capability list closed and inventing a name for a read is not available. The consequence is client-visible and one-directional: §7 makes `read_only` valid only on a read capability, so a grant of `cell.manage_membership` cannot be issued read-only, and nobody can be given roster visibility without also being given the power to change the roster. That is strictly more restrictive than the alternative rather than a leak, which is why it was safe to ship. What would settle it is the first screen that wants to *show* a Cell's members to somebody who should not move them — a report view, or an upline leader reviewing a branch — and Stage 5's reporting reads will ask the same question about every Cell-scoped read at once. Settle it there rather than for this route alone.
 - **What category a closed Cell has, for a report inside the month it closed.** Section 10 requires historical reports to use "the category valid at the time being reported", and the closure ruling of 2026-08-29 makes a closure end the open category row on its effective date. So a Cell closed on 10 March has no category row valid at 31 March, and Section 12 evaluates classification as of the end of the reporting month. Contained today rather than broken: Section 10 says every count of Cells and Cell categories means active Cells unless a report says otherwise, so nothing currently asks the question. Three answers look defensible — read the last category the Cell held, treat a closed Cell as having none and exclude it, or evaluate the category as of the closure date rather than the month end — and choosing between them wants a real report in front of it. Settle it in Stage 5 with the reporting queries, and note that the same question does **not** arise for the schedule row, whose closure is the point: a closed Cell must stop deriving scheduled meetings.
-- **What floor a Cell closure's effective date has.** A closure ends every open row on the Cell at the effective date, and `period_ordered` on all four tables refuses a period ending before it starts — so some dates are satisfiable by no write at all, and an operator submitting one meets a raw `check_violation` rather than the earliest legal date Sections 4 and 5 would give them. That a floor is needed is settled; what it is is not. Three formulations were written and refuted on the closure pre-flight branch, the second of which made a Cell with a pending schedule change **unclosable by anybody**: a schedule change takes effect at the start of the following month, so both the incoming row and the outgoing row it closes carry future timestamps, and a forward-dated closure is undefined. Excluding not-yet-started rows does not reach the outgoing row, which has started. **It cannot be settled before the outlive-closure question**: whether the rule that no row of a closed Cell may end after the Cell did reaches category and schedule rows, or only the leadership and membership rows the database constrains today. Section 10 states the rule for leadership and membership rows and records the category and schedule half as open. Settle both with the closure endpoint, against the schema rather than in prose.
-- **How an operation orders advisory locks against row locks.** A membership write already takes both classes — an advisory lock on the person, then a row lock on the Cell when the deferred state check reads it `FOR SHARE` at commit — so the order is already fixed by an existing writer. A Cell closure is the operation that makes the absence bite: it takes both deliberately rather than incidentally, changing a Cell's state and writing a membership row per dispersed person, and can therefore take them in the opposite order. Three orderings were written on the pre-flight branch and each was refuted, the last by `architecture-guardian` **reproducing a deadlock against PostgreSQL 16**. Two properties defeat reasoning on paper: a deferred constraint trigger takes row locks at commit in the order rows were written, which no rule reaches after the fact; and an operation cannot know which people to lock until it has read a list another transaction can invalidate before the row lock is taken. Needs a mechanism demonstrated against concurrent writers, not a rule. Three sub-questions travel with it — the ordering, the **strength** of each Cell row lock (which decides whether a meeting is a wait or a cycle), and what bounds each wait, since `lockPersonsWithin` sets no `lock_timeout` when its list is empty and a closure with nobody to disperse is exactly that case.
 - **Whether a floor breached with no effective date supplied answers `RESOURCE_BUSY` rather than `INVARIANT_VIOLATION`.** `NetworksService.floorBreach` returns a 409 whose message says "Retry in a moment" — the status and the advice on opposite sides of Section 22's store/release split, since a 4xx is stored against the idempotency key and replayed for the whole retention. `PeopleReassignmentService.reassignmentTooEarly` has answered `RESOURCE_BUSY` for the same case on the sibling path since `216be37` (2026-08-23), and Section 5 still describes that path as answering `INVARIANT_VIOLATION`, so the specification has been wrong about it since. Changing it is a ruling rather than a fix, and needs **two** amendments neither of which is derivable: Section 4 says an undated correction "always succeeds" and has no floor to clear, which the branch contradicts — reachable because the comparison is `<=` and `new Date()` is millisecond-resolution, so a Person encoded and corrected inside one millisecond collides; and Section 22 defines `RESOURCE_BUSY` as a wait that timed out or a deadlock victim, which this is neither, the lock having been acquired cleanly. Deliberately split out of the issue #16 fix rather than settled inside it. It is pinned by nothing on either path today, and it is deterministically stageable — but by a raw `network_assignments` row starting in the **future**, not at `now()`. Now that the instant is read after the lock, a row starting at `now()` leaves `effectiveAt >= bound.at` and the branch fires only on exact millisecond equality, which is a coin flip rather than a test. Nothing bounds `started_at`: the table carries `period_ordered` and no more.
 - **Whether the archived-and-merged refusals should be database constraints.** Section 10 gained three refusals on 2026-08-29 — an archived Person, a merged Person, and somebody already in the Cell — and the first two are the same rule `assertLeaderIsAssignable` enforces for a pastoral edge. Both are application-layer checks: contrary to what Section 10 said when the question was first written, `pastoral_assignments` carries **no** constraint for archived-or-merged either, so there is no asymmetry and the question is whether *either* should become one. The Definition of Done says an invariant expressible as a constraint exists as one, and this one is expressible — a membership under an archived Person is the corruption Section 3 refuses when archiving somebody who leads a Cell, reached one relationship over. What argues the other way is that both facts live in `people`'s tables while the constraint would sit on `cells`', so it is a trigger reading across a module boundary rather than an index. Not blocking: the checks refuse today and answer `INVARIANT_VIOLATION`; what a constraint would add is enforcement under a restore, which is the argument the Senior Pastor slot and the root seat both turned on.
 - **Whether a path identifier should be validated as strictly as one in a body.** `class-validator`'s `@IsUUID()` pins the version and variant nibbles and is on every DTO; `isUuid` — the repository's own predicate, used by the guard and by `UuidParamPipe` — does not. So `POST /cells/{id}/members` refuses as `person_id` a value the `DELETE` beside it accepts in the path. Every identifier in the database is a v4 and PostgreSQL's `uuid` takes both, so nothing is broken; what is unsettled is which predicate the API means, and Section 3's provision for a client-generated Person UUID is the case that would decide it.

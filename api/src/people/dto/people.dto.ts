@@ -15,6 +15,8 @@ import {
   ValidateIf,
 } from 'class-validator';
 
+import { CURSOR_MAX_LENGTH, NAME_FIELD_MAX_LENGTH } from '../../common/cursor';
+
 import type { CivilStatus, Sex } from '../../database/schema';
 
 /**
@@ -48,16 +50,16 @@ const CIVIL_STATUSES: CivilStatus[] = ['SINGLE', 'MARRIED', 'WIDOWED'];
  */
 export class CreatePersonDto {
   @IsString()
-  @Length(1, 100)
+  @Length(1, NAME_FIELD_MAX_LENGTH)
   first_name!: string;
 
   @IsOptional()
   @IsString()
-  @Length(0, 100)
+  @Length(0, NAME_FIELD_MAX_LENGTH)
   middle_name?: string | null;
 
   @IsString()
-  @Length(1, 100)
+  @Length(1, NAME_FIELD_MAX_LENGTH)
   last_name!: string;
 
   /**
@@ -120,17 +122,17 @@ export class CreatePersonDto {
 export class EditPersonDto {
   @IsOptional()
   @IsString()
-  @Length(1, 100)
+  @Length(1, NAME_FIELD_MAX_LENGTH)
   first_name?: string;
 
   @IsOptional()
   @IsString()
-  @Length(0, 100)
+  @Length(0, NAME_FIELD_MAX_LENGTH)
   middle_name?: string | null;
 
   @IsOptional()
   @IsString()
-  @Length(1, 100)
+  @Length(1, NAME_FIELD_MAX_LENGTH)
   last_name?: string;
 
   /**
@@ -264,11 +266,11 @@ export class ReassignPastoralLeaderDto {
  */
 export class DuplicateCandidatesDto {
   @IsString()
-  @Length(1, 100)
+  @Length(1, NAME_FIELD_MAX_LENGTH)
   first_name!: string;
 
   @IsString()
-  @Length(1, 100)
+  @Length(1, NAME_FIELD_MAX_LENGTH)
   last_name!: string;
 
   @IsOptional()
@@ -296,13 +298,34 @@ export class DuplicateCandidatesDto {
 
 export class SearchPeopleDto {
   @IsString()
-  @Length(2, 100)
+  // The upper bound is the name bound rather than a coincidence that matches it: this
+  // term is matched against `first_name`, `last_name` and the two joined, so a bound
+  // below `NAME_FIELD_MAX_LENGTH` would leave a full-length name searchable only by
+  // prefix, and would do so silently if that constant were ever raised. The minimum is
+  // its own rule — two characters, so a one-letter probe cannot page the directory.
+  @Length(2, NAME_FIELD_MAX_LENGTH)
   q!: string;
 
-  /** Opaque, and passed back unmodified (section 22). */
+  /**
+   * Opaque, and passed back unmodified (section 22).
+   *
+   * **500 was too small, and the same defect was found on the Cell roster first.** This
+   * cursor carries `last_name`, `first_name` and a UUID; the two names are bounded at
+   * 100 UTF-16 units each by the create and edit DTOs, and section 3 lets a name hold
+   * any character — so 100 three-byte characters apiece is 600 bytes before the UUID and
+   * the JSON punctuation, and base64url of that is 899. Past it the server emits a
+   * cursor its own DTO refuses, and the client is answered `VALIDATION_FAILED` on a
+   * value it was handed, with no way to page on.
+   *
+   * Fixed here rather than left, because `common/cursor.ts` cites this field as the
+   * precedent it was measured against, and a reader checking that citation would find
+   * the defect still in it. The bound is shared and explained there — and it is a guard
+   * on request size rather than a proof, because the column is bare `text` and the tree
+   * import bounds no name, which `CLAUDE.md` carries as open.
+   */
   @IsOptional()
   @IsString()
-  @Length(1, 500)
+  @Length(1, CURSOR_MAX_LENGTH)
   cursor?: string;
 
   /** Section 22: defaults to 50, maximum 200. */

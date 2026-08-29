@@ -325,6 +325,14 @@ export class CellsConfigurationService {
    * `coversWith` through the transaction; the reason it exists is not.
    *
    * The guard keeps the early, cheap refusal. This is what the write rests on.
+   *
+   * **Section 7's forward-dated clause is unfalsifiable here, and that is said rather
+   * than left to be discovered.** A schedule change is the one write in the system
+   * whose effective date is in the future, so it is the clause's only subject — and
+   * mutating this to `leaderAsOfWithin(effectiveFrom)` cannot change any answer,
+   * because no leadership row exists at a future instant that the currently open row
+   * does not already cover. The rule is right and no test can hold it; it acquires one
+   * the day a leadership row can be opened ahead of time.
    */
   private async assertStillInScopeWithin(
     trx: Transaction<Database>,
@@ -359,7 +367,20 @@ export class CellsConfigurationService {
   /**
    * Bound this transaction's waits, take the Cell exclusively, and refuse a closed one.
    *
-   * **`FOR UPDATE`, and a shared lock was tried first and was wrong.** Two
+   * **`FOR NO KEY UPDATE`, and both weaker and stronger were tried and were wrong.**
+   *
+   * It was `FOR UPDATE` until section 5 gained the Cell-lock rule with the closure
+   * endpoint, and that rule refuses it: an operation takes the weakest strength that
+   * does the job for each row, and `FOR UPDATE` additionally conflicts with the
+   * `FOR KEY SHARE` a `cell_memberships` insert takes through its foreign key — so a
+   * configuration change blocked every concurrent add into that Cell mid-statement,
+   * a cost with nothing to buy it. This service writes no `cells` row, but it needs
+   * mutual exclusion against a second configuration writer, and `FOR NO KEY UPDATE`
+   * conflicts with itself while `FOR SHARE` does not. That is the strength the
+   * operation needs.
+   *
+   * Below is why a shared lock was wrong, which is unchanged and is the reason the
+   * exclusion is needed at all. Two
    * configuration changes on one Cell — its leader and their upline, at the same
    * moment — both read the open row, and a shared lock lets both proceed. T1 closes
    * that row and opens its replacement; T2's blocked `UPDATE` re-evaluates under
@@ -370,7 +391,7 @@ export class CellsConfigurationService {
    * the same shape slice 3 closed for memberships, reintroduced by choosing a lock
    * strength that permitted the concurrency.
    *
-   * Exclusive, the loser waits and then re-reads: it sees the row T1 opened and
+   * Excluding, the loser waits and then re-reads: it sees the row T1 opened and
    * closes *that*, so the history chains correctly. Two configuration changes on one
    * Cell genuinely conflict, and they are rare enough that serializing them costs
    * nothing worth having.
@@ -424,7 +445,7 @@ export class CellsConfigurationService {
       .selectFrom('cells')
       .select(['cell_id', 'state'])
       .where('id', '=', cellId)
-      .forUpdate()
+      .forNoKeyUpdate()
       .executeTakeFirst();
 
     if (!cell) {

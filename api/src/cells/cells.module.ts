@@ -7,6 +7,7 @@ import { NetworksModule } from '../networks/networks.module';
 import { PeopleModule } from '../people/people.module';
 
 import { CellsController } from './cells.controller';
+import { CellsClosureService } from './cells.closure.service';
 import { CellsConfigurationService } from './cells.configuration.service';
 import { CellsMembershipService } from './cells.membership.service';
 import { CellsReadService } from './cells.read.service';
@@ -36,9 +37,10 @@ import { CellsService } from './cells.service';
  * `admin/settings` whether the encoding phase is open — each through the service
  * owning that table, inside the transaction this module opens.
  *
- * Four services, and the split is the one `people` already settled: `CellsService`,
- * `CellsMembershipService` and `CellsConfigurationService` are named for the
- * operations, `CellsReadService` for the reads another module needs. Section 2's "organise by module, never by layer" is about how the
+ * Five services, and the split is the one `people` already settled: `CellsService`,
+ * `CellsMembershipService`, `CellsConfigurationService` and `CellsClosureService`
+ * are named for the operations, `CellsReadService` for the reads another module
+ * needs. Section 2's "organise by module, never by layer" is about how the
  * application is divided and does not reach inside one, so the read seam is a
  * judgement rather than a requirement — and the boundary that *is* enforced, table
  * ownership, is unaffected by it.
@@ -46,7 +48,13 @@ import { CellsService } from './cells.service';
 @Module({
   imports: [PeopleModule, NetworksModule, AuthorizationModule, SettingsModule, AuditModule],
   controllers: [CellsController],
-  providers: [CellsService, CellsMembershipService, CellsConfigurationService, CellsReadService],
+  providers: [
+    CellsService,
+    CellsMembershipService,
+    CellsConfigurationService,
+    CellsClosureService,
+    CellsReadService,
+  ],
   exports: [CellsReadService],
 })
 export class CellsModule {}

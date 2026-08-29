@@ -1,8 +1,40 @@
-import { IsIn, IsInt, IsUUID, Matches, Max, Min } from 'class-validator';
+import { Transform, Type } from 'class-transformer';
+import {
+  ArrayMaxSize,
+  IsArray,
+  IsIn,
+  IsInt,
+  IsOptional,
+  IsString,
+  IsUUID,
+  Length,
+  Matches,
+  MaxLength,
+  MinLength,
+  ValidateNested,
+} from 'class-validator';
+import { Max, Min, ValidateIf } from 'class-validator';
 
-import type { CellCategory } from '../../database/schema';
+import { CURSOR_MAX_LENGTH } from '../../common/cursor';
+
+import type { CellCategory, CellClosureReason } from '../../database/schema';
 
 const CATEGORIES: CellCategory[] = ['YOUTH', 'YOUNG_PRO', 'COUPLE'];
+
+/**
+ * Section 10, *Closure reasons*, and the list is closed.
+ *
+ * Multiplication is deliberately absent and must not be added: when a Cell
+ * multiplies a disciple opens a new Cell and the original continues under the same
+ * leader, so multiplication creates Cells and never closes one.
+ */
+const CLOSURE_REASONS: CellClosureReason[] = [
+  'MERGED_INTO_ANOTHER_CELL',
+  'LEADER_STEPPED_DOWN',
+  'MEMBERS_DISPERSED',
+  'CREATED_IN_ERROR',
+  'OTHER',
+];
 
 /**
  * `POST /api/v1/cells` (SKILL.md section 22).
@@ -97,4 +129,173 @@ export class ChangeCellScheduleDto {
     message: 'time_of_day must be HH:MM or HH:MM:SS, in Asia/Manila wall-clock time',
   })
   time_of_day!: string;
+}
+
+/**
+ * One member of a closing Cell, and what the closer decided about them
+ * (SKILL.md section 10, *What closing does*).
+ */
+export class CellClosureMemberDto {
+  @IsUUID()
+  person_id!: string;
+
+  /**
+   * The Cell to move them to, or `null` to leave them in none.
+   *
+   * **Required, and `null` is a decision rather than an omission.** Section 10:
+   * members "must be dealt with explicitly rather than silently… Closure is not
+   * blocked on reassigning them, but it must not complete without the decision being
+   * made and recorded." An optional field would let a client leave somebody
+   * unassigned by forgetting them, which is exactly what that sentence forbids —
+   * and people left without a Cell go to section 15's attention list, which is a
+   * queue somebody has to work rather than a place to lose them.
+   */
+  @ValidateIf((decision: CellClosureMemberDto) => decision.destination_cell_id !== null)
+  @IsUUID()
+  destination_cell_id!: string | null;
+}
+
+/**
+ * `POST /api/v1/cells/{id}/closure` (SKILL.md section 10, *What closing does*).
+ *
+ * **`members` names every current member, and the server refuses the closure if it
+ * does not.** It is not an optional convenience: it is the recorded decision section
+ * 10 requires, and it is also what the operation locks people by, so a list that has
+ * gone stale is a list that locked the wrong people. The refusal asks for the
+ * membership to be re-read, which is section 14's rule that a conflict is resolved by
+ * a person rather than by last-write-wins.
+ */
+export class CloseCellDto {
+  @IsIn(CLOSURE_REASONS)
+  reason!: CellClosureReason;
+
+  /**
+   * Required where the reason is `OTHER` or the closure is backdated; optional
+   * otherwise.
+   *
+   * **The decorators are what enforce the first half, and an earlier version of this
+   * block claimed the enforcement while carrying only `@IsOptional()`.** A closure
+   * reasoned `OTHER` with no note then fell through to `cells_other_requires_note`,
+   * which nothing classifies, so it answered `INTERNAL_ERROR` — the
+   * 500-instead-of-an-answer failure this repository keeps recording, produced by a
+   * docblock rather than by the code beneath it.
+   *
+   * `@ValidateIf` rather than `@IsOptional()`, because the two differ on exactly the
+   * case that matters: `@IsOptional()` skips validation for null as well as
+   * undefined, which is how a nullable column once became an erase capability nobody
+   * decided on (section 3, the 2026-08-24 birthday ruling).
+   *
+   * The backdating half is a service check rather than a decorator: it depends on the
+   * effective date resolving to a Manila day earlier than today, which is a fact about
+   * the clock rather than about the payload.
+   *
+   * A note is permitted with any reason — `cells_note_only_with_reason` allows it, and
+   * a closure legitimately carries a sentence of context. Section 10 keeps the *reason*
+   * list closed and free of judgement (Principle 7); the note qualifies it.
+   */
+  @ValidateIf((closure: CloseCellDto) => closure.reason === 'OTHER' || closure.note !== undefined)
+  @IsString()
+  @MaxLength(500)
+  // **Trimmed, then required to be non-empty.** `@MinLength(1)` alone accepts `"  "`,
+  // which `cells_other_requires_note` does not — it compares `btrim(...) <> ''` — so a
+  // whitespace note reached the `UPDATE cells` and answered `INTERNAL_ERROR`, which is
+  // the failure this validation exists to remove, half-closed. It also satisfied the
+  // backdating rule below, so a backdated closure could carry a blank explanation and
+  // still write `effective_date.backdated` with a whitespace reason.
+  //
+  // The transform runs before the validators, so `@MinLength` sees the trimmed value
+  // and what is stored is what was checked.
+  @Transform(({ value }: { value: unknown }) => (typeof value === 'string' ? value.trim() : value))
+  @MinLength(1)
+  note?: string;
+
+  /**
+   * Asia/Manila calendar day, `YYYY-MM-DD` (section 22).
+   *
+   * Omitted, the closure takes effect now. Supplied, it must clear the floor the Cell's
+   * own leadership and membership records set — and where it is earlier than the
+   * current Manila day it is backdating, which requires
+   * `records.backdate_effective_date` and a note (section 10).
+   *
+   * **Today's date is not backdating**, though it resolves to Manila midnight and so
+   * is hours behind an undated closure. Section 10 makes the test the *day*, and the
+   * harm it guards is a closure reaching back to the first of the month.
+   */
+  @IsOptional()
+  @Matches(/^\d{4}-\d{2}-\d{2}$/, {
+    message: 'effective_date must be an Asia/Manila calendar day, YYYY-MM-DD',
+  })
+  effective_date?: string;
+
+  /**
+   * **Bounded, because it is the only unbounded list any request in this API
+   * carries.** Every entry becomes an advisory lock, one audit entry, and — for one
+   * naming a destination — a share of that Cell's row lock, which `lockCellsWithin`
+   * folds to one per Cell however many members name it. *An earlier version said "two
+   * audit entries" and "a `cells` row lock" per entry; both were wrong, and both
+   * overstated the cost this bound is set against.*
+   *
+   * Five hundred is far above any real Cell — section 2 puts the church at roughly 800
+   * Cells across three to four thousand people — and far below what would hold a
+   * transaction open long enough to matter to section 24's pool. Section 22 carries
+   * the number and the code, because a bound a client cannot discover is one it meets
+   * as an unexplained refusal.
+   */
+  @IsArray()
+  @ArrayMaxSize(500)
+  @ValidateNested({ each: true })
+  @Type(() => CellClosureMemberDto)
+  members!: CellClosureMemberDto[];
+}
+
+/**
+ * `GET /api/v1/cells/{id}/members` (SKILL.md section 22, *Pagination*).
+ *
+ * **`limit` is bound because section 22 makes pagination cursor-based on *every*
+ * collection endpoint**, and an envelope that answers `next_cursor: null` over a list
+ * it silently truncated reads as "this is the last page". A first version returned the
+ * envelope and bound no parameter, which is that shape with the truncation still to
+ * come.
+ *
+ * `next_cursor` is null for every Cell this church has, which is a fact about the data
+ * rather than a simplification: a Cell's membership is what one leader can pastor, so
+ * the default page holds every member of any Cell here. Where it does not — a Cell over
+ * the limit — the answer says so by returning `limit` rows and a cursor, rather than by
+ * returning everything.
+ *
+ * *An earlier version of this block said `next_cursor` "is still always null" four
+ * lines above describing the case that returns one, and beside code that returns one.
+ * It described the version before the pagination, in the commit that added it.*
+ */
+export class CellMembersDto {
+  /** Section 22: defaults to 50, maximum 200. */
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(200)
+  limit?: number;
+
+  /**
+   * The `next_cursor` of the previous page, passed back unmodified.
+   *
+   * Opaque, as section 22 requires: base64url of the three ordering keys the read
+   * service fixes — last name, first name, Member ID. A keyset rather than an offset,
+   * which section 22 forbids because a member added while a client pages would shift
+   * every subsequent page by one.
+   *
+   * *This said "the `person_id` the previous page ended on", which named neither the
+   * field the code emits nor the field it consumes — both are the Member ID at the
+   * time, and both are the whole key now. A client following the docblock would have
+   * sent a UUID and been answered a silent empty page reading as "last page".*
+   */
+  @IsOptional()
+  @IsString()
+  // `Length` rather than `MaxLength`, so `?cursor=` is refused exactly as
+  // `GET /api/v1/people` refuses it — the consistency this endpoint's treat-as-absent
+  // behaviour is argued from, which held for the decoder and not for the validation in
+  // front of it. The maximum is explained in `common/cursor.ts`; the 200 it replaces was
+  // sized for a cursor that carried a Member ID and nothing else.
+  @Length(1, CURSOR_MAX_LENGTH)
+  cursor?: string;
 }
