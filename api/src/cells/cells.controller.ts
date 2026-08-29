@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Param, Post } from '@nestjs/common';
+import { Body, Controller, Delete, Param, Post, Put } from '@nestjs/common';
 
 import { RequiresCapability } from '../auth/authorization/authorization.decorators';
 import { type Actor } from '../auth/authorization/authorization.service';
@@ -11,9 +11,15 @@ import {
 
 import { UuidParamPipe } from '../common/uuid-param.pipe';
 
+import { CellsConfigurationService } from './cells.configuration.service';
 import { CellsMembershipService } from './cells.membership.service';
 import { CellsService } from './cells.service';
-import { AddCellMemberDto, CreateCellDto } from './dto/cells.dto';
+import {
+  AddCellMemberDto,
+  ChangeCellCategoryDto,
+  ChangeCellScheduleDto,
+  CreateCellDto,
+} from './dto/cells.dto';
 
 /**
  * `/api/v1/cells` (SKILL.md section 22).
@@ -30,6 +36,7 @@ export class CellsController {
   constructor(
     private readonly cells: CellsService,
     private readonly membership: CellsMembershipService,
+    private readonly configuration: CellsConfigurationService,
   ) {}
 
   /**
@@ -144,5 +151,63 @@ export class CellsController {
     @CurrentIdempotency() claim: CurrentClaim,
   ): Promise<Record<string, unknown>> {
     return this.membership.remove(cellId, personId, actor, claim);
+  }
+
+  /**
+   * Change this Cell's category, effective today.
+   *
+   * Section 10: "Cell category is editable over time, e.g. Youth -> Young Pro. Keep
+   * the same Cell ID. Preserve category history with effective dates." The Cell ID
+   * deliberately does not change with it — section 10 gives that as the reason a Cell
+   * ID encodes nothing, since "an identifier such as `YTH-0042` becomes a lie the
+   * moment a Youth Cell becomes Young Pro".
+   *
+   * `PUT` rather than `PATCH`: the body carries the whole of what a category is, so
+   * there is no partial form of this request.
+   */
+  @Put(':id/category')
+  @RequiresCapability(Capability.CellManageConfiguration, {
+    kind: 'cell',
+    from: 'params.id',
+  })
+  async changeCategory(
+    @Param('id') cellId: string,
+    @Body() body: ChangeCellCategoryDto,
+    @CurrentActor() actor: Actor,
+    @CurrentIdempotency() claim: CurrentClaim,
+  ): Promise<Record<string, unknown>> {
+    return this.configuration.changeCategory(cellId, body.category, actor, claim);
+  }
+
+  /**
+   * Change this Cell's standing day and time, effective at the start of next month.
+   *
+   * Section 10 fixes the effective date and gives the reason: a month must hold
+   * exactly one schedule, or moving a Cell from Saturday to Sunday "silently rewrites
+   * the coverage figure for every earlier month". The response says
+   * `effective_from` rather than leaving a client to infer it.
+   *
+   * **This is not how a single meeting moves.** A lost venue or a clash is a
+   * `RESCHEDULED` meeting (section 13); section 10 keeps the two apart deliberately,
+   * because the schedule is the Cell's standing arrangement.
+   */
+  @Put(':id/schedule')
+  @RequiresCapability(Capability.CellManageConfiguration, {
+    kind: 'cell',
+    from: 'params.id',
+  })
+  async changeSchedule(
+    @Param('id') cellId: string,
+    @Body() body: ChangeCellScheduleDto,
+    @CurrentActor() actor: Actor,
+    @CurrentIdempotency() claim: CurrentClaim,
+  ): Promise<Record<string, unknown>> {
+    return this.configuration.changeSchedule(
+      cellId,
+      body.day_of_week,
+      body.time_of_day,
+      actor,
+      claim,
+    );
   }
 }
