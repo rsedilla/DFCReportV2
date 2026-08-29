@@ -5657,9 +5657,12 @@ recorded this fact about the same capability, one module over, in a comment corr
 earlier version of itself.
 
 Section 10's new backdated-`OTHER` rule — one note carries both — had nothing that could
-fail on it: all seventeen backdated cases paired a date with one of the other four
+fail on it: all fourteen backdated cases paired a date with one of the other four
 reasons, and all four `OTHER` cases were undated, so a service demanding a second
-explanation passed the whole suite. Section 7's forward-dated clause is unfalsifiable by
+explanation passed the whole suite. *This entry first said seventeen, which is the number
+of `effective_date` occurrences in that file — three of them are the two dated today and
+the one dated 2099, none of which is a backdate. Counting the grep rather than the thing
+the grep was standing in for, in the paragraph about a rule nothing could fail against.* Section 7's forward-dated clause is unfalsifiable by
 construction, `changeSchedule` being its only subject and no leadership row existing at a
 future instant; that one is now said in the docblock, as its two neighbours already do.
 
