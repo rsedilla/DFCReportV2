@@ -2144,6 +2144,12 @@ A handover is what a leader stepping down means where the Cell continues. Where 
 
 The Cell is the second object and carries its own rule: **the actor must have the Cell within their authorized scope**, on the same terms that govern closing it — its current leader, any leader upline of them acting within their own subtree, Admin, or a Senior Pastor. Without it an unrelated upline could give away a Cell belonging to a branch they have nothing to do with. Section 7 settles the shape: the guard checks one target, and a rule about a second object is a check in the owning module.
 
+**That check resolves `cell.manage_lifecycle` against the Cell's leader**, which is what "the same terms that govern closing it" means and is stated here so the next implementer converts the sentence above the same way this one did. The list of holders is not restated in code: `OWN_SUBTREE`, `NETWORK` and `WHOLE_CHURCH` resolve to exactly that set once the target is the Cell's leader.
+
+**It cannot be `cell.request_leadership`**, which the guard has already used. That capability is held at subtree **excluding self**, and the commonest handover there is has the actor *as* the Cell's current leader — a leader stepping down and naming their own disciple. Resolving the Cell through a self-excluding scope would refuse precisely the case this workflow exists for.
+
+The consequence is narrow and is accepted rather than discovered: an actor granted `cell.request_leadership` and not `cell.manage_lifecycle` cannot request a handover. No role is in that position by default, and the outcome reads correctly in any case — somebody who could not close a Cell also cannot give it away.
+
 No holder of the capability, at any scope, may name themselves. Without that exclusion a leader whose only Cell has closed — who keeps their account (Section 11) — could restore their own Current Cell Leader status, re-enter New Cell Leaders for the period, and restore their upline's Leaders-with-12+ count, with no upline involved and with Admin, who has no pastoral basis to judge readiness, as the only reviewer. Section 5, invariant 4 writes the same prohibition for pastoral assignment, for the same reason.
 
 **Step two — Admin approves.** The capability is `cell.approve_leadership`, held by Admin only and granted to no other role.
@@ -3309,7 +3315,7 @@ Audit important actions, including:
 - Role/permission changes
 - Attendance submission on behalf
 - Attendance corrections
-- Cell leadership requested, with the kind
+- Cell leadership request submitted, with the kind
 - Cell leadership request approved, with the kind
 - Cell leadership request declined, with the kind and the reason
 - Cell leadership opened, ended, or changed, carrying the outgoing and the incoming leader where each exists — a reader asking who led a Cell before a handover must find it here, which is the same requirement Section 5 makes of a pastoral transfer

@@ -230,19 +230,20 @@ export type AuditAction =
   // is what distinguishes it from a handover in the log. The opened half arrives with
   // the handover workflow.
   | 'cell_leadership.ended'
-  // Section 21 names three request actions: "Cell leadership requested, with the
-  // kind", "Cell leadership request approved, with the kind", and "Cell leadership
-  // request declined, with the kind and the reason".
+  // Section 21 names three request actions, all under one noun: "Cell leadership
+  // request submitted / approved / declined, with the kind" (and the reason, for a
+  // decline).
   //
-  // **One noun for all three, and section 21's first line phrases it differently.**
-  // Read literally that line gives `cell_leadership.requested`, which would put the
-  // three actions of one workflow under two nouns — and a reader asking how a leader
-  // was developed, which is exactly what section 10 calls the retained decline record,
-  // would have to know both to find the whole of it. The convention is
+  // **Section 21's first line said "Cell leadership requested" and was amended rather
+  // than transliterated.** Read literally it gives `cell_leadership.requested`, which
+  // would put one workflow's three actions under two nouns — and a reader asking how a
+  // leader was developed, which is exactly what section 10 calls the retained decline
+  // record, would have to know both to find the whole of it. The convention is
   // `<noun>.<past-tense verb>` and the noun is the thing the action happened to: a
-  // request is submitted, approved and declined, whereas no leadership exists to be
+  // request is submitted, approved and declined, whereas no leadership exists yet to be
   // "requested" and none at all is touched by a decline. Section 21's list opens with
-  // "including", so the convention governs rather than the wording.
+  // "including", so rewording one bullet is a wording change rather than a rule change
+  // — and it is the amendment rather than a comment here that keeps the two agreeing.
   //
   // `approved` is deliberately absent until the approval endpoint emits it. A member
   // of a closed union that nothing writes is the shape this repository has already

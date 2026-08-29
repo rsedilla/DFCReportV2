@@ -81,6 +81,15 @@ export class CellsLeadershipRequestService {
    * nothing. Refusing it here as well would be a rule section 10 does not state, and it
    * would be the wrong one: a `PENDING` request is not a live relationship, so section
    * 3's bar on an archived Person acquiring one is not engaged.
+   *
+   * **The cost is a slot, and it is what makes the queue non-optional.** A `PENDING`
+   * `NEW_CELL` request occupies its prospective leader's slot under
+   * `cell_leadership_requests_one_pending_new_cell`, so a request that can never be
+   * approved — one naming somebody archived the day after it was submitted — blocks
+   * every later request for that person until it is declined. Declining is cheap and is
+   * the remedy; what it needs is for somebody to see the stale row, which is why
+   * section 19 puts pending requests on the Admin queue rather than leaving them to be
+   * discovered by the next submission failing.
    */
   async request(
     input: LeadershipRequestInput,
