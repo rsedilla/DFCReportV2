@@ -5710,13 +5710,23 @@ roster's worst case is 870 and `/people`'s is 899, because its third key is a UU
 than a Member ID. Copying 500 would have been section 25 rule 19 for the third time on
 this branch, in the fix for a finding whose own heading is rule 19.
 
-So the bound is **derived rather than borrowed**, and the derivation is the interesting
+So the bound is **measured rather than borrowed**, and the arithmetic is the interesting
 half: `class-validator` counts UTF-16 units, so the costliest 100 units is 100
 three-byte characters — a four-byte character costs two units and buys 200 bytes rather
 than 300, which makes the intuitive worst case not the worst case. It lives in
 `common/cursor.ts` because both modules use it and a bound copied into two DTOs drifts,
-and `roster-cursor.spec.ts` computes the worst payload and asserts it fits, so lowering
-it reddens rather than waiting for a name long enough to find it. `/people` is fixed in
+and `roster-cursor.spec.ts` computes the worst payload and asserts it fits with real
+headroom, so lowering it reddens rather than waiting for a name long enough to find it.
+
+***It was first written as a derivation, and that word was wrong.*** The measurement
+covers the paths that validate a name, and `persons` stores names as bare `text` while
+the tree import writes through the services rather than a DTO and bounds nothing — so a
+300-character name is representable today and produces a 2,470-character cursor. No
+finite constant is provably sufficient while no rule states a maximum name length, and
+section 3 states none. The constant is therefore a request-size guard set about four
+times clear of any validated path, its docblock says so, and the missing rule is listed
+as open below. Found by checking my own premise rather than by the review — the premise
+being one this batch had just written into three files. `/people` is fixed in
 the same change, on the precedent this repository set on 2026-08-23: a pre-existing defect
 of the identical class is closed with it, because leaving it means a reader checking the
 citation finds the defect still in it.
@@ -5755,9 +5765,69 @@ mechanism the previous batch had just built. The two the fourth and fifth passes
 were both invisible to a green suite and a clean typecheck — a query that cannot be
 planned, and a bound nothing reaches until a name is long enough.
 
+### 2026-08-29 — Four on the fifth fix batch, and a disjunction pinned with a member missing
+
+Sixth `architecture-guardian` pass, scoped to the fifth batch. First pass on this branch
+where **no finding is a defect the previous batch introduced into a mechanism it had just
+built** — the keyset itself was traced and executed and confirmed again, as were the
+arithmetic, the empty-cursor alignment, the collation-safety of the fixture and the
+cross-module change. The yield across six passes is 12, 10, 10, 7, 5, 4.
+
+**The middle keyset disjunct had nothing that could fail on it**, and the batch before
+had claimed the opposite in a commit message, a test comment and this log. Three
+mutations were run and reddened; the fourth — deleting only
+`last_name = key AND first_name > key` — was not run, and it leaves the whole suite
+green. The fixture could not reach it: `alpha` and `twin` share *both* names, so that
+disjunct selects nobody at either cursor, and the other two decide every boundary.
+
+**Three members were not enough and the reason is worth keeping.** A fourth, `Santos,
+Berta`, gives a boundary that crosses on the first name within an equal last name. But
+adding her in creation order is still not enough: Member IDs come off a sequence, so a
+member created after the two Anas holds a higher Member ID and the *tie-break* reaches
+her, leaving the middle disjunct dead exactly as before. She is created **second**, so
+she sorts after both Anas by name and before them by Member ID — and only then does
+deleting the middle disjunct redden. Two inversions in one fixture, each killing a
+different mutation, and each is now asserted rather than assumed.
+
+That is the third consecutive batch on this branch to ship a disjunction pinned with a
+member missing. The other two are recorded above; what they share is that the mutation
+actually run was the one the author had in mind rather than the one the code permits.
+
+**Every sentence saying which assertion catches which mutation was wrong**, in the batch
+whose own heading is about statements broader than the code. `Zamora` was said to sort
+before `Santos`; the `last_name >` mutation was attributed to the page it does not fail
+at. The comments now name the boundary each disjunct decides, and each was checked
+against the fixture rather than against the intention.
+
+**`NAME_FIELD_MAX_LENGTH` was not what any DTO enforced.** The constant existed, was read
+only by the unit case, and the eight name fields carried the literal `100` — so the drift
+the file argues against was live one field over, and widening `first_name` would have left
+the case green at 100 characters while the emitted cursor doubled. The DTOs import it now,
+which is what makes the bound's premise falsifiable: the mutation is a name field
+widening, and it reddens.
+
+**And a re-export nothing imported**, displacing the module's docblock onto itself.
+Removed on the 2026-08-24 ground that removed `rolesFor`: code with no caller.
+
+**The premise defect the pass ranked fifth had already been found and fixed**, by checking
+my own claim rather than by review — that `1024` was called a *derivation* from a
+100-character name limit which only two DTOs enforce, while the column is bare `text` and
+the tree import bounds nothing. It is a request-size guard now, says so, and the missing
+rule is on the open list.
+
+**One local incident, recorded because it cost the most time in this batch and was not a
+defect.** Twenty tests failed, including tests untouched for weeks. Stashing to the
+committed state reproduced thirteen failures on a commit CI had already passed, which is
+what showed it was environmental: an orphaned `npm test` was still running against the
+scratch database, because stopping a background task kills the shell and not the node
+processes beneath it, and two jest runs truncating the same database interleave into
+duplicate-root violations. The lesson is the diagnostic order — a local failure on a
+commit CI passed is an environment claim until proven otherwise, and the cheapest proof
+is to run the committed state.
+
 ### Open — awaiting a ruling
 
-**One item awaits a ruling, and it blocks Stage 5. Thirty-two other things are
+**One item awaits a ruling, and it blocks Stage 5. Thirty-three other things are
 unsettled, none of them blocking. They are listed at the end, so this section is the
 whole of what is open.**
 
@@ -5766,9 +5836,10 @@ and the italic below it. The batch that added the thirty-second bullet updated t
 alone, because the instruction to recount lives only in the italic, and the bolded twin
 is what a reader meets first. Anyone adding a bullet updates both.*
 
-*Thirty-two distinct items across thirty-two bullets. Two arrived with the closure
-endpoint's reviews — whether a Cell roster read deserves a capability of its own, and
-what a collection endpoint does with a cursor it cannot resolve — and
+*Thirty-three distinct items across thirty-three bullets. Three arrived with the closure
+endpoint's reviews — whether a Cell roster read deserves a capability of its own, what a
+collection endpoint does with a cursor it cannot resolve, and whether a name has a
+maximum length — and
 two left on 2026-08-29. Those two are the
 pair that had come back: the closure effective-date floor and the cross-class lock
 ordering, each written three times in prose and refuted three times, both settled by
@@ -5803,6 +5874,7 @@ Two related questions have defined behaviour and are recorded in `SKILL.md` §12
 **Unsettled, and not blocking anything.** None of these is a Stop Condition. An implementer proceeds and settles them in passing; they are listed here because a reader looking for what is open should not have to find it inside the body of a ruling.
 
 - **What a collection endpoint does with a cursor it cannot resolve.** Section 22 fixes the cursor as opaque and requires pagination on every collection, and says nothing about a forged, stale or unparseable one — three lines mention `cursor` and none addresses it. Two endpoints exist and both now choose "treated as absent": `GET /api/v1/people`, which argues for it in a docblock, and `GET /api/v1/cells/{id}/members`, which was changed to match it on the fourth closure review rather than by decision. The consistency is deliberate and is not the ruling; what is unsettled is whether absent is right at all. Refusing is defensible — a client holding a cursor the server cannot read is in a state it should probably learn about rather than silently restart from the top — and the argument against it is that a stale cursor then strands a client with no way back, over a value that discloses nothing either way, since the worst a tampered one does is start a page elsewhere in a collection the reader may already see in full. Settle it before a third paginated collection is built, because a third one copying whichever it happened to read is how the two would diverge. Not blocking: both endpoints agree today, and `roster-cursor.ts` and `people.controller.ts` each say the question is open.
+- **Whether a name has a maximum length.** Section 3 says a name may hold any character and is silent on how many. `persons.first_name`, `middle_name` and `last_name` are bare `text` with only not-blank checks; the create and edit DTOs bound each at 100 UTF-16 units, and the tree import — which writes through the services rather than through a DTO — bounds nothing. So 100 is an implementation choice on two paths rather than a property of the data. It surfaced because a pagination cursor carries two names, so its length is unbounded exactly where the name's is: no finite bound on `CURSOR_MAX_LENGTH` is provable, and the constant is a request-size guard rather than a derivation, which its docblock now says. Not blocking — the guard sits about four times clear of anything a validated path produces, and far beyond what the spine import carries. What would settle it is a stated maximum in section 3, enforced as a `CHECK` constraint (the Definition of Done: an invariant expressible as a constraint exists as one) and applied to the import; that is a domain rule with a migration attached, which is why it is not decided in a pagination file. Whoever settles it should also say whether the limit counts characters or UTF-16 units, since section 6 already had to make that distinction for a password and got it wrong once.
 - **Whether reading a Cell's roster deserves a read capability of its own.** `GET /api/v1/cells/{id}/members` is guarded by `cell.manage_membership`, resolved against the Cell — the same target its write routes declare, chosen because §7 declares its capability list closed and inventing a name for a read is not available. The consequence is client-visible and one-directional: §7 makes `read_only` valid only on a read capability, so a grant of `cell.manage_membership` cannot be issued read-only, and nobody can be given roster visibility without also being given the power to change the roster. That is strictly more restrictive than the alternative rather than a leak, which is why it was safe to ship. What would settle it is the first screen that wants to *show* a Cell's members to somebody who should not move them — a report view, or an upline leader reviewing a branch — and Stage 5's reporting reads will ask the same question about every Cell-scoped read at once. Settle it there rather than for this route alone.
 - **What category a closed Cell has, for a report inside the month it closed.** Section 10 requires historical reports to use "the category valid at the time being reported", and the closure ruling of 2026-08-29 makes a closure end the open category row on its effective date. So a Cell closed on 10 March has no category row valid at 31 March, and Section 12 evaluates classification as of the end of the reporting month. Contained today rather than broken: Section 10 says every count of Cells and Cell categories means active Cells unless a report says otherwise, so nothing currently asks the question. Three answers look defensible — read the last category the Cell held, treat a closed Cell as having none and exclude it, or evaluate the category as of the closure date rather than the month end — and choosing between them wants a real report in front of it. Settle it in Stage 5 with the reporting queries, and note that the same question does **not** arise for the schedule row, whose closure is the point: a closed Cell must stop deriving scheduled meetings.
 - **Whether a floor breached with no effective date supplied answers `RESOURCE_BUSY` rather than `INVARIANT_VIOLATION`.** `NetworksService.floorBreach` returns a 409 whose message says "Retry in a moment" — the status and the advice on opposite sides of Section 22's store/release split, since a 4xx is stored against the idempotency key and replayed for the whole retention. `PeopleReassignmentService.reassignmentTooEarly` has answered `RESOURCE_BUSY` for the same case on the sibling path since `216be37` (2026-08-23), and Section 5 still describes that path as answering `INVARIANT_VIOLATION`, so the specification has been wrong about it since. Changing it is a ruling rather than a fix, and needs **two** amendments neither of which is derivable: Section 4 says an undated correction "always succeeds" and has no floor to clear, which the branch contradicts — reachable because the comparison is `<=` and `new Date()` is millisecond-resolution, so a Person encoded and corrected inside one millisecond collides; and Section 22 defines `RESOURCE_BUSY` as a wait that timed out or a deadlock victim, which this is neither, the lock having been acquired cleanly. Deliberately split out of the issue #16 fix rather than settled inside it. It is pinned by nothing on either path today, and it is deterministically stageable — but by a raw `network_assignments` row starting in the **future**, not at `now()`. Now that the instant is read after the lock, a row starting at `now()` leaves `effectiveAt >= bound.at` and the branch fires only on exact millisecond equality, which is a coin flip rather than a test. Nothing bounds `started_at`: the table carries `period_ordered` and no more.

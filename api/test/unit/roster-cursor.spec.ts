@@ -33,7 +33,7 @@ describe('the roster cursor', () => {
     expect(encoded).not.toContain('M-000123');
   });
 
-  it('fits the bound its DTOs enforce, at the worst payload a name can produce', () => {
+  it('fits the bound comfortably at the worst payload a validated path can produce', () => {
     // **The bound moved underneath the payload once and nothing said so.** It was 200,
     // sized for a cursor carrying a bare Member ID, and the payload became two names —
     // so the server could emit a value its own DTO refuses, which on this route means a
@@ -55,6 +55,13 @@ describe('the roster cursor', () => {
     }) as string;
 
     expect(encoded.length).toBeLessThanOrEqual(CURSOR_MAX_LENGTH);
+
+    // **Comfortably, not merely.** The bound is a request-size guard rather than a
+    // proof: `persons.first_name` is bare `text` and the tree import bounds nothing, so
+    // a longer name is representable and no finite constant is provably sufficient
+    // while no rule states a maximum. Asserting real headroom is what makes this a
+    // check on the margin rather than on a coincidence.
+    expect(encoded.length * 2).toBeLessThan(CURSOR_MAX_LENGTH);
     // And it round-trips at that size, so the bound is not merely a number that fits.
     expect(decodeRosterCursor(encoded)?.lastName).toBe(costliest);
   });

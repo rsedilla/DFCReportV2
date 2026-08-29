@@ -666,29 +666,41 @@ describe('cell membership (section 10)', () => {
       // It was not cosmetic. `POST /cells/{id}/closure` requires a member list that is
       // exactly the current membership, and this route is the only way to obtain one —
       // so any Cell with more members than the page was closable by nobody.
-      // **Three members, staged so each disjunct of the comparison is the one that
-      // decides a boundary.** Two members with distinct last names pin only that *some*
-      // filter exists: keeping `last_name >` alone, or replacing all three with
-      // `member_id >`, pages such a fixture correctly. The keyset's whole justification
-      // is that a lexicographic comparison needs every key it orders by, and section 3
-      // says plainly that a congregation of several thousand holds two people who share
-      // a name — so the disjuncts that matter are the ones a shared name reaches.
+      // **Four members, so that each of the three disjuncts decides exactly one
+      // boundary and none is dead.** Two members with distinct last names pin only that
+      // *some* filter exists, and three sharing a full name still leave the middle
+      // disjunct unreachable — `last_name = X AND first_name > Y` selects nobody when
+      // the two candidates share both names. The keyset's whole justification is that a
+      // lexicographic comparison needs every key it orders by, and section 3 says
+      // plainly that a congregation of several thousand holds two people who share a
+      // name.
       //
-      // `Santos, Ana` < `Santos, Ana` (second) < `Zamora, Zosimo`:
-      //   page 1 -> 2 crosses on first name equal, last name equal -> Member ID
-      //   page 2 -> 3 crosses on last name equal -> first name
-      //   page 3 -> end crosses on last name
+      // Name order, which is the page order:
+      //   1 Santos, Ana   (alpha)
+      //   2 Santos, Ana   (twin)   <- 1→2 crosses on the tie-break: both names equal
+      //   3 Santos, Berta (berta)  <- 2→3 crosses on the first name within an equal last
+      //   4 Zamora, Zosimo (omega) <- 3→4 crosses on the last name
+      //
+      // **Creation order is not name order, and both inversions are load-bearing.**
+      // Member IDs come off a sequence in creation order, so creating in name order
+      // makes the tie-break agree with the ordering by accident and a `member_id`-only
+      // comparison pages the fixture perfectly — that mutation was run against an
+      // earlier version of this case and passed. `omega` is created first, so it holds
+      // the lowest Member ID while sorting last. `berta` is created second, so she
+      // holds a *lower* Member ID than the two Anas while sorting after them — without
+      // which the tie-break disjunct alone still reaches her and the middle disjunct
+      // stays dead.
+      //
       // A member silently skipped here is a Cell whose closure can never name its
       // membership exactly, and therefore a Cell nobody can close.
-      // **Created in the reverse of their name order, deliberately.** Member IDs come
-      // off a sequence in creation order, so creating them in name order makes the
-      // tie-break agree with the ordering by accident — and a comparison of
-      // `member_id` alone then pages this fixture perfectly. That mutation was run
-      // against the first version of this case and passed. `omega` is created first so
-      // it holds the *lowest* Member ID while sorting *last* by name.
       const omega = await createPerson(db, {
         firstName: 'Zosimo',
         lastName: 'Zamora',
+        network: 'MENS',
+      });
+      const berta = await createPerson(db, {
+        firstName: 'Berta',
+        lastName: 'Santos',
         network: 'MENS',
       });
       const alpha = await createPerson(db, {
@@ -702,27 +714,34 @@ describe('cell membership (section 10)', () => {
         network: 'MENS',
       });
 
-      for (const person of [alpha, twin, omega]) {
+      for (const person of [alpha, twin, berta, omega]) {
         await assignTo(db, person.id, mark.id);
         await addMember(admin, markCell.id, person.id).expect(201);
       }
 
-      // Asserted rather than assumed, and both halves matter: `alpha` precedes `twin`
-      // under the tie-break, and `omega` precedes them both by Member ID while
-      // following them by name — which is what makes a Member-ID-only comparison lose
-      // it.
+      // Asserted rather than assumed, because every mutation below is caught by one of
+      // these inversions rather than by the names alone. Member IDs are `M-` plus ASCII
+      // digits, so this comparison is identical under every collation.
       const ids = new Map(
         (
           await db
             .selectFrom('persons')
             .select(['id', 'member_id'])
-            .where('id', 'in', [alpha.id, twin.id, omega.id])
+            .where('id', 'in', [alpha.id, twin.id, berta.id, omega.id])
             .execute()
         ).map((row) => [row.id, row.member_id]),
       );
 
-      expect(ids.get(alpha.id)!.localeCompare(ids.get(twin.id)!)).toBeLessThan(0);
-      expect(ids.get(omega.id)!.localeCompare(ids.get(alpha.id)!)).toBeLessThan(0);
+      const before = (a: TestPerson, b: TestPerson): number =>
+        ids.get(a.id)!.localeCompare(ids.get(b.id)!);
+
+      // The tie-break's direction: two identical names, `alpha` first.
+      expect(before(alpha, twin)).toBeLessThan(0);
+      // Sorts last by name, lowest Member ID — kills a `member_id`-only comparison.
+      expect(before(omega, alpha)).toBeLessThan(0);
+      // Sorts after both Anas by name, lower Member ID than either — kills a comparison
+      // that drops the middle disjunct and leans on the tie-break to reach her.
+      expect(before(berta, alpha)).toBeLessThan(0);
 
       const first = await request(app.getHttpServer())
         .get(`/api/v1/cells/${markCell.id}/members?limit=1`)
@@ -747,21 +766,29 @@ describe('cell membership (section 10)', () => {
           .set('Authorization', `Bearer ${admin.accessToken}`)
           .expect(200);
 
-      // Crosses on the Member ID: same last name, same first name. Fails if the
-      // tie-break disjunct is missing — `twin` is then excluded with `alpha` and the
-      // page skips to `omega`.
+      // **1 → 2 crosses on the tie-break**: `alpha` and `twin` share both names, so only
+      // the third disjunct separates them. Reddens if the tie-break is dropped, and
+      // reddens under `last_name >` alone — both skip `twin` and land on `berta`.
       const second = await page(first.body.next_cursor as string);
       expect(second.body.data).toHaveLength(1);
       expect(second.body.data[0].person_id).toBe(twin.id);
       expect(second.body.next_cursor).not.toBeNull();
 
-      // Crosses on the first name within an equal last name, then ends. Fails if the
-      // comparison is `last_name >` alone — `Zamora` sorts before `Santos`, so a
-      // last-name-only filter returns nothing here and the roster loses a member.
+      // **2 → 3 crosses on the first name within an equal last name**, which is the
+      // only boundary the middle disjunct decides — and the reason a three-member
+      // fixture was not enough. `berta` holds a lower Member ID than `twin`, so the
+      // tie-break cannot reach her and a comparison missing this disjunct skips
+      // straight to `omega`.
       const third = await page(second.body.next_cursor as string);
       expect(third.body.data).toHaveLength(1);
-      expect(third.body.data[0].person_id).toBe(omega.id);
-      expect(third.body.next_cursor).toBeNull();
+      expect(third.body.data[0].person_id).toBe(berta.id);
+      expect(third.body.next_cursor).not.toBeNull();
+
+      // **3 → 4 crosses on the last name**, then ends. `Zamora` sorts after `Santos`.
+      const fourth = await page(third.body.next_cursor as string);
+      expect(fourth.body.data).toHaveLength(1);
+      expect(fourth.body.data[0].person_id).toBe(omega.id);
+      expect(fourth.body.next_cursor).toBeNull();
     });
 
     it('treats an unreadable cursor as absent rather than refusing it', async () => {

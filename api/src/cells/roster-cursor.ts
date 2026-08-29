@@ -33,8 +33,6 @@
  * page elsewhere in a roster the reader is already authorized to see in full, and
  * refusing it would strand a client with no way back.
  */
-export { CURSOR_MAX_LENGTH } from '../common/cursor';
-
 export interface RosterCursor {
   lastName: string;
   firstName: string;
