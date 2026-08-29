@@ -13,8 +13,9 @@ import {
   ScopeDeniedError,
 } from '../common/errors/api-error';
 import { IdempotencyService } from '../common/idempotency/idempotency.service';
-import { startOfManilaDay, startOfNextManilaMonth } from '../common/time/manila';
+import { manilaDayOf, startOfManilaDay, startOfNextManilaMonth } from '../common/time/manila';
 import { DATABASE, type Db } from '../database/database.module';
+import { boundLockWaitsWithin } from '../database/person-lock';
 
 import { CellsReadService } from './cells.read.service';
 
@@ -152,7 +153,18 @@ export class CellsConfigurationService {
         cell_id: cell.cell_id,
         cell_uuid: cellId,
         category,
-        effective_from: at.toISOString(),
+        // Both renderings, as `PUT /people/{id}/sex` and `/pastoral-leader` already
+        // return them (section 22, one concept one field name). `effective_at` is the
+        // instant the rows carry, in UTC because that is unambiguous; `effective_date`
+        // is the Asia/Manila day, which is what a client displays.
+        //
+        // **The pair is not decoration here, it is the defect it prevents.** A
+        // schedule change effective 1 September carries the instant
+        // `2026-08-31T16:00:00Z`, so a client rendering a date from the instant alone
+        // shows 31 August — section 22 in one line: "Never send a date-only field as a
+        // timestamp; the conversion is where months silently shift."
+        effective_at: at.toISOString(),
+        effective_date: manilaDayOf(at),
       };
 
       await this.idempotency.completeWithin(trx, { ...claim, status: 200, body: response });
@@ -217,27 +229,36 @@ export class CellsConfigurationService {
       // Section 10, and the reason the zone is not optional: "first day of a month"
       // is a calendar-day test, so the row starts at Manila 00:00 on the 1st, stored
       // as 16:00 UTC on the last day of the previous month. Computing the month in
-      // UTC picks the wrong one for every instant in the last eight hours of a
-      // Manila day, and `cell_schedules_start_is_legal` would refuse the write.
+      // UTC picks the wrong one through the **first** eight hours of a Manila day —
+      // 00:00 to 07:59, which is UTC 16:00 to 23:59 of the day before.
+      //
+      // **And no constraint would catch it**, which an earlier version of this
+      // comment claimed. `startOfManilaDay` still yields a legal Manila month start,
+      // so `cell_schedules_start_is_legal` passes and the row is filed against the
+      // wrong month — section 10's own warning that "the defect hides in exactly the
+      // rows the rule is not about". The unit case in `manila.spec.ts` is the only
+      // thing that fails.
       const effectiveFrom = startOfManilaDay(startOfNextManilaMonth(at));
 
-      if (effectiveFrom <= current.started_at) {
-        // Reachable only where the open row already starts in the future, which is a
-        // second change inside one month: the first moved the row to the 1st of next
-        // month, and the second would close it at that same instant, leaving the
-        // zero-length row section 5 makes inert — so the Cell's current schedule
-        // would silently vanish from every as-of query. Refused with an answer
-        // rather than left to `cell_schedules_period_ordered`.
-        throw new InvariantViolationError(
-          'That Cell already has a schedule change pending for the start of next month. ' +
-            'Wait until it takes effect, or correct it rather than stacking a second ' +
-            'change on it (SKILL.md section 10, Schedule changes).',
-          {
-            cell_id: cell.cell_id,
-            pending_from: current.started_at.toISOString(),
-          },
-        );
-      }
+      // **A second change inside one month is permitted, and an earlier version of
+      // this refused it.** Both resolve to the same instant, so the second closes the
+      // pending row at its own `started_at` — the zero-length row section 5 makes
+      // inert. The reason given for refusing was that the Cell's current schedule
+      // would vanish, and that is false: the row that goes inert is the *pending*
+      // one, which was never in force. The row actually governing today is untouched.
+      //
+      // What it is instead is exactly the correction section 5 prescribes — "a row
+      // entered in error is corrected by closing it and opening the right one" — and
+      // is why `cell_schedules_period_ordered` was relaxed to `>=` on 2026-08-22.
+      // Refusing it stranded a leader who queued the wrong day: they could not fix it
+      // until it took effect, and a change made then lands a month later again, so
+      // one mistake cost a whole month meeting on a day the Cell had not agreed to.
+      //
+      // Equality is the only case this could ever have caught. `effectiveFrom` is
+      // always the next Manila month boundary, and an open row's `started_at` is
+      // either in the past or that same boundary, so there is no third case the
+      // check was protecting. The no-op refusal above is what covers "you changed
+      // nothing".
 
       await trx
         .updateTable('cell_schedules')
@@ -274,7 +295,8 @@ export class CellsConfigurationService {
         cell_uuid: cellId,
         day_of_week: dayOfWeek,
         time_of_day: timeOfDay,
-        effective_from: effectiveFrom.toISOString(),
+        effective_at: effectiveFrom.toISOString(),
+        effective_date: manilaDayOf(effectiveFrom),
       };
 
       await this.idempotency.completeWithin(trx, { ...claim, status: 200, body: response });
@@ -332,33 +354,47 @@ export class CellsConfigurationService {
   }
 
   /**
-   * Read the Cell under a row lock, and refuse a closed one.
+   * Bound this transaction's waits, take the Cell exclusively, and refuse a closed one.
    *
-   * **`FOR SHARE` although no trigger on these two tables requires it**, which is the
-   * one thing here that is not simply section 10 followed.
-   * `assert_active_cell_is_configured` reads `cells` without a lock, so nothing today
-   * orders a configuration change against a concurrent closure — and the two would
-   * both commit, leaving an open schedule row on a CLOSED Cell. That state is the one
-   * the closure ruling of 2026-08-29 forbids, and it is the same defect slice 3 found
-   * for memberships, whose remedy was exactly this lock.
+   * **`FOR UPDATE`, and a shared lock was tried first and was wrong.** Two
+   * configuration changes on one Cell — its leader and their upline, at the same
+   * moment — both read the open row, and a shared lock lets both proceed. T1 closes
+   * that row and opens its replacement; T2's blocked `UPDATE` re-evaluates under
+   * `READ COMMITTED`, still matches the row T1 just closed, and **overwrites its
+   * `ended_at`** — rewriting a closed row in place, which section 5 and Principle 12
+   * forbid — then opens a second live row and meets `23505`, which
+   * `postgres-errors.ts` does not classify, so it renders `INTERNAL_ERROR`. That is
+   * the same shape slice 3 closed for memberships, reintroduced by choosing a lock
+   * strength that permitted the concurrency.
    *
-   * It is unreachable today, because no operation closes a Cell yet. Taken now so
-   * that the correctness arrives with the closure endpoint rather than becoming its
-   * problem, and because a shared lock costs two concurrent configuration changes
-   * nothing — they conflict on the row they both write, not on this one.
+   * Exclusive, the loser waits and then re-reads: it sees the row T1 opened and
+   * closes *that*, so the history chains correctly. Two configuration changes on one
+   * Cell genuinely conflict, and they are rare enough that serializing them costs
+   * nothing worth having.
    *
-   * This takes one row lock and no advisory locks, so it raises none of the
-   * cross-class ordering question section 5 records as open.
+   * It also orders this against a concurrent closure, which was the original reason
+   * for a lock here: `assert_active_cell_is_configured` reads `cells` without one, so
+   * nothing else would stop a change committing beside a closure and leaving an open
+   * schedule row on a CLOSED Cell — the state section 10 now forbids. Unreachable
+   * today, since no operation closes a Cell yet.
+   *
+   * **This is the transaction's first lock, taken while holding nothing**, which is
+   * what makes this service unable to participate in a cycle — and it stops being
+   * true the moment a statement that takes a lock is added above it. The bound comes
+   * first because section 5 requires an operation taking row locks and no advisory
+   * locks to set it itself; `SET LOCAL` takes no locks, so it cannot be what waits.
    */
   private async lockAndReadCellWithin(
     trx: Transaction<Database>,
     cellId: string,
   ): Promise<{ cell_id: string }> {
+    await boundLockWaitsWithin(trx);
+
     const cell = await trx
       .selectFrom('cells')
       .select(['cell_id', 'state'])
       .where('id', '=', cellId)
-      .forShare()
+      .forUpdate()
       .executeTakeFirst();
 
     if (!cell) {

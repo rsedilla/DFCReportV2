@@ -86,7 +86,7 @@ export async function lockPersonsWithin(
   // in a transaction holding a pooled connection is the same liveness hazard. What
   // it requires is that a timeout raised *outside* this loop still answers
   // `RESOURCE_BUSY` rather than an unhandled 500, which `ApiExceptionFilter` does.
-  await sql`SET LOCAL lock_timeout = ${sql.raw(`'${LOCK_TIMEOUT}'`)}`.execute(transaction);
+  await boundLockWaitsWithin(transaction);
 
   // **`::uuid::text` normalizes the spelling before hashing, and that is not
   // cosmetic.** `hashtextextended` is case-sensitive; a `uuid` column comparison is
@@ -116,4 +116,25 @@ export async function lockPersonsWithin(
       throw error;
     }
   }
+}
+
+/**
+ * Bound every lock wait this transaction will make (SKILL.md section 5).
+ *
+ * `lockPersonsWithin` calls this, so a caller taking advisory locks gets the bound
+ * for free. **A caller that takes row locks and no advisory locks must call it
+ * itself**, which is the hole section 5 names: the person list is empty, the early
+ * return above fires, and nothing sets the bound — leaving the row locks the caller
+ * takes afterwards unbounded, in a transaction holding one of a bounded pool the
+ * liveness probe shares (section 24).
+ *
+ * `CellsConfigurationService` is the first caller of that kind. A Cell closure will
+ * be the second, for the same reason: a Cell with nobody to disperse locks no
+ * person and still locks Cells.
+ *
+ * `SET LOCAL` is a utility command and takes no snapshot and no locks, so calling
+ * this first costs a transaction nothing and cannot itself be what waits.
+ */
+export async function boundLockWaitsWithin(transaction: Transaction<Database>): Promise<void> {
+  await sql`SET LOCAL lock_timeout = ${sql.raw(`'${LOCK_TIMEOUT}'`)}`.execute(transaction);
 }

@@ -133,7 +133,13 @@ describe('cell configuration (section 10)', () => {
       .selectFrom('cell_categories')
       .select(['category', 'started_at', 'ended_at', 'actor_id'])
       .where('cell_id', '=', cellUuid)
+      // **`ended_at` is the tie-break, and it is load-bearing.** A section 5
+      // correction leaves two rows sharing a `started_at` — the inert one it
+      // closed and the live one it opened — so ordering by `started_at` alone
+      // returns them in whatever order the table happens to hold, and a case
+      // asserting on their positions passes or fails by luck.
       .orderBy('started_at', 'asc')
+      .orderBy('ended_at', sql`asc nulls last`)
       .execute();
 
   const scheduleRows = (cellUuid: string) =>
@@ -141,7 +147,13 @@ describe('cell configuration (section 10)', () => {
       .selectFrom('cell_schedules')
       .select(['day_of_week', 'time_of_day', 'started_at', 'ended_at', 'actor_id'])
       .where('cell_id', '=', cellUuid)
+      // **`ended_at` is the tie-break, and it is load-bearing.** A section 5
+      // correction leaves two rows sharing a `started_at` — the inert one it
+      // closed and the live one it opened — so ordering by `started_at` alone
+      // returns them in whatever order the table happens to hold, and a case
+      // asserting on their positions passes or fails by luck.
       .orderBy('started_at', 'asc')
+      .orderBy('ended_at', sql`asc nulls last`)
       .execute();
 
   describe('category (takes effect the day it is made)', () => {
@@ -159,10 +171,39 @@ describe('cell configuration (section 10)', () => {
 
       // Section 10 preserves category history with effective dates, and the two rows
       // must meet exactly: a gap would leave an instant at which the Cell had no
-      // category, which `assert_active_cell_is_configured` exists to prevent.
+      // category, so an as-of query for it answers nothing.
+      //
+      // **Nothing else pins that.** An earlier version of this comment credited
+      // `assert_active_cell_is_configured`, which only checks that a row with a null
+      // `ended_at` exists — close at `t` and open at `t + 1ms` and it passes with a
+      // one-millisecond hole. This assertion is the only contiguity check on either
+      // configuration table, which is worth knowing before somebody deletes it as
+      // redundant.
       expect(rows[0].ended_at?.toISOString()).toBe(rows[1].started_at.toISOString());
       expect(rows[1].category).toBe('YOUNG_PRO');
       expect(rows[1].ended_at).toBeNull();
+    });
+
+    it('takes effect now, not at the start of next month', async () => {
+      // **The distinguishing assertion against the schedule rule, and it was missing.**
+      // Section 10: "Unlike a schedule change, a category change takes effect on the
+      // date it is made" — because nothing derives a meeting count from a category, so
+      // there is no figure a mid-month change would rewrite.
+      //
+      // Replacing this rule's `at` with the schedule's next-month instant left all
+      // eighteen cases green: `period_ordered` is `>=`, `one_open` is satisfied, and
+      // migration 0009 says in terms that this table "carries no equivalent of the
+      // schedule trigger". Decision 1's entire justification had nothing able to fail
+      // on it.
+      const before = Date.now();
+      const response = await changeCategory(admin, markCell.id, 'YOUNG_PRO').expect(200);
+
+      const effective = new Date(response.body.effective_at).getTime();
+      expect(effective).toBeGreaterThanOrEqual(before - 1000);
+      expect(effective).toBeLessThanOrEqual(Date.now() + 1000);
+
+      const rows = await categoryRows(markCell.id);
+      expect(rows[1].started_at.getTime()).toBeLessThanOrEqual(Date.now());
     });
 
     it('records the actor on the row it opens', async () => {
@@ -226,7 +267,14 @@ describe('cell configuration (section 10)', () => {
       // *properties* section 10 states rather than only the equality: the instant is
       // a Manila month boundary, and it is in the future.
       const expected = startOfManilaDay(startOfNextManilaMonth(new Date()));
-      expect(response.body.effective_from).toBe(expected.toISOString());
+      expect(response.body.effective_at).toBe(expected.toISOString());
+
+      // **The Manila day, which is the point of returning both.** The instant is
+      // 16:00 UTC on the last day of the previous month, so a client rendering a date
+      // from it alone shows the wrong month -- section 22's "the conversion is where
+      // months silently shift".
+      expect(response.body.effective_date).toMatch(/-01$/);
+      expect(response.body.effective_date).not.toBe(expected.toISOString().slice(0, 10));
 
       // Manila is UTC+8 with no daylight saving, so a Manila month boundary is 16:00
       // UTC on the last day of the previous month. Section 10 says exactly this, and
@@ -255,18 +303,35 @@ describe('cell configuration (section 10)', () => {
       expect(rows[1].started_at.getTime()).toBeGreaterThan(Date.now());
     });
 
-    it('refuses a second change while one is already pending', async () => {
+    it('permits a second change in one month, correcting the pending one', async () => {
+      // **Ruled on 2026-08-29, after an earlier version refused this.** Both changes
+      // resolve to the same instant, so the second closes the pending row at its own
+      // `started_at` — the zero-length row section 5 makes inert. The refusal claimed
+      // the Cell's current schedule would vanish; it does not. The row that goes inert
+      // is the *pending* one, which was never in force.
+      //
+      // Refusing stranded a leader who queued the wrong day: they could not fix it
+      // until it took effect, and a change made then lands a month later again, so one
+      // mistake cost a whole month meeting on a day nobody had agreed to.
       await changeSchedule(admin, markCell.id, 7, '16:00').expect(200);
-
-      // Both changes resolve to the same instant, so the second would close the first
-      // at its own `started_at` — the zero-length row section 5 makes inert, which
-      // would remove the Cell's schedule from every as-of query with nothing raised.
-      const response = await changeSchedule(admin, markCell.id, 6, '10:00').expect(409);
-      expect(response.body.error.code).toBe('INVARIANT_VIOLATION');
+      await changeSchedule(admin, markCell.id, 1, '20:00').expect(200);
 
       const rows = await scheduleRows(markCell.id);
-      expect(rows).toHaveLength(2);
+      expect(rows).toHaveLength(3);
+
+      // The row governing today is untouched, which is the whole point.
+      expect(rows[0].day_of_week).toBe(markCell.dayOfWeek);
+      expect(rows[0].ended_at).not.toBeNull();
+
+      // The superseded pending row is inert: it starts and ends at the same instant,
+      // so no as-of query can ever select it (section 5).
       expect(rows[1].day_of_week).toBe(7);
+      expect(rows[1].started_at.toISOString()).toBe(rows[1].ended_at?.toISOString());
+
+      // And the correction is what takes effect next month.
+      expect(rows[2].day_of_week).toBe(1);
+      expect(rows[2].ended_at).toBeNull();
+      expect(rows[2].started_at.toISOString()).toBe(rows[1].started_at.toISOString());
     });
 
     it('refuses a change to the day and time the Cell already has', async () => {
@@ -299,6 +364,32 @@ describe('cell configuration (section 10)', () => {
       const response = await changeSchedule(admin, markCell.id, 7, '16:00').expect(409);
       expect(response.body.error.code).toBe('INVARIANT_VIOLATION');
       expect(response.body.error.message).toMatch(/closed/i);
+    });
+
+    it('records the actor and one audit entry carrying the effective date', async () => {
+      // Section 21 names this action "with effective date", and section 10 gives
+      // `cell_schedules` an `actor_id` whose null is reserved for a system action.
+      // The category half was pinned and this half was not: deleting either the audit
+      // write or the `actor_id` left every case green.
+      await changeSchedule(admin, markCell.id, 7, '16:00').expect(200);
+
+      const rows = await scheduleRows(markCell.id);
+      expect(rows[1].actor_id).toBe(admin.id);
+
+      const entries = await db
+        .selectFrom('audit_log')
+        .select(['target_type', 'target_id', 'before', 'after'])
+        .where('action', '=', 'cell_schedule.changed')
+        .execute();
+
+      expect(entries).toHaveLength(1);
+      expect(entries[0].target_type).toBe('cell');
+      expect(entries[0].target_id).toBe(markCell.id);
+      expect(entries[0].before).toMatchObject({ day_of_week: markCell.dayOfWeek });
+      expect(entries[0].after).toMatchObject({
+        day_of_week: 7,
+        started_at: rows[1].started_at.toISOString(),
+      });
     });
 
     it('refuses a day outside the ISO range as VALIDATION_FAILED', async () => {
