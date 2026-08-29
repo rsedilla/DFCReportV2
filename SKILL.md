@@ -2220,8 +2220,32 @@ On closure, as one transaction:
 - the Cell's state becomes `CLOSED` as of the effective date
 - the active Cell leadership assignment ends on that date (Section 11)
 - active memberships end on that date, preserving every membership record in full (Section 10, Managing Cell membership)
+- the open category row ends on that date
+- the open schedule row ends on that date
+
+**The last two were settled on 2026-08-29 and this list carried three writes until then**, while two other passages in this section already assumed five. The coverage rule above says a Cell closed part-way through a month has fewer scheduled meetings "because its schedule row opens at approval or **ends at closure**", and the Reopening ruling below argues against reversal partly on what "un-ending its schedule and membership rows" would do. Both presuppose the write this list omitted.
+
+The schedule half is forced independently of that reading: a schedule row left open on a closed Cell keeps deriving one scheduled meeting a week for ever, so Section 12 gives a Cell that no longer meets a coverage denominator, and the figure gets worse every month. The category half has no such consequence and is closed for consistency — the two rows open together at approval, an `ACTIVE` Cell is required to hold one of each, and a rule ending one of a pair needs a reason that does not exist here.
+
+Both halves are constraints rather than conventions, on the same terms as the leadership and membership rules beside them. Migration 0009 enforces the ACTIVE side only and its header records this as an open question; the CLOSED side arrives with the closure endpoint, in a migration of its own.
 
 Members must be dealt with explicitly rather than silently. Present the Cell's current members at the point of closure, allow them to be assigned to another Cell in bulk, and allow them to be left unassigned by explicit choice. People left without a Cell appear in the attention list in Section 15. Closure is not blocked on reassigning them — `MEMBERS_DISPERSED` has nowhere to send them — but it must not complete without the decision being made and recorded.
+
+**A destination Cell must be within the actor's authorized scope, exactly as an ordinary move requires (Managing Cell membership, above).** A leader closing their Cell may place members into Cells they hold scope over and must leave the rest unassigned; they may not put people into a Cell belonging to a branch they have nothing to do with.
+
+One rule rather than two, and the asymmetry it passes over is named so the choice is a knowing one. The membership rule was written about a leader **taking** somebody out of a peer's Cell; a dispersal is **giving**, which is the milder act. Giving is still not free: this section makes membership the leader's to manage, and members arriving unrequested change that leader's coverage denominator and every figure Section 16 derives from it, with no decision recorded by the person who now carries them.
+
+What makes the restriction bearable is that this section already built the escape. Closure is never blocked on placing anyone, members may be left unassigned by explicit choice, and Section 15's attention list exists so those people are surfaced rather than lost. The leader places whom they can, leaves the rest, and the cross-branch handoff becomes a conversation between two leaders — which is what it is. The cost is stated rather than discovered: a leader whose members mostly belong in other branches does part of the work and leaves a queue for somebody else, which is the friction Section 5 already imposes on a cross-branch pastoral move, deliberately.
+
+**The effective date has a floor, and below it no write satisfies the constraints.** It is the latest of: the start of every membership and leadership row still open on the Cell, and the end of every such row already closed. The Cell's own `created_at` bounds it too — a Cell cannot close before it existed.
+
+The reason is this section's own writes rather than a rule borrowed from elsewhere, and it is re-derived here because the floors in Sections 4 and 5 have different ones. A closure ends every open row *at* the effective date, and a period may not end before it starts; and no row of a closed Cell may end after the Cell did, which reaches rows closed by an earlier handover as well as the ones this operation writes. Below the latest of those the closure is unsatisfiable by any write at all, so permitting the attempt means handing the operator a constraint violation instead of an answer.
+
+The refusal names the earliest date the closure can legally take. Where that falls on the current day — the ordinary outcome once a Cell has changed hands — it names none, and says the closure cannot be backdated and will take effect now if submitted without an effective date, which always succeeds. This is the shape Section 4 uses, and it is adopted for the same reason rather than by resemblance: an administrator handed a raw bound has to work out which day to submit, and the day containing the bound is the one day guaranteed to be refused again.
+
+**The transaction takes its Cell locks up front, in ascending identifier order** — the closing Cell and every destination — before it writes anything. Section 5 states the same discipline for the advisory locks on a person, and the reason carries: two leaders closing Cells and dispersing into each other's take the two rows in opposite orders, and that is a deadlock rather than a wait, so no timeout bounds it and the database rather than this specification picks the victim. The bound on the wait is required here as it is there, because a closure that took no lock would otherwise never set one and the row locks its own checks take would be unbounded.
+
+**Scope over every Cell the operation touches is checked again inside that transaction, after the locks.** The guard decides on the connection pool before the transaction opens, so a handover landing in between leaves its answer describing authority the actor no longer has — the staleness Section 24 records for an intermediate ancestor, reached here through the Cell rather than through the tree. The guard's decision stays the one that refuses early and cheaply; the check after the lock is what the write actually rests on. The same applies to an ordinary membership move, whose destination is decided by the guard on the same terms.
 
 A closed Cell keeps its Cell ID permanently. The ID is never reused, for the same reason a Member ID is not (Section 3).
 
@@ -3459,13 +3483,19 @@ One envelope, always:
 | `INVARIANT_VIOLATION` | 409 | A domain rule rejects the write — cycle, cross-Network edge, two active assignments |
 | `DUPLICATE_ACKNOWLEDGEMENT_REQUIRED` | 409 | A Tier 1 duplicate candidate must be acknowledged before the Person is created (Section 3). The candidates are in `details` |
 | `NOT_FOUND` | 404 | No such record, or its existence must not be disclosed |
-| `RESOURCE_BUSY` | 503 | Another operation holds the record this write must serialize against, and the wait timed out (Section 5). Transient: retry after a short delay |
+| `RESOURCE_BUSY` | 503 | Another operation holds the record this write must serialize against, and either the wait timed out or the database chose this transaction as a deadlock victim (Section 5). Transient: retry after a short delay |
 
 `CAPABILITY_DENIED` and `SCOPE_DENIED` are deliberately distinct, because capability and scope are independent grants (Section 7) and an administrator diagnosing a permission problem needs to know which one failed.
 
 A domain check that rejects the **actor's authority over a target** answers `SCOPE_DENIED`, even though it runs in the domain layer rather than in the guard. Section 5's prohibition on acting on oneself or on anyone upline is the case in point: it concerns who may act on this record, which is what `SCOPE_DENIED` means. `INVARIANT_VIOLATION` is for a record the rules reject however it was submitted and whoever submitted it — a cycle, a cross-Network edge, a second active assignment. Keeping the two apart is what lets a client, and an administrator reading a log, tell "you may not do this" from "this cannot be recorded".
 
 Where revealing that a record exists would itself disclose something, return `NOT_FOUND` rather than a denial. People are not such a case: Section 8 already discloses minimal identity church-wide by design.
+
+**A Cell is not such a case either, and this is stated because it looks like one.** Section 8 protects a person's Cell membership and their Cell IDs, which reads as though a Cell's existence were disclosure. It is not reachable as one: a Cell is addressed by an unguessable identifier, so an actor holding it obtained it legitimately, and there is no space to sweep. What closes the oracle is not the code but the fact that an actor whose scope does not cover a Cell **cannot distinguish an absent Cell from one they may not see** — both answer `SCOPE_DENIED`, in one message carrying one details payload. `NOT_FOUND` is therefore reached only by an actor whose scope *would* have covered the Cell, for whom absence is genuinely absence.
+
+Two codes for one fact is the appearance rather than the rule: each actor gets one consistent answer, and which one they get is decided by their own scope rather than by the record.
+
+Answering `NOT_FOUND` to everyone was weighed and rejected on what it costs the ordinary case. A leader whose Cell was handed over yesterday would be told there is no such Cell — false, and it sends them hunting for a deleted record instead of telling them a handover moved it out of their scope. The rule generalises: where the identifier cannot be enumerated, indistinguishability is what protects the record, and a denial is the more truthful of the two indistinguishable answers.
 
 #### Write conflicts
 

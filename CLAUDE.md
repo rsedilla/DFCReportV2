@@ -4982,14 +4982,146 @@ behavioural defect. Twelve mutations verified in total.
 
 
 
+### 2026-08-29 — Six rulings the closure endpoint needed, settled before any of it
+
+Stage 3 slice 4 is closure, and the open list deferred six questions to it — more than
+any other unbuilt endpoint in the project. Settled together, before a line of code, on
+the pattern that opened this stage: read Sections 10, 11, 7 and 22 whole rather than
+meet them at a keyboard. Three turned out to be readings the specification had already
+decided; three were genuine choices.
+
+**A CLOSED Cell keeps no open category row and no open schedule row.** Migration 0009
+recorded this as unsettled and constrained only the ACTIVE side, because "What closing
+does" lists three writes and neither of these is among them. The specification decides
+it twice elsewhere, both times in load-bearing arguments: Section 12's coverage rule
+says a Cell closed part-way through a month has fewer scheduled meetings "because its
+schedule row ... ends at closure", and the Reopening ruling argues against reversal
+partly on what "un-ending its schedule and membership rows" would do. The list was
+incomplete; it now carries five writes.
+
+The schedule half is forced independently of that reading. A schedule row left open on a
+closed Cell derives one scheduled meeting a week for ever, so Section 12 hands a Cell
+that no longer meets a coverage denominator that worsens every month. The category half
+has no such consequence and is closed for consistency — the two rows open together at
+approval and an ACTIVE Cell must hold one of each, so ending one of a pair needs a
+reason that does not exist.
+
+**The closure effective date has a floor: the latest of every open row's `started_at`
+and every already-closed row's `ended_at`, across memberships and leaderships, bounded
+below by the Cell's own `created_at`.** Reachable the moment a Cell has changed hands
+once.
+
+**Its reason is this section's own writes, and that had to be re-derived rather than
+borrowed** (Section 25 rule 19). Section 4's floor reaches both directions because
+`assert_network_change_keeps_edges` selects edges either way; Section 5's exists because
+the same-Network trigger compares `network_as_of` at the assignment's start. Neither
+carries. Here it is that a closure ends every open row *at* the effective date while
+`period_ordered` is `>=`, and that the outlive-closure checks scan **all** rows rather
+than only open ones — so a row closed by an earlier handover binds the floor as much as
+a live one does. Below the latest of those the closure is satisfiable by no write at
+all, and permitting the attempt means a raw `check_violation` where the operator needed
+a date.
+
+The refusal names the earliest legal date, and names none where that falls on the
+current day — Section 4's shape, adopted for its reason rather than its resemblance: an
+administrator handed a raw bound must work out which day to submit, and the day
+containing it is the one guaranteed to be refused again.
+
+**A deadlock is answered as `RESOURCE_BUSY`, and the locks are ordered so it should not
+arise.** The `FOR SHARE` migration 0009 takes on the `cells` row makes `40P01` reachable
+from ordinary practice: two leaders closing Cells and dispersing into each other's take
+the two rows in opposite orders, each holding an exclusive lock and waiting on the
+other's. `isLockTimeout` matches `55P03` only, so today the loser gets `INTERNAL_ERROR`
+— a 500 for two people doing routine work at the same moment, with no indication that
+retrying would work.
+
+Both halves, because neither suffices. Closure takes the closing Cell and every
+destination up front in ascending identifier order, which is Section 5's existing
+discipline and removes this cycle; and `40P01` is classified as contention anyway,
+because ordering cannot reach the locks the deferred triggers take at COMMIT.
+
+The comment this overrules argued that a deadlock is not ordinary contention. That is
+right about the cause, and it is a statement about the logs rather than about the
+client: the caller's correct action is identical, and 503 releases the idempotency key,
+which is correct because nothing was recorded. Section 22's existing rule already
+requires an elapsed wait to answer `RESOURCE_BUSY` **wherever it is raised**; this is
+the same argument applied to the other way a wait can end. The ordering defect still
+surfaces, in the log rather than in a leader's face.
+
+**A Cell's existence is not a case Section 22's `NOT_FOUND` rule covers, and this
+recommendation reversed on writing the scenario down.** Section 8 protects a person's
+Cell membership and Cell IDs, so a Cell reads as exactly such a case, and Section 22's
+own prescription is `NOT_FOUND`. Slice 3 had closed the oracle the other way, making an
+absence look like a denial — the mirror image — which is what raised the question.
+
+What decides it is that **a Cell identifier cannot be enumerated**. Section 22's rule
+exists for the probe shape, where an attacker sweeps a space; a Cell is addressed by an
+unguessable identifier, so an actor holding one obtained it legitimately, and confirming
+that it exists tells them nothing they did not already have. The protection is not the
+code but the indistinguishability slice 3 already built: an actor whose scope does not
+cover a Cell gets one `SCOPE_DENIED`, one message, one details payload, whether or not
+the Cell is there.
+
+`NOT_FOUND` for everyone was rejected on what it costs the ordinary case, which is where
+the reversal came from. A leader whose Cell was handed over yesterday would be told
+there is no such Cell — false, and it sends them looking for a deleted record instead of
+telling them a handover moved it out of their scope. The "two codes for one fact"
+objection does not survive either: each actor gets one consistent answer, decided by
+their own scope rather than by the record, and `NOT_FOUND` is reached only by an actor
+whose scope would have covered the Cell, for whom absence is absence.
+
+Written to Section 22 as a second worked case beside People, so the next Cell-targeted
+route inherits it rather than deciding again. The generalisation is stated with it:
+where an identifier cannot be enumerated, indistinguishability is what protects the
+record, and a denial is the more truthful of the two indistinguishable answers.
+
+**A dispersal destination must be in the actor's scope, on the same rule as an ordinary
+move.** A leader closing their Cell places members into Cells they hold scope over and
+leaves the rest unassigned.
+
+One rule rather than two, and the asymmetry it passes over is named in Section 10 so the
+choice is knowing rather than careless. Slice 3's rule was written about a leader
+**taking** somebody out of a peer's Cell; a dispersal is **giving**, which is the milder
+act, so a different answer here would have been defensible rather than inconsistent.
+What tips it is that giving is not free: Section 10 makes membership the leader's to
+manage, and members arriving unrequested move that leader's coverage denominator and
+every Section 16 figure derived from it, with nothing recorded about the person who now
+carries them.
+
+The restriction is bearable only because Section 10 had already built the escape —
+closure is never blocked on placing anyone, members may be left unassigned by explicit
+choice, and Section 15's attention list exists so they are surfaced rather than lost. So
+nobody is stranded, and the cross-branch handoff becomes a conversation between two
+leaders, which is what it is. The cost is written into Section 10 rather than
+discovered: a leader whose members mostly belong in other branches does part of the work
+and leaves a queue for somebody else, which is the friction Section 5 already imposes on
+a cross-branch pastoral move.
+
+**Scope is checked again inside the transaction, after the locks.** The guard decides on
+the pool before the transaction opens, so a handover landing in between leaves its
+answer describing authority the actor no longer holds — the staleness Section 24 records
+for an intermediate ancestor, reached through the Cell rather than through the tree. The
+guard keeps the early, cheap refusal; the write rests on the check after the lock. It
+reaches an ordinary membership move too, whose destination is decided the same way.
+
+**Migration 0009's header is left standing and is superseded here.** It records the
+CLOSED-side question as open and deliberately constrains only the ACTIVE side, which was
+the right call when it was written. It sits in an approved pull request, and editing it
+would dismiss that approval to change a comment — so the constraint arrives in a
+migration of its own with the closure endpoint, and this entry is where the two are
+reconciled. The same shape as migration 0005's stale header, for the same reason.
+
+Written to `SKILL.md` Sections 10 and 22, and verified by grep rather than asserted.
+
+
 ### Open — awaiting a ruling
 
-**One item awaits a ruling, and it blocks Stage 5. Thirty-four other things are
+**One item awaits a ruling, and it blocks Stage 5. Twenty-eight other things are
 unsettled, none of them blocking. They are listed at the end, so this section is the
 whole of what is open.**
 
-*The count is thirty-four distinct items across thirty-five bullets — the deadlock
-item is deliberately cross-referenced twice. It said "twenty" from the day it was
+*Twenty-eight distinct items across twenty-eight bullets — the deadlock item's
+cross-reference went with it when the closure pre-flight settled it. It said "twenty" from the day it was
 written through six commits that added fourteen bullets without touching it, which is
 the miscount this log keeps recording, committed against the sentence whose only job
 is the number. Anyone adding a bullet updates it here, and counts rather than
@@ -5017,25 +5149,18 @@ Two related questions have defined behaviour and are recorded in `SKILL.md` §12
 
 **Unsettled, and not blocking anything.** None of these is a Stop Condition. An implementer proceeds and settles them in passing; they are listed here because a reader looking for what is open should not have to find it inside the body of a ruling.
 
-- **Whether a deadlock should be answered as contention** — *this is already on the list below, and its stated justification has lapsed.* It is recorded there as "not urgent while the import is the only long lock-holder and runs once". The `FOR SHARE` migration 0009 takes on the `cells` row makes `40P01` reachable from Section 10's ordinary closure operation between two ordinary leaders: closure disperses the members in bulk, so a transaction routinely closes one Cell and writes memberships into another, and two leaders doing that into each other's Cells take the two rows in opposite orders. `isLockTimeout` matches `55P03` only, so it renders `INTERNAL_ERROR`. It now blocks the closure endpoint rather than waiting on a second use of the import, and it needs the ordering discipline Section 5 already uses for the person lock as well as the error-code decision. The same lock is also an unbounded intra-transaction wait that no `lock_timeout` covers, which Section 5 makes a requirement to bound — settle both with the closure endpoint.
-- **Whether moving a member out of another leader's Cell requires scope over that Cell.** Section 10 gives `cell.manage_membership` per Cell — "the Cell's current leader, over their own Cells" — and a move is two membership changes, one to each Cell. Slice 3 reads that as requiring scope over the source as well as the destination, because the alternative lets a leader pull anybody in the church into their own Cell, ending a membership in a Cell they have nothing to do with and moving that person out of another leader's denominator. That is the harm Section 5 forbids for pastoral assignment, reached through the relationship Section 1 keeps separate from it. But Section 10 does not spell out the move case, and the difference is visible to a leader: under the reading implemented, a leader receiving somebody from another branch needs Admin, an upline, or the other leader to make the move. Settle it before the first real screens, since it decides what a leader can do unaided. Two things the ruling has to settle with it: **closure**, where under this reading a leader closing their own Cell can disperse members only into Cells inside their own scope (Section 10 requires them to be "assigned to another Cell in bulk", so this is where the reading first costs something visible); and **the refusal's payload**, which must not name the source Cell or assert the membership, because the actor routinely has no pastoral scope over that person (Section 8).
 - **Whether the archived-and-merged refusals should be database constraints.** Section 10 gained three refusals on 2026-08-29 — an archived Person, a merged Person, and somebody already in the Cell — and the first two are the same rule `assertLeaderIsAssignable` enforces for a pastoral edge. Both are application-layer checks: contrary to what Section 10 said when the question was first written, `pastoral_assignments` carries **no** constraint for archived-or-merged either, so there is no asymmetry and the question is whether *either* should become one. The Definition of Done says an invariant expressible as a constraint exists as one, and this one is expressible — a membership under an archived Person is the corruption Section 3 refuses when archiving somebody who leads a Cell, reached one relationship over. What argues the other way is that both facts live in `people`'s tables while the constraint would sit on `cells`', so it is a trigger reading across a module boundary rather than an index. Not blocking: the checks refuse today and answer `INVARIANT_VIOLATION`; what a constraint would add is enforcement under a restore, which is the argument the Senior Pastor slot and the root seat both turned on.
-- **Whether a Cell's existence is a case Section 22's `NOT_FOUND` rule covers.** Section 22 states the rule — "where revealing that a record exists would itself disclose something, return `NOT_FOUND` rather than a denial" — and then settles it for one object only: "People are not such a case: Section 8 already discloses minimal identity church-wide by design." Section 8 forbids disclosing "Cell membership or Cell IDs" for a person outside the viewer's scope, which points toward a Cell being such a case; a Cell UUID is unguessable and is supplied by the actor, which points the other way. Slice 3 closed the oracle by making an absence look like a *denial*, which is the mirror image of the remedy Section 22 names, and the API consequently answers both codes for one fact — `NOT_FOUND` for an absent Cell to a Whole Church actor, `SCOPE_DENIED` to a Leader. Coherent, undocumented, and it governs every Cell-targeted endpoint slices 4 and 5 add. Settle it before the closure endpoint rather than in the first controller that meets it.
 - **Whether a path identifier should be validated as strictly as one in a body.** `class-validator`'s `@IsUUID()` pins the version and variant nibbles and is on every DTO; `isUuid` — the repository's own predicate, used by the guard and by `UuidParamPipe` — does not. So `POST /cells/{id}/members` refuses as `person_id` a value the `DELETE` beside it accepts in the path. Every identifier in the database is a v4 and PostgreSQL's `uuid` takes both, so nothing is broken; what is unsettled is which predicate the API means, and Section 3's provision for a client-generated Person UUID is the case that would decide it.
 - **Whether the nil UUID should be reserved.** The capability guard hands `authorize` `00000000-0000-0000-0000-000000000000` as the target of a Cell it cannot place, so that an absent Cell refuses exactly as an out-of-scope one does. Nothing today can create a Person with that identifier — no endpoint accepts a client-supplied `id`, and every column defaults to `gen_random_uuid()` — but nothing forbids it either, and a Person holding it inside an actor's subtree would make every unplaceable Cell "covered" for that actor. The sentinel-free equivalent is to let the port's null reach `scopeCovers` the way `personBehind` already does for an absent Account. Settle it if Section 3's client-generated identifier is ever built.
 - **What Section 8 permits a refusal to reveal by its existence.** The source-Cell refusal no longer names a Cell or asserts a membership, but its *shape* still carries one bit: with the actor authorized over their own Cell and any `person_id` in the church — and Section 8 publishes every Person's identifier church-wide — a 403 means that person holds a membership somewhere the actor cannot see, and a 201 means they do not. The quiet outcome is the hit and the loud one is the miss, which is the reverse of the arrangement the 2026-08-22 create-probe ruling was willing to accept, and that ruling closed the leak rather than resting on loudness. This one cannot be closed by redacting anything: the refusal is required by the authorization rule itself. Settle it with the source-Cell reading below — whichever answer that takes has to say what a refusal may disclose by existing.
-- **Whether the destination Cell's scope should be re-checked inside the transaction.** The source Cell is evaluated through the transaction, so a concurrent handover cannot leave that answer stale; the destination — the primary target, and the more consequential — is decided by the guard on the pool and never re-checked, so a handover of it between guard and commit lets a write through the actor is no longer authorized to make. That is the window the 2026-08-23 READ COMMITTED ruling describes for an intermediate ancestor. Closing it is one more `coversWith` against the already-hoisted authority, but it belongs with the person lock: without ordering, the re-check still races. Settle it with the closure endpoint, which needs the same mechanism.
 - **Whether "Admin" in Sections 2 and 10 is a role requirement or a description of who holds the capabilities.** Section 2 settled this once, for the tree import, in the direction of "the role is required, and the capabilities alone are not enough" — and stated it in that paragraph rather than as a general rule. Direct creation is given to Admin in the same section and again in Section 10, and slice 2 reads it the same way and checks the role. If that reading is right, the two places should say it in the words Section 2 already uses for the import, because the next reader derives it from a neighbouring paragraph or not at all. If it is *not* right, then Section 7's permission to grant `cell.approve_leadership` explicitly makes request-and-approve optional for its holder over their own subtree, and Section 10 needs to say why that is acceptable. Nothing is blocked either way: the conservative reading is what is implemented.
 - **Whether a Cell's first leadership row may be corrected to a leader of the other Network, and whether a closed leadership row may be written at all.** Two halves of one question, both raised by the fourth review pass. Migration 0009 refuses a Section 5 correction that closes a Cell's first leadership row and opens one naming a person of the other Network: the zero-length row is selected as the predecessor and the leader-to-leader Network rule fires. That may well be right — a Cell created under a wrong-Network leader had the wrong Network for its whole life, and Section 10 gives `CREATED_IN_ERROR` for a Cell that should not exist — but Section 10 states that rule about a *handover*, and nothing distinguishes a correction from one. The second half is narrower and has no answer at all: `cell_leadership_is_opened_open` now refuses a leadership row written already closed, because no operation Sections 10 or 11 define writes one, and that forecloses correcting a closed historical stint. Neither is reachable today. Settle both with the handover-approval endpoint, which is where Section 10 makes the refusal.
-- **What floor a Cell closure's effective date has.** Section 10 makes closing "an explicit, authorized, audited action carrying an effective date" and states no bound on how far back that date may be set; Section 7 gives Admin `records.backdate_effective_date`. Migration 0009 now requires every leadership and membership row to end at or before `closed_at`, and `*_period_ordered` requires `ended_at >= started_at` — so a closure backdated before the current leadership's `started_at`, which is reachable after any handover, or before any member joined, is satisfiable by no write at all. The operator would meet a raw `check_violation` rather than the earliest legal date, which is the 500-instead-of-an-answer failure Section 4's backdate floor exists to prevent. Section 4 defines that floor for a Network correction and Section 5 for a reassignment; Section 10 defines none. Not reachable today, because no closure endpoint exists — settle it with the closure endpoint in Stage 3 slice 4, and give the refusal the earliest legal date the way Section 4 does.
 - **Which side moves when a Cell leader's Network changes.** Section 4's last paragraph says a Network change must not leave the person holding relationships the homogeneous-network rule no longer permits, and that where a choice arises it is flagged for authorized human resolution rather than guessed. For pastoral relationships Section 4 is concrete: the change is refused while the person leads anyone, and each disciple is moved by an ordinary reassignment first. For Cell **leadership** it says nothing concrete, and leading a Cell is a different relationship from discipling someone (Section 1, principle 3), so Section 4's refusal does not reach it. A Network change on a Cell's leader therefore moves the Cell's own Network and strands every member of every Cell they lead, and nothing raises. Refusing the change while they lead a Cell would be the Section 3 archival shape and would be consistent; requiring the Cell to be handed over first is a different pastoral decision. `docs/ROADMAP.md` books the work as Stage 3's last item without settling the rule. Settle it before the `networks` precondition grows its Cell half.
 - **Whether the requester of a Cell leadership request may decline it.** Section 10 states the prohibition once and states it about approval — "**No actor may approve a request they submitted**", and "that is what must be checked on every **approval**" — and says nothing about a decline. `SUBMITTED_IN_ERROR` in the fixed decline list points one way; the conflict-of-interest argument that justifies the approval rule points the other. Migration 0009 answered it in a comment, in the stricter direction, and the answer was terminal: Section 7 gives Admin `cell.request_leadership` and gives `cell.approve_leadership` to Admin alone, so on a single-Admin deployment a request Admin submits could be approved by nobody (correctly) and declined by nobody either — `PENDING` for ever, with the per-leader partial unique index then blocking every future `NEW_CELL` request for that person. The constraint now enforces what Section 10 states and nothing more. Settle it before the decline endpoint is built; if the answer is that a requester may not decline their own request, the same ruling has to say what a single-Admin deployment does instead.
 - **Whether a decided Cell leadership request may be re-decided, and which of its fields stay writable.** Section 10 says declined requests "are retained" and does not say whether a decision may be revised or withdrawn. Migration 0009 takes the conservative direction — what a request asked is immutable from the moment it is written, and the decision is immutable once made — on the reasoning of the 2026-08-24 ruling on an explicit null birthday: a relaxation must not become a capability by omission. What is unsettled is whether a legitimate re-decision path exists at all: a `DECLINED` request later approved, or an `APPROVED` one re-decided. If one does, it arrives as a deliberate amendment to Section 10 rather than by relaxing a trigger.
-- **Whether a CLOSED Cell keeps an open category row and an open schedule row.** Section 10 does not plainly say. "What closing does" lists three writes — the state, the leadership assignment, the memberships — and neither of these is among them; but the schedule paragraph says a Cell closed part-way through a month has fewer scheduled meetings "because its schedule row opens at approval or **ends at closure**", and the Reopening ruling argues against reversal partly on what "un-ending its schedule and membership rows" would do, which reads as though closure ends them. Migration 0009 therefore constrains the ACTIVE side only: an ACTIVE Cell must carry one open row of each, and a CLOSED Cell is left unconstrained rather than having the question answered by a trigger. **This covers category and schedule and nothing else** — the first version of the migration drew the escalation one table too wide and left memberships unenforced with it, which was a defect rather than an open question: memberships are named in the closure list itself, and a CLOSED Cell now holds none open. It matters for Stage 5 rather than now, because a closed Cell's coverage for the months it was open is read from the closed rows either way; what an open row on a closed Cell would change is whether a closed Cell appears to have a current schedule. Settle it with the closure endpoint, and make whichever answer is chosen a constraint.
 - **What the duplicate-candidate lookup does when its list exceeds `limit`.** `GET /people/duplicate-candidates` computes every candidate, returns `visible.slice(0, limit)`, and answers `next_cursor: null` — which §22's pagination rule reads as "this is the last page" over a set that was truncated, with no cursor to reach the rest. The `slice` is pre-existing; the ordering rule settled on 2026-08-28 (below) is what makes it consequential. In-scope candidates now always precede withheld ones, so the withheld tail is the **first** thing a truncation removes — the cross-branch duplicate §3 says the church-wide lookup exists to catch — and the client chooses `limit`, down to 1. Not *exactly* those: at a `limit` below the in-scope count it drops in-scope candidates too, and the point is which candidates it reaches first. Three answers are defensible and none is derivable: page the list honestly, refuse to truncate it at all, or state in §3 and §22 that the list is truncated and which candidates may be dropped. **The in-scope group's own internal order has to be settled in the same ruling**, because a page boundary over an unordered set is not pageable. `findDuplicates` issues its population query with no `ORDER BY` and `findCandidates` sorts by tier alone, so within one tier the in-scope order is PostgreSQL's physical row order. That is no disclosure — everything in that group is fully visible to the viewer — but it means that below the in-scope count, *which* in-scope candidates survive a truncation can differ between two identical requests. Raised by `architecture-guardian` on `fix/duplicate-candidate-oracle`, twice, and by the ordering rule itself: §3 now asks that any new decision the list is subjected to — it names a narrowing, a sort, a page boundary and a count — be treated as a disclosure until it is shown to be a function of what the viewer may already know. This is the one page boundary that exists, and nothing has shown it. Not blocking while the default limit of 50 exceeds any candidate list this church produces.
 - **Whether a pastoral path renders an absorbed Person or the survivor.** Every other `persons` read in the application filters `merged_into_id`; the path's name lookup deliberately does not, because on a lookup a filtered row is simply not found while on a path it is a *hole*, and a path with a hole reads as a shorter chain rather than as an error. Section 3 also says a merge never rewrites pastoral records to point at a different Person, so an absorbed ancestor genuinely stays on the chain and the real question is whether to show them or the survivor who now carries the identity. That is Person Merge's to answer for every surface at once rather than this endpoint's to decide, and merge is Stage 3, so nothing today can reach it. Settle it with the merge.
 - **Whether a Person holding an open root row may be absorbed by a Person Merge.** §3 refuses a merge where the absorbed Person leads a Cell and says nothing about a root; §5 leaves succession undefined and forbids reassigning a root. So merging a duplicate root holder into the real person appears permitted — and §3 says a merge "never rewrites historical attendance, pastoral, or audit records to point to a different Person", so the seat row keeps naming the absorbed record. The resolved identity then has two open assignments, which §5 invariant 3 forbids and which no constraint can refuse, because the rows carry different `person_id`s. Raised by the fifth review of the tree import, which is the only thing in the system that creates root rows: the dry-run warning's whole force is that no remedy exists for a mis-seated root, and merge is the one remedy §3 offers for a record created in error. The warning is correct under §3 as written. Settle this before anyone needs it.
-- **Whether a deadlock should be answered as contention.** The import holds every person lock it takes for the whole transaction and acquires them in tree order, so the union across rows is not in key order and a concurrent writer taking two locks sorted can cycle with it. `lockPersonsWithin` guarantees ordering *per call* and cannot reach further. The consequence is that PostgreSQL raises `40P01`, and `isLockTimeout` matches `55P03` only — deliberately, since §22's `RESOURCE_BUSY` says "retry after a short delay" and the existing comment argues a deadlock is not ordinary contention. But a deadlock *is* the case where a retry helps most, and today it renders `INTERNAL_ERROR`. Either `40P01` joins `RESOURCE_BUSY`, or §22 says why it does not. Not urgent while the import is the only long lock-holder and runs once.
 - **Whether a decisions file should bind the candidate set it was adjudicated against.** The fingerprint covers the input file and says nothing about the database, and section 2's decisions file has no candidate column — so a `CREATE` acknowledges a candidate set nothing pins. A Tier 1 candidate arriving between the dry run and the commit is caught where it gives a row its *first* one, because the row is then blank or absent, and is not caught where the row already carries a decision: it is created past an acknowledgement made about somebody else. Closing it means a per-row digest of the candidate identifiers, carried in the file and compared at commit — structure section 2 does not describe. Narrow in practice while the import is thirty rows against a near-empty database, and it is the shape that would matter if this were ever pointed at a larger file. Decide it before any second use of the import.
 - **Whether closing a person's only open `network_assignments` row, without opening a replacement, is a legal write.** Escalated by `architecture-guardian` on 2026-08-25 and general rather than root-specific. §4 defines a Network change as an atomic close-and-open pair sharing one instant; §5 forbids `DELETE` on the table; nothing addresses a close alone. No constraint refuses it — `network_assignments_one_open` is partial and permits zero, and the same-Network trigger compares at the closed row's own start, so it passes. The consequence is that `network_as_of` becomes null from that instant and every edge beneath the person is silently unresolvable, which is the outcome the no-delete trigger exists to prevent, reached one column over. The root seat made it visible rather than causing it, and the root case is now refused specifically; the general case is not. The same silence covers a close at T1 reopened at T2, which leaves a gap with no Network at all.
 - **Who may close a Network root's row, and under what capability.** §5 gives each Network exactly one root and says changing who holds one is "a deliberate Network-level decision, not a pastoral reassignment" — and names no capability, no endpoint and no workflow for it. The seat added on 2026-08-25 is partial over open rows, so a successor becomes possible the moment the previous root's row is closed; both write paths that could close it refuse a root outright, so nothing can. §5 now says plainly that a succession is not an operation this system offers, rather than implying one from the seat being freeable. Not blocking: the import creates two roots and neither changes.
