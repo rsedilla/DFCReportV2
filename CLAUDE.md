@@ -4982,7 +4982,7 @@ behavioural defect. Twelve mutations verified in total.
 
 
 
-### 2026-08-29 — Six rulings the closure endpoint needed, settled before any of it
+### 2026-08-29 — Six rulings the closure endpoint needed, four settled and two withdrawn
 
 Stage 3 slice 4 is closure, and the open list deferred six questions to it — more than
 any other unbuilt endpoint in the project. Settled together, before a line of code, on
@@ -5030,18 +5030,18 @@ two the database constrains today — which is itself an open item. Section 10 n
 the gap, names the schedule-change difficulty, and leaves the floor to the closure
 endpoint, which settles it against the schema.
 
-**A deadlock is answered as `RESOURCE_BUSY`, and the locks are ordered so it should not
-arise.** The `FOR SHARE` migration 0009 takes on the `cells` row makes `40P01` reachable
+**A deadlock is answered as `RESOURCE_BUSY`.** *The second half of this ruling as first
+written — that the locks are ordered so a deadlock should not arise — is the ordering
+withdrawn below. What survives is the error code, which stands on its own.* The `FOR SHARE` migration 0009 takes on the `cells` row makes `40P01` reachable
 from ordinary practice: two leaders closing Cells and dispersing into each other's take
 the two rows in opposite orders, each holding an exclusive lock and waiting on the
 other's. `isLockTimeout` matches `55P03` only, so today the loser gets `INTERNAL_ERROR`
 — a 500 for two people doing routine work at the same moment, with no indication that
 retrying would work.
 
-Both halves, because neither suffices. Closure takes the closing Cell and every
-destination up front in ascending identifier order, which is Section 5's existing
-discipline and removes this cycle; and `40P01` is classified as contention anyway,
-because ordering cannot reach the locks the deferred triggers take at COMMIT.
+The classification is needed whatever the ordering turns out to be, which is what lets it
+survive the withdrawal: ordering cannot reach the locks a deferred trigger takes at
+COMMIT, so `40P01` stays reachable however carefully an operation sorts its own.
 
 The comment this overrules argued that a deadlock is not ordinary contention. That is
 right about the cause, and it is a statement about the logs rather than about the
@@ -5127,12 +5127,9 @@ clear it, because a closure dated 1 September is forward-dated and Section 10 pr
 for no such thing. Neither the leader nor Admin could close a Cell whose leader had
 merely rescheduled it.
 
-The floor now reads only rows **already in force**, and a not-yet-started row is closed
-at its own `started_at`, leaving the inert zero-length row Section 5 already defines.
-Worth keeping because of what it says about the two sentences beside it: this branch
-asserted "the closer may always date a closure today, so nothing is blocked" and "which
-always succeeds" in the same commit that made both false. A floor no date can clear is
-the failure the floor exists to prevent, wearing the other face.
+*That third formulation is the one withdrawn below: the outgoing schedule row has
+started and still ends in the future, so the floor stayed in September and the Cell
+stayed unclosable. What is kept here is the account of how it failed.*
 
 **The two Stop Conditions the review raised are settled here as well, and both were
 right to be raised: each belongs to a section other than the one I had written it in.**
@@ -5158,7 +5155,7 @@ through a date field rather than a status. A Section 13-style window, letting th
 reach back inside the open reporting month, was considered for its consistency with how
 attendance already works and rejected for handing that vector to every leader in the
 period where it does most damage. The closer may always date a closure today, so nothing
-is blocked; what they give up is a few days of denominator accuracy.
+is blocked; what they give up is a few days of scheduled-meeting accuracy in the coverage line.
 
 **The lock ordering was rewritten three times and is withdrawn.** A closure needs both
 lock classes — advisory locks on people, row locks on Cells — and nothing orders them
@@ -5178,18 +5175,23 @@ transaction can invalidate. Section 5 now records the gap and requires an operat
 needing both classes to demonstrate its ordering against concurrent writers rather than
 assert it.
 
-Written to `SKILL.md` Sections 5, 7, 10 and 22, and verified by grep rather than
-asserted.
+The six rulings that stand are written to `SKILL.md` Sections 5, 7, 10 and 22, and were
+verified by grep rather than asserted. The two withdrawn above are written nowhere as
+rules: Sections 5 and 10 record them as gaps, and both are back on the open list.
 
-**Four review passes, and the two withdrawals are the honest outcome rather than a
-retreat.** Passes returned 8, 7, 5 and 5 findings, and from the second onward the
-majority were defects the previous batch's *fixes* had introduced — a floor broken by its
-own neighbouring ruling, then a Cell nobody could close, then a reproducible deadlock.
-Every one came from the same two rulings. The five that verified sound and never
-regressed are kept; the two that never converged are recorded as gaps for the endpoint
-that can test them. `CLAUDE.md`'s preamble names writing an under-specified rule into the
-source of truth as the failure it exists to prevent, and the 2026-08-28 handover ruling
-is the precedent: drafted, withdrawn, and landed once its questions were answerable.
+**Five review passes, and the two withdrawals are the honest outcome rather than a
+retreat.** They returned 8, 7, 5, 5 and 11 findings, and from the second onward the
+majority were defects the previous batch's *fixes* had introduced — a floor broken by
+its own neighbouring ruling, then a Cell nobody could close, then a reproducible
+deadlock, and finally a withdrawal that reinstated a claim an earlier pass had already
+corrected. Nearly every one came from the same two rulings.
+
+The six that verified sound and never regressed are kept — the four deferred questions
+plus the two Stop Conditions this entry settles — and the two that never converged are
+recorded as gaps for the endpoint that can test them. `CLAUDE.md`'s preamble names
+writing an under-specified rule into the source of truth as the failure it exists to
+prevent, and the 2026-08-28 handover ruling is the precedent: drafted, withdrawn, and
+landed once its questions were answerable.
 
 
 ### Open — awaiting a ruling
@@ -5229,8 +5231,8 @@ Two related questions have defined behaviour and are recorded in `SKILL.md` §12
 
 **Unsettled, and not blocking anything.** None of these is a Stop Condition. An implementer proceeds and settles them in passing; they are listed here because a reader looking for what is open should not have to find it inside the body of a ruling.
 
-- **What floor a Cell closure's effective date has.** A closure ends every open row on the Cell at the effective date, and `period_ordered` on all four tables refuses a period ending before it starts — so some dates are satisfiable by no write at all, and an operator submitting one meets a raw `check_violation` rather than the earliest legal date Sections 4 and 5 would give them. That a floor is needed is settled; what it is is not. Three formulations were written and refuted on the closure pre-flight branch, the second of which made a Cell with a pending schedule change **unclosable by anybody**: a schedule change takes effect at the start of the following month, so both the incoming row and the outgoing row it closes carry future timestamps, and a forward-dated closure is undefined. Excluding not-yet-started rows does not reach the outgoing row, which has started. **It cannot be settled before the CLOSED-side category and schedule question below**, since it turns on whether the outlive-closure rule reaches those two tables. Settle both with the closure endpoint, against the schema rather than in prose.
-- **How an operation orders advisory locks against row locks.** Every path taking an advisory lock today takes only advisory locks, so Section 5's ascending-lock-key rule covers all of them. A Cell closure is the first operation needing both classes — it changes a Cell's state and writes a membership row per dispersed person — and an ordinary membership move takes them in the opposite order, so the two can cycle. Three orderings were written on the pre-flight branch and each was refuted, the last by `architecture-guardian` **reproducing a deadlock against PostgreSQL 16**. Two properties defeat reasoning on paper: a deferred constraint trigger takes row locks at commit in the order rows were written, which no rule reaches after the fact; and an operation cannot know which people to lock until it has read a list another transaction can invalidate before the row lock is taken. Needs a mechanism demonstrated against concurrent writers, not a rule. Three sub-questions travel with it — the ordering, the **strength** of each Cell row lock (which decides whether a meeting is a wait or a cycle), and what bounds each wait, since `lockPersonsWithin` sets no `lock_timeout` when its list is empty and a closure with nobody to disperse is exactly that case.
+- **What floor a Cell closure's effective date has.** A closure ends every open row on the Cell at the effective date, and `period_ordered` on all four tables refuses a period ending before it starts — so some dates are satisfiable by no write at all, and an operator submitting one meets a raw `check_violation` rather than the earliest legal date Sections 4 and 5 would give them. That a floor is needed is settled; what it is is not. Three formulations were written and refuted on the closure pre-flight branch, the second of which made a Cell with a pending schedule change **unclosable by anybody**: a schedule change takes effect at the start of the following month, so both the incoming row and the outgoing row it closes carry future timestamps, and a forward-dated closure is undefined. Excluding not-yet-started rows does not reach the outgoing row, which has started. **It cannot be settled before the outlive-closure question**: whether the rule that no row of a closed Cell may end after the Cell did reaches category and schedule rows, or only the leadership and membership rows the database constrains today. Section 10 states the rule and records that half as open; the closure endpoint settles both with the constraint it adds. Settle both with the closure endpoint, against the schema rather than in prose.
+- **How an operation orders advisory locks against row locks.** A membership write already takes both classes — an advisory lock on the person, then a row lock on the Cell when the deferred state check reads it `FOR SHARE` at commit — so the order is already fixed by an existing writer. A Cell closure is the operation that makes the absence bite: it takes both deliberately rather than incidentally, changing a Cell's state and writing a membership row per dispersed person, and can therefore take them in the opposite order. Three orderings were written on the pre-flight branch and each was refuted, the last by `architecture-guardian` **reproducing a deadlock against PostgreSQL 16**. Two properties defeat reasoning on paper: a deferred constraint trigger takes row locks at commit in the order rows were written, which no rule reaches after the fact; and an operation cannot know which people to lock until it has read a list another transaction can invalidate before the row lock is taken. Needs a mechanism demonstrated against concurrent writers, not a rule. Three sub-questions travel with it — the ordering, the **strength** of each Cell row lock (which decides whether a meeting is a wait or a cycle), and what bounds each wait, since `lockPersonsWithin` sets no `lock_timeout` when its list is empty and a closure with nobody to disperse is exactly that case.
 - **Whether the archived-and-merged refusals should be database constraints.** Section 10 gained three refusals on 2026-08-29 — an archived Person, a merged Person, and somebody already in the Cell — and the first two are the same rule `assertLeaderIsAssignable` enforces for a pastoral edge. Both are application-layer checks: contrary to what Section 10 said when the question was first written, `pastoral_assignments` carries **no** constraint for archived-or-merged either, so there is no asymmetry and the question is whether *either* should become one. The Definition of Done says an invariant expressible as a constraint exists as one, and this one is expressible — a membership under an archived Person is the corruption Section 3 refuses when archiving somebody who leads a Cell, reached one relationship over. What argues the other way is that both facts live in `people`'s tables while the constraint would sit on `cells`', so it is a trigger reading across a module boundary rather than an index. Not blocking: the checks refuse today and answer `INVARIANT_VIOLATION`; what a constraint would add is enforcement under a restore, which is the argument the Senior Pastor slot and the root seat both turned on.
 - **Whether a path identifier should be validated as strictly as one in a body.** `class-validator`'s `@IsUUID()` pins the version and variant nibbles and is on every DTO; `isUuid` — the repository's own predicate, used by the guard and by `UuidParamPipe` — does not. So `POST /cells/{id}/members` refuses as `person_id` a value the `DELETE` beside it accepts in the path. Every identifier in the database is a v4 and PostgreSQL's `uuid` takes both, so nothing is broken; what is unsettled is which predicate the API means, and Section 3's provision for a client-generated Person UUID is the case that would decide it.
 - **Whether the nil UUID should be reserved.** The capability guard hands `authorize` `00000000-0000-0000-0000-000000000000` as the target of a Cell it cannot place, so that an absent Cell refuses exactly as an out-of-scope one does. Nothing today can create a Person with that identifier — no endpoint accepts a client-supplied `id`, and every column defaults to `gen_random_uuid()` — but nothing forbids it either, and a Person holding it inside an actor's subtree would make every unplaceable Cell "covered" for that actor. The sentinel-free equivalent is to let the port's null reach `scopeCovers` the way `personBehind` already does for an absent Account. Settle it if Section 3's client-generated identifier is ever built.
