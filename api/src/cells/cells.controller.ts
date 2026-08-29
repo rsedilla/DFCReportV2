@@ -302,12 +302,18 @@ export class CellsController {
    *
    * **Section 19's other list is not this one and is not built.** It puts "the outcome
    * of a Cell leadership request the user submitted" in every user's own outstanding
-   * work — a different population, a different reader, and one no capability in section
-   * 7's closed list can guard: `cell.request_leadership` is `SUBTREE_EXCL_SELF`, so it
+   * work — a different population and a different reader. **Section 7 names no
+   * capability for it**: `cell.request_leadership` is `SUBTREE_EXCL_SELF`, so it
    * resolves against neither the caller nor the church, and section 7's no-capability
    * exemption covers an endpoint acting "on the caller's own session" rather than one
-   * returning rows their account created. Recorded as open in `CLAUDE.md` rather than
-   * answered with a capability invented in a controller.
+   * returning rows their account created.
+   *
+   * *Not that none **can**, which an earlier version of this said.* `cell.view_subtree`
+   * against `{ kind: 'actor' }` is the shape `GET /people/duplicate-candidates` already
+   * uses for a church-wide read, one domain over — a new reading of an existing
+   * capability rather than a new capability, and defensible. It is recorded as open in
+   * `CLAUDE.md` with the alternatives because which of them is right is not derivable,
+   * not because the surface is unbuildable.
    *
    * That surface is not blocking: this queue is what approval needs, the way the roster
    * route was what the closure needed, while the requester's view is a dashboard tile

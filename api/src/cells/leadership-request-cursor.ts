@@ -36,6 +36,14 @@ import type { CellRequestKind } from '../database/schema';
  * whether the encode/decode pair should be generic there is recorded as open rather than
  * settled by a third copy.
  */
+/**
+ * PostgreSQL's `timestamptz` text rendering, which is what `cast(requested_at as text)`
+ * produces and therefore the only shape this cursor ever carries:
+ * `2026-08-30 11:22:33.456789+08`. Fractional seconds are absent when zero, and the
+ * offset carries minutes only where the zone has them.
+ */
+const TIMESTAMPTZ_TEXT = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(\.\d{1,6})?[+-]\d{2}(:\d{2})?$/;
+
 export interface LeadershipRequestCursor {
   requestedAt: string;
   id: string;
@@ -76,11 +84,17 @@ export function decodeLeadershipRequestCursor(
       parsed !== null &&
       typeof (parsed as LeadershipRequestCursor).requestedAt === 'string' &&
       typeof (parsed as LeadershipRequestCursor).id === 'string' &&
-      // The timestamp is compared against a `timestamptz` column, so a value that is
-      // not a date at all would reach PostgreSQL as a cast error rather than as an
-      // empty page — the 500-instead-of-an-answer failure this repository keeps
-      // recording. Checked here because a cursor is client-supplied.
-      !Number.isNaN(Date.parse((parsed as LeadershipRequestCursor).requestedAt))
+      // The timestamp is cast to `timestamptz` in the query, so a value PostgreSQL
+      // cannot parse reaches it as a cast error rather than as an empty page — the
+      // 500-instead-of-an-answer failure this repository keeps recording. Checked here
+      // because a cursor is client-supplied.
+      //
+      // **Matched against the format this code emits, not against `Date.parse`.** An
+      // earlier version used `Date.parse`, which is a different and much wider
+      // predicate: `new Date().toString()` passes it — V8's own output — and reaches
+      // PostgreSQL as `time zone "gmt+0800" not recognized`, a reproduced 500. What is
+      // emitted is `cast(requested_at as text)`, whose rendering is fixed.
+      TIMESTAMPTZ_TEXT.test((parsed as LeadershipRequestCursor).requestedAt)
     ) {
       return parsed as LeadershipRequestCursor;
     }

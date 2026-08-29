@@ -32,6 +32,14 @@ import type {
 } from '../database/schema';
 import type { Transaction } from 'kysely';
 
+/**
+ * A target that resolves to nobody, which is what the capability guard hands
+ * `authorize` for a Cell it cannot place (`capability.guard.ts`). Used here because
+ * this route's guard resolves the prospective leader rather than the Cell, so the
+ * domain layer owes section 22's indistinguishability itself.
+ */
+const NIL_PERSON = '00000000-0000-0000-0000-000000000000';
+
 export interface LeadershipRequestInput {
   kind: CellRequestKind;
   prospectiveLeaderId: string;
@@ -106,15 +114,41 @@ export class CellsLeadershipRequestService {
     // connection while holding one is the liveness hazard that section names.
     const authority = await this.authorization.authorityFor(actor.accountId);
 
+    if (sameId(input.prospectiveLeaderId, actor.personId)) {
+      // **Section 10: "No holder of the capability, at any scope, may name
+      // themselves."** `SUBTREE_EXCL_SELF` delivers that only while the grant is
+      // exactly that scope — `scopeCovers` returns true on its first line for a
+      // `WHOLE_CHURCH` grant, before the target is read at all, and a `NETWORK` grant
+      // compares the target's Network, which for the actor is their own. Section 7
+      // permits Admin to grant any capability beyond a role's defaults and has no
+      // mechanism refusing a *wider* grant, so both are ordinary rows.
+      //
+      // Section 10 says "at any scope" and cites section 5 invariant 4 as "the same
+      // prohibition ... for the same reason" — and that one is a domain check rather
+      // than a scope value, which is the shape section 7 prescribes where a rule
+      // forbids acting on oneself. So this is section 10 implemented rather than a rule
+      // invented: without it a leader whose only Cell has closed, holding one
+      // Admin-issued Whole Church grant, restores their own Current Cell Leader status
+      // with no upline involved.
+      //
+      // `sameId` rather than `===`, because this fails *open*: the check refuses, so a
+      // mis-cased identifier skips it (section 7, the 2026-08-23 rule).
+      throw new ScopeDeniedError(
+        'A request names somebody else. No holder of this capability, at any scope, may ' +
+          'name themselves (SKILL.md section 10).',
+        { capability: Capability.CellRequestLeadership },
+      );
+    }
+
     if (input.kind === 'NEW_CELL' && input.cellId !== undefined) {
       // Refused rather than ignored. `cell_leadership_requests_new_cell_has_no_cell_
       // before_approval` says a PENDING NEW_CELL row names no Cell, so a client that
       // sent one meant something the workflow cannot do — dropping it silently would
       // answer 201 to a request the server did not perform.
       //
-      // Here rather than on the DTO: `@ValidateIf` governs a whole property, so
-      // expressing "required for one kind and forbidden for the other" needs two
-      // conditions on one field and the second silently replaces the first.
+      // Here rather than on the DTO: two `@ValidateIf`s on one property are ANDed
+      // rather than replaced, so "required for one kind and forbidden for the other"
+      // is an unsatisfiable conjunction and cannot be expressed there at all.
       throw new ValidationFailedError(
         'A new-Cell request names no Cell. Section 10: nothing names one until approval ' +
           'mints it.',
@@ -230,7 +264,10 @@ export class CellsLeadershipRequestService {
     return this.db.transaction().execute(async (trx) => {
       // `FOR UPDATE`, because two concurrent declines would otherwise both read
       // `PENDING` and both write a decision — and the second would be refused by the
-      // finality trigger at COMMIT as a `restrict_violation`, which nothing classifies.
+      // finality trigger as a `restrict_violation`, which nothing classifies. That
+      // trigger is `BEFORE UPDATE FOR EACH ROW` rather than deferred, so it fires at the
+      // statement once this lock releases; an earlier version of this comment said "at
+      // COMMIT", which is the wrong mechanism for the right conclusion.
       // Taken on the request row alone: this operation writes no person-scoped edge, so
       // it needs none of the advisory locks section 5 orders.
       const existing = await trx
@@ -359,7 +396,12 @@ export class CellsLeadershipRequestService {
    * their own subtree, Admin, or a Senior Pastor". That enumeration is exactly what
    * `OWN_SUBTREE`, `NETWORK` and `WHOLE_CHURCH` resolve to when the target is the
    * Cell's leader, so the rule is the capability that governs closing rather than a
-   * list restated here.
+   * list restated here — `OWN_SUBTREE`, which is the scope every role holds it at by
+   * default. **Not `NETWORK`**: a Network-scoped grant covers every Cell in a Network
+   * irrespective of pastoral position, which is wider than section 10's list. No role
+   * is there by default and closing a Cell has the same gap; section 10 names it rather
+   * than claiming the three scopes resolve to that set, which an earlier version of
+   * both this comment and section 10 did.
    *
    * **It cannot be `cell.request_leadership`**, which the guard already used: that one
    * is `SUBTREE_EXCL_SELF`, and the commonest handover of all has the actor *as* the
@@ -384,29 +426,47 @@ export class CellsLeadershipRequestService {
       .where('id', '=', input.cellId as string)
       .executeTakeFirst();
 
-    if (!cell) {
-      throw new NotFoundError('No such Cell.');
-    }
-
-    const leaderId = await this.cells.leaderForScopeWithin(trx, cell.id);
-
-    if (leaderId === null) {
-      throw new InvariantViolationError(
-        'That Cell cannot be resolved to a leader, so there is no authority to check ' +
-          'against (SKILL.md section 11).',
-      );
-    }
+    // **An absent Cell is answered the way an out-of-scope one is** (section 22): "an
+    // actor whose scope does not cover a Cell cannot distinguish an absent Cell from one
+    // they may not see — both answer `SCOPE_DENIED`, in one message carrying one details
+    // payload. `NOT_FOUND` is therefore reached only by an actor whose scope *would*
+    // have covered the Cell."
+    //
+    // Every other Cell route gets that from the guard, which resolves `{ kind: 'cell' }`
+    // and hands `authorize` a target resolving to nobody. This route's guard resolves
+    // the prospective leader instead, so the ordering is owed here — and an earlier
+    // version answered `NOT_FOUND` before the scope check, which is an existence oracle
+    // over Cell identifiers.
+    //
+    // The nil target reproduces the guard's own behaviour rather than restating it: a
+    // Whole Church grant returns true before the target is read and so reaches
+    // `NOT_FOUND`, and every narrower scope fails to cover it and gets the same refusal
+    // an out-of-scope Cell gets.
+    const leaderId = cell ? await this.cells.leaderForScopeWithin(trx, cell.id) : NIL_PERSON;
 
     if (
       !(await this.authorization.coversWith(trx, actor, authority, Capability.CellManageLifecycle, {
         kind: 'person',
-        personId: leaderId,
+        personId: leaderId ?? NIL_PERSON,
       }))
     ) {
       throw new ScopeDeniedError(
         'That Cell is outside your authorized scope. A handover is requested by the Cell ' +
           'leader or by a leader upline of them (SKILL.md section 10).',
         { capability: Capability.CellManageLifecycle },
+      );
+    }
+
+    if (!cell) {
+      // Reached only by an actor whose scope would have covered it, per the nil target
+      // above — for whom absence is genuinely absence (section 22).
+      throw new NotFoundError('No such Cell.');
+    }
+
+    if (leaderId === null) {
+      throw new InvariantViolationError(
+        'That Cell cannot be resolved to a leader, so there is no authority to check ' +
+          'against (SKILL.md section 11).',
       );
     }
 

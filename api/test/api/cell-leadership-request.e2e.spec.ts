@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 
 import request from 'supertest';
 
+import { CellsLeadershipRequestService } from '../../src/cells/cells.leadership-request.service';
 import { createTestDb, truncateAll } from '../setup/database';
 import {
   assignTo,
@@ -155,6 +156,34 @@ describe('Cell leadership requests (section 10)', () => {
       expect(response.body.error.code).toBe('SCOPE_DENIED');
     });
 
+    it('refuses self-naming even under a Whole Church grant', async () => {
+      // **Section 10 says "at any scope", and `SUBTREE_EXCL_SELF` delivers that only
+      // while the grant is exactly that scope.** `scopeCovers` returns true on its first
+      // line for a `WHOLE_CHURCH` grant, before the target is read at all, and section 7
+      // permits Admin to grant beyond a role's defaults with no mechanism refusing a
+      // wider grant. So the prohibition is a domain check, which is the shape section 7
+      // prescribes for the analogous section 5 invariant 4 — and which section 10 points
+      // at by naming that invariant as "the same prohibition ... for the same reason".
+      //
+      // Reproduced as a 201 before the check existed: the row landed PENDING, took that
+      // person's `..._one_pending_new_cell` slot, and was approvable.
+      await db
+        .insertInto('capability_grants')
+        .values({
+          account_id: markAccount.id,
+          capability: 'cell.request_leadership',
+          scope_type: 'WHOLE_CHURCH',
+          read_only: false,
+          reason: 'Invented for this case (CLAUDE.md, Secrets).',
+          granted_by: admin.id,
+        })
+        .execute();
+
+      const response = await submit(markAccount, newCell(mark.id)).expect(403);
+
+      expect(response.body.error.code).toBe('SCOPE_DENIED');
+    });
+
     it('refuses a leader naming somebody outside their subtree', async () => {
       // Ben is Mark's sibling under the root, so he is outside Mark's subtree.
       const response = await submit(markAccount, newCell(ben.id)).expect(403);
@@ -240,6 +269,43 @@ describe('Cell leadership requests (section 10)', () => {
       expect(response.body.error.details.capability).toBe('cell.manage_lifecycle');
     });
 
+    it('answers an absent Cell exactly as it answers one out of scope', async () => {
+      // **Section 22**: "an actor whose scope does not cover a Cell cannot distinguish
+      // an absent Cell from one they may not see — both answer `SCOPE_DENIED`, in one
+      // message carrying one details payload." Every other Cell route gets that from the
+      // guard, which resolves `{ kind: 'cell' }`; this one resolves the prospective
+      // leader instead, so the domain layer owes it — and an earlier version answered
+      // `NOT_FOUND` first, which is an existence oracle over Cell identifiers.
+      const absent = await submit(markAccount, {
+        kind: 'HANDOVER',
+        prospective_leader_id: juan.id,
+        cell_id: randomUUID(),
+      }).expect(403);
+
+      const outOfScope = await submit(markAccount, {
+        kind: 'HANDOVER',
+        prospective_leader_id: juan.id,
+        cell_id: benCell.id,
+      }).expect(403);
+
+      expect(absent.body.error.code).toBe(outOfScope.body.error.code);
+      expect(absent.body.error.message).toBe(outOfScope.body.error.message);
+      expect(absent.body.error.details).toEqual(outOfScope.body.error.details);
+    });
+
+    it('answers NOT_FOUND to an actor whose scope would have covered it', async () => {
+      // The other half of the same rule: `NOT_FOUND` is reached only by an actor for
+      // whom absence is genuinely absence. Admin holds Whole Church, so `scopeCovers`
+      // returns before the target is read and the nil target cannot refuse them.
+      const response = await submit(admin, {
+        kind: 'HANDOVER',
+        prospective_leader_id: juan.id,
+        cell_id: randomUUID(),
+      }).expect(404);
+
+      expect(response.body.error.code).toBe('NOT_FOUND');
+    });
+
     it('refuses a closed Cell', async () => {
       await closeCellDirectly(db, markCell.id, { reason: 'LEADER_STEPPED_DOWN' });
 
@@ -267,6 +333,47 @@ describe('Cell leadership requests (section 10)', () => {
 
       expect(response.body.error.code).toBe('INVARIANT_VIOLATION');
       expect(response.body.error.message).toMatch(/already leads this Cell/);
+    });
+
+    it('compares identifiers canonically, called directly past the pipe', async () => {
+      // **Two refusals on this path fail *open*, and no end-to-end case can reach
+      // either.** `CanonicalIdentifierPipe` is registered globally, so every request
+      // arrives already canonical and both comparisons pass whether or not they
+      // normalize. Section 7's 2026-08-23 rule is explicit that the boundary and the
+      // defensive comparison "together pin the disjunction and neither half", and that
+      // the comparison must therefore be called directly with an uppercase identifier.
+      //
+      // Verified: replacing either `sameId` with `===` leaves all end-to-end cases green.
+      const service = app.get(CellsLeadershipRequestService);
+      const actor = { accountId: markAccount.id, personId: mark.id };
+      const claim = { key: randomUUID(), accountId: markAccount.id, claimId: randomUUID() };
+
+      // Self-naming, section 10's "at any scope" prohibition. Mis-cased, a `===`
+      // comparison skips the refusal and the request is accepted.
+      await expect(
+        service.request(
+          {
+            kind: 'NEW_CELL',
+            prospectiveLeaderId: mark.id.toUpperCase(),
+            category: 'YOUTH',
+            dayOfWeek: 6,
+            timeOfDay: '18:00',
+          },
+          actor,
+          claim as never,
+        ),
+      ).rejects.toMatchObject({ code: 'SCOPE_DENIED' });
+
+      // A handover naming the Cell's own current leader. Mis-cased, a `===` comparison
+      // accepts it, and the approval would end and reopen one leadership at a single
+      // instant — the audited operation that changed nothing section 10 refuses.
+      await expect(
+        service.request(
+          { kind: 'HANDOVER', prospectiveLeaderId: mark.id.toUpperCase(), cellId: markCell.id },
+          { accountId: admin.id, personId: root.id },
+          claim as never,
+        ),
+      ).rejects.toMatchObject({ code: 'INVARIANT_VIOLATION' });
     });
 
     it('refuses a second pending handover of the same Cell', async () => {
@@ -376,6 +483,34 @@ describe('Cell leadership requests (section 10)', () => {
       expect(response.body.error.message).toMatch(/already decided/);
     });
 
+    it('bounds a note that accompanies any other reason', async () => {
+      // **The bound was inert for four of the five reasons.** `class-validator` skips
+      // every decorator on a property whose `@ValidateIf` is false, so with the
+      // condition on the reason alone, the trim and the 500-character maximum applied
+      // only to `OTHER` — and a 5,000-character note was stored untrimmed against
+      // `TIMING_DEFERRED`. Section 10 and migration 0009 both permit a note with any
+      // reason; what they do not permit is an unbounded one.
+      const id = await pending();
+
+      const response = await decline(admin, id, {
+        reason: 'TIMING_DEFERRED',
+        note: 'x'.repeat(501),
+      }).expect(422);
+
+      expect(response.body.error.code).toBe('VALIDATION_FAILED');
+    });
+
+    it('accepts a bounded note with a reason other than OTHER', async () => {
+      // The permitting half, which section 10's shape states and `CloseCellDto` settles
+      // the identical question on: a decline legitimately carries a sentence of context.
+      const id = await pending();
+
+      await decline(admin, id, {
+        reason: 'TIMING_DEFERRED',
+        note: 'Revisit after the December encoding push.',
+      }).expect(200);
+    });
+
     it('refuses OTHER with a whitespace note, not only an absent one', async () => {
       // The constraint compares `btrim(coalesce(note, '')) <> ''`, so `@MinLength(1)`
       // alone accepts two spaces and turns a documented refusal into a constraint
@@ -460,6 +595,75 @@ describe('Cell leadership requests (section 10)', () => {
       expect(page2.body.data).toHaveLength(1);
       expect(page2.body.data[0].id).toBe(second.body.id);
       expect(page2.body.next_cursor).toBeNull();
+    });
+
+    it('breaks a tie on the id when two requests share an instant', async () => {
+      // **The keyset's tie-break and `ORDER BY id` had nothing that could fail on
+      // them.** `requested_at` defaults to `now()`, which is transaction start, and
+      // every case submits in its own request — so no two rows ever shared an instant
+      // and both could be deleted with the suite green. `leadership-request-cursor.ts`
+      // gives the tie-break's whole justification as "two requests can share a
+      // `requested_at`", and then says nothing does that today, which is exactly what
+      // makes the rule unfalsifiable rather than safe.
+      //
+      // Written directly, because no endpoint can produce the state: two rows at one
+      // instant need one transaction, and each request has its own.
+      const at = new Date('2026-03-01T10:00:00+08:00');
+      const other = await createPerson(db, { firstName: 'Nestor', network: 'MENS' });
+      await assignTo(db, other.id, mark.id);
+
+      await db
+        .insertInto('cell_leadership_requests')
+        .values(
+          [juan.id, other.id].map((personId) => ({
+            kind: 'NEW_CELL' as const,
+            prospective_leader_id: personId,
+            requested_by: markAccount.id,
+            category: 'YOUTH' as const,
+            day_of_week: 6,
+            time_of_day: '18:00',
+            requested_at: at,
+          })),
+        )
+        .execute();
+
+      const ids = (
+        await db.selectFrom('cell_leadership_requests').select('id').orderBy('id').execute()
+      ).map((row) => row.id);
+
+      expect(ids).toHaveLength(2);
+
+      const page1 = await queue(admin, '?limit=1').expect(200);
+      expect(page1.body.data[0].id).toBe(ids[0]);
+      expect(page1.body.next_cursor).not.toBeNull();
+
+      // Without the tie-break disjunct the cursor's `requested_at > at` excludes both
+      // rows and this page is empty; without `ORDER BY id` the two pages are not
+      // guaranteed to differ at all.
+      const page2 = await queue(
+        admin,
+        `?limit=1&cursor=${encodeURIComponent(page1.body.next_cursor as string)}`,
+      ).expect(200);
+
+      expect(page2.body.data).toHaveLength(1);
+      expect(page2.body.data[0].id).toBe(ids[1]);
+    });
+
+    it('refuses a forged cursor whose timestamp PostgreSQL cannot parse', async () => {
+      // **`Date.parse` is not PostgreSQL's parser**, and an earlier guard used it.
+      // `new Date().toString()` — V8's own rendering — passes `Date.parse` and reaches
+      // the `::timestamptz` cast as `time zone "gmt+0800" not recognized`, a 500 on a
+      // client-supplied value. The guard now matches the format this code emits.
+      await submit(markAccount, newCell(juan.id)).expect(201);
+
+      const forged = Buffer.from(
+        JSON.stringify({ requestedAt: new Date().toString(), id: randomUUID() }),
+        'utf8',
+      ).toString('base64url');
+
+      const response = await queue(admin, `?cursor=${encodeURIComponent(forged)}`).expect(200);
+
+      expect(response.body.data).toHaveLength(1);
     });
 
     it('treats an unreadable cursor as absent', async () => {

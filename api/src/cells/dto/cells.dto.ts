@@ -145,12 +145,14 @@ export class CreateLeadershipRequestDto {
   /**
    * The Cell being handed over. Required for a handover, and refused for a new Cell.
    *
-   * **Only the first half is here.** `@ValidateIf` governs the whole property rather
-   * than one decorator, so "present and a UUID for a handover" and "absent for a new
-   * Cell" cannot both be expressed on this field — the second condition replaces the
-   * first rather than joining it. The refusal lives in the service, beside the other
-   * rules `kind` decides, and `forbidNonWhitelisted` cannot help because the field is
-   * whitelisted on this DTO.
+   * **Only the first half is here.** Two `@ValidateIf`s on one property are **ANDed**,
+   * not replaced — `class-validator` collects every conditional and skips the property
+   * if any returns false — so "present and a UUID for a handover" and "absent for a new
+   * Cell" cannot both be expressed here, because their conjunction is unsatisfiable.
+   * (*An earlier version of this said the second condition replaced the first. The
+   * conclusion was right and the mechanism was not.*) The refusal lives in the service,
+   * beside the other rules `kind` decides, and `forbidNonWhitelisted` cannot help
+   * because the field is whitelisted on this DTO.
    */
   @ValidateIf((dto: CreateLeadershipRequestDto) => dto.kind === 'HANDOVER')
   @IsUUID()
@@ -195,15 +197,29 @@ export class DeclineLeadershipRequestDto {
   reason!: CellDeclineReason;
 
   /**
-   * Required where the reason is `OTHER`, and refused otherwise.
+   * Required where the reason is `OTHER`, and **permitted with any other reason**.
+   *
+   * *An earlier version said "refused otherwise", which was a rule section 10 does not
+   * have — its shape says only "nullable, required where the reason is `OTHER`", and
+   * migration 0009's `..._note_only_with_reason` permits a note beside any reason.
+   * Nothing refused it either, so the sentence was false of the code as well as of the
+   * specification.*
+   *
+   * **The `|| note !== undefined` disjunct is what makes the bounds apply at all**, and
+   * dropping it is how the sentence came to be false. `class-validator` skips *every*
+   * decorator on a property whose `@ValidateIf` is false — so with the condition on the
+   * reason alone, the trim, the minimum and the 500-character maximum were all inert for
+   * four of the five reasons, and a 5,000-character note was stored untrimmed. That is
+   * `CloseCellDto.note`'s shape, and this is the half of it that was reused without its
+   * reason being re-derived (section 25 rule 19).
    *
    * **Trimmed, then required to be non-empty**, because the database compares
-   * `btrim(coalesce(note, '')) <> ''` — a `@MinLength(1)` alone accepts two spaces and
+   * `btrim(coalesce(note, '')) <> ''` — `@MinLength(1)` alone accepts two spaces and
    * turns a documented refusal into a constraint violation rendered `INTERNAL_ERROR`.
-   * That is the half-closed fix the closure DTO had to correct, and it is not repeated
-   * here.
    */
-  @ValidateIf((dto: DeclineLeadershipRequestDto) => dto.reason === 'OTHER')
+  @ValidateIf(
+    (dto: DeclineLeadershipRequestDto) => dto.reason === 'OTHER' || dto.note !== undefined,
+  )
   @IsString()
   @Transform(({ value }: { value: unknown }) => (typeof value === 'string' ? value.trim() : value))
   @MinLength(1)
