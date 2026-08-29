@@ -154,11 +154,16 @@ export class CapabilityGuard implements CanActivate {
       // disclose something, return `NOT_FOUND` rather than a denial". Both close the
       // oracle; only one is the remedy the specification writes down, and an earlier
       // version of this comment credited section 22 for the direction not taken.
-      // Whether a Cell's existence is a case that rule covers is escalated in
-      // CLAUDE.md — section 22 settles it for a Person and for nothing else — and
-      // until it is settled this leaves the API answering both codes for one fact:
-      // `CellsMembershipService` answers `NOT_FOUND` for an absent Cell to a Whole
-      // Church actor, because `scopeCovers` returns true before the target is read.
+      // **Section 22 has since settled that a Cell is not such a case**, and this
+      // comment claimed the opposite for one slice after it did. A Cell identifier
+      // cannot be enumerated, so an actor holding one obtained it legitimately and
+      // confirming it exists tells them nothing they did not have; what protects the
+      // record is the indistinguishability below rather than the code. Section 22 also
+      // answers the "both codes for one fact" objection this comment used to raise:
+      // each actor gets one consistent answer decided by their own scope, and
+      // `NOT_FOUND` is reached only by an actor whose scope *would* have covered the
+      // Cell — a Whole Church one, since `scopeCovers` returns true before the target
+      // is read. `CellsMembershipService` and the closure both answer that way.
       //
       // Handing `authorize` a target that resolves to nobody is what the Account
       // path already does: `personBehind` returns null *inside* `scopeCovers`, after

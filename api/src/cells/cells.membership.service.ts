@@ -265,14 +265,22 @@ export class CellsMembershipService {
    * `scopeCovers` returns true before the target is read. Answering an empty list left
    * `POST /cells/{id}/closure` and this route giving two answers for one fact.
    *
-   * **Section 22's collection envelope, with `next_cursor` always null.** A Cell's
-   * membership is bounded by what one leader can pastor and the closure refuses a list
-   * over 500, so paging is not something a client does here. The envelope is that
-   * shape regardless, for the reason `GET /people/duplicate-candidates` gives: section
-   * 22 makes `/api/v1` additive-only, and a collection shipped without an envelope can
-   * never grow a cursor once a phone depends on it.
+   * **Section 22's collection envelope, and its pagination rather than only its
+   * shape.** A first version returned `{ data, next_cursor: null }` and bound no
+   * `limit`, which is the truncation-without-a-cursor shape `CLAUDE.md` already
+   * carries as open for `/people/duplicate-candidates`, arrived at deliberately. The
+   * reason given — that a Cell's membership is small and the closure refuses a list
+   * over 500 — bounds the closure *request* rather than a Cell's membership, and a
+   * Cell over that is then closable by nobody *and* silently truncated here.
+   *
+   * `next_cursor` is null for every Cell this church has, because a page of 50 holds
+   * what one leader can pastor. It is a fact about the data rather than a promise, and
+   * a client that meets a cursor can follow it.
    */
-  async membersOf(cellId: string): Promise<{
+  async membersOf(
+    cellId: string,
+    page: { limit?: number; cursor?: string } = {},
+  ): Promise<{
     data: Record<string, unknown>[];
     next_cursor: string | null;
   }> {
@@ -286,16 +294,28 @@ export class CellsMembershipService {
       throw new NotFoundError('No such Cell.');
     }
 
-    const members = await this.cells.membersOfWithin(this.db, cellId);
+    const limit = page.limit ?? 50;
+
+    // One more than asked for, so whether another page exists is answered by the read
+    // rather than by a second count — and the extra row is dropped before it is
+    // returned, so a client never sees `limit + 1`.
+    const members = await this.cells.membersOfWithin(this.db, cellId, {
+      limit: limit + 1,
+      after: page.cursor,
+    });
+
+    const visible = members.slice(0, limit);
 
     return {
-      data: members.map((member) => ({
+      data: visible.map((member) => ({
         person_id: member.person_id,
         member_id: member.member_id,
         full_name: member.full_name,
         started_at: member.started_at.toISOString(),
       })),
-      next_cursor: null,
+      // The Member ID of the last row shown, which is the third key of the ordering
+      // and total on its own (section 3).
+      next_cursor: members.length > limit ? (visible.at(-1)?.member_id ?? null) : null,
     };
   }
 

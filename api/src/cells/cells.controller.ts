@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, HttpCode, Param, Post, Put } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, Param, Post, Put, Query } from '@nestjs/common';
 
 import { RequiresCapability } from '../auth/authorization/authorization.decorators';
 import { type Actor } from '../auth/authorization/authorization.service';
@@ -17,6 +17,7 @@ import { CellsMembershipService } from './cells.membership.service';
 import { CellsService } from './cells.service';
 import {
   AddCellMemberDto,
+  CellMembersDto,
   ChangeCellCategoryDto,
   ChangeCellScheduleDto,
   CloseCellDto,
@@ -110,8 +111,9 @@ export class CellsController {
   })
   async members(
     @Param('id') cellId: string,
+    @Query() query: CellMembersDto,
   ): Promise<{ data: Record<string, unknown>[]; next_cursor: string | null }> {
-    return this.membership.membersOf(cellId);
+    return this.membership.membersOf(cellId, { limit: query.limit, cursor: query.cursor });
   }
 
   /**

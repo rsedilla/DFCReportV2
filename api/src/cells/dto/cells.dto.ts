@@ -244,3 +244,40 @@ export class CloseCellDto {
   @Type(() => CellClosureMemberDto)
   members!: CellClosureMemberDto[];
 }
+
+/**
+ * `GET /api/v1/cells/{id}/members` (SKILL.md section 22, *Pagination*).
+ *
+ * **`limit` is bound because section 22 makes pagination cursor-based on *every*
+ * collection endpoint**, and an envelope that answers `next_cursor: null` over a list
+ * it silently truncated reads as "this is the last page". A first version returned the
+ * envelope and bound no parameter, which is that shape with the truncation still to
+ * come.
+ *
+ * `next_cursor` is still always null, and here that is a fact rather than a
+ * simplification: a Cell's membership is what one leader can pastor, so the default
+ * page holds every member of any Cell this church has. Where it does not — a Cell over
+ * the limit — the answer says so by returning `limit` rows and a cursor, rather than by
+ * returning everything.
+ */
+export class CellMembersDto {
+  /** Section 22: defaults to 50, maximum 200. */
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(200)
+  limit?: number;
+
+  /**
+   * The `person_id` the previous page ended on.
+   *
+   * An opaque cursor over the ordering the read service fixes — last name, first name,
+   * Member ID — rather than an offset, which section 22 forbids: a member added while a
+   * client pages would shift every subsequent page by one.
+   */
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  cursor?: string;
+}

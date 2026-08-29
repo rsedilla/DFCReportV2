@@ -339,6 +339,8 @@ describe('closing a Cell (section 10)', () => {
       const created = new Date('2026-03-01T00:00:00+08:00');
       const handedOver = new Date('2026-03-20T00:00:00+08:00');
 
+      // Under the root, so Rosalio is Mark's sibling and outside Mark's subtree: the
+      // rejected reading resolves the destination through him and refuses.
       const rosa = await createPerson(db, { firstName: 'Rosalio', network: 'MENS' });
       await assignTo(db, rosa.id, root.id);
 
@@ -393,6 +395,80 @@ describe('closing a Cell (section 10)', () => {
       }).expect(422);
 
       expect(response.body.error.code).toBe('VALIDATION_FAILED');
+    });
+
+    it('scopes a destination by who leads it now, not by who led it then', async () => {
+      // **The one testable consequence of the rule section 7 gained**, and nothing
+      // pinned it: every destination case either closes as Admin, whose Whole Church
+      // scope returns true before the target is read, or names a Cell that never
+      // changed hands. Mutating the destination's scope check to resolve as of the
+      // effective date left the whole suite green — the rule written into the source
+      // of truth with nothing that could fail on it, which is this branch's own
+      // recurring fault.
+      //
+      // The destination was Rosalio's until 20 March and is Mark's since, and the
+      // closure is dated 10 March — so the two readings disagree: authority resolves
+      // through Mark, who is the actor, and the rejected reading resolves through
+      // Rosalio, who is his sibling and outside his subtree.
+      const created = new Date('2026-03-01T00:00:00+08:00');
+      const handedOver = new Date('2026-03-20T00:00:00+08:00');
+
+      // Under the root, so Rosalio is Mark's sibling and outside Mark's subtree: the
+      // rejected reading resolves the destination through him and refuses.
+      const rosa = await createPerson(db, { firstName: 'Rosalio', network: 'MENS' });
+      await assignTo(db, rosa.id, root.id);
+
+      const destination = await createCell(db, { leader: rosa, createdAt: created });
+      await db.transaction().execute(async (trx) => {
+        await trx
+          .updateTable('cell_leaderships')
+          .set({ ended_at: handedOver })
+          .where('cell_id', '=', destination.id)
+          .execute();
+        await trx
+          .insertInto('cell_leaderships')
+          .values({ person_id: mark.id, cell_id: destination.id, started_at: handedOver })
+          .execute();
+      });
+
+      const closing = await createCell(db, { leader: mark, createdAt: created });
+      await db
+        .insertInto('cell_memberships')
+        .values({ person_id: juan.id, cell_id: closing.id, started_at: created })
+        .execute();
+
+      // **A Leader, so scope is actually evaluated** — Admin's Whole Church grant
+      // returns true before the target is read, which is why every earlier
+      // destination case failed to discriminate. And the closure must be **backdated**,
+      // because an undated one takes effect now and the two readings then agree; a
+      // Leader can only backdate with an explicit grant, which section 7 permits Admin
+      // to issue.
+      //
+      // A first version of this case used an undated closure and passed against the
+      // mutation it names, which is the fault it was written to catch.
+      const leader = await createAccount(app, db, { person: mark, roles: ['LEADER'] });
+
+      await db
+        .insertInto('capability_grants')
+        .values({
+          account_id: leader.id,
+          capability: 'records.backdate_effective_date',
+          scope_type: 'WHOLE_CHURCH',
+          read_only: false,
+          reason: 'Invented for this case (CLAUDE.md, Secrets).',
+          granted_by: admin.id,
+        })
+        .execute();
+
+      await close(leader, closing.id, {
+        reason: 'MEMBERS_DISPERSED',
+        note: 'correcting the recorded date',
+        members: [{ person_id: juan.id, destination_cell_id: destination.id }],
+        // **Before the destination's handover, which is the whole staging.** Dated
+        // after it, both readings resolve to Mark and the case passes against the
+        // mutation it names — which a second version of this case did.
+        effective_date: '2026-03-10',
+      }).expect(200);
     });
 
     it('refuses a member list longer than the bound', async () => {
@@ -722,7 +798,7 @@ describe('closing a Cell (section 10)', () => {
       expect(response.body.error.code).toBe('INVARIANT_VIOLATION');
     });
 
-    it('decides backdating against the instant the write applies, not the request', async () => {
+    it('decides backdating after the locks, not at handler entry', async () => {
       // **The decision moved inside the transaction, after the locks**, and this is
       // what fails if it moves back. `manilaDayOf(new Date())` at handler entry is a
       // different clock and a different moment from the `clock_timestamp()` the write
@@ -731,9 +807,13 @@ describe('closing a Cell (section 10)', () => {
       // today's when it arrived is yesterday's when the rows are ended at it —
       // backdated, with no capability asked and no note required.
       //
-      // The wait is staged rather than the clock: a Leader is refused for backdating
-      // *while holding no capability*, which is only decided at all if the decision
-      // happens after the lock this closure is blocked on.
+      // **It pins the placement, not the clock, and the title said both until it
+      // didn't.** The wait is staged: a Leader is refused for backdating while holding
+      // no capability, which is only decided at all if the decision happens after the
+      // lock. Mutating `manilaDayOf(recordedAt)` back to `manilaDayOf(new Date())`
+      // *inside* the transaction leaves this green, because the request has waited and
+      // the host clock has crossed midnight too. What stays unpinned is the residue —
+      // host-to-server skew, which section 24 bounds nowhere and no test can stage.
       const leader = await createAccount(app, db, { person: mark, roles: ['LEADER'] });
       const created = new Date('2026-03-01T00:00:00+08:00');
       const cell = await createCell(db, { leader: mark, createdAt: created });
@@ -769,6 +849,48 @@ describe('closing a Cell (section 10)', () => {
         await holder.query('ROLLBACK').catch(() => undefined);
         await holder.end();
       }
+    });
+
+    it('refuses a narrow grant of the backdating capability with SCOPE_DENIED', async () => {
+      // **Two things nothing pinned, and both are the reason the check is written the
+      // way it is.**
+      //
+      // The code split: `coversWith` answers a boolean, so the two errors are chosen
+      // at the call site because section 7 makes the code name the half that failed.
+      // Deleting that and throwing `CAPABILITY_DENIED` unconditionally left every case
+      // green, and it is the wrong answer here — this actor *holds* the capability and
+      // an administrator told `CAPABILITY_DENIED` would grant what they already
+      // granted.
+      //
+      // And the target: `records.backdate_effective_date` is Whole Church only
+      // (section 7), so a grant issued narrower covers nothing. Resolved against the
+      // Cell's leader instead — which is what copying `PeopleReassignmentService`
+      // would have done — this grant would cover Mark and the closure would succeed.
+      const leader = await createAccount(app, db, { person: mark, roles: ['LEADER'] });
+      const created = new Date('2026-03-01T00:00:00+08:00');
+      const cell = await createCell(db, { leader: mark, createdAt: created });
+
+      await db
+        .insertInto('capability_grants')
+        .values({
+          account_id: leader.id,
+          capability: 'records.backdate_effective_date',
+          scope_type: 'OWN_SUBTREE',
+          read_only: false,
+          reason: 'Invented for this case (CLAUDE.md, Secrets).',
+          granted_by: admin.id,
+        })
+        .execute();
+
+      const response = await close(leader, cell.id, {
+        reason: 'CREATED_IN_ERROR',
+        note: 'well before today',
+        members: [],
+        effective_date: '2026-03-02',
+      }).expect(403);
+
+      expect(response.body.error.code).toBe('SCOPE_DENIED');
+      expect(response.body.error.details.capability).toBe('records.backdate_effective_date');
     });
 
     it('refuses a forward-dated closure', async () => {

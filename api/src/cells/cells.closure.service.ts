@@ -201,6 +201,13 @@ export class CellsClosureService {
           // 5 requires of a backdated reassignment and for the reason section 10
           // gives: a backdated closure erases the scheduled-meeting count a coverage
           // line is read against, so the entry that records it has to say why.
+          //
+          // **For `OTHER` this adds no field, and section 10 says so rather than
+          // leaving the code to take that reading silently.** That reason already
+          // requires a note, so one note explains both the closure and its date. The
+          // alternative is a second free-text field to obtain a distinction nothing
+          // can enforce; the requirement does its work on the other four reasons,
+          // where the note exists only because the closure is backdated.
           throw new ValidationFailedError(
             'Backdating a closure requires a note explaining it (SKILL.md section 7).',
             { field: 'note' },
@@ -218,7 +225,12 @@ export class CellsClosureService {
       const floor = await this.closureFloorWithin(trx, cellId);
 
       if (effectiveAt.getTime() < floor.getTime()) {
-        throw this.closureTooEarly(cell.cell_id, floor, input.effectiveDate !== undefined);
+        throw this.closureTooEarly(
+          cell.cell_id,
+          floor,
+          input.effectiveDate !== undefined,
+          recordedAt,
+        );
       }
 
       // Destinations are validated after the floor rather than before it, so a
@@ -876,7 +888,7 @@ export class CellsClosureService {
    * the day *after* it. Here a floor landing exactly on a Manila midnight is itself
    * legal, and only a floor inside a day pushes to the next one.
    */
-  private closureTooEarly(cellId: string, floor: Date, dated: boolean): ApiError {
+  private closureTooEarly(cellId: string, floor: Date, dated: boolean, recordedAt: Date): ApiError {
     if (!dated) {
       // **Unreachable through any operation this system defines, and kept as a
       // fail-safe rather than as a live branch.** The instant is `clock_timestamp()`
@@ -905,7 +917,13 @@ export class CellsClosureService {
     const earliest =
       startOfManilaDay(floorDay).getTime() === floor.getTime() ? floorDay : manilaDayAfter(floor);
 
-    if (startOfManilaDay(earliest).getTime() > Date.now()) {
+    // **`recordedAt`, not `Date.now()`.** This is the same day question the backdating
+    // decision above asks, one method down, and it was still being answered on the
+    // host clock after that one moved — so near Manila midnight, or under the
+    // host-to-server skew section 24 bounds nowhere, it names a date that is itself
+    // already refused. Section 10 says the refusal must not do that. The commit that
+    // moved the other half claimed "both halves of that comparison moved"; one had.
+    if (startOfManilaDay(earliest).getTime() > recordedAt.getTime()) {
       return new InvariantViolationError(
         'This closure cannot be backdated: the Cell’s own leadership and membership ' +
           'records reach past every date earlier than today. Submit it without an ' +

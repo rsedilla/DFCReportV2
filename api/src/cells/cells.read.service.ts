@@ -105,6 +105,7 @@ export class CellsReadService {
   async membersOfWithin(
     executor: Db | Transaction<Database>,
     cellId: string,
+    page: { limit: number; after?: string } = { limit: 50 },
   ): Promise<{ person_id: string; member_id: string; full_name: string; started_at: Date }[]> {
     const rows = await executor
       .selectFrom('cell_memberships')
@@ -121,9 +122,30 @@ export class CellsReadService {
       .where('cell_memberships.ended_at', 'is', null)
       // Ordered so two identical requests answer identically. Member ID is total and
       // encodes nothing (section 3), which is what makes it a safe tie-break.
+      // The cursor is the Member ID of the row the previous page ended on, compared
+      // against the same three keys the ordering uses. A keyset rather than an offset,
+      // which section 22 forbids for the reason it gives: a member added mid-paging
+      // would shift every subsequent page by one.
+      .$if(page.after !== undefined, (query) =>
+        query.where((eb) =>
+          eb(
+            eb.refTuple('persons.last_name', 'persons.first_name', 'persons.member_id'),
+            '>',
+            eb
+              .selectFrom('persons as cursor')
+              .select((cursorEb) =>
+                cursorEb
+                  .refTuple('cursor.last_name', 'cursor.first_name', 'cursor.member_id')
+                  .as('key'),
+              )
+              .where('cursor.member_id', '=', page.after as string),
+          ),
+        ),
+      )
       .orderBy('persons.last_name')
       .orderBy('persons.first_name')
       .orderBy('persons.member_id')
+      .limit(page.limit)
       .execute();
 
     return rows.map((row) => ({
@@ -194,14 +216,19 @@ export class CellsReadService {
       .where('cell_id', '=', cellId)
       .where('started_at', '<=', at)
       .where((eb) => eb.or([eb('ended_at', 'is', null), eb('ended_at', '>', at)]))
-      // **The tie-break the trigger has, and the predicate alone does not need it —
-      // today.** Leadership periods are a contiguous non-overlapping chain, so at most
-      // one row covers any instant: `cell_leaderships_one_open_per_cell` is an index,
-      // but contiguity is a **trigger**, and `pg_restore --disable-triggers` skips a
-      // trigger. This repository has made that argument three times for preferring an
-      // index; where no index is available, the query does not lean on the trigger
-      // having run. `assert_membership_same_network` orders the same way.
+      // **Ordered, and with a real tie-break rather than the one word.** Leadership
+      // periods are a contiguous non-overlapping chain, so at most one row covers any
+      // instant — but contiguity is a **trigger**, and `pg_restore --disable-triggers`
+      // skips a trigger. In exactly that state two rows can share a `started_at`: the
+      // pair a section 5 correction leaves. So `started_at DESC` alone chooses
+      // arbitrarily there, which a first version of this comment called a tie-break
+      // while having none. These are the three keys `leaderForScopeWithin` above
+      // documents at length and settles on; `assert_membership_same_network` carries
+      // only the first, which is a narrower guarantee than this needs rather than a
+      // reason to match it.
       .orderBy('started_at', 'desc')
+      .orderBy('ended_at', (ob) => ob.desc().nullsFirst())
+      .orderBy('id', 'desc')
       .limit(1)
       .executeTakeFirst();
 
