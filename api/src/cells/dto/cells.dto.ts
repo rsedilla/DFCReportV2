@@ -1,4 +1,4 @@
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import {
   ArrayMaxSize,
   IsArray,
@@ -193,15 +193,30 @@ export class CloseCellDto {
   @ValidateIf((closure: CloseCellDto) => closure.reason === 'OTHER' || closure.note !== undefined)
   @IsString()
   @MaxLength(500)
+  // **Trimmed, then required to be non-empty.** `@MinLength(1)` alone accepts `"  "`,
+  // which `cells_other_requires_note` does not — it compares `btrim(...) <> ''` — so a
+  // whitespace note reached the `UPDATE cells` and answered `INTERNAL_ERROR`, which is
+  // the failure this validation exists to remove, half-closed. It also satisfied the
+  // backdating rule below, so a backdated closure could carry a blank explanation and
+  // still write `effective_date.backdated` with a whitespace reason.
+  //
+  // The transform runs before the validators, so `@MinLength` sees the trimmed value
+  // and what is stored is what was checked.
+  @Transform(({ value }: { value: unknown }) => (typeof value === 'string' ? value.trim() : value))
   @MinLength(1)
   note?: string;
 
   /**
    * Asia/Manila calendar day, `YYYY-MM-DD` (section 22).
    *
-   * Omitted, the closure takes effect now. Supplied, it requires
-   * `records.backdate_effective_date` (section 10) and must clear the floor the
-   * Cell's own leadership and membership records set.
+   * Omitted, the closure takes effect now. Supplied, it must clear the floor the Cell's
+   * own leadership and membership records set — and where it is earlier than the
+   * current Manila day it is backdating, which requires
+   * `records.backdate_effective_date` and a note (section 10).
+   *
+   * **Today's date is not backdating**, though it resolves to Manila midnight and so
+   * is hours behind an undated closure. Section 10 makes the test the *day*, and the
+   * harm it guards is a closure reaching back to the first of the month.
    */
   @IsOptional()
   @Matches(/^\d{4}-\d{2}-\d{2}$/, {

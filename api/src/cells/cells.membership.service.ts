@@ -255,22 +255,47 @@ export class CellsMembershipService {
    * The query itself lives there, because `cells.read.service.ts` is where this
    * module's `SELECT`s are written.
    *
-   * No refusal for a Cell that does not exist: an empty list is the honest answer for
-   * a Cell with no members, and an actor whose scope would not cover the Cell was
-   * already refused by the guard. Distinguishing the two here would reintroduce the
-   * existence oracle section 22 settles for a Cell (2026-08-29).
+   * **`NOT_FOUND` for a Cell that is not there, and an earlier version answered 200
+   * with an empty list.** Its stated reason was that distinguishing the two would
+   * reintroduce the existence oracle — which is the opposite of what section 22
+   * settles. That ruling closes the oracle through the guard's uniform `SCOPE_DENIED`
+   * for every narrow scope, and then provides `NOT_FOUND` for an actor whose scope
+   * *would* have covered the Cell, "for whom absence is genuinely absence". Only a
+   * Whole Church actor reaches this handler for a Cell that does not exist, because
+   * `scopeCovers` returns true before the target is read. Answering an empty list left
+   * `POST /cells/{id}/closure` and this route giving two answers for one fact.
+   *
+   * **Section 22's collection envelope, with `next_cursor` always null.** A Cell's
+   * membership is bounded by what one leader can pastor and the closure refuses a list
+   * over 500, so paging is not something a client does here. The envelope is that
+   * shape regardless, for the reason `GET /people/duplicate-candidates` gives: section
+   * 22 makes `/api/v1` additive-only, and a collection shipped without an envelope can
+   * never grow a cursor once a phone depends on it.
    */
-  async membersOf(cellId: string): Promise<Record<string, unknown>> {
+  async membersOf(cellId: string): Promise<{
+    data: Record<string, unknown>[];
+    next_cursor: string | null;
+  }> {
+    const cell = await this.db
+      .selectFrom('cells')
+      .select('id')
+      .where('id', '=', cellId)
+      .executeTakeFirst();
+
+    if (!cell) {
+      throw new NotFoundError('No such Cell.');
+    }
+
     const members = await this.cells.membersOfWithin(this.db, cellId);
 
     return {
-      cell_uuid: cellId,
-      members: members.map((member) => ({
+      data: members.map((member) => ({
         person_id: member.person_id,
         member_id: member.member_id,
         full_name: member.full_name,
         started_at: member.started_at.toISOString(),
       })),
+      next_cursor: null,
     };
   }
 

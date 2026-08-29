@@ -17,6 +17,11 @@ export const DEADLOCK_DETECTED = '40P01';
 /**
  * Whether a thrown value is PostgreSQL reporting a wait this transaction lost.
  *
+ * **Named for what it matches, and it was `isLockTimeout` until it stopped matching
+ * only a timeout.** This repository renamed `cells_relationships_match_state` one
+ * slice ago on exactly that ground: a name that says less than the thing does is how
+ * the next reader concludes the other half is unhandled.
+ *
  * **Both ways a wait can end**, which section 5 states in as many words: "a deadlock
  * ends a wait too, and answers the same way… the two differ in cause and not in what
  * the caller should do: nothing was recorded, the retry is very likely to succeed,
@@ -39,7 +44,7 @@ export const DEADLOCK_DETECTED = '40P01';
  * A statement timeout is `57014` and stays out: it is not contention, and nothing
  * says a retry helps.
  */
-export function isLockTimeout(error: unknown): boolean {
+export function isLostLockWait(error: unknown): boolean {
   if (typeof error !== 'object' || error === null || !('code' in error)) {
     return false;
   }

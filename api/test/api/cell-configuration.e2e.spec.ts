@@ -499,14 +499,14 @@ describe('cell configuration (section 10)', () => {
 
   describe('concurrency (section 5)', () => {
     // **Both of this slice's live fixes were unpinned**, and a review found that
-    // rather than a test. Reverting `.forUpdate()` to `.forShare()`, or deleting the
+    // rather than a test. Reverting `.forNoKeyUpdate()` to `.forShare()`, or deleting the
     // `lock_timeout` bound, left all twenty cases green — in the batch whose own
     // headline was that three rules had nothing able to fail on them.
 
     it('waits for a Cell row held by another transaction', async () => {
       // **The blocker holds `FOR SHARE`, and that is what discriminates.** A shared
       // lock does not conflict with another shared lock, so a service still using
-      // `.forShare()` sails past and answers immediately. Only `FOR UPDATE` waits.
+      // `.forShare()` sails past and answers immediately. Only a lock that conflicts with `FOR SHARE` waits.
       //
       // That is the defect this pins: shared, two configuration changes both read the
       // open row, and the loser's `UPDATE` re-matches the row the winner just closed

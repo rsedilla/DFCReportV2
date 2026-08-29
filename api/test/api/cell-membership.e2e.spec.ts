@@ -597,24 +597,25 @@ describe('cell membership (section 10)', () => {
         .set('Authorization', `Bearer ${admin.accessToken}`)
         .expect(200);
 
-      expect(response.body.members).toHaveLength(1);
+      expect(response.body.next_cursor).toBeNull();
+      expect(response.body.data).toHaveLength(1);
       const memberId = await db
         .selectFrom('persons')
         .select('member_id')
         .where('id', '=', juan.id)
         .executeTakeFirstOrThrow();
 
-      expect(response.body.members[0]).toMatchObject({
+      expect(response.body.data[0]).toMatchObject({
         person_id: juan.id,
         member_id: memberId.member_id,
       });
-      expect(response.body.members[0].full_name).toContain('Juan');
+      expect(response.body.data[0].full_name).toContain('Juan');
 
       // **Section 8's protected fields are not here.** Names and the Member ID are
       // published church-wide; the birthday and the mobile number are not, and a
       // roster is not a route to them.
-      expect(response.body.members[0]).not.toHaveProperty('birth_date');
-      expect(response.body.members[0]).not.toHaveProperty('mobile_number');
+      expect(response.body.data[0]).not.toHaveProperty('birth_date');
+      expect(response.body.data[0]).not.toHaveProperty('mobile_number');
     });
 
     it('is refused to a leader whose scope does not reach the Cell', async () => {
@@ -631,13 +632,33 @@ describe('cell membership (section 10)', () => {
         .expect(403);
     });
 
+    it('answers NOT_FOUND for a Cell that is not there', async () => {
+      // **Section 22's Cell worked case, and an earlier version answered 200 with an
+      // empty list.** Its stated reason was that distinguishing the two would
+      // reintroduce the existence oracle, which is the opposite of what that ruling
+      // says: the oracle is closed by the guard's uniform `SCOPE_DENIED` for every
+      // narrow scope, and `NOT_FOUND` is then provided for an actor whose scope
+      // *would* have covered the Cell. Only a Whole Church actor gets here for an
+      // absent Cell, because `scopeCovers` returns true before the target is read.
+      //
+      // It also left `POST /cells/{id}/closure` and this route giving two answers for
+      // one fact.
+      const response = await request(app.getHttpServer())
+        .get(`/api/v1/cells/${randomUUID()}/members`)
+        .set('Authorization', `Bearer ${admin.accessToken}`)
+        .expect(404);
+
+      expect(response.body.error.code).toBe('NOT_FOUND');
+    });
+
     it('answers an empty list rather than a refusal for a Cell with no members', async () => {
       const response = await request(app.getHttpServer())
         .get(`/api/v1/cells/${markCell.id}/members`)
         .set('Authorization', `Bearer ${admin.accessToken}`)
         .expect(200);
 
-      expect(response.body.members).toEqual([]);
+      expect(response.body.data).toEqual([]);
+      expect(response.body.next_cursor).toBeNull();
     });
   });
 

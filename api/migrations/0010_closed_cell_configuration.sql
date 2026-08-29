@@ -153,11 +153,12 @@ BEGIN
   -- commit. That leaves an open schedule row on a CLOSED Cell, which is the exact
   -- state this rule exists to forbid.
   --
-  -- It costs nothing in practice, because `CellsConfigurationService` already takes
-  -- this row `FOR UPDATE` before it reads anything, and the closure takes it
-  -- `FOR NO KEY UPDATE`. Both conflict with this share lock, so by the time either
-  -- reaches commit the other has finished. What the lock adds is that the rule holds
-  -- for a writer that has not read that docblock.
+  -- It costs nothing in practice, because both writers that could reach this state
+  -- already take the `cells` row `FOR NO KEY UPDATE` before they read anything -- the
+  -- closure because it writes that row, `CellsConfigurationService` because two
+  -- configuration changes on one Cell must serialize. Both conflict with this share
+  -- lock, so by the time either reaches commit the other has finished. What the lock
+  -- adds is that the rule holds for a writer that has not read those docblocks.
   SELECT c.state, c.closed_at INTO v_state, v_closed_at
     FROM cells c WHERE c.id = p_cell_id FOR SHARE;
 

@@ -1473,6 +1473,12 @@ The four scope values are a closed enumeration. A guard cannot fail closed again
 Scope resolves against a target. Where the target is a Person, it resolves through their pastoral position. Where it is not:
 
 - a **Cell**, a Cell meeting, a membership or a leadership resolves through the Cell's leader **as of the period being viewed**, falling back to its last leader where the Cell is closed. A closed Cell keeps its history and its roster visible to the leader who led it (Sections 10 and 15), which resolving through a current leader it no longer has would prevent
+
+**For a write carrying a past effective date, the period being viewed is now.** Authority resolves through the Cell's *current* leader, whatever date the write is being applied at; the relationship being recorded resolves as of its own effective date, because that is the period it describes. Two questions, two answers, and an operation that backdates asks both.
+
+The direction is forced rather than chosen. A leader whose Cell was handed away yesterday holds no authority over it today, and resolving authority as of the effective date would let them recover it by dating the action far enough back — privilege reclaimed through a date field, which is the shape Section 5 invariant 4 refuses through the org chart. Nothing is lost by the other reading: the leader who *did* hold the Cell then is not thereby entitled to act on it now.
+
+It follows that a Cell closure backdated across a destination Cell's handover is scoped against the leader who holds that Cell today, and compares Networks against the leader who held it on the effective date. Those can be different people in different subtrees, and both answers are correct for the question each is asked.
 - a **DCC event** is church-wide and resolves through nothing; the endpoints on it are scoped by the people they return, so a roster or a submission covers only the requester's own authorized people (Section 9)
 - an **Account** resolves through its Person
 - a **report scope selector** is itself the target: a request for a scope the actor does not hold is `SCOPE_DENIED`, never silently narrowed to what they do hold
@@ -1775,6 +1781,12 @@ Do not expose, for a person outside the searching leader's pastoral scope:
 - reports
 - account information
 - complete pastoral/downline information
+
+**This list bounds the church-wide directory, not every surface that names a person.** It is written about *searching* — the church-wide people search this section defines, which everyone may use precisely so that duplicates are prevented (Section 3). It is not a rule that a person's Cell membership is invisible to everybody outside their pastoral branch, and reading it that way would forbid a Cell Leader their own roster.
+
+The distinction is the direction the question is asked from. A search starts from a person and would otherwise let any leader assemble a profile of anyone in the church. A Cell's roster starts from the Cell, and is shown only to those authorized over that Cell — its leader, their upline within scope, Admin and the Senior Pastors, which is exactly the set Section 10 authorizes to *change* that membership. Nobody learns anything about a person they could not already act on.
+
+**A Cell legitimately holds members the reader has no pastoral scope over**, because Section 10 makes membership independent of pastoral assignment, and Section 10 separately requires a Cell's current members to be presented at the point of closure. So the roster necessarily discloses the association this list protects in a search, and it is the disclosure the operational rules require rather than an exception carved for convenience. What it never carries is the rest of the list: a member's birthday, contact details, attendance, classification or reports are no more visible on a roster than in a search.
 
 Selecting an existing person during a duplicate-resolution workflow reuses that Person record but must not automatically transfer pastoral ownership, Cell membership, or any other relationship. Any such transfer requires its own explicit, authorized action.
 

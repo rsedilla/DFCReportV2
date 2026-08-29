@@ -89,11 +89,18 @@ export class CellsReadService {
    * without a route serving it the closure is unusable by any client. That is why it
    * arrives here rather than with the rest of the read surface.
    *
-   * **Names, not identifiers alone.** Section 8 publishes a Person's names and Member
-   * ID church-wide, so nothing here exceeds what a directory search already shows —
-   * and a closure screen that listed UUIDs would be asking a leader to make a pastoral
-   * decision about rows they cannot recognise. The birthday and the mobile number
-   * section 8 protects are not returned.
+   * **It discloses an association section 8 protects in a *search*, and section 8 now
+   * says why that is right rather than an exception.** A first version of this
+   * docblock argued that names and Member IDs are published church-wide "so nothing
+   * here exceeds what a directory search already shows". That was false in the half
+   * that mattered: the names are publishable and the *association* between them and
+   * this Cell is on section 8's forbidden list. What reconciles them is direction — a
+   * search starts from a person and this starts from a Cell, and everyone who can read
+   * this roster is somebody section 10 authorizes to change it.
+   *
+   * The rest of section 8's list is not here: no birthday, no contact detail, no
+   * attendance, no classification. Names because a closure screen listing UUIDs would
+   * be asking a leader to make a pastoral decision about rows they cannot recognise.
    */
   async membersOfWithin(
     executor: Db | Transaction<Database>,
@@ -133,10 +140,20 @@ export class CellsReadService {
    * The Cell's leader **as of an instant**, which is a different question from
    * `leaderForScopeWithin` above and must not be answered by it.
    *
-   * That one implements section 7's rule for a *scope*: current, falling back to the
-   * last leader where the Cell is closed, ignoring dates entirely. This implements
-   * section 10's rule for a *relationship*: the assignment row covering the instant,
-   * which is exactly what `assert_membership_same_network` compares against.
+   * That one answers *who may act on this Cell now* — the current leader, falling back
+   * to the last where the Cell is closed. This answers *who led it then*: the
+   * assignment row covering the instant, which is the predicate
+   * `assert_membership_same_network` uses.
+   *
+   * **Section 7 says "as of the period being viewed", and an earlier version of this
+   * paragraph paraphrased that as "ignoring dates entirely", which is the opposite.**
+   * The fallback to the last leader is scoped to a *closed* Cell rather than being a
+   * general licence. What settles which of the two a write uses is section 7 as
+   * amended for a backdated write: authority is decided as of now, because the actor
+   * is acting now — otherwise a leader whose Cell was handed away yesterday could
+   * reclaim authority over it by dating the action far enough back. The relationship
+   * being recorded is decided as of its own effective date, because that is the
+   * period it describes.
    *
    * **The two coincide for every membership written at `clock_timestamp()` and part
    * company the moment one is backdated**, which is how a closure reached a raw
@@ -151,6 +168,20 @@ export class CellsReadService {
    * Returns null where the Cell had no leader then, including where it did not exist.
    * A caller comparing Networks owes an answer for that rather than letting the
    * deferred trigger raise.
+   *
+   * **Only that null answer is observable today, and it is stated here rather than
+   * left for somebody to find by deleting the date filter.** Which row is selected
+   * cannot change a Network comparison, because `cell_leaderships_stay_in_network`
+   * makes every leader a Cell ever has belong to one Network — so a case pinning the
+   * *selection* would pass against a method that ignored dates, and one was written
+   * before this was noticed. The filter is written correctly anyway, on the same
+   * reasoning `isCurrentCellLeaderWithin` gives below: the rule that makes the two
+   * agree is a constraint trigger, and `pg_restore --disable-triggers` skips one.
+   *
+   * The closure's audit entry for the ended leadership uses this too, and there the
+   * answer is provably the open row: the floor's second term puts every *closed*
+   * leadership `ended_at` at or below the effective date, so no earlier stint can be
+   * covering it.
    */
   async leaderAsOfWithin(
     executor: Db | Transaction<Database>,
@@ -163,6 +194,15 @@ export class CellsReadService {
       .where('cell_id', '=', cellId)
       .where('started_at', '<=', at)
       .where((eb) => eb.or([eb('ended_at', 'is', null), eb('ended_at', '>', at)]))
+      // **The tie-break the trigger has, and the predicate alone does not need it —
+      // today.** Leadership periods are a contiguous non-overlapping chain, so at most
+      // one row covers any instant: `cell_leaderships_one_open_per_cell` is an index,
+      // but contiguity is a **trigger**, and `pg_restore --disable-triggers` skips a
+      // trigger. This repository has made that argument three times for preferring an
+      // index; where no index is available, the query does not lean on the trigger
+      // having run. `assert_membership_same_network` orders the same way.
+      .orderBy('started_at', 'desc')
+      .limit(1)
       .executeTakeFirst();
 
     return row?.person_id ?? null;

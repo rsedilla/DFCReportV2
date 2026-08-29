@@ -108,7 +108,9 @@ export class CellsController {
     kind: 'cell',
     from: 'params.id',
   })
-  async members(@Param('id') cellId: string): Promise<Record<string, unknown>> {
+  async members(
+    @Param('id') cellId: string,
+  ): Promise<{ data: Record<string, unknown>[]; next_cursor: string | null }> {
     return this.membership.membersOf(cellId);
   }
 

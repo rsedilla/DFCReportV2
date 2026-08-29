@@ -323,6 +323,78 @@ describe('closing a Cell (section 10)', () => {
       expect((await cellRow(closing.id)).state).toBe('ACTIVE');
     });
 
+    it('disperses into a Cell that has since changed hands', async () => {
+      // The positive half of the same fix: a backdated dispersal into a Cell that
+      // *did* have a leader on the effective date goes through. The case above pins
+      // the refusal; this pins that the refusal is not indiscriminate.
+      //
+      // **It does not pin `leaderAsOfWithin`'s row selection, and a first version of
+      // this comment claimed it did.** Mutating the method to ignore dates entirely
+      // leaves this green, because `cell_leaderships_stay_in_network` makes every
+      // leader a Cell ever has the same Network — so which of them the comparison
+      // resolves to cannot change the answer. What the method's date filter decides is
+      // whether there is a row at all, which is the case above. The read service says
+      // the same thing in its docblock rather than leaving somebody to discover it by
+      // deleting the filter.
+      const created = new Date('2026-03-01T00:00:00+08:00');
+      const handedOver = new Date('2026-03-20T00:00:00+08:00');
+
+      const rosa = await createPerson(db, { firstName: 'Rosalio', network: 'MENS' });
+      await assignTo(db, rosa.id, root.id);
+
+      const destination = await createCell(db, { leader: rosa, createdAt: created });
+      await db.transaction().execute(async (trx) => {
+        await trx
+          .updateTable('cell_leaderships')
+          .set({ ended_at: handedOver })
+          .where('cell_id', '=', destination.id)
+          .execute();
+        await trx
+          .insertInto('cell_leaderships')
+          .values({ person_id: ben.id, cell_id: destination.id, started_at: handedOver })
+          .execute();
+      });
+
+      const closing = await createCell(db, { leader: mark, createdAt: created });
+      await db
+        .insertInto('cell_memberships')
+        .values({ person_id: juan.id, cell_id: closing.id, started_at: created })
+        .execute();
+
+      await close(admin, closing.id, {
+        reason: 'MEMBERS_DISPERSED',
+        note: 'correcting the recorded date',
+        members: [{ person_id: juan.id, destination_cell_id: destination.id }],
+        effective_date: '2026-03-10',
+      }).expect(200);
+
+      // The leadership entry names the leader whose assignment the closure ended.
+      // That is always the *open* row and never an earlier one, because the floor's
+      // term (b) puts every closed leadership `ended_at` at or below the effective
+      // date — so no earlier stint can still be covering it.
+      const entry = await db
+        .selectFrom('audit_log')
+        .select('before')
+        .where('action', '=', 'cell_leadership.ended')
+        .executeTakeFirstOrThrow();
+
+      expect(entry.before).toMatchObject({ cell_leader_id: mark.id });
+    });
+
+    it('refuses a whitespace-only note as validation, not a constraint violation', async () => {
+      // `cells_other_requires_note` compares `btrim(...) <> ''`, and `@MinLength(1)`
+      // alone accepts two spaces — so the note fix was half-closed and the same
+      // `INTERNAL_ERROR` was still reachable. It also satisfied the backdating rule, so
+      // a backdated closure could carry a blank explanation.
+      const response = await close(admin, markCell.id, {
+        reason: 'OTHER',
+        note: '   ',
+        members: [],
+      }).expect(422);
+
+      expect(response.body.error.code).toBe('VALIDATION_FAILED');
+    });
+
     it('refuses a member list longer than the bound', async () => {
       // Section 22 states the number and the code. Refused at the boundary, before
       // anything is locked or read, so the entries need only be well-formed.
@@ -648,6 +720,55 @@ describe('closing a Cell (section 10)', () => {
       }).expect(409);
 
       expect(response.body.error.code).toBe('INVARIANT_VIOLATION');
+    });
+
+    it('decides backdating against the instant the write applies, not the request', async () => {
+      // **The decision moved inside the transaction, after the locks**, and this is
+      // what fails if it moves back. `manilaDayOf(new Date())` at handler entry is a
+      // different clock and a different moment from the `clock_timestamp()` the write
+      // is stamped with: a request arriving at 23:59:59.7 and waiting out part of the
+      // three-second `lock_timeout` crosses Manila midnight, and a date that was
+      // today's when it arrived is yesterday's when the rows are ended at it —
+      // backdated, with no capability asked and no note required.
+      //
+      // The wait is staged rather than the clock: a Leader is refused for backdating
+      // *while holding no capability*, which is only decided at all if the decision
+      // happens after the lock this closure is blocked on.
+      const leader = await createAccount(app, db, { person: mark, roles: ['LEADER'] });
+      const created = new Date('2026-03-01T00:00:00+08:00');
+      const cell = await createCell(db, { leader: mark, createdAt: created });
+
+      const holder = new Client({ connectionString: process.env.DATABASE_URL });
+      await holder.connect();
+
+      try {
+        const holderPid = Number(
+          (await holder.query<{ pid: string }>('SELECT pg_backend_pid() AS pid')).rows[0].pid,
+        );
+
+        await holder.query('BEGIN');
+        await holder.query('SELECT id FROM cells WHERE id = $1 FOR NO KEY UPDATE', [cell.id]);
+
+        const closing = close(leader, cell.id, {
+          reason: 'CREATED_IN_ERROR',
+          note: 'well before today',
+          members: [],
+          effective_date: '2026-03-02',
+        }).then((response) => response);
+
+        await waitForApiBlocked(holderPid);
+        await holder.query('ROLLBACK');
+
+        const response = await closing;
+
+        // Refused for the capability, which means the check ran — and it ran after the
+        // lock, because the request could not reach it until the row was released.
+        expect(response.status).toBe(403);
+        expect(response.body.error.details.capability).toBe('records.backdate_effective_date');
+      } finally {
+        await holder.query('ROLLBACK').catch(() => undefined);
+        await holder.end();
+      }
     });
 
     it('refuses a forward-dated closure', async () => {

@@ -10,7 +10,7 @@ import { ThrottlerException } from '@nestjs/throttler';
 import type { Request, Response } from 'express';
 
 import { ApiError, ApiErrorCode, ResourceBusyError, type ApiErrorBody } from './api-error';
-import { isLockTimeout } from './postgres-errors';
+import { isLostLockWait } from './postgres-errors';
 
 /**
  * Every failure leaves this API as the one envelope of SKILL.md section 22.
@@ -77,7 +77,7 @@ export function describeFailure(exception: unknown): { status: number; body: Api
   // and section 22's release rule turns on the status: released at 5xx and stored
   // otherwise, so misclassifying it as anything below 500 would pin a transient
   // failure to the idempotency key.
-  if (isLockTimeout(exception)) {
+  if (isLostLockWait(exception)) {
     const busy = new ResourceBusyError();
     return { status: busy.status, body: busy.toBody() };
   }

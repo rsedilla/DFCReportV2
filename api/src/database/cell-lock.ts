@@ -97,7 +97,7 @@ export interface CellLockRequest {
  *
  * The wait is bounded by the caller's `lock_timeout`, and an elapsed one answers
  * `RESOURCE_BUSY` wherever it is raised (section 5). So does a deadlock this ordering
- * has not reached — `isLockTimeout` matches `40P01` as well as `55P03`, which it did
+ * has not reached — `isLostLockWait` matches `40P01` as well as `55P03`, which it did
  * not until this endpoint landed and which is the half of section 5 that had been
  * stated and not built. Ordering reaches the locks an operation takes itself; it does
  * not reach the row locks a deferred constraint trigger takes at COMMIT in write

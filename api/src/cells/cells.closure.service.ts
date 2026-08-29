@@ -9,6 +9,7 @@ import {
 } from '../auth/authorization/authorization.service';
 import { Capability } from '../auth/authorization/capabilities';
 import {
+  CapabilityDeniedError,
   InvariantViolationError,
   NotFoundError,
   ResourceBusyError,
@@ -93,56 +94,6 @@ export class CellsClosureService {
     // connection while holding one is the liveness hazard that section names.
     const authority = await this.authorization.authorityFor(actor.accountId);
 
-    // **Earlier than the current Manila day, which is what section 10 says**, and an
-    // earlier version of this asked for the capability on any supplied date at all.
-    // That was stricter than the specification without recording the difference, and
-    // it cost something real: a leader submitting today's date rather than omitting
-    // the field was refused `SCOPE_DENIED` for a request section 10 permits them to
-    // make. The two are not identical — today's date resolves to Manila midnight and
-    // omitting resolves to now — but the distance between them is hours inside the
-    // current day, and the harm section 10 names is a closure reaching back to the
-    // first of the month.
-    const backdated =
-      input.effectiveDate !== undefined && input.effectiveDate < manilaDayOf(new Date());
-
-    if (backdated) {
-      // Section 10: "Any effective date earlier than the current day requires
-      // `records.backdate_effective_date`", which is Admin's. Asked before the
-      // transaction because it is a fact about the actor's grants that nothing
-      // inside can change — the same placement `PeopleReassignmentService` uses.
-      //
-      // Asked for any supplied date, including today's. Deciding "earlier than the
-      // current day" here would mean two answers to one request shape depending on
-      // the clock, and the closer who means today submits no date at all.
-      //
-      // **The target is the church, and `PeopleReassignmentService` naming a person
-      // for this same capability is not a precedent to copy** (section 25 rule 19).
-      // It names one because it has one in hand and the operation is about that
-      // person; a Cell is not a Person, and resolving it to its leader would be
-      // claiming that the authority to backdate is authority over that leader.
-      // Section 7 keeps `records.backdate_effective_date` at Whole Church only, so
-      // `{ kind: 'church' }` is what the grant has to cover and what a narrower one
-      // is refused against.
-      await this.authorization.authorize(actor, Capability.RecordsBackdateEffectiveDate, {
-        kind: 'church',
-      });
-
-      if (input.note === undefined) {
-        // Section 7: backdating a closure "is Admin-only and always requires a
-        // reason". The closure reason cannot be that reason — every closure carries
-        // one from the fixed list, so reading it that way makes the requirement
-        // vacuous and backdating adds nothing to what an ordinary closure already
-        // records. What is owed is an explanation of the *backdating*, which is what
-        // section 5 requires of a backdated reassignment and for the same reason:
-        // section 10 says a backdated closure erases the scheduled-meeting count a
-        // coverage line is read against, so the entry that records it has to say why.
-        throw new ValidationFailedError(
-          'Backdating a closure requires a note explaining it (SKILL.md section 7).',
-          { field: 'note' },
-        );
-      }
-    }
-
     this.assertDecisionsAreWellFormed(cellId, input.members);
 
     return this.db.transaction().execute(async (trx) => {
@@ -220,6 +171,42 @@ export class CellsClosureService {
       const recordedAt = await this.nowWithin(trx);
       const effectiveAt =
         input.effectiveDate === undefined ? recordedAt : startOfManilaDay(input.effectiveDate);
+
+      // **Decided here, after the locks, against the instant the write actually
+      // applies** — and an earlier version decided it at handler entry against
+      // `new Date()` on this host. Section 10 asks whether the effective date is
+      // earlier than *the current day*, and both halves of that comparison moved:
+      // a request arriving at 23:59:59.7 and waiting out part of the three-second
+      // `lock_timeout` crosses Manila midnight, so a date that was today when the
+      // request arrived is yesterday's by the time the closure ends rows at it —
+      // backdated by up to a day, with no capability asked, no note required and no
+      // `effective_date.backdated` entry written. Host-to-server clock skew does the
+      // same with no wait at all, and section 24 bounds no skew.
+      //
+      // This is section 5's rule about the effective instant applied to the decision
+      // that reads it: an operation reads what it will rely on after the lock. Issue
+      // #16 is the same fault one field over.
+      const backdated =
+        input.effectiveDate !== undefined && input.effectiveDate < manilaDayOf(recordedAt);
+
+      if (backdated) {
+        await this.assertMayBackdateWithin(trx, actor, authority);
+
+        if (input.note === undefined) {
+          // Section 7: backdating a closure "is Admin-only and always requires a
+          // reason". The closure reason cannot be that reason — every closure carries
+          // one from the fixed list, so reading it that way makes the requirement
+          // vacuous and backdating adds nothing to what an ordinary closure records.
+          // What is owed is an explanation of the *backdating*, which is what section
+          // 5 requires of a backdated reassignment and for the reason section 10
+          // gives: a backdated closure erases the scheduled-meeting count a coverage
+          // line is read against, so the entry that records it has to say why.
+          throw new ValidationFailedError(
+            'Backdating a closure requires a note explaining it (SKILL.md section 7).',
+            { field: 'note' },
+          );
+        }
+      }
 
       if (effectiveAt.getTime() > recordedAt.getTime()) {
         throw new ValidationFailedError(
@@ -601,10 +588,14 @@ export class CellsClosureService {
             'section 10, What closing does).',
         );
 
-        // **As of the effective instant, not "current falling back to last".** The
-        // scope check above uses section 7's rule, which ignores dates; the
-        // same-Network comparison must use the rule its trigger uses, which is the
-        // assignment row covering the membership's `started_at`. The two agree for
+        // **As of the effective instant, and the scope check above is deliberately not.**
+        // Section 7 as amended settles the pair for a backdated write: authority is
+        // decided as of now, because the actor acts now and a leader whose Cell was
+        // handed away must not reclaim it by dating the action back; the relationship
+        // being recorded is decided as of its own effective date, because that is the
+        // period it describes. The same-Network comparison is the second of those, and
+        // must use the predicate its trigger uses — the assignment row covering the
+        // membership's `started_at`. The two agree for
         // every membership written at `clock_timestamp()` and part company the moment
         // a closure is backdated — a closure dated to February dispersing into a Cell
         // created in August has a destination with no leader then, and the scope rule
@@ -775,6 +766,68 @@ export class CellsClosureService {
          AND (ended_at IS NULL
               OR ended_at > GREATEST(${effectiveAt}::timestamptz, started_at))
     `.execute(trx);
+  }
+
+  /**
+   * `records.backdate_effective_date`, asked inside the transaction.
+   *
+   * **It is asked here rather than on the pool because *whether to ask* depends on an
+   * instant only the transaction has.** Section 10 makes the test "earlier than the
+   * current day", and the current day is the one in force when the write applies, not
+   * when the request arrived — so the decision cannot precede the locks, and the check
+   * has to follow it.
+   *
+   * `coversWith` rather than `authorize`, which reads the account's grants on the pool
+   * and would be the liveness hazard section 24 names if called while holding a
+   * connection. `authority` was read on the pool before the transaction opened, which
+   * is safe for the reason `PeopleReassignmentService` gives: an account's grants are
+   * facts about the account, and nothing inside this transaction can change them.
+   *
+   * **The two codes are chosen here because `coversWith` collapses them**, and section
+   * 7 requires the code to name the half that failed: an administrator told
+   * `CAPABILITY_DENIED` grants the capability, and one told `SCOPE_DENIED` widens a
+   * grant they already made. `records.backdate_effective_date` is Whole Church only
+   * (section 7), so a grant issued narrower names the capability and covers nothing —
+   * which is the scope half.
+   */
+  private async assertMayBackdateWithin(
+    trx: Transaction<Database>,
+    actor: Actor,
+    authority: ActorAuthority,
+  ): Promise<void> {
+    if (
+      await this.authorization.coversWith(
+        trx,
+        actor,
+        authority,
+        Capability.RecordsBackdateEffectiveDate,
+        // The church, and `PeopleReassignmentService` naming a person for this same
+        // capability is not a precedent to copy (section 25 rule 19). It names one
+        // because it has one in hand and the operation is about that person; a Cell is
+        // not a Person, and resolving it to its leader would claim that the authority
+        // to backdate is authority over that leader.
+        { kind: 'church' },
+      )
+    ) {
+      return;
+    }
+
+    const held = authority.grants.some(
+      (grant) => grant.capability === Capability.RecordsBackdateEffectiveDate,
+    );
+
+    if (!held) {
+      throw new CapabilityDeniedError(
+        `You do not hold ${Capability.RecordsBackdateEffectiveDate}.`,
+        { capability: Capability.RecordsBackdateEffectiveDate },
+      );
+    }
+
+    throw new ScopeDeniedError(
+      'Backdating a closure requires records.backdate_effective_date at Whole Church ' +
+        'scope (SKILL.md section 7).',
+      { capability: Capability.RecordsBackdateEffectiveDate },
+    );
   }
 
   /**

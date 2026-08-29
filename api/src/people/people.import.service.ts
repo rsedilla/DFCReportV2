@@ -412,7 +412,7 @@ export class PeopleImportService {
     // keys across rows is still acquired in tree order rather than in key order. A
     // concurrent writer taking two person locks sorted can still cycle with it.
     // The consequence is unchanged and the answer to it is settled: section 5 says a
-    // deadlock victim answers `RESOURCE_BUSY`, and `isLockTimeout` matches `40P01`
+    // deadlock victim answers `RESOURCE_BUSY`, and `isLostLockWait` matches `40P01`
     // alongside `55P03` since the closure endpoint landed. So a cycle here is a 503
     // the operator can retry rather than an `INTERNAL_ERROR` reading as a defect.
     //
