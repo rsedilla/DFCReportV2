@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 
 import { sql } from 'kysely';
+import { Client } from 'pg';
 import request from 'supertest';
 
 import { CellsConfigurationService } from '../../src/cells/cells.configuration.service';
@@ -140,6 +141,10 @@ describe('cell configuration (section 10)', () => {
       // asserting on their positions passes or fails by luck.
       .orderBy('started_at', 'asc')
       .orderBy('ended_at', sql`asc nulls last`)
+      // A third correction produces two inert rows sharing both timestamps, and
+      // then physical row order decides again. Slice 1 recorded this and added an
+      // `id` fallback for the same reason.
+      .orderBy('id', 'asc')
       .execute();
 
   const scheduleRows = (cellUuid: string) =>
@@ -154,6 +159,10 @@ describe('cell configuration (section 10)', () => {
       // asserting on their positions passes or fails by luck.
       .orderBy('started_at', 'asc')
       .orderBy('ended_at', sql`asc nulls last`)
+      // A third correction produces two inert rows sharing both timestamps, and
+      // then physical row order decides again. Slice 1 recorded this and added an
+      // `id` fallback for the same reason.
+      .orderBy('id', 'asc')
       .execute();
 
   describe('category (takes effect the day it is made)', () => {
@@ -201,6 +210,15 @@ describe('cell configuration (section 10)', () => {
       const effective = new Date(response.body.effective_at).getTime();
       expect(effective).toBeGreaterThanOrEqual(before - 1000);
       expect(effective).toBeLessThanOrEqual(Date.now() + 1000);
+
+      // The Manila day, returned beside the instant on this route too (section 22).
+      // Pinned here because deleting it from the category response left the suite
+      // green — the schedule half was asserted and this one was not.
+      expect(response.body.effective_date).toBe(
+        new Date(response.body.effective_at).toLocaleDateString('en-CA', {
+          timeZone: 'Asia/Manila',
+        }),
+      );
 
       const rows = await categoryRows(markCell.id);
       expect(rows[1].started_at.getTime()).toBeLessThanOrEqual(Date.now());
@@ -277,9 +295,15 @@ describe('cell configuration (section 10)', () => {
       expect(response.body.effective_date).not.toBe(expected.toISOString().slice(0, 10));
 
       // Manila is UTC+8 with no daylight saving, so a Manila month boundary is 16:00
-      // UTC on the last day of the previous month. Section 10 says exactly this, and
-      // it is what `cell_schedules_start_is_legal` checks against — so a UTC-derived
-      // month would fail here rather than silently.
+      // UTC on the last day of the previous month, which is what
+      // `cell_schedules_start_is_legal` accepts.
+      //
+      // **It is not what would catch a UTC-derived month**, and an earlier version of
+      // this comment said it was. `expected` is computed with the same helper the
+      // service uses, so a defect there moves both and every equality here still
+      // passes; and the composition would still yield a legal month start, so the
+      // trigger passes too and the row files against the wrong month silently. The
+      // unit case in `manila.spec.ts` is what fails.
       expect(expected.getUTCHours()).toBe(16);
       expect(expected.getUTCMinutes()).toBe(0);
       expect(expected.getTime()).toBeGreaterThan(Date.now());
@@ -463,6 +487,83 @@ describe('cell configuration (section 10)', () => {
     });
   });
 
+  describe('concurrency (section 5)', () => {
+    // **Both of this slice's live fixes were unpinned**, and a review found that
+    // rather than a test. Reverting `.forUpdate()` to `.forShare()`, or deleting the
+    // `lock_timeout` bound, left all twenty cases green — in the batch whose own
+    // headline was that three rules had nothing able to fail on them.
+
+    it('waits for a Cell row held by another transaction', async () => {
+      // **The blocker holds `FOR SHARE`, and that is what discriminates.** A shared
+      // lock does not conflict with another shared lock, so a service still using
+      // `.forShare()` sails past and answers immediately. Only `FOR UPDATE` waits.
+      //
+      // That is the defect this pins: shared, two configuration changes both read the
+      // open row, and the loser's `UPDATE` re-matches the row the winner just closed
+      // and overwrites its `ended_at` — an in-place rewrite of a closed row, which
+      // section 5 and Principle 12 forbid — then opens a second live row and meets
+      // `23505`, which nothing classifies. A 500.
+      const blocker = new Client({ connectionString: process.env.DATABASE_URL });
+      await blocker.connect();
+
+      try {
+        await blocker.query('BEGIN');
+        await blocker.query('SELECT id FROM cells WHERE id = $1 FOR SHARE', [markCell.id]);
+        const { rows } = await blocker.query<{ pid: number }>('SELECT pg_backend_pid() AS pid');
+
+        // Dispatched, not held. A supertest object is lazy, and an unawaited one is
+        // never sent — the fault CLAUDE.md records at `19dfe3c` and which slice 3 hit
+        // again. `.then` sends it; the poll is what makes the contention real.
+        const pending = changeCategory(admin, markCell.id, 'YOUNG_PRO').then((r) => r);
+
+        await waitForBlockedBy(rows[0].pid);
+
+        await blocker.query('COMMIT');
+        const response = await pending;
+
+        expect(response.status).toBe(200);
+      } finally {
+        await blocker.end();
+      }
+    }, 20000);
+
+    it('gives up with RESOURCE_BUSY rather than waiting for ever', async () => {
+      // Section 5 bounds every wait, and requires an operation taking row locks and no
+      // advisory locks to set the bound itself — `lockPersonsWithin` returns before
+      // setting it when the person list is empty, which this service's always is.
+      // Without `boundLockWaitsWithin` this request waits until the blocker's
+      // connection closes, so what this case pins is that the answer arrives at all.
+      const blocker = new Client({ connectionString: process.env.DATABASE_URL });
+      await blocker.connect();
+
+      try {
+        await blocker.query('BEGIN');
+        await blocker.query('SELECT id FROM cells WHERE id = $1 FOR UPDATE', [markCell.id]);
+
+        // **Raced against a timer, because the failure this pins is a wait that never
+        // ends.** Without the bound the request blocks until the blocker's connection
+        // closes, so a bare `await` would hang the suite until the job timeout rather
+        // than failing — a defect that costs CI ten minutes and says nothing is worse
+        // than one that costs it eight seconds and names itself.
+        const response = await Promise.race([
+          changeCategory(admin, markCell.id, 'YOUNG_PRO'),
+          new Promise<never>((_, reject) =>
+            setTimeout(
+              () => reject(new Error('The request was still waiting after 8s: no lock_timeout.')),
+              8000,
+            ),
+          ),
+        ]);
+
+        expect(response.status).toBe(503);
+        expect(response.body.error.code).toBe('RESOURCE_BUSY');
+      } finally {
+        await blocker.query('ROLLBACK');
+        await blocker.end();
+      }
+    }, 30000);
+  });
+
   describe('idempotency (section 22)', () => {
     it('replays the stored response rather than changing the category twice', async () => {
       const key = randomUUID();
@@ -485,3 +586,42 @@ describe('cell configuration (section 10)', () => {
     });
   });
 });
+
+/**
+ * Wait until some backend is blocked **by this blocker**.
+ *
+ * Keyed on the blocker's own backend pid, which this test created and therefore
+ * knows. `pg_blocking_pids` answers "who is holding what this backend wants", so
+ * asking whether any backend is blocked by *my* pid names exactly the wait this
+ * test set up.
+ *
+ * A bare `pg_stat_activity` predicate was rejected, and slice 3 recorded why: it is
+ * cluster-wide, this machine also carries `dfc_dev`, and in CI the test role is a
+ * superuser — so "some backend is blocked" matches waits this test knows nothing
+ * about and would pass without the lock under test existing. The waiter's own pid is
+ * genuinely unknown, being a pooled connection inside the application; the blocker's
+ * is not.
+ */
+async function waitForBlockedBy(blockerPid: number): Promise<void> {
+  const probe = createTestDb();
+
+  try {
+    for (let attempt = 0; attempt < 200; attempt += 1) {
+      const waiting = await sql<{ count: string }>`
+        SELECT count(*) AS count
+          FROM pg_stat_activity
+         WHERE ${blockerPid}::int = ANY (pg_blocking_pids(pid))
+      `.execute(probe);
+
+      if (Number(waiting.rows[0].count) > 0) {
+        return;
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    }
+
+    throw new Error(`Nothing ever blocked on backend ${blockerPid}.`);
+  } finally {
+    await probe.destroy();
+  }
+}

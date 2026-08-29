@@ -185,7 +185,9 @@ export class CellsController {
    * Section 10 fixes the effective date and gives the reason: a month must hold
    * exactly one schedule, or moving a Cell from Saturday to Sunday "silently rewrites
    * the coverage figure for every earlier month". The response says
-   * `effective_from` rather than leaving a client to infer it.
+   * `effective_at` and `effective_date` rather than leaving a client to infer them,
+   * and the pair matters here: the instant is 16:00 UTC on the last day of the previous
+   * month, so a client rendering a date from it alone shows the wrong month.
    *
    * **This is not how a single meeting moves.** A lost venue or a clash is a
    * `RESCHEDULED` meeting (section 13); section 10 keeps the two apart deliberately,

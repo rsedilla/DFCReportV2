@@ -140,12 +140,17 @@ export function manilaDayAfter(instant: Date): string {
  * **The zone is not optional and is the whole reason this is not `getMonth()`.**
  * Section 10 records the trap in full: "first day of a month" is a calendar-day
  * test, so a legitimate row starts at Manila 00:00 on the 1st, which is 16:00 UTC
- * on the last day of the *previous* month. Deriving the month in UTC picks the wrong
- * one for every instant in the **first** eight hours of a Manila day — 00:00 to
- * 07:59, which is UTC 16:00 to 23:59 of the day before. An earlier version of this
- * said the *last* eight hours and called that "an ordinary evening", which is
- * backwards twice over: at Manila evening the two zones agree on the date and a UTC
- * reading is correct. The risk is early morning.
+ * on the last day of the *previous* month. UTC and Manila disagree on the calendar
+ * date through the first eight hours of any Manila day — 00:00 to 07:59, which is UTC
+ * 16:00 to 23:59 of the day before — but they disagree on the **month** only when
+ * that day is the **first of a Manila month**. So the window is eight hours a month,
+ * not eight hours a day: Manila 15 September 03:00 is UTC 14 September, still
+ * September, and a UTC reading answers correctly.
+ *
+ * Two earlier versions of this sentence were wrong in opposite directions. The first
+ * said the *last* eight hours and called that "an ordinary evening" — backwards, since
+ * at Manila evening the zones agree. The second fixed the direction and kept "of a
+ * Manila day", overstating the window by roughly thirty times.
  *
  * Returns a day rather than an instant, because section 20 makes a date-only
  * value the thing this system reasons about and `startOfManilaDay` is the single

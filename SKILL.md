@@ -2063,6 +2063,14 @@ Without history, moving a Cell from Saturday to Sunday in June silently rewrites
 
 **A schedule change takes effect at the start of the following month.** A Cell moving from Saturday to Sunday, decided in August, runs on Sunday from 1 September. A month therefore has exactly one schedule throughout.
 
+**A second change made before the first takes effect corrects it, and is permitted.** Both resolve to the same instant, so the second closes the pending row at its own `started_at` — the zero-length row Section 5 makes inert — and opens the corrected one there. Nothing that was ever in force is disturbed: the row governing today is untouched, and the row that goes inert is the pending one, which never governed anything.
+
+Refusing it was tried and stranded the leader it was meant to protect. A leader who queues the wrong day on 5 August cannot fix it until 1 September, and a change made then lands on 1 October — so one mistake costs a whole month meeting on a day nobody agreed to, with Section 12 computing that month's coverage against it. Nobody can shorten that, Admin included, because a forward-dated correction is not an operation this specification defines.
+
+**The cost is a boundary in the history where nothing changed, and it is accepted rather than hidden.** A leader who queues Sunday and then reverts to Saturday leaves three rows: Saturday until the month boundary, an inert Sunday, and Saturday again after it. Every as-of query answers correctly at every instant; what reads oddly is "how long has this Cell met on Saturday", which sees a boundary. Section 5 permits no other shape — withdrawing the pending change would mean reopening the row it closed, which is the in-place rewrite Principle 12 forbids, and closing it without a replacement would leave an `ACTIVE` Cell with no schedule.
+
+It follows that a Cell's refusal to record a change that changes nothing is a check against the row **currently open**, which after a first change is the pending one. It is not a guarantee that the history holds no boundary without a change across it.
+
 A Cell running for a whole month has 4 or 5 scheduled meetings. A Cell created or closed part-way through a month has fewer, because its schedule row opens at approval (Creating a Cell, above) or ends at closure. That is a partial month rather than an anomaly, and N follows from the meetings actually recorded either way.
 
 Mid-month changes were considered and rejected. Resolving them per week is possible but leaves a month able to hold three or six scheduled meetings, sometimes two on consecutive days, and the coverage denominator becomes something a leader cannot predict from their own calendar.

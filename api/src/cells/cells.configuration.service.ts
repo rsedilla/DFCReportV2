@@ -229,8 +229,9 @@ export class CellsConfigurationService {
       // Section 10, and the reason the zone is not optional: "first day of a month"
       // is a calendar-day test, so the row starts at Manila 00:00 on the 1st, stored
       // as 16:00 UTC on the last day of the previous month. Computing the month in
-      // UTC picks the wrong one through the **first** eight hours of a Manila day —
-      // 00:00 to 07:59, which is UTC 16:00 to 23:59 of the day before.
+      // UTC picks the wrong one only on the **first of a Manila month**, through that
+      // day's first eight hours — 00:00 to 07:59, which is UTC 16:00 to 23:59 of the
+      // day before. Eight hours a month, not eight hours a day.
       //
       // **And no constraint would catch it**, which an earlier version of this
       // comment claimed. `startOfManilaDay` still yields a legal Manila month start,
@@ -372,15 +373,33 @@ export class CellsConfigurationService {
    * Cell genuinely conflict, and they are rare enough that serializing them costs
    * nothing worth having.
    *
+   * **It costs the membership path something, which section 5 requires naming.** That
+   * path's deferred state check takes `FOR SHARE` on this row at commit; a shared
+   * lock did not conflict with it and this one does, so an ordinary add or move on
+   * this Cell now blocks behind a configuration change, and can be answered
+   * `RESOURCE_BUSY` if the wait runs past the bound. That is correct and transient
+   * rather than free: section 5 says the order is already fixed by an existing writer
+   * and anything added later is established against it, and this is that.
+   *
    * It also orders this against a concurrent closure, which was the original reason
    * for a lock here: `assert_active_cell_is_configured` reads `cells` without one, so
    * nothing else would stop a change committing beside a closure and leaving an open
    * schedule row on a CLOSED Cell — the state section 10 now forbids. Unreachable
    * today, since no operation closes a Cell yet.
    *
-   * **This is the transaction's first lock, taken while holding nothing**, which is
-   * what makes this service unable to participate in a cycle — and it stops being
-   * true the moment a statement that takes a lock is added above it. The bound comes
+   * **It takes one row lock and no advisory locks**, so it raises none of the
+   * cross-class ordering question section 5 records as open — that section puts the
+   * demonstration burden on an operation needing both classes.
+   *
+   * What makes it cycle-free is narrower than "it locks first", which an earlier
+   * version of this claimed and which is true of both parties to every deadlock ever
+   * recorded. It is that the only contended lock this service can wait on is the
+   * `cells` row; it takes that before anything else; and every lock it takes
+   * afterwards is held only by transactions that also took the `cells` row first. A
+   * membership write holds an advisory lock on a person and waits for `FOR SHARE` on
+   * this row at commit, and this service never wants that person lock, so the two
+   * wait rather than cycle. Adding a statement above this one that takes a lock ends
+   * the argument. The bound comes
    * first because section 5 requires an operation taking row locks and no advisory
    * locks to set it itself; `SET LOCAL` takes no locks, so it cannot be what waits.
    */
