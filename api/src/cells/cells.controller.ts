@@ -25,6 +25,7 @@ import {
   CreateCellDto,
   CreateLeadershipRequestDto,
   DeclineLeadershipRequestDto,
+  LeadershipRequestQueueDto,
 } from './dto/cells.dto';
 
 /**
@@ -289,6 +290,35 @@ export class CellsController {
       actor,
       claim,
     );
+  }
+
+  /**
+   * `GET /api/v1/cells/leadership-requests` — the Admin queue (section 19, section 10).
+   *
+   * **`cell.approve_leadership`, against the church**, which is the capability that
+   * decides these requests: whoever may approve or decline one may see the queue of
+   * them, and nobody else. Section 7 gives that capability one scope only, so a grant
+   * issued narrower covers nothing and is refused `SCOPE_DENIED`.
+   *
+   * **Section 19's other list is not this one and is not built.** It puts "the outcome
+   * of a Cell leadership request the user submitted" in every user's own outstanding
+   * work — a different population, a different reader, and one no capability in section
+   * 7's closed list can guard: `cell.request_leadership` is `SUBTREE_EXCL_SELF`, so it
+   * resolves against neither the caller nor the church, and section 7's no-capability
+   * exemption covers an endpoint acting "on the caller's own session" rather than one
+   * returning rows their account created. Recorded as open in `CLAUDE.md` rather than
+   * answered with a capability invented in a controller.
+   *
+   * That surface is not blocking: this queue is what approval needs, the way the roster
+   * route was what the closure needed, while the requester's view is a dashboard tile
+   * with no dashboard yet.
+   */
+  @Get('leadership-requests')
+  @RequiresCapability(Capability.CellApproveLeadership, { kind: 'church' })
+  async leadershipRequestQueue(
+    @Query() query: LeadershipRequestQueueDto,
+  ): Promise<Record<string, unknown>> {
+    return this.requests.pendingQueue({ limit: query.limit, cursor: query.cursor });
   }
 
   /**

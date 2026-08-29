@@ -2,6 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 
 import { DATABASE, type Db } from '../database/database.module';
 
+import type { LeadershipRequestCursor, LeadershipRequestRow } from './leadership-request-cursor';
 import type { RosterCursor } from './roster-cursor';
 import type { Database } from '../database/schema';
 import type { Transaction } from 'kysely';
@@ -180,6 +181,56 @@ export class CellsReadService {
       first_name: row.first_name,
       started_at: row.started_at,
     }));
+  }
+
+  /**
+   * Pending Cell leadership requests, oldest first (SKILL.md section 19, *Admin
+   * dashboard*; section 10).
+   *
+   * **Both kinds, on one queue**, which section 19 states and gives the reason for: "a
+   * request nobody can see is a request nobody acts on, and a pending one changes
+   * nothing until it is decided". A new Cell additionally holds up an account (section
+   * 6), which a handover does only where the incoming leader does not already lead one
+   * — a difference in urgency rather than in whether it belongs here.
+   *
+   * **`PENDING` only.** Section 19 asks for the queue, and a decided request is not on
+   * it. The decided ones are the requester's own outstanding work in section 19's other
+   * list, which is a different surface with a different reader and no capability that
+   * can guard it today — recorded as open in `CLAUDE.md` rather than answered here.
+   *
+   * No scope filter, and that is the capability rather than an omission:
+   * `cell.approve_leadership` is Admin's alone at Whole Church (section 7), so every
+   * caller who reaches this sees the same queue.
+   */
+  async pendingLeadershipRequestsWithin(
+    executor: Db | Transaction<Database>,
+    page: { limit: number; after?: LeadershipRequestCursor | null } = { limit: 50 },
+  ): Promise<LeadershipRequestRow[]> {
+    const after = page.after ?? null;
+
+    return (
+      executor
+        .selectFrom('cell_leadership_requests')
+        .select(['id', 'kind', 'prospective_leader_id', 'requested_by', 'requested_at', 'cell_id'])
+        .where('state', '=', 'PENDING')
+        // Spelled out rather than expressed as a row comparison against a looked-up key,
+        // for the reason `leadership-request-cursor.ts` records: the looked-up form does
+        // not compile to anything PostgreSQL can plan.
+        .$if(after !== null, (query) =>
+          query.where((eb) => {
+            const key = after as LeadershipRequestCursor;
+
+            return eb.or([
+              eb('requested_at', '>', new Date(key.requestedAt)),
+              eb.and([eb('requested_at', '=', new Date(key.requestedAt)), eb('id', '>', key.id)]),
+            ]);
+          }),
+        )
+        .orderBy('requested_at')
+        .orderBy('id')
+        .limit(page.limit)
+        .execute()
+    );
   }
 
   /**

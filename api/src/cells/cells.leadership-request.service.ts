@@ -17,6 +17,10 @@ import { IdempotencyService } from '../common/idempotency/idempotency.service';
 import { DATABASE, type Db } from '../database/database.module';
 
 import { CellsReadService } from './cells.read.service';
+import {
+  decodeLeadershipRequestCursor,
+  encodeLeadershipRequestCursor,
+} from './leadership-request-cursor';
 
 import type { CurrentClaim } from '../common/idempotency/current-idempotency.decorator';
 import type {
@@ -279,6 +283,54 @@ export class CellsLeadershipRequestService {
 
       return response;
     });
+  }
+
+  /**
+   * The Admin queue: pending requests of either kind, oldest first (section 19).
+   *
+   * **A read, so it takes no idempotency claim and opens no transaction.** The query
+   * lives on `CellsReadService`, which is where this module's `SELECT`s are written;
+   * this is `cells` answering its own controller.
+   *
+   * Section 22's envelope and its cursor pagination, with the `limit + 1` read that
+   * answers whether another page exists without a count — section 22 returns no totals.
+   */
+  async pendingQueue(page: {
+    limit?: number;
+    cursor?: string;
+  }): Promise<{ data: Record<string, unknown>[]; next_cursor: string | null }> {
+    const limit = page.limit ?? 50;
+
+    const rows = await this.cells.pendingLeadershipRequestsWithin(this.db, {
+      limit: limit + 1,
+      after: decodeLeadershipRequestCursor(page.cursor),
+    });
+
+    const visible = rows.slice(0, limit);
+    const last = visible.at(-1);
+
+    return {
+      data: visible.map((row) => ({
+        id: row.id,
+        kind: row.kind,
+        state: 'PENDING',
+        prospective_leader_id: row.prospective_leader_id,
+        requested_by: row.requested_by,
+        requested_at: row.requested_at.toISOString(),
+        // The Cell's UUID, and only for a handover. Section 10: for a new Cell nothing
+        // names one until approval mints it. The `CELL-000000` handle is deliberately
+        // not resolved here — it would be a join per page for a field the queue does
+        // not decide anything by, and the Cell's own route carries it.
+        cell_uuid: row.cell_id,
+      })),
+      next_cursor:
+        rows.length > limit && last !== undefined
+          ? encodeLeadershipRequestCursor({
+              requestedAt: last.requested_at.toISOString(),
+              id: last.id,
+            })
+          : null,
+    };
   }
 
   /**

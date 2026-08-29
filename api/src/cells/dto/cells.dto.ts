@@ -156,6 +156,29 @@ export class CreateLeadershipRequestDto {
 }
 
 /**
+ * `GET /api/v1/cells/leadership-requests` (SKILL.md section 19, section 22).
+ *
+ * The same two parameters section 22 fixes for every collection, and the same bounds
+ * the Cell roster carries: a default of 50, a maximum of 200, and an opaque cursor
+ * bounded by the shared guard in `common/cursor.ts`.
+ */
+export class LeadershipRequestQueueDto {
+  /** Section 22: defaults to 50, maximum 200. */
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(200)
+  limit?: number;
+
+  /** The `next_cursor` of the previous page, passed back unmodified (section 22). */
+  @IsOptional()
+  @IsString()
+  @Length(1, CURSOR_MAX_LENGTH)
+  cursor?: string;
+}
+
+/**
  * `POST /api/v1/cells/leadership-requests/{request_id}/decline`
  * (SKILL.md section 10, *Declining*).
  *
