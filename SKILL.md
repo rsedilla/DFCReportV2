@@ -3268,6 +3268,7 @@ GET  /api/v1/leaders/{id}/summary
 GET  /api/v1/dcc/events/{id}/roster
 POST /api/v1/dcc/events/{id}/submit
 
+POST /api/v1/cells                       direct creation, initial encoding only
 GET  /api/v1/cells/{id}
 GET  /api/v1/cells/{id}/members
 GET  /api/v1/cells/{id}/meetings

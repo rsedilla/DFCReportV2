@@ -124,11 +124,13 @@ describe('accounts: provisioning, activation and reset (section 6)', () => {
       ]);
     });
 
-    it('refuses a LEADER account, because nothing can qualify one yet', async () => {
-      // **The ruling this endpoint was blocked on.** A Leader account's
-      // qualification is an active Cell leadership assignment (section 11), and
-      // `cells` is Stage 3. Accepting it with the check deferred would detach
-      // "leader" from "leads a Cell" for a whole stage.
+    it('refuses a LEADER account for somebody who leads no Cell', async () => {
+      // **Section 6's ordinary qualification, and the rule this endpoint was
+      // blocked on until `cells` existed.** A Leader account's qualification is an
+      // active Cell leadership assignment on an `ACTIVE` Cell (section 11). The
+      // role is accepted now; what is refused is the account for somebody who has
+      // nothing to qualify one, which is what keeps "leader" attached to "leads a
+      // Cell".
       //
       // INVARIANT_VIOLATION rather than SCOPE_DENIED: the actor's authority is not
       // in question, and an Admin cannot do this either.
@@ -140,7 +142,7 @@ describe('accounts: provisioning, activation and reset (section 6)', () => {
 
       expect(response.status).toBe(409);
       expect(response.body.error.code).toBe('INVARIANT_VIOLATION');
-      expect(response.body.error.details.role).toBe('LEADER');
+      expect(response.body.error.message).toMatch(/does not lead a Cell/);
 
       const accounts = await db
         .selectFrom('accounts')
@@ -150,6 +152,70 @@ describe('accounts: provisioning, activation and reset (section 6)', () => {
 
       expect(accounts).toHaveLength(0);
       expect(outbox(app).sent).toHaveLength(0);
+    });
+
+    it('provisions a LEADER account for a current Cell Leader', async () => {
+      // The other side of the same rule, and the case that shows the refusal above
+      // is about the qualification rather than about the role being unsupported.
+      await createCellLedBy(db, ester.id);
+
+      const response = await provision({
+        person_id: ester.id,
+        email: 'ester@example.test',
+        role: 'LEADER',
+      });
+
+      expect(response.status).toBe(201);
+      expect(outbox(app).sent).toHaveLength(1);
+
+      const roles = await db
+        .selectFrom('account_roles')
+        .innerJoin('accounts', 'accounts.id', 'account_roles.account_id')
+        .select('account_roles.role')
+        .where('accounts.person_id', '=', ester.id)
+        .execute();
+
+      expect(roles).toEqual([{ role: 'LEADER' }]);
+    });
+
+    it('refuses a LEADER account for somebody who has handed their Cell on', async () => {
+      // **The case that pins the open-assignment half**, and the one it replaces
+      // pinned neither. That case closed the Cell — which also ends the leadership,
+      // because migration 0009 refuses a CLOSED Cell holding an open one — so the
+      // two halves of the query were each sufficient on their own and mutating
+      // either left the suite green.
+      //
+      // A handover separates them: the Cell stays ACTIVE and this person's
+      // assignment is closed, so only `ended_at IS NULL` refuses them. Section 11
+      // says it directly — a leader whose only Cell passes to somebody else stops
+      // being a current Cell Leader from that instant, and keeps their account
+      // where they already had one.
+      const cellId = await createCellLedBy(db, ester.id);
+      const successor = await createPerson(db, { firstName: 'Manuel', network: 'WOMENS' });
+
+      await db.transaction().execute(async (trx) => {
+        const at = (await sql<{ now: Date }>`SELECT now() AS now`.execute(trx)).rows[0].now;
+
+        await trx
+          .updateTable('cell_leaderships')
+          .set({ ended_at: at })
+          .where('cell_id', '=', cellId)
+          .where('ended_at', 'is', null)
+          .execute();
+        await trx
+          .insertInto('cell_leaderships')
+          .values({ person_id: successor.id, cell_id: cellId, started_at: at })
+          .execute();
+      });
+
+      const response = await provision({
+        person_id: ester.id,
+        email: 'ester@example.test',
+        role: 'LEADER',
+      });
+
+      expect(response.status).toBe(409);
+      expect(response.body.error.message).toMatch(/does not lead a Cell/);
     });
 
     it('refuses a second account for one Person', async () => {
@@ -1007,3 +1073,32 @@ describe('accounts: provisioning, activation and reset (section 6)', () => {
     });
   });
 });
+
+/**
+ * Gives a Person a Cell to lead, the way migration 0009 requires one to be built:
+ * the Cell, its category row, its schedule row and its leadership assignment in one
+ * statement, with the schedule row starting at the Cell's own `created_at`.
+ *
+ * Written here rather than through `POST /api/v1/cells` deliberately. This suite is
+ * about section 6, and routing its setup through another endpoint would make an
+ * accounts case fail when a cells case broke.
+ */
+async function createCellLedBy(db: Kysely<Database>, personId: string): Promise<string> {
+  const result = await sql<{ id: string }>`
+    WITH new_cell AS (
+      INSERT INTO cells DEFAULT VALUES RETURNING id, created_at
+    ), category AS (
+      INSERT INTO cell_categories (cell_id, category, started_at)
+      SELECT id, 'YOUTH'::cell_category, created_at FROM new_cell
+    ), schedule AS (
+      INSERT INTO cell_schedules (cell_id, day_of_week, time_of_day, started_at)
+      SELECT id, 6::smallint, '19:00'::time, created_at FROM new_cell
+    ), leadership AS (
+      INSERT INTO cell_leaderships (person_id, cell_id, started_at)
+      SELECT ${personId}::uuid, id, created_at FROM new_cell
+    )
+    SELECT id FROM new_cell
+  `.execute(db);
+
+  return result.rows[0].id;
+}

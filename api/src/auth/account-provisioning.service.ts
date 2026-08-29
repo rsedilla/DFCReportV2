@@ -7,6 +7,7 @@ import { APP_CONFIG, type AppConfig } from '../config/configuration';
 import { DATABASE, type Db } from '../database/database.module';
 import { EMAIL_PORT, type EmailPort, type OutboundEmail } from '../email/email.port';
 
+import { CellsReadService } from '../cells/cells.read.service';
 import { PeopleReadService } from '../people/people.read.service';
 
 import { AlreadyBootstrappedError } from '../common/errors/already-bootstrapped';
@@ -24,18 +25,21 @@ import type { Transaction } from 'kysely';
 const ACTIVATION_LIFETIME_MS = 7 * 24 * 60 * 60 * 1000;
 
 /**
- * The roles that qualify a Person for an account today (SKILL.md section 6).
+ * The roles that qualify a Person for an account (SKILL.md section 6).
  *
- * `LEADER` is absent deliberately and temporarily: a Leader account's
- * qualification is an active Cell leadership assignment (section 11), `cells` is
- * Stage 3, and there is nothing yet to check one against. Accepting a `LEADER`
- * request with the check deferred would detach "leader" from "leads a Cell" for a
- * whole stage, which section 11 makes non-negotiable and which the 2026-08-20
- * ruling on submission roll-up refused to widen section 6 for.
+ * **`LEADER` arrives here with the check that qualifies it, in one change**, which
+ * is what the previous version of this comment said Stage 3 would do. Section 6
+ * makes Cell leadership the ordinary qualification and section 11 defines it
+ * exactly: an active Cell leadership assignment on an `ACTIVE` Cell. Adding the
+ * role without the check would detach "leader" from "leads a Cell", which section 11
+ * makes non-negotiable and which the 2026-08-20 ruling on submission roll-up
+ * refused to widen section 6 for.
  *
- * Stage 3 adds `LEADER` here **and** the leadership check beside it, in one change.
+ * `ADMIN` and `SENIOR_PASTOR` are the two exceptions section 6 names, and they are
+ * exceptions to the *qualification* rather than to the workflow: each still gets an
+ * account, an activation email, and a password the holder sets.
  */
-const QUALIFYING_ROLES: readonly AccountRole[] = ['ADMIN', 'SENIOR_PASTOR'];
+const QUALIFYING_ROLES: readonly AccountRole[] = ['ADMIN', 'SENIOR_PASTOR', 'LEADER'];
 
 export interface ProvisionAccountInput {
   personId: string;
@@ -76,6 +80,7 @@ export class AccountProvisioningService {
     @Inject(EMAIL_PORT) private readonly email: EmailPort,
     private readonly tokens: AccountTokensService,
     private readonly people: PeopleReadService,
+    private readonly cells: CellsReadService,
     private readonly audit: AuditService,
     private readonly idempotency: IdempotencyService,
   ) {}
@@ -90,7 +95,7 @@ export class AccountProvisioningService {
       // is what separates this from `SCOPE_DENIED`. The actor's authority is not
       // in question — an Admin cannot do this either, yet.
       throw new InvariantViolationError(
-        'An account is provisioned together with the role that qualifies it, and only ADMIN and SENIOR_PASTOR qualify today. A LEADER account arrives with the Cell leadership that qualifies it.',
+        'An account is provisioned together with the role that qualifies it.',
         { role: input.role, qualifying_roles: QUALIFYING_ROLES },
       );
     }
@@ -123,6 +128,31 @@ export class AccountProvisioningService {
         throw new InvariantViolationError(
           'That person is archived. Restore them first, which is a separate and separately audited decision.',
           { person_id: input.personId },
+        );
+      }
+
+      // **A `LEADER` account is qualified by leading a Cell, and this is where that
+      // is checked** (section 6, Normal qualification; section 11).
+      //
+      // Section 11 defines a current Cell Leader as somebody holding at least one
+      // active leadership assignment **on an `ACTIVE` Cell**, and `CellsReadService`
+      // asks both halves. Read inside this transaction rather than on the pool, so
+      // the answer cannot be the state the request arrived with: a closure commits
+      // in one transaction and would otherwise be invisible to a provisioning
+      // request already in flight.
+      //
+      // Only `LEADER` is checked. `ADMIN` and `SENIOR_PASTOR` are section 6's two
+      // exceptions to the qualification, so requiring a Cell of them would refuse
+      // the first Admin's successor and both Senior Pastors — none of whom leads a
+      // Cell by virtue of the role.
+      if (
+        input.role === 'LEADER' &&
+        !(await this.cells.isCurrentCellLeaderWithin(trx, input.personId))
+      ) {
+        throw new InvariantViolationError(
+          'That person does not lead a Cell, so there is nothing to qualify a Leader account. ' +
+            'A Leader account arrives with the Cell leadership that qualifies it (SKILL.md section 6).',
+          { person_id: input.personId, role: input.role },
         );
       }
 

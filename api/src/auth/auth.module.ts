@@ -4,6 +4,7 @@ import { JwtModule } from '@nestjs/jwt';
 import { AuditModule } from '../audit/audit.module';
 import { APP_CONFIG, type AppConfig } from '../config/configuration';
 import { EmailModule } from '../email/email.module';
+import { CellsModule } from '../cells/cells.module';
 import { PeopleModule } from '../people/people.module';
 
 import { AuthorizationModule } from './authorization/authorization.module';
@@ -35,6 +36,7 @@ import { TokensService } from './tokens.service';
     // is only possible because the authorization seam moved out: `people` needs
     // `AuthorizationService`, and importing `AuthModule` for it made this a cycle.
     PeopleModule,
+    CellsModule,
     JwtModule.registerAsync({
       inject: [APP_CONFIG],
       useFactory: (config: AppConfig) => ({
