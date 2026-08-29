@@ -5876,9 +5876,67 @@ leave a full-length name searchable only by prefix.
 mechanism. What they found is that this branch's residual defect rate is entirely in prose
 about itself, and that the prose gets a review pass of its own or it is wrong.
 
+### 2026-08-30 — A requester may decline their own request, and a decision is final
+
+The two questions migration 0009 escalated in its own comments rather than answering,
+settled together before the leadership-request endpoints are written — which is the
+pattern that made the rest of Stage 3 go well: five rulings before a line of Cells code.
+
+**A requester may decline their own request.** Section 10 forbids *approving* one you
+submitted and is silent on declining, and the silence had to be resolved in one direction
+or the other before the decline endpoint could exist.
+
+The reason for the approval prohibition does not carry. The requester benefits from an
+approval — it moves Current Cell Leaders, New Cell Leaders for the period, and their own
+progress toward Leaders with 12+ Direct Leaders — which is exactly why section 10 requires
+a second party for it. A decline benefits them not at all, so there is no incentive for the
+rule to guard against, and `SUBMITTED_IN_ERROR` sits in the fixed list for precisely this
+case.
+
+**The strict reading was rejected because it is terminal rather than merely stricter.**
+`cell.approve_leadership` is Admin's alone, so on a single-Admin deployment a request that
+Admin submitted could be approved by nobody — correctly — and declined by nobody either.
+It stays `PENDING` for ever, and `cell_leadership_requests_one_pending_new_cell` then
+blocks every future `NEW_CELL` request for that prospective leader, permanently. The fixed
+list contains the remedy for that situation and the strict reading made it unreachable for
+the actor most likely to need it.
+
+A third option was weighed and refused: permitting self-decline only with
+`SUBMITTED_IN_ERROR`, so that withdrawing a request is distinguished from adjudicating one.
+It is more precise and it adds a rule section 10 does not have, to guard an incentive that
+does not exist — and section 10 already says a decline "never records an assessment of the
+person", which is the ground the distinction would have rested on.
+
+Declining still carries `cell.approve_leadership`, so this reaches an Admin who submitted a
+request and nobody else. It changes nothing about who may approve, and migration 0009's
+`..._approver_is_not_requester` constraint — which deliberately enforces section 10's
+stated rule and nothing more — is already correct and unchanged.
+
+**A decision is final.** A `DECLINED` request is never later approved, an `APPROVED` one is
+never reversed, and neither returns to `PENDING`. This confirms the conservative direction
+migration 0009's finality trigger already took, on the 2026-08-24 reasoning about an
+explicit null birthday: a relaxation must not become a capability by omission. What changes
+is that it is now a decision rather than a gap nobody had ruled on.
+
+The way forward from a decline is a new request. That keeps the declined row as what
+section 10 already requires — the record of how a leader was developed — and keeps
+`decided_by` and `decided_at` answering who decided and when, which a re-decision would
+overwrite. A `TIMING_DEFERRED` decline followed by a fresh request is the honest record:
+two requests, two dates, one outcome each.
+
+**Reversing an approval is a different operation, and naming it as such is the half worth
+recording.** A Cell created in error is closed with `CREATED_IN_ERROR`, and a handover
+completed in error is corrected by handing the Cell back — each an ordinary authorized
+action carrying its own audit entry, rather than a decision rewritten in place. That is the
+same shape as the 2026-08-28 ruling that a closure is never reversed, and for the same
+reason: the correction is a new fact, not an erased one.
+
+Both written to `SKILL.md` section 10 (*Declining*) in the same change, and verified by
+grep rather than asserted.
+
 ### Open — awaiting a ruling
 
-**One item awaits a ruling, and it blocks Stage 5. Thirty-three other things are
+**One item awaits a ruling, and it blocks Stage 5. Thirty-one other things are
 unsettled, none of them blocking. They are listed at the end, so this section is the
 whole of what is open.**
 
@@ -5887,10 +5945,12 @@ and the italic below it. The batch that added the thirty-second bullet updated t
 alone, because the instruction to recount lives only in the italic, and the bolded twin
 is what a reader meets first. Anyone adding a bullet updates both.*
 
-*Thirty-three distinct items across thirty-three bullets. Three arrived with the closure
+*Thirty-one distinct items across thirty-one bullets. Three arrived with the closure
 endpoint's reviews — whether a Cell roster read deserves a capability of its own, what a
 collection endpoint does with a cursor it cannot resolve, and whether a name has a
-maximum length — and
+maximum length — and two left on 2026-08-30, both settled before the leadership-request
+endpoints were written: a requester may decline their own request, and a decision is
+final. A further
 two left on 2026-08-29. Those two are the
 pair that had come back: the closure effective-date floor and the cross-class lock
 ordering, each written three times in prose and refuted three times, both settled by
@@ -5936,8 +5996,6 @@ Two related questions have defined behaviour and are recorded in `SKILL.md` §12
 - **Whether "Admin" in Sections 2 and 10 is a role requirement or a description of who holds the capabilities.** Section 2 settled this once, for the tree import, in the direction of "the role is required, and the capabilities alone are not enough" — and stated it in that paragraph rather than as a general rule. Direct creation is given to Admin in the same section and again in Section 10, and slice 2 reads it the same way and checks the role. If that reading is right, the two places should say it in the words Section 2 already uses for the import, because the next reader derives it from a neighbouring paragraph or not at all. If it is *not* right, then Section 7's permission to grant `cell.approve_leadership` explicitly makes request-and-approve optional for its holder over their own subtree, and Section 10 needs to say why that is acceptable. Nothing is blocked either way: the conservative reading is what is implemented.
 - **Whether a Cell's first leadership row may be corrected to a leader of the other Network, and whether a closed leadership row may be written at all.** Two halves of one question, both raised by the fourth review pass. Migration 0009 refuses a Section 5 correction that closes a Cell's first leadership row and opens one naming a person of the other Network: the zero-length row is selected as the predecessor and the leader-to-leader Network rule fires. That may well be right — a Cell created under a wrong-Network leader had the wrong Network for its whole life, and Section 10 gives `CREATED_IN_ERROR` for a Cell that should not exist — but Section 10 states that rule about a *handover*, and nothing distinguishes a correction from one. The second half is narrower and has no answer at all: `cell_leadership_is_opened_open` now refuses a leadership row written already closed, because no operation Sections 10 or 11 define writes one, and that forecloses correcting a closed historical stint. Neither is reachable today. Settle both with the handover-approval endpoint, which is where Section 10 makes the refusal.
 - **Which side moves when a Cell leader's Network changes.** Section 4's last paragraph says a Network change must not leave the person holding relationships the homogeneous-network rule no longer permits, and that where a choice arises it is flagged for authorized human resolution rather than guessed. For pastoral relationships Section 4 is concrete: the change is refused while the person leads anyone, and each disciple is moved by an ordinary reassignment first. For Cell **leadership** it says nothing concrete, and leading a Cell is a different relationship from discipling someone (Section 1, principle 3), so Section 4's refusal does not reach it. A Network change on a Cell's leader therefore moves the Cell's own Network and strands every member of every Cell they lead, and nothing raises. Refusing the change while they lead a Cell would be the Section 3 archival shape and would be consistent; requiring the Cell to be handed over first is a different pastoral decision. `docs/ROADMAP.md` books the work as Stage 3's last item without settling the rule. Settle it before the `networks` precondition grows its Cell half.
-- **Whether the requester of a Cell leadership request may decline it.** Section 10 states the prohibition once and states it about approval — "**No actor may approve a request they submitted**", and "that is what must be checked on every **approval**" — and says nothing about a decline. `SUBMITTED_IN_ERROR` in the fixed decline list points one way; the conflict-of-interest argument that justifies the approval rule points the other. Migration 0009 answered it in a comment, in the stricter direction, and the answer was terminal: Section 7 gives Admin `cell.request_leadership` and gives `cell.approve_leadership` to Admin alone, so on a single-Admin deployment a request Admin submits could be approved by nobody (correctly) and declined by nobody either — `PENDING` for ever, with the per-leader partial unique index then blocking every future `NEW_CELL` request for that person. The constraint now enforces what Section 10 states and nothing more. Settle it before the decline endpoint is built; if the answer is that a requester may not decline their own request, the same ruling has to say what a single-Admin deployment does instead.
-- **Whether a decided Cell leadership request may be re-decided, and which of its fields stay writable.** Section 10 says declined requests "are retained" and does not say whether a decision may be revised or withdrawn. Migration 0009 takes the conservative direction — what a request asked is immutable from the moment it is written, and the decision is immutable once made — on the reasoning of the 2026-08-24 ruling on an explicit null birthday: a relaxation must not become a capability by omission. What is unsettled is whether a legitimate re-decision path exists at all: a `DECLINED` request later approved, or an `APPROVED` one re-decided. If one does, it arrives as a deliberate amendment to Section 10 rather than by relaxing a trigger.
 - **What the duplicate-candidate lookup does when its list exceeds `limit`.** `GET /people/duplicate-candidates` computes every candidate, returns `visible.slice(0, limit)`, and answers `next_cursor: null` — which §22's pagination rule reads as "this is the last page" over a set that was truncated, with no cursor to reach the rest. The `slice` is pre-existing; the ordering rule settled on 2026-08-28 (below) is what makes it consequential. In-scope candidates now always precede withheld ones, so the withheld tail is the **first** thing a truncation removes — the cross-branch duplicate §3 says the church-wide lookup exists to catch — and the client chooses `limit`, down to 1. Not *exactly* those: at a `limit` below the in-scope count it drops in-scope candidates too, and the point is which candidates it reaches first. Three answers are defensible and none is derivable: page the list honestly, refuse to truncate it at all, or state in §3 and §22 that the list is truncated and which candidates may be dropped. **The in-scope group's own internal order has to be settled in the same ruling**, because a page boundary over an unordered set is not pageable. `findDuplicates` issues its population query with no `ORDER BY` and `findCandidates` sorts by tier alone, so within one tier the in-scope order is PostgreSQL's physical row order. That is no disclosure — everything in that group is fully visible to the viewer — but it means that below the in-scope count, *which* in-scope candidates survive a truncation can differ between two identical requests. Raised by `architecture-guardian` on `fix/duplicate-candidate-oracle`, twice, and by the ordering rule itself: §3 now asks that any new decision the list is subjected to — it names a narrowing, a sort, a page boundary and a count — be treated as a disclosure until it is shown to be a function of what the viewer may already know. This is the one page boundary that exists, and nothing has shown it. Not blocking while the default limit of 50 exceeds any candidate list this church produces.
 - **Whether a pastoral path renders an absorbed Person or the survivor.** Every other `persons` read in the application filters `merged_into_id`; the path's name lookup deliberately does not, because on a lookup a filtered row is simply not found while on a path it is a *hole*, and a path with a hole reads as a shorter chain rather than as an error. Section 3 also says a merge never rewrites pastoral records to point at a different Person, so an absorbed ancestor genuinely stays on the chain and the real question is whether to show them or the survivor who now carries the identity. That is Person Merge's to answer for every surface at once rather than this endpoint's to decide, and merge is Stage 3, so nothing today can reach it. Settle it with the merge.
 - **Whether a Person holding an open root row may be absorbed by a Person Merge.** §3 refuses a merge where the absorbed Person leads a Cell and says nothing about a root; §5 leaves succession undefined and forbids reassigning a root. So merging a duplicate root holder into the real person appears permitted — and §3 says a merge "never rewrites historical attendance, pastoral, or audit records to point to a different Person", so the seat row keeps naming the absorbed record. The resolved identity then has two open assignments, which §5 invariant 3 forbids and which no constraint can refuse, because the rows carry different `person_id`s. Raised by the fifth review of the tree import, which is the only thing in the system that creates root rows: the dry-run warning's whole force is that no remedy exists for a mis-seated root, and merge is the one remedy §3 offers for a record created in error. The warning is correct under §3 as written. Settle this before anyone needs it.

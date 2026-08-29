@@ -2229,6 +2229,18 @@ Declined requests are retained — they are part of the record of how a leader w
 
 The list is fixed and not administrator-configurable, for the reason given in Section 13. It is deliberately short and neutral. A decline is a durable record about a named person, and an unconstrained free-text field is exactly where a judgmental label about a prospective leader would be written (Section 1, Principle 7). A decline records that a Cell was not opened at this time. It never records an assessment of the person.
 
+**The requester may decline their own request.** The prohibition above is on *approving* one, and the reason it exists does not carry: the requester benefits from an approval, which is why a second party is required for it, and benefits from a decline not at all. `SUBMITTED_IN_ERROR` is in the fixed list for exactly this, and it is the reason a requester will ordinarily use — a leader who named the wrong person, or who has since learned that the timing is wrong, withdrawing their own request.
+
+Stated rather than left to fall out of the silence, because the alternative is terminal rather than merely stricter. `cell.approve_leadership` is Admin's alone (Section 7), so on a deployment with one Admin a request that Admin submitted could be approved by nobody — correctly — and declined by nobody either. It would stay `PENDING` for ever, and the per-leader uniqueness rule above would then block every future `NEW_CELL` request for that prospective leader, permanently.
+
+A decline still carries `cell.approve_leadership`, so an ordinary leader cannot decline their own request; the case this rule reaches is an Admin who submitted one. It changes nothing about who may *approve*.
+
+**A decision is final.** A `DECLINED` request is never later approved, an `APPROVED` one is never reversed, and neither is returned to `PENDING`. What a request asked — its kind, the person it names, who submitted it and when — is immutable from the moment it is written; the category, day and time a `NEW_CELL` request asks *for* stay writable while it is `PENDING`, so a mistyped time is corrected rather than declined and resubmitted.
+
+The way forward from a decline is a new request, not a revived one. That keeps the declined row as what this section already requires it to be — the record of how a leader was developed — and keeps `decided_by` and `decided_at` answering who decided and when, which a re-decision would overwrite. Where a decline was `TIMING_DEFERRED` and the timing has since changed, submitting again is the honest record: two requests, two dates, one outcome each.
+
+Reversing an approval is a different operation and is not this one. A Cell created in error is closed (`CREATED_IN_ERROR`, Cell lifecycle below), and a handover completed in error is corrected by handing the Cell back — each an ordinary authorized action with its own audit entry, rather than a decision rewritten in place.
+
 **Seeing the queue.** Pending requests appear on the Admin dashboard (Section 19), and a request's outcome appears to the requester in their own outstanding work (Section 19). Neither is a notification; notifications remain confined to Section 13. This surface is necessary rather than optional: a pending request holds up a real leader's account provisioning, so the person who can act on it must be able to see it.
 
 **Why two steps.** Creating a Cell mints a Cell Leader, and that act moves Current Cell Leaders, New Cell Leaders for the period, and the requesting leader's own progress toward Leaders with 12+ Direct Leaders (Section 16). The requester benefits from the outcome, so a second party is required.
