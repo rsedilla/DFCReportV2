@@ -818,6 +818,19 @@ export class CellsClosureService {
         // because it has one in hand and the operation is about that person; a Cell is
         // not a Person, and resolving it to its leader would claim that the authority
         // to backdate is authority over that leader.
+        //
+        // **Nothing can fail against changing this, and that is said here rather than
+        // left for a test to imply.** `coversWith` discards a grant `grantCoversNothing`
+        // voids before it reaches `scopeCovers`, so a narrower grant of a
+        // `WHOLE_CHURCH_ONLY` capability is skipped whatever target it is given; a Whole
+        // Church grant returns true on `scopeCovers`'s first line, before the target is
+        // read. `records.backdate_effective_date` is in that set and only `ADMIN` holds
+        // it by default, so every route to it bypasses this argument. The choice is
+        // section 7's rather than an observable one, and it starts mattering the day the
+        // capability leaves `WHOLE_CHURCH_ONLY`.
+        //
+        // `cell-closure.e2e.spec.ts` records the mutation that was run to establish
+        // this, so the next reader does not re-derive it from the call site.
         { kind: 'church' },
       )
     ) {

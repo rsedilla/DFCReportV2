@@ -2,6 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 
 import { DATABASE, type Db } from '../database/database.module';
 
+import type { RosterCursor } from './roster-cursor';
 import type { Database } from '../database/schema';
 import type { Transaction } from 'kysely';
 
@@ -105,8 +106,22 @@ export class CellsReadService {
   async membersOfWithin(
     executor: Db | Transaction<Database>,
     cellId: string,
-    page: { limit: number; after?: string } = { limit: 50 },
-  ): Promise<{ person_id: string; member_id: string; full_name: string; started_at: Date }[]> {
+    page: { limit: number; after?: RosterCursor | null } = { limit: 50 },
+  ): Promise<
+    {
+      person_id: string;
+      member_id: string;
+      full_name: string;
+      // The other two ordering keys travel with the row so the caller can build the
+      // next cursor from what it was given, rather than looking them up again — which
+      // is the lookup that made the first version unrunnable (`roster-cursor.ts`).
+      last_name: string;
+      first_name: string;
+      started_at: Date;
+    }[]
+  > {
+    const after = page.after ?? null;
+
     const rows = await executor
       .selectFrom('cell_memberships')
       .innerJoin('persons', 'persons.id', 'cell_memberships.person_id')
@@ -122,25 +137,32 @@ export class CellsReadService {
       .where('cell_memberships.ended_at', 'is', null)
       // Ordered so two identical requests answer identically. Member ID is total and
       // encodes nothing (section 3), which is what makes it a safe tie-break.
-      // The cursor is the Member ID of the row the previous page ended on, compared
-      // against the same three keys the ordering uses. A keyset rather than an offset,
-      // which section 22 forbids for the reason it gives: a member added mid-paging
-      // would shift every subsequent page by one.
-      .$if(page.after !== undefined, (query) =>
-        query.where((eb) =>
-          eb(
-            eb.refTuple('persons.last_name', 'persons.first_name', 'persons.member_id'),
-            '>',
-            eb
-              .selectFrom('persons as cursor')
-              .select((cursorEb) =>
-                cursorEb
-                  .refTuple('cursor.last_name', 'cursor.first_name', 'cursor.member_id')
-                  .as('key'),
-              )
-              .where('cursor.member_id', '=', page.after as string),
-          ),
-        ),
+      //
+      // **The keyset is spelled out rather than expressed as a row comparison against a
+      // looked-up key.** The looked-up form is what a first version wrote, and it did
+      // not run at all: a row constructor compared against a single-column subquery is
+      // `subquery has too few columns`, refused at analysis before any row is read, so
+      // every request following a cursor was a 500. `roster-cursor.ts` records why the
+      // key travels in the cursor instead. A keyset rather than an offset, which
+      // section 22 forbids for the reason it gives: a member added mid-paging would
+      // shift every subsequent page by one.
+      .$if(after !== null, (query) =>
+        query.where((eb) => {
+          const key = after as RosterCursor;
+
+          return eb.or([
+            eb('persons.last_name', '>', key.lastName),
+            eb.and([
+              eb('persons.last_name', '=', key.lastName),
+              eb('persons.first_name', '>', key.firstName),
+            ]),
+            eb.and([
+              eb('persons.last_name', '=', key.lastName),
+              eb('persons.first_name', '=', key.firstName),
+              eb('persons.member_id', '>', key.memberId),
+            ]),
+          ]);
+        }),
       )
       .orderBy('persons.last_name')
       .orderBy('persons.first_name')
@@ -154,6 +176,8 @@ export class CellsReadService {
       full_name: [row.first_name, row.middle_name, row.last_name]
         .filter((part): part is string => part !== null && part !== '')
         .join(' '),
+      last_name: row.last_name,
+      first_name: row.first_name,
       started_at: row.started_at,
     }));
   }

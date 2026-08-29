@@ -5591,14 +5591,105 @@ silently, as the code had been taking it. The alternative is a second free-text 
 which is structure nothing else in this specification has and section 26 would have to
 index, to obtain a distinction nothing can enforce. Written to section 10.
 
+### 2026-08-29 — Seven on the third fix batch, and a 500 on a documented parameter
+
+Fourth `architecture-guardian` pass, scoped to the third fix batch alone. The mechanism
+that batch was about — the backdating check moved inside the transaction — was confirmed
+correct for a second time, and `closureTooEarly`'s day decision was confirmed to have
+moved with it. Everything found was elsewhere, and two were live.
+
+**The pagination this branch added to satisfy section 22 could not run.** The cursor
+carried the Member ID alone and the comparison looked the other two ordering keys up in
+a scalar subquery, which compiles to a row constructor against a single-column subquery:
+`subquery has too few columns`. It is an analysis error, so it fires before a row is
+read, on every Cell and every cursor value — and `42601` is not a code
+`postgres-errors.ts` classifies, so it rendered `INTERNAL_ERROR`. A 500 on `limit`, which
+section 22 documents. I reproduced it against `dfc_ci` before acting on it.
+
+It was not confined to a read. `POST /cells/{id}/closure` refuses any member list that is
+not exactly the current membership, and this route is the only way to obtain one — so a
+Cell with more members than the page was **closable by nobody**, which is the failure the
+pagination was added to prevent, reached at 200 members instead of 500.
+
+Nothing could fail against it, for a reason worth keeping: the `$if` guard meant the
+broken SQL was never *built* unless a cursor was present, and no case supplied one.
+`tsc` was clean throughout. A green suite and a clean typecheck over a query that cannot
+be planned is the sharpest form of this branch's recurring fault.
+
+**The fix is section 25 rule 19 applied where the batch had skipped it.**
+`people.read.service.ts` already pages this shape and carries its whole key in the
+cursor, and the reason is not incidental: a lexicographic keyset needs every key it
+orders by. Carrying one key forces the lookup, and it also makes the boundary unstable —
+a member renamed between two pages moves the key the lookup would have found, so rows are
+skipped or repeated. The batch reused the `limit + 1` half and the envelope half and
+re-derived neither of the other two.
+
+The cursor is now base64url of all three keys, which also closes the second half: what it
+emitted was a bare Member ID, six digits off a sequence (section 3) and published
+church-wide (section 8), so a client could construct one — precisely what section 22 says
+a cursor must never be.
+
+**The rule this branch wrote into section 7 was written into section 8.** The three
+paragraphs were correctly lifted out of section 7's target-resolution bullet list, where
+they were terminating a closed enumeration, and reinserted eighty lines further down —
+past the section boundary. Section 7 line 1475 was left saying a Cell resolves through its
+leader "as of the period being viewed" with nothing in section 7 qualifying it, which is
+the exact ambiguity the rule exists to close, while four citations in two services and in
+this log all pointed at section 7. This is the seventh false "written to section x" claim
+recorded here and the first where the section is off by one — the failure mode the others
+share is that nobody greps, and a heading in the wrong section survives a grep for the
+*rule*.
+
+**Three unpinned rules and two false statements**, all the classes this branch has been
+recording:
+
+The `SCOPE_DENIED` case added by the previous batch pins one of the two things its comment
+claims. It does pin the error split — deleting it and throwing `CAPABILITY_DENIED`
+unconditionally reddens it, verified. It does not pin the `{ kind: 'church' }` target, and
+**nothing can**: `coversWith` discards a grant `grantCoversNothing` voids before reaching
+`scopeCovers`, so a narrower grant of a `WHOLE_CHURCH_ONLY` capability is skipped whatever
+target it is given, and a Whole Church grant returns true on `scopeCovers`'s first line
+before the target is read. Only `ADMIN` holds `records.backdate_effective_date`, at Whole
+Church, so both routes bypass the argument. The mutation was run and the case stayed green.
+The choice is right on section 7's terms and unfalsifiable, which is now said in both
+places rather than implied by a green case. `people.sex-correction.service.ts` already
+recorded this fact about the same capability, one module over, in a comment correcting an
+earlier version of itself.
+
+Section 10's new backdated-`OTHER` rule — one note carries both — had nothing that could
+fail on it: all seventeen backdated cases paired a date with one of the other four
+reasons, and all four `OTHER` cases were undated, so a service demanding a second
+explanation passed the whole suite. Section 7's forward-dated clause is unfalsifiable by
+construction, `changeSchedule` being its only subject and no leadership row existing at a
+future instant; that one is now said in the docblock, as its two neighbours already do.
+
+And a comment the batch inserted into a *pre-existing* case described the case below it:
+Rosalio's placement under the root is what makes the Leader-actor case discriminate, and
+the case it was written into closes as Admin, whose Whole Church grant returns true before
+any target is read.
+
+**What this pass did not find is worth recording too**, because three passes running had
+found a live defect in the previous batch's own mechanism and this one did not: nothing
+reads a host clock or an authority outside the transaction that relies on it, in either
+service.
+
+**The Stop Condition is listed as open rather than answered.** Section 22 does not define
+what a collection endpoint does with a forged, stale or unparseable cursor. The roster
+now matches `GET /api/v1/people` — treated as absent — because two endpoints on one API
+answering differently is the thing worth avoiding until the rule exists, and because it
+discloses nothing: the worst a tampered value does is start the page elsewhere in a roster
+the reader may already see in full. That is consistency with the only implementation this
+repository has, not a ruling.
+
 ### Open — awaiting a ruling
 
 **One item awaits a ruling, and it blocks Stage 5. Thirty-one other things are
 unsettled, none of them blocking. They are listed at the end, so this section is the
 whole of what is open.**
 
-*Thirty-one distinct items across thirty-one bullets. One arrived with the closure
-endpoint's review — whether a Cell roster read deserves a capability of its own — and
+*Thirty-two distinct items across thirty-two bullets. Two arrived with the closure
+endpoint's reviews — whether a Cell roster read deserves a capability of its own, and
+what a collection endpoint does with a cursor it cannot resolve — and
 two left on 2026-08-29. Those two are the
 pair that had come back: the closure effective-date floor and the cross-class lock
 ordering, each written three times in prose and refuted three times, both settled by
@@ -5632,6 +5723,7 @@ Two related questions have defined behaviour and are recorded in `SKILL.md` §12
 
 **Unsettled, and not blocking anything.** None of these is a Stop Condition. An implementer proceeds and settles them in passing; they are listed here because a reader looking for what is open should not have to find it inside the body of a ruling.
 
+- **What a collection endpoint does with a cursor it cannot resolve.** Section 22 fixes the cursor as opaque and requires pagination on every collection, and says nothing about a forged, stale or unparseable one — three lines mention `cursor` and none addresses it. Two endpoints exist and both now choose "treated as absent": `GET /api/v1/people`, which argues for it in a docblock, and `GET /api/v1/cells/{id}/members`, which was changed to match it on the fourth closure review rather than by decision. The consistency is deliberate and is not the ruling; what is unsettled is whether absent is right at all. Refusing is defensible — a client holding a cursor the server cannot read is in a state it should probably learn about rather than silently restart from the top — and the argument against it is that a stale cursor then strands a client with no way back, over a value that discloses nothing either way, since the worst a tampered one does is start a page elsewhere in a collection the reader may already see in full. Settle it before a third paginated collection is built, because a third one copying whichever it happened to read is how the two would diverge. Not blocking: both endpoints agree today, and `roster-cursor.ts` and `people.controller.ts` each say the question is open.
 - **Whether reading a Cell's roster deserves a read capability of its own.** `GET /api/v1/cells/{id}/members` is guarded by `cell.manage_membership`, resolved against the Cell — the same target its write routes declare, chosen because §7 declares its capability list closed and inventing a name for a read is not available. The consequence is client-visible and one-directional: §7 makes `read_only` valid only on a read capability, so a grant of `cell.manage_membership` cannot be issued read-only, and nobody can be given roster visibility without also being given the power to change the roster. That is strictly more restrictive than the alternative rather than a leak, which is why it was safe to ship. What would settle it is the first screen that wants to *show* a Cell's members to somebody who should not move them — a report view, or an upline leader reviewing a branch — and Stage 5's reporting reads will ask the same question about every Cell-scoped read at once. Settle it there rather than for this route alone.
 - **What category a closed Cell has, for a report inside the month it closed.** Section 10 requires historical reports to use "the category valid at the time being reported", and the closure ruling of 2026-08-29 makes a closure end the open category row on its effective date. So a Cell closed on 10 March has no category row valid at 31 March, and Section 12 evaluates classification as of the end of the reporting month. Contained today rather than broken: Section 10 says every count of Cells and Cell categories means active Cells unless a report says otherwise, so nothing currently asks the question. Three answers look defensible — read the last category the Cell held, treat a closed Cell as having none and exclude it, or evaluate the category as of the closure date rather than the month end — and choosing between them wants a real report in front of it. Settle it in Stage 5 with the reporting queries, and note that the same question does **not** arise for the schedule row, whose closure is the point: a closed Cell must stop deriving scheduled meetings.
 - **Whether a floor breached with no effective date supplied answers `RESOURCE_BUSY` rather than `INVARIANT_VIOLATION`.** `NetworksService.floorBreach` returns a 409 whose message says "Retry in a moment" — the status and the advice on opposite sides of Section 22's store/release split, since a 4xx is stored against the idempotency key and replayed for the whole retention. `PeopleReassignmentService.reassignmentTooEarly` has answered `RESOURCE_BUSY` for the same case on the sibling path since `216be37` (2026-08-23), and Section 5 still describes that path as answering `INVARIANT_VIOLATION`, so the specification has been wrong about it since. Changing it is a ruling rather than a fix, and needs **two** amendments neither of which is derivable: Section 4 says an undated correction "always succeeds" and has no floor to clear, which the branch contradicts — reachable because the comparison is `<=` and `new Date()` is millisecond-resolution, so a Person encoded and corrected inside one millisecond collides; and Section 22 defines `RESOURCE_BUSY` as a wait that timed out or a deadlock victim, which this is neither, the lock having been acquired cleanly. Deliberately split out of the issue #16 fix rather than settled inside it. It is pinned by nothing on either path today, and it is deterministically stageable — but by a raw `network_assignments` row starting in the **future**, not at `now()`. Now that the instant is read after the lock, a row starting at `now()` leaves `effectiveAt >= bound.at` and the branch fires only on exact millisecond equality, which is a coin flip rather than a test. Nothing bounds `started_at`: the table carries `period_ordered` and no more.

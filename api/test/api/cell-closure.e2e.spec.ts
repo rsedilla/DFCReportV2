@@ -339,8 +339,13 @@ describe('closing a Cell (section 10)', () => {
       const created = new Date('2026-03-01T00:00:00+08:00');
       const handedOver = new Date('2026-03-20T00:00:00+08:00');
 
-      // Under the root, so Rosalio is Mark's sibling and outside Mark's subtree: the
-      // rejected reading resolves the destination through him and refuses.
+      // Rosalio sits under the root, so he is Mark's sibling. **That placement decides
+      // nothing here**, and a version of this comment said it did — that "the rejected
+      // reading resolves the destination through him and refuses". This case closes as
+      // `admin`, whose Whole Church grant returns true on `scopeCovers`'s first line
+      // before any target is read, so no reading of the destination refuses anything.
+      // The subtree staging is what makes the *Leader*-actor case below discriminate;
+      // it was described here, one case up from where it is true.
       const rosa = await createPerson(db, { firstName: 'Rosalio', network: 'MENS' });
       await assignTo(db, rosa.id, root.id);
 
@@ -852,20 +857,30 @@ describe('closing a Cell (section 10)', () => {
     });
 
     it('refuses a narrow grant of the backdating capability with SCOPE_DENIED', async () => {
-      // **Two things nothing pinned, and both are the reason the check is written the
-      // way it is.**
+      // **What this pins is the code split, and only that.** `coversWith` answers a
+      // boolean, so the two errors are chosen at the call site because section 7 makes
+      // the code name the half that failed. Deleting that and throwing
+      // `CAPABILITY_DENIED` unconditionally left every other case green, and it is the
+      // wrong answer here — this actor *holds* the capability, and an administrator
+      // told `CAPABILITY_DENIED` would grant what they already granted. Verified red
+      // against that mutation.
       //
-      // The code split: `coversWith` answers a boolean, so the two errors are chosen
-      // at the call site because section 7 makes the code name the half that failed.
-      // Deleting that and throwing `CAPABILITY_DENIED` unconditionally left every case
-      // green, and it is the wrong answer here — this actor *holds* the capability and
-      // an administrator told `CAPABILITY_DENIED` would grant what they already
-      // granted.
+      // **It does not pin the `{ kind: 'church' }` target, and nothing can.** An
+      // earlier version of this comment claimed it did, on the reasoning that
+      // resolving against the Cell's leader instead — what copying
+      // `PeopleReassignmentService` would have done — would cover Mark and let the
+      // closure succeed. That is false, and the mutation was run: it leaves this case
+      // green. `coversWith` skips a grant `grantCoversNothing` voids *before* it
+      // reaches `scopeCovers`, so a narrower grant of a `WHOLE_CHURCH_ONLY` capability
+      // is discarded whatever target is passed; and a Whole Church grant returns true
+      // on `scopeCovers`'s first line, before the target is read. Only `ADMIN` holds
+      // this capability by default, at Whole Church, so both routes to it bypass the
+      // target and no actor can be built that distinguishes the two.
       //
-      // And the target: `records.backdate_effective_date` is Whole Church only
-      // (section 7), so a grant issued narrower covers nothing. Resolved against the
-      // Cell's leader instead — which is what copying `PeopleReassignmentService`
-      // would have done — this grant would cover Mark and the closure would succeed.
+      // The target is therefore right on section 7's terms and unfalsifiable, which is
+      // said here rather than left as a green case asserting more than it holds. It
+      // becomes observable the day `records.backdate_effective_date` leaves
+      // `WHOLE_CHURCH_ONLY`, and not before.
       const leader = await createAccount(app, db, { person: mark, roles: ['LEADER'] });
       const created = new Date('2026-03-01T00:00:00+08:00');
       const cell = await createCell(db, { leader: mark, createdAt: created });
@@ -891,6 +906,45 @@ describe('closing a Cell (section 10)', () => {
 
       expect(response.body.error.code).toBe('SCOPE_DENIED');
       expect(response.body.error.details.capability).toBe('records.backdate_effective_date');
+    });
+
+    it('accepts a backdated OTHER closure with one note carrying both', async () => {
+      // **The second Stop Condition this branch settled, and nothing could fail on
+      // it.** Section 10 says one note explains both the closure and its backdating
+      // where the reason is `OTHER`, which already requires a note — so for that one
+      // reason the backdating requirement adds no field, and section 10 says so
+      // rather than leaving the code to take that reading silently.
+      //
+      // Every other case pairs `OTHER` with an undated closure or a backdate with one
+      // of the other four reasons, so a service demanding a second explanation for a
+      // backdated `OTHER` passed the whole suite. That mutation reddens this.
+      const past = new Date('2026-03-01T00:00:00+08:00');
+      for (const table of ['cell_leaderships', 'cell_categories'] as const) {
+        await db
+          .updateTable(table)
+          .set({ started_at: past })
+          .where('cell_id', '=', markCell.id)
+          .execute();
+      }
+
+      await close(admin, markCell.id, {
+        reason: 'OTHER',
+        // One note, doing both jobs.
+        note: 'the venue was sold, and this is dated to the day it closed',
+        members: [],
+        effective_date: '2026-03-02',
+      }).expect(200);
+
+      const backdated = await db
+        .selectFrom('audit_log')
+        .select(['after'])
+        .where('action', '=', 'effective_date.backdated')
+        .executeTakeFirstOrThrow();
+
+      expect(backdated.after).toMatchObject({
+        operation: 'cell.closed',
+        effective_date: '2026-03-02',
+      });
     });
 
     it('refuses a forward-dated closure', async () => {

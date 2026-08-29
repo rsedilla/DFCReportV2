@@ -20,6 +20,7 @@ import { NetworksService } from '../networks/networks.service';
 import { PeopleReadService } from '../people/people.read.service';
 
 import { CellsReadService } from './cells.read.service';
+import { decodeRosterCursor, encodeRosterCursor } from './roster-cursor';
 
 import type { CurrentClaim } from '../common/idempotency/current-idempotency.decorator';
 import type { Database } from '../database/schema';
@@ -274,8 +275,15 @@ export class CellsMembershipService {
    * Cell over that is then closable by nobody *and* silently truncated here.
    *
    * `next_cursor` is null for every Cell this church has, because a page of 50 holds
-   * what one leader can pastor. It is a fact about the data rather than a promise, and
-   * a client that meets a cursor can follow it.
+   * what one leader can pastor. It is a fact about the data rather than a promise.
+   *
+   * **A client that meets a cursor can follow it, which was false when that sentence
+   * was first written.** The cursor was the Member ID alone and the comparison looked
+   * the other two keys up in a subquery, which PostgreSQL refuses at analysis — so the
+   * second page was a 500 on every Cell large enough to have one, and the closure
+   * endpoint, whose member list must be exactly the current membership, was therefore
+   * unsatisfiable for any Cell over the page size. `roster-cursor.ts` carries the fix
+   * and the reasoning.
    */
   async membersOf(
     cellId: string,
@@ -301,10 +309,11 @@ export class CellsMembershipService {
     // returned, so a client never sees `limit + 1`.
     const members = await this.cells.membersOfWithin(this.db, cellId, {
       limit: limit + 1,
-      after: page.cursor,
+      after: decodeRosterCursor(page.cursor),
     });
 
     const visible = members.slice(0, limit);
+    const last = visible.at(-1);
 
     return {
       data: visible.map((member) => ({
@@ -313,9 +322,18 @@ export class CellsMembershipService {
         full_name: member.full_name,
         started_at: member.started_at.toISOString(),
       })),
-      // The Member ID of the last row shown, which is the third key of the ordering
-      // and total on its own (section 3).
-      next_cursor: members.length > limit ? (visible.at(-1)?.member_id ?? null) : null,
+      // The whole ordering key of the last row shown, opaquely encoded. All three,
+      // because a lexicographic keyset needs every key it orders by and because a
+      // member renamed between two pages would otherwise move a key looked up by
+      // Member ID — skipping or repeating rows (`roster-cursor.ts`).
+      next_cursor:
+        members.length > limit && last !== undefined
+          ? encodeRosterCursor({
+              lastName: last.last_name,
+              firstName: last.first_name,
+              memberId: last.member_id,
+            })
+          : null,
     };
   }
 

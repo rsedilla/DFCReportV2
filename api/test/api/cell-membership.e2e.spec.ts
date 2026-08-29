@@ -651,6 +651,94 @@ describe('cell membership (section 10)', () => {
       expect(response.body.error.code).toBe('NOT_FOUND');
     });
 
+    it('pages: a cursor reaches the second page, and it is the whole key', async () => {
+      // **The case the pagination shipped without, and it was a 500.** The cursor was
+      // the Member ID alone and the comparison looked the other two ordering keys up
+      // in a scalar subquery, which compiles to a row constructor against a
+      // single-column subquery — `subquery has too few columns`, refused by PostgreSQL
+      // at analysis before a row is read, and `42601` is not a code
+      // `postgres-errors.ts` classifies, so it rendered `INTERNAL_ERROR`.
+      //
+      // Nothing could fail against it: `limit` is a documented parameter but no case
+      // supplied a `cursor`, and the `$if` guard meant the broken SQL was never even
+      // built. `tsc` was clean throughout.
+      //
+      // It was not cosmetic. `POST /cells/{id}/closure` requires a member list that is
+      // exactly the current membership, and this route is the only way to obtain one —
+      // so any Cell with more members than the page was closable by nobody.
+      const alpha = await createPerson(db, {
+        firstName: 'Ana',
+        lastName: 'Abadilla',
+        network: 'MENS',
+      });
+      const omega = await createPerson(db, {
+        firstName: 'Zosimo',
+        lastName: 'Zamora',
+        network: 'MENS',
+      });
+      await assignTo(db, alpha.id, mark.id);
+      await assignTo(db, omega.id, mark.id);
+      await addMember(admin, markCell.id, alpha.id).expect(201);
+      await addMember(admin, markCell.id, omega.id).expect(201);
+
+      const first = await request(app.getHttpServer())
+        .get(`/api/v1/cells/${markCell.id}/members?limit=1`)
+        .set('Authorization', `Bearer ${admin.accessToken}`)
+        .expect(200);
+
+      expect(first.body.data).toHaveLength(1);
+      expect(first.body.data[0].person_id).toBe(alpha.id);
+      expect(first.body.next_cursor).not.toBeNull();
+
+      // **Opaque, which section 22 requires and the first version was not.** It emitted
+      // a bare Member ID — six digits off a sequence (section 3), published church-wide
+      // (section 8), and therefore constructible by a client, which is exactly what
+      // section 22 says a cursor must never be.
+      const memberIds = await db
+        .selectFrom('persons')
+        .select('member_id')
+        .where('id', 'in', [alpha.id, omega.id])
+        .execute();
+
+      for (const row of memberIds) {
+        expect(first.body.next_cursor).not.toBe(row.member_id);
+      }
+
+      const second = await request(app.getHttpServer())
+        .get(
+          `/api/v1/cells/${markCell.id}/members?limit=1&cursor=${encodeURIComponent(
+            first.body.next_cursor as string,
+          )}`,
+        )
+        .set('Authorization', `Bearer ${admin.accessToken}`)
+        .expect(200);
+
+      expect(second.body.data).toHaveLength(1);
+      expect(second.body.data[0].person_id).toBe(omega.id);
+      expect(second.body.next_cursor).toBeNull();
+    });
+
+    it('treats an unreadable cursor as absent rather than refusing it', async () => {
+      // Matches `GET /api/v1/people`, which is the only other paginated collection and
+      // the only behaviour this repository has chosen. **Section 22 does not settle
+      // what a collection endpoint does with a forged, stale or unparseable cursor**,
+      // and that is recorded as open in `CLAUDE.md` rather than decided here — two
+      // endpoints on one API answering differently is the thing worth avoiding until
+      // it is.
+      //
+      // It discloses nothing either way: the worst a tampered value does is start the
+      // page elsewhere in a roster this reader may already see in full.
+      await addMember(admin, markCell.id, juan.id).expect(201);
+
+      const response = await request(app.getHttpServer())
+        .get(`/api/v1/cells/${markCell.id}/members?cursor=not-a-real-cursor`)
+        .set('Authorization', `Bearer ${admin.accessToken}`)
+        .expect(200);
+
+      expect(response.body.data).toHaveLength(1);
+      expect(response.body.data[0].person_id).toBe(juan.id);
+    });
+
     it('answers an empty list rather than a refusal for a Cell with no members', async () => {
       const response = await request(app.getHttpServer())
         .get(`/api/v1/cells/${markCell.id}/members`)

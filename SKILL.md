@@ -1513,6 +1513,14 @@ Example: an Associate Pastor may remain pastorally under Bishop Oriel while Admi
 
 All permission and scope grants — creation, modification, and revocation — must be audit logged (Section 21).
 
+#### An effective date does not move the scope decision
+
+**"The period being viewed" is the period a read is asking about. A write is acted on now, whatever date it takes effect at.** Authority resolves through the Cell's *current* leader; the relationship being recorded resolves as of its own effective date, because that is the period it describes. Two questions, two answers, and any write carrying an effective date other than now asks both.
+
+The direction is forced rather than chosen. A leader whose Cell was handed away yesterday holds no authority over it today, and resolving authority as of a past effective date would let them recover it by dating the action far enough back — privilege reclaimed through a date field, which is the shape Section 5 invariant 4 refuses through the org chart. A forward-dated write is the same rule from the other side: a schedule change takes effect at the start of the next month (Section 10) and is authorized by who holds the Cell when it is made, not by whoever may hold it then. Nothing is lost either way, because the leader who did hold the Cell, or who will, is not thereby entitled to act on it now.
+
+It follows that a Cell closure backdated across a destination Cell's handover is scoped against the leader who holds that Cell today, and compares Networks against the leader who held it on the effective date. Those can be different people in different subtrees, and both answers are correct for the question each is asked.
+
 ### How grants are held
 
 An account's effective authority is the union of two sources: the defaults of the roles it holds, and any capability granted to it explicitly.
@@ -1785,14 +1793,6 @@ The distinction is the direction the question is asked from. A search starts fro
 What travels with it is decided by the surface rather than by this list. A membership list carries the names and Member IDs this section already publishes and nothing further — no birthday, no contact detail, no classification. Section 12's **roster view** carries each member's attendance for the month as well, because that is what it is for, and it reaches the same readers this rule admits. Neither is an exception: this list bounds what a *search* returns about a person outside the searcher's pastoral scope, and a Cell surface is bounded by authority over the Cell instead.
 
 Selecting an existing person during a duplicate-resolution workflow reuses that Person record but must not automatically transfer pastoral ownership, Cell membership, or any other relationship. Any such transfer requires its own explicit, authorized action.
-
-#### An effective date does not move the scope decision
-
-**"The period being viewed" is the period a read is asking about. A write is acted on now, whatever date it takes effect at.** Authority resolves through the Cell's *current* leader; the relationship being recorded resolves as of its own effective date, because that is the period it describes. Two questions, two answers, and any write carrying an effective date other than now asks both.
-
-The direction is forced rather than chosen. A leader whose Cell was handed away yesterday holds no authority over it today, and resolving authority as of a past effective date would let them recover it by dating the action far enough back — privilege reclaimed through a date field, which is the shape Section 5 invariant 4 refuses through the org chart. A forward-dated write is the same rule from the other side: a schedule change takes effect at the start of the next month (Section 10) and is authorized by who holds the Cell when it is made, not by whoever may hold it then. Nothing is lost either way, because the leader who did hold the Cell, or who will, is not thereby entitled to act on it now.
-
-It follows that a Cell closure backdated across a destination Cell's handover is scoped against the leader who holds that Cell today, and compares Networks against the leader who held it on the effective date. Those can be different people in different subtrees, and both answers are correct for the question each is asked.
 
 Senior Pastors retain authorized whole-church visibility across both Men's and Women's Networks per Section 4 and are not subject to the out-of-scope restriction above. Admin access follows explicit administrative permissions per Section 7.
 

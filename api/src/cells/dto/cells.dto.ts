@@ -254,11 +254,15 @@ export class CloseCellDto {
  * envelope and bound no parameter, which is that shape with the truncation still to
  * come.
  *
- * `next_cursor` is still always null, and here that is a fact rather than a
- * simplification: a Cell's membership is what one leader can pastor, so the default
- * page holds every member of any Cell this church has. Where it does not — a Cell over
+ * `next_cursor` is null for every Cell this church has, which is a fact about the data
+ * rather than a simplification: a Cell's membership is what one leader can pastor, so
+ * the default page holds every member of any Cell here. Where it does not — a Cell over
  * the limit — the answer says so by returning `limit` rows and a cursor, rather than by
  * returning everything.
+ *
+ * *An earlier version of this block said `next_cursor` "is still always null" four
+ * lines above describing the case that returns one, and beside code that returns one.
+ * It described the version before the pagination, in the commit that added it.*
  */
 export class CellMembersDto {
   /** Section 22: defaults to 50, maximum 200. */
@@ -270,11 +274,17 @@ export class CellMembersDto {
   limit?: number;
 
   /**
-   * The `person_id` the previous page ended on.
+   * The `next_cursor` of the previous page, passed back unmodified.
    *
-   * An opaque cursor over the ordering the read service fixes — last name, first name,
-   * Member ID — rather than an offset, which section 22 forbids: a member added while a
-   * client pages would shift every subsequent page by one.
+   * Opaque, as section 22 requires: base64url of the three ordering keys the read
+   * service fixes — last name, first name, Member ID. A keyset rather than an offset,
+   * which section 22 forbids because a member added while a client pages would shift
+   * every subsequent page by one.
+   *
+   * *This said "the `person_id` the previous page ended on", which named neither the
+   * field the code emits nor the field it consumes — both are the Member ID at the
+   * time, and both are the whole key now. A client following the docblock would have
+   * sent a UUID and been answered a silent empty page reading as "last page".*
    */
   @IsOptional()
   @IsString()

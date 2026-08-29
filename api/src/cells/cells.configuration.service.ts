@@ -325,6 +325,14 @@ export class CellsConfigurationService {
    * `coversWith` through the transaction; the reason it exists is not.
    *
    * The guard keeps the early, cheap refusal. This is what the write rests on.
+   *
+   * **Section 7's forward-dated clause is unfalsifiable here, and that is said rather
+   * than left to be discovered.** A schedule change is the one write in the system
+   * whose effective date is in the future, so it is the clause's only subject — and
+   * mutating this to `leaderAsOfWithin(effectiveFrom)` cannot change any answer,
+   * because no leadership row exists at a future instant that the currently open row
+   * does not already cover. The rule is right and no test can hold it; it acquires one
+   * the day a leadership row can be opened ahead of time.
    */
   private async assertStillInScopeWithin(
     trx: Transaction<Database>,
