@@ -213,7 +213,14 @@ export type AuditAction =
   // `cell_membership` above: the noun is the thing that changed, so a reader asking
   // when a Cell last moved its meeting day has something to search on.
   | 'cell_category.changed'
-  | 'cell_schedule.changed';
+  | 'cell_schedule.changed'
+  // Section 21 lists "Cell closure with reason". One entry for the closure itself,
+  // and the membership entries above carry the dispersals — a dispersal *is* a move
+  // and leaving somebody unassigned *is* an ending, so a reader searching for either
+  // must find them whichever operation performed them. Section 11's leadership
+  // ending needs no entry of its own: it is not a separate decision, and its date is
+  // the closure's, which this entry carries.
+  | 'cell.closed';
 
 export interface AuditLogTable {
   id: Generated<string>;

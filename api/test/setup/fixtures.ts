@@ -329,11 +329,23 @@ export async function createCell(
     /** ISO 8601: 1 is Monday, 7 is Sunday (section 20). */
     dayOfWeek?: number;
     timeOfDay?: string;
+    /**
+     * When the Cell came into existence, for a case that needs a Cell with history.
+     *
+     * `created_at` is immutable once written (`cells_record_is_final`), so a case
+     * wanting a Cell that has been running for weeks has to say so here rather than
+     * moving the column afterwards. Everything the Cell opens with takes this instant
+     * too, which is what section 10 requires and what keeps a backdated fixture a
+     * state the application could actually have produced -- rather than one where the
+     * leadership row predates the Cell.
+     */
+    createdAt?: Date;
   },
 ): Promise<TestCell> {
   const result = await sql<{ id: string; cell_id: string }>`
     WITH new_cell AS (
-      INSERT INTO cells DEFAULT VALUES
+      INSERT INTO cells (created_at)
+      VALUES (coalesce(${options.createdAt ?? null}::timestamptz, now()))
       RETURNING id, cell_id, created_at
     ), category AS (
       INSERT INTO cell_categories (cell_id, category, started_at)
@@ -357,4 +369,97 @@ export async function createCell(
     dayOfWeek: options.dayOfWeek ?? 6,
     timeOfDay: options.timeOfDay ?? '19:00',
   };
+}
+
+/**
+ * End a Cell's open category and schedule rows at an instant, the way a closure does
+ * (SKILL.md section 10, *What closing does*; migration 0010).
+ *
+ * `GREATEST(at, started_at)`, so a row that has not started yet -- the incoming half
+ * of a schedule change queued for next month -- ends at its own start and is
+ * zero-length rather than ending before it began. `CellsClosureService` performs
+ * exactly this write; the duplication is deliberate, because a fixture calling the
+ * service under test would make every case in `cells.spec.ts` depend on the service
+ * rather than on the schema it is measuring.
+ *
+ * Exported separately from `closeCellDirectly` for the cases that stage a
+ * **deliberately partial** closure -- a leadership row left open, a membership
+ * outliving its Cell. Those must satisfy every rule except the one they are
+ * measuring, or they fail on this one instead and stop testing what they name.
+ */
+export async function endCellConfigurationWithin(
+  trx: Kysely<Database>,
+  cellId: string,
+  at: Date,
+): Promise<void> {
+  for (const table of ['cell_categories', 'cell_schedules'] as const) {
+    await sql`
+      UPDATE ${sql.table(table)}
+         SET ended_at = GREATEST(${at}::timestamptz, started_at)
+       WHERE cell_id = ${cellId}::uuid
+         AND (ended_at IS NULL
+              OR ended_at > GREATEST(${at}::timestamptz, started_at))
+    `.execute(trx);
+  }
+}
+
+/**
+ * Close a Cell directly, performing all five writes section 10 lists.
+ *
+ * **Five, not three.** The category and schedule rows joined that list on 2026-08-29
+ * and migration 0010 enforces it, so a fixture doing only the first three now leaves
+ * a CLOSED Cell with configuration rows still in force and fails at COMMIT on a rule
+ * the case is not about. Three copies of the three-write version existed across the
+ * suite and all three had to be corrected; this is the one copy that replaced them.
+ *
+ * It writes the tables directly rather than calling `CellsClosureService`, and that is
+ * the point: cases in `test/database/` measure the schema, and a fixture routed
+ * through the service would have them measuring the service instead.
+ */
+export async function closeCellDirectly(
+  db: Kysely<Database>,
+  cellId: string,
+  options: {
+    reason:
+      | 'MERGED_INTO_ANOTHER_CELL'
+      | 'LEADER_STEPPED_DOWN'
+      | 'MEMBERS_DISPERSED'
+      | 'CREATED_IN_ERROR'
+      | 'OTHER';
+    note?: string;
+    at?: Date;
+  },
+): Promise<void> {
+  await db.transaction().execute(async (trx) => {
+    const at =
+      options.at ??
+      (await sql<{ now: Date }>`SELECT clock_timestamp() AS now`.execute(trx)).rows[0].now;
+
+    await trx
+      .updateTable('cells')
+      .set({
+        state: 'CLOSED',
+        closed_at: at,
+        closure_reason: options.reason,
+        closure_note: options.note ?? null,
+      })
+      .where('id', '=', cellId)
+      .execute();
+
+    await trx
+      .updateTable('cell_leaderships')
+      .set({ ended_at: at })
+      .where('cell_id', '=', cellId)
+      .where('ended_at', 'is', null)
+      .execute();
+
+    await trx
+      .updateTable('cell_memberships')
+      .set({ ended_at: at })
+      .where('cell_id', '=', cellId)
+      .where('ended_at', 'is', null)
+      .execute();
+
+    await endCellConfigurationWithin(trx, cellId, at);
+  });
 }

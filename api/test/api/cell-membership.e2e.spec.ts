@@ -8,6 +8,7 @@ import { CellsMembershipService } from '../../src/cells/cells.membership.service
 import { createTestDb, truncateAll } from '../setup/database';
 import {
   assignTo,
+  closeCellDirectly,
   createAccount,
   createCell,
   createPerson,
@@ -85,34 +86,6 @@ describe('cell membership (section 10)', () => {
       .set('Authorization', `Bearer ${actor.accessToken}`)
       .set('Idempotency-Key', randomUUID())
       .send();
-
-  /**
-   * Closes a Cell the way section 10 says a closure happens, so a case can reach the
-   * state without a closure endpoint existing yet: the state, the leadership and any
-   * memberships end at one instant, which is what migration 0009 requires.
-   */
-  const closeCellDirectly = (cellUuid: string) =>
-    db.transaction().execute(async (trx) => {
-      const at = (await sql<{ now: Date }>`SELECT now() AS now`.execute(trx)).rows[0].now;
-
-      await trx
-        .updateTable('cells')
-        .set({ state: 'CLOSED', closed_at: at, closure_reason: 'MEMBERS_DISPERSED' })
-        .where('id', '=', cellUuid)
-        .execute();
-      await trx
-        .updateTable('cell_leaderships')
-        .set({ ended_at: at })
-        .where('cell_id', '=', cellUuid)
-        .where('ended_at', 'is', null)
-        .execute();
-      await trx
-        .updateTable('cell_memberships')
-        .set({ ended_at: at })
-        .where('cell_id', '=', cellUuid)
-        .where('ended_at', 'is', null)
-        .execute();
-    });
 
   const openMembership = (personId: string) =>
     db
@@ -212,7 +185,7 @@ describe('cell membership (section 10)', () => {
       // correction. The refusal here is about the Cell being closed rather than about
       // scope, which is what shows the scope resolved.
       const closing = await createCell(db, { leader: mark, category: 'COUPLE' });
-      await closeCellDirectly(closing.id);
+      await closeCellDirectly(db, closing.id, { reason: 'MEMBERS_DISPERSED' });
 
       const account = await createAccount(app, db, {
         person: mark,

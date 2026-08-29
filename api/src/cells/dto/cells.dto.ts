@@ -1,8 +1,36 @@
-import { IsIn, IsInt, IsUUID, Matches, Max, Min } from 'class-validator';
+import { Type } from 'class-transformer';
+import {
+  ArrayMaxSize,
+  IsArray,
+  IsIn,
+  IsInt,
+  IsOptional,
+  IsString,
+  IsUUID,
+  Matches,
+  MaxLength,
+  ValidateNested,
+} from 'class-validator';
+import { Max, Min, ValidateIf } from 'class-validator';
 
-import type { CellCategory } from '../../database/schema';
+import type { CellCategory, CellClosureReason } from '../../database/schema';
 
 const CATEGORIES: CellCategory[] = ['YOUTH', 'YOUNG_PRO', 'COUPLE'];
+
+/**
+ * Section 10, *Closure reasons*, and the list is closed.
+ *
+ * Multiplication is deliberately absent and must not be added: when a Cell
+ * multiplies a disciple opens a new Cell and the original continues under the same
+ * leader, so multiplication creates Cells and never closes one.
+ */
+const CLOSURE_REASONS: CellClosureReason[] = [
+  'MERGED_INTO_ANOTHER_CELL',
+  'LEADER_STEPPED_DOWN',
+  'MEMBERS_DISPERSED',
+  'CREATED_IN_ERROR',
+  'OTHER',
+];
 
 /**
  * `POST /api/v1/cells` (SKILL.md section 22).
@@ -97,4 +125,83 @@ export class ChangeCellScheduleDto {
     message: 'time_of_day must be HH:MM or HH:MM:SS, in Asia/Manila wall-clock time',
   })
   time_of_day!: string;
+}
+
+/**
+ * One member of a closing Cell, and what the closer decided about them
+ * (SKILL.md section 10, *What closing does*).
+ */
+export class CellClosureMemberDto {
+  @IsUUID()
+  person_id!: string;
+
+  /**
+   * The Cell to move them to, or `null` to leave them in none.
+   *
+   * **Required, and `null` is a decision rather than an omission.** Section 10:
+   * members "must be dealt with explicitly rather than silently… Closure is not
+   * blocked on reassigning them, but it must not complete without the decision being
+   * made and recorded." An optional field would let a client leave somebody
+   * unassigned by forgetting them, which is exactly what that sentence forbids —
+   * and people left without a Cell go to section 15's attention list, which is a
+   * queue somebody has to work rather than a place to lose them.
+   */
+  @ValidateIf((decision: CellClosureMemberDto) => decision.destination_cell_id !== null)
+  @IsUUID()
+  destination_cell_id!: string | null;
+}
+
+/**
+ * `POST /api/v1/cells/{id}/closure` (SKILL.md section 10, *What closing does*).
+ *
+ * **`members` names every current member, and the server refuses the closure if it
+ * does not.** It is not an optional convenience: it is the recorded decision section
+ * 10 requires, and it is also what the operation locks people by, so a list that has
+ * gone stale is a list that locked the wrong people. The refusal asks for the
+ * membership to be re-read, which is section 14's rule that a conflict is resolved by
+ * a person rather than by last-write-wins.
+ */
+export class CloseCellDto {
+  @IsIn(CLOSURE_REASONS)
+  reason!: CellClosureReason;
+
+  /**
+   * Required where the reason is `OTHER`, refused otherwise.
+   *
+   * The database says the same thing twice over (`cells_other_requires_note`,
+   * `cells_note_only_with_reason`); this is here so a missing note is
+   * `VALIDATION_FAILED` naming the field rather than a constraint violation. Section
+   * 10 asks every reason to stay "factual and free of judgement", which is why the
+   * list is closed and the note exists only to qualify the one open value.
+   */
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  note?: string;
+
+  /**
+   * Asia/Manila calendar day, `YYYY-MM-DD` (section 22).
+   *
+   * Omitted, the closure takes effect now. Supplied, it requires
+   * `records.backdate_effective_date` (section 10) and must clear the floor the
+   * Cell's own leadership and membership records set.
+   */
+  @IsOptional()
+  @Matches(/^\d{4}-\d{2}-\d{2}$/, {
+    message: 'effective_date must be an Asia/Manila calendar day, YYYY-MM-DD',
+  })
+  effective_date?: string;
+
+  /**
+   * **Bounded, because it is the only unbounded list any request in this API
+   * carries**, and every entry becomes an advisory lock, a `cells` row lock and two
+   * audit entries. Five hundred is far above any real Cell — section 2 puts the
+   * church at roughly 800 Cells across three to four thousand people — and far below
+   * what would hold a transaction open long enough to matter to section 24's pool.
+   */
+  @IsArray()
+  @ArrayMaxSize(500)
+  @ValidateNested({ each: true })
+  @Type(() => CellClosureMemberDto)
+  members!: CellClosureMemberDto[];
 }

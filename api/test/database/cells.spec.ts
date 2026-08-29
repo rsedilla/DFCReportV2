@@ -5,7 +5,14 @@ import { Client } from 'pg';
 
 import { createTestDb, truncateAll } from '../setup/database';
 import { manilaDayOf, startOfManilaDay } from '../../src/common/time/manila';
-import { createCell, createPerson, EPOCH, type TestPerson } from '../setup/fixtures';
+import {
+  closeCellDirectly,
+  createCell,
+  createPerson,
+  endCellConfigurationWithin,
+  EPOCH,
+  type TestPerson,
+} from '../setup/fixtures';
 
 import type { Database } from '../../src/database/schema';
 
@@ -99,12 +106,12 @@ describe('the Cell tables (SKILL.md sections 10 and 11)', () => {
     it('requires a note where the closure reason is OTHER', async () => {
       const cell = await createCell(db, { leader });
 
-      await expect(closeCell(db, cell.id, { reason: 'OTHER' })).rejects.toThrow(
+      await expect(closeCellDirectly(db, cell.id, { reason: 'OTHER' })).rejects.toThrow(
         /cells_other_requires_note/,
       );
 
       await expect(
-        closeCell(db, cell.id, { reason: 'OTHER', note: 'the venue was sold' }),
+        closeCellDirectly(db, cell.id, { reason: 'OTHER', note: 'the venue was sold' }),
       ).resolves.toBeUndefined();
     });
 
@@ -113,7 +120,7 @@ describe('the Cell tables (SKILL.md sections 10 and 11)', () => {
       // corrected by creating a new Cell, and the mistaken closure stands in the
       // record. That is a rule an UPDATE can break.
       const cell = await createCell(db, { leader });
-      await closeCell(db, cell.id, { reason: 'CREATED_IN_ERROR' });
+      await closeCellDirectly(db, cell.id, { reason: 'CREATED_IN_ERROR' });
 
       await expect(
         db
@@ -126,7 +133,7 @@ describe('the Cell tables (SKILL.md sections 10 and 11)', () => {
 
     it('never rewrites a closure that stands', async () => {
       const cell = await createCell(db, { leader });
-      await closeCell(db, cell.id, { reason: 'CREATED_IN_ERROR' });
+      await closeCellDirectly(db, cell.id, { reason: 'CREATED_IN_ERROR' });
 
       await expect(
         db
@@ -149,7 +156,7 @@ describe('the Cell tables (SKILL.md sections 10 and 11)', () => {
       // A trigger that raises and still lets the row change would pass every case
       // above while protecting nothing.
       const cell = await createCell(db, { leader });
-      await closeCell(db, cell.id, { reason: 'CREATED_IN_ERROR' });
+      await closeCellDirectly(db, cell.id, { reason: 'CREATED_IN_ERROR' });
 
       await expect(
         db.updateTable('cells').set({ state: 'ACTIVE' }).where('id', '=', cell.id).execute(),
@@ -292,21 +299,29 @@ describe('the Cell tables (SKILL.md sections 10 and 11)', () => {
     });
 
     it('refuses closing a Cell while its leadership stays open', async () => {
-      // Written against the table rather than through `closeCell`, because that
-      // helper ends the leadership -- which is the whole of what this case is
+      // Written against the tables rather than through `closeCellDirectly`, because
+      // that helper ends the leadership -- which is the whole of what this case is
       // checking cannot be skipped.
+      //
+      // **It ends the configuration rows, which is not incidental.** Migration 0010
+      // added a deferred trigger on `cells` for those, and trigger functions on one
+      // event fire in name order, so `cells_configuration_matches_state` runs before
+      // `cells_relationships_match_state`. Leaving them open makes this case fail on
+      // 0010's rule and stop measuring 0009's -- still red, and red for the wrong
+      // reason, which is the failure mode a passing suite never shows.
       const cell = await createCell(db, { leader });
 
       await expect(
-        db
-          .updateTable('cells')
-          .set({
-            state: 'CLOSED',
-            closed_at: await dbNow(db),
-            closure_reason: 'LEADER_STEPPED_DOWN',
-          })
-          .where('id', '=', cell.id)
-          .execute(),
+        db.transaction().execute(async (trx) => {
+          const at = await dbNow(trx);
+
+          await trx
+            .updateTable('cells')
+            .set({ state: 'CLOSED', closed_at: at, closure_reason: 'LEADER_STEPPED_DOWN' })
+            .where('id', '=', cell.id)
+            .execute();
+          await endCellConfigurationWithin(trx, cell.id, at);
+        }),
       ).rejects.toThrow(/is CLOSED and has 1 open leadership assignment/);
     });
 
@@ -333,6 +348,7 @@ describe('the Cell tables (SKILL.md sections 10 and 11)', () => {
             .where('cell_id', '=', cell.id)
             .where('ended_at', 'is', null)
             .execute();
+          await endCellConfigurationWithin(trx, cell.id, at);
         }),
       ).rejects.toThrow(/ending after its closure date/);
     });
@@ -340,7 +356,7 @@ describe('the Cell tables (SKILL.md sections 10 and 11)', () => {
     it('accepts a closure that ends the leadership on the same date', async () => {
       const cell = await createCell(db, { leader });
 
-      await closeCell(db, cell.id, { reason: 'MEMBERS_DISPERSED' });
+      await closeCellDirectly(db, cell.id, { reason: 'MEMBERS_DISPERSED' });
 
       const cellRow = await db
         .selectFrom('cells')
@@ -1040,6 +1056,7 @@ describe('the Cell tables (SKILL.md sections 10 and 11)', () => {
             .where('cell_id', '=', cell.id)
             .where('ended_at', 'is', null)
             .execute();
+          await endCellConfigurationWithin(trx, cell.id, at);
         }),
       ).rejects.toThrow(/open membership/);
     });
@@ -1047,7 +1064,7 @@ describe('the Cell tables (SKILL.md sections 10 and 11)', () => {
     it('refuses adding a member to a Cell that is already closed', async () => {
       const cell = await createCell(db, { leader });
       const member = await createPerson(db, { firstName: 'Juan', network: 'MENS' });
-      await closeCell(db, cell.id, { reason: 'MEMBERS_DISPERSED' });
+      await closeCellDirectly(db, cell.id, { reason: 'MEMBERS_DISPERSED' });
 
       await expect(addMember(db, cell.id, member.id)).rejects.toThrow(/open membership/);
     });
@@ -1078,6 +1095,7 @@ describe('the Cell tables (SKILL.md sections 10 and 11)', () => {
             .where('cell_id', '=', cell.id)
             .where('ended_at', 'is', null)
             .execute();
+          await endCellConfigurationWithin(trx, cell.id, at);
         }),
       ).rejects.toThrow(/ending after its closure date/);
     });
@@ -1682,6 +1700,17 @@ describe('the Cell tables (SKILL.md sections 10 and 11)', () => {
           [at, cell.id],
         );
 
+        // Migration 0010's half of the closure, so this closes cleanly and the case
+        // measures the membership rule rather than that one.
+        for (const table of ['cell_categories', 'cell_schedules']) {
+          await closer.query(
+            `UPDATE ${table} SET ended_at = GREATEST($1::timestamptz, started_at)
+              WHERE cell_id = $2
+                AND (ended_at IS NULL OR ended_at > GREATEST($1::timestamptz, started_at))`,
+            [at, cell.id],
+          );
+        }
+
         // The insert itself does not contend -- it is the deferred check's `FOR SHARE`
         // on the `cells` row that does, at COMMIT.
         await adder.query(
@@ -1879,49 +1908,6 @@ async function openClient(): Promise<Client> {
  * whatever it was about -- which is how the first version of this file was written,
  * and it is the failure a helper is supposed to prevent rather than cause.
  */
-async function closeCell(
-  db: Db,
-  cellId: string,
-  options: {
-    reason:
-      | 'MERGED_INTO_ANOTHER_CELL'
-      | 'LEADER_STEPPED_DOWN'
-      | 'MEMBERS_DISPERSED'
-      | 'CREATED_IN_ERROR'
-      | 'OTHER';
-    note?: string;
-    at?: Date;
-  },
-): Promise<void> {
-  await db.transaction().execute(async (trx) => {
-    const at = options.at ?? (await dbNow(trx));
-
-    await trx
-      .updateTable('cells')
-      .set({
-        state: 'CLOSED',
-        closed_at: at,
-        closure_reason: options.reason,
-        closure_note: options.note ?? null,
-      })
-      .where('id', '=', cellId)
-      .execute();
-
-    await trx
-      .updateTable('cell_leaderships')
-      .set({ ended_at: at })
-      .where('cell_id', '=', cellId)
-      .where('ended_at', 'is', null)
-      .execute();
-
-    await trx
-      .updateTable('cell_memberships')
-      .set({ ended_at: at })
-      .where('cell_id', '=', cellId)
-      .where('ended_at', 'is', null)
-      .execute();
-  });
-}
 
 /**
  * `now()` from the server, for any instant that has to be at or after a Cell's
