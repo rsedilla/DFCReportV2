@@ -414,8 +414,9 @@ export class PeopleImportService {
     // The consequence is unchanged, and it is **settled** rather than open since the
     // closure pre-flight of 2026-08-29: section 5 now says a deadlock victim answers
     // `RESOURCE_BUSY`. The predicate below has not been widened yet, so today:
-    // PostgreSQL raises `40P01`, and `isLockTimeout` matches `55P03` only and
-    // deliberately, so a deadlock renders `INTERNAL_ERROR`.
+    // PostgreSQL raises `40P01`, `isLockTimeout` matches `55P03` only, and a deadlock
+    // therefore renders `INTERNAL_ERROR`. That narrowness is now a known gap rather
+    // than the rule -- see `postgres-errors.ts`, corrected in the same change.
     //
     // The subject is locked at all because their own row is what is being decided:
     // a Network correction committing alongside changes which Network their new

@@ -5128,6 +5128,23 @@ would dismiss that approval to change a comment — so the constraint arrives in
 migration of its own with the closure endpoint, and this entry is where the two are
 reconciled. The same shape as migration 0005's stale header, for the same reason.
 
+**A third review pass found that the floor fix had made a Cell unclosable, and that is
+recorded rather than quietly repaired.** Widening the floor to all four tables was right
+and was stated without qualification, and a schedule row is written *before it starts*:
+a change decided on 12 August carries `started_at` of 1 September, and closes the
+outgoing row at the same future instant. A floor reading those sits in September, so
+every date below it is refused by `cell_schedules_period_ordered` — and no actor can
+clear it, because a closure dated 1 September is forward-dated and Section 10 provides
+for no such thing. Neither the leader nor Admin could close a Cell whose leader had
+merely rescheduled it.
+
+The floor now reads only rows **already in force**, and a not-yet-started row is closed
+at its own `started_at`, leaving the inert zero-length row Section 5 already defines.
+Worth keeping because of what it says about the two sentences beside it: this branch
+asserted "the closer may always date a closure today, so nothing is blocked" and "which
+always succeeds" in the same commit that made both false. A floor no date can clear is
+the failure the floor exists to prevent, wearing the other face.
+
 **The two Stop Conditions the review raised are settled here as well, and both were
 right to be raised: each belongs to a section other than the one I had written it in.**
 
@@ -5139,10 +5156,15 @@ was the shape this project keeps correcting.
 
 The reason is not consistency with Sections 4 and 5, and that matters because the
 obvious alternative is attractive on exactly those grounds. **Backdating a closure
-removes a coverage denominator**: Section 12 gives a Cell closed part-way through a
-month fewer scheduled meetings, so a leader who has submitted nothing all month and
-then closes effective the first of it leaves that month with almost no denominator, and
-the record of their silence goes with it. That is Section 13's own failure mode reached
+erases the scheduled-meeting count a coverage line is read against**: Section 12 gives a
+Cell closed part-way through a month fewer scheduled meetings, so a leader who has
+submitted nothing all month and then closes effective the first of it turns `0 of 4
+meetings recorded` into `0 of 0`, and the record of their silence goes with it. *Not the
+denominator, which Section 12 defines as the meetings actually recorded — that is
+already zero for this leader, which is exactly why the coverage line is the only
+artifact left. Two earlier versions of this paragraph said "denominator", a term the
+2026-08-19 ruling fixes, in the sentence carrying the whole justification for a new
+authorization rule.* That is Section 13's own failure mode reached
 through a date field rather than a status. A Section 13-style window, letting the closer
 reach back inside the open reporting month, was considered for its consistency with how
 attendance already works and rejected for handing that vector to every leader in the
@@ -5159,11 +5181,29 @@ ordered advisory locks among themselves, Section 10 ordered row locks among them
 and nothing ordered the classes.
 
 It lives in Section 5 because it spans two classes and Section 5 owns the locking
-discipline. Only closure changes, since an ordinary move already takes them in that
-order. The wrinkle is stated rather than left to be found: a closure must read its
-members before it can lock them, and that read may be stale — which is safe because the
-Cell row lock taken afterwards serializes against anybody adding a member in between, so
-their work waits and the closure's checks run against a settled state.
+discipline.
+
+*Two claims made when this was first written were false, and the review that produced
+them found both on the next pass.* **"Only closure changes" was wrong**: a move writes
+two membership rows in two Cells, so the deferred trigger takes two Cell locks at commit
+in write order rather than in ascending identifier, and a closure dispersing into the
+Cell a move is leaving still cycles with it. The rule now says *every* row lock, taken
+*explicitly and up front*, which is the only way it binds what a trigger does after the
+fact — and a move takes both its Cells sorted like everything else. Section 10 also now
+names the **strength** of each lock, which it had omitted and which decides whether two
+operations meeting on a row wait or deadlock: a closure takes its own Cell exclusively
+and its destinations shared, a move takes both shared.
+
+**And the stale-read reason was wrong in the direction that mattered.** The reordering
+*created* that staleness — under the previous order the Cell lock excluded new members
+before the list was read — and the reason given, that the row lock serializes against
+anybody adding in between, reaches only a writer still in flight. One that **committed**
+between the read and the lock is in no lock set at all, and both exits were blocked: not
+re-reading meets a raw constraint violation at commit, and re-reading needs a person lock
+after a row lock, which the new rule forbade. Section 5 now permits exactly that
+re-acquisition, and says why it is not a hole: the ordering rule guards a cycle between
+operations competing for their *first* locks, and an operation already holding its row
+lock has excluded everyone who could still add to its list.
 
 Written to `SKILL.md` Sections 5, 7, 10 and 22, and verified by grep rather than
 asserted.
