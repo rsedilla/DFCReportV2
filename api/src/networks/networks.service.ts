@@ -296,12 +296,15 @@ export class NetworksService {
       // the advice on opposite sides of that split. `reassignmentTooEarly` answers
       // `RESOURCE_BUSY` for the same case on the sibling path, since `216be37`.
       //
-      // It is left alone because changing it is a ruling rather than a fix: section 4
-      // says an undated correction "always succeeds" and has no floor to clear, which
-      // this branch contradicts; and section 22 defines `RESOURCE_BUSY` as a wait that
-      // timed out or a deadlock victim, which this is neither — the lock was acquired
-      // cleanly and the collision is with a committed row. Both sections need
-      // amending, and that belongs in its own change with its own Decisions entry.
+      // It is left alone because changing it is a ruling rather than a fix, and needs
+      // two amendments neither of which is derivable. Section 4 says an undated
+      // correction "always succeeds" and has no floor to clear, which **this branch of
+      // this method** contradicts — the contradiction is long-standing rather than
+      // introduced by any recent change, and issue #16 records it as pre-existing on
+      // `main`. And section 22 defines `RESOURCE_BUSY` as a wait that timed out or a
+      // deadlock victim, which this is neither: the lock was acquired cleanly and the
+      // collision is with a committed row.
+      //
       // Recorded as open in `CLAUDE.md` rather than settled in a fix batch.
       return new InvariantViolationError(
         'This change cannot take effect at this instant, because a record for this person was written at it. Retry in a moment.',

@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
+import { sql } from 'kysely';
 import { Client } from 'pg';
 import request from 'supertest';
 
@@ -108,6 +109,69 @@ describe('reassigning a pastoral leader: the record (sections 5, 21, 22)', () =>
       .set('Idempotency-Key', key)
       .send(body);
   }
+
+  describe('the effective instant is stamped after the lock (SKILL.md section 5)', () => {
+    it('records an instant not earlier than the moment the lock was released', async () => {
+      // **Section 5 states this rule and two of the three paths it reaches pinned it.**
+      // This one was moved to stamp after its lock by `216be37` on 2026-08-23 and has
+      // had no case since: hoisting `const recordedAt = new Date()` out of the
+      // transaction left the whole suite green. The sex correction, which kept the
+      // defect for six days because nothing swept the class, is pinned; the Cell
+      // membership move is pinned; this was the gap.
+      //
+      // Stamped before the lock, a request that waited carries an instant earlier than
+      // the winner's `started_at` and is refused as too early — a refusal caused purely
+      // by contention, and one section 22 stores against the idempotency key and
+      // replays for the whole retention.
+      const holder = new Client({ connectionString: process.env.DATABASE_URL });
+      await holder.connect();
+
+      try {
+        await holder.query('BEGIN');
+        await holder.query('SELECT pg_advisory_xact_lock(hashtextextended($1::uuid::text, 0))', [
+          mark.id,
+        ]);
+        const { rows } = await holder.query<{ pid: number }>('SELECT pg_backend_pid() AS pid');
+
+        // Handlers attached now: if the poll below throws, an unhandled rejection is
+        // fatal on Node 22 and turns an assertion failure into a worker crash.
+        const pending = reassign(mark.id, { pastoral_leader_id: rico.id }).then(
+          (response) => ({ ok: true, response }) as const,
+          (error: unknown) => ({ ok: false, error }) as const,
+        );
+
+        await waitForBlockedBy(rows[0].pid);
+
+        // Node's clock, because the service stamps with `new Date()`. Reading this from
+        // `clock_timestamp()` compares two clocks that agree only approximately, which
+        // made the equivalent case on the sex correction flaky about one run in three.
+        const releasedAt = new Date();
+
+        await holder.query('COMMIT');
+
+        const settled = await pending;
+        if (!settled.ok) {
+          throw settled.error;
+        }
+
+        expect(settled.response.status).toBe(200);
+
+        // `>=`: both instants come from one clock and can land in a single
+        // millisecond. What discriminates is the ordering — under the defect the stamp
+        // precedes the backend becoming blocked, which precedes the poll observing it,
+        // which precedes this read.
+        expect(
+          new Date(settled.response.body.effective_at as string).getTime(),
+        ).toBeGreaterThanOrEqual(releasedAt.getTime());
+      } finally {
+        try {
+          await holder.query('ROLLBACK').catch(() => undefined);
+        } finally {
+          await holder.end();
+        }
+      }
+    }, 20000);
+  });
 
   describe('the write', () => {
     it('closes and opens at one instant, and audits the transfer', async () => {
@@ -856,3 +920,36 @@ describe('reassigning a pastoral leader: the record (sections 5, 21, 22)', () =>
     });
   });
 });
+
+/**
+ * Wait until some backend is blocked **by this holder**.
+ *
+ * Keyed on the holder's own backend pid through `pg_blocking_pids`, which names the
+ * wait this test created. A bare `pg_stat_activity` predicate is cluster-wide — this
+ * machine also carries `dfc_dev`, and in CI the test role is a superuser — so it
+ * would match waits the test knows nothing about. The budget is under the service's
+ * 3s `lock_timeout`, so a slow-but-correct run cannot report a regression's message.
+ */
+async function waitForBlockedBy(holderPid: number): Promise<void> {
+  const probe = createTestDb();
+
+  try {
+    for (let attempt = 0; attempt < 100; attempt += 1) {
+      const waiting = await sql<{ count: string }>`
+        SELECT count(*) AS count
+          FROM pg_stat_activity
+         WHERE ${holderPid}::int = ANY (pg_blocking_pids(pid))
+      `.execute(probe);
+
+      if (Number(waiting.rows[0].count) > 0) {
+        return;
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    }
+
+    throw new Error(`Nothing ever blocked on backend ${holderPid}.`);
+  } finally {
+    await probe.destroy();
+  }
+}
