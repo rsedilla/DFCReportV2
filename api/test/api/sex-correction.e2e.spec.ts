@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
+import { sql } from 'kysely';
 import { Client } from 'pg';
 import request from 'supertest';
 
@@ -614,6 +615,84 @@ describe('sex correction (SKILL.md sections 4, 5, 7, 21, 22)', () => {
     });
   });
 
+  describe('the effective instant is stamped after the lock (issue #16)', () => {
+    it('records an instant later than the moment the lock was released', async () => {
+      // **The defect this pins was a contention-only failure with a permanent
+      // answer.** The instant was stamped before the transaction opened, so two
+      // corrections on one person both stamped at roughly the same moment; the winner
+      // committed a `network_assignments` row whose `started_at` was later than the
+      // loser's stamp, and the loser — reading that row after taking the lock second
+      // — was refused as too early with `INVARIANT_VIOLATION`. Section 22 **stores** a
+      // 409 against the idempotency key and replays it for the whole retention, so a
+      // request that was legal when it arrived was refused for ever, for having
+      // waited.
+      //
+      // The reassignment path has always stamped after its lock and records why. The
+      // two were written from one skeleton and drifted on this step.
+      //
+      // Asserting the instant rather than a status, because the status is 200 either
+      // way here: only a *second* writer produces the refusal, and staging that
+      // deterministically needs a raw row write. An instant earlier than the release
+      // is the same defect one step upstream, and it is what `new Date()` before the
+      // lock cannot avoid producing.
+      const holder = new Client({ connectionString: process.env.DATABASE_URL });
+      await holder.connect();
+
+      try {
+        await holder.query('BEGIN');
+        await holder.query('SELECT pg_advisory_xact_lock(hashtextextended($1::uuid::text, 0))', [
+          mark.id,
+        ]);
+        const { rows } = await holder.query<{ pid: number }>('SELECT pg_backend_pid() AS pid');
+
+        // Dispatched, not held: a supertest object is lazy, and an unawaited one is
+        // never sent — the fault CLAUDE.md records at `19dfe3c`. Handlers are attached
+        // now so a poll failure cannot become an unhandled rejection, which Node 22
+        // treats as fatal.
+        const pending = correct(mark.id, {
+          sex: 'FEMALE',
+          reason: 'Sex entered in error at encoding.',
+          pastoral_leader_id: grace.id,
+        }).then(
+          (response) => ({ ok: true, response }) as const,
+          (error: unknown) => ({ ok: false, error }) as const,
+        );
+
+        await waitForBlockedBy(rows[0].pid);
+
+        // **Node's clock, not the database's**, and the first version used
+        // `clock_timestamp()` and was flaky about one run in three. The service stamps
+        // with `new Date()`, so comparing against a PostgreSQL instant compares two
+        // clocks that agree only approximately. The test and the application run in
+        // one process, so this is the same clock the value under test came from.
+        const releasedAt = new Date();
+
+        await holder.query('COMMIT');
+
+        const settled = await pending;
+        if (!settled.ok) {
+          throw settled.error;
+        }
+
+        expect(settled.response.status).toBe(200);
+
+        // `>=` rather than `>`: both instants come from the same clock and can land in
+        // one millisecond. The margin is what discriminates — under the defect the
+        // stamp is taken before the request is dispatched, which precedes this instant
+        // by at least one poll interval, so the assertion fails by ~20ms or more.
+        expect(
+          new Date(settled.response.body.effective_at as string).getTime(),
+        ).toBeGreaterThanOrEqual(releasedAt.getTime());
+      } finally {
+        try {
+          await holder.query('ROLLBACK').catch(() => undefined);
+        } finally {
+          await holder.end();
+        }
+      }
+    }, 20000);
+  });
+
   describe('section 5 invariant 4: never oneself, never an upline', () => {
     /**
      * The gap the Whole Church check does not close. That one asks how far a grant
@@ -983,3 +1062,39 @@ describe('sex correction (SKILL.md sections 4, 5, 7, 21, 22)', () => {
     });
   });
 });
+
+/**
+ * Wait until some backend is blocked **by this holder**.
+ *
+ * Keyed on the holder's own backend pid through `pg_blocking_pids`, which names
+ * exactly the wait this test created. A bare `pg_stat_activity` predicate is
+ * cluster-wide — this machine also carries `dfc_dev`, and in CI the test role is a
+ * superuser — so it would match waits the test knows nothing about.
+ *
+ * The budget is deliberately under the service's 3s `lock_timeout`: a wider one lets
+ * a slow-but-correct run time out here and report the message a genuine regression
+ * produces.
+ */
+async function waitForBlockedBy(holderPid: number): Promise<void> {
+  const probe = createTestDb();
+
+  try {
+    for (let attempt = 0; attempt < 100; attempt += 1) {
+      const waiting = await sql<{ count: string }>`
+        SELECT count(*) AS count
+          FROM pg_stat_activity
+         WHERE ${holderPid}::int = ANY (pg_blocking_pids(pid))
+      `.execute(probe);
+
+      if (Number(waiting.rows[0].count) > 0) {
+        return;
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    }
+
+    throw new Error(`Nothing ever blocked on backend ${holderPid}.`);
+  } finally {
+    await probe.destroy();
+  }
+}

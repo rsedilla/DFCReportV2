@@ -95,9 +95,7 @@ export class PeopleSexCorrectionService {
     // would be a rule nobody could reason about.
     const authority = await this.authorization.authorityFor(actor.accountId);
 
-    const recordedAt = new Date();
     const backdated = input.effectiveDate !== undefined;
-    let effectiveAt = recordedAt;
 
     if (input.effectiveDate !== undefined) {
       // A second capability, checked here rather than by the guard. Section 7's
@@ -105,22 +103,15 @@ export class PeopleSexCorrectionService {
       // backdating a separate grant, and both being Admin-only in the catalog is
       // not the same as one implying the other — an explicit grant of
       // `people.correct_sex` carries no power to date it in the past.
+      //
+      // **This stays outside the transaction and the instant does not.** `authorize`
+      // reads `account_roles`, `capability_grants` and, for a subtree scope, the
+      // tree — three pool reads, which inside a transaction would ask a bounded pool
+      // for a second connection while holding one (section 24).
       await this.authorization.authorize(actor, Capability.RecordsBackdateEffectiveDate, {
         kind: 'person',
         personId,
       });
-
-      effectiveAt = startOfManilaDay(input.effectiveDate);
-
-      if (effectiveAt.getTime() > recordedAt.getTime()) {
-        // Section 5 knows two cases: recording as of now, and Admin setting a date
-        // **in the past**. A future date is neither, so nothing authorizes it, and
-        // the fail-closed answer is to refuse rather than to invent forward-dating.
-        throw new ValidationFailedError(
-          'An effective date is a correction to the past. It cannot be in the future.',
-          { field: 'effective_date', value: input.effectiveDate },
-        );
-      }
     }
 
     return this.db.transaction().execute(async (trx) => {
@@ -132,6 +123,37 @@ export class PeopleSexCorrectionService {
         trx,
         input.pastoralLeaderId === undefined ? [personId] : [personId, input.pastoralLeaderId],
       );
+
+      // **Stamped after the lock, and it was stamped before it until 2026-08-29.**
+      // The reassignment path has always read its instant here and records why; this
+      // one read it before the transaction opened, and the two drifted on that step
+      // although both were written from the same skeleton.
+      //
+      // What that cost: two corrections on one person both stamp at roughly the same
+      // instant, the winner commits a `network_assignments` row whose `started_at` is
+      // later than the loser's stamp, and the loser — which took the lock second and
+      // read the row the winner wrote — is refused as too early. That refusal is an
+      // `INVARIANT_VIOLATION`, a 409, which section 22 **stores** against the
+      // idempotency key and replays for the whole retention. The request was legal
+      // when it arrived and is refused permanently for having waited, which is the
+      // dead end that split exists to prevent and the reason `RESOURCE_BUSY` is a 503.
+      const recordedAt = new Date();
+      const effectiveAt =
+        input.effectiveDate === undefined ? recordedAt : startOfManilaDay(input.effectiveDate);
+
+      if (effectiveAt.getTime() > recordedAt.getTime()) {
+        // Section 5 knows two cases: recording as of now, and Admin setting a date
+        // **in the past**. A future date is neither, so nothing authorizes it, and
+        // the fail-closed answer is to refuse rather than to invent forward-dating.
+        //
+        // Moved here with the stamping it compares against. A backdated date is fixed
+        // by the client and cannot become future by waiting, so this refuses exactly
+        // what it refused before.
+        throw new ValidationFailedError(
+          'An effective date is a correction to the past. It cannot be in the future.',
+          { field: 'effective_date', value: input.effectiveDate },
+        );
+      }
 
       // Section 5 invariant 4, inside the transaction, for the reason the
       // reassignment path gives: the walk is over the tree, and a decision taken
