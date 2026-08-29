@@ -2306,6 +2306,14 @@ Cell membership does not have to mirror pastoral assignment. A person may be pas
 
 Archiving a Person ends their active Cell membership from the archive effective date, preserving the membership record in full. Restoring them does not automatically restore the membership; re-adding them to a Cell is a separate authorized action.
 
+**Three refusals, settled on 2026-08-29 because the membership endpoints could not avoid answering them and this section was silent.** Each answers `INVARIANT_VIOLATION` (Section 22): they are rules about what may be recorded, whoever submits it.
+
+- **An archived Person is not added to a Cell.** This section already ends their membership at archival and makes re-adding a separate action after a restore; it did not say what happens to a request naming somebody still archived. Every neighbouring rule points one way — Section 5 refuses an archived Person as the destination of a pastoral assignment, Section 3 refuses archiving somebody who leads a Cell — and an archived Person does not acquire new live relationships.
+- **A Person absorbed by a Merge is not added.** The surviving Person holds the identity (Section 3), so the request names a record that is no longer anybody.
+- **Adding somebody already in the Cell is refused.** Section 4 refuses a sex correction that changes nothing and Section 5 a reassignment to the leader a person already has, both because an audited operation whose before and after are identical misleads whoever reads the log. Here it would also put a boundary in the membership history where nothing happened, so "how long in this Cell" answers wrongly ever after.
+
+Whether the first two should additionally be database constraints is open: `pastoral_assignments` has one for the equivalent rule, and `cell_memberships` does not.
+
 Every membership change is audit logged with actor, person, Cell, and effective date (Section 21).
 
 Cell membership, like Cell Leadership and Cell category, must preserve history so that current and past membership can both be determined.
@@ -3271,6 +3279,8 @@ POST /api/v1/dcc/events/{id}/submit
 POST /api/v1/cells                       direct creation, initial encoding only
 GET  /api/v1/cells/{id}
 GET  /api/v1/cells/{id}/members
+POST /api/v1/cells/{id}/members            add, or move from another Cell
+DELETE /api/v1/cells/{id}/members/{person_id}  ends the membership
 GET  /api/v1/cells/{id}/meetings
 POST /api/v1/cells/{id}/meetings/{meeting_id}/submit
 

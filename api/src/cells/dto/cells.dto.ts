@@ -44,3 +44,17 @@ export class CreateCellDto {
   })
   time_of_day!: string;
 }
+
+/**
+ * `POST /api/v1/cells/{id}/members` (SKILL.md section 10).
+ *
+ * One field: a person has at most one active membership, so adding somebody who
+ * already belongs elsewhere *is* the move section 10 describes. There is no
+ * "source" to name, and no effective date to send — a membership change takes
+ * effect when it is made, and backdating one is `records.backdate_effective_date`
+ * territory that section 10 does not open.
+ */
+export class AddCellMemberDto {
+  @IsUUID()
+  person_id!: string;
+}

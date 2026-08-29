@@ -3,9 +3,11 @@ import { Module } from '@nestjs/common';
 import { SettingsModule } from '../admin/settings/settings.module';
 import { AuditModule } from '../audit/audit.module';
 import { AuthorizationModule } from '../auth/authorization/authorization.module';
+import { NetworksModule } from '../networks/networks.module';
 import { PeopleModule } from '../people/people.module';
 
 import { CellsController } from './cells.controller';
+import { CellsMembershipService } from './cells.membership.service';
 import { CellsReadService } from './cells.read.service';
 import { CellsService } from './cells.service';
 
@@ -40,9 +42,9 @@ import { CellsService } from './cells.service';
  * ownership, is unaffected by it.
  */
 @Module({
-  imports: [PeopleModule, AuthorizationModule, SettingsModule, AuditModule],
+  imports: [PeopleModule, NetworksModule, AuthorizationModule, SettingsModule, AuditModule],
   controllers: [CellsController],
-  providers: [CellsService, CellsReadService],
+  providers: [CellsService, CellsMembershipService, CellsReadService],
   exports: [CellsReadService],
 })
 export class CellsModule {}

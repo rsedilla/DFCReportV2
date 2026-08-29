@@ -15,6 +15,12 @@ export const AUTHENTICATED_ONLY_METADATA = 'dfc:authenticated-only';
  */
 export type TargetSpec =
   | { kind: Extract<TargetKind, 'person' | 'account'>; from: string }
+  /**
+   * A Cell. Its scope resolves through its leader (SKILL.md section 7), which the
+   * guard asks `CELL_SCOPE_PORT` for — `cells` owns `cell_leaderships` and this
+   * module may not read it (section 2).
+   */
+  | { kind: 'cell'; from: string }
   | { kind: 'church' }
   | { kind: 'actor' };
 

@@ -31,10 +31,17 @@ export interface Scope {
  * record being read or written.
  *
  * Section 7 also resolves scope for a Cell, a DCC event, a report scope selector
- * and an audit entry. Each of those arrives with the module that owns it, and
- * until then the resolver has no rule for them and denies. That is the intended
- * behaviour, not a gap: an endpoint cannot be authorized against a target the
- * system does not yet know how to place in the tree.
+ * and an audit entry. Each arrives with the module that owns it, and until then the
+ * resolver has no rule for it and denies. That is the intended behaviour, not a gap:
+ * an endpoint cannot be authorized against a target the system does not yet know how
+ * to place in the tree.
+ *
+ * **A Cell has arrived, and deliberately did not become a member of this union.**
+ * Section 7 places a Cell "through the Cell's leader", so the guard asks
+ * `CELL_SCOPE_PORT` for that leader and hands the resolver a `person` — `cells` owns
+ * `cell_leaderships` and this module may not read it (section 2), and a member here
+ * would have meant either that boundary or a second resolver. The three still to come
+ * may or may not go the same way; each decides it when it arrives.
  */
 export type Target =
   /** A Person. Scope resolves through their pastoral position. */

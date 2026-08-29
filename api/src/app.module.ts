@@ -16,7 +16,9 @@ import { DatabaseModule } from './database/database.module';
 import { HealthController } from './health/health.controller';
 import { HierarchyModule } from './hierarchy/hierarchy.module';
 import { NetworksModule } from './networks/networks.module';
+import { CELL_SCOPE_PORT } from './auth/authorization/cell-scope.port';
 import { CellsModule } from './cells/cells.module';
+import { CellsReadService } from './cells/cells.read.service';
 import { PeopleModule } from './people/people.module';
 
 /**
@@ -58,6 +60,18 @@ import { PeopleModule } from './people/people.module';
   ],
   controllers: [HealthController],
   providers: [
+    /**
+     * How the capability guard places a Cell in the pastoral tree (SKILL.md section
+     * 7), bound here because neither module may import the other: `cells` imports
+     * `AuthorizationModule` to ask its own authorization questions, and
+     * `AuthorizationModule` needs the answer to one about `cell_leaderships`, which
+     * `cells` owns (section 2). The interface lives with the guard, the
+     * implementation with the table, and the binding is this line.
+     *
+     * `useExisting` rather than `useClass`, so the guard and `cells` share one
+     * instance and one connection pool.
+     */
+    { provide: CELL_SCOPE_PORT, useExisting: CellsReadService },
     { provide: APP_FILTER, useClass: ApiExceptionFilter },
     { provide: APP_GUARD, useClass: ThrottlerGuard },
     { provide: APP_GUARD, useClass: AccessTokenGuard },
