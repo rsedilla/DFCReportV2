@@ -5128,7 +5128,45 @@ would dismiss that approval to change a comment — so the constraint arrives in
 migration of its own with the closure endpoint, and this entry is where the two are
 reconciled. The same shape as migration 0005's stale header, for the same reason.
 
-Written to `SKILL.md` Sections 10 and 22, and verified by grep rather than asserted.
+**The two Stop Conditions the review raised are settled here as well, and both were
+right to be raised: each belongs to a section other than the one I had written it in.**
+
+**Backdating a closure requires `records.backdate_effective_date`, and Section 7's list
+gains a Cell closure by name.** The floor said how far back a closure may be dated and
+nothing said who may date it back at all — while Section 7 declares its list closed and
+forbids deriving the next item from it, so answering by implication inside Section 10
+was the shape this project keeps correcting.
+
+The reason is not consistency with Sections 4 and 5, and that matters because the
+obvious alternative is attractive on exactly those grounds. **Backdating a closure
+removes a coverage denominator**: Section 12 gives a Cell closed part-way through a
+month fewer scheduled meetings, so a leader who has submitted nothing all month and
+then closes effective the first of it leaves that month with almost no denominator, and
+the record of their silence goes with it. That is Section 13's own failure mode reached
+through a date field rather than a status. A Section 13-style window, letting the closer
+reach back inside the open reporting month, was considered for its consistency with how
+attendance already works and rejected for handing that vector to every leader in the
+period where it does most damage. The closer may always date a closure today, so nothing
+is blocked; what they give up is a few days of denominator accuracy.
+
+**Person advisory locks are taken before Cell row locks, and Section 5 says so.** The
+closure paragraph had prescribed Cell locks in ascending identifier and claimed the
+ordering removed the cycle. It removes the cycle between two closures and creates one
+against an ordinary membership move, which takes the person lock first and the Cell row
+lock at commit — so a closure holding its Cell rows and reaching for a person holds what
+that move wants and wants what it holds. Neither existing rule could see it: Section 5
+ordered advisory locks among themselves, Section 10 ordered row locks among themselves,
+and nothing ordered the classes.
+
+It lives in Section 5 because it spans two classes and Section 5 owns the locking
+discipline. Only closure changes, since an ordinary move already takes them in that
+order. The wrinkle is stated rather than left to be found: a closure must read its
+members before it can lock them, and that read may be stale — which is safe because the
+Cell row lock taken afterwards serializes against anybody adding a member in between, so
+their work waits and the closure's checks run against a settled state.
+
+Written to `SKILL.md` Sections 5, 7, 10 and 22, and verified by grep rather than
+asserted.
 
 
 ### Open — awaiting a ruling
