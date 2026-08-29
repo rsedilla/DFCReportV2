@@ -5347,13 +5347,105 @@ Written to `SKILL.md` Sections 5, 10 and 22, and to migration `0010`. Verified b
 grepping for each rule rather than by asserting it here, this log having recorded at
 least six false "written to Section x" claims.
 
+### 2026-08-29 — Twelve findings on the closure, and the three the review escalated
+
+`architecture-guardian` on the closure branch. **It could not construct a cycle**, and
+said so having traced every pair — two closures crossing, closure against a move in
+either direction, closure against an add into the closing Cell and into a destination,
+closure against a configuration change, and the row locks the deferred triggers in 0009
+and 0010 take at COMMIT. The property carrying it is that no `cells` row is ever held
+while an advisory lock is waited for, and that every lock a commit-time trigger takes is
+already held at equal or greater strength. That half of the work stood.
+
+Everything it found was elsewhere, and two were live 500s.
+
+**A backdated dispersal into a Cell created later was a raw `check_violation`.** The
+destination check resolved the Cell's leader with `leaderForScopeWithin`, which is
+section 7's rule for a *scope* — current, falling back to last, ignoring dates —
+while `assert_membership_same_network` resolves the row *covering* the membership's
+`started_at`. `CellsMembershipService` already records that the two "coincide in every
+state migration 0009 permits" and that keeping them agreeing is something to watch
+rather than something the code guarantees. A backdated closure is the state where they
+stop: a membership dated February in a Cell created in August has no leader to compare
+against, the scope rule answers with the current one, and the deferred trigger raises at
+COMMIT. `leaderAsOfWithin` is the second question asked properly.
+
+**A closure reasoned `OTHER` with no note was a 500**, because the DTO's docblock
+described conditional validation the decorators did not carry — a rule stated in a
+comment and enforced nowhere, which is the shape this log keeps recording. The same
+block also claimed a note was "refused otherwise", which was false in the other
+direction.
+
+**Three statements were false of the code**, and one was a promise a file made about
+itself. `postgres-errors.ts` said its narrowness "lands with the closure endpoint,
+which is the first operation that can produce `40P01` in ordinary practice"; the
+endpoint landed and the predicate was not widened, so a deadlock still rendered
+`INTERNAL_ERROR` against section 5's own rule. `cell-lock.ts` then asserted the
+opposite of that. And the closure service cited a test file that does not exist —
+`api/test/cells/closure-floor.e2e.spec.ts`, for cases living in
+`api/test/api/cell-closure.e2e.spec.ts`.
+
+**Section 21 requires an audit entry for the leadership ending and the closure wrote
+none**, on the reasoning that it "is not a separate decision, and its date is the
+closure's". That is the reasoning the same commit *rejects* twelve lines earlier for
+memberships — a dispersal is a move and must be findable as one whichever operation
+performed it — and section 21 makes no exception for leadership.
+
+**Section 5's own new lock-strength rule was broken by an existing writer.**
+`CellsConfigurationService` took `FOR UPDATE` on a `cells` row it does not write, which
+the rule this branch added refuses: `FOR NO KEY UPDATE` conflicts with itself, which is
+all that service needs, and does not conflict with the `FOR KEY SHARE` a membership
+insert takes through its foreign key. Writing a rule and leaving the neighbouring caller
+non-compliant is how a rule becomes advisory.
+
+**And the `ResourceBusyError` branch of the floor refusal is unreachable**, with a
+comment claiming a reachability the strict comparison above it excludes. It was copied
+from `PeopleReassignmentService`, where the identical shape **is** reachable because
+section 5 lets Admin backdate a pastoral row; Cell leadership and membership rows cannot
+be backdated, so the reason does not carry. Section 25 rule 19, in the branch whose own
+entry is about rule 19. Kept as a fail-safe with an honest comment rather than deleted,
+because the floor is read from rows rather than guaranteed by a constraint.
+
+**Three Stop Conditions, all three settled here.**
+
+*What reason a backdated closure requires.* The note, not the closure reason. Every
+closure carries a reason from the fixed list, so reading section 7's "always requires a
+reason" as satisfied by it makes the requirement vacuous. What is owed is an explanation
+of the backdating, which is what section 5 requires of a backdated reassignment and for
+the reason section 10 gives: a backdated closure erases the scheduled-meeting count a
+coverage line is read against.
+
+*Whether a closure may rewrite an already-closed configuration row's `ended_at`.* It
+may, and section 10 now says so rather than leaving the code to do it silently. This is
+the one write in the system that shortens a closed effective-dated period in place. It
+is confined — the value replaced always reaches beyond the closure, so what is removed
+is a period the Cell no longer existed for — and the alternatives are all worse: leaving
+the row is the forbidden state, refusing makes a rescheduled Cell unclosable, opening a
+replacement records a schedule for a Cell that has none.
+
+*Whether an explicit effective date of today is backdating.* It is not. Section 10 says
+"earlier than the current day", and the code asked for the capability on any supplied
+date — stricter than the specification, with the difference unrecorded, and refusing a
+leader `SCOPE_DENIED` for a request section 10 permits. The floor is what actually
+refuses such a date, which is the more useful answer.
+
+**One thing the review found that needed building rather than fixing.** Making the
+member list mandatory turned `GET /api/v1/cells/{id}/members` from a documented-but-
+unbuilt route into a blocker: the closure refuses any list that is not exactly the
+current membership, so no client could construct a valid request. It is built, guarded
+by `cell.manage_membership` against the Cell — the same target the write routes declare,
+and a derivation rather than a new rule, since section 7's capability list is closed.
+The cost is escalated rather than hidden and is listed as open below.
+
 ### Open — awaiting a ruling
 
-**One item awaits a ruling, and it blocks Stage 5. Thirty other things are
+**One item awaits a ruling, and it blocks Stage 5. Thirty-one other things are
 unsettled, none of them blocking. They are listed at the end, so this section is the
 whole of what is open.**
 
-*Thirty distinct items across thirty bullets. The two that left on 2026-08-29 are the
+*Thirty-one distinct items across thirty-one bullets. One arrived with the closure
+endpoint's review — whether a Cell roster read deserves a capability of its own — and
+two left on 2026-08-29. Those two are the
 pair that had come back: the closure effective-date floor and the cross-class lock
 ordering, each written three times in prose and refuted three times, both settled by
 the closure endpoint running the database rather than by a fourth formulation. The
@@ -5386,6 +5478,7 @@ Two related questions have defined behaviour and are recorded in `SKILL.md` §12
 
 **Unsettled, and not blocking anything.** None of these is a Stop Condition. An implementer proceeds and settles them in passing; they are listed here because a reader looking for what is open should not have to find it inside the body of a ruling.
 
+- **Whether reading a Cell's roster deserves a read capability of its own.** `GET /api/v1/cells/{id}/members` is guarded by `cell.manage_membership`, resolved against the Cell — the same target its write routes declare, chosen because §7 declares its capability list closed and inventing a name for a read is not available. The consequence is client-visible and one-directional: §7 makes `read_only` valid only on a read capability, so a grant of `cell.manage_membership` cannot be issued read-only, and nobody can be given roster visibility without also being given the power to change the roster. That is strictly more restrictive than the alternative rather than a leak, which is why it was safe to ship. What would settle it is the first screen that wants to *show* a Cell's members to somebody who should not move them — a report view, or an upline leader reviewing a branch — and Stage 5's reporting reads will ask the same question about every Cell-scoped read at once. Settle it there rather than for this route alone.
 - **What category a closed Cell has, for a report inside the month it closed.** Section 10 requires historical reports to use "the category valid at the time being reported", and the closure ruling of 2026-08-29 makes a closure end the open category row on its effective date. So a Cell closed on 10 March has no category row valid at 31 March, and Section 12 evaluates classification as of the end of the reporting month. Contained today rather than broken: Section 10 says every count of Cells and Cell categories means active Cells unless a report says otherwise, so nothing currently asks the question. Three answers look defensible — read the last category the Cell held, treat a closed Cell as having none and exclude it, or evaluate the category as of the closure date rather than the month end — and choosing between them wants a real report in front of it. Settle it in Stage 5 with the reporting queries, and note that the same question does **not** arise for the schedule row, whose closure is the point: a closed Cell must stop deriving scheduled meetings.
 - **Whether a floor breached with no effective date supplied answers `RESOURCE_BUSY` rather than `INVARIANT_VIOLATION`.** `NetworksService.floorBreach` returns a 409 whose message says "Retry in a moment" — the status and the advice on opposite sides of Section 22's store/release split, since a 4xx is stored against the idempotency key and replayed for the whole retention. `PeopleReassignmentService.reassignmentTooEarly` has answered `RESOURCE_BUSY` for the same case on the sibling path since `216be37` (2026-08-23), and Section 5 still describes that path as answering `INVARIANT_VIOLATION`, so the specification has been wrong about it since. Changing it is a ruling rather than a fix, and needs **two** amendments neither of which is derivable: Section 4 says an undated correction "always succeeds" and has no floor to clear, which the branch contradicts — reachable because the comparison is `<=` and `new Date()` is millisecond-resolution, so a Person encoded and corrected inside one millisecond collides; and Section 22 defines `RESOURCE_BUSY` as a wait that timed out or a deadlock victim, which this is neither, the lock having been acquired cleanly. Deliberately split out of the issue #16 fix rather than settled inside it. It is pinned by nothing on either path today, and it is deterministically stageable — but by a raw `network_assignments` row starting in the **future**, not at `now()`. Now that the instant is read after the lock, a row starting at `now()` leaves `effectiveAt >= bound.at` and the branch fires only on exact millisecond equality, which is a coin flip rather than a test. Nothing bounds `started_at`: the table carries `period_ordered` and no more.
 - **Whether the archived-and-merged refusals should be database constraints.** Section 10 gained three refusals on 2026-08-29 — an archived Person, a merged Person, and somebody already in the Cell — and the first two are the same rule `assertLeaderIsAssignable` enforces for a pastoral edge. Both are application-layer checks: contrary to what Section 10 said when the question was first written, `pastoral_assignments` carries **no** constraint for archived-or-merged either, so there is no asymmetry and the question is whether *either* should become one. The Definition of Done says an invariant expressible as a constraint exists as one, and this one is expressible — a membership under an archived Person is the corruption Section 3 refuses when archiving somebody who leads a Cell, reached one relationship over. What argues the other way is that both facts live in `people`'s tables while the constraint would sit on `cells`', so it is a trigger reading across a module boundary rather than an index. Not blocking: the checks refuse today and answer `INVARIANT_VIOLATION`; what a constraint would add is enforcement under a restore, which is the argument the Senior Pastor slot and the root seat both turned on.

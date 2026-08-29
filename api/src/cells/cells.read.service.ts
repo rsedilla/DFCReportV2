@@ -81,6 +81,94 @@ export class CellsReadService {
   }
 
   /**
+   * A Cell's current members, which is the list a closure has to be decided against
+   * (SKILL.md section 10, *What closing does*).
+   *
+   * Section 10 requires the members to be "presented at the point of closure" and the
+   * closure endpoint refuses any decision list that is not exactly this one, so
+   * without a route serving it the closure is unusable by any client. That is why it
+   * arrives here rather than with the rest of the read surface.
+   *
+   * **Names, not identifiers alone.** Section 8 publishes a Person's names and Member
+   * ID church-wide, so nothing here exceeds what a directory search already shows —
+   * and a closure screen that listed UUIDs would be asking a leader to make a pastoral
+   * decision about rows they cannot recognise. The birthday and the mobile number
+   * section 8 protects are not returned.
+   */
+  async membersOfWithin(
+    executor: Db | Transaction<Database>,
+    cellId: string,
+  ): Promise<{ person_id: string; member_id: string; full_name: string; started_at: Date }[]> {
+    const rows = await executor
+      .selectFrom('cell_memberships')
+      .innerJoin('persons', 'persons.id', 'cell_memberships.person_id')
+      .select([
+        'cell_memberships.person_id as person_id',
+        'persons.member_id as member_id',
+        'persons.first_name as first_name',
+        'persons.middle_name as middle_name',
+        'persons.last_name as last_name',
+        'cell_memberships.started_at as started_at',
+      ])
+      .where('cell_memberships.cell_id', '=', cellId)
+      .where('cell_memberships.ended_at', 'is', null)
+      // Ordered so two identical requests answer identically. Member ID is total and
+      // encodes nothing (section 3), which is what makes it a safe tie-break.
+      .orderBy('persons.last_name')
+      .orderBy('persons.first_name')
+      .orderBy('persons.member_id')
+      .execute();
+
+    return rows.map((row) => ({
+      person_id: row.person_id,
+      member_id: row.member_id,
+      full_name: [row.first_name, row.middle_name, row.last_name]
+        .filter((part): part is string => part !== null && part !== '')
+        .join(' '),
+      started_at: row.started_at,
+    }));
+  }
+
+  /**
+   * The Cell's leader **as of an instant**, which is a different question from
+   * `leaderForScopeWithin` above and must not be answered by it.
+   *
+   * That one implements section 7's rule for a *scope*: current, falling back to the
+   * last leader where the Cell is closed, ignoring dates entirely. This implements
+   * section 10's rule for a *relationship*: the assignment row covering the instant,
+   * which is exactly what `assert_membership_same_network` compares against.
+   *
+   * **The two coincide for every membership written at `clock_timestamp()` and part
+   * company the moment one is backdated**, which is how a closure reached a raw
+   * `check_violation`. A closure backdated to February that disperses a member into a
+   * Cell created in August has a destination with no leader in February; the scope
+   * rule answers with the current leader, the trigger finds no row, and the caller
+   * gets `INTERNAL_ERROR` at COMMIT instead of an answer. `CellsMembershipService`
+   * records that these two rules agree "in every state migration 0009 permits" and
+   * that keeping them agreeing is something to watch rather than something the code
+   * guarantees — a backdated closure is the state where they stop.
+   *
+   * Returns null where the Cell had no leader then, including where it did not exist.
+   * A caller comparing Networks owes an answer for that rather than letting the
+   * deferred trigger raise.
+   */
+  async leaderAsOfWithin(
+    executor: Db | Transaction<Database>,
+    cellId: string,
+    at: Date,
+  ): Promise<string | null> {
+    const row = await executor
+      .selectFrom('cell_leaderships')
+      .select('person_id')
+      .where('cell_id', '=', cellId)
+      .where('started_at', '<=', at)
+      .where((eb) => eb.or([eb('ended_at', 'is', null), eb('ended_at', '>', at)]))
+      .executeTakeFirst();
+
+    return row?.person_id ?? null;
+  }
+
+  /**
    * Whether this Person is a current Cell Leader (SKILL.md section 11).
    *
    * **Both halves, and the second cannot be shown to matter — which is stated here

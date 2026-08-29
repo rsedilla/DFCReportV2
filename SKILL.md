@@ -2283,6 +2283,12 @@ The case is a pending schedule change. A schedule change takes effect at the sta
 
 So the closure ends each such row at the **later of the closure and the row's own start**. A row already running ends at the closure. A row that had not started yet ends at its own start, which makes it zero-length and therefore inert to every as-of read (Section 5) — the honest record of a schedule change that was decided and will now never take effect. A row that had already ended before the closure is left alone.
 
+**A fourth case is the one that has to be said out loud: a row that already carries an `ended_at` reaching past the closure has it moved back.** The outgoing half of a pending schedule change is exactly that, and so is any configuration row on a Cell closed with a backdated effective date. This is the one write in the system that shortens a closed period of an effective-dated row in place, and Section 5 otherwise forbids rewriting such a row.
+
+It is permitted here, and confined: the value replaced is always one that reaches beyond the closure, so what is removed is a period the Cell no longer existed for. Where the closure is dated today that period had not happened yet. Where it is backdated, part of it had — and that erasure is not a new cost, it is the cost this section already accepts in writing for backdating a closure, made concrete: a closure dated to the first of the month leaves that month with almost no scheduled meetings, and the schedule rows are how.
+
+The alternatives are worse and are named so the choice is knowing. Leaving the row is the state the rule forbids. Refusing the closure makes a rescheduled Cell unclosable, which is what two withdrawn formulations did. Closing it and opening a replacement records a schedule for a Cell that has none.
+
 The reach was genuinely undecided until the closure endpoint settled it, and the two wordings had to be told apart rather than assumed equivalent: reusing the leadership rule verbatim is what produced the unclosable Cell, and the reason that rule has its shape — a leadership or membership row can always be ended at the closure instant — is exactly the reason it does not carry (Section 25, rule 19).
 
 **The effective date has a floor: the latest of the `started_at` of every open leadership and membership row on the Cell, and the `ended_at` of every closed one.** Below it the closure would end a period before it began, or leave a row of a closed Cell ending after the Cell did, and the operator would meet a raw constraint violation rather than an answer.
@@ -2295,13 +2301,17 @@ The reach was genuinely undecided until the closure endpoint settled it, and the
 
 **A refusal names the earliest legal date, or says that none exists.** An effective date is a Manila calendar day and the floor is an instant (Section 20), so the earliest legal date is the first Manila midnight at or after the floor — the floor's own day where the floor falls exactly on it, and the day after otherwise. Where that day is later than today the closure cannot be backdated at all, and the refusal says so and points at submitting no effective date, which always succeeds. That is the ordinary case rather than a corner: a Cell whose membership changed today has a floor inside today. Naming tomorrow would be naming the one answer guaranteed to be refused again, which is the failure Sections 4 and 5 already write this refusal to avoid.
 
-**The floor says how far back a closure *can* be dated; `records.backdate_effective_date` says who may date it back at all.** The two are independent, and were settled separately — this half before the floor was. Any effective date earlier than the current day requires that capability (Section 7), which is Admin's. The closer may always date a closure today, so nothing is blocked — what they give up is an accurate scheduled-meeting count for the days between the Cell's last meeting and the closure being recorded.
+**The floor says how far back a closure *can* be dated; `records.backdate_effective_date` says who may date it back at all.** The two are independent, and were settled separately — this half before the floor was. Any effective date earlier than the current day requires that capability (Section 7), which is Admin's.
+
+**Earlier than the current *day*, and an effective date equal to today is not backdating.** It resolves to Manila midnight and so is hours behind the instant an undated closure takes, but the harm this rule guards is a closure reaching back to the first of the month, and nothing inside the current day reaches it. An implementation stricter than this refuses a request the rule permits, and the closer meets a capability refusal where the floor is what actually applies.
+
+**A backdated closure also requires a note, and the closure reason is not it.** Section 7 says backdating "always requires a reason"; every closure already carries one from the fixed list, so reading that requirement as satisfied by the closure reason makes it vacuous and backdating adds nothing to what an ordinary closure records. What is owed is an explanation of the *backdating*, which is what Section 5 requires of a backdated reassignment and for the same reason — a correction to the past that moves totals already reported has to say why. The `effective_date.backdated` audit entry carries it. The closer may always date a closure today, so nothing is blocked — what they give up is an accurate scheduled-meeting count for the days between the Cell's last meeting and the closure being recorded.
 
 That trade is deliberate, and the reason is the coverage line rather than consistency with Sections 4 and 5. A leader who has submitted nothing all month and then closes the Cell effective the first of it leaves that month with almost no scheduled meetings, and the record of their silence goes with it. Section 13 exists to obtain honest reporting, and a date field that quietly erases a month is the same defeat as a status that punishes honesty. Letting the closer reach back within the open reporting month — the window Section 13 gives attendance — was considered for its consistency and rejected for handing that vector to every leader, inside exactly the period where it does most damage.
 
 **A closure takes both of this system's lock classes, in the order Section 5 states: the people first, then every Cell it touches.** It changes a Cell's state and writes a membership row per dispersed person, so it needs both — and a membership write already takes that pair in that order, which fixes it rather than leaving it to be chosen.
 
-The people are known from the request rather than from a read, which is what makes the ordering possible at all: this section already requires an explicit decision about every member, so the list arrives with the closure. That list is bounded — it is the only unbounded list any request in this API carries, and every entry becomes an advisory lock, a row lock and audit entries — at a size far above any real Cell and far below what would hold a transaction open long enough to matter to Section 24's pool. The bound is client-visible and refuses rather than truncating, on the same terms as the nesting bound in Section 22. What it owes after the locks is a check that the list is the Cell's actual current membership, refusing where it is not — a member added or removed since the client read the roster means the decision was made about a different list, and the closure asks for it to be re-read rather than proceeding.
+The people are known from the request rather than from a read, which is what makes the ordering possible at all: this section already requires an explicit decision about every member, so the list arrives with the closure. That list is bounded in length, and Section 22 carries the number and the code because a bound a client cannot discover is one it meets as an unexplained refusal. What it owes after the locks is a check that the list is the Cell's actual current membership, refusing where it is not — a member added or removed since the client read the roster means the decision was made about a different list, and the closure asks for it to be re-read rather than proceeding.
 
 The Cell being closed is taken at the strength its own write needs; each dispersal destination is taken only strongly enough that it cannot close underneath the memberships being written into it, which lets ordinary membership work on those Cells proceed alongside. Section 5 carries what each strength is and why taking a row twice is what breaks the rule.
 
@@ -3368,7 +3378,7 @@ POST /api/v1/cells                       direct creation, initial encoding only
 GET  /api/v1/cells/{id}
 PUT  /api/v1/cells/{id}/category           effective the day it is made
 PUT  /api/v1/cells/{id}/schedule           effective the first of next month
-POST /api/v1/cells/{id}/closure            with a decision about every member
+POST /api/v1/cells/{id}/closure            with a decision about every member, at most 500
 GET  /api/v1/cells/{id}/members
 POST /api/v1/cells/{id}/members            add, or move from another Cell
 DELETE /api/v1/cells/{id}/members/{person_id}  ends the membership
@@ -3416,6 +3426,12 @@ Naming the Cell filter now, before Stage 3 builds it, is the rule applied to its
 Database columns are not bound by this: `pastoral_assignments.leader_id` needs no qualifier because its table supplies one.
 
 A field name that differs between two endpoints for one concept is a permanent cost on three client codebases that cannot be force-updated, and the only moment to fix one is before any client depends on it.
+
+#### One list in this API is bounded in length
+
+**A Cell closure's `members` array carries at most 500 entries, and one longer is refused with `VALIDATION_FAILED` naming the field.** It is the only list this API accepts whose length a client chooses and the server cannot derive, and every entry becomes an advisory lock and an audit entry inside one transaction — so it is bounded for the reason Section 24 bounds a lock wait, not because 500 is a limit anyone should meet. Section 2 puts the church at roughly 800 Cells across three to four thousand people, so a Cell approaching it is a data problem rather than a large Cell.
+
+It refuses rather than truncating, on the same reasoning as the depth bound below: a closure decided about the first 500 of 600 members is a closure that silently left 100 people in a Cell that no longer exists, which is precisely what Section 10 requires a decision about every member to prevent.
 
 #### Request bodies are bounded in depth
 

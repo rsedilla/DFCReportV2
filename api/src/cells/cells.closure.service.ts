@@ -56,9 +56,9 @@ export interface CloseCellInput {
  * are settled by execution rather than by argument.** Each had been written three
  * times in prose and refuted three times, the last by reproducing a deadlock, so the
  * standing instruction was to build the mechanism and let the specification record
- * what survived. `api/test/database/closure-locking.spec.ts` is the measurement and
- * `api/test/cells/closure-floor.e2e.spec.ts` is the floor's; the comments below say
- * what those found, and are not an argument for it.
+ * what survived. `api/test/database/closure-locking.spec.ts` measures the ordering and
+ * `api/test/api/cell-closure.e2e.spec.ts` the floor; the comments below say what those
+ * found, and are not an argument for it.
  *
  * **The member decisions come from the request, and that is what makes the lock
  * ordering possible at all.** Section 10 requires the members to be presented and an
@@ -92,7 +92,18 @@ export class CellsClosureService {
     // `account_roles` and `capability_grants`, and asking a bounded pool for a second
     // connection while holding one is the liveness hazard that section names.
     const authority = await this.authorization.authorityFor(actor.accountId);
-    const backdated = input.effectiveDate !== undefined;
+
+    // **Earlier than the current Manila day, which is what section 10 says**, and an
+    // earlier version of this asked for the capability on any supplied date at all.
+    // That was stricter than the specification without recording the difference, and
+    // it cost something real: a leader submitting today's date rather than omitting
+    // the field was refused `SCOPE_DENIED` for a request section 10 permits them to
+    // make. The two are not identical — today's date resolves to Manila midnight and
+    // omitting resolves to now — but the distance between them is hours inside the
+    // current day, and the harm section 10 names is a closure reaching back to the
+    // first of the month.
+    const backdated =
+      input.effectiveDate !== undefined && input.effectiveDate < manilaDayOf(new Date());
 
     if (backdated) {
       // Section 10: "Any effective date earlier than the current day requires
@@ -115,6 +126,21 @@ export class CellsClosureService {
       await this.authorization.authorize(actor, Capability.RecordsBackdateEffectiveDate, {
         kind: 'church',
       });
+
+      if (input.note === undefined) {
+        // Section 7: backdating a closure "is Admin-only and always requires a
+        // reason". The closure reason cannot be that reason — every closure carries
+        // one from the fixed list, so reading it that way makes the requirement
+        // vacuous and backdating adds nothing to what an ordinary closure already
+        // records. What is owed is an explanation of the *backdating*, which is what
+        // section 5 requires of a backdated reassignment and for the same reason:
+        // section 10 says a backdated closure erases the scheduled-meeting count a
+        // coverage line is read against, so the entry that records it has to say why.
+        throw new ValidationFailedError(
+          'Backdating a closure requires a note explaining it (SKILL.md section 7).',
+          { field: 'note' },
+        );
+      }
     }
 
     this.assertDecisionsAreWellFormed(cellId, input.members);
@@ -205,7 +231,7 @@ export class CellsClosureService {
       const floor = await this.closureFloorWithin(trx, cellId);
 
       if (effectiveAt.getTime() < floor.getTime()) {
-        throw this.closureTooEarly(cell.cell_id, floor, backdated);
+        throw this.closureTooEarly(cell.cell_id, floor, input.effectiveDate !== undefined);
       }
 
       // Destinations are validated after the floor rather than before it, so a
@@ -243,6 +269,8 @@ export class CellsClosureService {
             .execute();
         }
       }
+
+      const outgoingLeader = await this.cells.leaderAsOfWithin(trx, cellId, effectiveAt);
 
       await trx
         .updateTable('cell_leaderships')
@@ -284,6 +312,28 @@ export class CellsClosureService {
         },
         reason: input.note ?? null,
       });
+
+      // **Section 21 lists "Cell leadership opened, ended, or changed" as an action in
+      // its own right**, and the first version of this operation wrote none — on the
+      // reasoning that the ending is not a separate decision and its date is the
+      // closure's. That is the same reasoning the paragraph below rejects for a
+      // membership, twelve lines away: section 21 asks for one entry per action
+      // performed, and a reader asking who led a Cell before it closed must find it
+      // whichever operation ended the assignment.
+      if (outgoingLeader !== null) {
+        await this.audit.writeWithin(trx, {
+          actorId: actor.accountId,
+          action: 'cell_leadership.ended',
+          targetType: 'cell',
+          targetId: cellId,
+          // Section 21: "carrying the outgoing and the incoming leader where each
+          // exists". A closure has no incoming leader, which is what distinguishes it
+          // from a handover in the log.
+          before: { cell_leader_id: outgoingLeader },
+          after: { cell_leader_id: null, ended_at: effectiveAt.toISOString() },
+          reason: 'Cell closed',
+        });
+      }
 
       // **One entry per member, and the same two action names an ordinary membership
       // change writes.** Section 21 names "Cell membership added, moved, or ended"
@@ -551,13 +601,31 @@ export class CellsClosureService {
             'section 10, What closing does).',
         );
 
-        const leaderId = await this.cells.leaderForScopeWithin(trx, row.id);
+        // **As of the effective instant, not "current falling back to last".** The
+        // scope check above uses section 7's rule, which ignores dates; the
+        // same-Network comparison must use the rule its trigger uses, which is the
+        // assignment row covering the membership's `started_at`. The two agree for
+        // every membership written at `clock_timestamp()` and part company the moment
+        // a closure is backdated — a closure dated to February dispersing into a Cell
+        // created in August has a destination with no leader then, and the scope rule
+        // cheerfully answers with its current one. Left that way the deferred trigger
+        // raises `check_violation` at COMMIT and the caller gets `INTERNAL_ERROR`,
+        // which is the failure this whole method exists to prevent.
+        const leaderId = await this.cells.leaderAsOfWithin(trx, row.id, effectiveAt);
+
+        if (leaderId === null) {
+          throw new InvariantViolationError(
+            'A destination Cell had no leader on the closure date, so a membership ' +
+              'starting then has no Network to be checked against (SKILL.md section 11). ' +
+              'A Cell created after that date cannot receive a member dated before it.',
+            { person_id: member.personId, cell_id: row.cell_id },
+          );
+        }
 
         destination = {
           id: row.id,
           cell_id: row.cell_id,
-          network:
-            leaderId === null ? null : await this.networks.networkAsOf(trx, leaderId, effectiveAt),
+          network: await this.networks.networkAsOf(trx, leaderId, effectiveAt),
         };
 
         checked.set(member.destinationCellId, destination);
@@ -755,15 +823,28 @@ export class CellsClosureService {
    * the day *after* it. Here a floor landing exactly on a Manila midnight is itself
    * legal, and only a floor inside a day pushes to the next one.
    */
-  private closureTooEarly(cellId: string, floor: Date, backdated: boolean): ApiError {
-    if (!backdated) {
-      // The clock is read after the locks, so a request that merely waited is not
-      // refused here — this is reached only where a row on this Cell carries the very
-      // instant this closure is taking. `RESOURCE_BUSY` rather than a 409: contention
-      // reaches no decision, and section 22 stores a 4xx against the idempotency key
-      // while releasing a 5xx, so a 409 would replay a transient failure for the whole
-      // retention and the advice to retry would be advice to do the one thing that
-      // cannot work.
+  private closureTooEarly(cellId: string, floor: Date, dated: boolean): ApiError {
+    if (!dated) {
+      // **Unreachable through any operation this system defines, and kept as a
+      // fail-safe rather than as a live branch.** The instant is `clock_timestamp()`
+      // read after the locks, and both floor terms come from rows stamped the same
+      // way, so the floor is always in the past and an undated closure always clears
+      // it. Reaching this needs a leadership or membership row carrying a future
+      // timestamp, which nothing writes.
+      //
+      // *A first version of this comment claimed it was reached "where a row carries
+      // the very instant this closure is taking", which the strict `<` above excludes
+      // — a row at exactly the floor is legal.* The branch was copied from
+      // `PeopleReassignmentService`, where the identical shape **is** reachable
+      // because section 5 lets Admin backdate a pastoral row and a concurrent
+      // reassignment can therefore leave a row ahead of the clock. Cell leadership and
+      // membership rows cannot be backdated, so the reason does not carry (section 25,
+      // rule 19) — which is the fault this branch's own slice was written to observe.
+      //
+      // It stays because the floor is read from rows rather than guaranteed by a
+      // constraint, and answering a transient-looking condition is better than a 500.
+      // `RESOURCE_BUSY` rather than a 409: contention reaches no decision, and section
+      // 22 stores a 4xx against the idempotency key while releasing a 5xx.
       return new ResourceBusyError({ cell_id: cellId });
     }
 

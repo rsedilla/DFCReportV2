@@ -96,9 +96,12 @@ export interface CellLockRequest {
  * its locks in the order it sorts.
  *
  * The wait is bounded by the caller's `lock_timeout`, and an elapsed one answers
- * `RESOURCE_BUSY` wherever it is raised (section 5). A deadlock this ordering has
- * not reached answers the same way, which is section 22's rule rather than this
- * function's.
+ * `RESOURCE_BUSY` wherever it is raised (section 5). So does a deadlock this ordering
+ * has not reached — `isLockTimeout` matches `40P01` as well as `55P03`, which it did
+ * not until this endpoint landed and which is the half of section 5 that had been
+ * stated and not built. Ordering reaches the locks an operation takes itself; it does
+ * not reach the row locks a deferred constraint trigger takes at COMMIT in write
+ * order, so a cycle stays possible however carefully this sorts.
  */
 export async function lockCellsWithin(
   transaction: Transaction<Database>,

@@ -58,6 +58,16 @@
 -- The fourth line is the one the literal rule refuses and this one admits, and it is
 -- the whole reason the wording differs. Every other line agrees with it.
 --
+-- **The third line is the one that costs something, and it is stated rather than left
+-- to be met.** Satisfying it means moving an `ended_at` that is already set, on a row
+-- that is already closed -- which section 5 otherwise forbids, since an effective-dated
+-- row is corrected by closing it and opening the right one rather than by rewriting it.
+-- It is permitted here and confined: the value replaced always reaches beyond the
+-- closure, so what is removed is a period the Cell no longer existed for. Section 10
+-- carries the argument, and names the alternatives that are worse -- leaving the row is
+-- the state this rule forbids, refusing the closure makes a rescheduled Cell
+-- unclosable, and opening a replacement records a schedule for a Cell that has none.
+--
 -- ---------------------------------------------------------------------------
 -- **Deferred, and for its own reason rather than by imitation.** A closure writes
 -- the `cells` row and the configuration rows in one transaction, and section 10

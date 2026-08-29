@@ -217,10 +217,19 @@ export type AuditAction =
   // Section 21 lists "Cell closure with reason". One entry for the closure itself,
   // and the membership entries above carry the dispersals — a dispersal *is* a move
   // and leaving somebody unassigned *is* an ending, so a reader searching for either
-  // must find them whichever operation performed them. Section 11's leadership
-  // ending needs no entry of its own: it is not a separate decision, and its date is
-  // the closure's, which this entry carries.
-  | 'cell.closed';
+  // must find them whichever operation performed them.
+  | 'cell.closed'
+  // Section 21 lists "Cell leadership opened, ended, or changed, carrying the
+  // outgoing and the incoming leader where each exists — a reader asking who led a
+  // Cell before a handover must find it here".
+  //
+  // **An earlier version of this comment argued a closure needed no such entry**,
+  // because the ending "is not a separate decision, and its date is the closure's".
+  // That is the argument the membership pair above rejects, and section 21 makes no
+  // exception for leadership. A closure writes one with a null incoming leader, which
+  // is what distinguishes it from a handover in the log. The opened half arrives with
+  // the handover workflow.
+  | 'cell_leadership.ended';
 
 export interface AuditLogTable {
   id: Generated<string>;

@@ -246,6 +246,35 @@ export class CellsMembershipService {
   }
 
   /**
+   * This Cell's current members, for the screen that decides a closure.
+   *
+   * **A read, so it takes no idempotency claim and opens no transaction.** It is here
+   * rather than on `CellsReadService` because that service exists for the reads *other
+   * modules* need — `auth` asking whether a Person is a current Cell Leader, the guard
+   * resolving a Cell's leader — and this one is `cells` answering its own controller.
+   * The query itself lives there, because `cells.read.service.ts` is where this
+   * module's `SELECT`s are written.
+   *
+   * No refusal for a Cell that does not exist: an empty list is the honest answer for
+   * a Cell with no members, and an actor whose scope would not cover the Cell was
+   * already refused by the guard. Distinguishing the two here would reintroduce the
+   * existence oracle section 22 settles for a Cell (2026-08-29).
+   */
+  async membersOf(cellId: string): Promise<Record<string, unknown>> {
+    const members = await this.cells.membersOfWithin(this.db, cellId);
+
+    return {
+      cell_uuid: cellId,
+      members: members.map((member) => ({
+        person_id: member.person_id,
+        member_id: member.member_id,
+        full_name: member.full_name,
+        started_at: member.started_at.toISOString(),
+      })),
+    };
+  }
+
+  /**
    * End a person's membership of a Cell, leaving them in none.
    *
    * Section 10 makes this an ordinary authorized action rather than an exception:

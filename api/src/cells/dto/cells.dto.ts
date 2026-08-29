@@ -9,6 +9,7 @@ import {
   IsUUID,
   Matches,
   MaxLength,
+  MinLength,
   ValidateNested,
 } from 'class-validator';
 import { Max, Min, ValidateIf } from 'class-validator';
@@ -166,17 +167,33 @@ export class CloseCellDto {
   reason!: CellClosureReason;
 
   /**
-   * Required where the reason is `OTHER`, refused otherwise.
+   * Required where the reason is `OTHER` or the closure is backdated; optional
+   * otherwise.
    *
-   * The database says the same thing twice over (`cells_other_requires_note`,
-   * `cells_note_only_with_reason`); this is here so a missing note is
-   * `VALIDATION_FAILED` naming the field rather than a constraint violation. Section
-   * 10 asks every reason to stay "factual and free of judgement", which is why the
-   * list is closed and the note exists only to qualify the one open value.
+   * **The decorators are what enforce the first half, and an earlier version of this
+   * block claimed the enforcement while carrying only `@IsOptional()`.** A closure
+   * reasoned `OTHER` with no note then fell through to `cells_other_requires_note`,
+   * which nothing classifies, so it answered `INTERNAL_ERROR` — the
+   * 500-instead-of-an-answer failure this repository keeps recording, produced by a
+   * docblock rather than by the code beneath it.
+   *
+   * `@ValidateIf` rather than `@IsOptional()`, because the two differ on exactly the
+   * case that matters: `@IsOptional()` skips validation for null as well as
+   * undefined, which is how a nullable column once became an erase capability nobody
+   * decided on (section 3, the 2026-08-24 birthday ruling).
+   *
+   * The backdating half is a service check rather than a decorator: it depends on the
+   * effective date resolving to a Manila day earlier than today, which is a fact about
+   * the clock rather than about the payload.
+   *
+   * A note is permitted with any reason — `cells_note_only_with_reason` allows it, and
+   * a closure legitimately carries a sentence of context. Section 10 keeps the *reason*
+   * list closed and free of judgement (Principle 7); the note qualifies it.
    */
-  @IsOptional()
+  @ValidateIf((closure: CloseCellDto) => closure.reason === 'OTHER' || closure.note !== undefined)
   @IsString()
   @MaxLength(500)
+  @MinLength(1)
   note?: string;
 
   /**
@@ -194,10 +211,17 @@ export class CloseCellDto {
 
   /**
    * **Bounded, because it is the only unbounded list any request in this API
-   * carries**, and every entry becomes an advisory lock, a `cells` row lock and two
-   * audit entries. Five hundred is far above any real Cell — section 2 puts the
-   * church at roughly 800 Cells across three to four thousand people — and far below
-   * what would hold a transaction open long enough to matter to section 24's pool.
+   * carries.** Every entry becomes an advisory lock, one audit entry, and — for one
+   * naming a destination — a share of that Cell's row lock, which `lockCellsWithin`
+   * folds to one per Cell however many members name it. *An earlier version said "two
+   * audit entries" and "a `cells` row lock" per entry; both were wrong, and both
+   * overstated the cost this bound is set against.*
+   *
+   * Five hundred is far above any real Cell — section 2 puts the church at roughly 800
+   * Cells across three to four thousand people — and far below what would hold a
+   * transaction open long enough to matter to section 24's pool. Section 22 carries
+   * the number and the code, because a bound a client cannot discover is one it meets
+   * as an unexplained refusal.
    */
   @IsArray()
   @ArrayMaxSize(500)

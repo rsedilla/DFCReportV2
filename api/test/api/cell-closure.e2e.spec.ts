@@ -270,6 +270,73 @@ describe('closing a Cell (section 10)', () => {
       expect(response.body.error.code).toBe('VALIDATION_FAILED');
     });
 
+    it('refuses a note-less OTHER with an answer, not a constraint violation', async () => {
+      // `cells_other_requires_note` is an immediate CHECK, so left to the database
+      // this is a `23514` nothing classifies and the caller gets `INTERNAL_ERROR`.
+      // The DTO's docblock claimed this validation for a version that carried only
+      // `@IsOptional()` — a rule stated in a comment and enforced nowhere.
+      const response = await close(admin, markCell.id, {
+        reason: 'OTHER',
+        members: [],
+      }).expect(422);
+
+      expect(response.body.error.code).toBe('VALIDATION_FAILED');
+
+      await close(admin, markCell.id, {
+        reason: 'OTHER',
+        note: 'the venue was sold',
+        members: [],
+      }).expect(200);
+    });
+
+    it('refuses a destination that had no leader on the closure date', async () => {
+      // **A backdated closure and a destination created later.**
+      // `assert_membership_same_network` resolves a Cell's leader as the assignment
+      // row covering the membership's `started_at`, so a membership dated February in
+      // a Cell created in August has no leader to compare against and the deferred
+      // trigger raises `check_violation` at COMMIT — `INTERNAL_ERROR`.
+      //
+      // The destination check reached for `leaderForScopeWithin`, which is section 7's
+      // rule for a *scope*: current, falling back to last, ignoring dates. That agrees
+      // with the trigger for every membership written at `clock_timestamp()` and parts
+      // company the moment a closure is backdated. Two rules that coincide in every
+      // reachable state until one operation makes them diverge is exactly what the
+      // membership service's own comment says to watch for.
+      const created = new Date('2026-03-01T00:00:00+08:00');
+      const closing = await createCell(db, { leader: mark, createdAt: created });
+
+      await db
+        .insertInto('cell_memberships')
+        .values({ person_id: juan.id, cell_id: closing.id, started_at: created })
+        .execute();
+
+      // Ben's Cell was created today, long after the closure date.
+      const response = await close(admin, closing.id, {
+        reason: 'MEMBERS_DISPERSED',
+        note: 'correcting the recorded date',
+        members: [{ person_id: juan.id, destination_cell_id: benCell.id }],
+        effective_date: '2026-03-02',
+      }).expect(409);
+
+      expect(response.body.error.code).toBe('INVARIANT_VIOLATION');
+      expect(response.body.error.message).toMatch(/had no leader on the closure date/);
+      expect((await cellRow(closing.id)).state).toBe('ACTIVE');
+    });
+
+    it('refuses a member list longer than the bound', async () => {
+      // Section 22 states the number and the code. Refused at the boundary, before
+      // anything is locked or read, so the entries need only be well-formed.
+      const response = await close(admin, markCell.id, {
+        reason: 'MEMBERS_DISPERSED',
+        members: Array.from({ length: 501 }, () => ({
+          person_id: randomUUID(),
+          destination_cell_id: null,
+        })),
+      }).expect(422);
+
+      expect(response.body.error.code).toBe('VALIDATION_FAILED');
+    });
+
     it('refuses a closed destination Cell', async () => {
       await addMember(juan.id, markCell.id);
       await closeCellDirectly(db, benCell.id, { reason: 'MEMBERS_DISPERSED' });
@@ -391,6 +458,7 @@ describe('closing a Cell (section 10)', () => {
 
       const response = await close(admin, markCell.id, {
         reason: 'CREATED_IN_ERROR',
+        note: 'correcting the recorded date',
         members: [],
         effective_date: '2026-02-01',
       }).expect(409);
@@ -420,6 +488,7 @@ describe('closing a Cell (section 10)', () => {
 
       const response = await close(admin, markCell.id, {
         reason: 'CREATED_IN_ERROR',
+        note: 'correcting the recorded date',
         members: [],
         effective_date: '2026-03-01',
       }).expect(200);
@@ -450,6 +519,7 @@ describe('closing a Cell (section 10)', () => {
 
       const response = await close(admin, cell.id, {
         reason: 'MEMBERS_DISPERSED',
+        note: 'correcting the recorded date',
         members: [],
         effective_date: '2026-03-03',
       }).expect(409);
@@ -486,6 +556,7 @@ describe('closing a Cell (section 10)', () => {
 
       const response = await close(admin, cell.id, {
         reason: 'LEADER_STEPPED_DOWN',
+        note: 'correcting the recorded date',
         members: [],
         effective_date: '2026-03-04',
       }).expect(409);
@@ -508,6 +579,7 @@ describe('closing a Cell (section 10)', () => {
 
       const response = await close(admin, cell.id, {
         reason: 'MEMBERS_DISPERSED',
+        note: 'correcting the recorded date',
         members: [{ person_id: juan.id, destination_cell_id: null }],
         effective_date: '2026-03-04',
       }).expect(409);
@@ -534,9 +606,54 @@ describe('closing a Cell (section 10)', () => {
       await close(admin, markCell.id, { reason: 'CREATED_IN_ERROR', members: [] }).expect(200);
     });
 
+    it('requires a note when backdating, and not otherwise', async () => {
+      // **Section 7: backdating a closure "is Admin-only and always requires a
+      // reason".** The closure reason cannot be that reason — every closure carries
+      // one from the fixed list, so reading it that way makes the requirement vacuous.
+      // What is owed is an explanation of the backdating, which is what section 5
+      // requires of a backdated reassignment and for the reason section 10 gives: a
+      // backdated closure erases the scheduled-meeting count a coverage line is read
+      // against.
+      const created = new Date('2026-03-01T00:00:00+08:00');
+      const cell = await createCell(db, { leader: mark, createdAt: created });
+
+      const refused = await close(admin, cell.id, {
+        reason: 'CREATED_IN_ERROR',
+        members: [],
+        effective_date: '2026-03-02',
+      }).expect(422);
+
+      expect(refused.body.error.code).toBe('VALIDATION_FAILED');
+      expect(refused.body.error.details.field).toBe('note');
+
+      // Undated, so no note is owed and the closure goes through.
+      await close(admin, cell.id, { reason: 'CREATED_IN_ERROR', members: [] }).expect(200);
+    });
+
+    it('does not treat an explicit date of today as backdating', async () => {
+      // Section 10: "Any effective date earlier than the current day requires that
+      // capability." Today's date is not earlier than today, so a Leader may send it —
+      // an earlier version asked for the capability on any supplied date at all, which
+      // was stricter than the specification and refused a request section 10 permits.
+      //
+      // It is refused here, but by the **floor**: this Cell's leadership began today,
+      // so Manila midnight is below it. That is the point — the refusal names the
+      // rule that actually applies rather than a capability the actor does not need.
+      const leader = await createAccount(app, db, { person: mark, roles: ['LEADER'] });
+
+      const response = await close(leader, markCell.id, {
+        reason: 'CREATED_IN_ERROR',
+        members: [],
+        effective_date: manilaToday(),
+      }).expect(409);
+
+      expect(response.body.error.code).toBe('INVARIANT_VIOLATION');
+    });
+
     it('refuses a forward-dated closure', async () => {
       const response = await close(admin, markCell.id, {
         reason: 'CREATED_IN_ERROR',
+        note: 'correcting the recorded date',
         members: [],
         effective_date: '2099-01-01',
       }).expect(422);
@@ -555,6 +672,7 @@ describe('closing a Cell (section 10)', () => {
 
       const response = await close(leader, markCell.id, {
         reason: 'CREATED_IN_ERROR',
+        note: 'correcting the recorded date',
         members: [],
         effective_date: '2026-03-01',
       }).expect(403);
@@ -626,14 +744,25 @@ describe('closing a Cell (section 10)', () => {
       const entries = await db
         .selectFrom('audit_log')
         .select(['action', 'target_type', 'target_id', 'before', 'after', 'reason'])
-        .where('action', 'in', ['cell.closed', 'cell_membership.moved'])
+        .where('action', 'in', ['cell.closed', 'cell_leadership.ended', 'cell_membership.moved'])
         .orderBy('action')
         .execute();
 
       expect(entries.map((entry) => entry.action)).toEqual([
         'cell.closed',
+        'cell_leadership.ended',
         'cell_membership.moved',
       ]);
+
+      // **Section 21 lists the leadership ending as an action in its own right** —
+      // "carrying the outgoing and the incoming leader where each exists" — and the
+      // first version of this operation wrote none, on the reasoning that it is not a
+      // separate decision. That is the reasoning section 21 rejects for a membership
+      // twelve lines away.
+      expect(entries[1].target_id).toBe(markCell.id);
+      expect(entries[1].before).toMatchObject({ cell_leader_id: mark.id });
+      // No incoming leader, which is what distinguishes a closure from a handover here.
+      expect(entries[1].after).toMatchObject({ cell_leader_id: null });
 
       const closed = entries[0];
       expect(closed.target_id).toBe(markCell.id);
@@ -649,9 +778,9 @@ describe('closing a Cell (section 10)', () => {
       // move came from the membership endpoint or from a closure. Recording it only
       // inside the closure entry would make a member's history depend on which
       // operation happened to move them.
-      expect(entries[1].target_id).toBe(juan.id);
-      expect(entries[1].before).toMatchObject({ cell_id: markCell.cellId });
-      expect(entries[1].after).toMatchObject({ cell_id: benCell.cellId });
+      expect(entries[2].target_id).toBe(juan.id);
+      expect(entries[2].before).toMatchObject({ cell_id: markCell.cellId });
+      expect(entries[2].after).toMatchObject({ cell_id: benCell.cellId });
     });
 
     it('records a backdated closure separately', async () => {
@@ -666,6 +795,7 @@ describe('closing a Cell (section 10)', () => {
 
       await close(admin, markCell.id, {
         reason: 'CREATED_IN_ERROR',
+        note: 'correcting the recorded date',
         members: [],
         effective_date: '2026-03-02',
       }).expect(200);

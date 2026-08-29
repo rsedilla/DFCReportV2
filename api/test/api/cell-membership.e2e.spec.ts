@@ -583,6 +583,64 @@ describe('cell membership (section 10)', () => {
     }
   });
 
+  describe('reading a Cell’s members', () => {
+    it('lists the current members, with names', async () => {
+      // **The route the closure made necessary.** Section 10 requires the members to
+      // be "presented at the point of closure", and the closure refuses any decision
+      // list that is not exactly the current membership — so without this the closure
+      // is unusable by any client. Section 22 has documented the path since before
+      // either existed.
+      await addMember(admin, markCell.id, juan.id).expect(201);
+
+      const response = await request(app.getHttpServer())
+        .get(`/api/v1/cells/${markCell.id}/members`)
+        .set('Authorization', `Bearer ${admin.accessToken}`)
+        .expect(200);
+
+      expect(response.body.members).toHaveLength(1);
+      const memberId = await db
+        .selectFrom('persons')
+        .select('member_id')
+        .where('id', '=', juan.id)
+        .executeTakeFirstOrThrow();
+
+      expect(response.body.members[0]).toMatchObject({
+        person_id: juan.id,
+        member_id: memberId.member_id,
+      });
+      expect(response.body.members[0].full_name).toContain('Juan');
+
+      // **Section 8's protected fields are not here.** Names and the Member ID are
+      // published church-wide; the birthday and the mobile number are not, and a
+      // roster is not a route to them.
+      expect(response.body.members[0]).not.toHaveProperty('birth_date');
+      expect(response.body.members[0]).not.toHaveProperty('mobile_number');
+    });
+
+    it('is refused to a leader whose scope does not reach the Cell', async () => {
+      // The same target rule as the write routes: the Cell, resolved through its
+      // leader (section 7). Everyone who may act on the list may read it, and nobody
+      // else.
+      const outsider = await createPerson(db, { firstName: 'Ben', network: 'MENS' });
+      await assignTo(db, outsider.id, root.id);
+      const account = await createAccount(app, db, { person: outsider, roles: ['LEADER'] });
+
+      await request(app.getHttpServer())
+        .get(`/api/v1/cells/${markCell.id}/members`)
+        .set('Authorization', `Bearer ${account.accessToken}`)
+        .expect(403);
+    });
+
+    it('answers an empty list rather than a refusal for a Cell with no members', async () => {
+      const response = await request(app.getHttpServer())
+        .get(`/api/v1/cells/${markCell.id}/members`)
+        .set('Authorization', `Bearer ${admin.accessToken}`)
+        .expect(200);
+
+      expect(response.body.members).toEqual([]);
+    });
+  });
+
   it('refuses an add whose Cell was handed away while it waited', async () => {
     // **Section 10 requires scope over every Cell an operation touches to be
     // re-decided inside the transaction**, and until the closure slice this endpoint

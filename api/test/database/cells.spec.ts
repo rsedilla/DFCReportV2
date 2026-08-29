@@ -1898,18 +1898,6 @@ async function openClient(): Promise<Client> {
 }
 
 /**
- * Closes a Cell the way section 10 says a closure happens: as one transaction that
- * sets the state and ends the leadership assignment and the active memberships on
- * the same effective date.
- *
- * **The leadership half is not a convenience.** `assert_cell_leadership_matches_state`
- * refuses a CLOSED Cell that still has an open assignment, so a helper that only
- * wrote `cells` would make every case below fail on that trigger rather than on
- * whatever it was about -- which is how the first version of this file was written,
- * and it is the failure a helper is supposed to prevent rather than cause.
- */
-
-/**
  * `now()` from the server, for any instant that has to be at or after a Cell's
  * `created_at`.
  *

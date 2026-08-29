@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, HttpCode, Param, Post, Put } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, Param, Post, Put } from '@nestjs/common';
 
 import { RequiresCapability } from '../auth/authorization/authorization.decorators';
 import { type Actor } from '../auth/authorization/authorization.service';
@@ -81,6 +81,35 @@ export class CellsController {
       actor,
       claim,
     );
+  }
+
+  /**
+   * This Cell's current members (SKILL.md section 10, *What closing does*; section 22).
+   *
+   * **It exists because the closure endpoint made it necessary.** Section 10 requires
+   * the members to be "presented at the point of closure", and the closure refuses any
+   * decision list that is not exactly the Cell's current membership — so mandating the
+   * list turned a documented-but-unbuilt route into a blocker. Section 22 has
+   * documented this path since before the endpoint existed.
+   *
+   * **`cell.manage_membership`, resolved against the Cell**, which is what the two
+   * write routes below declare. Everyone who may act on this list may see it, and
+   * nobody else — a derivation rather than a new rule, and section 7 declares its
+   * capability list closed so inventing a read capability for it is not available.
+   *
+   * The cost is real and is escalated rather than hidden: guarding a read with a write
+   * capability means `read_only` on a grant of it is rejected at creation (section 7),
+   * so a person cannot be given roster visibility without also being given the power
+   * to change it. Whether a Cell roster deserves a read capability of its own is
+   * recorded as open in `CLAUDE.md`.
+   */
+  @Get(':id/members')
+  @RequiresCapability(Capability.CellManageMembership, {
+    kind: 'cell',
+    from: 'params.id',
+  })
+  async members(@Param('id') cellId: string): Promise<Record<string, unknown>> {
+    return this.membership.membersOf(cellId);
   }
 
   /**
