@@ -36,12 +36,22 @@ import type { Transaction } from 'kysely';
  * Cell." One operation rather than two, because two would let a client perform half
  * of it.
  *
- * **What the database already refuses**, and what is therefore not re-checked here:
- * a second open membership for one person (`cell_memberships_one_open`), a member
- * whose Network is not the Cell leader's, an open membership on a CLOSED Cell, and a
- * membership outliving its Cell. Migration 0009 carries all four. This service owns
- * the authorization, the refusals that need a message rather than a constraint
- * violation, and the audit entries section 10 requires.
+ * **What the database refuses, and what this service refuses as well.** Migration
+ * 0009 carries four constraints: a second open membership for one person
+ * (`cell_memberships_one_open`), a member whose Network is not the Cell leader's, an
+ * open membership on a CLOSED Cell, and a membership outliving its Cell.
+ *
+ * Two of those are re-checked here, and an earlier version of this paragraph said
+ * they were not — while the two methods seventy lines below said, correctly, that
+ * they are. Both of those constraints are **deferred**, so they raise at COMMIT as a
+ * raw `check_violation`, which `ApiExceptionFilter` does not recognise and renders
+ * `INTERNAL_ERROR`. The check turns each into the answer section 22 defines for it;
+ * the constraint stays the enforcement, because it holds under a concurrent write
+ * this check would be stale for. The other two are left to the database, which
+ * answers them the same way whoever writes.
+ *
+ * This service owns the authorization, the refusals that need a message rather than a
+ * constraint violation, and the audit entries section 10 requires.
  */
 @Injectable()
 export class CellsMembershipService {
@@ -389,8 +399,12 @@ export class CellsMembershipService {
    * can: the row to be superseded committed before this transaction was allowed to
    * proceed, so any instant read after the wait is later than it.*
    * `PeopleReassignmentService` takes `new Date()` after its own lock for the same
-   * reason; `clock_timestamp()` is that value without the millisecond truncation, and
-   * on the clock the columns are compared against.
+   * reason. What `clock_timestamp()` adds is the **database server's** clock rather
+   * than this host's, read after the wait; it adds no precision, and a previous
+   * version of this sentence claiming it avoided a millisecond truncation was wrong —
+   * node-postgres parses `timestamptz` into a JS `Date`, so the microseconds are gone
+   * either way. Nothing turns on that: `cell_memberships_period_ordered` is `>=`, so a
+   * move landing inside one millisecond is legal.
    *
    * Read once per transaction, so the close and the open still share one instant.
    */

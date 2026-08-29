@@ -2312,7 +2312,7 @@ Archiving a Person ends their active Cell membership from the archive effective 
 - **A Person absorbed by a Merge is not added.** The surviving Person holds the identity (Section 3), so the request names a record that is no longer anybody.
 - **Adding somebody already in the Cell is refused.** Section 4 refuses a sex correction that changes nothing and Section 5 a reassignment to the leader a person already has, both because an audited operation whose before and after are identical misleads whoever reads the log. Here it would also put a boundary in the membership history where nothing happened, so "how long in this Cell" answers wrongly ever after.
 
-Whether the first two should additionally be database constraints is open: `pastoral_assignments` has one for the equivalent rule, and `cell_memberships` does not.
+Whether the first two should additionally be database constraints is open, and the asymmetry an earlier version of this sentence claimed does not exist: `pastoral_assignments` carries no constraint for the archived-or-merged rule either. Both are application-layer checks today — `assertLeaderIsAssignable` for a pastoral edge, `CellsMembershipService` for a membership — and the open question is whether either should become a constraint, not why one is and one is not.
 
 Every membership change is audit logged with actor, person, Cell, and effective date (Section 21).
 

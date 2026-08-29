@@ -24,7 +24,8 @@ import { CellsService } from './cells.service';
  * would import `auth` right back if it took the whole of it to ask an authorization
  * question. What it needs is the question, not the module.
  *
- * The graph runs `auth -> cells -> {people, authorization, admin/settings, audit}`
+ * The graph runs `auth -> cells -> {people, networks, authorization, admin/settings,
+ * audit}`
  * with nothing pointing back. `test/unit/module-graph.spec.ts` builds the injector
  * without a database, which is what makes a wiring mistake fail in seconds rather
  * than on every authenticated request.
@@ -34,9 +35,9 @@ import { CellsService } from './cells.service';
  * `admin/settings` whether the encoding phase is open — each through the service
  * owning that table, inside the transaction this module opens.
  *
- * Two services, and the split is the one `people` already settled: `CellsService`
- * is named for the operations, `CellsReadService` for the reads another module
- * needs. Section 2's "organise by module, never by layer" is about how the
+ * Three services, and the split is the one `people` already settled: `CellsService`
+ * and `CellsMembershipService` are named for the operations, `CellsReadService` for
+ * the reads another module needs. Section 2's "organise by module, never by layer" is about how the
  * application is divided and does not reach inside one, so the read seam is a
  * judgement rather than a requirement — and the boundary that *is* enforced, table
  * ownership, is unaffected by it.

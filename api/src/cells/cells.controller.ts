@@ -18,10 +18,12 @@ import { AddCellMemberDto, CreateCellDto } from './dto/cells.dto';
 /**
  * `/api/v1/cells` (SKILL.md section 22).
  *
- * One route today, and it is the one section 2 relaxes rather than the one section
+ * Three routes. Creation is the one section 2 relaxes rather than the one section
  * 10 makes ordinary: while initial encoding is open, Admin creates a Cell and its
- * leadership assignment directly. Request-and-approve, closure and configuration
- * arrive with their own slices, and each carries its own capability.
+ * leadership assignment directly. The two membership routes are ordinary section 10
+ * operations, and they resolve scope through the Cell's leader rather than through
+ * the person named. Request-and-approve, closure and configuration arrive with their
+ * own slices, and each carries its own capability.
  */
 @Controller('cells')
 export class CellsController {
@@ -130,9 +132,12 @@ export class CellsController {
      * than an answer." The guard resolves `params.id` and nothing else, so before this
      * the value reached a `uuid` column and `22P02` answered `INTERNAL_ERROR`.
      *
-     * `UuidParamPipe` rather than Nest's `ParseUUIDPipe`: that one carries a stricter
-     * predicate than the rest of this API, and would refuse identifiers the `{id}` in
-     * the same path accepts.
+     * `UuidParamPipe` rather than Nest's `ParseUUIDPipe`, and **not** because that one
+     * is stricter — two earlier versions of this comment said so and it does not
+     * reproduce: with no `version` option its predicate is as loose as `isUuid`. The
+     * reason is section 22's single error envelope, which `BadRequestException` is not,
+     * and that `identifiers.ts` exists to be the one copy of this question. See the
+     * withdrawal in `uuid-param.pipe.ts`.
      */
     @Param('person_id', new UuidParamPipe('person_id')) personId: string,
     @CurrentActor() actor: Actor,

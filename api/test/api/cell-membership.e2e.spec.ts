@@ -203,12 +203,14 @@ describe('cell membership (section 10)', () => {
       // roster visible to the leader who led it (sections 10 and 15), which
       // resolving through a current leader it no longer has would prevent."
       //
-      // **Nothing pinned the fallback**, because for an ACTIVE Cell the second sort
-      // key picks the same row. A closed Cell has no open leadership at all, so
-      // without `ended_at DESC NULLS FIRST` reaching the closed rows there is no
-      // leader to resolve through and even Mark is refused. The refusal here is
-      // about the Cell being closed rather than about scope, which is what shows the
-      // scope resolved.
+      // **Nothing pinned the fallback**, and what implements it is the *absence of an
+      // `ended_at IS NULL` filter* — not a sort key. A closed Cell holds exactly one
+      // leadership row, so any ordering returns it; adding `where('ended_at','is',null)`
+      // is the mutation this case reddens, and deleting an `orderBy` is not. An earlier
+      // version of this comment credited the sort key, which is the third time that
+      // sentence has been wrong on this branch — `cells.read.service.ts` carries the
+      // correction. The refusal here is about the Cell being closed rather than about
+      // scope, which is what shows the scope resolved.
       const closing = await createCell(db, { leader: mark, category: 'COUPLE' });
       await closeCellDirectly(closing.id);
 

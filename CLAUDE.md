@@ -4888,7 +4888,11 @@ the comment and the migration now agree. Three versions of one paragraph, two of
 written after a review corrected it, is the strongest case this log has for describing
 a mechanism from the mechanism rather than from the last thing said about it.
 
-**`ParseUUIDPipe` was a fourth UUID predicate.** It carries `validator`'s own, which
+***Superseded** by the fourth pass below: `ParseUUIDPipe` with no `version` option is
+as loose as `isUuid`, so the 422 described here never happened and the decision stands
+on section 22's single error envelope instead. Left in place rather than deleted, per
+this log's convention.* **`ParseUUIDPipe` was a fourth UUID predicate.** It carries
+`validator`'s own, which
 refuses values this API accepts everywhere else — `01234567-89ab-cdef-0123-456789abcdef`
 among them — so one parameter of one route answered 422 for identifiers the `{id}` in
 the same path takes, and §3 permits a client-generated Person UUID. `UuidParamPipe`
@@ -4916,7 +4920,12 @@ Nine mutations verified across the two fix batches.
 defect.** That is the convergence the two before it did not show, and the scoping is
 part of why — the same shape slice 1 needed on its fourth pass. Both structural
 mechanisms this batch introduced were traced and confirmed: the `NIL_UUID` target
-makes an absent Cell and an out-of-scope one indistinguishable at every scope value,
+makes an absent Cell and an out-of-scope one indistinguishable at every scope value
+that refuses — `OWN_SUBTREE`, `SUBTREE_EXCL_SELF` and `NETWORK`, each producing one
+`ScopeDeniedError` message and one details payload — but **not** at `WHOLE_CHURCH`,
+where `scopeCovers` returns true before the target is read and the two answers are a
+`NOT_FOUND` and a 201. The unqualified claim is false and this same entry says so forty
+lines below it, which is the fault it exists to record,
 and `clock_timestamp()` is read after the lock in both methods with the two writes of
 a move still sharing one instant. The `ORDER BY` reorder is equivalent in every state
 migration 0009 permits — which also means nothing can fail against reverting it, and
@@ -4975,9 +4984,16 @@ behavioural defect. Twelve mutations verified in total.
 
 ### Open — awaiting a ruling
 
-**One item awaits a ruling, and it blocks Stage 5. Twenty other things are
+**One item awaits a ruling, and it blocks Stage 5. Thirty-four other things are
 unsettled, none of them blocking. They are listed at the end, so this section is the
 whole of what is open.**
+
+*The count is thirty-four distinct items across thirty-five bullets — the deadlock
+item is deliberately cross-referenced twice. It said "twenty" from the day it was
+written through six commits that added fourteen bullets without touching it, which is
+the miscount this log keeps recording, committed against the sentence whose only job
+is the number. Anyone adding a bullet updates it here, and counts rather than
+remembers: `awk '/^### Open — awaiting a ruling/,0' CLAUDE.md | grep -c '^- \*\*'`.*
 
 The two Stage 3 questions that stood here — how a Cell changes hands, and what reversing a closure does — were settled the same day by the ruling above: a handover goes through request-and-approve, and a closure is never reversed. Nothing in Stage 3 is now blocked.
 
@@ -5003,6 +5019,7 @@ Two related questions have defined behaviour and are recorded in `SKILL.md` §12
 
 - **Whether a deadlock should be answered as contention** — *this is already on the list below, and its stated justification has lapsed.* It is recorded there as "not urgent while the import is the only long lock-holder and runs once". The `FOR SHARE` migration 0009 takes on the `cells` row makes `40P01` reachable from Section 10's ordinary closure operation between two ordinary leaders: closure disperses the members in bulk, so a transaction routinely closes one Cell and writes memberships into another, and two leaders doing that into each other's Cells take the two rows in opposite orders. `isLockTimeout` matches `55P03` only, so it renders `INTERNAL_ERROR`. It now blocks the closure endpoint rather than waiting on a second use of the import, and it needs the ordering discipline Section 5 already uses for the person lock as well as the error-code decision. The same lock is also an unbounded intra-transaction wait that no `lock_timeout` covers, which Section 5 makes a requirement to bound — settle both with the closure endpoint.
 - **Whether moving a member out of another leader's Cell requires scope over that Cell.** Section 10 gives `cell.manage_membership` per Cell — "the Cell's current leader, over their own Cells" — and a move is two membership changes, one to each Cell. Slice 3 reads that as requiring scope over the source as well as the destination, because the alternative lets a leader pull anybody in the church into their own Cell, ending a membership in a Cell they have nothing to do with and moving that person out of another leader's denominator. That is the harm Section 5 forbids for pastoral assignment, reached through the relationship Section 1 keeps separate from it. But Section 10 does not spell out the move case, and the difference is visible to a leader: under the reading implemented, a leader receiving somebody from another branch needs Admin, an upline, or the other leader to make the move. Settle it before the first real screens, since it decides what a leader can do unaided. Two things the ruling has to settle with it: **closure**, where under this reading a leader closing their own Cell can disperse members only into Cells inside their own scope (Section 10 requires them to be "assigned to another Cell in bulk", so this is where the reading first costs something visible); and **the refusal's payload**, which must not name the source Cell or assert the membership, because the actor routinely has no pastoral scope over that person (Section 8).
+- **Whether the archived-and-merged refusals should be database constraints.** Section 10 gained three refusals on 2026-08-29 — an archived Person, a merged Person, and somebody already in the Cell — and the first two are the same rule `assertLeaderIsAssignable` enforces for a pastoral edge. Both are application-layer checks: contrary to what Section 10 said when the question was first written, `pastoral_assignments` carries **no** constraint for archived-or-merged either, so there is no asymmetry and the question is whether *either* should become one. The Definition of Done says an invariant expressible as a constraint exists as one, and this one is expressible — a membership under an archived Person is the corruption Section 3 refuses when archiving somebody who leads a Cell, reached one relationship over. What argues the other way is that both facts live in `people`'s tables while the constraint would sit on `cells`', so it is a trigger reading across a module boundary rather than an index. Not blocking: the checks refuse today and answer `INVARIANT_VIOLATION`; what a constraint would add is enforcement under a restore, which is the argument the Senior Pastor slot and the root seat both turned on.
 - **Whether a Cell's existence is a case Section 22's `NOT_FOUND` rule covers.** Section 22 states the rule — "where revealing that a record exists would itself disclose something, return `NOT_FOUND` rather than a denial" — and then settles it for one object only: "People are not such a case: Section 8 already discloses minimal identity church-wide by design." Section 8 forbids disclosing "Cell membership or Cell IDs" for a person outside the viewer's scope, which points toward a Cell being such a case; a Cell UUID is unguessable and is supplied by the actor, which points the other way. Slice 3 closed the oracle by making an absence look like a *denial*, which is the mirror image of the remedy Section 22 names, and the API consequently answers both codes for one fact — `NOT_FOUND` for an absent Cell to a Whole Church actor, `SCOPE_DENIED` to a Leader. Coherent, undocumented, and it governs every Cell-targeted endpoint slices 4 and 5 add. Settle it before the closure endpoint rather than in the first controller that meets it.
 - **Whether a path identifier should be validated as strictly as one in a body.** `class-validator`'s `@IsUUID()` pins the version and variant nibbles and is on every DTO; `isUuid` — the repository's own predicate, used by the guard and by `UuidParamPipe` — does not. So `POST /cells/{id}/members` refuses as `person_id` a value the `DELETE` beside it accepts in the path. Every identifier in the database is a v4 and PostgreSQL's `uuid` takes both, so nothing is broken; what is unsettled is which predicate the API means, and Section 3's provision for a client-generated Person UUID is the case that would decide it.
 - **Whether the nil UUID should be reserved.** The capability guard hands `authorize` `00000000-0000-0000-0000-000000000000` as the target of a Cell it cannot place, so that an absent Cell refuses exactly as an out-of-scope one does. Nothing today can create a Person with that identifier — no endpoint accepts a client-supplied `id`, and every column defaults to `gen_random_uuid()` — but nothing forbids it either, and a Person holding it inside an actor's subtree would make every unplaceable Cell "covered" for that actor. The sentinel-free equivalent is to let the port's null reach `scopeCovers` the way `personBehind` already does for an absent Account. Settle it if Section 3's client-generated identifier is ever built.
