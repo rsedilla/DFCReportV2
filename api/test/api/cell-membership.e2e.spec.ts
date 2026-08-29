@@ -583,6 +583,67 @@ describe('cell membership (section 10)', () => {
     }
   });
 
+  it('refuses an add whose Cell was handed away while it waited', async () => {
+    // **Section 10 requires scope over every Cell an operation touches to be
+    // re-decided inside the transaction**, and until the closure slice this endpoint
+    // did that for the *source* Cell of a move and left the destination to the
+    // guard's answer from before the request queued. Section 10 named that half as
+    // owed; this is the case that makes it fail without it.
+    //
+    // Every other case here is decided the same way by the guard, so deleting the
+    // re-check left them all green -- the disjunction-with-one-member shape this
+    // repository keeps recording. The only thing that separates the two layers is
+    // making the guard's answer go stale on purpose, which the person lock provides
+    // a place to do: the request blocks there, holding no Cell row, and the Cell
+    // changes hands underneath it.
+    const leader = await createAccount(app, db, { person: mark, roles: ['LEADER'] });
+    const ben = await createPerson(db, { firstName: 'Ben', network: 'MENS' });
+    await assignTo(db, ben.id, root.id);
+    const blocker = await openClient();
+
+    try {
+      await blocker.query('BEGIN');
+      const { rows } = await blocker.query<{ key: string }>(
+        'SELECT hashtextextended($1::uuid::text, 0) AS key',
+        [juan.id],
+      );
+      const lockKey = rows[0].key;
+      await blocker.query('SELECT pg_advisory_xact_lock($1::bigint)', [lockKey]);
+
+      const pending = addMember(leader, markCell.id, juan.id).then((r) => r);
+      await waitForBlockedOn(lockKey);
+
+      // Ben is Mark's sibling under the root, so the Cell leaves Mark's subtree.
+      // One transaction, because section 11 makes a leaderless Cell impossible.
+      await db.transaction().execute(async (trx) => {
+        // One instant for both rows: section 11 requires a handover to be contiguous,
+        // and two `clock_timestamp()` calls are microseconds apart.
+        const at = (await sql<{ at: Date }>`SELECT clock_timestamp() AS at`.execute(trx)).rows[0]
+          .at;
+
+        await trx
+          .updateTable('cell_leaderships')
+          .set({ ended_at: at })
+          .where('cell_id', '=', markCell.id)
+          .where('ended_at', 'is', null)
+          .execute();
+        await trx
+          .insertInto('cell_leaderships')
+          .values({ person_id: ben.id, cell_id: markCell.id, started_at: at })
+          .execute();
+      });
+
+      await blocker.query('COMMIT');
+
+      const response = await pending;
+
+      expect(response.status).toBe(403);
+      expect(response.body.error.code).toBe('SCOPE_DENIED');
+    } finally {
+      await blocker.end();
+    }
+  });
+
   it('refuses a mis-cased Cell identifier as the same Cell, called directly', async () => {
     // **Called through the service rather than the API, deliberately**, and the
     // 2026-08-23 ruling is why: `CanonicalIdentifierPipe` is global, so a mis-cased

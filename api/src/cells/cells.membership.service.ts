@@ -175,6 +175,17 @@ export class CellsMembershipService {
         });
       }
 
+      // **The destination, re-decided here rather than left to the guard's earlier
+      // answer.** Section 10 requires scope over every Cell an operation touches to be
+      // checked again inside the transaction: the guard resolves a Cell through its
+      // leader on the pool, before the request queued, so a handover committing in
+      // between leaves that answer describing authority the actor no longer holds.
+      //
+      // Section 10 named this half as owed and unbuilt until the closure endpoint
+      // built the mechanism. This is that half; `CellsClosureService` makes the same
+      // check about the Cell it is closing and about each dispersal destination.
+      await this.assertActorMayChangeMembershipOf(trx, actor, authority, cellId);
+
       if (current) {
         await this.assertActorMayChangeMembershipOf(trx, actor, authority, current.cell_uuid);
       }
