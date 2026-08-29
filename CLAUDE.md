@@ -4982,13 +4982,14 @@ behavioural defect. Twelve mutations verified in total.
 
 
 
-### 2026-08-29 — Six rulings the closure endpoint needed, four settled and two withdrawn
+### 2026-08-29 — Six rulings the closure endpoint needed, and two the review raised
 
 Stage 3 slice 4 is closure, and the open list deferred six questions to it — more than
 any other unbuilt endpoint in the project. Settled together, before a line of code, on
 the pattern that opened this stage: read Sections 10, 11, 7 and 22 whole rather than
 meet them at a keyboard. Three turned out to be readings the specification had already
-decided; three were genuine choices.
+decided; three were genuine choices. Two of the eight did not survive review and are
+withdrawn at the end of this entry.
 
 **A CLOSED Cell keeps no open category row and no open schedule row.** Migration 0009
 recorded this as unsettled and constrained only the ACTIVE side, because "What closing
@@ -5032,7 +5033,8 @@ endpoint, which settles it against the schema.
 
 **A deadlock is answered as `RESOURCE_BUSY`.** *The second half of this ruling as first
 written — that the locks are ordered so a deadlock should not arise — is the ordering
-withdrawn below. What survives is the error code, which stands on its own.* The `FOR SHARE` migration 0009 takes on the `cells` row makes `40P01` reachable
+withdrawn below. What survives is the error code, which stands on its own.* The `FOR
+SHARE` migration 0009 takes on the `cells` row makes `40P01` reachable
 from ordinary practice: two leaders closing Cells and dispersing into each other's take
 the two rows in opposite orders, each holding an exclusive lock and waiting on the
 other's. `isLockTimeout` matches `55P03` only, so today the loser gets `INTERNAL_ERROR`
@@ -5112,7 +5114,8 @@ CLOSED-side question as open — in a comment above the check rather than in its
 which an earlier version of this paragraph got wrong — and deliberately constrains only
 the ACTIVE side, which was the right call when it was written. Two further notes in that
 file are settled by this entry as well: the `40P01` decision and the unbounded wait, both
-of which it describes as open in `CLAUDE.md` and both of which left the list here. It sits in an approved pull request, and editing it
+of which it describes as open in `CLAUDE.md` and both of which left the list here. It
+sits in an approved pull request, and editing it
 would dismiss that approval to change a comment — so the constraint arrives in a
 migration of its own with the closure endpoint, and this entry is where the two are
 reconciled. The same shape as migration 0005's stale header, for the same reason.
@@ -5127,12 +5130,13 @@ clear it, because a closure dated 1 September is forward-dated and Section 10 pr
 for no such thing. Neither the leader nor Admin could close a Cell whose leader had
 merely rescheduled it.
 
-*That third formulation is the one withdrawn below: the outgoing schedule row has
-started and still ends in the future, so the floor stayed in September and the Cell
-stayed unclosable. What is kept here is the account of how it failed.*
+*The fix this paragraph describes is the second of the three formulations, and it did not
+hold either — the account of how the third failed is in the withdrawal below. What is kept
+here is the record of the second.*
 
-**The two Stop Conditions the review raised are settled here as well, and both were
+**The two Stop Conditions the review raised are answered here as well, and both were
 right to be raised: each belongs to a section other than the one I had written it in.**
+One is settled below and the other is withdrawn with the floor.
 
 **Backdating a closure requires `records.backdate_effective_date`, and Section 7's list
 gains a Cell closure by name.** The floor said how far back a closure may be dated and
@@ -5186,8 +5190,10 @@ its own neighbouring ruling, then a Cell nobody could close, then a reproducible
 deadlock, and finally a withdrawal that reinstated a claim an earlier pass had already
 corrected. Nearly every one came from the same two rulings.
 
-The six that verified sound and never regressed are kept — the four deferred questions
-plus the two Stop Conditions this entry settles — and the two that never converged are
+Six rulings are kept and two are withdrawn, and the split does not fall where the
+heading's two halves do: of the six questions deferred to this endpoint, **five are
+settled and the floor is withdrawn**; of the two Stop Conditions the review raised,
+**backdating is settled and the lock ordering is withdrawn**. The two withdrawn are
 recorded as gaps for the endpoint that can test them. `CLAUDE.md`'s preamble names
 writing an under-specified rule into the source of truth as the failure it exists to
 prevent, and the 2026-08-28 handover ruling is the precedent: drafted, withdrawn, and
@@ -5231,7 +5237,7 @@ Two related questions have defined behaviour and are recorded in `SKILL.md` §12
 
 **Unsettled, and not blocking anything.** None of these is a Stop Condition. An implementer proceeds and settles them in passing; they are listed here because a reader looking for what is open should not have to find it inside the body of a ruling.
 
-- **What floor a Cell closure's effective date has.** A closure ends every open row on the Cell at the effective date, and `period_ordered` on all four tables refuses a period ending before it starts — so some dates are satisfiable by no write at all, and an operator submitting one meets a raw `check_violation` rather than the earliest legal date Sections 4 and 5 would give them. That a floor is needed is settled; what it is is not. Three formulations were written and refuted on the closure pre-flight branch, the second of which made a Cell with a pending schedule change **unclosable by anybody**: a schedule change takes effect at the start of the following month, so both the incoming row and the outgoing row it closes carry future timestamps, and a forward-dated closure is undefined. Excluding not-yet-started rows does not reach the outgoing row, which has started. **It cannot be settled before the outlive-closure question**: whether the rule that no row of a closed Cell may end after the Cell did reaches category and schedule rows, or only the leadership and membership rows the database constrains today. Section 10 states the rule and records that half as open; the closure endpoint settles both with the constraint it adds. Settle both with the closure endpoint, against the schema rather than in prose.
+- **What floor a Cell closure's effective date has.** A closure ends every open row on the Cell at the effective date, and `period_ordered` on all four tables refuses a period ending before it starts — so some dates are satisfiable by no write at all, and an operator submitting one meets a raw `check_violation` rather than the earliest legal date Sections 4 and 5 would give them. That a floor is needed is settled; what it is is not. Three formulations were written and refuted on the closure pre-flight branch, the second of which made a Cell with a pending schedule change **unclosable by anybody**: a schedule change takes effect at the start of the following month, so both the incoming row and the outgoing row it closes carry future timestamps, and a forward-dated closure is undefined. Excluding not-yet-started rows does not reach the outgoing row, which has started. **It cannot be settled before the outlive-closure question**: whether the rule that no row of a closed Cell may end after the Cell did reaches category and schedule rows, or only the leadership and membership rows the database constrains today. Section 10 states the rule for leadership and membership rows and records the category and schedule half as open. Settle both with the closure endpoint, against the schema rather than in prose.
 - **How an operation orders advisory locks against row locks.** A membership write already takes both classes — an advisory lock on the person, then a row lock on the Cell when the deferred state check reads it `FOR SHARE` at commit — so the order is already fixed by an existing writer. A Cell closure is the operation that makes the absence bite: it takes both deliberately rather than incidentally, changing a Cell's state and writing a membership row per dispersed person, and can therefore take them in the opposite order. Three orderings were written on the pre-flight branch and each was refuted, the last by `architecture-guardian` **reproducing a deadlock against PostgreSQL 16**. Two properties defeat reasoning on paper: a deferred constraint trigger takes row locks at commit in the order rows were written, which no rule reaches after the fact; and an operation cannot know which people to lock until it has read a list another transaction can invalidate before the row lock is taken. Needs a mechanism demonstrated against concurrent writers, not a rule. Three sub-questions travel with it — the ordering, the **strength** of each Cell row lock (which decides whether a meeting is a wait or a cycle), and what bounds each wait, since `lockPersonsWithin` sets no `lock_timeout` when its list is empty and a closure with nobody to disperse is exactly that case.
 - **Whether the archived-and-merged refusals should be database constraints.** Section 10 gained three refusals on 2026-08-29 — an archived Person, a merged Person, and somebody already in the Cell — and the first two are the same rule `assertLeaderIsAssignable` enforces for a pastoral edge. Both are application-layer checks: contrary to what Section 10 said when the question was first written, `pastoral_assignments` carries **no** constraint for archived-or-merged either, so there is no asymmetry and the question is whether *either* should become one. The Definition of Done says an invariant expressible as a constraint exists as one, and this one is expressible — a membership under an archived Person is the corruption Section 3 refuses when archiving somebody who leads a Cell, reached one relationship over. What argues the other way is that both facts live in `people`'s tables while the constraint would sit on `cells`', so it is a trigger reading across a module boundary rather than an index. Not blocking: the checks refuse today and answer `INVARIANT_VIOLATION`; what a constraint would add is enforcement under a restore, which is the argument the Senior Pastor slot and the root seat both turned on.
 - **Whether a path identifier should be validated as strictly as one in a body.** `class-validator`'s `@IsUUID()` pins the version and variant nibbles and is on every DTO; `isUuid` — the repository's own predicate, used by the guard and by `UuidParamPipe` — does not. So `POST /cells/{id}/members` refuses as `person_id` a value the `DELETE` beside it accepts in the path. Every identifier in the database is a v4 and PostgreSQL's `uuid` takes both, so nothing is broken; what is unsettled is which predicate the API means, and Section 3's provision for a client-generated Person UUID is the case that would decide it.
