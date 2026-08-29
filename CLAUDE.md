@@ -134,7 +134,7 @@ Name branches with a type prefix and a short description: `spec/cell-lifecycle`,
 
 **Then run it again on what you changed in response.** A batch of fixes breaks something about as often as new writing does — measured on this repository, across four passes on two pull requests, every fix batch introduced defects of its own, including one that reinstated the exact failure the specification warns about. A review of the original that is not followed by a review of the fixes has checked the version nobody merged.
 
-A pull request needs one approval. Changes to `SKILL.md`, `CLAUDE.md`, and `.claude/` additionally require a code owner (`.github/CODEOWNERS`).
+A pull request needs one approval. Changes to `SKILL.md`, `.claude/`, `.github/`, `docs/`, `api/migrations/`, and any `CLAUDE.md` or `AGENTS.md` **at any depth** additionally require a code owner (`.github/CODEOWNERS`). The last two are unanchored deliberately: an agent instruction file inside an app directory is read by every agent working there, and anchored patterns would have let one merge with neither owner seeing it.
 
 Resolve every conversation before merging. Approvals are dismissed when new commits are pushed, so push fixes before asking for re-review.
 
