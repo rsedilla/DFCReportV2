@@ -6139,9 +6139,11 @@ silently. Measured across all four styles. The key is now `to_char` with an expl
 format, which is `DateStyle`-independent, and ISO 8601 parses back the same way under any
 of them because it is unambiguous. A case pins it by paging under `German, DMY`.
 
-*The time-zone half was right and was checked: the pattern accepts `+00`, `+05:45` and
-`-02:30`, so a deployment outside Asia/Manila pages correctly — section 20 fixes reporting
-to Manila and says nothing about the session zone.*
+*The time-zone half is right and the reason first given for it was the superseded one.
+Those three offsets — `+00`, `+05:45`, `-02:30` — were properties of the pattern that was
+deleted. The one that shipped accepts no offset at all, because `at time zone 'UTC'` in the
+`to_char` makes the key zone-independent and it always ends `Z`. Right answer, wrong reason,
+in the entry recording wrong reasons.*
 
 **Two smaller ones.** The new constant was inserted between the module docblock and the
 interface it documented, leaving the block dangling above a regex — the orphaned-docblock
@@ -6150,9 +6152,64 @@ guard's `NIL_UUID`: two sentinels with a rule attached, free to drift. It lives 
 `common/identifiers.ts` now and both call sites import it, which is what
 `CURSOR_MAX_LENGTH` already did for the same reason.
 
+### 2026-08-30 — Four on the second fix batch, and a pin that pinned nothing
+
+Third pass, scoped to the second batch's fixes. The `to_char` key was executed against the
+database across five `DateStyle`s, four zones and seven instants and is correct; the shared
+sentinel, the deterministic tie-break fixture and the section 10 and `@Transform`
+corrections were all verified true. Every finding is again a statement or a test, which is
+the convergence signal — but one of them is the batch's own headline fix arriving with a
+case that pins nothing, and one is a fix that created two new instances of the defect it
+was fixing.
+
+**The `German, DMY` case pinned nothing, and three places said it did.** `createTestDb`
+opens its own pool and the application opens another, and `SET DateStyle` is per
+connection — so a case that sets it on the test pool and then makes an HTTP request has
+changed nothing about the session the query runs in. Reverting the fix left the case green.
+It reddened under the mutation only because the cast's shape fails the new pattern under
+*every* style, which is an unrelated reason.
+
+*Found independently while the pass was running, and the pass confirmed it with two hazards
+I had not seen.* A `SET` without `LOCAL` changes the one pooled connection that ran it, so
+the restore may be handed a different one and leave the first dirty. And a dirty one is
+worse than untidy: **under a non-ISO `DateStyle` the driver's own `timestamptz` parser
+returns `null`**, so every later timestamp read on that connection comes back empty and
+reads as a defect in whatever case drew it. Reproduced.
+
+The property is pinned now where it can be — `test/database/cursor-rendering.spec.ts`, on
+one dedicated `Client` rather than a pool, across all five styles. The format string is
+shared with the query rather than copied, because a test carrying its own copy keeps
+passing after the query's has changed.
+
+**The orphaned-docblock fix created two more orphans, in the two files it touched.** Moving
+`NIL_UUID` out of the guard left its docblock behind, floating between two import blocks
+and describing nothing; inserting it into `common/identifiers.ts` put it between
+`canonicalId`'s docblock and `canonicalId`, so the twenty-six-line rationale for the whole
+identifier-canonicalization rule documented a constant and `canonicalId` had none. That is
+the previous pass's headline shape — a fix undone in the act of making it — and it is the
+second batch running in which this defect has appeared.
+
+**Section 7 stated the removed mechanism in a second place and only one was amended.** The
+entry said "Section 7 now says the scope value is chosen to match the prohibition and does
+not enforce it"; line 1632 was amended and line 1471, a hundred and sixty lines earlier and
+what a reader meets first, still scoped the domain-check rule to "where the grant must
+still reach oneself as a *source*" — which is exactly the implicature that a domain check is
+unnecessary here. It also made the service's citation wider than its source. Both now say
+the same thing.
+
+**And a correction carried the superseded reason.** The entry defended the time-zone half by
+saying the pattern accepts `+00`, `+05:45` and `-02:30` — properties of the pattern that had
+just been deleted. The one that shipped accepts no offset at all, because `at time zone
+'UTC'` makes the key zone-independent and it always ends `Z`. Right answer, wrong reason, in
+the entry recording wrong reasons.
+
+Also: a sentence asserting that a `NETWORK` grant "compares a Network that for the actor is
+their own" was true of one of the two grants that can be issued, and is narrowed to say the
+grant covers the actor wherever it names their own Network.
+
 ### Open — awaiting a ruling
 
-**One item awaits a ruling, and it blocks Stage 5. Thirty-three other things are
+**One item awaits a ruling, and it blocks Stage 5. Thirty-four other things are
 unsettled, none of them blocking. They are listed at the end, so this section is the
 whole of what is open.**
 
@@ -6161,8 +6218,9 @@ and the italic below it. The batch that added the thirty-second bullet updated t
 alone, because the instruction to recount lives only in the italic, and the bolded twin
 is what a reader meets first. Anyone adding a bullet updates both.*
 
-*Thirty-three distinct items across thirty-three bullets. Two arrived with the leadership
-request slice: how a requester sees the outcome of a request they submitted, which
+*Thirty-four distinct items across thirty-four bullets. Three arrived with the leadership
+request slice — the third being whether the application should pin the database session's
+`DateStyle`, raised by the third review pass. The first two are: how a requester sees the outcome of a request they submitted, which
 section 19 requires and section 7 names no capability for, and whether section 7 should
 refuse a grant of `cell.request_leadership` wider than `SUBTREE_EXCL_SELF`. Both are
 named here because the sentence whose job is the count named one of them and left the
@@ -6232,6 +6290,7 @@ Two related questions have defined behaviour and are recorded in `SKILL.md` §12
 - **Whether "asked, not given" is a state on the Person.** It follows the item above rather than standing alone. Without it, somebody who declined to give their birthday stays on a collect-list forever, which presses on exactly the privacy the optional ruling protects. With it, the next leader learns she was asked rather than rediscovering it by asking again — but it is a new field on `persons`, so it is a ruling and not a detail.
 - **Whether a recorded birthday may ever be removed.** §3 defines adding one and, since 2026-08-24, refuses an explicit null on the edit path so that a nullable column does not become an erase capability nobody decided on. The privacy argument that made the field optional cuts toward permitting removal — somebody may withdraw what they earlier gave. Reproducibility cuts the other way: a Tier 1 acknowledgement recorded against a birthday, and every age derived from it, stop being explicable once it is gone. Left refused until decided.
 - **Whether the API runs as more than one instance, and what clock skew revocation may assume.** §6 says any instance can serve any request, and account-wide revocation compares two timestamps both stamped by an API process. On one instance that is one clock; on several it is not, and §24 now requires synchronised clocks without bounding the skew this comparison tolerates. The row lock added for the uncommitted-revocation window orders the two events in the database and does not depend on clocks, so this affects the comparison rather than the ordering. Settle it before the first multi-instance deployment.
+- **Whether the application should pin the database session's `DateStyle`.** Nothing in this repository sets it, and it is deployment-controlled — this machine's server already runs `ISO, DMY` rather than the default `ISO, MDY`, so the value is demonstrably not fixed. Under `SQL`, `Postgres` or `German` the consequence is not a formatting nuisance: `node-postgres`'s own `timestamptz` parser returns **`null`**, reproduced, so every timestamp the API reads comes back empty — `started_at`, `ended_at`, `requested_at`, every effective-dated period and every audit entry — while nothing raises. The leadership-request cursor no longer depends on the setting (its key is rendered by `to_char` with an explicit format), but that fix addresses one symptom of a fault whose first symptom would be far louder and far stranger. Three answers look defensible: set `options: '-c DateStyle=ISO,MDY'` on the pool so the application does not care what the server is configured for; assert the setting at startup the way section 24's isolation level is asserted, and refuse to boot otherwise; or document it as a deployment requirement and leave it unchecked. Not blocking, and it belongs beside the open items on the least-privilege database role and the liveness probe, since all three are settings a deployment owns rather than rules the specification states.
 - **The application's database role.** §24 requires least-privilege credentials and none exist: the API connects as the owner of every table, so it holds `TRUNCATE`, which bypasses the no-delete triggers entirely, and `DROP`. The no-delete rule leans on this role to make its `TRUNCATE` exemption safe. Creating it is deployment work with no ruling attached, but until it happens §5's exemption is unprotected.
 - **Whether a revocation may be undone in place.** Nothing addresses setting `revoked_at` back to `NULL`, and the schema permits it on `account_roles` and `capability_grants`. It erases a revocation exactly as a `DELETE` would, one column over — and the Senior Pastor cap depends on `revoked_at` being monotone for the count to mean anything over time.
 - **The native client framework.** `SKILL.md` §2 settles the web stack and says nothing about Android and iOS. Deferred since the specification was written; indexed here because two rules now point at it as open.

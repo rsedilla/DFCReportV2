@@ -78,8 +78,8 @@ export class CellsLeadershipRequestService {
    * was.** "No holder of the capability, at any scope, may name themselves" is
    * categorical, and a scope value delivers it only while the grant carries that scope:
    * `scopeCovers` returns true on its first line for a `WHOLE_CHURCH` grant, before the
-   * target is read at all, and a `NETWORK` grant compares a Network that for the actor
-   * is their own. Section 7 lets Admin grant beyond a role's defaults and refuses no
+   * target is read at all, and a `NETWORK` grant covers the actor wherever it names
+   * their own Network. Section 7 lets Admin grant beyond a role's defaults and refuses no
    * wider grant. The prohibition is therefore the domain check below, which is the shape
    * section 7 prescribes wherever a rule forbids acting on oneself and which section 10
    * points at by naming section 5 invariant 4.

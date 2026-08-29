@@ -14,12 +14,6 @@ import {
 } from '../../common/errors/api-error';
 import { isUuid, NIL_UUID } from '../../common/identifiers';
 
-/**
- * A Person nothing is. Used as the target of a Cell the scope resolver cannot
- * place, so the refusal comes out of `authorize` in the same shape as every other
- * out-of-scope target rather than out of this file.
- */
-
 import {
   AUTHENTICATED_ONLY_METADATA,
   CAPABILITY_METADATA,

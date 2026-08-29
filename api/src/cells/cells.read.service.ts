@@ -3,6 +3,8 @@ import { sql } from 'kysely';
 
 import { DATABASE, type Db } from '../database/database.module';
 
+import { CURSOR_INSTANT_FORMAT } from './leadership-request-cursor';
+
 import type { LeadershipRequestCursor, LeadershipRequestRow } from './leadership-request-cursor';
 import type { RosterCursor } from './roster-cursor';
 import type { Database } from '../database/schema';
@@ -235,7 +237,7 @@ export class CellsReadService {
           // format check on the way back in, so the client is silently served page one
           // for ever. `to_char` is `DateStyle`-independent, and ISO 8601 input parses
           // back the same way under any of them because it is unambiguous.
-          sql<string>`to_char(requested_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')`.as(
+          sql<string>`to_char(requested_at at time zone 'UTC', ${sql.lit(CURSOR_INSTANT_FORMAT)})`.as(
             'requested_at_key',
           ),
         ])

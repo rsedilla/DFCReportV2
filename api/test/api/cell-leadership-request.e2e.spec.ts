@@ -1,6 +1,5 @@
 import { randomUUID } from 'node:crypto';
 
-import { sql } from 'kysely';
 import request from 'supertest';
 
 import { CellsLeadershipRequestService } from '../../src/cells/cells.leadership-request.service';
@@ -660,43 +659,6 @@ describe('Cell leadership requests (section 10)', () => {
 
       expect(page2.body.data).toHaveLength(1);
       expect(page2.body.data[0].id).toBe(ids[1]);
-    });
-
-    it('pages under a session DateStyle that is not ISO', async () => {
-      // **`cast(requested_at as text)` renders according to the session's `DateStyle`**,
-      // which nothing in this repository sets and the deployment controls — this
-      // machine's server already runs `ISO, DMY` rather than the default `ISO, MDY`.
-      // Under `SQL`, `Postgres` or `German` a cast emits `30/08/2026 …`, which the
-      // decoder's format check rejects, so the server would refuse every cursor it had
-      // just emitted and serve page one for ever. Silent, and invisible to every other
-      // case here, because they all run under this machine's ISO style.
-      //
-      // `to_char` with an explicit format is the fix; this is what fails without it.
-      await sql`SET DateStyle = 'German, DMY'`.execute(db);
-
-      try {
-        const first = await submit(markAccount, newCell(juan.id)).expect(201);
-        const second = await submit(markAccount, {
-          kind: 'HANDOVER',
-          prospective_leader_id: juan.id,
-          cell_id: markCell.id,
-        }).expect(201);
-
-        const page1 = await queue(admin, '?limit=1').expect(200);
-        expect(page1.body.data[0].id).toBe(first.body.id);
-        expect(page1.body.next_cursor).not.toBeNull();
-
-        const page2 = await queue(
-          admin,
-          `?limit=1&cursor=${encodeURIComponent(page1.body.next_cursor as string)}`,
-        ).expect(200);
-
-        // Page one again is the failure this pins: the cursor was emitted in a shape its
-        // own decoder rejects, so it decoded to null and the page never advanced.
-        expect(page2.body.data[0].id).toBe(second.body.id);
-      } finally {
-        await sql`SET DateStyle = 'ISO, MDY'`.execute(db);
-      }
     });
 
     it('refuses a forged cursor whose timestamp PostgreSQL cannot parse', async () => {

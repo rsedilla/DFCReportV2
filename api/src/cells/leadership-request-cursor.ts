@@ -45,6 +45,12 @@ export interface LeadershipRequestCursor {
  * The one rendering `requested_at` is ever carried in: ISO 8601, UTC, microseconds,
  * `2026-08-30T05:08:54.622914Z`.
  *
+ * Exported so `test/database/cursor-rendering.spec.ts` can assert the query's own
+ * `to_char` output against it under every `DateStyle`. That property cannot be pinned
+ * end to end: the test harness opens its own pool, and a `SET` on one connection does
+ * not reach the pool the application serves requests from — so an end-to-end case that
+ * sets `DateStyle` is testing nothing about the session the query actually runs in.
+ *
  * **Fixed by `to_char` with an explicit format rather than by a cast to `text`**, which
  * renders according to the session's `DateStyle` — a setting nothing in this repository
  * pins and the deployment controls. Under `SQL`, `Postgres` or `German` a cast emits
@@ -55,7 +61,14 @@ export interface LeadershipRequestCursor {
  * *An earlier version matched the cast's rendering and called it "the only shape this
  * cursor ever carries", which was true of this machine and of nothing else.*
  */
-const CURSOR_INSTANT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}Z$/;
+/**
+ * The `to_char` format the ordering key is rendered with, shared so the query and the
+ * test that pins its rendering cannot drift apart — a test carrying its own copy of the
+ * format would keep passing after the query's changed.
+ */
+export const CURSOR_INSTANT_FORMAT = 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"';
+
+export const CURSOR_INSTANT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}Z$/;
 
 export interface LeadershipRequestRow {
   id: string;
