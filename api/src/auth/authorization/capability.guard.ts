@@ -1,4 +1,10 @@
-import { Injectable, type CanActivate, type ExecutionContext } from '@nestjs/common';
+import {
+  Inject,
+  Injectable,
+  Optional,
+  type CanActivate,
+  type ExecutionContext,
+} from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 
 import {
@@ -8,6 +14,13 @@ import {
 } from '../../common/errors/api-error';
 import { isUuid } from '../../common/identifiers';
 
+/**
+ * A Person nothing is. Used as the target of a Cell the scope resolver cannot
+ * place, so the refusal comes out of `authorize` in the same shape as every other
+ * out-of-scope target rather than out of this file.
+ */
+const NIL_UUID = '00000000-0000-0000-0000-000000000000';
+
 import {
   AUTHENTICATED_ONLY_METADATA,
   CAPABILITY_METADATA,
@@ -16,6 +29,7 @@ import {
   type TargetSpec,
 } from './authorization.decorators';
 import { AuthorizationService, type Actor } from './authorization.service';
+import { CELL_SCOPE_PORT, type CellScopePort } from './cell-scope.port';
 
 import type { AuthenticatedRequest } from './access-token.guard';
 import type { Target } from './scopes';
@@ -40,6 +54,13 @@ export class CapabilityGuard implements CanActivate {
   constructor(
     private readonly reflector: Reflector,
     private readonly authorization: AuthorizationService,
+    /**
+     * Optional so that this module stays independent of `cells`, and denying when
+     * it is absent rather than throwing on construction: a deployment that never
+     * binds it simply has no Cell-scoped endpoint that works, which is the
+     * fail-closed direction.
+     */
+    @Optional() @Inject(CELL_SCOPE_PORT) private readonly cellScope?: CellScopePort,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -79,12 +100,16 @@ export class CapabilityGuard implements CanActivate {
       );
     }
 
-    const target = this.resolveTarget(requirement.target, request, actor);
+    const target = await this.resolveTarget(requirement.target, request, actor);
     await this.authorization.authorize(actor, requirement.capability, target);
     return true;
   }
 
-  private resolveTarget(spec: TargetSpec, request: AuthenticatedRequest, actor: Actor): Target {
+  private async resolveTarget(
+    spec: TargetSpec,
+    request: AuthenticatedRequest,
+    actor: Actor,
+  ): Promise<Target> {
     if (spec.kind === 'church') {
       return { kind: 'church' };
     }
@@ -98,6 +123,49 @@ export class CapabilityGuard implements CanActivate {
       throw new ValidationFailedError(`${spec.from} must be a UUID identifying the target.`, {
         field: spec.from,
       });
+    }
+
+    if (spec.kind === 'cell') {
+      // Section 7: a Cell resolves through its leader. Asked of the port rather
+      // than read here, because `cells` owns `cell_leaderships` (section 2).
+      if (!this.cellScope) {
+        // A deployment fault rather than a client one, and it names itself as such:
+        // no binding means no Cell-scoped endpoint works at all.
+        throw new CapabilityDeniedError(
+          'This deployment cannot resolve a Cell scope, so the endpoint is closed.',
+          { target: 'cell' },
+        );
+      }
+
+      const leaderId = await this.cellScope.leaderForScope(value);
+
+      // **A Cell that cannot be placed becomes a target nothing covers, rather than
+      // a refusal thrown from here**, and two earlier versions threw.
+      //
+      // Throwing at this point runs *before* `authorize`, which checks the
+      // capability first and the scope second — so it answered an actor holding no
+      // `cell.manage_membership` at all with a scope refusal, for a request whose
+      // capability half was never evaluated, and section 7 makes the code name the
+      // half that failed. It also left the two refusals distinguishable, by code for
+      // that actor and by message and `details` for every other.
+      //
+      // **This closes that by making an absence look like a denial, and section 22
+      // names the mirror image** — "where revealing that a record exists would itself
+      // disclose something, return `NOT_FOUND` rather than a denial". Both close the
+      // oracle; only one is the remedy the specification writes down, and an earlier
+      // version of this comment credited section 22 for the direction not taken.
+      // Whether a Cell's existence is a case that rule covers is escalated in
+      // CLAUDE.md — section 22 settles it for a Person and for nothing else — and
+      // until it is settled this leaves the API answering both codes for one fact:
+      // `CellsMembershipService` answers `NOT_FOUND` for an absent Cell to a Whole
+      // Church actor, because `scopeCovers` returns true before the target is read.
+      //
+      // Handing `authorize` a target that resolves to nobody is what the Account
+      // path already does: `personBehind` returns null *inside* `scopeCovers`, after
+      // the capability check, and an absent Account and an out-of-scope one produce
+      // the identical message and details. The nil UUID is a Person nothing can be,
+      // so an unknown Cell and an out-of-scope Cell now answer identically too.
+      return { kind: 'person', personId: leaderId ?? NIL_UUID };
     }
 
     return spec.kind === 'person'

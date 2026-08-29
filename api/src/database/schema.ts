@@ -191,7 +191,18 @@ export type AuditAction =
   // left with account provisioning pending". It names a state rather than an actor,
   // and every Cell created outside an approval is in it until somebody provisions
   // the account (section 6, section 7).
-  | 'cell_leadership.account_pending';
+  | 'cell_leadership.account_pending'
+  // Section 21 names three: "Cell membership added, moved, or ended". Three actions
+  // rather than the two an earlier version had, and a move is **one** entry rather
+  // than an ending plus an opening — section 21 asks for one entry per action
+  // performed, and a move is one action. Its `before` names the Cell left and its
+  // `after` the Cell joined, so a reader searching for moves has something to search
+  // on and a reader asking who left a Cell finds it against that Cell.
+  //
+  // `added` rather than `opened`, matching section 21's own noun.
+  | 'cell_membership.added'
+  | 'cell_membership.moved'
+  | 'cell_membership.ended';
 
 export interface AuditLogTable {
   id: Generated<string>;
