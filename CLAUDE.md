@@ -4993,10 +4993,14 @@ decided; three were genuine choices.
 **A CLOSED Cell keeps no open category row and no open schedule row.** Migration 0009
 recorded this as unsettled and constrained only the ACTIVE side, because "What closing
 does" lists three writes and neither of these is among them. The specification decides
-it twice elsewhere, both times in load-bearing arguments: Section 12's coverage rule
-says a Cell closed part-way through a month has fewer scheduled meetings "because its
-schedule row ... ends at closure", and the Reopening ruling argues against reversal
-partly on what "un-ending its schedule and membership rows" would do. The list was
+it twice elsewhere, both times in load-bearing arguments: the coverage paragraph under
+Section 10's own *Schedule changes* says a Cell closed part-way through a month has
+fewer scheduled meetings "because its schedule row ... ends at closure", and the
+Reopening ruling argues against reversal partly on what "un-ending its schedule and
+membership rows" would do. *An earlier version of this paragraph, and the commit message
+with it, attributed the first to Section 12. Section 12's equivalent sentence does not
+contain the clause — and misnaming it weakened the very citation the argument rests on,
+which is that two other passages already assumed the write.* The list was
 incomplete; it now carries five writes.
 
 The schedule half is forced independently of that reading. A schedule row left open on a
@@ -5007,9 +5011,19 @@ approval and an ACTIVE Cell must hold one of each, so ending one of a pair needs
 reason that does not exist.
 
 **The closure effective date has a floor: the latest of every open row's `started_at`
-and every already-closed row's `ended_at`, across memberships and leaderships, bounded
-below by the Cell's own `created_at`.** Reachable the moment a Cell has changed hands
-once.
+and every already-closed row's `ended_at`, across all four tables the closure ends —
+memberships, leaderships, categories and schedules — bounded below by the Cell's own
+`created_at`.** Reachable the moment a Cell has changed hands once, or has changed its
+schedule or category.
+
+*This ruling was written naming two tables, in the same commit that made closure end
+four.* The category and schedule checks are immediate rather than deferred, so they
+raise at the statement; and because a schedule row starts on the first of a month and a
+category row on the day it is made, either can be the latest row on a Cell whose
+memberships are much older. So the two-table floor admitted dates a constraint refused,
+which is the failure the floor exists to prevent, introduced seventeen lines below the
+paragraph that caused it. Found by `architecture-guardian`, which was asked to look for
+exactly this and did.
 
 **Its reason is this section's own writes, and that had to be re-derived rather than
 borrowed** (Section 25 rule 19). Section 4's floor reaches both directions because
@@ -5104,9 +5118,12 @@ for an intermediate ancestor, reached through the Cell rather than through the t
 guard keeps the early, cheap refusal; the write rests on the check after the lock. It
 reaches an ordinary membership move too, whose destination is decided the same way.
 
-**Migration 0009's header is left standing and is superseded here.** It records the
-CLOSED-side question as open and deliberately constrains only the ACTIVE side, which was
-the right call when it was written. It sits in an approved pull request, and editing it
+**Migration 0009's own notes are left standing and are superseded here.** It records the
+CLOSED-side question as open — in a comment above the check rather than in its header,
+which an earlier version of this paragraph got wrong — and deliberately constrains only
+the ACTIVE side, which was the right call when it was written. Two further notes in that
+file are settled by this entry as well: the `40P01` decision and the unbounded wait, both
+of which it describes as open in `CLAUDE.md` and both of which left the list here. It sits in an approved pull request, and editing it
 would dismiss that approval to change a comment — so the constraint arrives in a
 migration of its own with the closure endpoint, and this entry is where the two are
 reconciled. The same shape as migration 0005's stale header, for the same reason.
@@ -5152,7 +5169,7 @@ Two related questions have defined behaviour and are recorded in `SKILL.md` §12
 - **Whether the archived-and-merged refusals should be database constraints.** Section 10 gained three refusals on 2026-08-29 — an archived Person, a merged Person, and somebody already in the Cell — and the first two are the same rule `assertLeaderIsAssignable` enforces for a pastoral edge. Both are application-layer checks: contrary to what Section 10 said when the question was first written, `pastoral_assignments` carries **no** constraint for archived-or-merged either, so there is no asymmetry and the question is whether *either* should become one. The Definition of Done says an invariant expressible as a constraint exists as one, and this one is expressible — a membership under an archived Person is the corruption Section 3 refuses when archiving somebody who leads a Cell, reached one relationship over. What argues the other way is that both facts live in `people`'s tables while the constraint would sit on `cells`', so it is a trigger reading across a module boundary rather than an index. Not blocking: the checks refuse today and answer `INVARIANT_VIOLATION`; what a constraint would add is enforcement under a restore, which is the argument the Senior Pastor slot and the root seat both turned on.
 - **Whether a path identifier should be validated as strictly as one in a body.** `class-validator`'s `@IsUUID()` pins the version and variant nibbles and is on every DTO; `isUuid` — the repository's own predicate, used by the guard and by `UuidParamPipe` — does not. So `POST /cells/{id}/members` refuses as `person_id` a value the `DELETE` beside it accepts in the path. Every identifier in the database is a v4 and PostgreSQL's `uuid` takes both, so nothing is broken; what is unsettled is which predicate the API means, and Section 3's provision for a client-generated Person UUID is the case that would decide it.
 - **Whether the nil UUID should be reserved.** The capability guard hands `authorize` `00000000-0000-0000-0000-000000000000` as the target of a Cell it cannot place, so that an absent Cell refuses exactly as an out-of-scope one does. Nothing today can create a Person with that identifier — no endpoint accepts a client-supplied `id`, and every column defaults to `gen_random_uuid()` — but nothing forbids it either, and a Person holding it inside an actor's subtree would make every unplaceable Cell "covered" for that actor. The sentinel-free equivalent is to let the port's null reach `scopeCovers` the way `personBehind` already does for an absent Account. Settle it if Section 3's client-generated identifier is ever built.
-- **What Section 8 permits a refusal to reveal by its existence.** The source-Cell refusal no longer names a Cell or asserts a membership, but its *shape* still carries one bit: with the actor authorized over their own Cell and any `person_id` in the church — and Section 8 publishes every Person's identifier church-wide — a 403 means that person holds a membership somewhere the actor cannot see, and a 201 means they do not. The quiet outcome is the hit and the loud one is the miss, which is the reverse of the arrangement the 2026-08-22 create-probe ruling was willing to accept, and that ruling closed the leak rather than resting on loudness. This one cannot be closed by redacting anything: the refusal is required by the authorization rule itself. Settle it with the source-Cell reading below — whichever answer that takes has to say what a refusal may disclose by existing.
+- **What Section 8 permits a refusal to reveal by its existence.** The source-Cell refusal no longer names a Cell or asserts a membership, but its *shape* still carries one bit: with the actor authorized over their own Cell and any `person_id` in the church — and Section 8 publishes every Person's identifier church-wide — a 403 means that person holds a membership somewhere the actor cannot see, and a 201 means they do not. The quiet outcome is the hit and the loud one is the miss, which is the reverse of the arrangement the 2026-08-22 create-probe ruling was willing to accept, and that ruling closed the leak rather than resting on loudness. This one cannot be closed by redacting anything: the refusal is required by the authorization rule itself. The source-Cell reading it used to defer to was settled by the closure pre-flight above, which did not answer this: what a refusal may disclose by *existing* is still open, and is now the last part of that question standing.
 - **Whether "Admin" in Sections 2 and 10 is a role requirement or a description of who holds the capabilities.** Section 2 settled this once, for the tree import, in the direction of "the role is required, and the capabilities alone are not enough" — and stated it in that paragraph rather than as a general rule. Direct creation is given to Admin in the same section and again in Section 10, and slice 2 reads it the same way and checks the role. If that reading is right, the two places should say it in the words Section 2 already uses for the import, because the next reader derives it from a neighbouring paragraph or not at all. If it is *not* right, then Section 7's permission to grant `cell.approve_leadership` explicitly makes request-and-approve optional for its holder over their own subtree, and Section 10 needs to say why that is acceptable. Nothing is blocked either way: the conservative reading is what is implemented.
 - **Whether a Cell's first leadership row may be corrected to a leader of the other Network, and whether a closed leadership row may be written at all.** Two halves of one question, both raised by the fourth review pass. Migration 0009 refuses a Section 5 correction that closes a Cell's first leadership row and opens one naming a person of the other Network: the zero-length row is selected as the predecessor and the leader-to-leader Network rule fires. That may well be right — a Cell created under a wrong-Network leader had the wrong Network for its whole life, and Section 10 gives `CREATED_IN_ERROR` for a Cell that should not exist — but Section 10 states that rule about a *handover*, and nothing distinguishes a correction from one. The second half is narrower and has no answer at all: `cell_leadership_is_opened_open` now refuses a leadership row written already closed, because no operation Sections 10 or 11 define writes one, and that forecloses correcting a closed historical stint. Neither is reachable today. Settle both with the handover-approval endpoint, which is where Section 10 makes the refusal.
 - **Which side moves when a Cell leader's Network changes.** Section 4's last paragraph says a Network change must not leave the person holding relationships the homogeneous-network rule no longer permits, and that where a choice arises it is flagged for authorized human resolution rather than guessed. For pastoral relationships Section 4 is concrete: the change is refused while the person leads anyone, and each disciple is moved by an ordinary reassignment first. For Cell **leadership** it says nothing concrete, and leading a Cell is a different relationship from discipling someone (Section 1, principle 3), so Section 4's refusal does not reach it. A Network change on a Cell's leader therefore moves the Cell's own Network and strands every member of every Cell they lead, and nothing raises. Refusing the change while they lead a Cell would be the Section 3 archival shape and would be consistent; requiring the Cell to be handed over first is a different pastoral decision. `docs/ROADMAP.md` books the work as Stage 3's last item without settling the rule. Settle it before the `networks` precondition grows its Cell half.

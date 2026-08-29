@@ -411,7 +411,9 @@ export class PeopleImportService {
     // whole tree in one transaction and holds every lock to commit, so the union of
     // keys across rows is still acquired in tree order rather than in key order. A
     // concurrent writer taking two person locks sorted can still cycle with it.
-    // The consequence is unchanged and is recorded as open in `CLAUDE.md`:
+    // The consequence is unchanged, and it is **settled** rather than open since the
+    // closure pre-flight of 2026-08-29: section 5 now says a deadlock victim answers
+    // `RESOURCE_BUSY`. The predicate below has not been widened yet, so today:
     // PostgreSQL raises `40P01`, and `isLockTimeout` matches `55P03` only and
     // deliberately, so a deadlock renders `INTERNAL_ERROR`.
     //
