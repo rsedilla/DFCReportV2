@@ -1629,7 +1629,9 @@ A request is allowed where **any** active role default or active grant for that 
 
 Those conditions are enforced in the owning module's domain layer — `hierarchy` for Section 5, `cells` for the Section 10 workflow — and are additional to the guard, never a substitute for it and never expressible as a scope value. A developer who implements the guard and believes the rule is implemented has built half of it.
 
-`SUBTREE_EXCL_SELF` exists for the one case where a scope value genuinely does the work: `cell.request_leadership`, where the object the scope resolves against *is* the object the actor may not be (Section 10).
+`SUBTREE_EXCL_SELF` exists for the one case where a scope value is *chosen* to match a prohibition: `cell.request_leadership`, where the object the scope resolves against is the object the actor may not be (Section 10).
+
+**It does not enforce that prohibition, and must not be relied on to.** Section 10's rule is categorical — "no holder of the capability, at any scope, may name themselves" — and a scope value delivers it only while the grant carries that scope. A grant of this capability at `NETWORK` or `WHOLE_CHURCH` is an ordinary row: this section permits authority beyond a role's defaults, and the rule refusing a grant for being too *narrow* has no counterpart refusing one for being too wide. At Whole Church the scope check returns before the target is read at all. The prohibition is therefore a domain check in the module that owns the workflow, exactly as it is for Section 5 invariant 4 — which Section 10 names as the same prohibition for the same reason.
 
 A grant is revoked by setting `revoked_at`, never by deleting the row. The history of who could do what, and when, is part of the audit record.
 
@@ -2144,7 +2146,7 @@ A handover is what a leader stepping down means where the Cell continues. Where 
 
 The Cell is the second object and carries its own rule: **the actor must have the Cell within their authorized scope**, on the same terms that govern closing it — its current leader, any leader upline of them acting within their own subtree, Admin, or a Senior Pastor. Without it an unrelated upline could give away a Cell belonging to a branch they have nothing to do with. Section 7 settles the shape: the guard checks one target, and a rule about a second object is a check in the owning module.
 
-**That check resolves `cell.manage_lifecycle` against the Cell's leader**, which is what "the same terms that govern closing it" means and is stated here so the next implementer converts the sentence above the same way this one did. The list of holders is not restated in code: resolving the capability against the Cell's leader is what produces it, and `OWN_SUBTREE` is the scope every role holds it at by default.
+**That check resolves `cell.manage_lifecycle` against the Cell's leader**, which is what "the same terms that govern closing it" means and is stated here so the next implementer converts the sentence above the same way this one did. The list of holders is not restated in code: resolving the capability against the Cell's leader is what produces it. `OWN_SUBTREE` is a Leader's default for that capability, and Admin and the Senior Pastors hold it at Whole Church, which is how the other names on the list are reached.
 
 *Not `NETWORK`, and an earlier version of this paragraph said "`OWN_SUBTREE`, `NETWORK` and `WHOLE_CHURCH` resolve to exactly that set". A Network-scoped grant covers every Cell in a Network irrespective of pastoral position, which is wider than the list above — "any leader upline of them **acting within their own subtree**". No role holds it at that scope by default, so the gap opens only through an explicit Admin-issued grant, and it is the same gap closing a Cell already has (Cell lifecycle, below). It is named here rather than smoothed over, because the sentence was the stated reason for not restating the list in code.*
 

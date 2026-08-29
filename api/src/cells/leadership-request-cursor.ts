@@ -36,18 +36,26 @@ import type { CellRequestKind } from '../database/schema';
  * whether the encode/decode pair should be generic there is recorded as open rather than
  * settled by a third copy.
  */
-/**
- * PostgreSQL's `timestamptz` text rendering, which is what `cast(requested_at as text)`
- * produces and therefore the only shape this cursor ever carries:
- * `2026-08-30 11:22:33.456789+08`. Fractional seconds are absent when zero, and the
- * offset carries minutes only where the zone has them.
- */
-const TIMESTAMPTZ_TEXT = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(\.\d{1,6})?[+-]\d{2}(:\d{2})?$/;
-
 export interface LeadershipRequestCursor {
   requestedAt: string;
   id: string;
 }
+
+/**
+ * The one rendering `requested_at` is ever carried in: ISO 8601, UTC, microseconds,
+ * `2026-08-30T05:08:54.622914Z`.
+ *
+ * **Fixed by `to_char` with an explicit format rather than by a cast to `text`**, which
+ * renders according to the session's `DateStyle` — a setting nothing in this repository
+ * pins and the deployment controls. Under `SQL`, `Postgres` or `German` a cast emits
+ * `30/08/2026 …`, `Sun 30 Aug …` or `30.08.2026 …`, every one of which this pattern
+ * rejects; the server would then refuse every cursor it had just emitted and serve page
+ * one for ever, silently. Measured against all four styles rather than assumed.
+ *
+ * *An earlier version matched the cast's rendering and called it "the only shape this
+ * cursor ever carries", which was true of this machine and of nothing else.*
+ */
+const CURSOR_INSTANT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}Z$/;
 
 export interface LeadershipRequestRow {
   id: string;
@@ -92,9 +100,8 @@ export function decodeLeadershipRequestCursor(
       // **Matched against the format this code emits, not against `Date.parse`.** An
       // earlier version used `Date.parse`, which is a different and much wider
       // predicate: `new Date().toString()` passes it — V8's own output — and reaches
-      // PostgreSQL as `time zone "gmt+0800" not recognized`, a reproduced 500. What is
-      // emitted is `cast(requested_at as text)`, whose rendering is fixed.
-      TIMESTAMPTZ_TEXT.test((parsed as LeadershipRequestCursor).requestedAt)
+      // PostgreSQL as `time zone "gmt+0800" not recognized`, a reproduced 500.
+      CURSOR_INSTANT.test((parsed as LeadershipRequestCursor).requestedAt)
     ) {
       return parsed as LeadershipRequestCursor;
     }

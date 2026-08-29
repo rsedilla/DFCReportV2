@@ -212,7 +212,7 @@ export class CellsReadService {
     return (
       executor
         .selectFrom('cell_leadership_requests')
-        .select((eb) => [
+        .select([
           'id',
           'kind',
           'prospective_leader_id',
@@ -226,7 +226,18 @@ export class CellsReadService {
           // from, so `requested_at > cursor` matches that row again and the page repeats
           // its last row instead of advancing. Found by the paging case rather than
           // reasoned about.
-          eb.cast<string>('requested_at', 'text').as('requested_at_key'),
+          //
+          // **`to_char` with an explicit format rather than a cast to `text`**, because
+          // a cast renders according to the session's `DateStyle`, which nothing in this
+          // repository sets and which the deployment controls — this machine's server
+          // already runs `ISO, DMY` rather than the default `ISO, MDY`. Under `SQL`,
+          // `Postgres` or `German` every cursor the server emits fails the decoder's
+          // format check on the way back in, so the client is silently served page one
+          // for ever. `to_char` is `DateStyle`-independent, and ISO 8601 input parses
+          // back the same way under any of them because it is unambiguous.
+          sql<string>`to_char(requested_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')`.as(
+            'requested_at_key',
+          ),
         ])
         .where('state', '=', 'PENDING')
         // Spelled out rather than expressed as a row comparison against a looked-up key,

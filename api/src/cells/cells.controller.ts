@@ -260,9 +260,13 @@ export class CellsController {
    * **The guard resolves the prospective leader**, at subtree-excluding-self. Section
    * 10: "the prospective leader is what the scope is about, because the thing being
    * decided is whether that person should lead". That scope value is used by this one
-   * capability alone, and it is what enforces the rule that no holder, at any scope,
-   * may name themselves — the object the scope resolves against is the one object the
+   * capability alone, chosen so the object it resolves against is the one object the
    * actor may not be (section 7).
+   *
+   * **It is not what enforces "no holder, at any scope, may name themselves"**, which an
+   * earlier version of this docblock said: `scopeCovers` returns true before the target
+   * is read for a Whole Church grant, and section 7 refuses no grant for being too wide.
+   * Section 10's prohibition is a domain check in the service.
    *
    * A handover carries a second object, the Cell, and section 7 settles where that
    * goes: the guard checks one target, and a rule about anything else is a check in

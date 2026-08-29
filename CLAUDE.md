@@ -6080,6 +6080,76 @@ escalations this branch's own rulings closed. The migration is merged and only t
 may be corrected in place, so they stand and are corrected here — which is the third time
 this log has had to record exactly that, after migrations 0005 and 0007.
 
+### 2026-08-30 — Ten on the request fix batch, and a fix claimed in the past tense that was never made
+
+Second pass, scoped to the first batch's fixes. Both live mechanisms it introduced — the
+self-naming domain check and the nil-target answer for an absent Cell — were traced at
+every scope value and confirmed correct, and the Stop Condition the first pass offered is
+confirmed not to be one. Every finding is a statement, a rule left unamended, or a test
+that does not pin what it names.
+
+**Three docblocks still said the prohibition was enforced by the scope value, and the
+entry recording that said it in the past tense.** The previous entry listed "three
+docblocks asserted the prohibition was enforced by the scope value" among the things the
+batch addressed; the commit touches none of them, and one of the three sits thirty-three
+lines above the check that replaced it, in the same method. That is worse than the class
+it belongs to: not a wrong reason, but a fix claimed and not made — the same shape as the
+orphaned docblock recorded on 2026-08-29, and the reason this log's "written to §x" habit
+keeps costing passes.
+
+**Section 7 still stated the mechanism the fix stopped relying on, and was not amended in
+the same change.** It said `SUBTREE_EXCL_SELF` "exists for the one case where a scope
+value genuinely does the work", which tells the next implementer the domain check is
+unnecessary — while section 10 carries the rule requiring it. Section 10 *was* amended in
+that commit for a smaller point, so the amendment was in scope and was simply not made.
+Section 7 now says the scope value is chosen to match the prohibition and does not enforce
+it, and why: a wider grant is an ordinary row, and the rule refusing a grant for being too
+narrow has no counterpart refusing one for being too wide.
+
+**The reason given for the note defect was false, and it travelled into four places.**
+The claim was that `@ValidateIf` false makes "every decorator" inert, so the note was
+"stored untrimmed". `@Transform` is a `class-transformer` decorator and `ValidationPipe`
+runs `plainToInstance` before `validate`, so the trim ran regardless — reproduced, the
+5,000-character note was stored **trimmed**. The defect was the missing bound and not the
+missing trim. The same file says the true version twenty lines below, in `CloseCellDto`,
+which is where the shape was copied from. Corrected in the DTO and the test comment; the
+commit message is immutable and stands wrong.
+
+**A correction introduced a new false statement, one sentence over.** Replacing the
+`NETWORK` overstatement, section 10 gained "`OWN_SUBTREE` is the scope every role holds it
+at by default" — false: `cell.manage_lifecycle` is Whole Church for Admin and the Senior
+Pastors and `OWN_SUBTREE` for Leader alone, and read literally the sentence makes two of
+section 10's own four named holders unreachable. And the service docblock grafted the
+`NETWORK` correction onto the superseded sentence instead of replacing it, so it asserted
+and denied the same claim four lines apart.
+
+**The tie-break mutation was a coin flip presented as a pin.** With `gen_random_uuid()`,
+which row sorts first is chance: measured over forty runs, dropping `ORDER BY id` still
+returned the lowest-id row first in twenty-four. The ids are written now and inverted
+against insertion order, so a plan returning insertion order disagrees every time —
+verified ten times out of ten. This repository has recorded twice before that a mutation
+caught two runs in three is not a pin, and shipped a third.
+
+**The cursor's format guard depended on a deployment setting nothing pins.**
+`cast(requested_at as text)` renders according to the session's `DateStyle`, which this
+repository never sets and which the deployment controls — this machine's server already
+runs `ISO, DMY` rather than the default `ISO, MDY`. Under `SQL`, `Postgres` or `German` the
+server emits a cursor its own decoder rejects, so the client is served page one for ever,
+silently. Measured across all four styles. The key is now `to_char` with an explicit
+format, which is `DateStyle`-independent, and ISO 8601 parses back the same way under any
+of them because it is unambiguous. A case pins it by paging under `German, DMY`.
+
+*The time-zone half was right and was checked: the pattern accepts `+00`, `+05:45` and
+`-02:30`, so a deployment outside Asia/Manila pages correctly — section 20 fixes reporting
+to Manila and says nothing about the session zone.*
+
+**Two smaller ones.** The new constant was inserted between the module docblock and the
+interface it documented, leaving the block dangling above a regex — the orphaned-docblock
+shape again, one batch after it was recorded. And `NIL_PERSON` was a second copy of the
+guard's `NIL_UUID`: two sentinels with a rule attached, free to drift. It lives in
+`common/identifiers.ts` now and both call sites import it, which is what
+`CURSOR_MAX_LENGTH` already did for the same reason.
+
 ### Open — awaiting a ruling
 
 **One item awaits a ruling, and it blocks Stage 5. Thirty-three other things are
@@ -6092,8 +6162,11 @@ alone, because the instruction to recount lives only in the italic, and the bold
 is what a reader meets first. Anyone adding a bullet updates both.*
 
 *Thirty-three distinct items across thirty-three bullets. Two arrived with the leadership
-request slice — how a requester sees the outcome of a request they submitted, which
-section 19 requires and section 7 has no capability for. Three arrived with the closure
+request slice: how a requester sees the outcome of a request they submitted, which
+section 19 requires and section 7 names no capability for, and whether section 7 should
+refuse a grant of `cell.request_leadership` wider than `SUBTREE_EXCL_SELF`. Both are
+named here because the sentence whose job is the count named one of them and left the
+other to be found by counting. Three arrived with the closure
 endpoint's reviews — whether a Cell roster read deserves a capability of its own, what a
 collection endpoint does with a cursor it cannot resolve, and whether a name has a
 maximum length — and two left on 2026-08-30, both settled before the leadership-request
@@ -6141,7 +6214,7 @@ Two related questions have defined behaviour and are recorded in `SKILL.md` §12
 - **Whether a floor breached with no effective date supplied answers `RESOURCE_BUSY` rather than `INVARIANT_VIOLATION`.** `NetworksService.floorBreach` returns a 409 whose message says "Retry in a moment" — the status and the advice on opposite sides of Section 22's store/release split, since a 4xx is stored against the idempotency key and replayed for the whole retention. `PeopleReassignmentService.reassignmentTooEarly` has answered `RESOURCE_BUSY` for the same case on the sibling path since `216be37` (2026-08-23), and Section 5 still describes that path as answering `INVARIANT_VIOLATION`, so the specification has been wrong about it since. Changing it is a ruling rather than a fix, and needs **two** amendments neither of which is derivable: Section 4 says an undated correction "always succeeds" and has no floor to clear, which the branch contradicts — reachable because the comparison is `<=` and `new Date()` is millisecond-resolution, so a Person encoded and corrected inside one millisecond collides; and Section 22 defines `RESOURCE_BUSY` as a wait that timed out or a deadlock victim, which this is neither, the lock having been acquired cleanly. Deliberately split out of the issue #16 fix rather than settled inside it. It is pinned by nothing on either path today, and it is deterministically stageable — but by a raw `network_assignments` row starting in the **future**, not at `now()`. Now that the instant is read after the lock, a row starting at `now()` leaves `effectiveAt >= bound.at` and the branch fires only on exact millisecond equality, which is a coin flip rather than a test. Nothing bounds `started_at`: the table carries `period_ordered` and no more.
 - **Whether the archived-and-merged refusals should be database constraints.** Section 10 gained three refusals on 2026-08-29 — an archived Person, a merged Person, and somebody already in the Cell — and the first two are the same rule `assertLeaderIsAssignable` enforces for a pastoral edge. Both are application-layer checks: contrary to what Section 10 said when the question was first written, `pastoral_assignments` carries **no** constraint for archived-or-merged either, so there is no asymmetry and the question is whether *either* should become one. The Definition of Done says an invariant expressible as a constraint exists as one, and this one is expressible — a membership under an archived Person is the corruption Section 3 refuses when archiving somebody who leads a Cell, reached one relationship over. What argues the other way is that both facts live in `people`'s tables while the constraint would sit on `cells`', so it is a trigger reading across a module boundary rather than an index. Not blocking: the checks refuse today and answer `INVARIANT_VIOLATION`; what a constraint would add is enforcement under a restore, which is the argument the Senior Pastor slot and the root seat both turned on.
 - **Whether a path identifier should be validated as strictly as one in a body.** `class-validator`'s `@IsUUID()` pins the version and variant nibbles and is on every DTO; `isUuid` — the repository's own predicate, used by the guard and by `UuidParamPipe` — does not. So `POST /cells/{id}/members` refuses as `person_id` a value the `DELETE` beside it accepts in the path. Every identifier in the database is a v4 and PostgreSQL's `uuid` takes both, so nothing is broken; what is unsettled is which predicate the API means, and Section 3's provision for a client-generated Person UUID is the case that would decide it.
-- **Whether the nil UUID should be reserved.** The capability guard hands `authorize` `00000000-0000-0000-0000-000000000000` as the target of a Cell it cannot place, so that an absent Cell refuses exactly as an out-of-scope one does. Nothing today can create a Person with that identifier — no endpoint accepts a client-supplied `id`, and every column defaults to `gen_random_uuid()` — but nothing forbids it either, and a Person holding it inside an actor's subtree would make every unplaceable Cell "covered" for that actor. The sentinel-free equivalent is to let the port's null reach `scopeCovers` the way `personBehind` already does for an absent Account. Settle it if Section 3's client-generated identifier is ever built.
+- **Whether the nil UUID should be reserved.** Two call sites now hand `authorize` `00000000-0000-0000-0000-000000000000` — the capability guard, for a Cell it cannot place, and `CellsLeadershipRequestService`, for a handover whose Cell must not be shown to exist; the constant is shared in `common/identifiers.ts` rather than copied. It is handed over as the target of an object the caller cannot be shown to exist, so that an absent Cell refuses exactly as an out-of-scope one does. Nothing today can create a Person with that identifier — no endpoint accepts a client-supplied `id`, and every column defaults to `gen_random_uuid()` — but nothing forbids it either, and a Person holding it inside an actor's subtree would make every unplaceable Cell "covered" for that actor. The sentinel-free equivalent is to let the port's null reach `scopeCovers` the way `personBehind` already does for an absent Account. Settle it if Section 3's client-generated identifier is ever built.
 - **What Section 8 permits a refusal to reveal by its existence.** The source-Cell refusal no longer names a Cell or asserts a membership, but its *shape* still carries one bit: with the actor authorized over their own Cell and any `person_id` in the church — and Section 8 publishes every Person's identifier church-wide — a 403 means that person holds a membership somewhere the actor cannot see, and a 201 means they do not. The quiet outcome is the hit and the loud one is the miss, which is the reverse of the arrangement the 2026-08-22 create-probe ruling was willing to accept, and that ruling closed the leak rather than resting on loudness. This one cannot be closed by redacting anything: the refusal is required by the authorization rule itself. The source-Cell reading it used to defer to was settled by the closure pre-flight above, which did not answer this: what a refusal may disclose by *existing* is still open, and is now the last part of that question standing.
 - **Whether "Admin" in Sections 2 and 10 is a role requirement or a description of who holds the capabilities.** Section 2 settled this once, for the tree import, in the direction of "the role is required, and the capabilities alone are not enough" — and stated it in that paragraph rather than as a general rule. Direct creation is given to Admin in the same section and again in Section 10, and slice 2 reads it the same way and checks the role. If that reading is right, the two places should say it in the words Section 2 already uses for the import, because the next reader derives it from a neighbouring paragraph or not at all. If it is *not* right, then Section 7's permission to grant `cell.approve_leadership` explicitly makes request-and-approve optional for its holder over their own subtree, and Section 10 needs to say why that is acceptable. Nothing is blocked either way: the conservative reading is what is implemented.
 - **Whether a Cell's first leadership row may be corrected to a leader of the other Network, and whether a closed leadership row may be written at all.** Two halves of one question, both raised by the fourth review pass. Migration 0009 refuses a Section 5 correction that closes a Cell's first leadership row and opens one naming a person of the other Network: the zero-length row is selected as the predecessor and the leader-to-leader Network rule fires. That may well be right — a Cell created under a wrong-Network leader had the wrong Network for its whole life, and Section 10 gives `CREATED_IN_ERROR` for a Cell that should not exist — but Section 10 states that rule about a *handover*, and nothing distinguishes a correction from one. The second half is narrower and has no answer at all: `cell_leadership_is_opened_open` now refuses a leadership row written already closed, because no operation Sections 10 or 11 define writes one, and that forecloses correcting a closed historical stint. Neither is reachable today. Settle both with the handover-approval endpoint, which is where Section 10 makes the refusal.

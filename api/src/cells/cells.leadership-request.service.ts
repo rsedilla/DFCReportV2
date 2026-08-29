@@ -13,7 +13,7 @@ import {
   ScopeDeniedError,
   ValidationFailedError,
 } from '../common/errors/api-error';
-import { sameId } from '../common/identifiers';
+import { NIL_UUID, sameId } from '../common/identifiers';
 import { IdempotencyService } from '../common/idempotency/idempotency.service';
 import { DATABASE, type Db } from '../database/database.module';
 
@@ -31,14 +31,6 @@ import type {
   Database,
 } from '../database/schema';
 import type { Transaction } from 'kysely';
-
-/**
- * A target that resolves to nobody, which is what the capability guard hands
- * `authorize` for a Cell it cannot place (`capability.guard.ts`). Used here because
- * this route's guard resolves the prospective leader rather than the Cell, so the
- * domain layer owes section 22's indistinguishability itself.
- */
-const NIL_PERSON = '00000000-0000-0000-0000-000000000000';
 
 export interface LeadershipRequestInput {
   kind: CellRequestKind;
@@ -78,11 +70,19 @@ export class CellsLeadershipRequestService {
    * handed to them.
    *
    * The guard has already resolved `cell.request_leadership` against the **prospective
-   * leader**, at subtree-excluding-self. That is the one place in the system where a
-   * scope value does the work of a prohibition, because the object the scope is about
-   * is also the one object the actor may not be (section 7, section 10) — so "no holder
-   * of the capability, at any scope, may name themselves" is enforced there rather than
-   * repeated here.
+   * leader**, at subtree-excluding-self — the one scope value in the system chosen so
+   * that the object it resolves against is also the one object the actor may not be
+   * (section 7, section 10).
+   *
+   * **That is not what enforces section 10's prohibition, and three docblocks said it
+   * was.** "No holder of the capability, at any scope, may name themselves" is
+   * categorical, and a scope value delivers it only while the grant carries that scope:
+   * `scopeCovers` returns true on its first line for a `WHOLE_CHURCH` grant, before the
+   * target is read at all, and a `NETWORK` grant compares a Network that for the actor
+   * is their own. Section 7 lets Admin grant beyond a role's defaults and refuses no
+   * wider grant. The prohibition is therefore the domain check below, which is the shape
+   * section 7 prescribes wherever a rule forbids acting on oneself and which section 10
+   * points at by naming section 5 invariant 4.
    *
    * **What is left is the Cell**, which only a handover has. Section 7 settles the
    * shape: the guard checks one target, and a rule about a second object is a check in
@@ -396,12 +396,16 @@ export class CellsLeadershipRequestService {
    * their own subtree, Admin, or a Senior Pastor". That enumeration is exactly what
    * `OWN_SUBTREE`, `NETWORK` and `WHOLE_CHURCH` resolve to when the target is the
    * Cell's leader, so the rule is the capability that governs closing rather than a
-   * list restated here — `OWN_SUBTREE`, which is the scope every role holds it at by
-   * default. **Not `NETWORK`**: a Network-scoped grant covers every Cell in a Network
-   * irrespective of pastoral position, which is wider than section 10's list. No role
-   * is there by default and closing a Cell has the same gap; section 10 names it rather
-   * than claiming the three scopes resolve to that set, which an earlier version of
-   * both this comment and section 10 did.
+   * list restated here.
+   *
+   * **Not that the three scope values resolve to that list**, which an earlier version
+   * of this comment and of section 10 both claimed. A `NETWORK` grant covers every Cell
+   * in a Network irrespective of pastoral position, which is wider than "any leader
+   * upline of them acting within their own subtree"; no role holds any capability at
+   * that scope by default, so the gap opens only through an explicit grant, and closing
+   * a Cell has it too. `OWN_SUBTREE` is `LEADER`'s default for this capability, and
+   * `ADMIN` and `SENIOR_PASTOR` hold it at Whole Church — which is how the other two
+   * names on section 10's list are reached.
    *
    * **It cannot be `cell.request_leadership`**, which the guard already used: that one
    * is `SUBTREE_EXCL_SELF`, and the commonest handover of all has the actor *as* the
@@ -442,12 +446,12 @@ export class CellsLeadershipRequestService {
     // Whole Church grant returns true before the target is read and so reaches
     // `NOT_FOUND`, and every narrower scope fails to cover it and gets the same refusal
     // an out-of-scope Cell gets.
-    const leaderId = cell ? await this.cells.leaderForScopeWithin(trx, cell.id) : NIL_PERSON;
+    const leaderId = cell ? await this.cells.leaderForScopeWithin(trx, cell.id) : NIL_UUID;
 
     if (
       !(await this.authorization.coversWith(trx, actor, authority, Capability.CellManageLifecycle, {
         kind: 'person',
-        personId: leaderId ?? NIL_PERSON,
+        personId: leaderId ?? NIL_UUID,
       }))
     ) {
       throw new ScopeDeniedError(

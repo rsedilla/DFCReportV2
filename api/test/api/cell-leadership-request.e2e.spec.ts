@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
+import { sql } from 'kysely';
 import request from 'supertest';
 
 import { CellsLeadershipRequestService } from '../../src/cells/cells.leadership-request.service';
@@ -484,12 +485,14 @@ describe('Cell leadership requests (section 10)', () => {
     });
 
     it('bounds a note that accompanies any other reason', async () => {
-      // **The bound was inert for four of the five reasons.** `class-validator` skips
-      // every decorator on a property whose `@ValidateIf` is false, so with the
-      // condition on the reason alone, the trim and the 500-character maximum applied
-      // only to `OTHER` — and a 5,000-character note was stored untrimmed against
-      // `TIMING_DEFERRED`. Section 10 and migration 0009 both permit a note with any
-      // reason; what they do not permit is an unbounded one.
+      // **The bound was inert for four of the five reasons.** `@ValidateIf` gates the
+      // validators on a property, so with the condition on the reason alone the minimum
+      // and the 500-character maximum applied only to `OTHER` — and a 5,000-character
+      // note against `TIMING_DEFERRED` was accepted. Section 10 and migration 0009 both
+      // permit a note with any reason; what they do not permit is an unbounded one.
+      //
+      // (*The trim was never inert: `@Transform` is a `class-transformer` decorator and
+      // runs before validation. An earlier version of this comment said otherwise.*)
       const id = await pending();
 
       const response = await decline(admin, id, {
@@ -612,10 +615,24 @@ describe('Cell leadership requests (section 10)', () => {
       const other = await createPerson(db, { firstName: 'Nestor', network: 'MENS' });
       await assignTo(db, other.id, mark.id);
 
-      await db
-        .insertInto('cell_leadership_requests')
-        .values(
-          [juan.id, other.id].map((personId) => ({
+      // **The ids are written rather than generated, and inverted against insertion
+      // order.** With `gen_random_uuid()` which row sorts first is a coin flip: measured
+      // over forty runs, dropping `ORDER BY id` still returned the lowest-id row first
+      // in twenty-four of them, so the mutation was caught about three runs in five —
+      // which this repository has twice recorded is not a pin. The row inserted *first*
+      // now holds the *higher* id, so a plan returning insertion order disagrees with
+      // the required order every time.
+      const high = 'ffffffff-ffff-4fff-8fff-ffffffffffff';
+      const low = '00000000-0000-4000-8000-000000000001';
+
+      for (const [id, personId] of [
+        [high, juan.id],
+        [low, other.id],
+      ] as const) {
+        await db
+          .insertInto('cell_leadership_requests')
+          .values({
+            id,
             kind: 'NEW_CELL' as const,
             prospective_leader_id: personId,
             requested_by: markAccount.id,
@@ -623,15 +640,11 @@ describe('Cell leadership requests (section 10)', () => {
             day_of_week: 6,
             time_of_day: '18:00',
             requested_at: at,
-          })),
-        )
-        .execute();
+          })
+          .execute();
+      }
 
-      const ids = (
-        await db.selectFrom('cell_leadership_requests').select('id').orderBy('id').execute()
-      ).map((row) => row.id);
-
-      expect(ids).toHaveLength(2);
+      const ids = [low, high];
 
       const page1 = await queue(admin, '?limit=1').expect(200);
       expect(page1.body.data[0].id).toBe(ids[0]);
@@ -647,6 +660,43 @@ describe('Cell leadership requests (section 10)', () => {
 
       expect(page2.body.data).toHaveLength(1);
       expect(page2.body.data[0].id).toBe(ids[1]);
+    });
+
+    it('pages under a session DateStyle that is not ISO', async () => {
+      // **`cast(requested_at as text)` renders according to the session's `DateStyle`**,
+      // which nothing in this repository sets and the deployment controls — this
+      // machine's server already runs `ISO, DMY` rather than the default `ISO, MDY`.
+      // Under `SQL`, `Postgres` or `German` a cast emits `30/08/2026 …`, which the
+      // decoder's format check rejects, so the server would refuse every cursor it had
+      // just emitted and serve page one for ever. Silent, and invisible to every other
+      // case here, because they all run under this machine's ISO style.
+      //
+      // `to_char` with an explicit format is the fix; this is what fails without it.
+      await sql`SET DateStyle = 'German, DMY'`.execute(db);
+
+      try {
+        const first = await submit(markAccount, newCell(juan.id)).expect(201);
+        const second = await submit(markAccount, {
+          kind: 'HANDOVER',
+          prospective_leader_id: juan.id,
+          cell_id: markCell.id,
+        }).expect(201);
+
+        const page1 = await queue(admin, '?limit=1').expect(200);
+        expect(page1.body.data[0].id).toBe(first.body.id);
+        expect(page1.body.next_cursor).not.toBeNull();
+
+        const page2 = await queue(
+          admin,
+          `?limit=1&cursor=${encodeURIComponent(page1.body.next_cursor as string)}`,
+        ).expect(200);
+
+        // Page one again is the failure this pins: the cursor was emitted in a shape its
+        // own decoder rejects, so it decoded to null and the page never advanced.
+        expect(page2.body.data[0].id).toBe(second.body.id);
+      } finally {
+        await sql`SET DateStyle = 'ISO, MDY'`.execute(db);
+      }
     });
 
     it('refuses a forged cursor whose timestamp PostgreSQL cannot parse', async () => {

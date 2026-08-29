@@ -206,16 +206,32 @@ export class DeclineLeadershipRequestDto {
    * specification.*
    *
    * **The `|| note !== undefined` disjunct is what makes the bounds apply at all**, and
-   * dropping it is how the sentence came to be false. `class-validator` skips *every*
-   * decorator on a property whose `@ValidateIf` is false — so with the condition on the
-   * reason alone, the trim, the minimum and the 500-character maximum were all inert for
-   * four of the five reasons, and a 5,000-character note was stored untrimmed. That is
-   * `CloseCellDto.note`'s shape, and this is the half of it that was reused without its
-   * reason being re-derived (section 25 rule 19).
+   * dropping it is how the sentence came to be false. `@ValidateIf` gates the
+   * *validators* on a property, so with the condition on the reason alone the minimum
+   * and the 500-character maximum were inert for four of the five reasons and a
+   * 5,000-character note was accepted. That is `CloseCellDto.note`'s shape, and this is
+   * the half of it that was reused without its reason being re-derived (section 25 rule
+   * 19).
+   *
+   * *An earlier version of this said the **trim** was inert too, and that the note was
+   * "stored untrimmed". It was not: `@Transform` is a `class-transformer` decorator and
+   * `ValidationPipe` runs `plainToInstance` before `validate`, so the transform runs
+   * whatever `@ValidateIf` decides — as `CloseCellDto.note` says twenty lines below, in
+   * this same file. Reproduced: the 5,000-character note was stored **trimmed**. The
+   * defect was the missing bound and not the missing trim, and the wrong reason travelled
+   * into `CLAUDE.md`, a commit message and a test comment.*
    *
    * **Trimmed, then required to be non-empty**, because the database compares
    * `btrim(coalesce(note, '')) <> ''` — `@MinLength(1)` alone accepts two spaces and
    * turns a documented refusal into a constraint violation rendered `INTERNAL_ERROR`.
+   *
+   * **An explicit `null` is refused, and that is a decision rather than a side effect.**
+   * `null !== undefined`, so it satisfies the condition above and then fails `@IsString`.
+   * Omitting the field is how a decline carries no note; sending `null` says something
+   * this endpoint does not define, and the conservative direction is taken deliberately
+   * — the 2026-08-24 ruling on an explicit null birthday is the precedent, and its point
+   * is that a nullable column must not become a capability nobody decided on. Verified
+   * against the installed `class-validator` rather than assumed.
    */
   @ValidateIf(
     (dto: DeclineLeadershipRequestDto) => dto.reason === 'OTHER' || dto.note !== undefined,
