@@ -616,7 +616,7 @@ describe('sex correction (SKILL.md sections 4, 5, 7, 21, 22)', () => {
   });
 
   describe('the effective instant is stamped after the lock (issue #16)', () => {
-    it('records an instant later than the moment the lock was released', async () => {
+    it('records an instant not earlier than the moment the lock was released', async () => {
       // **The defect this pins was a contention-only failure with a permanent
       // answer.** The instant was stamped before the transaction opened, so two
       // corrections on one person both stamped at roughly the same moment; the winner
@@ -677,9 +677,13 @@ describe('sex correction (SKILL.md sections 4, 5, 7, 21, 22)', () => {
         expect(settled.response.status).toBe(200);
 
         // `>=` rather than `>`: both instants come from the same clock and can land in
-        // one millisecond. The margin is what discriminates — under the defect the
-        // stamp is taken before the request is dispatched, which precedes this instant
-        // by at least one poll interval, so the assertion fails by ~20ms or more.
+        // one millisecond. What discriminates is the ordering, not a margin. Under the
+        // defect the stamp is the handler's first statement — after dispatch, before
+        // the transaction — so it necessarily precedes the backend becoming blocked,
+        // which precedes `waitForBlockedBy` observing it, which precedes this read.
+        // Strictly ordered by construction rather than by a timing margin; an earlier
+        // version of this comment said "before the request is dispatched", which the
+        // handler cannot do.
         expect(
           new Date(settled.response.body.effective_at as string).getTime(),
         ).toBeGreaterThanOrEqual(releasedAt.getTime());

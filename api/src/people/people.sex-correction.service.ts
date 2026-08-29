@@ -105,9 +105,16 @@ export class PeopleSexCorrectionService {
       // `people.correct_sex` carries no power to date it in the past.
       //
       // **This stays outside the transaction and the instant does not.** `authorize`
-      // reads `account_roles`, `capability_grants` and, for a subtree scope, the
-      // tree — three pool reads, which inside a transaction would ask a bounded pool
-      // for a second connection while holding one (section 24).
+      // reads `account_roles` and `capability_grants` on the pool, and inside a
+      // transaction that would ask a bounded pool for a second connection while
+      // holding one (section 24).
+      //
+      // It does **not** read the tree for this capability, which an earlier version of
+      // this comment claimed: `records.backdate_effective_date` is in
+      // `WHOLE_CHURCH_ONLY`, so `scopeCovers` returns at its first line and the
+      // subtree branch is unreachable here. Two pooled reads carry the argument on
+      // their own. The sibling comment this was modelled on says only "facts about
+      // the actor's account rather than about the tree" and was right to stop there.
       await this.authorization.authorize(actor, Capability.RecordsBackdateEffectiveDate, {
         kind: 'person',
         personId,
@@ -125,9 +132,17 @@ export class PeopleSexCorrectionService {
       );
 
       // **Stamped after the lock, and it was stamped before it until 2026-08-29.**
-      // The reassignment path has always read its instant here and records why; this
-      // one read it before the transaction opened, and the two drifted on that step
-      // although both were written from the same skeleton.
+      //
+      // The reassignment path did **not** always read its instant here — it was moved
+      // by `216be37` on 2026-08-23, an `architecture-guardian` finding whose message
+      // says a request that merely waited was refused with a 409 section 22 stores for
+      // ever. At that commit both methods were in one file, three hundred lines apart.
+      // One was fixed and the other was not looked at.
+      //
+      // So this is not two copies drifting unobserved; it is a defect fixed on one
+      // member of a class with the class left unswept, which this project records
+      // under that name twice already — the lock key on 2026-08-23 and the Stage 1
+      // verification. The weaker story was the one first told here.
       //
       // What that cost: two corrections on one person both stamp at roughly the same
       // instant, the winner commits a `network_assignments` row whose `started_at` is

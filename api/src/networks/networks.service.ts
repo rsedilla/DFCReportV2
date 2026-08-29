@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 
-import { InvariantViolationError } from '../common/errors/api-error';
+import { InvariantViolationError, ResourceBusyError } from '../common/errors/api-error';
 import { manilaDayAfter, startOfManilaDay } from '../common/time/manila';
 import { type Db } from '../database/database.module';
 import { lockPersonsWithin } from '../database/person-lock';
@@ -280,7 +280,7 @@ export class NetworksService {
      * no pastoral assignment that they had stranded one.
      */
     kind: 'edges' | 'network-row',
-  ): InvariantViolationError {
+  ): InvariantViolationError | ResourceBusyError {
     const earliest = manilaDayAfter(bound);
     const submittable = startOfManilaDay(earliest).getTime() <= Date.now();
 
@@ -288,10 +288,23 @@ export class NetworksService {
       // Reached only where a record for this person was written at the same
       // instant this correction is taking — a Person encoded and corrected within
       // the same millisecond. There is no date to offer and none was asked for.
-      return new InvariantViolationError(
-        'This change cannot take effect at this instant, because a record for this person was written at it. Retry in a moment.',
-        { person_id: change.personId },
-      );
+      //
+      // **`RESOURCE_BUSY` rather than a 409**, matching
+      // `PeopleReassignmentService.reassignmentTooEarly`, which was written for this
+      // exact case and whose reasoning carries unchanged: contention reaches no
+      // decision, and section 22 stores a 4xx against the idempotency key and
+      // replays it for the whole retention. A 409 here would pin a transient failure
+      // to the key for a day while telling the caller to retry — the message and the
+      // status on opposite sides of that split, which is what this branch said
+      // before.
+      //
+      // The sibling path got this on 2026-08-23 in `216be37` and this one did not,
+      // although both methods sat in one file three hundred lines apart. Same
+      // omission as the stamp this commit moves, and the same remedy: sweep the
+      // class rather than the instance.
+      // The standard message rather than a bespoke one, exactly as the sibling does:
+      // section 22 fixes what `RESOURCE_BUSY` means, and a caller branches on the code.
+      return new ResourceBusyError({ person_id: change.personId });
     }
 
     if (!submittable) {
