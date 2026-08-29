@@ -202,7 +202,18 @@ export type AuditAction =
   // `added` rather than `opened`, matching section 21's own noun.
   | 'cell_membership.added'
   | 'cell_membership.moved'
-  | 'cell_membership.ended';
+  | 'cell_membership.ended'
+  // Section 10 requires a category change and a schedule change to be audited, and
+  // section 7 governs both with one capability. Two actions rather than one, because
+  // section 21 asks for one entry per action performed and these are different facts
+  // with different effective dates — a category change takes effect the day it is
+  // made, a schedule change at the start of the following month.
+  //
+  // `cell_category` and `cell_schedule` rather than `cell`, matching
+  // `cell_membership` above: the noun is the thing that changed, so a reader asking
+  // when a Cell last moved its meeting day has something to search on.
+  | 'cell_category.changed'
+  | 'cell_schedule.changed';
 
 export interface AuditLogTable {
   id: Generated<string>;

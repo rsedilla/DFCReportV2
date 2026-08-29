@@ -1,4 +1,9 @@
-import { manilaDayAfter, manilaDayOf, startOfManilaDay } from '../../src/common/time/manila';
+import {
+  manilaDayAfter,
+  manilaDayOf,
+  startOfManilaDay,
+  startOfNextManilaMonth,
+} from '../../src/common/time/manila';
 
 /**
  * Asia/Manila dates and instants (SKILL.md section 20).
@@ -62,6 +67,46 @@ describe('Asia/Manila dates and instants (section 20)', () => {
    * handed a date that will be refused again, or is refused one that would have
    * been accepted.
    */
+  describe('startOfNextManilaMonth (section 10, Schedule changes)', () => {
+    it('takes a change made mid-month to the first of the next month', () => {
+      // Section 10: "A Cell moving from Saturday to Sunday, decided in August, runs
+      // on Sunday from 1 September."
+      expect(startOfNextManilaMonth(new Date('2026-08-12T04:00:00Z'))).toBe('2026-09-01');
+    });
+
+    it('rolls the year over from December', () => {
+      expect(startOfNextManilaMonth(new Date('2026-12-20T04:00:00Z'))).toBe('2027-01-01');
+    });
+
+    it('reads the month in Manila, not in UTC', () => {
+      // **The case the whole helper exists for.** 2026-08-31T16:30:00Z is already
+      // 1 September in Manila (UTC+8), so the next month is October. A UTC reading
+      // sees 31 August and answers September -- a month early, silently, and only
+      // on the **first of a Manila month**, through that day's first eight hours:
+      // 00:00 to 07:59, which is UTC 16:00 to 23:59 of the day before. This case is
+      // Manila 00:30 on 1 September. Eight hours a month, not eight hours a day —
+      // Manila 15 September 03:00 is UTC 14 September, still September. At Manila
+      // evening the two zones agree on the date and a UTC reading is correct, so the
+      // risk is early morning rather than the busiest hours -- an earlier version of
+      // this comment had it exactly backwards.
+      expect(startOfNextManilaMonth(new Date('2026-08-31T16:30:00Z'))).toBe('2026-10-01');
+    });
+
+    it('is unaffected on the same date eight hours earlier', () => {
+      // The same calendar date, still 31 August in Manila. Paired with the case
+      // above so the two differ only by the zone reading.
+      expect(startOfNextManilaMonth(new Date('2026-08-31T08:30:00Z'))).toBe('2026-09-01');
+    });
+
+    it('composes with startOfManilaDay to give the instant a schedule row starts at', () => {
+      // Section 10 requires the row to start at Manila 00:00 on the 1st, "stored as
+      // 16:00 UTC on the last day of the previous month" -- which is what the
+      // trigger in migration 0009 checks against.
+      const day = startOfNextManilaMonth(new Date('2026-08-12T04:00:00Z'));
+      expect(startOfManilaDay(day).toISOString()).toBe('2026-08-31T16:00:00.000Z');
+    });
+  });
+
   describe('the earliest date that clears a floor (section 4)', () => {
     const floors = [
       // Midnight in Manila exactly, which is the case that separates "strictly

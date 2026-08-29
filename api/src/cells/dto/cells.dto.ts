@@ -58,3 +58,43 @@ export class AddCellMemberDto {
   @IsUUID()
   person_id!: string;
 }
+
+/**
+ * `PUT /api/v1/cells/{id}/category` (SKILL.md section 10, *Category changes*).
+ *
+ * The validators are the same three the creation DTO carries for this field, and
+ * that repetition is deliberate rather than a missed abstraction: a shared base
+ * class would couple two request shapes that section 10 governs with different
+ * rules, and the one thing they must not share is the effective date.
+ */
+export class ChangeCellCategoryDto {
+  @IsIn(CATEGORIES)
+  category!: CellCategory;
+}
+
+/**
+ * `PUT /api/v1/cells/{id}/schedule` (SKILL.md section 10, *Schedule changes*).
+ *
+ * Day and time move together. Section 10 treats the schedule as one thing — "the
+ * Cell's standing day and time" — and `cell_schedules` carries both on one
+ * effective-dated row, so accepting one without the other would mean reading the
+ * current row to fill the gap and recording a change to a field nobody sent.
+ */
+export class ChangeCellScheduleDto {
+  /**
+   * ISO 8601 day number: 1 is Monday, 7 is Sunday (section 20).
+   *
+   * Validated here as well as in the database so a bad value is
+   * `VALIDATION_FAILED` rather than a constraint violation.
+   */
+  @IsInt()
+  @Min(1)
+  @Max(7)
+  day_of_week!: number;
+
+  /** Wall-clock time in Asia/Manila, with no offset of its own (section 20). */
+  @Matches(/^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/, {
+    message: 'time_of_day must be HH:MM or HH:MM:SS, in Asia/Manila wall-clock time',
+  })
+  time_of_day!: string;
+}
