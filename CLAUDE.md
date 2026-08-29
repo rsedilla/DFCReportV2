@@ -5210,7 +5210,10 @@ Section 5 makes inert — and the row actually governing today is untouched.
 
 What it is instead is exactly the correction Section 5 prescribes, "a row entered in
 error is corrected by closing it and opening the right one", and the reason
-`cell_schedules_period_ordered` was relaxed to `>=` on 2026-08-22.
+`cell_schedules_period_ordered` is `>=`. The 2026-08-22 ruling settled that shape for
+effective-dated tables generally; migration 0009 created this constraint on 2026-08-28
+already carrying it, so nothing was relaxed here — an earlier version of this sentence
+said it was.
 
 **The refusal stranded the leader it was meant to protect.** Queue the wrong day on 5
 August and it cannot be fixed until 1 September; a change made then lands on 1 October.
@@ -5233,7 +5236,9 @@ Cell met on Saturday".
 **Section 5 permits no other shape, which is what makes the cost forced rather than
 chosen.** Withdrawing the pending change means reopening the row it closed, which is the
 in-place rewrite Principle 12 forbids. Closing it without a replacement leaves an
-`ACTIVE` Cell with no open schedule row, which `cells_are_configured` refuses. Comparing
+`ACTIVE` Cell with no open schedule row, which `cell_schedules_keep_cell_configured`
+refuses — not `cells_are_configured`, which fires on writes to `cells`. Both call the
+same function, so the argument held and the mechanism named was wrong. Comparing
 the no-op refusal against the row *in force* rather than the open one refuses the revert
 altogether, which is the stranding this ruling exists to end.
 

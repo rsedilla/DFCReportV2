@@ -217,7 +217,7 @@ export class CellsConfigurationService {
 
       if (current.day_of_week === dayOfWeek && sameTimeOfDay(current.time_of_day, timeOfDay)) {
         throw new InvariantViolationError(
-          'That Cell already meets then. A change that changes nothing is refused, ' +
+          'That Cell is already scheduled for then. A change that changes nothing is refused, ' +
             'because it would record a schedule boundary where nothing happened ' +
             '(SKILL.md section 10, Schedule changes).',
           { cell_id: cell.cell_id, day_of_week: dayOfWeek, time_of_day: timeOfDay },
@@ -250,7 +250,9 @@ export class CellsConfigurationService {
       //
       // What it is instead is exactly the correction section 5 prescribes — "a row
       // entered in error is corrected by closing it and opening the right one" — and
-      // is why `cell_schedules_period_ordered` was relaxed to `>=` on 2026-08-22.
+      // is why `cell_schedules_period_ordered` is `>=`. The 2026-08-22 ruling settled
+      // that shape for effective-dated tables generally; 0009 created this constraint
+      // already carrying it, so nothing was relaxed here.
       // Refusing it stranded a leader who queued the wrong day: they could not fix it
       // until it took effect, and a change made then lands a month later again, so
       // one mistake cost a whole month meeting on a day the Cell had not agreed to.
@@ -391,15 +393,24 @@ export class CellsConfigurationService {
    * cross-class ordering question section 5 records as open — that section puts the
    * demonstration burden on an operation needing both classes.
    *
-   * What makes it cycle-free is narrower than "it locks first", which an earlier
-   * version of this claimed and which is true of both parties to every deadlock ever
-   * recorded. It is that the only contended lock this service can wait on is the
-   * `cells` row; it takes that before anything else; and every lock it takes
-   * afterwards is held only by transactions that also took the `cells` row first. A
-   * membership write holds an advisory lock on a person and waits for `FOR SHARE` on
-   * this row at commit, and this service never wants that person lock, so the two
-   * wait rather than cycle. Adding a statement above this one that takes a lock ends
-   * the argument. The bound comes
+   * **Two earlier versions of this argument were over-broad and both are recorded.**
+   * The first was "it takes its first lock while holding nothing", which is true of
+   * both parties to every deadlock ever recorded. The second was that every lock
+   * taken afterwards is held only by transactions that also took this row first —
+   * false, because `completeWithin` takes the idempotency key's row lock, which
+   * section 5 names in as many words and which any other write endpoint can hold
+   * without ever touching `cells`.
+   *
+   * The argument that holds is per-lock rather than general. This transaction takes
+   * three: the `cells` row, which it takes first while holding nothing; the
+   * configuration rows, reachable only through the Cell it already holds; and the
+   * idempotency key, last. A holder of that key row is at its own final statement —
+   * section 22 requires the completion to be the last statement in the transaction —
+   * so it wants nothing further and cannot be waiting on this one. A membership write
+   * holds an advisory lock on a person and waits for `FOR SHARE` on this Cell at
+   * commit, and this service never wants a person lock, so those two wait rather than
+   * cycle. Adding a statement above the `cells` lock that takes a lock ends the first
+   * clause and the argument with it. The bound comes
    * first because section 5 requires an operation taking row locks and no advisory
    * locks to set it itself; `SET LOCAL` takes no locks, so it cannot be what waits.
    */

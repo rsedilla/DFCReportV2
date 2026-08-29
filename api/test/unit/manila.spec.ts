@@ -82,8 +82,10 @@ describe('Asia/Manila dates and instants (section 20)', () => {
       // **The case the whole helper exists for.** 2026-08-31T16:30:00Z is already
       // 1 September in Manila (UTC+8), so the next month is October. A UTC reading
       // sees 31 August and answers September -- a month early, silently, and only
-      // through the **first** eight hours of a Manila day: 00:00 to 07:59, which is
-      // UTC 16:00 to 23:59 of the day before. This case is Manila 00:30. At Manila
+      // on the **first of a Manila month**, through that day's first eight hours:
+      // 00:00 to 07:59, which is UTC 16:00 to 23:59 of the day before. This case is
+      // Manila 00:30 on 1 September. Eight hours a month, not eight hours a day —
+      // Manila 15 September 03:00 is UTC 14 September, still September. At Manila
       // evening the two zones agree on the date and a UTC reading is correct, so the
       // risk is early morning rather than the busiest hours -- an earlier version of
       // this comment had it exactly backwards.

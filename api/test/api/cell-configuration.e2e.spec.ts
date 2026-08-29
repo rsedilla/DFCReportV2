@@ -141,9 +141,13 @@ describe('cell configuration (section 10)', () => {
       // asserting on their positions passes or fails by luck.
       .orderBy('started_at', 'asc')
       .orderBy('ended_at', sql`asc nulls last`)
-      // A third correction produces two inert rows sharing both timestamps, and
-      // then physical row order decides again. Slice 1 recorded this and added an
-      // `id` fallback for the same reason.
+      // A third correction produces two inert rows sharing both timestamps. This
+      // fallback makes the order **stable** — the same across repeated queries and
+      // independent of physical row order — and it does **not** make it predictable,
+      // because these ids are `gen_random_uuid()` defaults assigned through the API.
+      // Slice 1's equivalent is predictable only because its case fixes the id it
+      // wants to lose. A three-correction case asserting on positions would need the
+      // same; nothing exercises that today.
       .orderBy('id', 'asc')
       .execute();
 
@@ -159,9 +163,13 @@ describe('cell configuration (section 10)', () => {
       // asserting on their positions passes or fails by luck.
       .orderBy('started_at', 'asc')
       .orderBy('ended_at', sql`asc nulls last`)
-      // A third correction produces two inert rows sharing both timestamps, and
-      // then physical row order decides again. Slice 1 recorded this and added an
-      // `id` fallback for the same reason.
+      // A third correction produces two inert rows sharing both timestamps. This
+      // fallback makes the order **stable** — the same across repeated queries and
+      // independent of physical row order — and it does **not** make it predictable,
+      // because these ids are `gen_random_uuid()` defaults assigned through the API.
+      // Slice 1's equivalent is predictable only because its case fixes the id it
+      // wants to lose. A three-correction case asserting on positions would need the
+      // same; nothing exercises that today.
       .orderBy('id', 'asc')
       .execute();
 
@@ -358,6 +366,36 @@ describe('cell configuration (section 10)', () => {
       expect(rows[2].started_at.toISOString()).toBe(rows[1].started_at.toISOString());
     });
 
+    it('permits reverting to the day the Cell actually meets on', async () => {
+      // **This is the worked example section 10 and the Decisions entry both use, and
+      // nothing pinned it.** Mutating the no-op comparison to read the row *in force*
+      // rather than the row currently open left the whole suite green — against the
+      // exact mutation section 10's closing argument rules out, because every other
+      // case submits a day that differs from both rows.
+      //
+      // Section 10: "It follows that a Cell's refusal to record a change that changes
+      // nothing is a check against the row currently open, which after a first change
+      // is the pending one."
+      await changeSchedule(admin, markCell.id, 7, '16:00').expect(200);
+
+      // Saturday is what the Cell meets on today, and what the pending row moved it
+      // away from. Read against the row in force this is a no-op and is refused; read
+      // against the open row it is the revert, and permitted.
+      await changeSchedule(admin, markCell.id, markCell.dayOfWeek, markCell.timeOfDay).expect(200);
+
+      const rows = await scheduleRows(markCell.id);
+      expect(rows).toHaveLength(3);
+
+      // The boundary section 10 accepts in writing: the Cell meets Saturday before the
+      // month boundary and Saturday after it, with a boundary in between across which
+      // the schedule did not change. Every as-of query still answers correctly.
+      expect(rows[0].day_of_week).toBe(markCell.dayOfWeek);
+      expect(rows[1].day_of_week).toBe(7);
+      expect(rows[1].started_at.toISOString()).toBe(rows[1].ended_at?.toISOString());
+      expect(rows[2].day_of_week).toBe(markCell.dayOfWeek);
+      expect(rows[2].ended_at).toBeNull();
+    });
+
     it('refuses a change to the day and time the Cell already has', async () => {
       const response = await changeSchedule(
         admin,
@@ -514,14 +552,23 @@ describe('cell configuration (section 10)', () => {
         // Dispatched, not held. A supertest object is lazy, and an unawaited one is
         // never sent — the fault CLAUDE.md records at `19dfe3c` and which slice 3 hit
         // again. `.then` sends it; the poll is what makes the contention real.
-        const pending = changeCategory(admin, markCell.id, 'YOUNG_PRO').then((r) => r);
+        // `.catch` is attached immediately, not for tidiness: if the poll below throws,
+        // nothing has handled this promise yet, and Node 22 treats an unhandled
+        // rejection as fatal — turning a clean assertion failure into a worker crash.
+        const pending = changeCategory(admin, markCell.id, 'YOUNG_PRO').then(
+          (r) => ({ ok: true, response: r }) as const,
+          (error: unknown) => ({ ok: false, error }) as const,
+        );
 
         await waitForBlockedBy(rows[0].pid);
 
         await blocker.query('COMMIT');
-        const response = await pending;
+        const settled = await pending;
 
-        expect(response.status).toBe(200);
+        if (!settled.ok) {
+          throw settled.error;
+        }
+        expect(settled.response.status).toBe(200);
       } finally {
         await blocker.end();
       }
@@ -545,21 +592,29 @@ describe('cell configuration (section 10)', () => {
         // closes, so a bare `await` would hang the suite until the job timeout rather
         // than failing — a defect that costs CI ten minutes and says nothing is worse
         // than one that costs it eight seconds and names itself.
+        let timer: NodeJS.Timeout | undefined;
         const response = await Promise.race([
           changeCategory(admin, markCell.id, 'YOUNG_PRO'),
-          new Promise<never>((_, reject) =>
-            setTimeout(
+          new Promise<never>((_, reject) => {
+            timer = setTimeout(
               () => reject(new Error('The request was still waiting after 8s: no lock_timeout.')),
               8000,
-            ),
-          ),
-        ]);
+            );
+          }),
+          // Cleared on both paths: left armed, it keeps the event loop alive for five
+          // seconds after a successful run settles at about three.
+        ]).finally(() => clearTimeout(timer));
 
         expect(response.status).toBe(503);
         expect(response.body.error.code).toBe('RESOURCE_BUSY');
       } finally {
-        await blocker.query('ROLLBACK');
-        await blocker.end();
+        // Nested, so a `ROLLBACK` that rejects — a backend already gone, most likely —
+        // cannot skip `end()` and leave the connection open.
+        try {
+          await blocker.query('ROLLBACK');
+        } finally {
+          await blocker.end();
+        }
       }
     }, 30000);
   });
@@ -606,7 +661,10 @@ async function waitForBlockedBy(blockerPid: number): Promise<void> {
   const probe = createTestDb();
 
   try {
-    for (let attempt = 0; attempt < 200; attempt += 1) {
+    // 100 x 20ms = 2s, deliberately **under** the service's 3s `lock_timeout`. A wider
+    // budget lets a slow-but-correct run time out here and report the same message a
+    // genuine `.forShare()` regression produces, which is a diagnostic that lies.
+    for (let attempt = 0; attempt < 100; attempt += 1) {
       const waiting = await sql<{ count: string }>`
         SELECT count(*) AS count
           FROM pg_stat_activity
