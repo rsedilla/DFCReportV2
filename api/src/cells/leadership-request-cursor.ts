@@ -47,6 +47,17 @@ export interface LeadershipRequestRow {
   prospective_leader_id: string;
   requested_by: string;
   requested_at: Date;
+  /**
+   * The same instant at the column's own precision, rendered by PostgreSQL.
+   *
+   * `timestamptz` holds microseconds and the driver parses it into a JS `Date`, which
+   * holds milliseconds — so a cursor built from `requested_at.toISOString()` is
+   * *earlier* than the row it came from, `requested_at > cursor` matches that row
+   * again, and the page repeats its last row instead of advancing. The response still
+   * carries the `Date`, because that is what a client reads; only the key needs the
+   * precision.
+   */
+  requested_at_key: string;
   cell_id: string | null;
 }
 

@@ -11,6 +11,7 @@ import {
   InvariantViolationError,
   NotFoundError,
   ScopeDeniedError,
+  ValidationFailedError,
 } from '../common/errors/api-error';
 import { sameId } from '../common/identifiers';
 import { IdempotencyService } from '../common/idempotency/idempotency.service';
@@ -104,6 +105,22 @@ export class CellsLeadershipRequestService {
     // and `capability_grants` on the pool, and asking a bounded pool for a second
     // connection while holding one is the liveness hazard that section names.
     const authority = await this.authorization.authorityFor(actor.accountId);
+
+    if (input.kind === 'NEW_CELL' && input.cellId !== undefined) {
+      // Refused rather than ignored. `cell_leadership_requests_new_cell_has_no_cell_
+      // before_approval` says a PENDING NEW_CELL row names no Cell, so a client that
+      // sent one meant something the workflow cannot do — dropping it silently would
+      // answer 201 to a request the server did not perform.
+      //
+      // Here rather than on the DTO: `@ValidateIf` governs a whole property, so
+      // expressing "required for one kind and forbidden for the other" needs two
+      // conditions on one field and the second silently replaces the first.
+      throw new ValidationFailedError(
+        'A new-Cell request names no Cell. Section 10: nothing names one until approval ' +
+          'mints it.',
+        { field: 'cell_id' },
+      );
+    }
 
     return this.db.transaction().execute(async (trx) => {
       const cell =
@@ -326,7 +343,7 @@ export class CellsLeadershipRequestService {
       next_cursor:
         rows.length > limit && last !== undefined
           ? encodeLeadershipRequestCursor({
-              requestedAt: last.requested_at.toISOString(),
+              requestedAt: last.requested_at_key,
               id: last.id,
             })
           : null,

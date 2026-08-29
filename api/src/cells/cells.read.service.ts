@@ -1,4 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
+import { sql } from 'kysely';
 
 import { DATABASE, type Db } from '../database/database.module';
 
@@ -211,7 +212,22 @@ export class CellsReadService {
     return (
       executor
         .selectFrom('cell_leadership_requests')
-        .select(['id', 'kind', 'prospective_leader_id', 'requested_by', 'requested_at', 'cell_id'])
+        .select((eb) => [
+          'id',
+          'kind',
+          'prospective_leader_id',
+          'requested_by',
+          'requested_at',
+          'cell_id',
+          // **The ordering key at the column's own precision**, which the `Date` beside
+          // it is not: `timestamptz` holds microseconds and the driver parses it into a
+          // JS `Date`, which holds milliseconds. A cursor built from
+          // `requested_at.toISOString()` is therefore *earlier* than the row it came
+          // from, so `requested_at > cursor` matches that row again and the page repeats
+          // its last row instead of advancing. Found by the paging case rather than
+          // reasoned about.
+          eb.cast<string>('requested_at', 'text').as('requested_at_key'),
+        ])
         .where('state', '=', 'PENDING')
         // Spelled out rather than expressed as a row comparison against a looked-up key,
         // for the reason `leadership-request-cursor.ts` records: the looked-up form does
@@ -220,9 +236,13 @@ export class CellsReadService {
           query.where((eb) => {
             const key = after as LeadershipRequestCursor;
 
+            // Cast on the parameter rather than converting in JavaScript, so the
+            // comparison happens at the column's own precision.
+            const at = sql<Date>`${key.requestedAt}::timestamptz`;
+
             return eb.or([
-              eb('requested_at', '>', new Date(key.requestedAt)),
-              eb.and([eb('requested_at', '=', new Date(key.requestedAt)), eb('id', '>', key.id)]),
+              eb('requested_at', '>', at),
+              eb.and([eb('requested_at', '=', at), eb('id', '>', key.id)]),
             ]);
           }),
         )

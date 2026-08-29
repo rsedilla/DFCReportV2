@@ -145,10 +145,12 @@ export class CreateLeadershipRequestDto {
   /**
    * The Cell being handed over. Required for a handover, and refused for a new Cell.
    *
-   * `@ValidateIf` on the *`NEW_CELL`* branch as well as the handover one, because the
-   * two say different things: on a handover it must be present and a UUID, and on a new
-   * Cell it must be absent. `forbidNonWhitelisted` cannot express the second — the field
-   * is whitelisted on this DTO — so the refusal is a validator of its own.
+   * **Only the first half is here.** `@ValidateIf` governs the whole property rather
+   * than one decorator, so "present and a UUID for a handover" and "absent for a new
+   * Cell" cannot both be expressed on this field — the second condition replaces the
+   * first rather than joining it. The refusal lives in the service, beside the other
+   * rules `kind` decides, and `forbidNonWhitelisted` cannot help because the field is
+   * whitelisted on this DTO.
    */
   @ValidateIf((dto: CreateLeadershipRequestDto) => dto.kind === 'HANDOVER')
   @IsUUID()
