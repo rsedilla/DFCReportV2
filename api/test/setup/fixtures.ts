@@ -286,3 +286,62 @@ export function resetRateLimits(app: INestApplication): void {
   const storage = app.get<ThrottlerStorageService>(ThrottlerStorage);
   storage.storage.clear();
 }
+
+export interface TestCell {
+  id: string;
+  cellId: string;
+  leaderId: string;
+}
+
+/**
+ * An ACTIVE Cell, complete: the Cell, its category row, its schedule row and its
+ * leadership assignment, in one statement (SKILL.md section 10, Creating a Cell).
+ *
+ * **One statement is not tidiness, it is the only way this writes at all.** Three
+ * constraints in migration 0009 make a partly-built Cell impossible, and each is
+ * one this helper would otherwise trip: an ACTIVE Cell has exactly one open
+ * leadership assignment (section 11), and an open category row and an open
+ * schedule row (section 10).
+ *
+ * **The schedule row takes its `started_at` from `cells.created_at` in the same
+ * expression**, which is what section 10 asks for by name. The Cell is created
+ * part-way through a month, so its first schedule row is legal by the `created_at`
+ * half of the rule rather than by the month half -- and equality with a column on
+ * another table is exact, so a `created_at DEFAULT now()` beside an
+ * application-computed timestamp differs by microseconds and aborts every
+ * creation, with a failure that reads as a clock problem rather than as a rule.
+ */
+export async function createCell(
+  db: Kysely<Database>,
+  options: {
+    leader: TestPerson;
+    category?: 'YOUTH' | 'YOUNG_PRO' | 'COUPLE';
+    /** ISO 8601: 1 is Monday, 7 is Sunday (section 20). */
+    dayOfWeek?: number;
+    timeOfDay?: string;
+  },
+): Promise<TestCell> {
+  const result = await sql<{ id: string; cell_id: string }>`
+    WITH new_cell AS (
+      INSERT INTO cells DEFAULT VALUES
+      RETURNING id, cell_id, created_at
+    ), category AS (
+      INSERT INTO cell_categories (cell_id, category, started_at)
+      SELECT id, ${options.category ?? 'YOUTH'}::cell_category, created_at FROM new_cell
+    ), schedule AS (
+      INSERT INTO cell_schedules (cell_id, day_of_week, time_of_day, started_at)
+      SELECT id, ${options.dayOfWeek ?? 6}::smallint, ${options.timeOfDay ?? '19:00'}::time, created_at
+        FROM new_cell
+    ), leadership AS (
+      INSERT INTO cell_leaderships (person_id, cell_id, started_at)
+      SELECT ${options.leader.id}::uuid, id, created_at FROM new_cell
+    )
+    SELECT id, cell_id FROM new_cell
+  `.execute(db);
+
+  return {
+    id: result.rows[0].id,
+    cellId: result.rows[0].cell_id,
+    leaderId: options.leader.id,
+  };
+}

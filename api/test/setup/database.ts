@@ -46,6 +46,12 @@ export async function truncateAll(db: Kysely<Database>): Promise<void> {
     TRUNCATE TABLE
       idempotency_keys,
       audit_log,
+      cell_leadership_requests,
+      cell_memberships,
+      cell_leaderships,
+      cell_schedules,
+      cell_categories,
+      cells,
       refresh_tokens,
       account_tokens,
       capability_grants,

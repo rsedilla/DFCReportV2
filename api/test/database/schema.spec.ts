@@ -451,8 +451,179 @@ describe('the schema (SKILL.md sections 4, 5, 6 and 7)', () => {
       ['lifecycle_state', ['CURRENT', 'ARCHIVED']],
       ['account_status', ['PENDING_ACTIVATION', 'ACTIVE', 'DISABLED']],
       ['account_role', ['SENIOR_PASTOR', 'ADMIN', 'LEADER']],
+      ['cell_state', ['ACTIVE', 'CLOSED']],
+      ['cell_category', ['YOUTH', 'YOUNG_PRO', 'COUPLE']],
+      [
+        'cell_closure_reason',
+        [
+          'MERGED_INTO_ANOTHER_CELL',
+          'LEADER_STEPPED_DOWN',
+          'MEMBERS_DISPERSED',
+          'CREATED_IN_ERROR',
+          'OTHER',
+        ],
+      ],
+      ['cell_request_kind', ['NEW_CELL', 'HANDOVER']],
+      ['cell_request_state', ['PENDING', 'APPROVED', 'DECLINED']],
+      [
+        'cell_decline_reason',
+        [
+          'LEADER_DEVELOPMENT_CONTINUING',
+          'TIMING_DEFERRED',
+          'DUPLICATE_REQUEST',
+          'SUBMITTED_IN_ERROR',
+          'OTHER',
+        ],
+      ],
     ])('%s', async (typeName, expected) => {
       expect(await enumLabels(db, typeName)).toEqual(expected);
+    });
+  });
+
+  /**
+   * Migration 0009. The behavioural half -- what each of these actually refuses --
+   * is in `cells.spec.ts`; this is the half that catches a constraint quietly
+   * losing its shape, which a behavioural case cannot see.
+   */
+  describe('the Cell tables (sections 10 and 11)', () => {
+    it.each([
+      ['cell_categories', 'cell_categories_one_open'],
+      ['cell_schedules', 'cell_schedules_one_open'],
+      ['cell_leaderships', 'cell_leaderships_one_open_per_cell'],
+    ])('%s has one open row per Cell', async (_table, indexName) => {
+      const index = await indexDefinition(db, indexName);
+
+      expect(index).toMatch(/CREATE UNIQUE INDEX/i);
+      expect(index).toMatch(/\(cell_id\)/i);
+      expect(index).toMatch(/WHERE \(ended_at IS NULL\)/i);
+    });
+
+    it('gives cell_memberships one open row per person, not per Cell', async () => {
+      // Over the person, exactly as pastoral assignment is: a member belongs to one
+      // Cell at a time, while a Cell holds many members (section 10). Keyed on the
+      // wrong column this index would forbid a Cell having two members at all, and
+      // every behavioural case here uses one member per Cell.
+      const index = await indexDefinition(db, 'cell_memberships_one_open');
+
+      expect(index).toMatch(/CREATE UNIQUE INDEX/i);
+      expect(index).toMatch(/\(person_id\)/i);
+      expect(index).toMatch(/WHERE \(ended_at IS NULL\)/i);
+    });
+
+    it.each([
+      ['cell_leadership_requests_one_pending_new_cell', 'prospective_leader_id', 'NEW_CELL'],
+      ['cell_leadership_requests_one_pending_handover', 'cell_id', 'HANDOVER'],
+    ])('%s is partial over PENDING and its own kind', async (indexName, column, kind) => {
+      // Two rules, one per kind, and neither widened to cover both (section 10).
+      // Widening either is invisible to a behavioural case that only ever writes one
+      // kind, and it would make a legitimate request unsubmittable rather than
+      // declinable.
+      const index = await indexDefinition(db, indexName);
+
+      expect(index).toMatch(/CREATE UNIQUE INDEX/i);
+      expect(index).toMatch(new RegExp(`\\(${column}\\)`, 'i'));
+      expect(index).toMatch(/state = 'PENDING'/i);
+      expect(index).toMatch(new RegExp(`kind = '${kind}'`, 'i'));
+    });
+
+    it.each([
+      ['cells', 'cells_relationships_match_state', 'assert_cell_relationships_from_cells'],
+      [
+        'cell_leaderships',
+        'cell_leaderships_match_cell_state',
+        'assert_cell_leadership_from_leaderships',
+      ],
+      [
+        'cell_memberships',
+        'cell_memberships_match_cell_state',
+        'assert_memberships_from_memberships',
+      ],
+      [
+        'cell_leaderships',
+        'cell_leaderships_stay_in_network',
+        'assert_leadership_stays_in_network',
+      ],
+    ])(
+      'enforces a Cell state rule on %s, deferred to commit',
+      async (table, triggerName, functionName) => {
+        // Section 11 requires the deferral by name: ending one assignment and opening
+        // another leaves the Cell momentarily with none, and a check firing per
+        // statement would reject whichever ran first -- making a handover
+        // unperformable. An immediate trigger passes every *refusal* case in
+        // `cells.spec.ts` and breaks the one operation section 10 mandates.
+        const facts = await constraintTriggerFacts(db, table, triggerName);
+
+        expect(facts.deferrable).toBe(true);
+        expect(facts.initially_deferred).toBe(true);
+        expect(facts.fires_on_insert).toBe(true);
+        expect(facts.fires_on_update).toBe(true);
+        expect(facts.timing).toBe('AFTER');
+        expect(facts.per_row).toBe(true);
+        expect(facts.enabled).toBe(true);
+        expect(facts.function_name).toBe(functionName);
+      },
+    );
+
+    it('checks a schedule row start immediately, not at commit', async () => {
+      // The opposite of the rule above, and deliberately so: it reads
+      // `cells.created_at`, which is written first and is immutable afterwards, so
+      // no ordering a deferral would rescue exists. Deferred, a violation arrives at
+      // COMMIT as a raw check_violation -- the 500-instead-of-an-answer failure this
+      // repository keeps recording.
+      const facts = await constraintTriggerFacts(
+        db,
+        'cell_schedules',
+        'cell_schedules_start_is_legal',
+      );
+
+      expect(facts.deferrable).toBe(false);
+      expect(facts.timing).toBe('BEFORE');
+      expect(facts.fires_on_insert).toBe(true);
+      expect(facts.fires_on_update).toBe(true);
+      expect(facts.enabled).toBe(true);
+    });
+
+    it('enforces the same-Network membership with a deferred constraint trigger', async () => {
+      const facts = await constraintTriggerFacts(
+        db,
+        'cell_memberships',
+        'cell_memberships_same_network',
+      );
+
+      expect(facts.deferrable).toBe(true);
+      expect(facts.initially_deferred).toBe(true);
+      expect(facts.enabled).toBe(true);
+      expect(facts.function_name).toBe('assert_membership_same_network');
+    });
+
+    it('holds the approver rule to approval, and not to a decline', async () => {
+      // **Pins the shape rather than the domain question, which is deliberate.**
+      // Whether a requester may decline their own request is unsettled and is
+      // escalated in CLAUDE.md, so no behavioural case may assert either direction.
+      // But the *fix* still needs something that can fail: an earlier version of this
+      // constraint read `decided_by IS DISTINCT FROM requested_by` unconditionally,
+      // which left a single-Admin deployment unable to dispose of its own request at
+      // all -- PENDING for ever, with the per-leader partial unique index then
+      // blocking every future request for that person. Restoring that form leaves
+      // every behavioural case green, because the only row of that shape in the suite
+      // is APPROVED and fails identically under both.
+      const definition = await constraintDefinition(
+        db,
+        'cell_leadership_requests_approver_is_not_requester',
+      );
+
+      expect(definition).toMatch(/state <> 'APPROVED'/i);
+      expect(definition).toMatch(/decided_by IS DISTINCT FROM requested_by/i);
+    });
+
+    it('draws the Cell ID from a sequence, server-side', async () => {
+      // Server-assigned is the rule (section 10, Cell ID generation). A default the
+      // application may override is not the same thing, and a behavioural case that
+      // never sends one cannot tell the difference.
+      const facts = await columnFacts(db, 'cells', 'cell_id');
+
+      expect(facts.not_null).toBe(true);
+      expect(facts.default_expression).toMatch(/nextval\('cell_id_seq'/);
     });
   });
 });
