@@ -666,20 +666,63 @@ describe('cell membership (section 10)', () => {
       // It was not cosmetic. `POST /cells/{id}/closure` requires a member list that is
       // exactly the current membership, and this route is the only way to obtain one —
       // so any Cell with more members than the page was closable by nobody.
-      const alpha = await createPerson(db, {
-        firstName: 'Ana',
-        lastName: 'Abadilla',
-        network: 'MENS',
-      });
+      // **Three members, staged so each disjunct of the comparison is the one that
+      // decides a boundary.** Two members with distinct last names pin only that *some*
+      // filter exists: keeping `last_name >` alone, or replacing all three with
+      // `member_id >`, pages such a fixture correctly. The keyset's whole justification
+      // is that a lexicographic comparison needs every key it orders by, and section 3
+      // says plainly that a congregation of several thousand holds two people who share
+      // a name — so the disjuncts that matter are the ones a shared name reaches.
+      //
+      // `Santos, Ana` < `Santos, Ana` (second) < `Zamora, Zosimo`:
+      //   page 1 -> 2 crosses on first name equal, last name equal -> Member ID
+      //   page 2 -> 3 crosses on last name equal -> first name
+      //   page 3 -> end crosses on last name
+      // A member silently skipped here is a Cell whose closure can never name its
+      // membership exactly, and therefore a Cell nobody can close.
+      // **Created in the reverse of their name order, deliberately.** Member IDs come
+      // off a sequence in creation order, so creating them in name order makes the
+      // tie-break agree with the ordering by accident — and a comparison of
+      // `member_id` alone then pages this fixture perfectly. That mutation was run
+      // against the first version of this case and passed. `omega` is created first so
+      // it holds the *lowest* Member ID while sorting *last* by name.
       const omega = await createPerson(db, {
         firstName: 'Zosimo',
         lastName: 'Zamora',
         network: 'MENS',
       });
-      await assignTo(db, alpha.id, mark.id);
-      await assignTo(db, omega.id, mark.id);
-      await addMember(admin, markCell.id, alpha.id).expect(201);
-      await addMember(admin, markCell.id, omega.id).expect(201);
+      const alpha = await createPerson(db, {
+        firstName: 'Ana',
+        lastName: 'Santos',
+        network: 'MENS',
+      });
+      const twin = await createPerson(db, {
+        firstName: 'Ana',
+        lastName: 'Santos',
+        network: 'MENS',
+      });
+
+      for (const person of [alpha, twin, omega]) {
+        await assignTo(db, person.id, mark.id);
+        await addMember(admin, markCell.id, person.id).expect(201);
+      }
+
+      // Asserted rather than assumed, and both halves matter: `alpha` precedes `twin`
+      // under the tie-break, and `omega` precedes them both by Member ID while
+      // following them by name — which is what makes a Member-ID-only comparison lose
+      // it.
+      const ids = new Map(
+        (
+          await db
+            .selectFrom('persons')
+            .select(['id', 'member_id'])
+            .where('id', 'in', [alpha.id, twin.id, omega.id])
+            .execute()
+        ).map((row) => [row.id, row.member_id]),
+      );
+
+      expect(ids.get(alpha.id)!.localeCompare(ids.get(twin.id)!)).toBeLessThan(0);
+      expect(ids.get(omega.id)!.localeCompare(ids.get(alpha.id)!)).toBeLessThan(0);
 
       const first = await request(app.getHttpServer())
         .get(`/api/v1/cells/${markCell.id}/members?limit=1`)
@@ -694,28 +737,31 @@ describe('cell membership (section 10)', () => {
       // a bare Member ID — six digits off a sequence (section 3), published church-wide
       // (section 8), and therefore constructible by a client, which is exactly what
       // section 22 says a cursor must never be.
-      const memberIds = await db
-        .selectFrom('persons')
-        .select('member_id')
-        .where('id', 'in', [alpha.id, omega.id])
-        .execute();
-
-      for (const row of memberIds) {
-        expect(first.body.next_cursor).not.toBe(row.member_id);
+      for (const memberId of ids.values()) {
+        expect(first.body.next_cursor).not.toBe(memberId);
       }
 
-      const second = await request(app.getHttpServer())
-        .get(
-          `/api/v1/cells/${markCell.id}/members?limit=1&cursor=${encodeURIComponent(
-            first.body.next_cursor as string,
-          )}`,
-        )
-        .set('Authorization', `Bearer ${admin.accessToken}`)
-        .expect(200);
+      const page = async (cursor: string): Promise<request.Response> =>
+        request(app.getHttpServer())
+          .get(`/api/v1/cells/${markCell.id}/members?limit=1&cursor=${encodeURIComponent(cursor)}`)
+          .set('Authorization', `Bearer ${admin.accessToken}`)
+          .expect(200);
 
+      // Crosses on the Member ID: same last name, same first name. Fails if the
+      // tie-break disjunct is missing — `twin` is then excluded with `alpha` and the
+      // page skips to `omega`.
+      const second = await page(first.body.next_cursor as string);
       expect(second.body.data).toHaveLength(1);
-      expect(second.body.data[0].person_id).toBe(omega.id);
-      expect(second.body.next_cursor).toBeNull();
+      expect(second.body.data[0].person_id).toBe(twin.id);
+      expect(second.body.next_cursor).not.toBeNull();
+
+      // Crosses on the first name within an equal last name, then ends. Fails if the
+      // comparison is `last_name >` alone — `Zamora` sorts before `Santos`, so a
+      // last-name-only filter returns nothing here and the roster loses a member.
+      const third = await page(second.body.next_cursor as string);
+      expect(third.body.data).toHaveLength(1);
+      expect(third.body.data[0].person_id).toBe(omega.id);
+      expect(third.body.next_cursor).toBeNull();
     });
 
     it('treats an unreadable cursor as absent rather than refusing it', async () => {
@@ -737,6 +783,15 @@ describe('cell membership (section 10)', () => {
 
       expect(response.body.data).toHaveLength(1);
       expect(response.body.data[0].person_id).toBe(juan.id);
+
+      // **An empty `cursor=` is refused rather than treated as absent**, which is where
+      // the consistency claim was broader than the code: the decoder returned null for
+      // `''` while `/people`'s DTO refused it, so the two agreed on a forged cursor and
+      // disagreed on an empty one. Both bind `@Length(1, …)` now.
+      await request(app.getHttpServer())
+        .get(`/api/v1/cells/${markCell.id}/members?cursor=`)
+        .set('Authorization', `Bearer ${admin.accessToken}`)
+        .expect(422);
     });
 
     it('answers an empty list rather than a refusal for a Cell with no members', async () => {

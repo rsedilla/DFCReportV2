@@ -1,3 +1,4 @@
+import { CURSOR_MAX_LENGTH, NAME_FIELD_MAX_LENGTH } from '../../src/common/cursor';
 import { decodeRosterCursor, encodeRosterCursor } from '../../src/cells/roster-cursor';
 
 /**
@@ -32,6 +33,32 @@ describe('the roster cursor', () => {
     expect(encoded).not.toContain('M-000123');
   });
 
+  it('fits the bound its DTOs enforce, at the worst payload a name can produce', () => {
+    // **The bound moved underneath the payload once and nothing said so.** It was 200,
+    // sized for a cursor carrying a bare Member ID, and the payload became two names —
+    // so the server could emit a value its own DTO refuses, which on this route means a
+    // Cell over the page size that nobody can close.
+    //
+    // Derived rather than assumed: `class-validator` counts UTF-16 units, so the
+    // costliest 100 units is 100 three-byte characters. A four-byte character costs two
+    // units and therefore buys 200 bytes rather than 300, which is why this uses CJK
+    // rather than an emoji — the intuitive worst case is not the worst case.
+    const costliest = '中'.repeat(NAME_FIELD_MAX_LENGTH);
+    expect(costliest).toHaveLength(NAME_FIELD_MAX_LENGTH);
+
+    const encoded = encodeRosterCursor({
+      lastName: costliest,
+      firstName: costliest,
+      // The longest third key either cursor carries is a UUID, not a Member ID, so the
+      // bound is derived against that and covers both.
+      memberId: '00000000-0000-4000-8000-000000000000',
+    }) as string;
+
+    expect(encoded.length).toBeLessThanOrEqual(CURSOR_MAX_LENGTH);
+    // And it round-trips at that size, so the bound is not merely a number that fits.
+    expect(decodeRosterCursor(encoded)?.lastName).toBe(costliest);
+  });
+
   it('encodes null as null', () => {
     expect(encodeRosterCursor(null)).toBeNull();
   });
@@ -55,6 +82,11 @@ describe('the roster cursor', () => {
     // Absent rather than refused, matching `GET /api/v1/people` — the only other
     // paginated collection and the only behaviour this repository has chosen. Section
     // 22 does not settle it; `CLAUDE.md` carries that as open.
+    //
+    // The first two cases never reach this decoder through the API: `@IsOptional()`
+    // skips an absent parameter, and `@Length(1, …)` refuses `?cursor=` with 422, as
+    // `/people` does. They are here because this function is called with whatever a
+    // caller has, and its own contract should not depend on a decorator upstream.
     expect(decodeRosterCursor(value)).toBeNull();
   });
 });

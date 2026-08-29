@@ -15,6 +15,8 @@ import {
   ValidateIf,
 } from 'class-validator';
 
+import { CURSOR_MAX_LENGTH } from '../../common/cursor';
+
 import type { CivilStatus, Sex } from '../../database/schema';
 
 /**
@@ -299,10 +301,24 @@ export class SearchPeopleDto {
   @Length(2, 100)
   q!: string;
 
-  /** Opaque, and passed back unmodified (section 22). */
+  /**
+   * Opaque, and passed back unmodified (section 22).
+   *
+   * **500 was too small, and the same defect was found on the Cell roster first.** This
+   * cursor carries `last_name`, `first_name` and a UUID; the two names are bounded at
+   * 100 UTF-16 units each by the create and edit DTOs, and section 3 lets a name hold
+   * any character — so 100 three-byte characters apiece is 600 bytes before the UUID and
+   * the JSON punctuation, and base64url of that is 899. Past it the server emits a
+   * cursor its own DTO refuses, and the client is answered `VALIDATION_FAILED` on a
+   * value it was handed, with no way to page on.
+   *
+   * Fixed here rather than left, because `common/cursor.ts` cites this field as the
+   * precedent it was derived against, and a reader checking that citation would find the
+   * defect still in it. The bound is shared and derived there.
+   */
   @IsOptional()
   @IsString()
-  @Length(1, 500)
+  @Length(1, CURSOR_MAX_LENGTH)
   cursor?: string;
 
   /** Section 22: defaults to 50, maximum 200. */

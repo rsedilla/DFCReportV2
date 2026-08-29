@@ -7,12 +7,15 @@ import {
   IsOptional,
   IsString,
   IsUUID,
+  Length,
   Matches,
   MaxLength,
   MinLength,
   ValidateNested,
 } from 'class-validator';
 import { Max, Min, ValidateIf } from 'class-validator';
+
+import { CURSOR_MAX_LENGTH } from '../../common/cursor';
 
 import type { CellCategory, CellClosureReason } from '../../database/schema';
 
@@ -288,6 +291,11 @@ export class CellMembersDto {
    */
   @IsOptional()
   @IsString()
-  @MaxLength(200)
+  // `Length` rather than `MaxLength`, so `?cursor=` is refused exactly as
+  // `GET /api/v1/people` refuses it — the consistency this endpoint's treat-as-absent
+  // behaviour is argued from, which held for the decoder and not for the validation in
+  // front of it. The maximum is derived in `common/cursor.ts`; the 200 it replaces was
+  // sized for a cursor that carried a Member ID and nothing else.
+  @Length(1, CURSOR_MAX_LENGTH)
   cursor?: string;
 }

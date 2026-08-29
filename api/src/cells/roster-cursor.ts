@@ -23,13 +23,18 @@
  * sequence and section 8 publishes it church-wide.
  *
  * **An unreadable cursor is treated as absent rather than refused**, which matches
- * `people.controller.ts` and is the only behaviour in the repository. Section 22 does
+ * `people.controller.ts` and is the only behaviour in the repository. That claim covers
+ * the validation in front of the decoder as well as the decoder — the two DTOs share the
+ * same bound and both refuse an empty `cursor=` — because a consistency argument that
+ * holds only for the last step of three is not one. Section 22 does
  * not settle what a collection endpoint does with a forged, stale or unparseable
  * cursor — that is recorded as open in `CLAUDE.md` rather than decided here. What can
  * be said is that it discloses nothing: the worst a tampered value does is start the
  * page elsewhere in a roster the reader is already authorized to see in full, and
  * refusing it would strand a client with no way back.
  */
+export { CURSOR_MAX_LENGTH } from '../common/cursor';
+
 export interface RosterCursor {
   lastName: string;
   firstName: string;
