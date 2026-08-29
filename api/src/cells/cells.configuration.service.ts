@@ -203,7 +203,7 @@ export class CellsConfigurationService {
         );
       }
 
-      if (current.day_of_week === dayOfWeek && current.time_of_day === timeOfDay) {
+      if (current.day_of_week === dayOfWeek && sameTimeOfDay(current.time_of_day, timeOfDay)) {
         throw new InvariantViolationError(
           'That Cell already meets then. A change that changes nothing is refused, ' +
             'because it would record a schedule boundary where nothing happened ' +
@@ -394,4 +394,27 @@ export class CellsConfigurationService {
 
     return row.at;
   }
+}
+
+/**
+ * Whether two wall-clock times are the same time.
+ *
+ * **Not `===`, and a test is what found that.** PostgreSQL renders `time` as
+ * `HH:MM:SS` while section 22's DTO accepts `HH:MM` or `HH:MM:SS`, so a leader
+ * resubmitting the time their Cell already meets at, written the shorter way, gets
+ * `19:00` compared against a stored `19:00:00` and slips past the refusal above.
+ * What that records is a schedule boundary where nothing happened — the exact thing
+ * the refusal exists to prevent, reached through a formatting difference.
+ *
+ * Seconds default to zero rather than being required, because the column has second
+ * precision and the DTO makes them optional: `19:00` and `19:00:00` are one time, and
+ * a comparison that says otherwise is comparing spellings.
+ */
+function sameTimeOfDay(stored: string, submitted: string): boolean {
+  const normalize = (value: string): string => {
+    const [hours, minutes, seconds = '00'] = value.split(':');
+    return `${hours}:${minutes}:${seconds}`;
+  };
+
+  return normalize(stored) === normalize(submitted);
 }

@@ -291,6 +291,16 @@ export interface TestCell {
   id: string;
   cellId: string;
   leaderId: string;
+  /**
+   * The configuration the Cell was created with.
+   *
+   * Returned so a test asserting "the category it already has" reads it from the
+   * fixture rather than restating the default. A test that restates it passes if the
+   * default changes underneath it and stops testing what its name says.
+   */
+  category: 'YOUTH' | 'YOUNG_PRO' | 'COUPLE';
+  dayOfWeek: number;
+  timeOfDay: string;
 }
 
 /**
@@ -343,5 +353,8 @@ export async function createCell(
     id: result.rows[0].id,
     cellId: result.rows[0].cell_id,
     leaderId: options.leader.id,
+    category: options.category ?? 'YOUTH',
+    dayOfWeek: options.dayOfWeek ?? 6,
+    timeOfDay: options.timeOfDay ?? '19:00',
   };
 }

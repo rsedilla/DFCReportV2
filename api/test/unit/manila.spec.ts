@@ -1,4 +1,9 @@
-import { manilaDayAfter, manilaDayOf, startOfManilaDay, startOfNextManilaMonth } from '../../src/common/time/manila';
+import {
+  manilaDayAfter,
+  manilaDayOf,
+  startOfManilaDay,
+  startOfNextManilaMonth,
+} from '../../src/common/time/manila';
 
 /**
  * Asia/Manila dates and instants (SKILL.md section 20).
