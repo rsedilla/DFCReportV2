@@ -6319,11 +6319,28 @@ it for both and settles what the predicate is.
 
 **One refusal, and which half moved is deliberately not distinguished.** Re-evaluating the
 whole of the requester's authority answers no where the person or the Cell moved out of
-reach, and equally where the requester has since lost the capability, changed role, or had
-their account disabled. Those are different facts and they get one answer. That is "the state
-at approval governs" applied without qualification, and it takes the conservative direction
-where Section 10 would otherwise be silent — the 2026-08-24 reasoning on an explicit null
-birthday, that a relaxation must not become a capability by omission.
+reach, and equally where the requester has since lost the capability or the role carrying it.
+Those are different facts and they get one answer. That is "the state at approval governs"
+applied without qualification, and it takes the conservative direction where Section 10 would
+otherwise be silent — the 2026-08-24 reasoning on an explicit null birthday, that a
+relaxation must not become a capability by omission.
+
+*The first version of this entry, and the Section 10 sentence it was written into, both said
+the predicate also answers no where the requester's account has been **disabled**. That is
+false, and it was false when committed.* `activeRoles` and `effective` join `accounts` and
+filter on neither `status` nor anything derived from it, so a disabled account keeps every
+role and grant it held; Section 6 makes disablement an authentication decision, which stops
+the holder signing in rather than emptying their authority. The claim was checked against the
+service before any approval code was written and corrected in the next commit — which is
+the only reason it is a correction rather than the seventh false "written to Section x" claim
+in this log. Section 10 now states the limit rather than the opposite: account status is not
+consulted, and an approval is not evidence that the requester could still act today.
+
+Whether it *should* be consulted is deliberately not opened. It is a rule about what a grant
+means, so it belongs to Section 7 and to all twenty-seven capabilities at once rather than to
+this endpoint, and inventing it here would be the shape this log keeps recording — a rule
+adopted from a neighbouring sentence by its shape rather than by re-deriving why it has
+it.
 
 **The strict reading is safe here and was terminal for declining**, which is the distinction
 worth keeping. The 2026-08-30 ruling on self-decline refused a strict reading because a
