@@ -86,7 +86,22 @@ The criterion says spine rather than tree because the whole tree cannot be loade
 
 ---
 
-## Stage 3 — Cells
+## Stage 3 — Cells — **complete**
+
+Closed on 2026-08-30. All three exit criteria are met, each with tests: a Cell can be
+requested (#47), approved (#48) and closed (#46); a membership move is one transaction and
+`cell_memberships_one_open` is exercised concurrently rather than sequentially; and a
+schedule change is effective-dated and takes effect the following month, so a past month's
+coverage figure does not move.
+
+The scope list below completed with #50, which grew the `networks` precondition its second
+half. **It was closed by #51 rather than by #50**, and the distinction is the point: on this
+document's own text the stage was already done, and section 4 still stated a rule with a hole
+that this stage had itself opened — the backdate floor had terms over pastoral rows only, so a
+correction dated back into a Cell stint the person had since handed over stranded every
+membership opened during it. Delivering a stage and leaving the specification describing
+something the code does not do are not the same thing. #51 closed it, and both readings now
+agree.
 
 **Three Stop Conditions were settled before any of this was built**, on 2026-08-28, by
 reading Sections 10, 11, 7 and 26 whole rather than by meeting them at a keyboard: an
