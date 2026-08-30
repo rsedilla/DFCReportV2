@@ -12,9 +12,10 @@ import { NetworksService } from './networks.service';
  * lead anyone, and how far back the change may be dated. Each is asked of the module
  * that owns that table rather than read from it here.
  *
- * *Counted as two until the second pass on the Cell precondition, which found the
- * same count wrong in three other places. Stated as "several" with the list beside
- * it, because the number is what kept going stale.*
+ * *Counted as two until the second pass on the Cell precondition. Stated as
+ * "several" with the list beside it, because the number is what kept going stale —
+ * and an earlier version of this note said "three other places", a figure that
+ * counted a correction made by a different commit.*
  */
 @Module({
   imports: [HierarchyModule],

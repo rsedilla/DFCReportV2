@@ -344,9 +344,18 @@ describe('sex correction (SKILL.md sections 4, 5, 7, 21, 22)', () => {
         { id: highHandle.id, cell_id: 'CELL-999900' },
       ]);
 
-      // The two orders genuinely differ, which is what makes the assertion a pin
-      // rather than a restatement of insertion order.
+      // **Both orderings the assertion depends on, asserted.** The handle order is what
+      // makes deleting the `ORDER BY` redden; the id order is what makes switching it to
+      // `cells.id` redden, and nothing checked it — true with probability 1 - 2^-32,
+      // which is not the same as checked.
+      //
+      // The handle is a fixed `CELL-999900` against a sequence that `truncateAll` does
+      // not reset (`cell_id_seq` has no `OWNED BY`). It degrades loudly rather than
+      // silently: at 999,900 the insert hits the unique index, and past 999,999 the
+      // handle grows a digit and lexicographic order inverts — at which point this
+      // assertion is what goes red.
       expect(lowHandle.cellId < 'CELL-999900').toBe(true);
+      expect(highHandle.id < lowHandle.id).toBe(true);
     });
 
     it('refuses while the person holds a Cell membership', async () => {
@@ -433,7 +442,17 @@ describe('sex correction (SKILL.md sections 4, 5, 7, 21, 22)', () => {
       await closeCellDirectly(db, own.id, { reason: 'LEADER_STEPPED_DOWN' });
       await db
         .updateTable('cell_memberships')
-        .set({ ended_at: new Date() })
+        // **Both ends of the period from the database clock, and this is the third
+        // instance of that hazard on this branch.** Before the fix above, both sides
+        // came from the host and `ended_at >= started_at` held by construction; moving
+        // only `started_at` to `clock_timestamp()` turned that into a race against
+        // `cell_memberships_period_ordered`. Measured on this machine,
+        // `clock_timestamp()` runs 6-8ms *ahead* of `Date.now()` — PostgreSQL reads
+        // `GetSystemTimePreciseAsFileTime` while V8 interpolates from the coarse tick —
+        // so a host instant taken 1-3ms later still lands behind the start. It is not
+        // skew between two hosts, which is why "the database is local" is the wrong
+        // intuition.
+        .set({ ended_at: sql<Date>`clock_timestamp()` })
         .where('person_id', '=', mark.id)
         .where('ended_at', 'is', null)
         .execute();

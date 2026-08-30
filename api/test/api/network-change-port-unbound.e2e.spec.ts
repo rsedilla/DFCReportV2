@@ -130,6 +130,14 @@ describe('a Network change with the Cell-relationships port unbound (section 4)'
     // from a crash; the log can, and it is what an operator diagnoses this from.
     expect(logged.join(' ')).toContain('CELL_RELATIONSHIPS_PORT');
 
+    // **What this pins, exactly.** One substring appearing somewhere in `Logger.error`
+    // output during the case — not the level, not the source, and not that the message
+    // names the person or calls itself a deployment fault, all of which an operator's
+    // diagnosis actually rests on. It is deliberately not narrowed to the filter's own
+    // logger, because the spy is on the prototype and every logger in the process
+    // shares it. Sufficient for the mutation it exists to catch, and weaker than the
+    // sentence "an operator can diagnose this" would suggest on its own.
+
     // **Refused means nothing written.** The point of failing closed is that a
     // wiring fault cannot let a Network change through unverified, so the Network
     // row must be untouched.

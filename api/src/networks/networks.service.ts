@@ -107,15 +107,16 @@ export class NetworksService {
    * closed and the new one opened, both at `effectiveAt` (SKILL.md section 4).
    *
    * **Section 4's preconditions are enforced here**, and section 4
-   * says so by name — not because this is a convenient place, but because neither
-   * is a constraint the database can hold. The same-Network trigger is
+   * says so by name — not because this is a convenient place, but because none
+   * of them is a constraint the database can hold. The same-Network trigger is
    * `DEFERRABLE INITIALLY DEFERRED` and sees only the state at commit, so a
    * transaction that moved a disciple out of the way and then performed the
    * correction commits legally: the schema permits exactly the combined operation
    * the first rule forbids. Nobody may read the passing constraint as agreement.
    *
    * This never touches `pastoral_assignments` and never reads it: `hierarchy` owns
-   * that table (section 2, Modules) and is asked for both facts. The reassignment
+   * that table (section 2, Modules) and is asked for each of them — whether the person
+   * is a root, whether they lead anyone, and how far back the change may be dated. The reassignment
    * the change forces is the caller's, performed in this same transaction at this
    * same instant.
    *
@@ -150,7 +151,9 @@ export class NetworksService {
     // them unevenly — an earlier version of this comment said four and omitted
     // closure, which is the one that is neither covered nor uncovered:
     //
-    //   - a leadership request's approval locks the prospective leader;
+    //   - a leadership request's approval locks the prospective leader **and the
+    //     outgoing one**, so it is the leadership-ending write that does hold a lock on
+    //     the leader whose row it closes;
     //   - both membership writes lock the person;
     //   - a **closure** locks only the members it disperses, so it ends the outgoing
     //     leader's row while holding no lock on that leader;
