@@ -34,8 +34,14 @@ export const ApiErrorCode = {
   /** No such record, or its existence must not be disclosed. */
   NOT_FOUND: 'NOT_FOUND',
   /**
-   * Another operation holds the record this write must serialize against, and the
-   * wait timed out (section 5, Database enforcement). Transient: retry shortly.
+   * The write could not be serialized against another operation and reached no
+   * decision. Transient: retry shortly, **with the same key**.
+   *
+   * Three conditions (section 22): the wait timed out (section 5, Database
+   * enforcement), the database chose this transaction as a deadlock victim, or a
+   * premise read before a lock no longer held under it — the third added by the
+   * ruling of 2026-08-31, which places a refusal by asking whether this same body,
+   * resubmitted unchanged, could succeed.
    *
    * **A 5xx deliberately, and that is not cosmetic.** Section 22 stores a 4xx
    * against the idempotency key and releases the key on a 5xx, because the first

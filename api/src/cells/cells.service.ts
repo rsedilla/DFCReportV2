@@ -146,8 +146,11 @@ export class CellsService {
         // closed Cell's record with the leader who led it.
         //
         // *This named the person until 2026-08-31, while `ended` and `changed` named
-        // the Cell. Nothing had decided the split; a reader whose scope covered the
-        // person and not the Cell found the appointment and not the ending.*
+        // the Cell, and nothing had decided the split. What it cost is narrower than
+        // scope: at the instant this is written the Cell resolves through this same
+        // person, so the two targets part company only after a later handover. The
+        // reason to move it is the fallback above and three entries about one thing
+        // being read by one rule.*
         targetType: 'cell',
         targetId: created.id,
         // Section 21 asks a leadership entry to carry "the outgoing and the incoming

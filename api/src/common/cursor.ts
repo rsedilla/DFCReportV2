@@ -4,11 +4,17 @@ import { ValidationFailedError } from './errors/api-error';
  * The refusal for a `cursor` a collection endpoint cannot resolve (SKILL.md section 22,
  * *Pagination*; the ruling of 2026-08-31).
  *
- * **Shared rather than repeated, so the two decoders answer identically.** They already
- * diverged once by copying: `GET /api/v1/people` chose to treat an unreadable cursor as
- * absent, and the Cell roster was changed to match it on a review pass rather than by a
- * decision, so the consistency was accidental and would not have survived a third
- * collection. Stage 4 adds one.
+ * **Shared rather than repeated, so the three decoders answer identically** —
+ * `people.controller.ts`, `roster-cursor.ts` and `leadership-request-cursor.ts`. They
+ * reached one answer by copying rather than by deciding: `GET /api/v1/people` chose to
+ * treat an unreadable cursor as absent and never pinned it, the Cell roster was changed
+ * to match it on a review pass, and the leadership queue then matched both. So one
+ * decision looked like three endpoints agreeing, and would not have survived a fourth.
+ * Stage 4 adds one.
+ *
+ * *This docblock said "the two decoders" when it was written, in the change whose ruling
+ * opens by correcting that exact count in `CLAUDE.md`. Counted rather than assumed now:
+ * three files import this.*
  *
  * `VALIDATION_FAILED` because section 22 defines it as malformed or missing input,
  * which a value the server cannot read is exactly. `field: 'cursor'` because the

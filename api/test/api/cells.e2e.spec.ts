@@ -143,8 +143,8 @@ describe('cells: direct creation during initial encoding (sections 2 and 10)', (
     // through its target and resolves a leadership through the Cell's leader as of the
     // period, falling back to its last leader once the Cell is closed — so a
     // person-targeted entry would be read by a different rule from the `ended` and
-    // `changed` entries beside it, and a reader whose scope covered the person and not
-    // the Cell would find an appointment with no ending.
+    // `changed` entries beside it, and only the Cell's rule keeps a closed Cell's
+    // record with whoever led it.
     //
     // The leader is still asserted, from `after` rather than from the target, which is
     // where section 21 requires the incoming leader to be. That is what makes the

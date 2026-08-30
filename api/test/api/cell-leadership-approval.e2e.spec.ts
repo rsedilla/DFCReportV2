@@ -397,8 +397,8 @@ describe('Cell leadership approval (section 10)', () => {
       // Section 7 resolves an entry through its target, and resolves a leadership
       // through the Cell — falling back to its last leader once the Cell is closed,
       // which is what keeps a closed Cell's record with whoever led it. A
-      // person-targeted entry follows that person's later pastoral reassignment
-      // instead.
+      // person-targeted entry has no such fallback and follows that person's later
+      // pastoral reassignment instead.
       const requestId = await pendingNewCell(markAccount, juan.id);
       const response = await approve(admin, requestId).expect(200);
 

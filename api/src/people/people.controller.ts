@@ -409,10 +409,11 @@ export class PeopleController {
  * having learned to read it.
  *
  * **A cursor this cannot resolve is refused**, on the ruling of 2026-08-31 now written
- * into section 22, through the shared refusal in `common/cursor.ts` so that this route
- * and the Cell roster answer identically. It was treated as absent until then, and the
- * roster was changed to match *this* file on a review pass, so the two agreed by
- * copying rather than by decision.
+ * into section 22, through the shared refusal in `common/cursor.ts` so that this route,
+ * the Cell roster and the leadership-request queue answer identically. It was treated as
+ * absent until then — the decision was made *here*, and never pinned here; the roster
+ * was changed to match this file on a review pass and the queue then matched both, so
+ * one choice read as three endpoints agreeing.
  *
  * The stranding argument that stood here does not survive: the recovery is a request
  * the client can already make — drop the cursor and start over — which is exactly what

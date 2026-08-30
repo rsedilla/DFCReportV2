@@ -22,10 +22,17 @@ approval picked the Cell for `changed` because its neighbour had it, which is Se
 25 rule 19 — a shape reused without re-deriving why it had that shape — and the
 question was raised rather than settled at the time.
 
-The consequence is not cosmetic. Section 7 resolves an audit entry's scope **through
-its target**, so a reader whose scope covers the person but not the Cell saw the
-appointment and not the handover that took it away, and a reader searching one person's
-leadership history found the opening and not the ending.
+The consequence is real and it is narrower than the first version of this ruling said,
+which is worth getting right: an overstated reason is one a later reader disproves, and
+then discounts the rule along with it.
+
+Section 7 resolves an audit entry's scope **through its target**, and it resolves a Cell
+through *its leader*. So at the instant an `opened` entry is written the two targets
+resolve to the same person's pastoral position, and they diverge only after a later
+handover — and only for a reader holding `audit.view` at a scope narrower than Whole
+Church, which is the default for both roles that hold it and which Section 7 notes makes
+the target moot. What is left is a reader searching one person's leadership history
+finding the opening and not the ending, which is a search rather than a permission.
 
 ## Why the Cell
 
@@ -49,10 +56,16 @@ search starts from is the Cell's.
 
 **The person-shaped search is served, and by the field built for it.** Section 21
 requires these entries to carry "the outgoing and the incoming leader where each
-exists", and all four sites already do. So naming the Cell as the target costs a
-person-shaped search a payload predicate rather than the entry itself, while naming the
-person costs a Cell-shaped search the fallback above. Only one of those two losses is
-recoverable.
+exists", and all four sites already do. So a person-shaped *search* becomes a predicate
+over `before` and `after` rather than over `target_id`.
+
+**That argument is about searching and not about scope**, and the first version of this
+ruling ran the two together. Scope is not recoverable by a predicate: Section 7 resolves
+the entry through its target, so a reader whose scope does not reach the Cell loses the
+entry outright. The point is that the same holds in the other direction — a
+person-targeted entry is lost to a reader whose scope reaches the Cell and not the
+person — and the tie is broken by which target Section 7 already names for a leadership,
+and by the closed-Cell fallback, which only the Cell has.
 
 **Section 16 was the argument for the person, and it is about a different table.** New
 Cell Leaders counts by when a leadership assignment starts, which it reads from
@@ -82,6 +95,13 @@ performed, not per target, and it says so to keep a compound operation legible. 
 entries per leadership action doubles the log and makes any count of leadership actions
 wrong unless every reader deduplicates — a correctness burden placed on every future
 reader to save one predicate today.
+
+**Moving the fourth action with them.** `cell_leadership.account_pending` carries the
+same noun and is not part of this: Section 21 lists it separately, as "Cell leadership
+assignment left with account provisioning pending", and what is pending is a
+provisioning step on a Person (Section 6). It keeps a `person` target, and Section 21
+now says so — because "all three" stated over a noun with four actions reads as an
+omission rather than as a boundary.
 
 **Leaving it heterogeneous and documenting the split.** Cheapest now, and it makes every
 reader of this log carry two readings for one concept. The reason to settle it before

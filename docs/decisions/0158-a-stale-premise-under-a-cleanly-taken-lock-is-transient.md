@@ -41,6 +41,23 @@ the advice to mint a new key, which a 503 makes wrong:
 - `assertHandoverApprovableWithin`, where the outgoing leader differs from the one the
   lock list covers.
 
+**None of the four is reachable through a request this API accepts, and they are
+unreachable for three different reasons, not one.** Stating them apart matters, because
+one of the three is weaker than the others and could stop holding.
+
+`requested_by` and the *nullness* of `cell_id` are frozen by the finality trigger and by
+a check constraint tying that nullness to a frozen `kind` — enforcement, in the database.
+The **value** of `cell_id` on a `PENDING` handover is frozen by nothing; it is unreached
+because no code writes it, and whether it should be frozen is on `CLAUDE.md`'s open list.
+The two handover refusals rest on neither: a closed Cell is refused earlier by `state`,
+`cell_leadership_requests_one_pending_handover` permits one pending handover per Cell,
+and the two writers of `insert-cell.ts` both write a different Cell.
+
+So the refusals are placed by what they would answer if reached, which is the only thing
+about them a ruling can decide. A first version of this said all three were frozen by the
+trigger and the check constraint — an argument that covers two of the four and was
+borrowed onto the rest.
+
 Two already answered `RESOURCE_BUSY` and are unchanged: `CellsClosureService`'s
 `closureTooEarly` on an undated closure, and `PeopleReassignmentService`'s
 `reassignmentTooEarly` on an undated reassignment.
@@ -61,22 +78,35 @@ to look again, not to choose.
 
 ## Two things CLAUDE.md asked whoever settled this to re-derive
 
-**The asymmetry `closureTooEarly` records for itself does not hold.** Its comment says
-the undated branch is unreachable for a closure but reachable in
-`PeopleReassignmentService`, "because section 5 lets Admin backdate a pastoral row and a
-concurrent reassignment can therefore leave a row ahead of the clock". Backdating writes
-a row *behind* the clock, so the stated reason is backwards, and re-deriving it makes the
-two sites one case rather than two: both are reached when a row for the same subject
-carries an instant at or after the one this request is taking. Neither needs backdating
-to get there.
+**The reason `closureTooEarly` records for its own asymmetry is backwards, and the
+asymmetry is real.** Its comment says the undated branch is unreachable for a closure but
+reachable in `PeopleReassignmentService`, "because section 5 lets Admin backdate a
+pastoral row and a concurrent reassignment can therefore leave a row ahead of the clock".
+Backdating writes a row *behind* the clock, so that reason does not follow.
 
-**What does make them reachable is resolution, not backdating.** `pastoral_assignments`
-and `network_assignments` are stamped from the host (`new Date()`, millisecond
-resolution) after the lock; two operations on one person that land in the same
-millisecond therefore tie, and a tie is a breach because the comparison is `<=`. That is
-narrow and it is not nothing, and it is the same shape at all three floor sites.
+The conclusion does. What separates the sites is the **comparison**, which is stated two
+paragraphs above the closure's own floor rule and was not connected to it:
 
-*A first draft of this ruling attributed the reachability to the database clock running
+- `NetworksService` and `PeopleReassignmentService` refuse at `effectiveAt <= floor`.
+  Their rows are stamped from the host (`new Date()`, millisecond resolution) after the
+  lock, so two operations on one person landing in the same millisecond tie — and a tie
+  is a breach. Narrow, and reachable.
+- `CellsClosureService` refuses at `effectiveAt < floor`, which Section 10 chose
+  deliberately: a date exactly at the floor is legal there. An undated closure's instant
+  is at or after every row it reads, so no collision can refuse it. Reaching that branch
+  needs a row stamped *ahead* of the clock, and nothing writes one. It is kept as a
+  fail-safe because the floor is read from rows rather than guaranteed by a constraint.
+
+***A first version of this ruling collapsed the two into one case and amended Section 10
+to say an undated closure carries the same exception as Section 4's.*** That is false —
+Section 10's bound is inclusive and says so — and it is Section 25 rule 19 committed
+inside a ruling written to settle a rule 19 question: Section 4's qualification was
+reused where the reason for it, a strict bound, does not hold. `closureTooEarly`'s
+comment records that the identical mistake had already been made and corrected once,
+which is the sentence the re-derivation should have started from. Found by
+`architecture-guardian`, and the amendment is withdrawn.
+
+*A draft of this ruling also attributed the reachability to the database clock running
 6–8 ms ahead of the host's. That was measured rather than assumed and is not true here:
 against `dfc_ci`, `clock_timestamp()` was a median of 0 ms and at most 1 ms ahead of a
 host stamp read after the query returned, across forty samples. The apparent offset is a

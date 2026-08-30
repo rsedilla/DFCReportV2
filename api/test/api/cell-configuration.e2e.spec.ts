@@ -201,7 +201,16 @@ describe('cell configuration (section 10)', () => {
       );
 
       const rows = await categoryRows(markCell.id);
-      expect(rows[1].started_at.getTime()).toBeLessThanOrEqual(Date.now());
+      // **The same 1000ms of slack the two assertions above already take, and for the
+      // same reason.** `started_at` is `clock_timestamp()` — the *database's* clock —
+      // and `Date.now()` is this process's, so the two ends of this comparison come
+      // from different clocks, which `test/setup/fixtures.ts` names as a hazard. With
+      // no slack a forward difference of a single millisecond fails a correct run, and
+      // it did: this case failed once in a full-suite run and passed on the next.
+      //
+      // The slack costs the assertion nothing. What it is for is "now rather than the
+      // first of next month", and next month is thirty days away.
+      expect(rows[1].started_at.getTime()).toBeLessThanOrEqual(Date.now() + 1000);
     });
 
     it('records the actor on the row it opens', async () => {

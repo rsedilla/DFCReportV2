@@ -54,17 +54,23 @@ rediscovered:
   since refusing a valid session costs a sign-in and admitting a revoked one costs the
   thing revocation exists for;
 - and every other cross-instance timestamp comparison in the system found and given the
-  same treatment. Section 20's month close is one and there will be more.
+  same treatment.
+
+*The list said "Section 20's month close is one" and the next section says the month
+close is deliberately **not** one, so the ruling gave its own reader two answers. The
+next section is the one that holds: the close is built to be decided in the database,
+which is what keeps it off this list.*
 
 ## What this does not reach
 
-**The submission window is not a cross-instance comparison and gains nothing here.**
-Section 13 closes a month at a wall-clock instant in Asia/Manila, compared against the
-instant a request is served. Both are read on one host in a single-instance deployment,
-and on several instances the correct fix is not a tolerance but reading the boundary
-from the database, whose clock every instance shares. Stage 4 is written that way from
-the start, so a second instance never has to revisit it: the close is decided by an
-instant the database supplies, not by whichever host happened to serve the request.
+**The submission window is not a cross-instance comparison, provided it is built not to
+be.** Section 13 closes a month at a wall-clock instant in Asia/Manila, compared against
+the instant a request is served. On several instances the correct fix for that is not a
+tolerance but reading both from the database, whose clock every instance shares — so
+Stage 4 is to be written that way from the start, and Section 24 states it as an
+obligation on the code rather than as a property it already has. Nothing implements the
+window yet, and a version of this paragraph that said it did would be describing code
+that does not exist.
 
 **Whether the isolation level should be pinned the way `DateStyle` is** stays open. It
 sits with the least-privilege database role and the liveness probe as a setting a
