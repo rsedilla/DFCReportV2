@@ -30,6 +30,6 @@ creation, since it is a write.
 
 ---
 
-Decision 0083 of 155, indexed in [CLAUDE.md](../../CLAUDE.md).
+Decision 0083, indexed in [CLAUDE.md](../../CLAUDE.md).
 
 Previous: [2026-08-22 — A Network change is refused while the person leads anyone](0082-a-network-change-is-refused-while-the-person-leads-anyone.md) | Next: [2026-08-22 — Idempotency covers the authenticated write surface, and applies by default](0084-idempotency-covers-the-authenticated-write-surface-and.md)

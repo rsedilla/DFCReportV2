@@ -70,6 +70,6 @@ is to run the committed state.
 
 ---
 
-Decision 0145 of 155, indexed in [CLAUDE.md](../../CLAUDE.md).
+Decision 0145, indexed in [CLAUDE.md](../../CLAUDE.md).
 
 Previous: [2026-08-29 — Five on the fourth fix batch, and a bound that moved underneath its payload](0144-five-on-the-fourth-fix-batch-and-a-bound-that-moved.md) | Next: [2026-08-29 — Five on the sixth fix batch, all of them what the batch said about itself](0146-five-on-the-sixth-fix-batch-all-of-them-what-the-batch-said.md)

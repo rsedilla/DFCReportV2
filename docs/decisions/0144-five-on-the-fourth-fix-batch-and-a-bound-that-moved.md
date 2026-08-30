@@ -82,6 +82,6 @@ planned, and a bound nothing reaches until a name is long enough.
 
 ---
 
-Decision 0144 of 155, indexed in [CLAUDE.md](../../CLAUDE.md).
+Decision 0144, indexed in [CLAUDE.md](../../CLAUDE.md).
 
 Previous: [2026-08-29 — Seven on the third fix batch, and a 500 on a documented parameter](0143-seven-on-the-third-fix-batch-and-a-500-on-a-documented.md) | Next: [2026-08-29 — Four on the fifth fix batch, and a disjunction pinned with a member missing](0145-four-on-the-fifth-fix-batch-and-a-disjunction-pinned-with-a.md)

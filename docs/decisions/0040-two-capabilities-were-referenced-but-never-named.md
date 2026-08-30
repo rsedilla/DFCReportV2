@@ -5,6 +5,6 @@
 
 ---
 
-Decision 0040 of 155, indexed in [CLAUDE.md](../../CLAUDE.md).
+Decision 0040, indexed in [CLAUDE.md](../../CLAUDE.md).
 
 Previous: [2026-08-20 — Backups are daily, not weekly](0039-backups-are-daily-not-weekly.md) | Next: [2026-08-20 — DCC attendance is face to face only](0041-dcc-attendance-is-face-to-face-only.md)

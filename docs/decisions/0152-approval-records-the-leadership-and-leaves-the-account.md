@@ -61,6 +61,6 @@ for the rule rather than by asserting it here.
 
 ---
 
-Decision 0152 of 155, indexed in [CLAUDE.md](../../CLAUDE.md).
+Decision 0152, indexed in [CLAUDE.md](../../CLAUDE.md).
 
 Previous: [2026-08-30 — Four on the second fix batch, and a pin that pinned nothing](0151-four-on-the-second-fix-batch-and-a-pin-that-pinned-nothing.md) | Next: [2026-08-30 — Three rulings the approval endpoint needed, and a condition nothing could evaluate](0153-three-rulings-the-approval-endpoint-needed-and-a-condition.md)

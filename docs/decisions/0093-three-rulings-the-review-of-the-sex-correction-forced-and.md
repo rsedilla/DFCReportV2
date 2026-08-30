@@ -80,6 +80,6 @@ that finds these, and it has to be asked per rule rather than per test.
 
 ---
 
-Decision 0093 of 155, indexed in [CLAUDE.md](../../CLAUDE.md).
+Decision 0093, indexed in [CLAUDE.md](../../CLAUDE.md).
 
 Previous: [2026-08-23 — Reading the Network-change trigger fired twice, which is what the section 4 floor is about](0092-reading-the-network-change-trigger-fired-twice-which-is-what.md) | Next: [2026-08-23 — The root is a row, and a person lock serializes the same-Network rule](0094-the-root-is-a-row-and-a-person-lock-serializes-the-same.md)

@@ -46,6 +46,6 @@ on its own.
 
 ---
 
-Decision 0119 of 155, indexed in [CLAUDE.md](../../CLAUDE.md).
+Decision 0119, indexed in [CLAUDE.md](../../CLAUDE.md).
 
 Previous: [2026-08-26 — A module's tables are never written by another, and read by one only where the query is rooted elsewhere](0118-a-modules-tables-are-never-written-by-another-and-read-by.md) | Next: [2026-08-26 — The tree import, and the one thing the fingerprint cannot bind](0120-the-tree-import-and-the-one-thing-the-fingerprint-cannot.md)

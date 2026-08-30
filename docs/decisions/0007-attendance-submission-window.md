@@ -4,6 +4,6 @@ A month closes on the 7th of the following month. After close, only Admin may am
 
 ---
 
-Decision 0007 of 155, indexed in [CLAUDE.md](../../CLAUDE.md).
+Decision 0007, indexed in [CLAUDE.md](../../CLAUDE.md).
 
 Previous: [2026-08-19 — Cell monthly denominator](0006-cell-monthly-denominator.md) | Next: [2026-08-19 — Facilitation is not leadership](0008-facilitation-is-not-leadership.md)

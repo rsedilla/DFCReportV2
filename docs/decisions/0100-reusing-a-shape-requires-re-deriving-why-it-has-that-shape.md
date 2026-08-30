@@ -33,6 +33,6 @@ than left to care.
 
 ---
 
-Decision 0100 of 155, indexed in [CLAUDE.md](../../CLAUDE.md).
+Decision 0100, indexed in [CLAUDE.md](../../CLAUDE.md).
 
 Previous: [2026-08-23 — The application runs at READ COMMITTED, and that is now load-bearing](0099-the-application-runs-at-read-committed-and-that-is-now-load.md) | Next: [2026-08-23 — Identifier normalization is global, and a pastoral leader has one field name](0101-identifier-normalization-is-global-and-a-pastoral-leader-has.md)

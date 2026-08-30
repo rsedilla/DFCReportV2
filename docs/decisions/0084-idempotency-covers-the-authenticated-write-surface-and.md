@@ -78,6 +78,6 @@ the code, and nothing checks a "Written to §22" claim.
 
 ---
 
-Decision 0084 of 155, indexed in [CLAUDE.md](../../CLAUDE.md).
+Decision 0084, indexed in [CLAUDE.md](../../CLAUDE.md).
 
 Previous: [2026-08-22 — `people.correct_sex`, the twenty-fifth capability, Admin-only](0083-people-correctsex-the-twenty-fifth-capability-admin-only.md) | Next: [2026-08-22 — A claim and a response are bounded separately](0085-a-claim-and-a-response-are-bounded-separately.md)

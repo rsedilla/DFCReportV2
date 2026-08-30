@@ -6,6 +6,6 @@ Section 6 was deliberately not widened. An account for someone who has not opene
 
 ---
 
-Decision 0042 of 155, indexed in [CLAUDE.md](../../CLAUDE.md).
+Decision 0042, indexed in [CLAUDE.md](../../CLAUDE.md).
 
 Previous: [2026-08-20 — DCC attendance is face to face only](0041-dcc-attendance-is-face-to-face-only.md) | Next: [2026-08-20 — Recorded scale and initial data load](0043-recorded-scale-and-initial-data-load.md)

@@ -40,6 +40,6 @@ module graph; a cross-module table read is greppable in one line and has no gate
 
 ---
 
-Decision 0118 of 155, indexed in [CLAUDE.md](../../CLAUDE.md).
+Decision 0118, indexed in [CLAUDE.md](../../CLAUDE.md).
 
 Previous: [2026-08-25 — The first Admin account is a one-time command, and an administrator need not be in the tree](0117-the-first-admin-account-is-a-one-time-command-and-an.md) | Next: [2026-08-26 — The bootstrap's two service methods guard themselves, and `ts-node` ships](0119-the-bootstraps-two-service-methods-guard-themselves-and-ts.md)

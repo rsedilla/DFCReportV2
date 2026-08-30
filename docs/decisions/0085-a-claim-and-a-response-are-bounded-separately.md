@@ -29,6 +29,6 @@ write's transaction rather than follow it.
 
 ---
 
-Decision 0085 of 155, indexed in [CLAUDE.md](../../CLAUDE.md).
+Decision 0085, indexed in [CLAUDE.md](../../CLAUDE.md).
 
 Previous: [2026-08-22 — Idempotency covers the authenticated write surface, and applies by default](0084-idempotency-covers-the-authenticated-write-surface-and.md) | Next: [2026-08-22 — A write endpoint records its idempotency completion in its own transaction](0086-a-write-endpoint-records-its-idempotency-completion-in-its.md)

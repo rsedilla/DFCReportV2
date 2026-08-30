@@ -4,6 +4,6 @@ Three roles — Senior Pastor, Admin, Leader — with defined default capabiliti
 
 ---
 
-Decision 0013 of 155, indexed in [CLAUDE.md](../../CLAUDE.md).
+Decision 0013, indexed in [CLAUDE.md](../../CLAUDE.md).
 
 Previous: [2026-08-19 — A merge lowers past-period totals](0012-a-merge-lowers-past-period-totals.md) | Next: [2026-08-20 — Stack pinned: NestJS, PostgreSQL, Next.js as a pure client](0014-stack-pinned-nestjs-postgresql-next-js-as-a-pure-client.md)

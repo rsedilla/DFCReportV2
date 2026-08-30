@@ -20,6 +20,6 @@ Also closed: an `-- migrate:irreversible` marker above the up marker recorded an
 
 ---
 
-Decision 0074 of 155, indexed in [CLAUDE.md](../../CLAUDE.md).
+Decision 0074, indexed in [CLAUDE.md](../../CLAUDE.md).
 
 Previous: [2026-08-21 — WCAG 2.2 Level AA, with something that can fail](0073-wcag-2-2-level-aa-with-something-that-can-fail.md) | Next: [2026-08-21 — Migration 0001 may be corrected in place until first deployment](0075-migration-0001-may-be-corrected-in-place-until-first.md)

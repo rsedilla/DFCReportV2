@@ -74,6 +74,6 @@ Written to `SKILL.md` §22.
 
 ---
 
-Decision 0086 of 155, indexed in [CLAUDE.md](../../CLAUDE.md).
+Decision 0086, indexed in [CLAUDE.md](../../CLAUDE.md).
 
 Previous: [2026-08-22 — A claim and a response are bounded separately](0085-a-claim-and-a-response-are-bounded-separately.md) | Next: [2026-08-22 — `people.create`, and how a Tier 1 duplicate is refused](0087-people-create-and-how-a-tier-1-duplicate-is-refused.md)

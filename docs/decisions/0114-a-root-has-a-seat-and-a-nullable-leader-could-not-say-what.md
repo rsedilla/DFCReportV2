@@ -160,6 +160,6 @@ does not offer.
 
 ---
 
-Decision 0114 of 155, indexed in [CLAUDE.md](../../CLAUDE.md).
+Decision 0114, indexed in [CLAUDE.md](../../CLAUDE.md).
 
 Previous: [2026-08-25 — The decisions file is a CSV, and the fingerprint is over trimmed fields in order](0113-the-decisions-file-is-a-csv-and-the-fingerprint-is-over.md) | Next: [2026-08-25 — The tree is known centrally only to its first level, and no birthday is required](0115-the-tree-is-known-centrally-only-to-its-first-level-and-no.md)

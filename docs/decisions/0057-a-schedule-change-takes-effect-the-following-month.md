@@ -6,6 +6,6 @@ Mid-month resolution was tried and rejected: it left a month able to hold three 
 
 ---
 
-Decision 0057 of 155, indexed in [CLAUDE.md](../../CLAUDE.md).
+Decision 0057, indexed in [CLAUDE.md](../../CLAUDE.md).
 
 Previous: [2026-08-20 — Cell monthly attendance reports on members](0056-cell-monthly-attendance-reports-on-members.md) | Next: [2026-08-20 — Cell monthly attendance reverts to attendees, with a separate roster view](0058-cell-monthly-attendance-reverts-to-attendees-with-a-separate.md)

@@ -11,6 +11,6 @@ Communicating a new Cell Leader to the Senior Pastors' direct leaders happens ou
 
 ---
 
-Decision 0044 of 155, indexed in [CLAUDE.md](../../CLAUDE.md).
+Decision 0044, indexed in [CLAUDE.md](../../CLAUDE.md).
 
 Previous: [2026-08-20 — Recorded scale and initial data load](0043-recorded-scale-and-initial-data-load.md) | Next: [2026-08-20 — Admin creates the initial Cells](0045-admin-creates-the-initial-cells.md)

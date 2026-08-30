@@ -43,6 +43,6 @@ the effective date to today. Written to `SKILL.md` §4.
 
 ---
 
-Decision 0082 of 155, indexed in [CLAUDE.md](../../CLAUDE.md).
+Decision 0082, indexed in [CLAUDE.md](../../CLAUDE.md).
 
 Previous: [2026-08-22 — Four enforcement gaps found reviewing the Stage 2 rulings](0081-four-enforcement-gaps-found-reviewing-the-stage-2-rulings.md) | Next: [2026-08-22 — `people.correct_sex`, the twenty-fifth capability, Admin-only](0083-people-correctsex-the-twenty-fifth-capability-admin-only.md)

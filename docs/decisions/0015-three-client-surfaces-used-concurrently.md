@@ -9,6 +9,6 @@ Desktop web, mobile web, and native Android/iOS, against one API, by the same pe
 
 ---
 
-Decision 0015 of 155, indexed in [CLAUDE.md](../../CLAUDE.md).
+Decision 0015, indexed in [CLAUDE.md](../../CLAUDE.md).
 
 Previous: [2026-08-20 — Stack pinned: NestJS, PostgreSQL, Next.js as a pure client](0014-stack-pinned-nestjs-postgresql-next-js-as-a-pure-client.md) | Next: [2026-08-20 — DCC has no meeting status](0016-dcc-has-no-meeting-status.md)

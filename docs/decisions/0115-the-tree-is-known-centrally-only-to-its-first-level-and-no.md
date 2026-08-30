@@ -60,6 +60,6 @@ than asserted.
 
 ---
 
-Decision 0115 of 155, indexed in [CLAUDE.md](../../CLAUDE.md).
+Decision 0115, indexed in [CLAUDE.md](../../CLAUDE.md).
 
 Previous: [2026-08-25 — A root has a seat, and a nullable leader could not say what it meant](0114-a-root-has-a-seat-and-a-nullable-leader-could-not-say-what.md) | Next: [2026-08-25 — A generational suffix lives in `last_name`, and a title lives nowhere](0116-a-generational-suffix-lives-in-lastname-and-a-title-lives.md)

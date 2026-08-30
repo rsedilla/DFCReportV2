@@ -140,6 +140,6 @@ and this list was not. It is walked now.
 
 ---
 
-Decision 0121 of 155, indexed in [CLAUDE.md](../../CLAUDE.md).
+Decision 0121, indexed in [CLAUDE.md](../../CLAUDE.md).
 
 Previous: [2026-08-26 — The tree import, and the one thing the fingerprint cannot bind](0120-the-tree-import-and-the-one-thing-the-fingerprint-cannot.md) | Next: [2026-08-26 — A check that reads what its caller handed it is not a check](0122-a-check-that-reads-what-its-caller-handed-it-is-not-a-check.md)

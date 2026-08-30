@@ -34,6 +34,6 @@ Written to `SKILL.md` §6, and pinned by a two-tab case in
 
 ---
 
-Decision 0125 of 155, indexed in [CLAUDE.md](../../CLAUDE.md).
+Decision 0125, indexed in [CLAUDE.md](../../CLAUDE.md).
 
 Previous: [2026-08-27 — What the web client does with a refresh token, pending three rulings](0124-what-the-web-client-does-with-a-refresh-token-pending-three.md) | Next: [2026-08-27 — `field-invalid` follows the field, not the error code](0126-field-invalid-follows-the-field-not-the-error-code.md)

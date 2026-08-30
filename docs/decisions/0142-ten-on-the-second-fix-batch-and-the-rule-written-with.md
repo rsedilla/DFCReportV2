@@ -67,6 +67,6 @@ index, to obtain a distinction nothing can enforce. Written to section 10.
 
 ---
 
-Decision 0142 of 155, indexed in [CLAUDE.md](../../CLAUDE.md).
+Decision 0142, indexed in [CLAUDE.md](../../CLAUDE.md).
 
 Previous: [2026-08-29 — Ten more on the fixes, and the one the fixes introduced](0141-ten-more-on-the-fixes-and-the-one-the-fixes-introduced.md) | Next: [2026-08-29 — Seven on the third fix batch, and a 500 on a documented parameter](0143-seven-on-the-third-fix-batch-and-a-500-on-a-documented.md)

@@ -6,6 +6,6 @@ Initial encoding is a distinct phase: Admin imports the leadership tree centrall
 
 ---
 
-Decision 0043 of 155, indexed in [CLAUDE.md](../../CLAUDE.md).
+Decision 0043, indexed in [CLAUDE.md](../../CLAUDE.md).
 
 Previous: [2026-08-20 — Submission rolls up to the nearest upline with an account](0042-submission-rolls-up-to-the-nearest-upline-with-an-account.md) | Next: [2026-08-20 — Cell creation is request then approve](0044-cell-creation-is-request-then-approve.md)

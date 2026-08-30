@@ -218,6 +218,6 @@ landed once its questions were answerable.
 
 ---
 
-Decision 0137 of 155, indexed in [CLAUDE.md](../../CLAUDE.md).
+Decision 0137, indexed in [CLAUDE.md](../../CLAUDE.md).
 
 Previous: [2026-08-29 — A Cell is placed in the tree by its leader, and a move is two changes](0136-a-cell-is-placed-in-the-tree-by-its-leader-and-a-move-is-two.md) | Next: [2026-08-29 — A second schedule change corrects the pending one](0138-a-second-schedule-change-corrects-the-pending-one.md)

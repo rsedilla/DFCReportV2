@@ -41,6 +41,6 @@ does not undo the drops already made for N+1.
 
 ---
 
-Decision 0081 of 155, indexed in [CLAUDE.md](../../CLAUDE.md).
+Decision 0081, indexed in [CLAUDE.md](../../CLAUDE.md).
 
 Previous: [2026-08-22 — Seven Stage 2 rulings, settled before any Stage 2 code](0080-seven-stage-2-rulings-settled-before-any-stage-2-code.md) | Next: [2026-08-22 — A Network change is refused while the person leads anyone](0082-a-network-change-is-refused-while-the-person-leads-anyone.md)

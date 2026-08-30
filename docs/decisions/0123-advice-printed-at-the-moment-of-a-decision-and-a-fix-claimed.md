@@ -78,6 +78,6 @@ as `>` when it is `>=`.
 
 ---
 
-Decision 0123 of 155, indexed in [CLAUDE.md](../../CLAUDE.md).
+Decision 0123, indexed in [CLAUDE.md](../../CLAUDE.md).
 
 Previous: [2026-08-26 — A check that reads what its caller handed it is not a check](0122-a-check-that-reads-what-its-caller-handed-it-is-not-a-check.md) | Next: [2026-08-27 — What the web client does with a refresh token, pending three rulings](0124-what-the-web-client-does-with-a-refresh-token-pending-three.md)

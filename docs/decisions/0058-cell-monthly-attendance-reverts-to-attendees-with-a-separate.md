@@ -8,6 +8,6 @@ Monthly-attendance buckets are now a Cell-scope view only. N belongs to a Cell, 
 
 ---
 
-Decision 0058 of 155, indexed in [CLAUDE.md](../../CLAUDE.md).
+Decision 0058, indexed in [CLAUDE.md](../../CLAUDE.md).
 
 Previous: [2026-08-20 — A schedule change takes effect the following month](0057-a-schedule-change-takes-effect-the-following-month.md) | Next: [2026-08-20 — Three reporting questions are deferred to implementation](0059-three-reporting-questions-are-deferred-to-implementation.md)

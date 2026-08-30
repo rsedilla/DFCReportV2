@@ -121,6 +121,6 @@ have been caught by the tests that now exist and did not.
 
 ---
 
-Decision 0101 of 155, indexed in [CLAUDE.md](../../CLAUDE.md).
+Decision 0101, indexed in [CLAUDE.md](../../CLAUDE.md).
 
 Previous: [2026-08-23 — Reusing a shape requires re-deriving why it has that shape](0100-reusing-a-shape-requires-re-deriving-why-it-has-that-shape.md) | Next: [2026-08-23 — What an identifier's field name is, and the second walk over a body](0102-what-an-identifiers-field-name-is-and-the-second-walk-over-a.md)

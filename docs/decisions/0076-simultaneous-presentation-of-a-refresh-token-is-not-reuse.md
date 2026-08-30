@@ -10,6 +10,6 @@ Two rules that make the marker work are written to §6 alongside it, because bot
 
 ---
 
-Decision 0076 of 155, indexed in [CLAUDE.md](../../CLAUDE.md).
+Decision 0076, indexed in [CLAUDE.md](../../CLAUDE.md).
 
 Previous: [2026-08-21 — Migration 0001 may be corrected in place until first deployment](0075-migration-0001-may-be-corrected-in-place-until-first.md) | Next: [2026-08-21 — `account_roles` gains `senior_pastor_slot`](0077-accountroles-gains-seniorpastorslot.md)

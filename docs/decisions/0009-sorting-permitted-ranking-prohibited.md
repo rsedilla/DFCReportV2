@@ -6,6 +6,6 @@ The reason is practical, not only pastoral: `NOT_HELD` exists to obtain honest r
 
 ---
 
-Decision 0009 of 155, indexed in [CLAUDE.md](../../CLAUDE.md).
+Decision 0009, indexed in [CLAUDE.md](../../CLAUDE.md).
 
 Previous: [2026-08-19 — Facilitation is not leadership](0008-facilitation-is-not-leadership.md) | Next: [2026-08-19 — Reporting time zone is Asia/Manila](0010-reporting-time-zone-is-asia-manila.md)

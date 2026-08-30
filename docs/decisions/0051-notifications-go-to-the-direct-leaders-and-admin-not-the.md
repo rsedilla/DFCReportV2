@@ -6,6 +6,6 @@ Recipients see church-wide figures, which exceeds the own/subtree scope their po
 
 ---
 
-Decision 0051 of 155, indexed in [CLAUDE.md](../../CLAUDE.md).
+Decision 0051, indexed in [CLAUDE.md](../../CLAUDE.md).
 
 Previous: [2026-08-20 — A rescheduled meeting takes its roster from the actual date](0050-a-rescheduled-meeting-takes-its-roster-from-the-actual-date.md) | Next: [2026-08-20 — `settings.manage` for church-wide operational settings](0052-settings-manage-for-church-wide-operational-settings.md)

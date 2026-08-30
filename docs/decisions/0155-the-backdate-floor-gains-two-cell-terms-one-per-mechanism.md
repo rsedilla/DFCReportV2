@@ -293,6 +293,6 @@ holding connections.
 
 ---
 
-Decision 0155 of 155, indexed in [CLAUDE.md](../../CLAUDE.md).
+Decision 0155, indexed in [CLAUDE.md](../../CLAUDE.md).
 
-Previous: [2026-08-30 — A Network change is refused while the person leads a Cell](0154-a-network-change-is-refused-while-the-person-leads-a-cell.md)
+Previous: [2026-08-30 — A Network change is refused while the person leads a Cell](0154-a-network-change-is-refused-while-the-person-leads-a-cell.md) | Next: [2026-08-30 — `DateStyle` is pinned by the connection, not inherited](0156-datestyle-is-pinned-by-the-connection-not-inherited.md)

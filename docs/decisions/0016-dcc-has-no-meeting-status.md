@@ -4,6 +4,6 @@ The three-status model is Cell-only. DCC is a single church-wide service, so whe
 
 ---
 
-Decision 0016 of 155, indexed in [CLAUDE.md](../../CLAUDE.md).
+Decision 0016, indexed in [CLAUDE.md](../../CLAUDE.md).
 
 Previous: [2026-08-20 — Three client surfaces used concurrently](0015-three-client-surfaces-used-concurrently.md) | Next: [2026-08-20 — Cell membership workflow](0017-cell-membership-workflow.md)

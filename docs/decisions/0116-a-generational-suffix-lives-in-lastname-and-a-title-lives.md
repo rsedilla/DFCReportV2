@@ -47,6 +47,6 @@ Written to `SKILL.md` §3 (*Name handling*), and verified by grep rather than as
 
 ---
 
-Decision 0116 of 155, indexed in [CLAUDE.md](../../CLAUDE.md).
+Decision 0116, indexed in [CLAUDE.md](../../CLAUDE.md).
 
 Previous: [2026-08-25 — The tree is known centrally only to its first level, and no birthday is required](0115-the-tree-is-known-centrally-only-to-its-first-level-and-no.md) | Next: [2026-08-25 — The first Admin account is a one-time command, and an administrator need not be in the tree](0117-the-first-admin-account-is-a-one-time-command-and-an.md)

@@ -6,6 +6,6 @@ Chosen for simplicity: one list on the leader's screen, and the roster, the memb
 
 ---
 
-Decision 0031 of 155, indexed in [CLAUDE.md](../../CLAUDE.md).
+Decision 0031, indexed in [CLAUDE.md](../../CLAUDE.md).
 
 Previous: [2026-08-20 — Cell ID generation](0030-cell-id-generation.md) | Next: [2026-08-20 — API conventions](0032-api-conventions.md)

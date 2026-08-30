@@ -4,6 +4,6 @@
 
 ---
 
-Decision 0004 of 155, indexed in [CLAUDE.md](../../CLAUDE.md).
+Decision 0004, indexed in [CLAUDE.md](../../CLAUDE.md).
 
 Previous: [2026-08-19 — Network roots](0003-network-roots.md) | Next: [2026-08-19 — Cell meeting status extended to three](0005-cell-meeting-status-extended-to-three.md)

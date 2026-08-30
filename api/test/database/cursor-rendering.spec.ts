@@ -38,9 +38,11 @@ describe('the leadership-request cursor key (section 22)', () => {
   });
 
   /**
-   * Every `DateStyle` PostgreSQL supports. Nothing in this repository sets one and the
-   * deployment controls it — this machine's server already runs `ISO, DMY` rather than
-   * the default `ISO, MDY`, which is the concrete demonstration that it is not fixed.
+   * Every `DateStyle` PostgreSQL supports. The application's own pool pins one now
+   * (`database/date-style.ts`), which this comment used to say nothing did — and these
+   * cases deliberately set the style themselves, so what they measure is unchanged:
+   * that the rendered key survives whatever the session is set to, rather than that
+   * the session is set to anything in particular.
    */
   const styles = ['ISO, MDY', 'ISO, DMY', 'SQL, DMY', 'Postgres, DMY', 'German, DMY'];
 

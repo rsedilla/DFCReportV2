@@ -4,6 +4,6 @@
 
 ---
 
-Decision 0008 of 155, indexed in [CLAUDE.md](../../CLAUDE.md).
+Decision 0008, indexed in [CLAUDE.md](../../CLAUDE.md).
 
 Previous: [2026-08-19 — Attendance submission window](0007-attendance-submission-window.md) | Next: [2026-08-19 — Sorting permitted, ranking prohibited](0009-sorting-permitted-ranking-prohibited.md)

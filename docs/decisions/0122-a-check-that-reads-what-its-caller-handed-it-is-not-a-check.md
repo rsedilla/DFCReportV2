@@ -63,6 +63,6 @@ than asserted, because counting them by memory is what produced both errors.
 
 ---
 
-Decision 0122 of 155, indexed in [CLAUDE.md](../../CLAUDE.md).
+Decision 0122, indexed in [CLAUDE.md](../../CLAUDE.md).
 
 Previous: [2026-08-26 — The import's actor must hold ADMIN, and four other findings from the review](0121-the-imports-actor-must-hold-admin-and-four-other-findings.md) | Next: [2026-08-26 — Advice printed at the moment of a decision, and a fix claimed but not made](0123-advice-printed-at-the-moment-of-a-decision-and-a-fix-claimed.md)

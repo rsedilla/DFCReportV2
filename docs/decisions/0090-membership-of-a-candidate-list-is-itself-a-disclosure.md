@@ -62,6 +62,6 @@ was being looked at.
 
 ---
 
-Decision 0090 of 155, indexed in [CLAUDE.md](../../CLAUDE.md).
+Decision 0090, indexed in [CLAUDE.md](../../CLAUDE.md).
 
 Previous: [2026-08-22 — A duplicate candidate outside the viewer's scope carries no tier](0089-a-duplicate-candidate-outside-the-viewers-scope-carries-no.md) | Next: [2026-08-23 — Six rulings the sex-correction route needed, settled before the code](0091-six-rulings-the-sex-correction-route-needed-settled-before.md)

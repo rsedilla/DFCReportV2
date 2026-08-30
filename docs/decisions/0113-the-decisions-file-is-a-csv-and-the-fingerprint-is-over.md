@@ -70,6 +70,6 @@ asserting it here.
 
 ---
 
-Decision 0113 of 155, indexed in [CLAUDE.md](../../CLAUDE.md).
+Decision 0113, indexed in [CLAUDE.md](../../CLAUDE.md).
 
 Previous: [2026-08-24 — Birthday is optional on a Person](0112-birthday-is-optional-on-a-person.md) | Next: [2026-08-25 — A root has a seat, and a nullable leader could not say what it meant](0114-a-root-has-a-seat-and-a-nullable-leader-could-not-say-what.md)

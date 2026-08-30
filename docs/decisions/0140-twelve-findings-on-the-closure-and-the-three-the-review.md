@@ -91,6 +91,6 @@ The cost is escalated rather than hidden and is listed as open below.
 
 ---
 
-Decision 0140 of 155, indexed in [CLAUDE.md](../../CLAUDE.md).
+Decision 0140, indexed in [CLAUDE.md](../../CLAUDE.md).
 
 Previous: [2026-08-29 — The closure ordering and the closure floor, settled by running the database](0139-the-closure-ordering-and-the-closure-floor-settled-by.md) | Next: [2026-08-29 — Ten more on the fixes, and the one the fixes introduced](0141-ten-more-on-the-fixes-and-the-one-the-fixes-introduced.md)

@@ -10,6 +10,6 @@ The Next.js application carries no API routes and no server actions. If that bou
 
 ---
 
-Decision 0014 of 155, indexed in [CLAUDE.md](../../CLAUDE.md).
+Decision 0014, indexed in [CLAUDE.md](../../CLAUDE.md).
 
 Previous: [2026-08-19 — Role catalog](0013-role-catalog.md) | Next: [2026-08-20 — Three client surfaces used concurrently](0015-three-client-surfaces-used-concurrently.md)

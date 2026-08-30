@@ -57,6 +57,6 @@ because those three *are* on the unauthenticated list.
 
 ---
 
-Decision 0104 of 155, indexed in [CLAUDE.md](../../CLAUDE.md).
+Decision 0104, indexed in [CLAUDE.md](../../CLAUDE.md).
 
 Previous: [2026-08-24 — "Never by layer" is about modules, not about files inside one](0103-never-by-layer-is-about-modules-not-about-files-inside-one.md) | Next: [2026-08-24 — Four rulings the accounts review forced, and the escalation that prompted them](0105-four-rulings-the-accounts-review-forced-and-the-escalation.md)

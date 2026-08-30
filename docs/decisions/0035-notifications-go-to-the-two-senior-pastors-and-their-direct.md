@@ -7,6 +7,6 @@ Every leader still sees their own outstanding records on their own dashboard —
 
 ---
 
-Decision 0035 of 155, indexed in [CLAUDE.md](../../CLAUDE.md).
+Decision 0035, indexed in [CLAUDE.md](../../CLAUDE.md).
 
 Previous: [2026-08-20 — DCC events are generated ahead, not lazily](0034-dcc-events-are-generated-ahead-not-lazily.md) | Next: [2026-08-20 — Attention threshold is one church-wide Admin setting](0036-attention-threshold-is-one-church-wide-admin-setting.md)

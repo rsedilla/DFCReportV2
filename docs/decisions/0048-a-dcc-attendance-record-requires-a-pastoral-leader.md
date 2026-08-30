@@ -4,6 +4,6 @@ The VIP workflow captures the pastoral leader at creation. In practice the answe
 
 ---
 
-Decision 0048 of 155, indexed in [CLAUDE.md](../../CLAUDE.md).
+Decision 0048, indexed in [CLAUDE.md](../../CLAUDE.md).
 
 Previous: [2026-08-20 — Initial encoding ends by an audited Admin action](0047-initial-encoding-ends-by-an-audited-admin-action.md) | Next: [2026-08-20 — A person who changes Cell mid-month reports under the new Cell](0049-a-person-who-changes-cell-mid-month-reports-under-the-new.md)

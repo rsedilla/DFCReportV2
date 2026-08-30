@@ -4,6 +4,6 @@ Same close as Cell: the 7th of the following month, 23:59 Asia/Manila, Admin-onl
 
 ---
 
-Decision 0021 of 155, indexed in [CLAUDE.md](../../CLAUDE.md).
+Decision 0021, indexed in [CLAUDE.md](../../CLAUDE.md).
 
 Previous: [2026-08-20 — No "on behalf" for pastoral assignment](0020-no-on-behalf-for-pastoral-assignment.md) | Next: [2026-08-20 — Archiving a Person who leads a Cell](0022-archiving-a-person-who-leads-a-cell.md)

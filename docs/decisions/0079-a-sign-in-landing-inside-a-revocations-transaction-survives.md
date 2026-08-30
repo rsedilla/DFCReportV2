@@ -12,6 +12,6 @@ Written to `SKILL.md` §6, which now carries three rules for immediate revocatio
 
 ---
 
-Decision 0079 of 155, indexed in [CLAUDE.md](../../CLAUDE.md).
+Decision 0079, indexed in [CLAUDE.md](../../CLAUDE.md).
 
 Previous: [2026-08-21 — A row of an effective-dated table is never deleted](0078-a-row-of-an-effective-dated-table-is-never-deleted.md) | Next: [2026-08-22 — Seven Stage 2 rulings, settled before any Stage 2 code](0080-seven-stage-2-rulings-settled-before-any-stage-2-code.md)

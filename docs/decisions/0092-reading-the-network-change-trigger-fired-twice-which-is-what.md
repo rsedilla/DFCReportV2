@@ -73,6 +73,6 @@ excused as a corner.
 
 ---
 
-Decision 0092 of 155, indexed in [CLAUDE.md](../../CLAUDE.md).
+Decision 0092, indexed in [CLAUDE.md](../../CLAUDE.md).
 
 Previous: [2026-08-23 — Six rulings the sex-correction route needed, settled before the code](0091-six-rulings-the-sex-correction-route-needed-settled-before.md) | Next: [2026-08-23 — Three rulings the review of the sex correction forced, and one gap it found](0093-three-rulings-the-review-of-the-sex-correction-forced-and.md)

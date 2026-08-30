@@ -10,6 +10,6 @@ The cost is real and accepted: a developer who applied 0001 locally sees `migrat
 
 ---
 
-Decision 0075 of 155, indexed in [CLAUDE.md](../../CLAUDE.md).
+Decision 0075, indexed in [CLAUDE.md](../../CLAUDE.md).
 
 Previous: [2026-08-21 — Twelve findings from the Stage 1 verification, and why they existed](0074-twelve-findings-from-the-stage-1-verification-and-why-they.md) | Next: [2026-08-21 — Simultaneous presentation of a refresh token is not reuse](0076-simultaneous-presentation-of-a-refresh-token-is-not-reuse.md)

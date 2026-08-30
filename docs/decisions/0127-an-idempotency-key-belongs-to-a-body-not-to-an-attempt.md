@@ -36,6 +36,6 @@ Written to `SKILL.md` §22, checked by grep rather than asserted.
 
 ---
 
-Decision 0127 of 155, indexed in [CLAUDE.md](../../CLAUDE.md).
+Decision 0127, indexed in [CLAUDE.md](../../CLAUDE.md).
 
 Previous: [2026-08-27 — `field-invalid` follows the field, not the error code](0126-field-invalid-follows-the-field-not-the-error-code.md) | Next: [2026-08-27 — A re-presentation whose replacement was never used is a retry](0128-a-re-presentation-whose-replacement-was-never-used-is-a.md)

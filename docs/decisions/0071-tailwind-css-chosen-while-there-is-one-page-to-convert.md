@@ -8,6 +8,6 @@ Chosen now rather than at Stage 5 for the same reason CI was chosen at Stage 1. 
 
 ---
 
-Decision 0071 of 155, indexed in [CLAUDE.md](../../CLAUDE.md).
+Decision 0071, indexed in [CLAUDE.md](../../CLAUDE.md).
 
 Previous: [2026-08-20 — The unauthenticated surface is a closed list, and `read_only` is not a role concept](0070-the-unauthenticated-surface-is-a-closed-list-and-readonly-is.md) | Next: [2026-08-21 — UI direction: headless primitives the repository owns, and no design-system framework](0072-ui-direction-headless-primitives-the-repository-owns-and-no.md)

@@ -49,6 +49,6 @@ Written to `SKILL.md` §6, checked by grep rather than asserted.
 
 ---
 
-Decision 0128 of 155, indexed in [CLAUDE.md](../../CLAUDE.md).
+Decision 0128, indexed in [CLAUDE.md](../../CLAUDE.md).
 
 Previous: [2026-08-27 — An idempotency key belongs to a body, not to an attempt](0127-an-idempotency-key-belongs-to-a-body-not-to-an-attempt.md) | Next: [2026-08-28 — Membership and order disclose as loudly as fields did](0129-membership-and-order-disclose-as-loudly-as-fields-did.md)

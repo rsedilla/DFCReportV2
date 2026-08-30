@@ -18,6 +18,6 @@ Written to `SKILL.md` §10, §7, §19, §21.
 
 ---
 
-Decision 0046 of 155, indexed in [CLAUDE.md](../../CLAUDE.md).
+Decision 0046, indexed in [CLAUDE.md](../../CLAUDE.md).
 
 Previous: [2026-08-20 — Admin creates the initial Cells](0045-admin-creates-the-initial-cells.md) | Next: [2026-08-20 — Initial encoding ends by an audited Admin action](0047-initial-encoding-ends-by-an-audited-admin-action.md)

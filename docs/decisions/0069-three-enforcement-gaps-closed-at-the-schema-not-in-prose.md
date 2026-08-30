@@ -10,6 +10,6 @@ Also from the same review, and grouped because each is the same mistake: a rule 
 
 ---
 
-Decision 0069 of 155, indexed in [CLAUDE.md](../../CLAUDE.md).
+Decision 0069, indexed in [CLAUDE.md](../../CLAUDE.md).
 
 Previous: [2026-08-20 — A Network change validates forward from its effective date](0068-a-network-change-validates-forward-from-its-effective-date.md) | Next: [2026-08-20 — The unauthenticated surface is a closed list, and `read_only` is not a role concept](0070-the-unauthenticated-surface-is-a-closed-list-and-readonly-is.md)

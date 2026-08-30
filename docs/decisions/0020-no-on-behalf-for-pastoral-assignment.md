@@ -4,6 +4,6 @@ Declined deliberately. Attendance carries a responsible leader because attendanc
 
 ---
 
-Decision 0020 of 155, indexed in [CLAUDE.md](../../CLAUDE.md).
+Decision 0020, indexed in [CLAUDE.md](../../CLAUDE.md).
 
 Previous: [2026-08-20 — Member ID generation](0019-member-id-generation.md) | Next: [2026-08-20 — DCC submission window](0021-dcc-submission-window.md)

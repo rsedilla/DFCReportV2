@@ -94,6 +94,6 @@ repository has, not a ruling.
 
 ---
 
-Decision 0143 of 155, indexed in [CLAUDE.md](../../CLAUDE.md).
+Decision 0143, indexed in [CLAUDE.md](../../CLAUDE.md).
 
 Previous: [2026-08-29 — Ten on the second fix batch, and the rule written with nothing that could fail on it](0142-ten-on-the-second-fix-batch-and-the-rule-written-with.md) | Next: [2026-08-29 — Five on the fourth fix batch, and a bound that moved underneath its payload](0144-five-on-the-fourth-fix-batch-and-a-bound-that-moved.md)

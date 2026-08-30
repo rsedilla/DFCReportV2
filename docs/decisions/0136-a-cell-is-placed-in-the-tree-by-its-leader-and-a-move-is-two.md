@@ -276,6 +276,6 @@ behavioural defect. Twelve mutations verified in total.
 
 ---
 
-Decision 0136 of 155, indexed in [CLAUDE.md](../../CLAUDE.md).
+Decision 0136, indexed in [CLAUDE.md](../../CLAUDE.md).
 
 Previous: [2026-08-29 — Direct creation, and a subtree check where Section 2 asks for Whole Church](0135-direct-creation-and-a-subtree-check-where-section-2-asks-for.md) | Next: [2026-08-29 — Six rulings the closure endpoint needed, and two the review raised](0137-six-rulings-the-closure-endpoint-needed-and-two-the-review.md)

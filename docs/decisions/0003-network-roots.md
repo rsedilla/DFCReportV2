@@ -5,6 +5,6 @@ Each Network has exactly one root leader with no pastoral assignment, and a root
 
 ---
 
-Decision 0003 of 155, indexed in [CLAUDE.md](../../CLAUDE.md).
+Decision 0003, indexed in [CLAUDE.md](../../CLAUDE.md).
 
 Previous: [2026-08-19 — Senior Pastors may reassign across both Networks](0002-senior-pastors-may-reassign-across-both-networks.md) | Next: [2026-08-19 — Agent roster reduced to two](0004-agent-roster-reduced-to-two.md)

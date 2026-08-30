@@ -96,6 +96,6 @@ with nothing defining it.
 
 ---
 
-Decision 0133 of 155, indexed in [CLAUDE.md](../../CLAUDE.md).
+Decision 0133, indexed in [CLAUDE.md](../../CLAUDE.md).
 
 Previous: [2026-08-28 — Three rulings before Stage 3, and a fourth withdrawn](0132-three-rulings-before-stage-3-and-a-fourth-withdrawn.md) | Next: [2026-08-28 — The Cell schema, and a test that agreed with itself on one machine only](0134-the-cell-schema-and-a-test-that-agreed-with-itself-on-one.md)

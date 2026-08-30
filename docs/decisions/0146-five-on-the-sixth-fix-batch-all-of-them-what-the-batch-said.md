@@ -43,6 +43,6 @@ about itself, and that the prose gets a review pass of its own or it is wrong.
 
 ---
 
-Decision 0146 of 155, indexed in [CLAUDE.md](../../CLAUDE.md).
+Decision 0146, indexed in [CLAUDE.md](../../CLAUDE.md).
 
 Previous: [2026-08-29 — Four on the fifth fix batch, and a disjunction pinned with a member missing](0145-four-on-the-fifth-fix-batch-and-a-disjunction-pinned-with-a.md) | Next: [2026-08-30 — A requester may decline their own request, and a decision is final](0147-a-requester-may-decline-their-own-request-and-a-decision-is.md)

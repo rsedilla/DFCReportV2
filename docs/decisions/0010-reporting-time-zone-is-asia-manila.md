@@ -4,6 +4,6 @@ All dates and period boundaries — days, weeks, months, DCC Sundays, and the mo
 
 ---
 
-Decision 0010 of 155, indexed in [CLAUDE.md](../../CLAUDE.md).
+Decision 0010, indexed in [CLAUDE.md](../../CLAUDE.md).
 
 Previous: [2026-08-19 — Sorting permitted, ranking prohibited](0009-sorting-permitted-ranking-prohibited.md) | Next: [2026-08-19 — Development reports DCC VIPs and Cell VIPs separately](0011-development-reports-dcc-vips-and-cell-vips-separately.md)

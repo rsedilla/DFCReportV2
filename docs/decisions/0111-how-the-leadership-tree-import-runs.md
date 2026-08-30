@@ -61,6 +61,6 @@ Written to `SKILL.md` §2 (How the tree import runs) in the same change.
 
 ---
 
-Decision 0111 of 155, indexed in [CLAUDE.md](../../CLAUDE.md).
+Decision 0111, indexed in [CLAUDE.md](../../CLAUDE.md).
 
 Previous: [2026-08-24 — The grant-making pair is never held by a Senior Pastor](0110-the-grant-making-pair-is-never-held-by-a-senior-pastor.md) | Next: [2026-08-24 — Birthday is optional on a Person](0112-birthday-is-optional-on-a-person.md)

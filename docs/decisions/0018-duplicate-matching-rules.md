@@ -4,6 +4,6 @@ Never auto-merge and never block creation; surface candidates and let a person d
 
 ---
 
-Decision 0018 of 155, indexed in [CLAUDE.md](../../CLAUDE.md).
+Decision 0018, indexed in [CLAUDE.md](../../CLAUDE.md).
 
 Previous: [2026-08-20 — Cell membership workflow](0017-cell-membership-workflow.md) | Next: [2026-08-20 — Member ID generation](0019-member-id-generation.md)

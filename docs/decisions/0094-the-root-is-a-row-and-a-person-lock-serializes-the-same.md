@@ -56,6 +56,6 @@ test-that-passes-for-the-wrong-reason this log keeps recording.
 
 ---
 
-Decision 0094 of 155, indexed in [CLAUDE.md](../../CLAUDE.md).
+Decision 0094, indexed in [CLAUDE.md](../../CLAUDE.md).
 
 Previous: [2026-08-23 — Three rulings the review of the sex correction forced, and one gap it found](0093-three-rulings-the-review-of-the-sex-correction-forced-and.md) | Next: [2026-08-23 — `RESOURCE_BUSY`, and why its status carries the rule](0095-resourcebusy-and-why-its-status-carries-the-rule.md)

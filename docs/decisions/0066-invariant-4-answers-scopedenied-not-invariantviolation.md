@@ -6,6 +6,6 @@ A leader acting on their own assignment, or on an upline's, is refused with `SCO
 
 ---
 
-Decision 0066 of 155, indexed in [CLAUDE.md](../../CLAUDE.md).
+Decision 0066, indexed in [CLAUDE.md](../../CLAUDE.md).
 
 Previous: [2026-08-20 — An endpoint that declares no capability is denied](0065-an-endpoint-that-declares-no-capability-is-denied.md) | Next: [2026-08-20 — The eleven authorization cases ship failing, in their own CI job](0067-the-eleven-authorization-cases-ship-failing-in-their-own-ci.md)

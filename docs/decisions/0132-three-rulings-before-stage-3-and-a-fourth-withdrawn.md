@@ -127,6 +127,6 @@ truth, which is the part worth keeping.*
 
 ---
 
-Decision 0132 of 155, indexed in [CLAUDE.md](../../CLAUDE.md).
+Decision 0132, indexed in [CLAUDE.md](../../CLAUDE.md).
 
 Previous: [2026-08-28 — A pastoral path says which end is a root](0131-a-pastoral-path-says-which-end-is-a-root.md) | Next: [2026-08-28 — A Cell changes hands by request and approval, and a closure is never reversed](0133-a-cell-changes-hands-by-request-and-approval-and-a-closure.md)

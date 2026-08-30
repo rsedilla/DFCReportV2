@@ -73,6 +73,6 @@ guard's `NIL_UUID`: two sentinels with a rule attached, free to drift. It lives 
 
 ---
 
-Decision 0150 of 155, indexed in [CLAUDE.md](../../CLAUDE.md).
+Decision 0150, indexed in [CLAUDE.md](../../CLAUDE.md).
 
 Previous: [2026-08-30 — Section 10's "at any scope" was resting on a scope value](0149-section-10s-at-any-scope-was-resting-on-a-scope-value.md) | Next: [2026-08-30 — Four on the second fix batch, and a pin that pinned nothing](0151-four-on-the-second-fix-batch-and-a-pin-that-pinned-nothing.md)

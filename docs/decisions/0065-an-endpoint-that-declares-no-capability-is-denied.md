@@ -6,6 +6,6 @@ Stated as a rule because the alternative failure is silent. An endpoint missing 
 
 ---
 
-Decision 0065 of 155, indexed in [CLAUDE.md](../../CLAUDE.md).
+Decision 0065, indexed in [CLAUDE.md](../../CLAUDE.md).
 
 Previous: [2026-08-20 — Migrations are hand-written SQL, and there is no ORM](0064-migrations-are-hand-written-sql-and-there-is-no-orm.md) | Next: [2026-08-20 — Invariant 4 answers `SCOPE_DENIED`, not `INVARIANT_VIOLATION`](0066-invariant-4-answers-scopedenied-not-invariantviolation.md)

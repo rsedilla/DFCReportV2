@@ -89,6 +89,6 @@ protects is the **association** between them and the Cell.
 
 ---
 
-Decision 0141 of 155, indexed in [CLAUDE.md](../../CLAUDE.md).
+Decision 0141, indexed in [CLAUDE.md](../../CLAUDE.md).
 
 Previous: [2026-08-29 — Twelve findings on the closure, and the three the review escalated](0140-twelve-findings-on-the-closure-and-the-three-the-review.md) | Next: [2026-08-29 — Ten on the second fix batch, and the rule written with nothing that could fail on it](0142-ten-on-the-second-fix-batch-and-the-rule-written-with.md)
