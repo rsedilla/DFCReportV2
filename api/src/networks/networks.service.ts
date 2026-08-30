@@ -96,10 +96,18 @@ export class NetworksService {
    * the change forces is the caller's, performed in this same transaction at this
    * same instant.
    *
-   * Section 4's last paragraph puts the same obligation on Cell membership and Cell
-   * leadership, and it is **not** enforced here because neither table exists yet.
-   * That is Stage 3, where `docs/ROADMAP.md` names it as work rather than leaving
-   * it as a comment nobody is accountable for.
+   * **Section 4's Cell obligation is not enforced here yet, and the reason this
+   * comment used to give has stopped being true.** It said neither table existed;
+   * both have since migration 0009. What is true now is narrower: section 4 settled
+   * the *leadership* half on 2026-08-30 — a Network change is refused while the
+   * person holds an open Cell leadership assignment — and this method does not yet
+   * implement it. The *membership* half is not settled at all and is recorded as
+   * open in `CLAUDE.md`.
+   *
+   * Both belong here, beside the pastoral precondition above, which is where
+   * `docs/ROADMAP.md` books them. Until the leadership half lands, section 4 states
+   * a rule nothing enforces — named here rather than left for a reader to infer
+   * from a passing test suite.
    */
   async changeWithin(
     transaction: Transaction<Database>,
