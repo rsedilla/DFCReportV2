@@ -35,14 +35,17 @@ import { CellsService } from './cells.service';
  * than on every authenticated request.
  *
  * **It touches no table it does not own.** Creating a Cell reads the prospective
- * leader through `people`, writes its audit entries through `audit`, and asks
- * `admin/settings` whether the encoding phase is open — each through the service
- * owning that table, inside the transaction this module opens.
+ * leader through `people`, its open pastoral assignment through `hierarchy`, writes
+ * its audit entries through `audit`, and asks `admin/settings` whether the encoding
+ * phase is open — each through the service owning that table, inside the transaction
+ * this module opens.
  *
- * Five services, and the split is the one `people` already settled: `CellsService`,
- * `CellsMembershipService`, `CellsConfigurationService` and `CellsClosureService`
- * are named for the operations, `CellsReadService` for the reads another module
- * needs. Section 2's "organise by module, never by layer" is about how the
+ * Six services, and the split is the one `people` already settled: `CellsService`,
+ * `CellsLeadershipRequestService`, `CellsMembershipService`,
+ * `CellsConfigurationService` and `CellsClosureService` are named for the
+ * operations, `CellsReadService` for the reads another module needs. *The count
+ * was five for two slices after the request service arrived, which is what a
+ * docblock enumerating its own subject costs.* Section 2's "organise by module, never by layer" is about how the
  * application is divided and does not reach inside one, so the read seam is a
  * judgement rather than a requirement — and the boundary that *is* enforced, table
  * ownership, is unaffected by it.

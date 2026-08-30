@@ -128,9 +128,11 @@ export async function lockPersonsWithin(
  * takes afterwards unbounded, in a transaction holding one of a bounded pool the
  * liveness probe shares (section 24).
  *
- * `CellsConfigurationService` is the first caller of that kind. A Cell closure will
- * be the second, for the same reason: a Cell with nobody to disperse locks no
- * person and still locks Cells.
+ * `CellsConfigurationService` was the first caller of that kind, and there are three:
+ * a Cell closure with nobody to disperse locks no person and still locks Cells, and
+ * declining a leadership request locks the request row and never a person. *Written
+ * as a class rather than a list, because the list went stale on the batch that added
+ * to it — twice.*
  *
  * `SET LOCAL` is a utility command and takes no snapshot and no locks, so calling
  * this first costs a transaction nothing and cannot itself be what waits.

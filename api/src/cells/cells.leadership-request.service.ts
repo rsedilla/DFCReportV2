@@ -11,7 +11,6 @@ import { Capability } from '../auth/authorization/capabilities';
 import {
   InvariantViolationError,
   NotFoundError,
-  ResourceBusyError,
   ScopeDeniedError,
   ValidationFailedError,
 } from '../common/errors/api-error';
@@ -432,10 +431,21 @@ export class CellsLeadershipRequestService {
     // **Read once here to learn whom to lock, then read again under the lock.** The
     // person locks must be taken before any `cells` row lock (section 5), and the
     // people this operation touches are named by the request rather than by the
-    // caller — so the list cannot be built without reading it first. What makes the
-    // pre-read safe is that migration 0009's finality trigger makes a request's kind,
-    // the person it names, who submitted it and when immutable from the moment it is
-    // written: the values the locks are chosen from cannot change under this.
+    // caller — so the list cannot be built without reading it first.
+    //
+    // **Two of the three values the lock list is built from are frozen, and the third
+    // is not.** `cell_leadership_request_is_final` freezes the kind and the person
+    // named (and `requested_by`, which chooses whose authority is read rather than
+    // what is locked). It does **not** freeze `cell_id`, which decides which `cells`
+    // row is locked and whose leadership is looked up. So the pre-read is not safe by
+    // the trigger alone, and the re-read under the lock compares what the trigger does
+    // not guarantee rather than assuming it.
+    //
+    // *An earlier version of this paragraph claimed the trigger made every value the
+    // locks are chosen from immutable, which is broader than the trigger. The commit
+    // that recorded that finding said it had been corrected here and corrected only
+    // the comparison further down — a fix claimed in the past tense and not made,
+    // which is the class it was fixing.*
     const pre = await this.db
       .selectFrom('cell_leadership_requests')
       .select(['id', 'kind', 'prospective_leader_id', 'requested_by', 'cell_id'])
@@ -555,24 +565,37 @@ export class CellsLeadershipRequestService {
       // requester whose scope is about to be evaluated would not be the one the
       // authority was read for.
       // **`requested_by` and `cell_id`, because the locks were chosen from both.**
-      // `cell_leadership_request_is_final` freezes the kind, the person named, the
-      // requester and the requested-at instant -- and *not* `cell_id`, which decides
-      // which `cells` row was locked and whose leader was looked up. An earlier version
-      // of the comment above listed the frozen four and called the pre-read safe on
-      // their account, which is broader than the trigger. Nothing writes `cell_id` on a
-      // PENDING row today, so both branches are unreachable; they are checked rather
-      // than argued away, because the argument is what would go stale.
+      // **`requested_by` and `cell_id`, and they are here for different reasons.**
+      // `requested_by` chooses whose authority was read before the transaction, not
+      // what was locked; `cell_id` chooses which `cells` row was locked and whose
+      // leadership was looked up. `cell_leadership_request_is_final` freezes the first
+      // and not the second (migration 0009), so only one of the two would be safe to
+      // argue rather than check.
       //
-      // `RESOURCE_BUSY` rather than a 409: section 22 stores a 4xx against the
-      // idempotency key and releases a 5xx, and the remedy here is a retry -- so a
-      // stored 409 would replay this refusal for the whole retention, which is the dead
-      // end the 2026-08-23 `RESOURCE_BUSY` ruling exists to prevent.
+      // All three disjuncts are unreachable today: `requested_by` is frozen, and
+      // `cell_id`'s nullness is tied to `kind` by a check constraint while `kind` is
+      // frozen. They are checked because the *argument* is what goes stale, and a
+      // revision path for a pending request would make the third live.
+      //
+      // **`INVARIANT_VIOLATION` rather than `RESOURCE_BUSY`.** Section 22 defines that
+      // code as a wait that timed out or a deadlock victim, and this is neither: every
+      // lock was taken cleanly and what differs is a value read before one of them.
+      // A previous batch answered `RESOURCE_BUSY` here on section 22's store/release
+      // reasoning, which is a good argument and is the argument CLAUDE.md's open list
+      // says needs a *ruling* rather than a fix -- it carries the identical question
+      // for `NetworksService.floorBreach`, which still answers a 409. Settling it in
+      // one module, in the opposite direction from the other, with section 22 unamended,
+      // is what that open item exists to prevent.
       if (
         !sameId(request.requested_by, pre.requested_by) ||
         (request.cell_id === null) !== (pre.cell_id === null) ||
         (request.cell_id !== null && pre.cell_id !== null && !sameId(request.cell_id, pre.cell_id))
       ) {
-        throw new ResourceBusyError({ request_id: request.id });
+        throw new InvariantViolationError(
+          'This request changed while it was being approved, so the locks it took no ' +
+            'longer cover what it would write. Submit the approval again.',
+          { request_id: request.id },
+        );
       }
 
       const decision = await this.assertApprovableWithin(trx, request, {
@@ -927,23 +950,33 @@ export class CellsLeadershipRequestService {
     // Refused rather than trusted, because if it ever did the person whose Network is
     // about to be compared would be one this transaction never locked.
     if (context.outgoingBeforeLock === null) {
-      // A Cell that had no leadership row when the lock list was built and has one now.
-      // No operation produces it -- an `ACTIVE` Cell always has exactly one, and a
-      // `CLOSED` one is refused above -- and nothing changed hands, so the refusal
-      // below would be the wrong sentence. Kept as a guard against a state the schema
-      // forbids rather than removed, because the alternative is comparing against a
-      // person nobody locked.
+      // A Cell that had no leadership row when the lock list was built and has one
+      // now. No operation produces it -- an `ACTIVE` Cell always has exactly one, and a
+      // `CLOSED` one is refused above. Kept rather than removed because the alternative
+      // is comparing a leader against nothing and proceeding to write against a person
+      // this transaction never locked.
+      //
+      // *The message said "so there is nobody to hand it over from", which is false of
+      // the only state that reaches this: `outgoingLeaderId` was read non-null four
+      // lines above, so there is somebody -- they are simply somebody the lock list,
+      // built before the transaction, does not cover.*
       throw new InvariantViolationError(
-        'That Cell had no leadership assignment when this approval began, so there is ' +
-          'nobody to hand it over from (SKILL.md section 11).',
+        'That Cell acquired its leadership assignment while this approval was starting, ' +
+          'so the approval holds no lock on the leader it would hand over from. Submit ' +
+          'it again (SKILL.md section 11).',
         { cell_id: cell.cell_id },
       );
     }
 
     if (!sameId(outgoingLeaderId, context.outgoingBeforeLock)) {
-      // `RESOURCE_BUSY` for the reason above: the remedy is a retry, and a stored 409
-      // would replay the refusal for the key's whole retention (section 22).
-      throw new ResourceBusyError({ cell_id: cell.cell_id });
+      // `INVARIANT_VIOLATION` for the reason the pre-read check gives: section 22
+      // reserves `RESOURCE_BUSY` for an elapsed wait or a deadlock victim, and every
+      // lock here was taken cleanly.
+      throw new InvariantViolationError(
+        'This Cell changed hands while the approval was being made, so the leader it ' +
+          'locked is no longer the one it would hand over from. Submit the approval again.',
+        { cell_id: cell.cell_id },
+      );
     }
 
     if (sameId(outgoingLeaderId, request.prospective_leader_id)) {

@@ -1,5 +1,8 @@
 import { randomUUID } from 'node:crypto';
 
+import { Client } from 'pg';
+import { sql } from 'kysely';
+
 import request from 'supertest';
 
 import { createTestDb, truncateAll } from '../setup/database';
@@ -262,6 +265,66 @@ describe('Cell leadership approval (section 10)', () => {
 
       expect(cell.created_at.getTime()).toBeGreaterThan(entry.occurred_at.getTime());
     });
+
+    it('takes the prospective leader’s lock before it stamps the Cell', async () => {
+      // **The case above pins the clock source; this pins the ordering its title leads
+      // with.** They are different properties, and the first review's remedy caught only
+      // one: moving `lockPersonsWithin` below `insertCellWithin` leaves the assertion
+      // above green, because `clock_timestamp()` is later than transaction start
+      // whenever it is read.
+      //
+      // Here the lock is held externally, so the approval cannot reach its insert until
+      // it is released. The Cell's `created_at` is then after the release, which is only
+      // true if the stamp follows the lock.
+      const requestId = await pendingNewCell(markAccount, juan.id);
+
+      const blocker = new Client({ connectionString: process.env.DATABASE_URL });
+      await blocker.connect();
+
+      try {
+        await blocker.query('BEGIN');
+        // The same key `lockPersonsWithin` computes: the canonical spelling, hashed.
+        await blocker.query('SELECT pg_advisory_xact_lock(hashtextextended($1::uuid::text, 0))', [
+          juan.id,
+        ]);
+
+        const pid = Number(
+          (await blocker.query('SELECT pg_backend_pid() AS pid')).rows[0].pid as string,
+        );
+
+        // **`.then` is what dispatches it.** A supertest object is lazy: assigning it to
+        // a variable sends nothing, so the poll below would find no waiter and report
+        // "nothing ever blocked" against a request that had never been made. This
+        // repository has fixed that exact defect once before (`19dfe3c`) and this case
+        // reproduced it on the first run.
+        const pending = approve(admin, requestId).then((response) => response);
+        await waitForBlockedBy(pid);
+
+        // Read after the approval is demonstrably stuck, so it is strictly before any
+        // instant the approval can go on to take.
+        const released = new Date();
+        await blocker.query('ROLLBACK');
+
+        // `pending` is a promise rather than a supertest `Test` once `.then` has been
+        // called, so the status is asserted here rather than chained.
+        const response = await pending;
+        expect(response.status).toBe(200);
+
+        const cell = await db
+          .selectFrom('cells')
+          .select('created_at')
+          .where('id', '=', response.body.cell_uuid as string)
+          .executeTakeFirstOrThrow();
+
+        expect(cell.created_at.getTime()).toBeGreaterThanOrEqual(released.getTime());
+      } finally {
+        try {
+          await blocker.query('ROLLBACK');
+        } finally {
+          await blocker.end();
+        }
+      }
+    }, 30000);
 
     it('marks the request APPROVED, names the Cell it minted, and records who decided', async () => {
       const requestId = await pendingNewCell(markAccount, juan.id);
@@ -729,6 +792,49 @@ describe('Cell leadership approval (section 10)', () => {
     expect(response.body.error.code).toBe('VALIDATION_FAILED');
   });
 
+  it('bounds the wait when declining a request another transaction holds', async () => {
+    // **Section 5: an operation that takes row locks and locks no person sets the bound
+    // itself**, because `lockPersonsWithin` returns before setting `lock_timeout` when
+    // the person list is empty — and `decline`'s always is. Approval is what made this
+    // reachable: it now holds the same request row across an entire Cell creation.
+    //
+    // Deleting `boundLockWaitsWithin` from `decline` leaves this red and nothing else;
+    // without it the request waits until the blocker's connection closes.
+    const requestId = await pendingNewCell(markAccount, juan.id);
+
+    const blocker = new Client({ connectionString: process.env.DATABASE_URL });
+    await blocker.connect();
+
+    try {
+      await blocker.query('BEGIN');
+      await blocker.query('SELECT id FROM cell_leadership_requests WHERE id = $1 FOR UPDATE', [
+        requestId,
+      ]);
+
+      // Raced against a timer, because the failure this pins is a wait that never ends:
+      // a bare await would hang the suite until the job timeout rather than failing.
+      let timer: NodeJS.Timeout | undefined;
+      const response = await Promise.race([
+        decline(admin, requestId),
+        new Promise<never>((_, reject) => {
+          timer = setTimeout(
+            () => reject(new Error('The decline was still waiting after 8s: no lock_timeout.')),
+            8000,
+          );
+        }),
+      ]).finally(() => clearTimeout(timer));
+
+      expect(response.status).toBe(503);
+      expect(response.body.error.code).toBe('RESOURCE_BUSY');
+    } finally {
+      try {
+        await blocker.query('ROLLBACK');
+      } finally {
+        await blocker.end();
+      }
+    }
+  }, 30000);
+
   it('answers NOT_FOUND for a request that does not exist', async () => {
     // Safe as an absence rather than a denial: the guard admits only a Whole Church
     // holder of `cell.approve_leadership`, so every caller reaching here would have
@@ -737,3 +843,40 @@ describe('Cell leadership approval (section 10)', () => {
     expect(response.body.error.code).toBe('NOT_FOUND');
   });
 });
+
+/**
+ * Wait until some backend is blocked **by this one**, keyed on the blocker's pid.
+ *
+ * A bare `pg_stat_activity` predicate was rejected on this repository once already and
+ * the reason is recorded: it is cluster-wide, this machine also carries `dfc_dev`, and
+ * in CI the test role is a superuser — so "some backend is blocked" matches waits the
+ * case knows nothing about and would pass with no lock under test at all. The waiter's
+ * own pid is genuinely unknown, being a pooled connection inside the application; the
+ * blocker's is not.
+ */
+async function waitForBlockedBy(blockerPid: number): Promise<void> {
+  const probe = createTestDb();
+
+  try {
+    // 100 x 20ms = 2s, deliberately under the service's 3s `lock_timeout`: a wider
+    // budget lets a slow-but-correct run time out here and report the same message a
+    // genuine regression produces, which is a diagnostic that lies.
+    for (let attempt = 0; attempt < 100; attempt += 1) {
+      const waiting = await sql<{ count: string }>`
+        SELECT count(*) AS count
+          FROM pg_stat_activity
+         WHERE ${blockerPid}::int = ANY (pg_blocking_pids(pid))
+      `.execute(probe);
+
+      if (Number(waiting.rows[0].count) > 0) {
+        return;
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    }
+
+    throw new Error(`Nothing ever blocked on backend ${blockerPid}.`);
+  } finally {
+    await probe.destroy();
+  }
+}
