@@ -326,8 +326,12 @@ export class CellsClosureService {
           targetType: 'cell',
           targetId: cellId,
           // Section 21: "carrying the outgoing and the incoming leader where each
-          // exists". A closure has no incoming leader, which is what distinguishes it
-          // from a handover in the log.
+          // exists". A closure has no incoming leader.
+          //
+          // *It used to add "which is what distinguishes it from a handover in the log",
+          // and the approval endpoint made that false: a handover writes
+          // `cell_leadership.changed`, not this action, so there is nothing to be
+          // distinguished from.*
           before: { cell_leader_id: outgoingLeader },
           after: { cell_leader_id: null, ended_at: effectiveAt.toISOString() },
           reason: 'Cell closed',

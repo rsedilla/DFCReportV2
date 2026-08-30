@@ -396,6 +396,45 @@ export class AuthorizationService {
   }
 
   /**
+   * The `Actor` an account identifier names, or null where no such account exists.
+   *
+   * **For asking a scope question about somebody who is not the caller.** SKILL.md
+   * section 10 has approval revalidate a pending request against the account that
+   * *submitted* it — the prospective leader must still be within the requester's
+   * authorized subtree, and the Cell within their authorized scope — so `cells`
+   * needs the requester's Person to build the pair `scopeCovers` resolves a subtree
+   * against. It is the first caller in the system asking a counterfactual about
+   * another account, and it is deliberate rather than incidental.
+   *
+   * **It lives here because `auth` owns `accounts`** (section 2, Modules). `cells`
+   * may not read that table: `auth` imports `cells` so provisioning can ask whether
+   * a Person is a current Cell Leader (section 6), and a read the other way would
+   * close the cycle the 2026-08-24 seam ruling removed.
+   *
+   * **`coversWith`'s guard is unaffected**, and that is the property that keeps this
+   * safe. It refuses authority whose `accountId` differs from the actor's, so a
+   * caller pairs this `Actor` with `authorityFor` on the *same* identifier and the
+   * two still name one account. What the guard prevents is mixing two accounts in
+   * one decision; it was never a rule that the account must be the caller's.
+   *
+   * **Account status is not consulted, and section 10 says so rather than leaving it
+   * to be assumed.** A disabled account keeps its roles and grants — section 6 makes
+   * disablement an authentication decision, which stops the holder signing in rather
+   * than emptying their authority — so this answers for one exactly as it does for
+   * any other. Whether it should is a question about what a grant means, which
+   * belongs to section 7 and to every capability at once.
+   */
+  async actorFor(accountId: string): Promise<Actor | null> {
+    const account = await this.db
+      .selectFrom('accounts')
+      .select(['id', 'person_id'])
+      .where('id', '=', accountId)
+      .executeTakeFirst();
+
+    return account ? { accountId: account.id, personId: account.person_id } : null;
+  }
+
+  /**
    * The same question, against grants the caller has already read.
    *
    * **This exists so that a caller inside a transaction touches the pool exactly

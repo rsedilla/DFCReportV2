@@ -3,6 +3,7 @@ import { Module } from '@nestjs/common';
 import { SettingsModule } from '../admin/settings/settings.module';
 import { AuditModule } from '../audit/audit.module';
 import { AuthorizationModule } from '../auth/authorization/authorization.module';
+import { HierarchyModule } from '../hierarchy/hierarchy.module';
 import { NetworksModule } from '../networks/networks.module';
 import { PeopleModule } from '../people/people.module';
 
@@ -27,27 +28,48 @@ import { CellsService } from './cells.service';
  * would import `auth` right back if it took the whole of it to ask an authorization
  * question. What it needs is the question, not the module.
  *
- * The graph runs `auth -> cells -> {people, networks, authorization, admin/settings,
- * audit}`
+ * The graph runs `auth -> cells -> {people, networks, hierarchy, authorization,
+ * admin/settings, audit}`
  * with nothing pointing back. `test/unit/module-graph.spec.ts` builds the injector
  * without a database, which is what makes a wiring mistake fail in seconds rather
  * than on every authenticated request.
  *
- * **It touches no table it does not own.** Creating a Cell reads the prospective
- * leader through `people`, writes its audit entries through `audit`, and asks
- * `admin/settings` whether the encoding phase is open — each through the service
- * owning that table, inside the transaction this module opens.
+ * **It touches no table it does not own.** Every cross-module read goes through the
+ * service owning that table, inside the transaction this module opens: `people` for a
+ * Person's identity and lifecycle, `hierarchy` for an open pastoral assignment,
+ * `networks` for a Network in force, `authorization` for roles, grants and the Account
+ * behind an actor, `audit` for its entries, and `admin/settings` for the
+ * initial-encoding flag. `IdempotencyService` writes `idempotency_keys`, which section
+ * 2 assigns to no module.
  *
- * Five services, and the split is the one `people` already settled: `CellsService`,
- * `CellsMembershipService`, `CellsConfigurationService` and `CellsClosureService`
- * are named for the operations, `CellsReadService` for the reads another module
- * needs. Section 2's "organise by module, never by layer" is about how the
+ * *Written as the whole set rather than as one operation's reads, because naming an
+ * operation is what kept getting it wrong.* Three successive batches left this short by
+ * one {M} `networks`, then `authorization` {M} while the graph sentence six lines above
+ * listed both all along; and it attributed the `hierarchy` and `networks` reads to
+ * creating a Cell, which does neither. Both belong to approval
+ * (`CellsLeadershipRequestService`), and its Network comparison for a new Cell is
+ * between the prospective leader and their *pastoral* leader, not between two Cell
+ * leaders.
+ *
+ * Six services, and the split is the one `people` already settled: `CellsService`,
+ * `CellsLeadershipRequestService`, `CellsMembershipService`,
+ * `CellsConfigurationService` and `CellsClosureService` are named for the
+ * operations, `CellsReadService` for the reads another module needs. *The count
+ * was five for two slices after the request service arrived, which is what a
+ * docblock enumerating its own subject costs.* Section 2's "organise by module, never by layer" is about how the
  * application is divided and does not reach inside one, so the read seam is a
  * judgement rather than a requirement — and the boundary that *is* enforced, table
  * ownership, is unaffected by it.
  */
 @Module({
-  imports: [PeopleModule, NetworksModule, AuthorizationModule, SettingsModule, AuditModule],
+  imports: [
+    PeopleModule,
+    NetworksModule,
+    HierarchyModule,
+    AuthorizationModule,
+    SettingsModule,
+    AuditModule,
+  ],
   controllers: [CellsController],
   providers: [
     CellsService,
