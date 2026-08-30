@@ -17,6 +17,7 @@ import { IdempotencyService } from '../../src/common/idempotency/idempotency.ser
 import { PeopleService } from '../../src/people/people.service';
 import { createTestDb, truncateAll } from '../setup/database';
 import { assignTo, createAccount, createPerson, createTestApp, EPOCH } from '../setup/fixtures';
+import { countWhileInFlight, track } from '../setup/concurrency';
 
 import type { INestApplication } from '@nestjs/common';
 import type { Kysely } from 'kysely';
@@ -133,40 +134,37 @@ describe('the person lock, and the identifier boundary that needs the same fixtu
         personId,
       ]);
 
-      const pending = attempt().then(
-        () => undefined,
-        // A refusal after the lock is acquired is fine and is not what this asserts.
-        () => undefined,
+      // Watched rather than awaited: a refusal after the lock is acquired is fine
+      // and is not what this asserts.
+      const inFlight = track(attempt());
+
+      // **Bounded by the attempt rather than by a wall clock**
+      // (`test/setup/concurrency.ts`). The budget this replaces ran from dispatch,
+      // and the request's pre-lock work — round trip, token, guard reads, subtree
+      // walk — can outrun it under load, failing while the system is correct.
+      const waiting = await countWhileInFlight(
+        async () => {
+          const found = await holder.query<{ waiting: string }>(
+            `SELECT count(*) AS waiting
+               FROM pg_locks
+              WHERE locktype = 'advisory'
+                AND NOT granted
+                AND objsubid = 1
+                AND classid::bigint = ((hashtextextended($1::uuid::text, 0) >> 32) & 4294967295)
+                AND objid::bigint = (hashtextextended($1::uuid::text, 0) & 4294967295)`,
+            [personId],
+          );
+
+          return Number(found.rows[0].waiting);
+        },
+        inFlight,
+        'a waiter on the person key',
       );
-
-      let waiting = 0;
-      // Shorter than the lock timeout the code under test sets, because past that
-      // the waiter is gone and no later poll can succeed. A deadline beyond it
-      // would spend the difference failing.
-      const deadline = Date.now() + 2_500;
-
-      while (Date.now() < deadline && waiting === 0) {
-        const found = await holder.query<{ waiting: string }>(
-          `SELECT count(*) AS waiting
-             FROM pg_locks
-            WHERE locktype = 'advisory'
-              AND NOT granted
-              AND objsubid = 1
-              AND classid::bigint = ((hashtextextended($1::uuid::text, 0) >> 32) & 4294967295)
-              AND objid::bigint = (hashtextextended($1::uuid::text, 0) & 4294967295)`,
-          [personId],
-        );
-
-        waiting = Number(found.rows[0].waiting);
-        if (waiting === 0) {
-          await new Promise((resolve) => setTimeout(resolve, 50));
-        }
-      }
 
       expect(waiting).toBeGreaterThan(0);
 
       await holder.query('ROLLBACK');
-      await pending;
+      await inFlight.done;
     } finally {
       await holder.end();
     }
@@ -455,39 +453,34 @@ describe('the person lock, and the identifier boundary that needs the same fixtu
       await holder.query('SELECT pg_advisory_xact_lock($1::bigint)', [higher.key]);
 
       // Given in the order that would be wrong if the helper trusted its caller.
-      const pending = database
-        .transaction()
-        .execute((trx) => lockPersonsWithin(trx, [higher.id, lower.id]))
-        .then(
-          () => undefined,
-          () => undefined,
-        );
+      const inFlight = track(
+        database.transaction().execute((trx) => lockPersonsWithin(trx, [higher.id, lower.id])),
+      );
 
-      let held = 0;
-      const deadline = Date.now() + 2_500;
+      // Same bound as the helper above, and for the same reason.
+      const held = await countWhileInFlight(
+        async () => {
+          const found = await holder.query<{ held: string }>(
+            `SELECT count(*) AS held
+               FROM pg_locks
+              WHERE locktype = 'advisory'
+                AND granted
+                AND objsubid = 1
+                AND classid::bigint = (($1::bigint >> 32) & 4294967295)
+                AND objid::bigint = ($1::bigint & 4294967295)`,
+            [lower.key],
+          );
 
-      while (Date.now() < deadline && held === 0) {
-        const found = await holder.query<{ held: string }>(
-          `SELECT count(*) AS held
-             FROM pg_locks
-            WHERE locktype = 'advisory'
-              AND granted
-              AND objsubid = 1
-              AND classid::bigint = (($1::bigint >> 32) & 4294967295)
-              AND objid::bigint = ($1::bigint & 4294967295)`,
-          [lower.key],
-        );
-
-        held = Number(found.rows[0].held);
-        if (held === 0) {
-          await new Promise((resolve) => setTimeout(resolve, 50));
-        }
-      }
+          return Number(found.rows[0].held);
+        },
+        inFlight,
+        'the lower key to be held',
+      );
 
       expect(held).toBeGreaterThan(0);
 
       await holder.query('ROLLBACK');
-      await pending;
+      await inFlight.done;
     } finally {
       await holder.end();
     }
