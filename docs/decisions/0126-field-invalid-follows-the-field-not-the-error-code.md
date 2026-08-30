@@ -23,6 +23,6 @@ screen it flips in a line. Written to `SKILL.md` §23.
 
 ---
 
-Decision 0126 of 155, indexed in [CLAUDE.md](../../CLAUDE.md).
+Decision 0126, indexed in [CLAUDE.md](../../CLAUDE.md).
 
 Previous: [2026-08-27 — Every tab of one browser profile is one session](0125-every-tab-of-one-browser-profile-is-one-session.md) | Next: [2026-08-27 — An idempotency key belongs to a body, not to an attempt](0127-an-idempotency-key-belongs-to-a-body-not-to-an-attempt.md)

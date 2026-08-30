@@ -59,6 +59,6 @@ whatever it seems to fit.
 
 ---
 
-Decision 0124 of 155, indexed in [CLAUDE.md](../../CLAUDE.md).
+Decision 0124, indexed in [CLAUDE.md](../../CLAUDE.md).
 
 Previous: [2026-08-26 — Advice printed at the moment of a decision, and a fix claimed but not made](0123-advice-printed-at-the-moment-of-a-decision-and-a-fix-claimed.md) | Next: [2026-08-27 — Every tab of one browser profile is one session](0125-every-tab-of-one-browser-profile-is-one-session.md)

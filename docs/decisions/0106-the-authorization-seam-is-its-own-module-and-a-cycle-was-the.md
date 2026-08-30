@@ -52,6 +52,6 @@ answer is that it imports `AuthorizationModule`.
 
 ---
 
-Decision 0106 of 155, indexed in [CLAUDE.md](../../CLAUDE.md).
+Decision 0106, indexed in [CLAUDE.md](../../CLAUDE.md).
 
 Previous: [2026-08-24 — Four rulings the accounts review forced, and the escalation that prompted them](0105-four-rulings-the-accounts-review-forced-and-the-escalation.md) | Next: [2026-08-24 — Who the two Senior Pastors are is read from configuration, and checked twice](0107-who-the-two-senior-pastors-are-is-read-from-configuration.md)

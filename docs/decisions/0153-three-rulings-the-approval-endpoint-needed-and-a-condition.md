@@ -125,6 +125,6 @@ both for each rule rather than by asserting it here.
 
 ---
 
-Decision 0153 of 155, indexed in [CLAUDE.md](../../CLAUDE.md).
+Decision 0153, indexed in [CLAUDE.md](../../CLAUDE.md).
 
 Previous: [2026-08-30 — Approval records the leadership and leaves the account pending](0152-approval-records-the-leadership-and-leaves-the-account.md) | Next: [2026-08-30 — A Network change is refused while the person leads a Cell](0154-a-network-change-is-refused-while-the-person-leads-a-cell.md)

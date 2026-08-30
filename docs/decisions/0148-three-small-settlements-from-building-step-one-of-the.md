@@ -61,6 +61,6 @@ rather than by asserting it here.
 
 ---
 
-Decision 0148 of 155, indexed in [CLAUDE.md](../../CLAUDE.md).
+Decision 0148, indexed in [CLAUDE.md](../../CLAUDE.md).
 
 Previous: [2026-08-30 — A requester may decline their own request, and a decision is final](0147-a-requester-may-decline-their-own-request-and-a-decision-is.md) | Next: [2026-08-30 — Section 10's "at any scope" was resting on a scope value](0149-section-10s-at-any-scope-was-resting-on-a-scope-value.md)

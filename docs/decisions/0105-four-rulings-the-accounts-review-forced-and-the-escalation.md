@@ -127,6 +127,6 @@ write and a network call would be a second false claim.
 
 ---
 
-Decision 0105 of 155, indexed in [CLAUDE.md](../../CLAUDE.md).
+Decision 0105, indexed in [CLAUDE.md](../../CLAUDE.md).
 
 Previous: [2026-08-24 — Three rulings the accounts work needed, settled before the code](0104-three-rulings-the-accounts-work-needed-settled-before-the.md) | Next: [2026-08-24 — The authorization seam is its own module, and a cycle was the reason a rule was being broken](0106-the-authorization-seam-is-its-own-module-and-a-cycle-was-the.md)

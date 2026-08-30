@@ -8,6 +8,6 @@ Authorization never consults this definition; it depends on capability grant and
 
 ---
 
-Decision 0025 of 155, indexed in [CLAUDE.md](../../CLAUDE.md).
+Decision 0025, indexed in [CLAUDE.md](../../CLAUDE.md).
 
 Previous: [2026-08-20 — Cell lifecycle, and closure is declared](0024-cell-lifecycle-and-closure-is-declared.md) | Next: [2026-08-20 — DCC monthly buckets derive from N](0026-dcc-monthly-buckets-derive-from-n.md)

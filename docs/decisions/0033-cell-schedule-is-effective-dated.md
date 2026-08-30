@@ -4,6 +4,6 @@ Day and time carry history exactly as category does, because scheduled meetings 
 
 ---
 
-Decision 0033 of 155, indexed in [CLAUDE.md](../../CLAUDE.md).
+Decision 0033, indexed in [CLAUDE.md](../../CLAUDE.md).
 
 Previous: [2026-08-20 — API conventions](0032-api-conventions.md) | Next: [2026-08-20 — DCC events are generated ahead, not lazily](0034-dcc-events-are-generated-ahead-not-lazily.md)

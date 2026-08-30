@@ -9,6 +9,6 @@ Chosen over the two attendee-only alternatives because a report listing only the
 
 ---
 
-Decision 0056 of 155, indexed in [CLAUDE.md](../../CLAUDE.md).
+Decision 0056, indexed in [CLAUDE.md](../../CLAUDE.md).
 
 Previous: [2026-08-20 — Monthly attendance is measured over the membership window](0055-monthly-attendance-is-measured-over-the-membership-window.md) | Next: [2026-08-20 — A schedule change takes effect the following month](0057-a-schedule-change-takes-effect-the-following-month.md)

@@ -20,6 +20,6 @@ Recorded also because elegance in this application is mostly not a dependency. O
 
 ---
 
-Decision 0072 of 155, indexed in [CLAUDE.md](../../CLAUDE.md).
+Decision 0072, indexed in [CLAUDE.md](../../CLAUDE.md).
 
 Previous: [2026-08-21 — Tailwind CSS, chosen while there is one page to convert](0071-tailwind-css-chosen-while-there-is-one-page-to-convert.md) | Next: [2026-08-21 — WCAG 2.2 Level AA, with something that can fail](0073-wcag-2-2-level-aa-with-something-that-can-fail.md)

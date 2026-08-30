@@ -4,6 +4,6 @@ Three months by default, never per leader. A list that differs by viewer makes t
 
 ---
 
-Decision 0036 of 155, indexed in [CLAUDE.md](../../CLAUDE.md).
+Decision 0036, indexed in [CLAUDE.md](../../CLAUDE.md).
 
 Previous: [2026-08-20 — Notifications go to the two Senior Pastors and their direct leaders only](0035-notifications-go-to-the-two-senior-pastors-and-their-direct.md) | Next: [2026-08-20 — Network is assigned from sex, not proposed](0037-network-is-assigned-from-sex-not-proposed.md)

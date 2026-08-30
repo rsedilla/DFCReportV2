@@ -7,6 +7,6 @@ Named because Principle 13's modular monolith is otherwise just a monolith, and 
 
 ---
 
-Decision 0060 of 155, indexed in [CLAUDE.md](../../CLAUDE.md).
+Decision 0060, indexed in [CLAUDE.md](../../CLAUDE.md).
 
 Previous: [2026-08-20 — Three reporting questions are deferred to implementation](0059-three-reporting-questions-are-deferred-to-implementation.md) | Next: [2026-08-20 — Every required structure is named and indexed](0061-every-required-structure-is-named-and-indexed.md)

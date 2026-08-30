@@ -103,6 +103,6 @@ verified by grep rather than asserted.
 
 ---
 
-Decision 0117 of 155, indexed in [CLAUDE.md](../../CLAUDE.md).
+Decision 0117, indexed in [CLAUDE.md](../../CLAUDE.md).
 
 Previous: [2026-08-25 — A generational suffix lives in `last_name`, and a title lives nowhere](0116-a-generational-suffix-lives-in-lastname-and-a-title-lives.md) | Next: [2026-08-26 — A module's tables are never written by another, and read by one only where the query is rooted elsewhere](0118-a-modules-tables-are-never-written-by-another-and-read-by.md)

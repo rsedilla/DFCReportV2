@@ -35,6 +35,6 @@ write answers 503 would pass equally against the stored-forever version.
 
 ---
 
-Decision 0095 of 155, indexed in [CLAUDE.md](../../CLAUDE.md).
+Decision 0095, indexed in [CLAUDE.md](../../CLAUDE.md).
 
 Previous: [2026-08-23 — The root is a row, and a person lock serializes the same-Network rule](0094-the-root-is-a-row-and-a-person-lock-serializes-the-same.md) | Next: [2026-08-23 — Three corrections to the lock, and two rules that were never written down](0096-three-corrections-to-the-lock-and-two-rules-that-were-never.md)

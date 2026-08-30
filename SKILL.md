@@ -3973,6 +3973,20 @@ A deployment that changes `default_transaction_isolation` therefore silently rem
 
 **The liveness probe currently shares that pool**, and answers by reaching the database. So pool exhaustion presents to the platform as a dead process, and the response is a restart that discards the transactions still making progress — turning contention into lost work. Whether the probe should keep sharing the pool, and whether "healthy" should mean "can reach the database", is an operational decision recorded as open in `CLAUDE.md` rather than settled here.
 
+### DateStyle
+
+**The application pins `DateStyle` on every connection rather than inheriting it**, in the startup packet, as `ISO, MDY`. It reads the value back when it starts and **refuses to start** unless the pin took effect.
+
+This is not the same kind of rule as the isolation level above, and reading it as one gets it backwards. Isolation is a dependency the application *has* on the server, because a client cannot set another session's default; it is therefore asserted rather than set. `DateStyle` arrives in the connection's own startup packet, so the application can stop depending on the server altogether — and it does.
+
+**What it prevents is silent and total.** The driver parses a `timestamptz` from the text the server sends, and expects the ISO output format. Under `SQL`, `Postgres` or `German` it does not fail: it returns **null**. Every timestamp the API reads then comes back empty — `started_at`, `ended_at`, every effective-dated period and every audit entry — with nothing raised. Section 5's as-of queries, Section 4's backdate floor and Section 20's period boundaries are all built on those columns, so a deployment could pass every test in this repository and still answer "who led this person in March" with nothing at all.
+
+The setting is deployment-controlled and demonstrably varies: this project's own development server runs `ISO, DMY` rather than PostgreSQL's default `ISO, MDY`, which has been harmless only because both are ISO.
+
+**The startup check is a check on the pin, not on the server.** Once the pin is in place the server's configuration no longer reaches the application, so there would be nothing left to assert about it — what the check earns is that the pin cannot be removed, or fail to arrive, without the application refusing to start rather than serving empty dates.
+
+`MDY` is the input half, and nothing here depends on it: Section 22 sends date-only fields as `YYYY-MM-DD`, which is unambiguous under every input order, and every other value is a bound parameter. It is pinned for determinism, and the check requires both halves because a difference in either means the startup option did not arrive.
+
 ---
 
 ## 25. Coding-Agent Rules

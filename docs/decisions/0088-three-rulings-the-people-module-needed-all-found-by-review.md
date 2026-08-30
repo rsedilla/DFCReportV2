@@ -53,6 +53,6 @@ none.
 
 ---
 
-Decision 0088 of 155, indexed in [CLAUDE.md](../../CLAUDE.md).
+Decision 0088, indexed in [CLAUDE.md](../../CLAUDE.md).
 
 Previous: [2026-08-22 — `people.create`, and how a Tier 1 duplicate is refused](0087-people-create-and-how-a-tier-1-duplicate-is-refused.md) | Next: [2026-08-22 — A duplicate candidate outside the viewer's scope carries no tier](0089-a-duplicate-candidate-outside-the-viewers-scope-carries-no.md)

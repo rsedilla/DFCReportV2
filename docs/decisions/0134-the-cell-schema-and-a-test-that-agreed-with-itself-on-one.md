@@ -233,6 +233,6 @@ deterministic rather than accepted.
 
 ---
 
-Decision 0134 of 155, indexed in [CLAUDE.md](../../CLAUDE.md).
+Decision 0134, indexed in [CLAUDE.md](../../CLAUDE.md).
 
 Previous: [2026-08-28 — A Cell changes hands by request and approval, and a closure is never reversed](0133-a-cell-changes-hands-by-request-and-approval-and-a-closure.md) | Next: [2026-08-29 — Direct creation, and a subtree check where Section 2 asks for Whole Church](0135-direct-creation-and-a-subtree-check-where-section-2-asks-for.md)

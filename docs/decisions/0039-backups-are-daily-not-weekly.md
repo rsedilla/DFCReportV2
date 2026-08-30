@@ -6,6 +6,6 @@ Weekly was considered and rejected: attendance exists nowhere else, so a week of
 
 ---
 
-Decision 0039 of 155, indexed in [CLAUDE.md](../../CLAUDE.md).
+Decision 0039, indexed in [CLAUDE.md](../../CLAUDE.md).
 
 Previous: [2026-08-20 — Closed months may be materialized](0038-closed-months-may-be-materialized.md) | Next: [2026-08-20 — Two capabilities were referenced but never named](0040-two-capabilities-were-referenced-but-never-named.md)

@@ -8,6 +8,6 @@ The accepted cost is that table types are hand-written and reviewed rather than 
 
 ---
 
-Decision 0064 of 155, indexed in [CLAUDE.md](../../CLAUDE.md).
+Decision 0064, indexed in [CLAUDE.md](../../CLAUDE.md).
 
 Previous: [2026-08-20 — `read_only` is valid only on a read capability](0063-readonly-is-valid-only-on-a-read-capability.md) | Next: [2026-08-20 — An endpoint that declares no capability is denied](0065-an-endpoint-that-declares-no-capability-is-denied.md)

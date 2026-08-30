@@ -85,6 +85,6 @@ and pass every other case. Written to `SKILL.md` §7 and migration `0005`.
 
 ---
 
-Decision 0109 of 155, indexed in [CLAUDE.md](../../CLAUDE.md).
+Decision 0109, indexed in [CLAUDE.md](../../CLAUDE.md).
 
 Previous: [2026-08-24 — Naming a Senior Pastor takes effect on the next restart](0108-naming-a-senior-pastor-takes-effect-on-the-next-restart.md) | Next: [2026-08-24 — The grant-making pair is never held by a Senior Pastor](0110-the-grant-making-pair-is-never-held-by-a-senior-pastor.md)

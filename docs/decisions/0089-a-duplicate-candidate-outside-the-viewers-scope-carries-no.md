@@ -31,6 +31,6 @@ the leak, and applies it to the Tier 1 refusal as well.
 
 ---
 
-Decision 0089 of 155, indexed in [CLAUDE.md](../../CLAUDE.md).
+Decision 0089, indexed in [CLAUDE.md](../../CLAUDE.md).
 
 Previous: [2026-08-22 — Three rulings the `people` module needed, all found by review](0088-three-rulings-the-people-module-needed-all-found-by-review.md) | Next: [2026-08-22 — Membership of a candidate list is itself a disclosure](0090-membership-of-a-candidate-list-is-itself-a-disclosure.md)

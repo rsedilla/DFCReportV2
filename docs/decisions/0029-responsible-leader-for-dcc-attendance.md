@@ -6,6 +6,6 @@ Cell leadership is not involved: a leader who disciples people but leads no Cell
 
 ---
 
-Decision 0029 of 155, indexed in [CLAUDE.md](../../CLAUDE.md).
+Decision 0029, indexed in [CLAUDE.md](../../CLAUDE.md).
 
 Previous: [2026-08-20 — Mobile number is the only contact detail; no email on a Person](0028-mobile-number-is-the-only-contact-detail-no-email-on-a.md) | Next: [2026-08-20 — Cell ID generation](0030-cell-id-generation.md)

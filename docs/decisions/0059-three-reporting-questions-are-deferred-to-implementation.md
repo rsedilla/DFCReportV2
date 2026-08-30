@@ -6,6 +6,6 @@ Each was answered twice, and each answer broke reconciliation or reproducibility
 
 ---
 
-Decision 0059 of 155, indexed in [CLAUDE.md](../../CLAUDE.md).
+Decision 0059, indexed in [CLAUDE.md](../../CLAUDE.md).
 
 Previous: [2026-08-20 — Cell monthly attendance reverts to attendees, with a separate roster view](0058-cell-monthly-attendance-reverts-to-attendees-with-a-separate.md) | Next: [2026-08-20 — Nine modules, each owning its tables](0060-nine-modules-each-owning-its-tables.md)

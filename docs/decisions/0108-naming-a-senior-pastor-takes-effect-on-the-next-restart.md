@@ -25,6 +25,6 @@ already described; this entry is what makes it a decision rather than a descript
 
 ---
 
-Decision 0108 of 155, indexed in [CLAUDE.md](../../CLAUDE.md).
+Decision 0108, indexed in [CLAUDE.md](../../CLAUDE.md).
 
 Previous: [2026-08-24 — Who the two Senior Pastors are is read from configuration, and checked twice](0107-who-the-two-senior-pastors-are-is-read-from-configuration.md) | Next: [2026-08-24 — An account holds at most one of `ADMIN` and `SENIOR_PASTOR`](0109-an-account-holds-at-most-one-of-admin-and-seniorpastor.md)

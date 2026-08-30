@@ -5,6 +5,6 @@ The schedule in force on the first day of the week a meeting belongs to determin
 
 ---
 
-Decision 0053 of 155, indexed in [CLAUDE.md](../../CLAUDE.md).
+Decision 0053, indexed in [CLAUDE.md](../../CLAUDE.md).
 
 Previous: [2026-08-20 — `settings.manage` for church-wide operational settings](0052-settings-manage-for-church-wide-operational-settings.md) | Next: [2026-08-20 — A calendar week begins on Monday](0054-a-calendar-week-begins-on-monday.md)

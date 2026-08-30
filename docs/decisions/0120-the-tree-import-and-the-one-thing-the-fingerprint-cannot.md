@@ -77,6 +77,6 @@ something and is not is worse than one that says no.
 
 ---
 
-Decision 0120 of 155, indexed in [CLAUDE.md](../../CLAUDE.md).
+Decision 0120, indexed in [CLAUDE.md](../../CLAUDE.md).
 
 Previous: [2026-08-26 — The bootstrap's two service methods guard themselves, and `ts-node` ships](0119-the-bootstraps-two-service-methods-guard-themselves-and-ts.md) | Next: [2026-08-26 — The import's actor must hold ADMIN, and four other findings from the review](0121-the-imports-actor-must-hold-admin-and-four-other-findings.md)

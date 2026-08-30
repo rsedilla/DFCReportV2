@@ -6,6 +6,6 @@ Shapes now sit in the section owning each rule, and §26 carries an index of all
 
 ---
 
-Decision 0061 of 155, indexed in [CLAUDE.md](../../CLAUDE.md).
+Decision 0061, indexed in [CLAUDE.md](../../CLAUDE.md).
 
 Previous: [2026-08-20 — Nine modules, each owning its tables](0060-nine-modules-each-owning-its-tables.md) | Next: [2026-08-20 — The guard checks one target; the rest is domain layer](0062-the-guard-checks-one-target-the-rest-is-domain-layer.md)

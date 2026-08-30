@@ -4,6 +4,6 @@ Buckets run to the number of applicable DCC events in the month, not the number 
 
 ---
 
-Decision 0026 of 155, indexed in [CLAUDE.md](../../CLAUDE.md).
+Decision 0026, indexed in [CLAUDE.md](../../CLAUDE.md).
 
 Previous: [2026-08-20 — "Qualifies as a leader" means current Cell Leader](0025-qualifies-as-a-leader-means-current-cell-leader.md) | Next: [2026-08-20 — Dashboard rules](0027-dashboard-rules.md)

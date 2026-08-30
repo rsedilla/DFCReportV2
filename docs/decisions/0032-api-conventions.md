@@ -6,6 +6,6 @@ Fixed before implementation because three clients consume the API concurrently a
 
 ---
 
-Decision 0032 of 155, indexed in [CLAUDE.md](../../CLAUDE.md).
+Decision 0032, indexed in [CLAUDE.md](../../CLAUDE.md).
 
 Previous: [2026-08-20 — Cell attendance records members only](0031-cell-attendance-records-members-only.md) | Next: [2026-08-20 — Cell schedule is effective-dated](0033-cell-schedule-is-effective-dated.md)

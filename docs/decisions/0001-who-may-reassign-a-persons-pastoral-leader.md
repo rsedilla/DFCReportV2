@@ -4,6 +4,6 @@ Admin; any leader upline of the person, acting within their own authorized pasto
 
 ---
 
-Decision 0001 of 155, indexed in [CLAUDE.md](../../CLAUDE.md).
+Decision 0001, indexed in [CLAUDE.md](../../CLAUDE.md).
 
 Next: [2026-08-19 — Senior Pastors may reassign across both Networks](0002-senior-pastors-may-reassign-across-both-networks.md)

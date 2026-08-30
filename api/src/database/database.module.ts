@@ -1,8 +1,16 @@
-import { Global, Inject, Module, type OnApplicationShutdown } from '@nestjs/common';
+import {
+  Global,
+  Inject,
+  Module,
+  type OnApplicationBootstrap,
+  type OnApplicationShutdown,
+} from '@nestjs/common';
 import { Kysely, PostgresDialect } from 'kysely';
 import { Pool, types } from 'pg';
 
 import { APP_CONFIG, type AppConfig } from '../config/configuration';
+
+import { assertDateStyle, DATE_STYLE_OPTION } from './date-style';
 
 import type { Database } from './schema';
 
@@ -49,6 +57,13 @@ export type Db = Kysely<Database>;
               connectionString: config.databaseUrl,
               // Least-privilege credentials and a bounded pool (SKILL.md section 24).
               max: 10,
+              // **`DateStyle` is pinned per connection rather than inherited**
+              // (`date-style.ts`). Under a non-ISO style the driver parses every
+              // timestamp as null rather than failing, so an inherited value is a
+              // silent way to lose every date in the system. Sent in the startup
+              // packet, so it applies to every connection this pool opens without a
+              // session hook to remember.
+              options: DATE_STYLE_OPTION,
             }),
           }),
         }),
@@ -56,8 +71,20 @@ export type Db = Kysely<Database>;
   ],
   exports: [DATABASE],
 })
-export class DatabaseModule implements OnApplicationShutdown {
+export class DatabaseModule implements OnApplicationBootstrap, OnApplicationShutdown {
   constructor(@Inject(DATABASE) private readonly db: Db) {}
+
+  /**
+   * Read the pin back and refuse to start unless it took effect.
+   *
+   * Not a check on how the server is configured — the pool no longer depends on that.
+   * It is a check on the pin itself, which is what stops it being a line somebody
+   * removes without anything noticing. The alternative is an application that starts
+   * happily and answers every date with null.
+   */
+  async onApplicationBootstrap(): Promise<void> {
+    await assertDateStyle(this.db);
+  }
 
   async onApplicationShutdown(): Promise<void> {
     await this.db.destroy();

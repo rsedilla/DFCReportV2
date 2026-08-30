@@ -87,6 +87,6 @@ this log has had to record exactly that, after migrations 0005 and 0007.
 
 ---
 
-Decision 0149 of 155, indexed in [CLAUDE.md](../../CLAUDE.md).
+Decision 0149, indexed in [CLAUDE.md](../../CLAUDE.md).
 
 Previous: [2026-08-30 — Three small settlements from building step one of the request workflow](0148-three-small-settlements-from-building-step-one-of-the.md) | Next: [2026-08-30 — Ten on the request fix batch, and a fix claimed in the past tense that was never made](0150-ten-on-the-request-fix-batch-and-a-fix-claimed-in-the-past.md)

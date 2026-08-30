@@ -66,6 +66,6 @@ correction.
 
 ---
 
-Decision 0091 of 155, indexed in [CLAUDE.md](../../CLAUDE.md).
+Decision 0091, indexed in [CLAUDE.md](../../CLAUDE.md).
 
 Previous: [2026-08-22 — Membership of a candidate list is itself a disclosure](0090-membership-of-a-candidate-list-is-itself-a-disclosure.md) | Next: [2026-08-23 — Reading the Network-change trigger fired twice, which is what the section 4 floor is about](0092-reading-the-network-change-trigger-fired-twice-which-is-what.md)

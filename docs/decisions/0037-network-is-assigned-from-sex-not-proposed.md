@@ -4,6 +4,6 @@ The mapping is total under the homogeneous-network rule, so a confirmation step 
 
 ---
 
-Decision 0037 of 155, indexed in [CLAUDE.md](../../CLAUDE.md).
+Decision 0037, indexed in [CLAUDE.md](../../CLAUDE.md).
 
 Previous: [2026-08-20 — Attention threshold is one church-wide Admin setting](0036-attention-threshold-is-one-church-wide-admin-setting.md) | Next: [2026-08-20 — Closed months may be materialized](0038-closed-months-may-be-materialized.md)

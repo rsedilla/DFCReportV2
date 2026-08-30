@@ -4,6 +4,6 @@ Capability `cell.manage_membership`, held by the Cell's leader, their upline wit
 
 ---
 
-Decision 0017 of 155, indexed in [CLAUDE.md](../../CLAUDE.md).
+Decision 0017, indexed in [CLAUDE.md](../../CLAUDE.md).
 
 Previous: [2026-08-20 — DCC has no meeting status](0016-dcc-has-no-meeting-status.md) | Next: [2026-08-20 — Duplicate matching rules](0018-duplicate-matching-rules.md)

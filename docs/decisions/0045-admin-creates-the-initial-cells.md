@@ -4,6 +4,6 @@ A leader cannot create their own first Cell: an account arrives with Cell leader
 
 ---
 
-Decision 0045 of 155, indexed in [CLAUDE.md](../../CLAUDE.md).
+Decision 0045, indexed in [CLAUDE.md](../../CLAUDE.md).
 
 Previous: [2026-08-20 — Cell creation is request then approve](0044-cell-creation-is-request-then-approve.md) | Next: [2026-08-20 — Cell creation workflow, hardened](0046-cell-creation-workflow-hardened.md)

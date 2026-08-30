@@ -6,6 +6,6 @@ They run as a separate job that is reported and not required, so the `api` job s
 
 ---
 
-Decision 0067 of 155, indexed in [CLAUDE.md](../../CLAUDE.md).
+Decision 0067, indexed in [CLAUDE.md](../../CLAUDE.md).
 
 Previous: [2026-08-20 — Invariant 4 answers `SCOPE_DENIED`, not `INVARIANT_VIOLATION`](0066-invariant-4-answers-scopedenied-not-invariantviolation.md) | Next: [2026-08-20 — A Network change validates forward from its effective date](0068-a-network-change-validates-forward-from-its-effective-date.md)

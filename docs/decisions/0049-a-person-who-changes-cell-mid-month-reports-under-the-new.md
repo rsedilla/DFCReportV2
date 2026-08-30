@@ -5,6 +5,6 @@ Their denominator is the new Cell's recorded meetings, and attendance at the Cel
 
 ---
 
-Decision 0049 of 155, indexed in [CLAUDE.md](../../CLAUDE.md).
+Decision 0049, indexed in [CLAUDE.md](../../CLAUDE.md).
 
 Previous: [2026-08-20 — A DCC attendance record requires a pastoral leader](0048-a-dcc-attendance-record-requires-a-pastoral-leader.md) | Next: [2026-08-20 — A rescheduled meeting takes its roster from the actual date](0050-a-rescheduled-meeting-takes-its-roster-from-the-actual-date.md)

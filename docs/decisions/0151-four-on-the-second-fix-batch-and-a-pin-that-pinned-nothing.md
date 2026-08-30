@@ -64,6 +64,6 @@ grant covers the actor wherever it names their own Network.
 
 ---
 
-Decision 0151 of 155, indexed in [CLAUDE.md](../../CLAUDE.md).
+Decision 0151, indexed in [CLAUDE.md](../../CLAUDE.md).
 
 Previous: [2026-08-30 — Ten on the request fix batch, and a fix claimed in the past tense that was never made](0150-ten-on-the-request-fix-batch-and-a-fix-claimed-in-the-past.md) | Next: [2026-08-30 — Approval records the leadership and leaves the account pending](0152-approval-records-the-leadership-and-leaves-the-account.md)

@@ -92,6 +92,6 @@ least six false "written to Section x" claims.
 
 ---
 
-Decision 0139 of 155, indexed in [CLAUDE.md](../../CLAUDE.md).
+Decision 0139, indexed in [CLAUDE.md](../../CLAUDE.md).
 
 Previous: [2026-08-29 — A second schedule change corrects the pending one](0138-a-second-schedule-change-corrects-the-pending-one.md) | Next: [2026-08-29 — Twelve findings on the closure, and the three the review escalated](0140-twelve-findings-on-the-closure-and-the-three-the-review.md)

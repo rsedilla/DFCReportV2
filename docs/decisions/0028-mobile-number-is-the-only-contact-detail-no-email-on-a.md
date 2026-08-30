@@ -8,6 +8,6 @@ The number is optional because a required contact field gets filled with fiction
 
 ---
 
-Decision 0028 of 155, indexed in [CLAUDE.md](../../CLAUDE.md).
+Decision 0028, indexed in [CLAUDE.md](../../CLAUDE.md).
 
 Previous: [2026-08-20 — Dashboard rules](0027-dashboard-rules.md) | Next: [2026-08-20 — Responsible leader for DCC attendance](0029-responsible-leader-for-dcc-attendance.md)

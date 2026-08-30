@@ -14,6 +14,6 @@ The native clients are deliberately out of scope. Their framework is not chosen,
 
 ---
 
-Decision 0073 of 155, indexed in [CLAUDE.md](../../CLAUDE.md).
+Decision 0073, indexed in [CLAUDE.md](../../CLAUDE.md).
 
 Previous: [2026-08-21 — UI direction: headless primitives the repository owns, and no design-system framework](0072-ui-direction-headless-primitives-the-repository-owns-and-no.md) | Next: [2026-08-21 — Twelve findings from the Stage 1 verification, and why they existed](0074-twelve-findings-from-the-stage-1-verification-and-why-they.md)

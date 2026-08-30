@@ -8,6 +8,6 @@ Found by `architecture-guardian` on the Stage 1 branch. `records.backdate_effect
 
 ---
 
-Decision 0068 of 155, indexed in [CLAUDE.md](../../CLAUDE.md).
+Decision 0068, indexed in [CLAUDE.md](../../CLAUDE.md).
 
 Previous: [2026-08-20 — The eleven authorization cases ship failing, in their own CI job](0067-the-eleven-authorization-cases-ship-failing-in-their-own-ci.md) | Next: [2026-08-20 — Three enforcement gaps closed at the schema, not in prose](0069-three-enforcement-gaps-closed-at-the-schema-not-in-prose.md)

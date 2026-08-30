@@ -7,6 +7,6 @@ This replaces the earlier month-end rule, which had no answer for a person who l
 
 ---
 
-Decision 0055 of 155, indexed in [CLAUDE.md](../../CLAUDE.md).
+Decision 0055, indexed in [CLAUDE.md](../../CLAUDE.md).
 
 Previous: [2026-08-20 — A calendar week begins on Monday](0054-a-calendar-week-begins-on-monday.md) | Next: [2026-08-20 — Cell monthly attendance reports on members](0056-cell-monthly-attendance-reports-on-members.md)

@@ -180,6 +180,6 @@ validate its own — is pinned as a real gap rather than left as a caution.
 
 ---
 
-Decision 0102 of 155, indexed in [CLAUDE.md](../../CLAUDE.md).
+Decision 0102, indexed in [CLAUDE.md](../../CLAUDE.md).
 
 Previous: [2026-08-23 — Identifier normalization is global, and a pastoral leader has one field name](0101-identifier-normalization-is-global-and-a-pastoral-leader-has.md) | Next: [2026-08-24 — "Never by layer" is about modules, not about files inside one](0103-never-by-layer-is-about-modules-not-about-files-inside-one.md)

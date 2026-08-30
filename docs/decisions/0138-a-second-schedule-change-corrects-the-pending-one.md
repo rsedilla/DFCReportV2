@@ -56,6 +56,6 @@ have been the seventh, made knowingly.
 
 ---
 
-Decision 0138 of 155, indexed in [CLAUDE.md](../../CLAUDE.md).
+Decision 0138, indexed in [CLAUDE.md](../../CLAUDE.md).
 
 Previous: [2026-08-29 — Six rulings the closure endpoint needed, and two the review raised](0137-six-rulings-the-closure-endpoint-needed-and-two-the-review.md) | Next: [2026-08-29 — The closure ordering and the closure floor, settled by running the database](0139-the-closure-ordering-and-the-closure-floor-settled-by.md)

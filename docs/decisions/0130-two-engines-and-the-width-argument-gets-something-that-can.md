@@ -49,6 +49,6 @@ against the part of it being looked at. Nothing about the screens was wrong.
 
 ---
 
-Decision 0130 of 155, indexed in [CLAUDE.md](../../CLAUDE.md).
+Decision 0130, indexed in [CLAUDE.md](../../CLAUDE.md).
 
 Previous: [2026-08-28 — Membership and order disclose as loudly as fields did](0129-membership-and-order-disclose-as-loudly-as-fields-did.md) | Next: [2026-08-28 — A pastoral path says which end is a root](0131-a-pastoral-path-says-which-end-is-a-root.md)

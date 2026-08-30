@@ -73,6 +73,6 @@ ruling's own absence. Written to `SKILL.md`
 
 ---
 
-Decision 0129 of 155, indexed in [CLAUDE.md](../../CLAUDE.md).
+Decision 0129, indexed in [CLAUDE.md](../../CLAUDE.md).
 
 Previous: [2026-08-27 — A re-presentation whose replacement was never used is a retry](0128-a-re-presentation-whose-replacement-was-never-used-is-a.md) | Next: [2026-08-28 — Two engines, and the width argument gets something that can fail](0130-two-engines-and-the-width-argument-gets-something-that-can.md)

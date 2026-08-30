@@ -120,6 +120,6 @@ and is listed as unsettled below rather than decided in passing.
 
 ---
 
-Decision 0107 of 155, indexed in [CLAUDE.md](../../CLAUDE.md).
+Decision 0107, indexed in [CLAUDE.md](../../CLAUDE.md).
 
 Previous: [2026-08-24 — The authorization seam is its own module, and a cycle was the reason a rule was being broken](0106-the-authorization-seam-is-its-own-module-and-a-cycle-was-the.md) | Next: [2026-08-24 — Naming a Senior Pastor takes effect on the next restart](0108-naming-a-senior-pastor-takes-effect-on-the-next-restart.md)

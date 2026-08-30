@@ -97,6 +97,6 @@ Written to `SKILL.md` §7, §24 and migration `0006`.
 
 ---
 
-Decision 0110 of 155, indexed in [CLAUDE.md](../../CLAUDE.md).
+Decision 0110, indexed in [CLAUDE.md](../../CLAUDE.md).
 
 Previous: [2026-08-24 — An account holds at most one of `ADMIN` and `SENIOR_PASTOR`](0109-an-account-holds-at-most-one-of-admin-and-seniorpastor.md) | Next: [2026-08-24 — How the leadership tree import runs](0111-how-the-leadership-tree-import-runs.md)

@@ -8,6 +8,6 @@ The reason first recorded for refusing the column, that §7's shape has no slot,
 
 ---
 
-Decision 0077 of 155, indexed in [CLAUDE.md](../../CLAUDE.md).
+Decision 0077, indexed in [CLAUDE.md](../../CLAUDE.md).
 
 Previous: [2026-08-21 — Simultaneous presentation of a refresh token is not reuse](0076-simultaneous-presentation-of-a-refresh-token-is-not-reuse.md) | Next: [2026-08-21 — A row of an effective-dated table is never deleted](0078-a-row-of-an-effective-dated-table-is-never-deleted.md)

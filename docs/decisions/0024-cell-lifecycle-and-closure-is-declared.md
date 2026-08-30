@@ -8,6 +8,6 @@ Prolonged inactivity instead drives an attention list (§15) that prompts a pers
 
 ---
 
-Decision 0024 of 155, indexed in [CLAUDE.md](../../CLAUDE.md).
+Decision 0024, indexed in [CLAUDE.md](../../CLAUDE.md).
 
 Previous: [2026-08-20 — Migration policy](0023-migration-policy.md) | Next: [2026-08-20 — "Qualifies as a leader" means current Cell Leader](0025-qualifies-as-a-leader-means-current-cell-leader.md)

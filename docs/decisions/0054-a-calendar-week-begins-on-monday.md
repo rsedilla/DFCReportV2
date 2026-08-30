@@ -5,6 +5,6 @@ ISO 8601, consistent with the date format already in use. Not a formatting prefe
 
 ---
 
-Decision 0054 of 155, indexed in [CLAUDE.md](../../CLAUDE.md).
+Decision 0054, indexed in [CLAUDE.md](../../CLAUDE.md).
 
 Previous: [2026-08-20 — A mid-month schedule change is resolved per week](0053-a-mid-month-schedule-change-is-resolved-per-week.md) | Next: [2026-08-20 — Monthly attendance is measured over the membership window](0055-monthly-attendance-is-measured-over-the-membership-window.md)

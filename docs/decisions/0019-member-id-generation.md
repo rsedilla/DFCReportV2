@@ -4,6 +4,6 @@
 
 ---
 
-Decision 0019 of 155, indexed in [CLAUDE.md](../../CLAUDE.md).
+Decision 0019, indexed in [CLAUDE.md](../../CLAUDE.md).
 
 Previous: [2026-08-20 — Duplicate matching rules](0018-duplicate-matching-rules.md) | Next: [2026-08-20 — No "on behalf" for pastoral assignment](0020-no-on-behalf-for-pastoral-assignment.md)

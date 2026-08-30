@@ -162,6 +162,6 @@ prevent. It lands in migration 0002 beside `audit_log` and `idempotency_keys`.
 
 ---
 
-Decision 0080 of 155, indexed in [CLAUDE.md](../../CLAUDE.md).
+Decision 0080, indexed in [CLAUDE.md](../../CLAUDE.md).
 
 Previous: [2026-08-22 — A sign-in landing inside a revocation's transaction survives it](0079-a-sign-in-landing-inside-a-revocations-transaction-survives.md) | Next: [2026-08-22 — Four enforcement gaps found reviewing the Stage 2 rulings](0081-four-enforcement-gaps-found-reviewing-the-stage-2-rulings.md)

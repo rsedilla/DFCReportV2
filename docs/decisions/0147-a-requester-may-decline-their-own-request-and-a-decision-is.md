@@ -59,6 +59,6 @@ grep rather than asserted.
 
 ---
 
-Decision 0147 of 155, indexed in [CLAUDE.md](../../CLAUDE.md).
+Decision 0147, indexed in [CLAUDE.md](../../CLAUDE.md).
 
 Previous: [2026-08-29 — Five on the sixth fix batch, all of them what the batch said about itself](0146-five-on-the-sixth-fix-batch-all-of-them-what-the-batch-said.md) | Next: [2026-08-30 — Three small settlements from building step one of the request workflow](0148-three-small-settlements-from-building-step-one-of-the.md)

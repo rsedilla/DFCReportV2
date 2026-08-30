@@ -8,6 +8,6 @@ The exemption sentence claimed the unauthenticated set was sign-in and the passw
 
 ---
 
-Decision 0070 of 155, indexed in [CLAUDE.md](../../CLAUDE.md).
+Decision 0070, indexed in [CLAUDE.md](../../CLAUDE.md).
 
 Previous: [2026-08-20 — Three enforcement gaps closed at the schema, not in prose](0069-three-enforcement-gaps-closed-at-the-schema-not-in-prose.md) | Next: [2026-08-21 — Tailwind CSS, chosen while there is one page to convert](0071-tailwind-css-chosen-while-there-is-one-page-to-convert.md)

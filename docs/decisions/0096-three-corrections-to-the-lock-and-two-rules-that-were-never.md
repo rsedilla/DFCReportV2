@@ -58,6 +58,6 @@ waits, which is true only if the helper sorted.
 
 ---
 
-Decision 0096 of 155, indexed in [CLAUDE.md](../../CLAUDE.md).
+Decision 0096, indexed in [CLAUDE.md](../../CLAUDE.md).
 
 Previous: [2026-08-23 — `RESOURCE_BUSY`, and why its status carries the rule](0095-resourcebusy-and-why-its-status-carries-the-rule.md) | Next: [2026-08-23 — An identifier is compared canonically, and the class was wider than the instance](0097-an-identifier-is-compared-canonically-and-the-class-was.md)

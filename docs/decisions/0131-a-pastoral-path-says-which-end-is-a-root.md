@@ -52,6 +52,6 @@ and an entry asserting it would be the fault the entry above it records.
 
 ---
 
-Decision 0131 of 155, indexed in [CLAUDE.md](../../CLAUDE.md).
+Decision 0131, indexed in [CLAUDE.md](../../CLAUDE.md).
 
 Previous: [2026-08-28 — Two engines, and the width argument gets something that can fail](0130-two-engines-and-the-width-argument-gets-something-that-can.md) | Next: [2026-08-28 — Three rulings before Stage 3, and a fourth withdrawn](0132-three-rulings-before-stage-3-and-a-fourth-withdrawn.md)

@@ -6,6 +6,6 @@ Stated because a capability and a scope cannot express three objects with three 
 
 ---
 
-Decision 0062 of 155, indexed in [CLAUDE.md](../../CLAUDE.md).
+Decision 0062, indexed in [CLAUDE.md](../../CLAUDE.md).
 
 Previous: [2026-08-20 — Every required structure is named and indexed](0061-every-required-structure-is-named-and-indexed.md) | Next: [2026-08-20 — `read_only` is valid only on a read capability](0063-readonly-is-valid-only-on-a-read-capability.md)

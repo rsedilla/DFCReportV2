@@ -6,6 +6,6 @@ This is a defect correction, not a history rewrite: the report was counting one 
 
 ---
 
-Decision 0012 of 155, indexed in [CLAUDE.md](../../CLAUDE.md).
+Decision 0012, indexed in [CLAUDE.md](../../CLAUDE.md).
 
 Previous: [2026-08-19 — Development reports DCC VIPs and Cell VIPs separately](0011-development-reports-dcc-vips-and-cell-vips-separately.md) | Next: [2026-08-19 — Role catalog](0013-role-catalog.md)

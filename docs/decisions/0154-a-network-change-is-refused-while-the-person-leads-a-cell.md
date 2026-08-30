@@ -94,6 +94,6 @@ than by asserting it here.
 
 ---
 
-Decision 0154 of 155, indexed in [CLAUDE.md](../../CLAUDE.md).
+Decision 0154, indexed in [CLAUDE.md](../../CLAUDE.md).
 
 Previous: [2026-08-30 — Three rulings the approval endpoint needed, and a condition nothing could evaluate](0153-three-rulings-the-approval-endpoint-needed-and-a-condition.md) | Next: [2026-08-30 — The backdate floor gains two Cell terms, one per mechanism](0155-the-backdate-floor-gains-two-cell-terms-one-per-mechanism.md)

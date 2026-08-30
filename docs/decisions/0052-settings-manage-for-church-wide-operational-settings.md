@@ -4,6 +4,6 @@ Admin-only, Whole Church, audit logged with previous and new values. It governs 
 
 ---
 
-Decision 0052 of 155, indexed in [CLAUDE.md](../../CLAUDE.md).
+Decision 0052, indexed in [CLAUDE.md](../../CLAUDE.md).
 
 Previous: [2026-08-20 — Notifications go to the direct leaders and Admin, not the Senior Pastors](0051-notifications-go-to-the-direct-leaders-and-admin-not-the.md) | Next: [2026-08-20 — A mid-month schedule change is resolved per week](0053-a-mid-month-schedule-change-is-resolved-per-week.md)

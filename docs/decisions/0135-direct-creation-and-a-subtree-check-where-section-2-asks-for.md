@@ -95,6 +95,6 @@ capability — each reddening exactly its own cases.
 
 ---
 
-Decision 0135 of 155, indexed in [CLAUDE.md](../../CLAUDE.md).
+Decision 0135, indexed in [CLAUDE.md](../../CLAUDE.md).
 
 Previous: [2026-08-28 — The Cell schema, and a test that agreed with itself on one machine only](0134-the-cell-schema-and-a-test-that-agreed-with-itself-on-one.md) | Next: [2026-08-29 — A Cell is placed in the tree by its leader, and a move is two changes](0136-a-cell-is-placed-in-the-tree-by-its-leader-and-a-move-is-two.md)

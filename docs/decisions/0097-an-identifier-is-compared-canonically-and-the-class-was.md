@@ -74,6 +74,6 @@ dependency runs.
 
 ---
 
-Decision 0097 of 155, indexed in [CLAUDE.md](../../CLAUDE.md).
+Decision 0097, indexed in [CLAUDE.md](../../CLAUDE.md).
 
 Previous: [2026-08-23 — Three corrections to the lock, and two rules that were never written down](0096-three-corrections-to-the-lock-and-two-rules-that-were-never.md) | Next: [2026-08-23 — A backdated reassignment is bounded by §4's floor and one rule of its own](0098-a-backdated-reassignment-is-bounded-by-4s-floor-and-one-rule.md)

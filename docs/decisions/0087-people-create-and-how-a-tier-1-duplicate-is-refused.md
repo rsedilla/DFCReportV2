@@ -36,6 +36,6 @@ Written to `SKILL.md` §7 and §22.
 
 ---
 
-Decision 0087 of 155, indexed in [CLAUDE.md](../../CLAUDE.md).
+Decision 0087, indexed in [CLAUDE.md](../../CLAUDE.md).
 
 Previous: [2026-08-22 — A write endpoint records its idempotency completion in its own transaction](0086-a-write-endpoint-records-its-idempotency-completion-in-its.md) | Next: [2026-08-22 — Three rulings the `people` module needed, all found by review](0088-three-rulings-the-people-module-needed-all-found-by-review.md)

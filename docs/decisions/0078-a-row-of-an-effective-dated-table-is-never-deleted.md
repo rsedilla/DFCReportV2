@@ -13,6 +13,6 @@ It reaches `account_roles` and `capability_grants` too. §7 says a grant is revo
 
 ---
 
-Decision 0078 of 155, indexed in [CLAUDE.md](../../CLAUDE.md).
+Decision 0078, indexed in [CLAUDE.md](../../CLAUDE.md).
 
 Previous: [2026-08-21 — `account_roles` gains `senior_pastor_slot`](0077-accountroles-gains-seniorpastorslot.md) | Next: [2026-08-22 — A sign-in landing inside a revocation's transaction survives it](0079-a-sign-in-landing-inside-a-revocations-transaction-survives.md)

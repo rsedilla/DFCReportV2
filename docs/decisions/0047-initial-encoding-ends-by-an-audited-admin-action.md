@@ -4,6 +4,6 @@ While open, Admin may create Cells directly. Once closed, that path is gone and 
 
 ---
 
-Decision 0047 of 155, indexed in [CLAUDE.md](../../CLAUDE.md).
+Decision 0047, indexed in [CLAUDE.md](../../CLAUDE.md).
 
 Previous: [2026-08-20 — Cell creation workflow, hardened](0046-cell-creation-workflow-hardened.md) | Next: [2026-08-20 — A DCC attendance record requires a pastoral leader](0048-a-dcc-attendance-record-requires-a-pastoral-leader.md)

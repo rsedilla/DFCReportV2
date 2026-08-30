@@ -8,6 +8,6 @@ Rationale for the change: a silent leader and a leader honestly reporting that t
 
 ---
 
-Decision 0005 of 155, indexed in [CLAUDE.md](../../CLAUDE.md).
+Decision 0005, indexed in [CLAUDE.md](../../CLAUDE.md).
 
 Previous: [2026-08-19 — Agent roster reduced to two](0004-agent-roster-reduced-to-two.md) | Next: [2026-08-19 — Cell monthly denominator](0006-cell-monthly-denominator.md)

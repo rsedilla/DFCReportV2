@@ -37,6 +37,6 @@ it — both of which this branch corrected elsewhere.
 
 ---
 
-Decision 0103 of 155, indexed in [CLAUDE.md](../../CLAUDE.md).
+Decision 0103, indexed in [CLAUDE.md](../../CLAUDE.md).
 
 Previous: [2026-08-23 — What an identifier's field name is, and the second walk over a body](0102-what-an-identifiers-field-name-is-and-the-second-walk-over-a.md) | Next: [2026-08-24 — Three rulings the accounts work needed, settled before the code](0104-three-rulings-the-accounts-work-needed-settled-before-the.md)

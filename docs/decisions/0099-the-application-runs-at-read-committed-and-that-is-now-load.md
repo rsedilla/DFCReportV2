@@ -37,6 +37,6 @@ since it is the kind of mechanism this log has recorded getting wrong seven time
 
 ---
 
-Decision 0099 of 155, indexed in [CLAUDE.md](../../CLAUDE.md).
+Decision 0099, indexed in [CLAUDE.md](../../CLAUDE.md).
 
 Previous: [2026-08-23 — A backdated reassignment is bounded by §4's floor and one rule of its own](0098-a-backdated-reassignment-is-bounded-by-4s-floor-and-one-rule.md) | Next: [2026-08-23 — Reusing a shape requires re-deriving why it has that shape](0100-reusing-a-shape-requires-re-deriving-why-it-has-that-shape.md)
