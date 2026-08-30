@@ -428,6 +428,97 @@ export class CellsReadService implements CellScopePort, CellRelationshipsPort {
   }
 
   /**
+   * `CellRelationshipsPort`. How far back a Network correction for this person may be
+   * dated, as far as their closed Cell relationships are concerned
+   * (SKILL.md section 4, the floor's two Cell terms).
+   *
+   * The port's docblock carries why each half takes the shape it takes. What is worth
+   * saying at the query is why the membership half is a join rather than a column.
+   *
+   * **A membership is compared at more than one instant, and the first version of this
+   * method assumed it was compared at exactly one.** `assert_membership_same_network`
+   * reads it at its own `started_at`; `assert_leadership_stays_in_network` reads the
+   * member's Network again, at the *incoming leadership row's* `started_at`, for every
+   * membership open at that instant. So a membership that spanned a handover was
+   * compared at that handover too, and a correction dated after the join but before the
+   * handover falsifies that comparison while clearing a `started_at` bound.
+   *
+   * That was reproduced against the schema before this shape was written: the four-row
+   * correction commits, and at the handover instant the member resolves to one Network
+   * while the leader resolves to the other — the state that trigger's own message exists
+   * to refuse.
+   *
+   * So the term is the latest instant at which the membership was ever compared: its own
+   * start, or the last leadership start it spans. The predicate is the member scan's own
+   * selection read backwards — it takes `cm.started_at <= H` and `cm.ended_at > H`, so
+   * this takes leadership starts in `[cm.started_at, cm.ended_at)`.
+   *
+   * **Every leadership row in that window ran the scan**, including ones since closed, so
+   * the join is exact rather than conservative. What guarantees that is the trigger's
+   * *state at commit* rather than the shape of the write, and saying it the other way
+   * round is wrong in a way that matters:
+   * `assert_leadership_stays_in_network` is deferred and returns early only where the row
+   * stands closed at COMMIT.
+   *
+   * `cell_leadership_is_opened_open` is a narrower guarantee than it looks — it refuses an
+   * INSERT carrying an `ended_at`, and a write that *changes* an already-set `ended_at`,
+   * which leaves the ordinary null-to-value close permitted and does not refuse
+   * insert-open-then-close inside one transaction. (`cell_leaderships_period_ordered`
+   * being `>=` is what makes the *zero-length* variant of that representable; the
+   * later-instant variant needs no help from it.) No operation this specification
+   * defines writes one:
+   * approval leaves the incoming row open, closure only closes, direct creation only
+   * opens. If anything ever did, this term would over-refuse rather than under-refuse.
+   *
+   * **`GREATEST` ignores nulls in PostgreSQL and is null only when every argument is**,
+   * which is section 4's "each term is a maximum over rows that may be empty, and an
+   * empty term contributes nothing". It is what lets the inner subquery return null for a
+   * membership that spanned no handover and still yield that membership's own start. Raw
+   * SQL for that reason — the same null-handling `HierarchyService.backdateFloorFor` needs
+   * — and the pastoral terms are combined by the caller rather than here, because
+   * `pastoral_assignments` is not this module's to read.
+   *
+   * **The window's lower bound is inclusive and nothing can fail against it.** A
+   * leadership starting at the exact instant a membership starts needs two identical
+   * `clock_timestamp()` reads, which no operation produces — so `>=` against `>` is
+   * green, and it is declared here rather than pinned by a fixture that could not arise.
+   * Inclusive is still the correct reading of the member scan, which takes
+   * `cm.started_at <= v_row.started_at`.
+   *
+   * **Both halves are restricted to closed rows, and the two filters are not alike.**
+   * `cl.ended_at IS NOT NULL` on the leadership half is a no-op, since `max` ignores
+   * nulls; it is written for the reader. `cm.ended_at IS NOT NULL` on the membership half
+   * decides rows, and nothing can fail against it, because an open membership refuses the
+   * correction outright upstream (section 4). Both are stated rather than left for
+   * somebody to delete and find the suite still green.
+   */
+  async closedRelationshipFloorOf(
+    executor: Transaction<Database>,
+    personId: string,
+  ): Promise<Date | null> {
+    const result = await sql<{ floor: Date | null }>`
+      SELECT GREATEST(
+        (SELECT max(cl.ended_at)
+           FROM cell_leaderships cl
+          WHERE cl.person_id = ${personId}::uuid
+            AND cl.ended_at IS NOT NULL),
+        (SELECT max(GREATEST(
+                  cm.started_at,
+                  (SELECT max(spanned.started_at)
+                     FROM cell_leaderships spanned
+                    WHERE spanned.cell_id = cm.cell_id
+                      AND spanned.started_at >= cm.started_at
+                      AND spanned.started_at < cm.ended_at)))
+           FROM cell_memberships cm
+          WHERE cm.person_id = ${personId}::uuid
+            AND cm.ended_at IS NOT NULL)
+      ) AS floor
+    `.execute(executor);
+
+    return result.rows[0]?.floor ?? null;
+  }
+
+  /**
    * Whether this Person is a current Cell Leader (SKILL.md section 11).
    *
    * **Both halves, and the second cannot be shown to matter — which is stated here

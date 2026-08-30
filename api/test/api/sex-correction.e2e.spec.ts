@@ -689,6 +689,443 @@ describe('sex correction (SKILL.md sections 4, 5, 7, 21, 22)', () => {
       expect(response.status).toBe(422);
       expect(response.body.error.code).toBe('VALIDATION_FAILED');
     });
+
+    it('names the pastoral bound where it ties with the Network row', async () => {
+      // **The tie is the ordinary fixture shape rather than a corner**, and nothing
+      // pinned it: `createPerson` writes the Network row at `EPOCH` and `assignTo`
+      // defaults to `EPOCH`, so term (a) equals the Network row's start for most
+      // people. Grace is one — a leaf, with no Cell and no disciples.
+      //
+      // Two assertions, and each catches a different mutation. The wording pins
+      // `MESSAGE_FOR.edges`, which no other case in the suite reaches. That it is the
+      // *pastoral* wording pins the tie direction: the bound is resolved by a reduce
+      // that keeps the earlier candidate, so `>` becoming `>=` would name the Network
+      // row here and change nothing else in the suite.
+      // **The premise, asserted rather than assumed.** Both bounds are `EPOCH` only
+      // because `createPerson` and `assignTo` happen to default to it. If either default
+      // moved, this would quietly become a plain pastoral-floor case and would stop
+      // distinguishing `>` from `>=` while still passing on the wording.
+      const premise = await db
+        .selectFrom('network_assignments')
+        .innerJoin(
+          'pastoral_assignments',
+          'pastoral_assignments.person_id',
+          'network_assignments.person_id',
+        )
+        .select([
+          'network_assignments.started_at as network_started_at',
+          'pastoral_assignments.started_at as assignment_started_at',
+        ])
+        .where('network_assignments.person_id', '=', grace.id)
+        .where('network_assignments.ended_at', 'is', null)
+        .where('pastoral_assignments.ended_at', 'is', null)
+        .executeTakeFirstOrThrow();
+
+      expect(premise.network_started_at.getTime()).toBe(premise.assignment_started_at.getTime());
+
+      const response = await correct(grace.id, {
+        sex: 'MALE',
+        reason: 'Sex entered in error at encoding.',
+        pastoral_leader_id: raymond.id,
+        effective_date: manilaDayOf(EPOCH),
+      });
+
+      expect(response.status).toBe(409);
+      expect(response.body.error.code).toBe('INVARIANT_VIOLATION');
+      expect(response.body.error.details.earliest_effective_date).toBe('2020-01-02');
+      expect(response.body.error.message).toMatch(/pastoral assignment/);
+    });
+  });
+
+  describe("the floor's two Cell terms (section 4)", () => {
+    /**
+     * Every instant here is a fixed constant, which is the per-*period* rule in
+     * `test/setup/fixtures.ts`: both ends of a period from one clock. Mixing a host
+     * `Date` with `clock_timestamp()` writes a period that ends before it begins on
+     * some runs only, and it has been shipped three times on this project.
+     *
+     * All of them are later than `MARK_ASSIGNED_AT`, so the Cell term is the one that
+     * binds. With a pastoral term above them these cases would pass against a floor
+     * that ignored Cell rows entirely, which is what they exist to refuse.
+     */
+    const LED_FROM = new Date('2026-04-03T19:00:00+08:00');
+    const LED_UNTIL = new Date('2026-04-30T18:00:00+08:00');
+    const JOINED_AT = new Date('2026-05-10T19:00:00+08:00');
+    const LEFT_AT = new Date('2026-06-20T18:00:00+08:00');
+    /** Both inside the membership's span, which is what makes them comparison instants. */
+    const HANDED_OVER_FIRST_AT = new Date('2026-05-20T19:00:00+08:00');
+    const HANDED_OVER_AT = new Date('2026-06-01T19:00:00+08:00');
+
+    it('bounds on a closed membership start, and accepts a date inside that membership', async () => {
+      // **The second request is what pins the column**, and without it this case
+      // passes just as well against a term over `ended_at`.
+      //
+      // This Cell never changes hands, which is the condition that makes the
+      // membership's own start the last instant it was ever compared at — the case
+      // below is the one where it is not. With no handover to span, every date after
+      // the join leaves the membership legal, and a term over `ended_at` would refuse
+      // the second request here for nothing.
+      const manuelCell = await createCell(db, { leader: manuel, createdAt: JOINED_AT });
+
+      await db
+        .insertInto('cell_memberships')
+        .values({
+          person_id: mark.id,
+          cell_id: manuelCell.id,
+          started_at: JOINED_AT,
+          ended_at: LEFT_AT,
+        })
+        .execute();
+
+      const refused = await correct(mark.id, {
+        sex: 'FEMALE',
+        reason: 'Sex entered in error at encoding.',
+        pastoral_leader_id: grace.id,
+        effective_date: manilaDayOf(JOINED_AT),
+      });
+
+      expect(refused.status).toBe(409);
+      expect(refused.body.error.code).toBe('INVARIANT_VIOLATION');
+      expect(refused.body.error.details.earliest_effective_date).toBe('2026-05-11');
+
+      // **The wording, which is the `kind`.** A pastoral message here would send an
+      // administrator looking for an assignment that is not the problem — the reason
+      // section 4's three bounds do not share one message.
+      expect(refused.body.error.message).toMatch(/Cell relationship/);
+
+      const accepted = await correct(mark.id, {
+        sex: 'FEMALE',
+        reason: 'Sex entered in error at encoding.',
+        pastoral_leader_id: grace.id,
+        effective_date: '2026-06-01',
+      });
+
+      expect(accepted.status).toBe(200);
+      expect(accepted.body.effective_date).toBe('2026-06-01');
+
+      // And the membership it reached over is still legal, which is the property the
+      // column choice rests on: it is compared at its own start, where Mark still
+      // resolves to the Network he is being corrected out of.
+      const membership = await db
+        .selectFrom('cell_memberships')
+        .select('started_at')
+        .where('person_id', '=', mark.id)
+        .executeTakeFirstOrThrow();
+
+      expect(membership.started_at.getTime()).toBeLessThan(
+        new Date(accepted.body.effective_at).getTime(),
+      );
+    });
+
+    it('extends the membership term to a handover the membership spanned', async () => {
+      // **The membership is compared at more than one instant, and the first version
+      // of this term assumed it was compared at exactly one.**
+      // `assert_leadership_stays_in_network` reads the member's Network again at the
+      // *incoming* leadership row's `started_at`, for every membership open then. So a
+      // correction dated after the join but before the handover clears a `started_at`
+      // bound and falsifies the handover's own comparison.
+      //
+      // Reproduced against the schema before this was written: the correction commits,
+      // and at the handover instant the member resolves to one Network and the leader
+      // to the other. Nothing re-examines it.
+      const marco = await createPerson(db, { firstName: 'Marco', network: 'MENS' });
+      await assignTo(db, marco.id, manuel.id);
+
+      const manuelCell = await createCell(db, { leader: manuel, createdAt: JOINED_AT });
+      await db
+        .insertInto('cell_memberships')
+        .values({
+          person_id: mark.id,
+          cell_id: manuelCell.id,
+          started_at: JOINED_AT,
+          ended_at: LEFT_AT,
+        })
+        .execute();
+
+      // A real handover inside the membership's span: the outgoing row ends and the
+      // incoming one opens at the same instant, which contiguity requires.
+      await db.transaction().execute(async (trx) => {
+        await trx
+          .updateTable('cell_leaderships')
+          .set({ ended_at: HANDED_OVER_AT })
+          .where('cell_id', '=', manuelCell.id)
+          .where('ended_at', 'is', null)
+          .execute();
+        await trx
+          .insertInto('cell_leaderships')
+          .values({ person_id: marco.id, cell_id: manuelCell.id, started_at: HANDED_OVER_AT })
+          .execute();
+      });
+
+      // 20 May: after the join on 10 May, before the handover on 1 June. Accepted by
+      // a term over `started_at` alone, which is the defect.
+      const refused = await correct(mark.id, {
+        sex: 'FEMALE',
+        reason: 'Sex entered in error at encoding.',
+        pastoral_leader_id: grace.id,
+        effective_date: '2026-05-20',
+      });
+
+      expect(refused.status).toBe(409);
+      expect(refused.body.error.code).toBe('INVARIANT_VIOLATION');
+      expect(refused.body.error.details.earliest_effective_date).toBe('2026-06-02');
+      expect(refused.body.error.message).toMatch(/Cell relationship/);
+
+      // The date it names is accepted, and it is past the handover rather than merely
+      // past the join — so this also pins that the term did not simply move to
+      // `ended_at`, which would name 21 June.
+      const accepted = await correct(mark.id, {
+        sex: 'FEMALE',
+        reason: 'Sex entered in error at encoding.',
+        pastoral_leader_id: grace.id,
+        effective_date: '2026-06-02',
+      });
+
+      expect(accepted.status).toBe(200);
+      expect(accepted.body.effective_date).toBe('2026-06-02');
+    });
+
+    it('takes the last of several handovers a membership spanned', async () => {
+      // **`max` against `min` on the inner subquery, pinned on a shape production can
+      // produce.** The `extends` case above also catches that mutation, but only because
+      // its Cell is created at the very instant the member joins, so the Cell's own first
+      // leadership row falls inside the window and gives it two rows. That equality is a
+      // fixture artefact — the docblock declaring the window's lower bound says in terms
+      // that production cannot produce it, since it needs two identical
+      // `clock_timestamp()` reads.
+      //
+      // Here the Cell pre-exists the membership, which is the ordinary shape, so its
+      // opening row is outside the window and the two rows inside it are genuine
+      // handovers. `min` collapses the term to the first of them.
+      const marco = await createPerson(db, { firstName: 'Marco', network: 'MENS' });
+      await assignTo(db, marco.id, manuel.id);
+
+      const manuelCell = await createCell(db, { leader: manuel, createdAt: LED_FROM });
+      await db
+        .insertInto('cell_memberships')
+        .values({
+          person_id: mark.id,
+          cell_id: manuelCell.id,
+          started_at: JOINED_AT,
+          ended_at: LEFT_AT,
+        })
+        .execute();
+
+      for (const [at, to] of [
+        [HANDED_OVER_FIRST_AT, marco.id],
+        [HANDED_OVER_AT, raymond.id],
+      ] as const) {
+        await db.transaction().execute(async (trx) => {
+          await trx
+            .updateTable('cell_leaderships')
+            .set({ ended_at: at })
+            .where('cell_id', '=', manuelCell.id)
+            .where('ended_at', 'is', null)
+            .execute();
+          await trx
+            .insertInto('cell_leaderships')
+            .values({ person_id: to, cell_id: manuelCell.id, started_at: at })
+            .execute();
+        });
+      }
+
+      // 25 May sits between the two handovers. The term is the later one, so this is
+      // refused and the date named is past 1 June; under `min` the term would be 20 May
+      // and this would be accepted.
+      const refused = await correct(mark.id, {
+        sex: 'FEMALE',
+        reason: 'Sex entered in error at encoding.',
+        pastoral_leader_id: grace.id,
+        effective_date: '2026-05-25',
+      });
+
+      expect(refused.status).toBe(409);
+      expect(refused.body.error.details.earliest_effective_date).toBe('2026-06-02');
+    });
+
+    it('ignores a handover in a Cell the person was not a member of', async () => {
+      // **The correlation, and nothing else pinned it.** Dropping
+      // `spanned.cell_id = cm.cell_id` was green across the whole suite until this
+      // case: every other fixture has one Cell, or a second whose handover falls
+      // outside the membership window. Uncorrelated, the term picks up any Cell's
+      // handover and over-refuses a correction that strands nothing.
+      //
+      // Mark's own Cell never changes hands, so his term is the join instant. The
+      // other Cell changes hands inside his membership window and has nothing to do
+      // with him.
+      //
+      // **It is a negative case, so it pins the correlation only alongside `extends`.**
+      // Deleting the whole membership term, or `min` for `max`, or either inequality,
+      // all leave this green — a case asserting that something is *accepted* cannot
+      // distinguish a term that is correctly narrow from one that is absent. `extends`
+      // establishes that the term exists and reaches handovers; this one establishes
+      // that it reaches only the person's own Cell.
+      const marco = await createPerson(db, { firstName: 'Marco', network: 'MENS' });
+      await assignTo(db, marco.id, manuel.id);
+
+      const manuelCell = await createCell(db, { leader: manuel, createdAt: JOINED_AT });
+      await db
+        .insertInto('cell_memberships')
+        .values({
+          person_id: mark.id,
+          cell_id: manuelCell.id,
+          started_at: JOINED_AT,
+          ended_at: LEFT_AT,
+        })
+        .execute();
+
+      const otherCell = await createCell(db, { leader: raymond, createdAt: LED_FROM });
+      await db.transaction().execute(async (trx) => {
+        await trx
+          .updateTable('cell_leaderships')
+          .set({ ended_at: HANDED_OVER_AT })
+          .where('cell_id', '=', otherCell.id)
+          .where('ended_at', 'is', null)
+          .execute();
+        await trx
+          .insertInto('cell_leaderships')
+          .values({ person_id: marco.id, cell_id: otherCell.id, started_at: HANDED_OVER_AT })
+          .execute();
+      });
+
+      // The same date the `extends` case above is refused at, and here it is accepted
+      // — the difference being whose Cell changed hands.
+      const accepted = await correct(mark.id, {
+        sex: 'FEMALE',
+        reason: 'Sex entered in error at encoding.',
+        pastoral_leader_id: grace.id,
+        effective_date: '2026-06-01',
+      });
+
+      expect(accepted.status).toBe(200);
+      expect(accepted.body.effective_date).toBe('2026-06-01');
+    });
+
+    it('does not extend to a handover at the instant the membership ended', async () => {
+      // **The boundary the span predicate turns on**, and `<` against `<=` is invisible
+      // without it. The member scan selects memberships with `cm.ended_at > H`, false at
+      // equality, so at commit a membership ending exactly at a leadership's start is not
+      // compared there.
+      //
+      // **That is the state at commit rather than a claim about history.** A backdated
+      // closure may close an *open* membership at exactly the sitting leadership's
+      // `started_at` — `CellsClosureService`'s floor is inclusive for that case — and the
+      // scan did run at that instant when the leadership was written.
+      //
+      // Bounding past it would still be wrong, and the reason is about the **leadership**
+      // row rather than the membership. That closure ends both at the same instant, so a
+      // leadership `[H, ∞)` becomes `[H, H]` — zero-length, and inert under section 5,
+      // since `assert_membership_same_network`'s leader lookup asks
+      // `cl.started_at <= t AND ended_at > t`, unsatisfiable at `H`. The membership
+      // becomes `[m, H]`, which is positive length and fully resolvable. So the
+      // comparison the correction would falsify belongs to a row no query resolves, and
+      // it is not the row whose term is being computed.
+      //
+      // *An earlier version of this comment called the membership zero-length. The
+      // conclusion was right and the row was wrong — the subject was carried across from
+      // `CellsClosureService`'s own inclusivity rationale, which is written about a
+      // membership closed at its own `started_at`.*
+      const marco = await createPerson(db, { firstName: 'Marco', network: 'MENS' });
+      await assignTo(db, marco.id, manuel.id);
+
+      const manuelCell = await createCell(db, { leader: manuel, createdAt: JOINED_AT });
+      await db
+        .insertInto('cell_memberships')
+        .values({
+          person_id: mark.id,
+          cell_id: manuelCell.id,
+          started_at: JOINED_AT,
+          ended_at: LEFT_AT,
+        })
+        .execute();
+
+      await db.transaction().execute(async (trx) => {
+        await trx
+          .updateTable('cell_leaderships')
+          .set({ ended_at: LEFT_AT })
+          .where('cell_id', '=', manuelCell.id)
+          .where('ended_at', 'is', null)
+          .execute();
+        await trx
+          .insertInto('cell_leaderships')
+          .values({ person_id: marco.id, cell_id: manuelCell.id, started_at: LEFT_AT })
+          .execute();
+      });
+
+      // The term is the join instant, so a date after it is accepted even though a
+      // handover sits later inside the calendar window.
+      const accepted = await correct(mark.id, {
+        sex: 'FEMALE',
+        reason: 'Sex entered in error at encoding.',
+        pastoral_leader_id: grace.id,
+        effective_date: '2026-06-01',
+      });
+
+      expect(accepted.status).toBe(200);
+      expect(accepted.body.effective_date).toBe('2026-06-01');
+    });
+
+    it('bounds on a closed leadership end, and refuses a date inside that stint', async () => {
+      // **Term over `cl.ended_at`, and a date inside the stint is what pins it.**
+      // Over `started_at` this correction would be accepted, and it would strand
+      // every membership opened in the Cell after 3 April — rows belonging to other
+      // people, which is why the bound cannot be read off Mark's own membership rows.
+      const own = await createCell(db, { leader: mark, createdAt: LED_FROM });
+      await closeCellDirectly(db, own.id, { reason: 'LEADER_STEPPED_DOWN', at: LED_UNTIL });
+
+      const refused = await correct(mark.id, {
+        sex: 'FEMALE',
+        reason: 'Sex entered in error at encoding.',
+        pastoral_leader_id: grace.id,
+        effective_date: '2026-04-15',
+      });
+
+      expect(refused.status).toBe(409);
+      expect(refused.body.error.code).toBe('INVARIANT_VIOLATION');
+      expect(refused.body.error.details.earliest_effective_date).toBe('2026-05-01');
+      expect(refused.body.error.message).toMatch(/Cell relationship/);
+
+      // The date it names is accepted, which is the property every floor case owes:
+      // an administrator handed a date must not be refused again.
+      const accepted = await correct(mark.id, {
+        sex: 'FEMALE',
+        reason: 'Sex entered in error at encoding.',
+        pastoral_leader_id: grace.id,
+        effective_date: '2026-05-01',
+      });
+
+      expect(accepted.status).toBe(200);
+      expect(accepted.body.effective_date).toBe('2026-05-01');
+    });
+
+    it('takes the later of the two Cell terms', async () => {
+      // Both present, and the membership start is the later — so a floor taking only
+      // the leadership half would accept a date that strands the membership. Neither
+      // subquery alone satisfies this case.
+      const own = await createCell(db, { leader: mark, createdAt: LED_FROM });
+      await closeCellDirectly(db, own.id, { reason: 'LEADER_STEPPED_DOWN', at: LED_UNTIL });
+
+      const manuelCell = await createCell(db, { leader: manuel, createdAt: JOINED_AT });
+      await db
+        .insertInto('cell_memberships')
+        .values({
+          person_id: mark.id,
+          cell_id: manuelCell.id,
+          started_at: JOINED_AT,
+          ended_at: LEFT_AT,
+        })
+        .execute();
+
+      const refused = await correct(mark.id, {
+        sex: 'FEMALE',
+        reason: 'Sex entered in error at encoding.',
+        pastoral_leader_id: grace.id,
+        effective_date: '2026-05-01',
+      });
+
+      expect(refused.status).toBe(409);
+      expect(refused.body.error.details.earliest_effective_date).toBe('2026-05-11');
+    });
   });
 
   describe('authorization (sections 5 and 7)', () => {
