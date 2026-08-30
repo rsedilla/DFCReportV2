@@ -138,12 +138,24 @@ export class CellsService {
       await this.audit.writeWithin(trx, {
         actorId: actor.accountId,
         action: 'cell_leadership.opened',
-        targetType: 'person',
-        targetId: input.cellLeaderId,
+        // **The Cell, on section 21's rule for all three leadership actions.** Scope
+        // resolves an audit entry through its target (section 7), and section 7
+        // resolves a leadership through the Cell's leader as of the period, falling
+        // back to its last leader once the Cell is closed — so a Cell target is read
+        // by the rule written for what the entry is about, and the fallback keeps a
+        // closed Cell's record with the leader who led it.
+        //
+        // *This named the person until 2026-08-31, while `ended` and `changed` named
+        // the Cell. Nothing had decided the split; a reader whose scope covered the
+        // person and not the Cell found the appointment and not the ending.*
+        targetType: 'cell',
+        targetId: created.id,
         // Section 21 asks a leadership entry to carry "the outgoing and the incoming
         // leader where each exists". There is no outgoing one at a creation, and the
-        // incoming leader is named rather than left to the entry's `target_id`, so a
-        // handover's entry and this one read the same way.
+        // incoming leader is named in `after` rather than left to the entry's
+        // `target_id`, so a handover's entry and this one read the same way — which
+        // is also what makes the target a free choice rather than the only place the
+        // leader appears.
         after: {
           cell_id: created.cellId,
           cell_uuid: created.id,

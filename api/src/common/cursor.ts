@@ -1,3 +1,32 @@
+import { ValidationFailedError } from './errors/api-error';
+
+/**
+ * The refusal for a `cursor` a collection endpoint cannot resolve (SKILL.md section 22,
+ * *Pagination*; the ruling of 2026-08-31).
+ *
+ * **Shared rather than repeated, so the two decoders answer identically.** They already
+ * diverged once by copying: `GET /api/v1/people` chose to treat an unreadable cursor as
+ * absent, and the Cell roster was changed to match it on a review pass rather than by a
+ * decision, so the consistency was accidental and would not have survived a third
+ * collection. Stage 4 adds one.
+ *
+ * `VALIDATION_FAILED` because section 22 defines it as malformed or missing input,
+ * which a value the server cannot read is exactly. `field: 'cursor'` because the
+ * envelope carries a hint for binding a message to what it concerns — and section 23
+ * governs what a client does with it: no screen has a form field named `cursor`, so
+ * this is a client-to-client message and carries no `field-invalid` colour.
+ *
+ * It is a `GET`, so it carries no `Idempotency-Key` and section 22's store/release rule
+ * does not reach it.
+ */
+export function unresolvableCursor(): ValidationFailedError {
+  return new ValidationFailedError(
+    'That pagination cursor could not be read. Request the collection again without ' +
+      'one to start from the first page.',
+    { field: 'cursor' },
+  );
+}
+
 /**
  * The longest opaque pagination cursor any collection endpoint may emit (SKILL.md
  * section 22, *Pagination*).

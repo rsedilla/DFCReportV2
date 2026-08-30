@@ -557,6 +557,49 @@ describe('sex correction (SKILL.md sections 4, 5, 7, 21, 22)', () => {
       expect(opened.started_at.toISOString()).toBe(accepted.body.effective_at);
     });
 
+    it('answers RESOURCE_BUSY where an undated correction cannot clear the floor', async () => {
+      // **The branch section 4 calls "always succeeds", and it does not always.** An
+      // undated correction takes the instant it is recorded and clears every bound,
+      // because each is read from a row already written — unless a record for this
+      // person carries an instant at or after that one. Two operations landing in the
+      // same millisecond produce it, which is a collision rather than a decision.
+      //
+      // **`RESOURCE_BUSY`, since the ruling of 2026-08-31**, on section 22's placement
+      // question: could this same body, resubmitted unchanged, succeed? Here it plainly
+      // could. A 409 would have been stored against the idempotency key and replayed
+      // for the whole retention, so this refusal's own advice to retry would have been
+      // advice to do the one thing that cannot work.
+      //
+      // **Reached by a fixture rather than by racing a clock.** A same-millisecond
+      // collision is not something a test can stage reliably, and a probe that tried
+      // would be the flaky-by-construction shape this repository has already paid for.
+      // Term (a) of the floor is the person's open assignment `started_at`, so moving
+      // it ahead of the clock reaches the identical branch by the identical comparison,
+      // deterministically. Nothing else about the row changes.
+      await db
+        .updateTable('pastoral_assignments')
+        .set({ started_at: new Date(Date.now() + 60_000) })
+        .where('person_id', '=', mark.id)
+        .where('ended_at', 'is', null)
+        .execute();
+
+      const response = await correct(mark.id, {
+        sex: 'FEMALE',
+        reason: 'Sex entered in error at encoding.',
+        pastoral_leader_id: grace.id,
+      });
+
+      expect(response.status).toBe(503);
+      expect(response.body.error.code).toBe('RESOURCE_BUSY');
+
+      // **The advice moved with the status.** A 5xx releases the key, so the retry
+      // reuses it; the message must not send the client to mint a new one, and it must
+      // not name a date, because none was asked for and none would help.
+      expect(response.body.error.message).toMatch(/Retry in a moment/);
+      expect(response.body.error.message).not.toMatch(/Idempotency-Key/);
+      expect(response.body.error.details).not.toHaveProperty('earliest_effective_date');
+    });
+
     it('refuses a correction backdated past a closed edge the person led', async () => {
       // Term (b), in the leader direction. Section 4's sharp consequence: moving a
       // disciple out of the way closes their edge as of today, and that `ended_at`

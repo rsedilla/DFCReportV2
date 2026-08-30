@@ -186,6 +186,12 @@ export type AuditAction =
   // began leading a Cell must find that entry whether it arose from the
   // initial-encoding path or from an approval.
   | 'cell.created'
+  // **All three leadership actions target the Cell** (section 21, settled 2026-08-31).
+  // Section 7 resolves an audit entry's scope through its target and resolves a
+  // leadership through the Cell's leader as of the period, falling back to its last
+  // leader once the Cell is closed. `opened` named the person until then, so the three
+  // did not agree and a reader whose scope covered the person and not the Cell saw an
+  // appointment without its ending.
   | 'cell_leadership.opened'
   // Section 21 lists this as an action in its own right: "Cell leadership assignment
   // left with account provisioning pending". It names a state rather than an actor,

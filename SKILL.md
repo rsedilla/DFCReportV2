@@ -738,7 +738,7 @@ It is reachable wherever the floor is empty, which is most ordinarily a Person w
 
 The system therefore **rejects the correction and names the earliest date it can legally take**, rather than failing with a constraint violation the administrator cannot act on. The rejection is a rule about what can be recorded, not about the actor's authority, so it answers `INVARIANT_VIOLATION` (Section 22).
 
-**Where no date can clear the floor, the refusal names none.** The floor can fall on the current day — moving a disciple aside closes their edge as of today, which the paragraph below makes the *ordinary* outcome — and the day after today is tomorrow, which no correction may take because an effective date is a correction to the past. Naming it would hand the administrator the one answer guaranteed to be refused again, which is the failure this rule exists to prevent. The system instead says that the correction cannot be backdated at all and will take effect now if submitted without an effective date. That always succeeds: every bound is read from a row already written, so it lies in the past.
+**Where no date can clear the floor, the refusal names none.** The floor can fall on the current day — moving a disciple aside closes their edge as of today, which the paragraph below makes the *ordinary* outcome — and the day after today is tomorrow, which no correction may take because an effective date is a correction to the past. Naming it would hand the administrator the one answer guaranteed to be refused again, which is the failure this rule exists to prevent. The system instead says that the correction cannot be backdated at all and will take effect now if submitted without an effective date. That succeeds in every case but one: every bound is read from a row already written, so it lies in the past — unless a record for this person carries the very instant the undated correction is taking, which two operations landing in the same millisecond produce. That is a collision rather than a decision, and it answers `RESOURCE_BUSY` (Section 22) so the identical submission may simply be retried.
 
 **The floor is an instant and the effective date is a day, so the answer is the day after the floor's day.** An effective date is a date-only field (Section 22) resolved to the start of that day in Asia/Manila (Section 20), while the floor above is a timestamp taken from rows written at whatever moment they were written. The earliest legal date is therefore the Manila calendar day *following* the day the floor falls in, and that holds however the floor sits within its day: the start of the floor's own day is never strictly later than the floor, and the start of the next day always is. A correction with no effective date takes the instant it is recorded and has no floor to clear, since every bound above lies in the past.
 
@@ -2443,7 +2443,7 @@ The reach was genuinely undecided until the closure endpoint settled it, and the
 
 **The bound is inclusive**, unlike Section 4's, which is strict. There the strictness is earned: a zero-length row goes inert and silently removes the period it recorded, so the instant itself is not an honest answer. Here a closure dated at exactly an open row's `started_at` closes that row zero-length, and the relationship it records genuinely had no duration. A floor refuses what the schema refuses and nothing more.
 
-**A refusal names the earliest legal date, or says that none exists.** An effective date is a Manila calendar day and the floor is an instant (Section 20), so the earliest legal date is the first Manila midnight at or after the floor — the floor's own day where the floor falls exactly on it, and the day after otherwise. Where that day is later than today the closure cannot be backdated at all, and the refusal says so and points at submitting no effective date, which always succeeds. That is the ordinary case rather than a corner: a Cell whose membership changed today has a floor inside today. Naming tomorrow would be naming the one answer guaranteed to be refused again, which is the failure Sections 4 and 5 already write this refusal to avoid.
+**A refusal names the earliest legal date, or says that none exists.** An effective date is a Manila calendar day and the floor is an instant (Section 20), so the earliest legal date is the first Manila midnight at or after the floor — the floor's own day where the floor falls exactly on it, and the day after otherwise. Where that day is later than today the closure cannot be backdated at all, and the refusal says so and points at submitting no effective date, which succeeds save for the same instant-level collision Section 4 names, and which answers `RESOURCE_BUSY` for the same reason. That is the ordinary case rather than a corner: a Cell whose membership changed today has a floor inside today. Naming tomorrow would be naming the one answer guaranteed to be refused again, which is the failure Sections 4 and 5 already write this refusal to avoid.
 
 **The floor says how far back a closure *can* be dated; `records.backdate_effective_date` says who may date it back at all.** The two are independent, and were settled separately — this half before the floor was. Any effective date earlier than the current day requires that capability (Section 7), which is Admin's.
 
@@ -3471,6 +3471,12 @@ The alternative — one entry describing everything — was rejected because the
 
 `target_id` is text rather than a UUID, and is required. Almost every target above is identified by a UUID, but not all: a setting is keyed by its `key` (Section 7), and a setting change is on the list. It carries no foreign key, because this log is append-only and an entry outlives the row it describes — a constraint that could refuse or cascade would make the trail depend on the survival of what it exists to remember.
 
+**All three Cell leadership actions name the Cell as their target.** `cell_leadership.opened`, `cell_leadership.ended` and `cell_leadership.changed` each carry `target_type` of the Cell and the Cell's UUID as `target_id`; the outgoing and the incoming leader are carried in `before` and `after`, as the list above already requires.
+
+The reason is Section 7 rather than symmetry. Scope resolves an audit entry through its target, and Section 7 already says how a leadership resolves: through the Cell's leader as of the period being viewed, falling back to its last leader where the Cell is closed. A Cell target therefore resolves by the rule written for the thing the entry is about, and the fallback is what keeps a closed Cell's record readable by the leader who led it — which resolving through a person would surrender the moment that person is reassigned. The reader-question this list states is Cell-shaped too: somebody asking who led a Cell before a handover starts from the Cell.
+
+This settles a divergence rather than describing one. `opened` named the person and the other two named the Cell, so a reader whose scope covered the person but not the Cell found the appointment and not the ending. Section 16's New Cell Leaders is not affected and never was: it counts from `cell_leaderships`, and this log is never a source for as-of state.
+
 The audit log is append-only. Nothing updates or deletes a row, and it is never a source for as-of state — a report answering "who was `CURRENT` in March" reads the effective-dated table, not this (Section 3).
 
 Audit logs should preserve facts without judgmental labels.
@@ -3684,6 +3690,13 @@ GET /api/v1/people?q=dela+cruz&limit=50
 - `limit` defaults to 50, maximum 200.
 - The cursor is opaque. Clients pass it back unmodified and never construct one.
 - `next_cursor` is absent or null on the last page.
+- **A cursor the server cannot resolve is refused** with `VALIDATION_FAILED`, carrying `field: "cursor"` in `details`. Unparseable, forged, or structurally wrong, all the same answer. An absent cursor is still absent and starts at the first page; this is about one that was sent.
+
+Refusing rather than starting again is the same choice this section makes for a body nested past its depth bound and for a Cell closure naming more than 500 members, and it is made for the same reason. A client sends a cursor because it already holds a page; handed the first page again with a `200`, it appends what it already has and cannot tell that from a collection that grew. Silently doing something other than what was asked is the worse failure, and it is the requests nobody looks at that receive it. The recovery is a request the client can already make: drop the cursor and start over, which is exactly what the old behaviour did for it, with the difference that it now knows.
+
+It also makes one rule of a path that had two. A `limit` above the maximum and an empty `cursor=` are already `VALIDATION_FAILED`, so a value one byte too long was refused while a value of the right length carrying nothing readable was a silent restart.
+
+This does not require a cursor to be signed. A forged one that happens to parse discloses nothing: the worst it can do is start the page elsewhere in a collection the reader is authorized to see in full.
 
 Offset pagination is not used. Rows inserted while a client is paging shift every subsequent offset, which duplicates and skips records — a real problem on a directory that grows during a Sunday service, and a worse one for mobile sync.
 
@@ -3718,7 +3731,17 @@ One envelope, always:
 | `INVARIANT_VIOLATION` | 409 | A domain rule rejects the write — cycle, cross-Network edge, two active assignments |
 | `DUPLICATE_ACKNOWLEDGEMENT_REQUIRED` | 409 | A Tier 1 duplicate candidate must be acknowledged before the Person is created (Section 3). The candidates are in `details` |
 | `NOT_FOUND` | 404 | No such record, or its existence must not be disclosed |
-| `RESOURCE_BUSY` | 503 | Another operation holds the record this write must serialize against, and either the wait timed out or the database chose this transaction as a deadlock victim (Section 5). Transient: retry after a short delay |
+| `RESOURCE_BUSY` | 503 | The write could not be serialized against another operation and reached no decision: the wait timed out, the database chose this transaction as a deadlock victim (Section 5), or a premise read before a lock no longer held under it (below). Transient: retry after a short delay, **with the same key** |
+
+**A stale premise is placed by one question: could this same body, resubmitted unchanged, succeed?** A write that reads a value, takes a lock, and finds the value different underneath it has taken its lock cleanly — so it is neither of the first two conditions above, and it needed a home.
+
+Where the answer is **yes**, the refusal reached no decision about the request and answers `RESOURCE_BUSY`. Where the answer is **no** — where the body itself has to change before any attempt can succeed — the refusal is a decision about this body, answers `INVARIANT_VIOLATION`, and its message says what to change and that a new key is needed.
+
+The question is the status rather than the wording, because the Idempotency rules below split on the status and nothing else: a 4xx is stored against the key and replayed for the retention, so a 409 whose own message says "retry" tells the client to do the one thing that cannot work. This is the same rule the Idempotency section states for a new code, applied to the codes that already exist.
+
+Both answers are live. A closure whose member decisions no longer match the Cell's membership (Section 10) must be re-read and resubmitted with a different list, so it is `INVARIANT_VIOLATION`. An undated correction refused because a record for the same person carries the very instant it is taking is `RESOURCE_BUSY`, because the identical body succeeds a moment later. That second case is why Sections 4 and 10 each qualify "always succeeds" rather than stating it flatly.
+
+A `VERSION_CONFLICT` is none of these. Section 14 requires it to carry both values, both actors and both timestamps so that a person can choose between them, so a refusal with no second value to show is not one, whatever went stale.
 
 `CAPABILITY_DENIED` and `SCOPE_DENIED` are deliberately distinct, because capability and scope are independent grants (Section 7) and an administrator diagnosing a permission problem needs to know which one failed.
 
@@ -3931,7 +3954,23 @@ Do not build offline complexity before it is needed. Do not make architectural c
 - A restore tested before go-live, and at least annually thereafter
 - Audit logging
 - Least-privilege database/application credentials
-- **Synchronised clocks on every host running the API.** Account-wide revocation compares a token's issued-at against the account's revocation marker, and Section 6 requires both to be stamped by an API process. On more than one instance those are two clocks, and skew moves tokens across the boundary in both directions — admitting a token that should be dead, or refusing a sign-in that should work. Ordinary NTP is sufficient; the requirement is that it is not left to chance
+- **Synchronised clocks on every host running the API.** Account-wide revocation compares a token's issued-at against the account's revocation marker, and Section 6 requires both to be stamped by an API process. On more than one instance those are two clocks, and skew moves tokens across the boundary in both directions — admitting a token that should be dead, or refusing a sign-in that should work. Ordinary NTP is sufficient; the requirement is that it is not left to chance. See The instance count, below
+
+### The instance count
+
+**The deployment runs one API instance.** Section 2 makes the API stateless and separately deployable, which is what makes a second one possible; this records that one is running, so that a second is a change something can be checked against rather than a state the system drifts into.
+
+It is load-bearing for exactly one comparison. Account-wide revocation compares a token's issued-at against the account's revocation marker, both stamped by an API process (Section 6). On one instance that is one clock and the comparison is exact, so no tolerance is needed and none is stated. The *ordering* of a sign-in against a revocation still in flight does not depend on this: it is decided by a row lock in the database and by no clock at all.
+
+**A tolerance is deliberately not chosen in advance.** With one instance there is no second host to be skewed against and nothing that would go red if the number were wrong, which is the shape this specification refuses elsewhere — the contrast check, the module graph, the `DateStyle` startup assertion. Any tolerance is also a loosening: it admits tokens near the boundary that an exact comparison refuses, and revocation is the account's own emergency stop.
+
+**What the change introducing a second instance owes**, so the obligation arrives with it rather than being rediscovered:
+
+- a stated maximum tolerated skew, with NTP configured to hold it;
+- the revocation comparison made tolerant to that bound in the direction that fails safe — a token near the boundary treated as revoked rather than as live, since refusing a valid session costs a sign-in while admitting a revoked one costs the thing revocation exists for;
+- every other cross-instance timestamp comparison in the system found and given the same treatment.
+
+**One comparison is deliberately outside that list.** The submission window closing on the 7th (Sections 9, 13 and 20) is not made skew-tolerant, because it is not decided on a host clock: the boundary and the instant a request is judged against it are both read from the database, whose clock every instance shares. A comparison that can be moved to the database belongs there rather than in a tolerance.
 
 ### Backups
 

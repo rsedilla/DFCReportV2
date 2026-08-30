@@ -1,3 +1,5 @@
+import { unresolvableCursor } from '../common/cursor';
+
 import type { CellRequestKind } from '../database/schema';
 
 /**
@@ -26,15 +28,23 @@ import type { CellRequestKind } from '../database/schema';
  * is total makes the order deterministic whether or not that happens, which is what
  * section 22 requires of two identical requests.
  *
- * An unreadable cursor is treated as absent, matching `GET /api/v1/people` and the Cell
- * roster. Section 22 does not settle what a collection endpoint does with a forged,
- * stale or unparseable cursor — `CLAUDE.md` carries that as open — and this route makes
- * the third implementation agreeing rather than a second answer.
+ * **A cursor this cannot resolve is refused** with `VALIDATION_FAILED` naming the field,
+ * on the ruling of 2026-08-31 now written into section 22, through the shared refusal in
+ * `common/cursor.ts`. It was treated as absent until then — this route having matched
+ * the two that came before it, both of which say the same about themselves, so one
+ * decision had been copied twice and looked like three.
+ *
+ * This route has a third way to be unresolvable that the others do not: `requestedAt` is
+ * cast to `timestamptz` in the query, so a value PostgreSQL cannot parse is a 500 rather
+ * than an empty page. It is refused by the same code as the other two, because to a
+ * client they are one condition — the server could not read the cursor.
  *
  * **This is the third keyset cursor in the repository**, after `people.controller.ts`
- * and `roster-cursor.ts`. They share the bound in `common/cursor.ts` and nothing else;
- * whether the encode/decode pair should be generic there is recorded as open rather than
- * settled by a third copy.
+ * and `roster-cursor.ts`. They share the bound in `common/cursor.ts` and now the
+ * refusal; whether the encode/decode pair should be generic there is on `CLAUDE.md`'s
+ * open list, which is where an earlier version of this sentence said it was before it
+ * was — the claim was made and never carried out, and a reader grepping for it found
+ * nothing.
  */
 export interface LeadershipRequestCursor {
   requestedAt: string;
@@ -97,6 +107,9 @@ export interface LeadershipRequestRow {
 export function decodeLeadershipRequestCursor(
   value: string | undefined,
 ): LeadershipRequestCursor | null {
+  // An **absent** cursor is absent. The empty string is already refused by the DTO in
+  // front of this; it is treated as absent here so the function is total for a caller
+  // that has none.
   if (value === undefined || value === '') {
     return null;
   }
@@ -123,10 +136,10 @@ export function decodeLeadershipRequestCursor(
       return parsed as LeadershipRequestCursor;
     }
   } catch {
-    // Falls through to null: an unreadable cursor is absent, per the docblock above.
+    // Falls through to the refusal below.
   }
 
-  return null;
+  throw unresolvableCursor();
 }
 
 export function encodeLeadershipRequestCursor(
