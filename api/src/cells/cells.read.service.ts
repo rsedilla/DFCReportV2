@@ -432,29 +432,49 @@ export class CellsReadService implements CellScopePort, CellRelationshipsPort {
    * dated, as far as their closed Cell relationships are concerned
    * (SKILL.md section 4, the floor's two Cell terms).
    *
-   * The port's own docblock carries why each half takes the column it takes; what is
-   * worth saying at the query is why the two are not one.
+   * The port's docblock carries why each half takes the shape it takes. What is worth
+   * saying at the query is why the membership half is a join rather than a column.
    *
-   * **`max(ended_at)` over closed leaderships, `max(started_at)` over closed
-   * memberships.** Making them agree would be sound and would refuse safe writes:
-   * every date between a membership's start and its end leaves that membership legal,
-   * because `assert_membership_same_network` compares it at its start and nowhere
-   * else. Section 4 says in terms that the two must not be tidied into one, because
-   * the tidied form is the one that reads better.
+   * **A membership is compared at more than one instant, and the first version of this
+   * method assumed it was compared at exactly one.** `assert_membership_same_network`
+   * reads it at its own `started_at`; `assert_leadership_stays_in_network` reads the
+   * member's Network again, at the *incoming leadership row's* `started_at`, for every
+   * membership open at that instant. So a membership that spanned a handover was
+   * compared at that handover too, and a correction dated after the join but before the
+   * handover falsifies that comparison while clearing a `started_at` bound.
+   *
+   * That was reproduced against the schema before this shape was written: the four-row
+   * correction commits, and at the handover instant the member resolves to one Network
+   * while the leader resolves to the other — the state that trigger's own message exists
+   * to refuse.
+   *
+   * So the term is the latest instant at which the membership was ever compared: its own
+   * start, or the last leadership start it spans. The predicate is the member scan's own
+   * selection read backwards — it takes `cm.started_at <= H` and `cm.ended_at > H`, so
+   * this takes leadership starts in `[cm.started_at, cm.ended_at)`.
+   *
+   * **Every leadership row in that window was a comparison instant**, including ones
+   * since closed: `cell_leadership_is_opened_open` refuses a row written already closed,
+   * so every one of them ran the scan when it was written. The join is therefore exact
+   * rather than conservative.
    *
    * **`GREATEST` ignores nulls in PostgreSQL and is null only when every argument is**,
    * which is section 4's "each term is a maximum over rows that may be empty, and an
-   * empty term contributes nothing". Raw SQL for that reason — the same reason
-   * `HierarchyService.backdateFloorFor` is raw, and the two are combined by the caller
-   * rather than here, because `networks` may not read `pastoral_assignments` through
-   * this module any more than this module may read them at all.
+   * empty term contributes nothing". It is what lets the inner subquery return null for a
+   * membership that spanned no handover and still yield that membership's own start. Raw
+   * SQL for that reason — the same null-handling `HierarchyService.backdateFloorFor` needs
+   * — and the pastoral terms are combined by the caller rather than here, because
+   * `pastoral_assignments` is not this module's to read.
    *
-   * **Both halves are restricted to closed rows.** An open row of either kind refuses
-   * the correction outright at the two methods above, so a term over one could never
-   * bind — and section 4 rejects a floor carrying a term that can never bind.
+   * **Both halves are restricted to closed rows, and the two filters are not alike.**
+   * `cl.ended_at IS NOT NULL` on the leadership half is a no-op, since `max` ignores
+   * nulls; it is written for the reader. `cm.ended_at IS NOT NULL` on the membership half
+   * decides rows, and nothing can fail against it, because an open membership refuses the
+   * correction outright upstream (section 4). Both are stated rather than left for
+   * somebody to delete and find the suite still green.
    */
   async closedRelationshipFloorOf(
-    executor: Db | Transaction<Database>,
+    executor: Transaction<Database>,
     personId: string,
   ): Promise<Date | null> {
     const result = await sql<{ floor: Date | null }>`
@@ -463,7 +483,13 @@ export class CellsReadService implements CellScopePort, CellRelationshipsPort {
            FROM cell_leaderships cl
           WHERE cl.person_id = ${personId}::uuid
             AND cl.ended_at IS NOT NULL),
-        (SELECT max(cm.started_at)
+        (SELECT max(GREATEST(
+                  cm.started_at,
+                  (SELECT max(spanned.started_at)
+                     FROM cell_leaderships spanned
+                    WHERE spanned.cell_id = cm.cell_id
+                      AND spanned.started_at >= cm.started_at
+                      AND spanned.started_at < cm.ended_at)))
            FROM cell_memberships cm
           WHERE cm.person_id = ${personId}::uuid
             AND cm.ended_at IS NOT NULL)

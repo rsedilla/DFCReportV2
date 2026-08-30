@@ -94,42 +94,63 @@ export interface CellRelationshipsPort {
    * **closed** Cell relationships are concerned, or null where they hold none
    * (SKILL.md section 4, the floor's two Cell terms).
    *
-   * The maximum of two different columns on two different tables, and the asymmetry
-   * is the rule rather than an oversight. Section 4 is explicit that the two halves
-   * must not be tidied into one.
+   * Each term is the **latest instant at which the relationship was ever compared**,
+   * because a Network write re-examines no Cell row: `assert_network_change_keeps_edges`
+   * reads no Cell table, and the Cell triggers fire only on writes to their own. A Cell
+   * relationship is stranded by a comparison that would now go the other way and will
+   * never be made again.
    *
-   * **A closed membership contributes its `started_at`, and that is exact.**
-   * `assert_membership_same_network` compares the member against the Cell's leader as
-   * of the membership's own `started_at` and at no other instant, so the row is
-   * stranded exactly when the corrected Network is in force at or before it. Nothing
-   * between that start and the membership's end strands anything: the comparison is
-   * never made again.
+   * The two halves take different shapes, and section 4 is explicit that they must not
+   * be tidied into one.
    *
-   * **A closed leadership contributes its `ended_at`**, for two reasons that hold over
-   * different stints and that were re-derived here rather than carried across from the
-   * line above.
+   * **A closed membership: its `started_at`, extended to the last leadership start it
+   * spans.** It is compared twice over — by `assert_membership_same_network` at its own
+   * start, and by the member scan inside `assert_leadership_stays_in_network` at the
+   * *incoming leadership row's* start, for every membership open at that instant. Both
+   * are rows of the membership's own Cell, so the term needs nothing from other people's
+   * records.
    *
-   *   - Ended in a **handover**, it is exact. `assert_leadership_stays_in_network`
-   *     reads the outgoing leader's Network as of the *successor's* `started_at`, and
-   *     the contiguity check in that same function forces the two to be equal — so a
+   * *An earlier version bounded this at `started_at` alone, on the claim that a
+   * membership is compared at its start "and at no other instant". True of one trigger,
+   * false across two, and reachable by ordinary history: joined January, Cell handed over
+   * in March, left in June, corrected effective February. It committed.*
+   *
+   * **A closed leadership: its `ended_at`**, for two reasons that hold over different
+   * stints and that were re-derived rather than carried across from the line above.
+   *
+   *   - Ended in a **handover**, it is exact. `assert_leadership_stays_in_network` reads
+   *     the outgoing leader's Network as of the *successor's* `started_at`, and the
+   *     contiguity check in that same function forces the two to be equal — so a
    *     correction dated at or before this row's `ended_at` makes the successor's
    *     assignment retroactively cross-Network.
    *   - Ended in a **closure**, there is no successor, and what is stranded is other
    *     people's rows: memberships opened during the stint, each compared against the
-   *     leader's Network as of its own start. Those cannot be reached from this
-   *     person's rows at all, and bounding past the end of the stint covers every one
-   *     of them.
+   *     leader's Network as of its own start. Those cannot be reached from this person's
+   *     rows at all, and bounding past the end of the stint covers every one of them.
    *
-   * The second is the only over-refusal — a Cell that never held a member strands
-   * nobody — and section 4 accepts it, because the alternative is a bound that reasons
-   * about other people's rows to decide one person's floor.
+   * The second is the only over-refusal — a Cell that never held a member strands nobody
+   * — and section 4 accepts it, because the alternative is a bound that reasons about
+   * other people's rows to decide one person's floor.
    *
-   * **Open rows contribute nothing**, and are not filtered out for tidiness: the two
-   * methods above refuse the change outright while either exists, so a term over them
-   * could never bind.
+   * **Open rows contribute nothing**, and are not filtered out for tidiness: the change
+   * is refused outright while either exists, so a term over them could never bind. That
+   * refusal is `NetworksService`'s, made from what the two methods above report — a port
+   * answers questions and refuses nothing.
    */
   closedRelationshipFloorOf(
-    executor: Db | Transaction<Database>,
+    /**
+     * **A transaction, not the pool, and the type is the enforcement.** The floor is
+     * read after the person lock and relied on by the write that follows, so reading
+     * it on the pool would both answer from the state the request arrived with
+     * (section 5) and ask a bounded pool for a second connection while holding one
+     * (section 24). Both are invisible in a sequential test, which is why this is a
+     * compile error rather than a comment — the standard section 2 sets for the
+     * capability guard and section 22 for `completeWithin`.
+     *
+     * The two methods above keep the wider type: they are preconditions rather than
+     * premises for a later write, and nothing yet calls them outside a transaction.
+     */
+    executor: Transaction<Database>,
     personId: string,
   ): Promise<Date | null>;
 }

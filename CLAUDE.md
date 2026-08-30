@@ -6504,16 +6504,38 @@ its `started_at`.** Two clauses rather than one, because they are bounded by two
 different mechanisms.
 
 **Nothing selects a Cell relationship on a Network write**, which is what makes these
-terms unlike term (b). `assert_network_change_keeps_edges` reads `pastoral_assignments`
-and no other table — verified by reading its `FROM` clause rather than inferring it from
-its purpose — and the Cell triggers fire only on writes to their own tables. So a Cell
-relationship is stranded by never being examined again, not by being re-examined and
-failing. Each term therefore has to clear the instant its trigger compares at.
+terms unlike term (b). `assert_network_change_keeps_edges` reads no Cell table, and the
+Cell triggers fire only on writes to their own. So a Cell relationship is stranded by
+never being examined again, not by being re-examined and failing, and each term has to
+clear the latest instant at which the relationship was ever compared.
 
-**Membership: `started_at`, and it is exact.** `assert_membership_same_network` compares
-member against leader as of the membership's own `started_at` and at no other instant. So
-the row is stranded exactly when the corrected Network is in force at or before that
-instant, and it is a row of the person's own, so nothing has to be inferred to find it.
+*This first said that trigger reads "`pastoral_assignments` and no other table",
+"verified by reading its `FROM` clause". It reads `network_assignments` too — its own
+`NEW` row, and again through `network_as_of`. The load-bearing half, that it reads no
+Cell table, is true; the sentence was not, and it was in `SKILL.md` as well as here.
+Found by `architecture-guardian` reading the clause the claim said it had been verified
+against.*
+
+**Membership: its `started_at`, extended to the last leadership start it spans.** A
+membership is compared twice over — by `assert_membership_same_network` at its own start,
+and by the member scan inside `assert_leadership_stays_in_network` at the *incoming
+leadership row's* start, for every membership open at that instant. Both are rows of the
+membership's own Cell, so the term still needs nothing from other people's records.
+
+***The first version of this ruling bounded it at `started_at` alone, and that was a live
+defect.*** It rested on "compared at its start and at no other instant" — true of one
+trigger, false across two. The gap is ordinary history rather than a contrivance: joined
+in January, the Cell handed over in March, left in June, corrected effective February. The
+correction commits and leaves the March handover asserting a Cell containing a member of
+the other Network, which is the state that trigger's own message exists to refuse.
+
+Found by `architecture-guardian`, and reproduced against the schema before it was acted
+on. The reason it survived my own check is worth keeping: I did examine the member scan,
+and asked only whether a *future* handover could bind. It cannot — approval stamps
+`clock_timestamp()`, so a future handover is after every closed `ended_at`. Every handover
+that matters is in the past, and the question was asked in the one direction where the
+answer is no. That is the recurring fault in a new costume: a mechanism checked over the
+part of its range being looked at.
 
 **Leadership: `ended_at`, on two grounds that hold over different stints.** Where the
 stint ended in a **handover** it is *exact*: `assert_leadership_stays_in_network` reads
@@ -6529,9 +6551,10 @@ The second ground is the only over-refusal, and it is small: a Cell that never h
 member strands nobody, and its former leader is bounded anyway.
 
 **The uniform `ended_at` form was drafted, and it was refused for what it costs the
-membership half.** It is sound — `ended_at >= started_at`, so it dominates — and it
-refuses writes that are provably safe: every date between a membership's start and its
-end leaves that membership legal, because it is compared at its start and nowhere else.
+membership half.** It is sound — `ended_at` is never earlier than any instant the
+membership was compared at, so it dominates — and it refuses writes that are provably
+safe: for a membership that spanned no handover, every date after the join leaves it
+legal, and for one that did, every date after the last handover does.
 
 **What decided it is an interaction neither the draft nor the open item named.** Section 4
 refuses the correction while an open membership stands, so the administrator ends it —
@@ -6563,9 +6586,68 @@ Section 4 now says the two halves must not be tidied into one, and why, because 
 tidied form is the one that reads better.
 
 Written to `SKILL.md` Section 4, and verified by grepping that section for each term
-rather than by asserting it here. The stale parenthetical four paragraphs below the floor
-— which said a Cell floor term was an open question — is corrected in the same change.
+rather than by asserting it here. The stale parenthetical below the floor — which said a
+Cell floor term was an open question — is corrected in the same change.
 
+
+
+**One `architecture-guardian` pass, and it refuted the ruling's central premise.** One
+live defect, eight false statements, five unpinned rules. The defect and the premise are
+recorded above, where the claim was made; what follows is the rest, because the shape of
+it is the useful part.
+
+**Every false statement was a true conclusion with a false reason**, which is this
+project's most-recorded fault and which four consecutive passes on the previous slice also
+found. In this batch: the `FROM`-clause overclaim above; "compared at its start and at no
+other instant", which was in six places at once — Section 4 twice, both docblocks, this
+entry, and both commit messages; a description of `assert_network_change_keeps_edges` that
+covered only its `INSERT` firing, in the file whose own 2026-08-23 entry exists to record
+that describing that trigger from one firing is the recurring error; a directional word
+pointing at the wrong paragraph; a paragraph miscount; "the two methods above refuse the
+change", which a port cannot do; and a comment in `networks` justifying an uncovered
+concurrent closure with "a relationship that is genuinely gone cannot strand anyone" —
+which is the exact opposite of this ruling's own second ground for the leadership term,
+left standing by the change that falsified it.
+
+**The two commit messages are immutable and carry the false premise.** `f0dce59` and
+`dea0031` both state that a membership is compared at its start and nowhere else. They
+stand; this entry is the correction.
+
+**Four rules had nothing that could fail on them, and the tie was the sharpest.** The
+bound is resolved by a reduce that keeps the earlier candidate, so `>` becoming `>=` would
+name the Network row where the pastoral edge should be named — and no case in the suite
+asserted the pastoral wording at all, so `MESSAGE_FOR.edges` could have been changed to
+anything. The tie is not a corner: `createPerson` writes the Network row at `EPOCH` and
+`assignTo` defaults to it, so term (a) equals the Network row's start for most fixture
+people, and the one existing case near it deliberately uses an unassigned person and never
+reaches the tie.
+
+**One gap was closed by a type rather than a test.** Nothing pinned that the Cell floor is
+read through the caller's transaction: passing the pool compiles, and under READ COMMITTED
+with the lock held it returns the same rows in every sequential test, while breaking both
+the Section 5 rule that a write reads what it relies on after the lock and the Section 24
+pooled-connection hazard. `closedRelationshipFloorOf` now takes `Transaction<Database>`
+rather than `Db | Transaction<Database>`, so the mistake is a compile error — the standard
+Section 2 sets for the capability guard and Section 22 for `completeWithin`. The two
+precondition methods keep the wider type, because they are not premises for a later write.
+
+**And one boundary was found by mutating rather than by review.** The span predicate takes
+leadership starts in `[cm.started_at, cm.ended_at)`, and widening it to `<=` left the whole
+suite green. A handover at the exact instant a member left is not a comparison instant —
+the member scan selects on `cm.ended_at > H`, false at equality — so bounding past it would
+refuse a correction for nothing. Pinned now.
+
+**The Stop Condition the pass raised is settled in Section 4 rather than left open.**
+Section 4 refuses a Network change while an *open* membership stands, and permits a
+correction dated inside a membership that has since ended, and those read as opposite
+answers to one fact pattern. The difference is not the comparison instant, which is the
+same for both. It is that an open membership is a **live** relationship — the person is
+presently in a Cell of the Network they no longer belong to, which is a state this
+specification holds absolutely against — while a closed one is a historical period, and
+Section 4 has already accepted in writing that closed periods keep the Network recorded for
+them. The floor is what keeps that bargain honest: it refuses any date that would falsify a
+comparison some row still depends on, and permits only dates that leave the record merely
+out of date.
 
 ### Open — awaiting a ruling
 

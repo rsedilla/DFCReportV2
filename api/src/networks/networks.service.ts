@@ -181,11 +181,18 @@ export class NetworksService {
     //   - **direct Cell creation** during initial encoding (section 2) takes none.
     //
     // What survives is narrower than "covered": the only uncovered *opener* is direct
-    // creation, because a closure merely ends a leadership and a relationship that is
-    // genuinely gone cannot strand anyone. And a Cell created during initial encoding
-    // holds no members yet, and that path closes with the phase. Named rather than
-    // left to be discovered, and stated as a list because the count is what went
-    // wrong.
+    // creation, and a Cell created during initial encoding holds no members yet, and
+    // that path closes with the phase. Named rather than left to be discovered, and
+    // stated as a list because the count is what went wrong.
+    //
+    // **The closure is uncovered and harmless, but not for the reason first given
+    // here.** That reason was "a relationship that is genuinely gone cannot strand
+    // anyone", which the floor's own leadership term refutes: a *gone* leadership is
+    // exactly what strands the memberships opened during it, which is why that term
+    // exists. What actually makes the race harmless is ordering — an open leadership
+    // is refused at `assertHoldsNoCellRelationshipWithin`, and a closure committing
+    // after that point closes a row the floor read below then sees as closed, so it
+    // contributes its `ended_at` either way.
     //
     // The deferred triggers cannot see an edge opened
     // concurrently and committed just after this transaction's own comparison. The
