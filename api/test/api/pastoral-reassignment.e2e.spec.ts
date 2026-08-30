@@ -16,6 +16,7 @@ import {
   EPOCH,
   nameSeniorPastors,
 } from '../setup/fixtures';
+import { countWhileInFlight, track } from '../setup/concurrency';
 
 import type { INestApplication } from '@nestjs/common';
 import type { Kysely } from 'kysely';
@@ -722,39 +723,40 @@ describe('reassigning a pastoral leader: the record (sections 5, 21, 22)', () =>
           mark.id,
         ]);
 
-        let settled = false;
-        const pending = reassign(mark.id, { pastoral_leader_id: raymond.id }, raymondAccount).then(
-          (response) => {
-            settled = true;
-            return response;
-          },
-        );
+        const pending = reassign(mark.id, { pastoral_leader_id: raymond.id }, raymondAccount);
+        const inFlight = track(pending);
 
         // Wait for the request to be blocked on Mark's key, so the move below
         // genuinely lands between its authorization and its write.
-        let waiting = 0;
-        // Comfortably inside the 3s lock timeout, so a slow detect plus the two
-        // writes below cannot turn the expected 403 into a RESOURCE_BUSY.
-        const deadline = Date.now() + 1_500;
-        while (Date.now() < deadline && waiting === 0) {
-          const found = await holder.query<{ waiting: string }>(
-            `SELECT count(*) AS waiting
+        //
+        // **The budget this replaces was 1.5s from dispatch, justified as
+        // "comfortably inside the 3s lock timeout".** That measures from the wrong
+        // origin. `lock_timeout` aborts a statement that waits too long *while
+        // acquiring a lock*, so its clock starts when the wait starts and slow
+        // pre-lock work consumes none of it — verified against this project's
+        // PostgreSQL, and recorded in `test/setup/concurrency.ts`. There is nothing
+        // to stay inside of, and the bound is the attempt instead.
+        const waiting = await countWhileInFlight(
+          async () => {
+            const found = await holder.query<{ waiting: string }>(
+              `SELECT count(*) AS waiting
                FROM pg_locks
               WHERE locktype = 'advisory'
                 AND NOT granted
                 AND objsubid = 1
                 AND classid::bigint = ((hashtextextended($1::uuid::text, 0) >> 32) & 4294967295)
                 AND objid::bigint = (hashtextextended($1::uuid::text, 0) & 4294967295)`,
-            [mark.id],
-          );
-          waiting = Number(found.rows[0].waiting);
-          if (waiting === 0) {
-            await new Promise((resolve) => setTimeout(resolve, 50));
-          }
-        }
+              [mark.id],
+            );
+
+            return Number(found.rows[0].waiting);
+          },
+          inFlight,
+          "a waiter on Mark's key",
+        );
 
         expect(waiting).toBeGreaterThan(0);
-        expect(settled).toBe(false);
+        expect(inFlight.settled).toBe(false);
 
         // Written directly, so it takes no advisory lock and lands while the
         // request is queued behind the holder.
@@ -832,34 +834,43 @@ describe('reassigning a pastoral leader: the record (sections 5, 21, 22)', () =>
           rico.id,
         ]);
 
-        // `.then` is what dispatches it. A supertest `Test` is lazy — held without
-        // one, the request is not sent until it is awaited, which here would be
-        // after the lock was released, and the probe below would correctly report
-        // no waiter. This repository has made that exact mistake once before
-        // (`fix(test): dispatch the in-flight probe, which supertest had never
-        // sent`), and CI caught it again here.
-        const pending = reassign(rico.id, { pastoral_leader_id: ben.id }, raymondAccount).then(
-          (response) => response,
-        );
+        // **`track` is what dispatches it**, by attaching a `.then`. A supertest
+        // `Test` is lazy — with no continuation the request is not sent until it is
+        // awaited, which here would be after the lock was released, and the probe
+        // below would correctly report no waiter. This repository has made that exact
+        // mistake once before (`fix(test): dispatch the in-flight probe, which
+        // supertest had never sent`), and CI caught it again here.
+        //
+        // So `track` is load-bearing rather than observational, and a refactor that
+        // stopped attaching a continuation would silently un-dispatch this.
+        const pending = reassign(rico.id, { pastoral_leader_id: ben.id }, raymondAccount);
+        const inFlight = track(pending);
 
-        let waiting = 0;
-        const deadline = Date.now() + 1_500;
-        while (Date.now() < deadline && waiting === 0) {
-          const found = await holder.query<{ waiting: string }>(
-            `SELECT count(*) AS waiting
+        // **The budget this replaces was 1.5s from dispatch, justified as
+        // "comfortably inside the 3s lock timeout".** That measures from the wrong
+        // origin. `lock_timeout` aborts a statement that waits too long *while
+        // acquiring a lock*, so its clock starts when the wait starts and slow
+        // pre-lock work consumes none of it — verified against this project's
+        // PostgreSQL, and recorded in `test/setup/concurrency.ts`. There is nothing
+        // to stay inside of, and the bound is the attempt instead.
+        const waiting = await countWhileInFlight(
+          async () => {
+            const found = await holder.query<{ waiting: string }>(
+              `SELECT count(*) AS waiting
                FROM pg_locks
               WHERE locktype = 'advisory'
                 AND NOT granted
                 AND objsubid = 1
                 AND classid::bigint = ((hashtextextended($1::uuid::text, 0) >> 32) & 4294967295)
                 AND objid::bigint = (hashtextextended($1::uuid::text, 0) & 4294967295)`,
-            [rico.id],
-          );
-          waiting = Number(found.rows[0].waiting);
-          if (waiting === 0) {
-            await new Promise((resolve) => setTimeout(resolve, 50));
-          }
-        }
+              [rico.id],
+            );
+
+            return Number(found.rows[0].waiting);
+          },
+          inFlight,
+          "a waiter on Rico's key",
+        );
 
         expect(waiting).toBeGreaterThan(0);
 
