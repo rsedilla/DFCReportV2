@@ -59,8 +59,12 @@ export const CURSOR_INSTANT_FORMAT = 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"';
  * sets `DateStyle` is testing nothing about the session the query actually runs in.
  *
  * **Fixed by `to_char` with an explicit format rather than by a cast to `text`**, which
- * renders according to the session's `DateStyle` — a setting nothing in this repository
- * pins and the deployment controls. Under `SQL`, `Postgres` or `German` a cast emits
+ * renders according to the session's `DateStyle`. That setting is now pinned by the pool
+ * (`database/date-style.ts`), which this sentence used to say it was not — but the
+ * `to_char` is still what makes the key safe, because an ISO cast emits
+ * `2026-08-30 05:08:54.622914+00`, which `CURSOR_INSTANT` rejects on the space and the
+ * offset. The pin removed the reason this was written; it did not remove the need for
+ * it. Under `SQL`, `Postgres` or `German` a cast emits
  * `30/08/2026 …`, `Sun 30 Aug …` or `30.08.2026 …`, every one of which this pattern
  * rejects; the server would then refuse every cursor it had just emitted and serve page
  * one for ever, silently. Measured against all four styles rather than assumed.
