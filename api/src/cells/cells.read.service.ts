@@ -461,9 +461,12 @@ export class CellsReadService implements CellScopePort, CellRelationshipsPort {
    * stands closed at COMMIT.
    *
    * `cell_leadership_is_opened_open` is a narrower guarantee than it looks — it refuses an
-   * INSERT carrying an `ended_at`, and a second write to that column, and does not refuse
-   * insert-open-then-close inside one transaction, which `cell_leaderships_period_ordered`
-   * being `>=` makes representable. No operation this specification defines writes one:
+   * INSERT carrying an `ended_at`, and a write that *changes* an already-set `ended_at`,
+   * which leaves the ordinary null-to-value close permitted and does not refuse
+   * insert-open-then-close inside one transaction. (`cell_leaderships_period_ordered`
+   * being `>=` is what makes the *zero-length* variant of that representable; the
+   * later-instant variant needs no help from it.) No operation this specification
+   * defines writes one:
    * approval leaves the incoming row open, closure only closes, direct creation only
    * opens. If anything ever did, this term would over-refuse rather than under-refuse.
    *

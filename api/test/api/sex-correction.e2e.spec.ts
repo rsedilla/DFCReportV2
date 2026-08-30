@@ -752,7 +752,8 @@ describe('sex correction (SKILL.md sections 4, 5, 7, 21, 22)', () => {
     const LED_UNTIL = new Date('2026-04-30T18:00:00+08:00');
     const JOINED_AT = new Date('2026-05-10T19:00:00+08:00');
     const LEFT_AT = new Date('2026-06-20T18:00:00+08:00');
-    /** Inside the membership's span, which is what makes it a comparison instant. */
+    /** Both inside the membership's span, which is what makes them comparison instants. */
+    const HANDED_OVER_FIRST_AT = new Date('2026-05-20T19:00:00+08:00');
     const HANDED_OVER_AT = new Date('2026-06-01T19:00:00+08:00');
 
     it('bounds on a closed membership start, and accepts a date inside that membership', async () => {
@@ -884,6 +885,64 @@ describe('sex correction (SKILL.md sections 4, 5, 7, 21, 22)', () => {
       expect(accepted.body.effective_date).toBe('2026-06-02');
     });
 
+    it('takes the last of several handovers a membership spanned', async () => {
+      // **`max` against `min` on the inner subquery, pinned on a shape production can
+      // produce.** The `extends` case above also catches that mutation, but only because
+      // its Cell is created at the very instant the member joins, so the Cell's own first
+      // leadership row falls inside the window and gives it two rows. That equality is a
+      // fixture artefact — the docblock declaring the window's lower bound says in terms
+      // that production cannot produce it, since it needs two identical
+      // `clock_timestamp()` reads.
+      //
+      // Here the Cell pre-exists the membership, which is the ordinary shape, so its
+      // opening row is outside the window and the two rows inside it are genuine
+      // handovers. `min` collapses the term to the first of them.
+      const marco = await createPerson(db, { firstName: 'Marco', network: 'MENS' });
+      await assignTo(db, marco.id, manuel.id);
+
+      const manuelCell = await createCell(db, { leader: manuel, createdAt: LED_FROM });
+      await db
+        .insertInto('cell_memberships')
+        .values({
+          person_id: mark.id,
+          cell_id: manuelCell.id,
+          started_at: JOINED_AT,
+          ended_at: LEFT_AT,
+        })
+        .execute();
+
+      for (const [at, to] of [
+        [HANDED_OVER_FIRST_AT, marco.id],
+        [HANDED_OVER_AT, raymond.id],
+      ] as const) {
+        await db.transaction().execute(async (trx) => {
+          await trx
+            .updateTable('cell_leaderships')
+            .set({ ended_at: at })
+            .where('cell_id', '=', manuelCell.id)
+            .where('ended_at', 'is', null)
+            .execute();
+          await trx
+            .insertInto('cell_leaderships')
+            .values({ person_id: to, cell_id: manuelCell.id, started_at: at })
+            .execute();
+        });
+      }
+
+      // 25 May sits between the two handovers. The term is the later one, so this is
+      // refused and the date named is past 1 June; under `min` the term would be 20 May
+      // and this would be accepted.
+      const refused = await correct(mark.id, {
+        sex: 'FEMALE',
+        reason: 'Sex entered in error at encoding.',
+        pastoral_leader_id: grace.id,
+        effective_date: '2026-05-25',
+      });
+
+      expect(refused.status).toBe(409);
+      expect(refused.body.error.details.earliest_effective_date).toBe('2026-06-02');
+    });
+
     it('ignores a handover in a Cell the person was not a member of', async () => {
       // **The correlation, and nothing else pinned it.** Dropping
       // `spanned.cell_id = cm.cell_id` was green across the whole suite until this
@@ -894,6 +953,13 @@ describe('sex correction (SKILL.md sections 4, 5, 7, 21, 22)', () => {
       // Mark's own Cell never changes hands, so his term is the join instant. The
       // other Cell changes hands inside his membership window and has nothing to do
       // with him.
+      //
+      // **It is a negative case, so it pins the correlation only alongside `extends`.**
+      // Deleting the whole membership term, or `min` for `max`, or either inequality,
+      // all leave this green — a case asserting that something is *accepted* cannot
+      // distinguish a term that is correctly narrow from one that is absent. `extends`
+      // establishes that the term exists and reaches handovers; this one establishes
+      // that it reaches only the person's own Cell.
       const marco = await createPerson(db, { firstName: 'Marco', network: 'MENS' });
       await assignTo(db, marco.id, manuel.id);
 
@@ -944,10 +1010,21 @@ describe('sex correction (SKILL.md sections 4, 5, 7, 21, 22)', () => {
       // **That is the state at commit rather than a claim about history.** A backdated
       // closure may close an *open* membership at exactly the sitting leadership's
       // `started_at` — `CellsClosureService`'s floor is inclusive for that case — and the
-      // scan did run at that instant when the leadership was written. Bounding past it
-      // would still be wrong: such a membership is zero-length and therefore inert
-      // (section 5), so the comparison it would falsify belongs to a row no query
-      // resolves.
+      // scan did run at that instant when the leadership was written.
+      //
+      // Bounding past it would still be wrong, and the reason is about the **leadership**
+      // row rather than the membership. That closure ends both at the same instant, so a
+      // leadership `[H, ∞)` becomes `[H, H]` — zero-length, and inert under section 5,
+      // since `assert_membership_same_network`'s leader lookup asks
+      // `cl.started_at <= t AND ended_at > t`, unsatisfiable at `H`. The membership
+      // becomes `[m, H]`, which is positive length and fully resolvable. So the
+      // comparison the correction would falsify belongs to a row no query resolves, and
+      // it is not the row whose term is being computed.
+      //
+      // *An earlier version of this comment called the membership zero-length. The
+      // conclusion was right and the row was wrong — the subject was carried across from
+      // `CellsClosureService`'s own inclusivity rationale, which is written about a
+      // membership closed at its own `started_at`.*
       const marco = await createPerson(db, { firstName: 'Marco', network: 'MENS' });
       await assignTo(db, marco.id, manuel.id);
 

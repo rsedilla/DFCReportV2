@@ -6698,6 +6698,48 @@ the pre-existing case refusing an effective date at the instant the Network row 
 where an empty candidate list makes the seedless `reduce` throw. The message is immutable
 and stands; this is the correction.
 
+
+**A third pass, scoped to the two fix commits, found nothing behavioural either.** It
+re-derived the boundary, the correlation case, the closure disjunction and the docblock
+caveats against the SQL and confirmed all four. What it found was one new false statement,
+two imprecisions, and a fixture dependency nothing declared.
+
+**The new false statement was in the comment written to close the pass before it**, which
+is worth recording plainly. That comment justified excluding a handover at the instant a
+membership ended by saying "such a membership is zero-length and therefore inert". The
+membership is not: a backdated closure at that instant leaves it `[m, H]`, positive length
+and fully resolvable. What is zero-length is the **leadership** row, `[H, H]`, because a
+closure ends leaderships and memberships together — so the comparison the correction would
+falsify belongs to a row no query resolves, and it is not the row whose term is being
+computed. Right conclusion, wrong row.
+
+The subject was carried across from `CellsClosureService`'s own inclusivity rationale,
+which is written about a membership closed at its own `started_at`. Section 25 rule 19,
+inside the comment written to close a Section 25 rule 19 finding — the third time on this
+branch that the rule has failed in the act of being applied.
+
+**Two imprecisions, both true in conclusion.** Section 4's surviving consequence named the
+member scan as the mechanism that stops a stranded Cell changing hands, and that closes one
+of the two successors: a successor in the *outgoing* leader's Network is refused by the
+member scan, and one in the *stranded member's new* Network by the leader-to-leader check.
+Section 4 already states the fuller form one paragraph over, for the leader case. And the
+implementation docblock said `cell_leadership_is_opened_open` refuses "a second write" to
+`ended_at`, where it refuses a write that *changes* an already-set one — the ordinary
+null-to-value close is permitted, which is the whole point.
+
+**The `max` pin was real and rested on something nobody had declared.** It works because
+the `extends` fixture creates its Cell at the very instant the member joins, so the Cell's
+own opening leadership row falls inside the membership window and gives it two rows — while
+the docblock two files over declares that same equality unreachable in production. Both
+statements were true and nothing connected them. A second case now pins `max` on the
+ordinary shape, a Cell that pre-exists the membership with two genuine handovers inside the
+window, so the pin no longer depends on a fixture artefact.
+
+**And the correlation case is a negative one**, so it pins the correlation only alongside
+`extends`: a case asserting that something is *accepted* cannot distinguish a term that is
+correctly narrow from one that is absent. Said in the comment rather than left for somebody
+to discover by deleting the term and finding this case still green.
+
 ### Open — awaiting a ruling
 
 **One item awaits a ruling, and it blocks Stage 5. Thirty-six other things are
