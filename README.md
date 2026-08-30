@@ -9,7 +9,8 @@ People, pastoral hierarchy, DCC and Cell attendance, leadership development, and
 | Document | What it is |
 | --- | --- |
 | [SKILL.md](SKILL.md) | **Source of truth.** Every domain rule, permission, reporting definition, and invariant. 26 sections. |
-| [CLAUDE.md](CLAUDE.md) | Project governance: review gates, definition of done, and the decisions log. |
+| [CLAUDE.md](CLAUDE.md) | Project governance: review gates, definition of done, the decisions index, and what is open. |
+| [docs/decisions/](docs/decisions/) | The rulings themselves, one numbered file each, in the order they were made. |
 | [docs/ROADMAP.md](docs/ROADMAP.md) | How the system gets built, in order, and how you know a stage is finished. |
 
 Read `SKILL.md` before planning or implementing anything. Where any other instruction disagrees with it, `SKILL.md` wins.
