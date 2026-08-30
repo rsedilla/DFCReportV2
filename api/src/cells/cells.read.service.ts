@@ -453,10 +453,19 @@ export class CellsReadService implements CellScopePort, CellRelationshipsPort {
    * selection read backwards — it takes `cm.started_at <= H` and `cm.ended_at > H`, so
    * this takes leadership starts in `[cm.started_at, cm.ended_at)`.
    *
-   * **Every leadership row in that window was a comparison instant**, including ones
-   * since closed: `cell_leadership_is_opened_open` refuses a row written already closed,
-   * so every one of them ran the scan when it was written. The join is therefore exact
-   * rather than conservative.
+   * **Every leadership row in that window ran the scan**, including ones since closed, so
+   * the join is exact rather than conservative. What guarantees that is the trigger's
+   * *state at commit* rather than the shape of the write, and saying it the other way
+   * round is wrong in a way that matters:
+   * `assert_leadership_stays_in_network` is deferred and returns early only where the row
+   * stands closed at COMMIT.
+   *
+   * `cell_leadership_is_opened_open` is a narrower guarantee than it looks — it refuses an
+   * INSERT carrying an `ended_at`, and a second write to that column, and does not refuse
+   * insert-open-then-close inside one transaction, which `cell_leaderships_period_ordered`
+   * being `>=` makes representable. No operation this specification defines writes one:
+   * approval leaves the incoming row open, closure only closes, direct creation only
+   * opens. If anything ever did, this term would over-refuse rather than under-refuse.
    *
    * **`GREATEST` ignores nulls in PostgreSQL and is null only when every argument is**,
    * which is section 4's "each term is a maximum over rows that may be empty, and an

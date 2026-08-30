@@ -864,9 +864,17 @@ describe('sex correction (SKILL.md sections 4, 5, 7, 21, 22)', () => {
 
     it('does not extend to a handover at the instant the membership ended', async () => {
       // **The boundary the span predicate turns on**, and `<` against `<=` is invisible
-      // without it. The member scan selects memberships with `cm.ended_at > H`, which is
-      // false at equality — so a handover at the moment a member left never compared
-      // that member, and bounding past it would refuse a correction for nothing.
+      // without it. The member scan selects memberships with `cm.ended_at > H`, false at
+      // equality, so at commit a membership ending exactly at a leadership's start is not
+      // compared there.
+      //
+      // **That is the state at commit rather than a claim about history.** A backdated
+      // closure may close an *open* membership at exactly the sitting leadership's
+      // `started_at` — `CellsClosureService`'s floor is inclusive for that case — and the
+      // scan did run at that instant when the leadership was written. Bounding past it
+      // would still be wrong: such a membership is zero-length and therefore inert
+      // (section 5), so the comparison it would falsify belongs to a row no query
+      // resolves.
       const marco = await createPerson(db, { firstName: 'Marco', network: 'MENS' });
       await assignTo(db, marco.id, manuel.id);
 

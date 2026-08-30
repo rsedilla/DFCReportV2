@@ -185,14 +185,20 @@ export class NetworksService {
     // that path closes with the phase. Named rather than left to be discovered, and
     // stated as a list because the count is what went wrong.
     //
-    // **The closure is uncovered and harmless, but not for the reason first given
-    // here.** That reason was "a relationship that is genuinely gone cannot strand
+    // **The closure is uncovered and harmless, and two reasons given for that have
+    // been wrong.** The first was "a relationship that is genuinely gone cannot strand
     // anyone", which the floor's own leadership term refutes: a *gone* leadership is
-    // exactly what strands the memberships opened during it, which is why that term
-    // exists. What actually makes the race harmless is ordering — an open leadership
-    // is refused at `assertHoldsNoCellRelationshipWithin`, and a closure committing
-    // after that point closes a row the floor read below then sees as closed, so it
-    // contributes its `ended_at` either way.
+    // exactly what strands the memberships opened during it. The second described a
+    // path that cannot occur — a closure committing *after* the precondition read,
+    // whose `ended_at` the floor then picks up. If it commits after that read, the
+    // precondition saw the row open and refused, so there is no floor read at all and
+    // "either way" names one branch that does not exist.
+    //
+    // What is true is a disjunction, and it is exhaustive under READ COMMITTED because
+    // an uncommitted `UPDATE` leaves the `ended_at IS NULL` version visible. Either the
+    // closure had already committed, and the precondition sees the row closed while the
+    // floor read below takes its `ended_at`; or it had not, and the precondition sees it
+    // open and refuses. Neither branch admits a correction that skips the term.
     //
     // The deferred triggers cannot see an edge opened
     // concurrently and committed just after this transaction's own comparison. The

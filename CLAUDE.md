@@ -6500,8 +6500,14 @@ membership opened during it — this rule's own failure, reached through a date 
 rather than an open row. The open list has carried it since the Cell precondition merged.
 
 **A closed Cell leadership bounds on its `ended_at`; a closed Cell membership bounds on
-its `started_at`.** Two clauses rather than one, because they are bounded by two
-different mechanisms.
+its `started_at`, extended to the last leadership start it spans.** Two clauses rather
+than one, because they are bounded by two different mechanisms.
+
+*This thesis said `started_at` alone until the second review pass. The paragraph four
+lines below it had been corrected and this one had not — which is the failure the
+2026-08-23 reassignment entry records in one line: a heading is what gets skimmed and
+quoted, so a stale one travels further than a stale paragraph. It was the heading here,
+in the entry that quotes that lesson.*
 
 **Nothing selects a Cell relationship on a Network write**, which is what makes these
 terms unlike term (b). `assert_network_change_keeps_edges` reads no Cell table, and the
@@ -6660,7 +6666,7 @@ and the italic below it. The batch that added the thirty-second bullet updated t
 alone, because the instruction to recount lives only in the italic, and the bolded twin
 is what a reader meets first. Anyone adding a bullet updates both.*
 
-*Thirty-six distinct items across thirty-six bullets. One left on 2026-08-30 with the backdate floor's Cell terms, which settled what it asked: a closed Cell leadership bounds on its `ended_at`, a closed Cell membership on its `started_at`. One arrived with the Network-change precondition: whether a port a module cannot bind for itself should be optional-and-refuse or mandatory. Two arrived with the Cell leadership approval slice, both escalated by its first architecture-guardian pass: which kind of target a leadership audit entry carries, and whether a request's `cell_id` should be frozen while it is PENDING. A third was *widened* rather than added by that slice's third pass — the error code a stale-premise refusal answers — and a batch that claimed to widen it duplicated it instead, which is why this sentence is one a reader should not trust without recounting. Three arrived with the leadership
+*Thirty-six distinct items across thirty-six bullets. One left on 2026-08-30 with the backdate floor's Cell terms, which settled what it asked: a closed Cell leadership bounds on its `ended_at`, and a closed Cell membership on its `started_at` extended to the last leadership start it spans. One arrived with the Network-change precondition: whether a port a module cannot bind for itself should be optional-and-refuse or mandatory. Two arrived with the Cell leadership approval slice, both escalated by its first architecture-guardian pass: which kind of target a leadership audit entry carries, and whether a request's `cell_id` should be frozen while it is PENDING. A third was *widened* rather than added by that slice's third pass — the error code a stale-premise refusal answers — and a batch that claimed to widen it duplicated it instead, which is why this sentence is one a reader should not trust without recounting. Three arrived with the leadership
 request slice — the third being whether the application should pin the database session's
 `DateStyle`, raised by the third review pass. The first two are: how a requester sees the outcome of a request they submitted, which
 section 19 requires and section 7 names no capability for, and whether section 7 should

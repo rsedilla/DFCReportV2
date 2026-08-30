@@ -147,8 +147,12 @@ export interface CellRelationshipsPort {
      * compile error rather than a comment — the standard section 2 sets for the
      * capability guard and section 22 for `completeWithin`.
      *
-     * The two methods above keep the wider type: they are preconditions rather than
-     * premises for a later write, and nothing yet calls them outside a transaction.
+     * The two methods above keep the wider type only because nothing yet calls them
+     * outside a transaction and narrowing them was not attempted. *An earlier version
+     * said they are "preconditions rather than premises for a later write", which is
+     * unsound — a refusal from either decides whether the correction happens, so they
+     * are premises in exactly that sense, and the section 24 half of the argument
+     * applies to them identically.*
      */
     executor: Transaction<Database>,
     personId: string,
