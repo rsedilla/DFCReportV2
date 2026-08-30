@@ -101,13 +101,15 @@ export class NetworksService {
    * both have since migration 0009. What is true now is narrower: section 4 settled
    * the *leadership* half on 2026-08-30 — a Network change is refused while the
    * person holds an open Cell leadership assignment — and this method does not yet
-   * implement it. The *membership* half is not settled at all and is recorded as
-   * open in `CLAUDE.md`.
+   * implement it. The *membership* half was settled the same day and on its own terms:
+   * refused while they hold an open Cell membership, cleared by ending that membership,
+   * which is one authorized operation rather than a handover. Leadership is refused
+   * first, so somebody holding both is told about the obligation that takes weeks.
    *
    * Both belong here, beside the pastoral precondition above, which is where
-   * `docs/ROADMAP.md` books them. Until the leadership half lands, section 4 states
-   * a rule nothing enforces — named here rather than left for a reader to infer
-   * from a passing test suite.
+   * `docs/ROADMAP.md` books them. Until they land, section 4 states two rules nothing
+   * enforces — named here rather than left for a reader to infer from a passing test
+   * suite.
    */
   async changeWithin(
     transaction: Transaction<Database>,
