@@ -41,6 +41,27 @@ export interface TestAccount {
 /** Well before anything a test does, so every assignment has a Network in force. */
 export const EPOCH = new Date('2020-01-01T00:00:00+08:00');
 
+/**
+ * **Never take the two ends of an effective-dated period from different clocks.**
+ *
+ * PostgreSQL's `clock_timestamp()` and Node's `Date.now()` do not agree, and on this
+ * project's Windows development machines the database runs measurably *ahead* — 6-8ms,
+ * drifting within a session, because PostgreSQL reads
+ * `GetSystemTimePreciseAsFileTime` while V8 interpolates from the coarse system tick.
+ * It is not skew between two hosts, so "the database is local" is the wrong intuition
+ * and the wrong reassurance.
+ *
+ * A fixture that stamps `started_at` from the database and `ended_at` from the host
+ * therefore writes a period that ends before it begins whenever the real elapsed time
+ * is under the current offset, which a local transaction usually is. Every
+ * `..._period_ordered` check in migration 0009 and 0001 refuses that, intermittently.
+ *
+ * This has been shipped three times on one branch, twice by the fix for the previous
+ * instance. The rule is per *period*, not per call site: take both ends from
+ * `sql\`clock_timestamp()\``, or both from a host `Date`, or both from a fixed
+ * constant like `EPOCH`. Mixing is what fails, and it fails on some runs only.
+ */
+
 export async function createPerson(
   db: Kysely<Database>,
   options: {

@@ -57,11 +57,16 @@ export class PeopleSexCorrectionService {
    * implementer meeting that as a constraint violation is tempted to move the
    * timestamps apart, which does not fix the write.
    *
-   * The order below is not arbitrary. `changeWithin` carries section 4's two
-   * preconditions — the refusal while the person leads anyone, and the backdate
-   * floor — and it runs before the destination leader is validated so that those
-   * refusals reach the administrator first. Reporting "that leader is in the wrong
-   * Network" to somebody whose real problem is twelve disciples is unhelpful.
+   * The order below is not arbitrary. `changeWithin` carries section 4's preconditions
+   * — the root refusal, the refusal while the person leads anyone, the two Cell
+   * refusals, and the backdate floor — and it runs before the destination leader is
+   * validated so that those refusals reach the administrator first. Reporting "that
+   * leader is in the wrong Network" to somebody whose real problem is twelve disciples
+   * is unhelpful.
+   *
+   * *Counted as two until the Cell precondition landed, and it was three even then:
+   * the root refusal predates both. Stated as a list rather than a number, because the
+   * number is what went stale.*
    *
    * The completion is last, because it takes the key's row lock and a concurrent
    * retry waits on that lock rather than being answered `REQUEST_IN_FLIGHT`

@@ -1,7 +1,9 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { sql } from 'kysely';
 
+import { type CellScopePort } from '../auth/authorization/cell-scope.port';
 import { DATABASE, type Db } from '../database/database.module';
+import { type CellRelationshipsPort, type NamedCell } from '../networks/cell-relationships.port';
 
 import { CURSOR_INSTANT_FORMAT } from './leadership-request-cursor';
 
@@ -28,7 +30,7 @@ import type { Transaction } from 'kysely';
  * nothing pointing back, because this module never imports `auth`.
  */
 @Injectable()
-export class CellsReadService {
+export class CellsReadService implements CellScopePort, CellRelationshipsPort {
   constructor(@Inject(DATABASE) private readonly db: Db) {}
 
   /**
@@ -342,6 +344,87 @@ export class CellsReadService {
       .executeTakeFirst();
 
     return row?.person_id ?? null;
+  }
+
+  /**
+   * `CellRelationshipsPort`. Every Cell this person currently leads — every open
+   * leadership row, whatever state its Cell is in
+   * (SKILL.md section 4, section 11).
+   *
+   * **For the Network-change precondition in `networks`**, which refuses a change
+   * while the person leads a Cell. `networks` cannot read these tables (section 2)
+   * and cannot import this module without closing a cycle, so it declares a port and
+   * this implements it.
+   *
+   * **No `ACTIVE` filter, and the first version had one on a reason that pointed the
+   * wrong way.** It cited `isCurrentCellLeaderWithin`'s restore argument —
+   * `pg_restore --disable-triggers` skips the trigger keeping `cells.state` and these
+   * rows in step. There the join **withholds** a qualification and so fails closed: a
+   * leader whose Cell is closed is refused an account. Here it would **remove a
+   * blocker**: an open leadership on a CLOSED Cell would be filtered out and the
+   * Network change would proceed. The same argument, the opposite consequence.
+   *
+   * So this asks only what section 4 needs — does an open leadership row exist —
+   * and blocks on it whatever state the Cell is in. Unreachable through any operation,
+   * because migration 0009 refuses that pair from both sides.
+   *
+   * **In the restore state where it is reachable, blocking is safe but not free**, and
+   * saying only "safe" understates it. The refusal tells the administrator to hand the
+   * Cell over or close it, and both refuse a CLOSED Cell — so that person's Network
+   * change is performable by no route until the data is repaired. Fail-closed is still
+   * right, because section 4 states the rule absolutely and a corrupted restore is a
+   * repair situation rather than an operating one; what is not right is a paragraph
+   * that implies the remedy still works.
+   *
+   * Ordered by Cell ID so a refusal naming several Cells names them the same way
+   * twice, which a client rendering the list depends on.
+   */
+  async openLeadershipsOf(
+    executor: Db | Transaction<Database>,
+    personId: string,
+  ): Promise<NamedCell[]> {
+    const rows = await executor
+      .selectFrom('cell_leaderships')
+      .innerJoin('cells', 'cells.id', 'cell_leaderships.cell_id')
+      .select(['cells.id as id', 'cells.cell_id as cell_id'])
+      .where('cell_leaderships.person_id', '=', personId)
+      .where('cell_leaderships.ended_at', 'is', null)
+      .orderBy('cells.cell_id')
+      .execute();
+
+    return rows.map((row) => ({ id: row.id, cellId: row.cell_id }));
+  }
+
+  /**
+   * `CellRelationshipsPort`. The Cell this person currently belongs to, or null.
+   *
+   * Section 10 gives a person at most one active membership, enforced by a partial
+   * unique index over the person — so this returns one row rather than a list, and
+   * the index is what makes that safe rather than an assumption.
+   *
+   * **No `ACTIVE` filter, matching the leaderships above, because the schema is
+   * symmetric.** An earlier version of this said the asymmetry between the two
+   * queries was the schema's; it was not, and there is no asymmetry now.
+   * `assert_cell_memberships_match_state` refuses a CLOSED Cell holding an open
+   * membership, fired from both tables, exactly as the leadership rule is — and
+   * section 10's *What closing does* ends leadership and memberships in the same
+   * list. The two facts are identical and neither query filters on them.
+   *
+   * The join is here for the Cell's handle rather than as a filter.
+   */
+  async openMembershipOf(
+    executor: Db | Transaction<Database>,
+    personId: string,
+  ): Promise<NamedCell | null> {
+    const row = await executor
+      .selectFrom('cell_memberships')
+      .innerJoin('cells', 'cells.id', 'cell_memberships.cell_id')
+      .select(['cells.id as id', 'cells.cell_id as cell_id'])
+      .where('cell_memberships.person_id', '=', personId)
+      .where('cell_memberships.ended_at', 'is', null)
+      .executeTakeFirst();
+
+    return row ? { id: row.id, cellId: row.cell_id } : null;
   }
 
   /**

@@ -1,10 +1,12 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable, Optional } from '@nestjs/common';
 
 import { InvariantViolationError } from '../common/errors/api-error';
 import { manilaDayAfter, startOfManilaDay } from '../common/time/manila';
 import { type Db } from '../database/database.module';
 import { lockPersonsWithin } from '../database/person-lock';
 import { HierarchyService } from '../hierarchy/hierarchy.service';
+
+import { CELL_RELATIONSHIPS_PORT, type CellRelationshipsPort } from './cell-relationships.port';
 
 import type { Database, NetworkName, Sex } from '../database/schema';
 import type { Transaction } from 'kysely';
@@ -19,7 +21,28 @@ import type { Transaction } from 'kysely';
  */
 @Injectable()
 export class NetworksService {
-  constructor(private readonly hierarchy: HierarchyService) {}
+  constructor(
+    private readonly hierarchy: HierarchyService,
+    /**
+     * **Optional in the injector and required in effect** (`cell-relationships.port.ts`).
+     * What makes that safe is the refusal below: an unbound port closes the Network
+     * change rather than waving it through, which is the reading `CELL_SCOPE_PORT`
+     * already gives for the same situation.
+     *
+     * *An earlier version said the parameter could not be mandatory, because only
+     * `AppModule` could bind an implementation. That was wrong; so was the first
+     * correction, which said a `@Global()` binding puts the token in every context. It
+     * reaches every module of a graph that *includes* it, and a mandatory injection
+     * works today only because the one test graph omitting it constructs no
+     * `NetworksService`.* Whether it should be mandatory is
+     * recorded as open in `CLAUDE.md` — it would move a wiring fault to startup,
+     * where the module-graph gate already lives, at the cost of a deployment failing
+     * to boot rather than losing one operation.
+     */
+    @Optional()
+    @Inject(CELL_RELATIONSHIPS_PORT)
+    private readonly cells?: CellRelationshipsPort,
+  ) {}
 
   /**
    * The person's Network as it stood at `at`, or null where none was recorded
@@ -83,33 +106,31 @@ export class NetworksService {
    * Changes a person's Network inside a caller's transaction: the open row is
    * closed and the new one opened, both at `effectiveAt` (SKILL.md section 4).
    *
-   * **The two preconditions section 4 states are enforced here**, and section 4
-   * says so by name — not because this is a convenient place, but because neither
-   * is a constraint the database can hold. The same-Network trigger is
+   * **Section 4's preconditions are enforced here**, and section 4
+   * says so by name — not because this is a convenient place, but because none
+   * of them is a constraint the database can hold. The same-Network trigger is
    * `DEFERRABLE INITIALLY DEFERRED` and sees only the state at commit, so a
    * transaction that moved a disciple out of the way and then performed the
    * correction commits legally: the schema permits exactly the combined operation
    * the first rule forbids. Nobody may read the passing constraint as agreement.
    *
    * This never touches `pastoral_assignments` and never reads it: `hierarchy` owns
-   * that table (section 2, Modules) and is asked for both facts. The reassignment
+   * that table (section 2, Modules) and is asked for each of them — whether the person
+   * is a root, whether they lead anyone, and how far back the change may be dated. The reassignment
    * the change forces is the caller's, performed in this same transaction at this
    * same instant.
    *
-   * **Section 4's Cell obligation is not enforced here yet, and the reason this
-   * comment used to give has stopped being true.** It said neither table existed;
-   * both have since migration 0009. What is true now is narrower: section 4 settled
-   * the *leadership* half on 2026-08-30 — a Network change is refused while the
-   * person holds an open Cell leadership assignment — and this method does not yet
-   * implement it. The *membership* half was settled the same day and on its own terms:
-   * refused while they hold an open Cell membership, cleared by ending that membership,
-   * which is one authorized operation rather than a handover. Leadership is refused
-   * first, so somebody holding both is told about the obligation that takes weeks.
+   * **Section 4's Cell obligation is enforced here**, in
+   * `assertHoldsNoCellRelationshipWithin` below: a Network change is refused while the
+   * person holds an open Cell leadership assignment, and refused while they hold an
+   * open Cell membership. Leadership is refused first, so somebody holding both is
+   * told about the obligation that takes weeks rather than the one that takes minutes.
    *
-   * Both belong here, beside the pastoral precondition above, which is where
-   * `docs/ROADMAP.md` books them. Until they land, section 4 states two rules nothing
-   * enforces — named here rather than left for a reader to infer from a passing test
-   * suite.
+   * *This block has now been wrong in both directions.* It first said the obligation
+   * was unenforced because neither table existed, which stopped being true at
+   * migration 0009; it was corrected to say the rules were settled and unbuilt, which
+   * stopped being true in the commit that built them. Both were accurate when written
+   * and neither was revisited by the change that falsified it.
    */
   async changeWithin(
     transaction: Transaction<Database>,
@@ -124,8 +145,28 @@ export class NetworksService {
       reason: string;
     },
   ): Promise<{ from: NetworkName }> {
-    // **Before anything is read.** Every precondition below is a statement about
-    // pastoral edges, and the deferred triggers cannot see an edge opened
+    // **Before anything is read.** Every precondition below was a statement about
+    // pastoral edges when this was written, and two of them are now about Cell
+    // relationships. There are five writers of those two tables, and the lock covers
+    // them unevenly — an earlier version of this comment said four and omitted
+    // closure, which is the one that is neither covered nor uncovered:
+    //
+    //   - a leadership request's approval locks the prospective leader **and the
+    //     outgoing one**, so it is the leadership-ending write that does hold a lock on
+    //     the leader whose row it closes;
+    //   - both membership writes lock the person;
+    //   - a **closure** locks only the members it disperses, so it ends the outgoing
+    //     leader's row while holding no lock on that leader;
+    //   - **direct Cell creation** during initial encoding (section 2) takes none.
+    //
+    // What survives is narrower than "covered": the only uncovered *opener* is direct
+    // creation, because a closure merely ends a leadership and a relationship that is
+    // genuinely gone cannot strand anyone. And a Cell created during initial encoding
+    // holds no members yet, and that path closes with the phase. Named rather than
+    // left to be discovered, and stated as a list because the count is what went
+    // wrong.
+    //
+    // The deferred triggers cannot see an edge opened
     // concurrently and committed just after this transaction's own comparison. The
     // lock is what makes the refusals mean something under concurrency; see
     // `lockPersonsWithin`.
@@ -201,6 +242,23 @@ export class NetworksService {
         },
       );
     }
+
+    // **Then the Cell relationships, and leadership before membership** (section 4).
+    // The order is the section's: somebody holding both is told about the obligation
+    // that takes weeks rather than the one that takes minutes, which is the same
+    // reason the root refusal fires before the disciple refusal above.
+    //
+    // **Before the floor, like the disciple refusal.** Resolving either relationship
+    // writes a `cell_leaderships` or `cell_memberships` row and neither is a term in
+    // the floor, so this ordering is about the *message* rather than about the
+    // arithmetic: reporting a floor to somebody who is going to be refused anyway
+    // tells them to solve the wrong problem first.
+    //
+    // Whether Cell relationships *should* contribute a floor term is a real gap and
+    // is recorded as open in `CLAUDE.md`: the refusal reaches only open rows, so a
+    // correction backdated into a stint since handed over still strands the
+    // memberships opened during it.
+    await this.assertHoldsNoCellRelationshipWithin(transaction, change.personId);
 
     const floor = await this.hierarchy.backdateFloorFor(
       transaction,
@@ -351,5 +409,93 @@ export class NetworksService {
   /** The person's Network as it stands now. */
   async currentNetwork(executor: Db, personId: string): Promise<NetworkName | null> {
     return this.networkAsOf(executor, personId, new Date());
+  }
+
+  /**
+   * Section 4: a Network change is refused while the person holds either Cell
+   * relationship.
+   *
+   * **Both halves, and they are separate rules rather than one.** Leadership is
+   * refused because a Cell takes its Network from its leader, so the change would
+   * carry the Cell across and strand every member. Membership is refused because the
+   * person's own membership becomes a cross-Network relationship. Neither is reached
+   * by the disciple refusal above: membership does not mirror pastoral assignment, so
+   * a member need not lead anything and need not sit under the Cell's leader.
+   *
+   * **What makes this a domain check rather than a constraint** is that it is a
+   * precondition on the state the request *arrives* in. A deferred trigger sees only
+   * commit-time state, so a transaction that resolved the Cell and performed the
+   * correction together would pass it; an immediate one would enforce statement
+   * ordering instead, which an implementer clears by resolving the Cell first.
+   * Section 4 says this, and migration 0009 records the same trap for a sibling
+   * trigger.
+   *
+   * **Naming the Cells is a disclosure, and it is safe here for the reason the
+   * disciple refusal gives for naming people**: section 8 protects Cell membership
+   * and Cell IDs for somebody outside the reader's scope, and every capability
+   * reaching this path is held at Whole Church only (section 7). A narrower grant
+   * would make this the disclosure of a branch the actor does not oversee.
+   */
+  private async assertHoldsNoCellRelationshipWithin(
+    transaction: Transaction<Database>,
+    personId: string,
+  ): Promise<void> {
+    if (!this.cells) {
+      // **A wiring fault, refused rather than skipped** — unbound, this check cannot
+      // run, and section 4 states the rule absolutely. `CELL_SCOPE_PORT` sets that
+      // precedent: a missing binding closes the operation rather than opening it.
+      //
+      // **A plain `Error`, so the filter renders 500 and section 22 releases the
+      // idempotency key.** The first version threw `InvariantViolationError`, and a
+      // 409 is *stored* against the key and replayed for the whole retention — so a
+      // client retrying the unchanged body after the deployment was fixed would be
+      // served the refusal for ever. Section 22 is explicit that a transient condition
+      // reaching no decision must be a 5xx, and an unbound port reaches none: the
+      // record is not one "the rules reject however it was submitted", it is one
+      // nothing could evaluate.
+      //
+      // *The `CELL_SCOPE_PORT` precedent does not carry to the status, only to the
+      // refusal.* That one is thrown by a **guard**, and Nest runs every guard before
+      // any interceptor, so no idempotency key exists when it fires and the
+      // store/release split never applies to it. Reusing its 4xx here was section 25
+      // rule 19 — the shape without its reason.
+      //
+      // *An earlier version credited `AppModule`'s provider order for that, which is
+      // not what produces it: the ordering of `APP_GUARD` against `APP_INTERCEPTOR`
+      // decides nothing, and only the two guards' order relative to each other. The
+      // conclusion held and the mechanism was wrong, which is the fault this whole
+      // paragraph is about.*
+      throw new Error(
+        `Cannot check Cell relationships for person ${personId}: CELL_RELATIONSHIPS_PORT ` +
+          'is not bound, so the SKILL.md section 4 precondition on a Network change ' +
+          'cannot be evaluated. This is a deployment fault.',
+      );
+    }
+
+    const leaderships = await this.cells.openLeadershipsOf(transaction, personId);
+
+    if (leaderships.length > 0) {
+      throw new InvariantViolationError(
+        'That person still leads a Cell. Hand each Cell to a new leader, or close it, then ' +
+          'make this change.',
+        {
+          person_id: personId,
+          cells: leaderships.map((cell) => ({ id: cell.id, cell_id: cell.cellId })),
+        },
+      );
+    }
+
+    const membership = await this.cells.openMembershipOf(transaction, personId);
+
+    if (membership !== null) {
+      throw new InvariantViolationError(
+        'That person still belongs to a Cell. End that membership first, then make this ' +
+          'change; they can join a Cell in their new Network afterwards.',
+        {
+          person_id: personId,
+          cell: { id: membership.id, cell_id: membership.cellId },
+        },
+      );
+    }
   }
 }

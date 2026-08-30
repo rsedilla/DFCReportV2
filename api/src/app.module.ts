@@ -17,6 +17,7 @@ import { HealthController } from './health/health.controller';
 import { HierarchyModule } from './hierarchy/hierarchy.module';
 import { NetworksModule } from './networks/networks.module';
 import { CELL_SCOPE_PORT } from './auth/authorization/cell-scope.port';
+import { CellRelationshipsBindingModule } from './cells/cell-relationships.binding.module';
 import { CellsModule } from './cells/cells.module';
 import { CellsReadService } from './cells/cells.read.service';
 import { PeopleModule } from './people/people.module';
@@ -57,6 +58,7 @@ import { PeopleModule } from './people/people.module';
     NetworksModule,
     PeopleModule,
     CellsModule,
+    CellRelationshipsBindingModule,
   ],
   controllers: [HealthController],
   providers: [
@@ -76,8 +78,11 @@ import { PeopleModule } from './people/people.module';
     { provide: APP_GUARD, useClass: ThrottlerGuard },
     { provide: APP_GUARD, useClass: AccessTokenGuard },
     { provide: APP_GUARD, useClass: CapabilityGuard },
-    // After both guards, so the actor is resolved and an unauthorized request
-    // never claims a key (SKILL.md section 22).
+    // Listed after both guards for readability. **The ordering here is not what makes
+    // an unauthorized request claim no key** — Nest runs every guard before any
+    // interceptor by its own lifecycle, whatever order these providers appear in, and
+    // only the two guards' order relative to each other is decided here. The property
+    // section 22 depends on is real; the mechanism this comment credited was not.
     { provide: APP_INTERCEPTOR, useClass: IdempotencyInterceptor },
   ],
 })

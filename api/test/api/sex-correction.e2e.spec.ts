@@ -6,7 +6,15 @@ import request from 'supertest';
 
 import { manilaDayOf } from '../../src/common/time/manila';
 import { createTestDb, truncateAll } from '../setup/database';
-import { assignTo, createAccount, createPerson, createTestApp, EPOCH } from '../setup/fixtures';
+import {
+  assignTo,
+  closeCellDirectly,
+  createAccount,
+  createCell,
+  createPerson,
+  createTestApp,
+  EPOCH,
+} from '../setup/fixtures';
 
 import type { INestApplication } from '@nestjs/common';
 import type { Kysely } from 'kysely';
@@ -242,6 +250,224 @@ describe('sex correction (SKILL.md sections 4, 5, 7, 21, 22)', () => {
         .execute();
 
       expect(networks).toHaveLength(2);
+    });
+  });
+
+  describe('refused while the person holds a Cell relationship (section 4)', () => {
+    // Settled on 2026-08-30, and the second half of section 4's Cell obligation. The
+    // failure it prevents is invisible to the schema: `assert_membership_same_network`
+    // compares both sides as of the membership's own `started_at`, so after a Network
+    // change the comparison instant precedes it, both sides still resolve to the old
+    // Network, and no trigger objects — even if the row were written again.
+
+    it('refuses while the person leads a Cell, naming it', async () => {
+      const cell = await createCell(db, { leader: mark });
+
+      const response = await correct(mark.id, {
+        sex: 'FEMALE',
+        reason: 'Sex entered in error at encoding.',
+        pastoral_leader_id: grace.id,
+      });
+
+      expect(response.status).toBe(409);
+      expect(response.body.error.code).toBe('INVARIANT_VIOLATION');
+      // Naming the Cell is what makes the refusal actionable, and is safe only
+      // because every capability reaching this path is Whole Church (section 7).
+      expect(response.body.error.details.cells).toEqual([{ id: cell.id, cell_id: cell.cellId }]);
+
+      // Refused means nothing written: the Network row is untouched.
+      const networks = await db
+        .selectFrom('network_assignments')
+        .select('network')
+        .where('person_id', '=', mark.id)
+        .where('ended_at', 'is', null)
+        .executeTakeFirstOrThrow();
+      expect(networks.network).toBe('MENS');
+    });
+
+    it('names every Cell a person leads, not just the first', async () => {
+      // Section 10 permits one leader to lead many. An administrator told about one
+      // Cell, who resolves it and is then refused for a second, learns the shape of
+      // the obligation one Cell at a time.
+      // **Created in the order that makes the assertion disagree with heap order.**
+      // `cell_id` is `CELL-` plus a zero-padded sequence value, so it ascends with
+      // creation and a sequential scan returns freshly inserted rows in that same
+      // order — which means deleting the `ORDER BY` would leave a creation-ordered
+      // assertion green, deterministically. The first Cell is given an explicit high
+      // handle so that handle order and creation order are opposites, and both the
+      // deletion and a switch to `cells.id` redden.
+      // **The handle and the UUID are both chosen, and they sort opposite ways.**
+      // `cell_id` is immutable once written (`cells_record_is_final`), so the high
+      // handle is set at insert; the `id` is set low so that `ORDER BY cells.id` would
+      // put this Cell *first* while `ORDER BY cells.cell_id` puts it last. That makes
+      // all three states distinguishable deterministically: the correct ordering, the
+      // ordering deleted (heap order, which is insertion order), and the ordering moved
+      // to the UUID — which is otherwise a coin flip, and this repository has twice
+      // recorded that a mutation caught on some runs is not a pin.
+      //
+      // Four rows from one statement, sharing the Cell's `created_at`, because
+      // migration 0009 refuses a partly-built Cell and requires the schedule row to
+      // start exactly there.
+      const highHandle = (
+        await sql<{ id: string }>`
+          WITH new_cell AS (
+            INSERT INTO cells (id, cell_id)
+            VALUES ('00000000-0000-4000-8000-000000000001'::uuid, 'CELL-999900')
+            RETURNING id, created_at
+          ), category AS (
+            INSERT INTO cell_categories (cell_id, category, started_at)
+            SELECT id, 'YOUTH'::cell_category, created_at FROM new_cell
+          ), schedule AS (
+            INSERT INTO cell_schedules (cell_id, day_of_week, time_of_day, started_at)
+            SELECT id, 6::smallint, '18:00'::time, created_at FROM new_cell
+          ), leadership AS (
+            INSERT INTO cell_leaderships (person_id, cell_id, started_at)
+            SELECT ${mark.id}::uuid, id, created_at FROM new_cell
+          )
+          SELECT id FROM new_cell
+        `.execute(db)
+      ).rows[0];
+
+      const lowHandle = await createCell(db, { leader: mark, category: 'COUPLE' });
+
+      const response = await correct(mark.id, {
+        sex: 'FEMALE',
+        reason: 'Sex entered in error at encoding.',
+        pastoral_leader_id: grace.id,
+      });
+
+      expect(response.status).toBe(409);
+      // Compared in order rather than sorted on both sides: sorting would leave the
+      // query free to order by anything at all.
+      expect(response.body.error.details.cells).toEqual([
+        { id: lowHandle.id, cell_id: lowHandle.cellId },
+        { id: highHandle.id, cell_id: 'CELL-999900' },
+      ]);
+
+      // **Both orderings the assertion depends on, asserted.** The handle order is what
+      // makes deleting the `ORDER BY` redden; the id order is what makes switching it to
+      // `cells.id` redden, and nothing checked it — true with probability 1 - 2^-32,
+      // which is not the same as checked.
+      //
+      // The handle is a fixed `CELL-999900` against a sequence that `truncateAll` does
+      // not reset (`cell_id_seq` has no `OWNED BY`). It degrades loudly rather than
+      // silently: at 999,900 the insert hits the unique index, and past 999,999 the
+      // handle grows a digit and lexicographic order inverts — at which point this
+      // assertion is what goes red.
+      expect(lowHandle.cellId < 'CELL-999900').toBe(true);
+      expect(highHandle.id < lowHandle.id).toBe(true);
+    });
+
+    it('refuses while the person holds a Cell membership', async () => {
+      // Reached by nothing the leadership half does: Mark leads no Cell here, and
+      // membership does not mirror pastoral assignment, so the Cell's leader need not
+      // be anywhere near him.
+      const manuelCell = await createCell(db, { leader: manuel });
+      await db
+        .insertInto('cell_memberships')
+        // **`clock_timestamp()`, not `new Date()`.** The Cell's leadership row starts at
+        // the database's clock; a host `Date` a few milliseconds behind it makes the
+        // membership predate the leadership, and `assert_membership_same_network`
+        // correctly refuses — "had no leader as of ...". That is what failed once,
+        // was wrongly written off as a flake, and then reproduced.
+        .values({
+          person_id: mark.id,
+          cell_id: manuelCell.id,
+          started_at: sql<Date>`clock_timestamp()`,
+        })
+        .execute();
+
+      const response = await correct(mark.id, {
+        sex: 'FEMALE',
+        reason: 'Sex entered in error at encoding.',
+        pastoral_leader_id: grace.id,
+      });
+
+      expect(response.status).toBe(409);
+      expect(response.body.error.code).toBe('INVARIANT_VIOLATION');
+      expect(response.body.error.details.cell).toEqual({
+        id: manuelCell.id,
+        cell_id: manuelCell.cellId,
+      });
+    });
+
+    it('reports leadership before membership where the person holds both', async () => {
+      // Section 4 fixes the order so somebody holding both is told about the
+      // obligation that takes weeks — a handover — rather than the one that takes
+      // minutes. Swapping the two checks reddens this and nothing else.
+      const own = await createCell(db, { leader: mark });
+      const manuelCell = await createCell(db, { leader: manuel });
+      await db
+        .insertInto('cell_memberships')
+        // **`clock_timestamp()`, not `new Date()`.** The Cell's leadership row starts at
+        // the database's clock; a host `Date` a few milliseconds behind it makes the
+        // membership predate the leadership, and `assert_membership_same_network`
+        // correctly refuses — "had no leader as of ...". That is what failed once,
+        // was wrongly written off as a flake, and then reproduced.
+        .values({
+          person_id: mark.id,
+          cell_id: manuelCell.id,
+          started_at: sql<Date>`clock_timestamp()`,
+        })
+        .execute();
+
+      const response = await correct(mark.id, {
+        sex: 'FEMALE',
+        reason: 'Sex entered in error at encoding.',
+        pastoral_leader_id: grace.id,
+      });
+
+      expect(response.status).toBe(409);
+      expect(response.body.error.details.cells).toEqual([{ id: own.id, cell_id: own.cellId }]);
+      expect(response.body.error.details.cell).toBeUndefined();
+    });
+
+    it('accepts the correction once the Cell has been closed and the membership ended', async () => {
+      const own = await createCell(db, { leader: mark });
+      const manuelCell = await createCell(db, { leader: manuel });
+      await db
+        .insertInto('cell_memberships')
+        // **`clock_timestamp()`, not `new Date()`.** The Cell's leadership row starts at
+        // the database's clock; a host `Date` a few milliseconds behind it makes the
+        // membership predate the leadership, and `assert_membership_same_network`
+        // correctly refuses — "had no leader as of ...". That is what failed once,
+        // was wrongly written off as a flake, and then reproduced.
+        .values({
+          person_id: mark.id,
+          cell_id: manuelCell.id,
+          started_at: sql<Date>`clock_timestamp()`,
+        })
+        .execute();
+
+      await closeCellDirectly(db, own.id, { reason: 'LEADER_STEPPED_DOWN' });
+      await db
+        .updateTable('cell_memberships')
+        // **Both ends of the period from the database clock, and this is the third
+        // instance of that hazard on this branch.** Before the fix above, both sides
+        // came from the host and `ended_at >= started_at` held by construction; moving
+        // only `started_at` to `clock_timestamp()` turned that into a race against
+        // `cell_memberships_period_ordered`. Measured on this machine,
+        // `clock_timestamp()` runs 6-8ms *ahead* of `Date.now()` — PostgreSQL reads
+        // `GetSystemTimePreciseAsFileTime` while V8 interpolates from the coarse tick —
+        // so a host instant taken 1-3ms later still lands behind the start. It is not
+        // skew between two hosts, which is why "the database is local" is the wrong
+        // intuition.
+        .set({ ended_at: sql<Date>`clock_timestamp()` })
+        .where('person_id', '=', mark.id)
+        .where('ended_at', 'is', null)
+        .execute();
+
+      const response = await correct(mark.id, {
+        sex: 'FEMALE',
+        reason: 'Sex entered in error at encoding.',
+        pastoral_leader_id: grace.id,
+      });
+
+      // **The refusal clears, which is what makes it a precondition rather than a
+      // bar.** A closed Cell holds no open leadership (section 11), so it never
+      // blocks — that falls out of the schema rather than needing a filter.
+      expect(response.status).toBe(200);
+      expect(response.body).toMatchObject({ id: mark.id, sex: 'FEMALE' });
     });
   });
 
