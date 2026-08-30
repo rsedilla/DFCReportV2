@@ -6215,6 +6215,58 @@ Also: a sentence asserting that a `NETWORK` grant "compares a Network that for t
 their own" was true of one of the two grants that can be issued, and is narrowed to say the
 grant covers the actor wherever it names their own Network.
 
+### 2026-08-30 — A Network change is refused while the person leads a Cell
+
+Stage 3's last item, and the second half of Section 4's closing paragraph: a Network change
+must not leave the person holding relationships the homogeneous-network rule no longer
+permits. Section 4 settled the pastoral half on 2026-08-22 and left the Cell half undefined,
+because neither `cells` nor `cell_leaderships` existed yet.
+
+**Refused, on the same terms as the pastoral half.** The remedy is a handover through
+request-and-approve, or a closure — both operations Stage 3 built, both separately
+authorized and separately audited. Once the person leads no Cell, the correction is retried.
+
+Worth stating plainly because the question is usually framed as a choice between refusing and
+handing over, and those are not alternatives: **refusing is the mechanism, and a handover is
+one of the two ways to clear it.** The genuine alternative was to cascade — let the change
+through and carry the Cell across with its leader.
+
+**Cascading is rejected on the argument Section 4 already made once.** Where a Cell holds a
+dozen members, moving them is a dozen pastoral decisions, and an administrator supplying
+destinations inside a data-correction form is exactly what that section refused for the
+pastoral case. Section 10 gives those decisions their own operation with an explicit recorded
+choice about every member.
+
+**The failure it prevents is silent, which is what decides it.** A Cell takes its Network from
+its leader, and membership is compared against that Network only when a membership row is
+written. So a leader's Network change carries the Cell across and leaves every existing member
+on the wrong side of the rule with **nothing raised** — coverage, attendance and
+classification all keep computing. Migration 0009 names this as the widest of its three
+uncovered paths, and this branch's own cross-Network approval test had to exploit it to build
+a fixture, which is how sharply reachable it is.
+
+**A Cell with no members is refused too.** The Cell carries a Network itself, so flipping it
+part-way through its life moves every past-period figure for it, against Section 3's
+reproducibility guarantee. A roster-dependent rule would also make the refusal depend on
+something the administrator cannot see from the correction form.
+
+**It is a domain-layer rule, and re-deriving that rather than borrowing it is the point.**
+Section 4 says the database cannot hold the pastoral half because the same-Network trigger is
+deferred and sees only commit-time state. The same is true here for a different reason worth
+checking rather than assuming: a commit-time check asks whether the person leads a Cell *at
+the end* of the transaction, and a transaction that resolved the Cell and performed the
+correction together would pass it. The refusal is about the state the request arrives in,
+which no constraint observes. It lands in `networks` beside the pastoral precondition, which
+is where `docs/ROADMAP.md` already books it.
+
+**The cost is accepted in writing.** Finding a new leader for a Cell takes weeks, not an
+afternoon, so somebody whose record is wrong stays wrong until the Cell is resolved or closed.
+Section 4 accepts the identical cost for the pastoral half. The alternative is a correction
+that quietly invalidates every membership in the Cell.
+
+Written to `SKILL.md` Section 4, and verified by grepping that section for the rule rather
+than by asserting it here.
+
 ### Open — awaiting a ruling
 
 **One item awaits a ruling, and it blocks Stage 5. Thirty-four other things are

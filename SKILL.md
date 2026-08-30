@@ -631,6 +631,20 @@ It also removes the need for the correction itself to carry more than one reassi
 
 **The two sides would have taken different destinations, which is why doing them separately is also clearer.** The person being corrected moves to a leader in their **new** Network — they are the one whose Network is changing, and the trigger compares their replacement edge against the corrected value already in force. A disciple moves within their **own, unchanged** Network, because nothing about them has changed. Those are two different rules, applied by two different people at two different times, and running them through one endpoint invited applying one rule to both.
 
+**A Network change is refused while the person leads a Cell**, on the same terms and for the same reason. If they hold any open Cell leadership assignment (Section 11), the change is rejected, naming the Cells that must be resolved first. Each is resolved by handing it to a new leader through request-and-approve, or by closing it — both ordinary, separately authorized, separately audited operations (Section 10) — and the Network change is attempted again once none remains.
+
+**What it prevents is silent, and that is what makes the refusal worth its cost.** A Cell takes its Network from its leader, and its members are compared against that Network when a membership is written (Section 10). Letting the leader's Network change carries the Cell across with them and leaves every existing member on the wrong side of a rule the system otherwise holds absolutely — and **nothing raises**, because the membership rows are never rewritten and the trigger that would object fires only on a write to them. The Cell keeps computing coverage, attendance and classification as though nothing had happened. It surfaces when somebody asks why a Network's figures contain people who are not in it, which may be months.
+
+**The alternative was to cascade**, moving or dispersing every member as part of the correction. It is rejected on the argument this section already makes for the pastoral half: where a Cell holds a dozen members, that is a dozen pastoral decisions, and an administrator supplying their destinations inside a data-correction form is the shape both alternatives above were refused for. Section 10 gives those decisions their own operation, with an explicit recorded choice about every member; a correction must not make them by rule.
+
+**A Cell with no members is refused too, and the uniform rule is deliberate.** The Cell itself is what carries a Network, so a Cell whose Network flips part-way through its life makes every past-period figure for it move, which is what Section 3 guarantees does not happen. A narrower rule would also make the refusal depend on a roster the administrator cannot see from where they are standing.
+
+A `CLOSED` Cell holds no open leadership assignment (Section 11), so it never blocks a correction. This rule reaches only Cells that are still running.
+
+**This is a domain-layer rule and the database cannot hold it either**, for the reason the pastoral half gives above: the refusal is a precondition on the state the request *arrives* in, and a commit-time check sees only the state it ends in — which a transaction resolving the Cell and performing the correction together would satisfy. It is enforced in `networks`, beside the pastoral precondition, and tested at the API layer.
+
+**The cost is a correction blocked behind a pastoral decision, and it is accepted rather than discovered.** Finding a new leader for a Cell is not an afternoon's work, so a person whose record is wrong stays recorded wrongly until it is done, or until the Cell is closed. This section already accepts exactly that cost for the pastoral half. The alternative is a correction that quietly invalidates every membership in the Cell.
+
 **A backdated correction reaches only as far as it can be made legal.** Where `records.backdate_effective_date` (Section 7) is used to give the correction an effective date in the past, that date must be **strictly later** than the latest of:
 
 - the `started_at` of the person's current pastoral assignment;
