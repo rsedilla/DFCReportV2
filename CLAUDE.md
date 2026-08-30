@@ -6492,9 +6492,84 @@ narrower grant could make naming the Cells a disclosure — are on the open list
 Written to `SKILL.md` Section 4, and verified by grepping that section for both rules rather
 than by asserting it here.
 
+### 2026-08-30 — The backdate floor gains two Cell terms, one per mechanism
+
+The last hole in Section 4. The floor's terms were over pastoral rows alone, so a
+correction backdated into a Cell stint the person has since handed over stranded every
+membership opened during it — this rule's own failure, reached through a date field
+rather than an open row. The open list has carried it since the Cell precondition merged.
+
+**A closed Cell leadership bounds on its `ended_at`; a closed Cell membership bounds on
+its `started_at`.** Two clauses rather than one, because they are bounded by two
+different mechanisms.
+
+**Nothing selects a Cell relationship on a Network write**, which is what makes these
+terms unlike term (b). `assert_network_change_keeps_edges` reads `pastoral_assignments`
+and no other table — verified by reading its `FROM` clause rather than inferring it from
+its purpose — and the Cell triggers fire only on writes to their own tables. So a Cell
+relationship is stranded by never being examined again, not by being re-examined and
+failing. Each term therefore has to clear the instant its trigger compares at.
+
+**Membership: `started_at`, and it is exact.** `assert_membership_same_network` compares
+member against leader as of the membership's own `started_at` and at no other instant. So
+the row is stranded exactly when the corrected Network is in force at or before that
+instant, and it is a row of the person's own, so nothing has to be inferred to find it.
+
+**Leadership: `ended_at`, on two grounds that hold over different stints.** Where the
+stint ended in a **handover** it is *exact*: `assert_leadership_stays_in_network` reads
+the outgoing leader's Network as of the successor's `started_at`, and the contiguity
+check forces that to equal the outgoing `ended_at` — so a correction dated at or before
+it makes the successor's row retroactively cross-Network. Where the stint ended in a
+**closure** there is no successor, and what is stranded is other people's memberships,
+opened during the stint and compared against the leader's Network as of each membership's
+own start. Those cannot be enumerated from the corrected person's rows, so bounding past
+the end of the stint covers them all without trying.
+
+The second ground is the only over-refusal, and it is small: a Cell that never held a
+member strands nobody, and its former leader is bounded anyway.
+
+**The uniform `ended_at` form was drafted, and it was refused for what it costs the
+membership half.** It is sound — `ended_at >= started_at`, so it dominates — and it
+refuses writes that are provably safe: every date between a membership's start and its
+end leaves that membership legal, because it is compared at its start and nowhere else.
+
+**What decided it is an interaction neither the draft nor the open item named.** Section 4
+refuses the correction while an open membership stands, so the administrator ends it —
+which closes it *today*. Under a uniform `ended_at` the floor would then fall on the
+current day, and a backdated correction would be unavailable to anyone who has ever been
+in a Cell, which is very nearly every person in the church. Over `started_at` it falls on
+the day they joined, and the period before that stays reachable.
+
+Section 4 *does* accept exactly that outcome for disciples — clearing them fixes the
+effective date to today. The difference is that there it is **forced**, because
+`assert_network_change_keeps_edges` selects on `ended_at`; here it would be **chosen**,
+over the most common relationship in the church, to make two terms look alike. That is
+Section 25 rule 19 in the direction it is usually met: a shape reused without re-deriving
+why it has that shape.
+
+**The draft's justification for the uniform form was a false citation, and it was the
+load-bearing sentence.** It defended the over-refusal as "the trade this section already
+makes one paragraph up, where the uniform strict form is called conservative by one
+instant and followed rather than optimised". That sentence is in *this log*, in the
+2026-08-23 entry — not in Section 4, and not in `SKILL.md` at all, which carries no
+conservatism trade anywhere near the floor. Caught by grepping for it rather than by
+reading the paragraph it pointed at. It would have entered the source of truth as the
+justification for the one part of the rule that needed one.
+
+The magnitude was wrong with it: a membership over-refusal is the length of the
+membership, which is years, and not one instant.
+
+Section 4 now says the two halves must not be tidied into one, and why, because the
+tidied form is the one that reads better.
+
+Written to `SKILL.md` Section 4, and verified by grepping that section for each term
+rather than by asserting it here. The stale parenthetical four paragraphs below the floor
+— which said a Cell floor term was an open question — is corrected in the same change.
+
+
 ### Open — awaiting a ruling
 
-**One item awaits a ruling, and it blocks Stage 5. Thirty-seven other things are
+**One item awaits a ruling, and it blocks Stage 5. Thirty-six other things are
 unsettled, none of them blocking. They are listed at the end, so this section is the
 whole of what is open.**
 
@@ -6503,7 +6578,7 @@ and the italic below it. The batch that added the thirty-second bullet updated t
 alone, because the instruction to recount lives only in the italic, and the bolded twin
 is what a reader meets first. Anyone adding a bullet updates both.*
 
-*Thirty-seven distinct items across thirty-seven bullets. One arrived with the Network-change precondition: whether a port a module cannot bind for itself should be optional-and-refuse or mandatory. Two arrived with the Cell leadership approval slice, both escalated by its first architecture-guardian pass: which kind of target a leadership audit entry carries, and whether a request's `cell_id` should be frozen while it is PENDING. A third was *widened* rather than added by that slice's third pass — the error code a stale-premise refusal answers — and a batch that claimed to widen it duplicated it instead, which is why this sentence is one a reader should not trust without recounting. Three arrived with the leadership
+*Thirty-six distinct items across thirty-six bullets. One left on 2026-08-30 with the backdate floor's Cell terms, which settled what it asked: a closed Cell leadership bounds on its `ended_at`, a closed Cell membership on its `started_at`. One arrived with the Network-change precondition: whether a port a module cannot bind for itself should be optional-and-refuse or mandatory. Two arrived with the Cell leadership approval slice, both escalated by its first architecture-guardian pass: which kind of target a leadership audit entry carries, and whether a request's `cell_id` should be frozen while it is PENDING. A third was *widened* rather than added by that slice's third pass — the error code a stale-premise refusal answers — and a batch that claimed to widen it duplicated it instead, which is why this sentence is one a reader should not trust without recounting. Three arrived with the leadership
 request slice — the third being whether the application should pin the database session's
 `DateStyle`, raised by the third review pass. The first two are: how a requester sees the outcome of a request they submitted, which
 section 19 requires and section 7 names no capability for, and whether section 7 should
@@ -6569,7 +6644,6 @@ Two related questions have defined behaviour and are recorded in `SKILL.md` §12
 - **What Section 8 permits a refusal to reveal by its existence.** The source-Cell refusal no longer names a Cell or asserts a membership, but its *shape* still carries one bit: with the actor authorized over their own Cell and any `person_id` in the church — and Section 8 publishes every Person's identifier church-wide — a 403 means that person holds a membership somewhere the actor cannot see, and a 201 means they do not. The quiet outcome is the hit and the loud one is the miss, which is the reverse of the arrangement the 2026-08-22 create-probe ruling was willing to accept, and that ruling closed the leak rather than resting on loudness. This one cannot be closed by redacting anything: the refusal is required by the authorization rule itself. The source-Cell reading it used to defer to was settled by the closure pre-flight above, which did not answer this: what a refusal may disclose by *existing* is still open, and is now the last part of that question standing.
 - **Whether "Admin" in Sections 2 and 10 is a role requirement or a description of who holds the capabilities.** Section 2 settled this once, for the tree import, in the direction of "the role is required, and the capabilities alone are not enough" — and stated it in that paragraph rather than as a general rule. Direct creation is given to Admin in the same section and again in Section 10, and slice 2 reads it the same way and checks the role. If that reading is right, the two places should say it in the words Section 2 already uses for the import, because the next reader derives it from a neighbouring paragraph or not at all. If it is *not* right, then Section 7's permission to grant `cell.approve_leadership` explicitly makes request-and-approve optional for its holder over their own subtree, and Section 10 needs to say why that is acceptable. Nothing is blocked either way: the conservative reading is what is implemented.
 - **Whether a Cell's first leadership row may be corrected to a leader of the other Network, and whether a closed leadership row may be written at all.** Two halves of one question, both raised by the fourth review pass. Migration 0009 refuses a Section 5 correction that closes a Cell's first leadership row and opens one naming a person of the other Network: the zero-length row is selected as the predecessor and the leader-to-leader Network rule fires. That may well be right — a Cell created under a wrong-Network leader had the wrong Network for its whole life, and Section 10 gives `CREATED_IN_ERROR` for a Cell that should not exist — but Section 10 states that rule about a *handover*, and nothing distinguishes a correction from one. The second half is narrower and has no answer at all: `cell_leadership_is_opened_open` now refuses a leadership row written already closed, because no operation Sections 10 or 11 define writes one, and that forecloses correcting a closed historical stint. Neither is reachable today. Settle both with the handover-approval endpoint, which is where Section 10 makes the refusal.
-- **Whether Cell relationships owe a term in Section 4's backdate floor.** The leadership refusal reaches only *open* assignments, and the floor's terms are over pastoral rows alone. So a correction backdated into a period the person led a Cell they have since handed over is unbounded: memberships opened during that stint compare, at their own `started_at`, as member-in-old-Network against leader-in-new, and nothing re-validates them because no `cell_memberships` row is written and the Network trigger reads only `pastoral_assignments`. That is the failure this ruling exists to prevent, reached through a date field instead of an open row. The pastoral half needed both a refusal *and* term (b) for precisely this reason, and Section 4 explains why; the Cell half has the refusal and no term. What the term should range over — closed leadership stints, closed memberships, or nothing because the pastoral floor usually dominates — is a ruling rather than something to infer from the neighbouring paragraph.
 - **What the duplicate-candidate lookup does when its list exceeds `limit`.** `GET /people/duplicate-candidates` computes every candidate, returns `visible.slice(0, limit)`, and answers `next_cursor: null` — which §22's pagination rule reads as "this is the last page" over a set that was truncated, with no cursor to reach the rest. The `slice` is pre-existing; the ordering rule settled on 2026-08-28 (below) is what makes it consequential. In-scope candidates now always precede withheld ones, so the withheld tail is the **first** thing a truncation removes — the cross-branch duplicate §3 says the church-wide lookup exists to catch — and the client chooses `limit`, down to 1. Not *exactly* those: at a `limit` below the in-scope count it drops in-scope candidates too, and the point is which candidates it reaches first. Three answers are defensible and none is derivable: page the list honestly, refuse to truncate it at all, or state in §3 and §22 that the list is truncated and which candidates may be dropped. **The in-scope group's own internal order has to be settled in the same ruling**, because a page boundary over an unordered set is not pageable. `findDuplicates` issues its population query with no `ORDER BY` and `findCandidates` sorts by tier alone, so within one tier the in-scope order is PostgreSQL's physical row order. That is no disclosure — everything in that group is fully visible to the viewer — but it means that below the in-scope count, *which* in-scope candidates survive a truncation can differ between two identical requests. Raised by `architecture-guardian` on `fix/duplicate-candidate-oracle`, twice, and by the ordering rule itself: §3 now asks that any new decision the list is subjected to — it names a narrowing, a sort, a page boundary and a count — be treated as a disclosure until it is shown to be a function of what the viewer may already know. This is the one page boundary that exists, and nothing has shown it. Not blocking while the default limit of 50 exceeds any candidate list this church produces.
 - **Whether a pastoral path renders an absorbed Person or the survivor.** Every other `persons` read in the application filters `merged_into_id`; the path's name lookup deliberately does not, because on a lookup a filtered row is simply not found while on a path it is a *hole*, and a path with a hole reads as a shorter chain rather than as an error. Section 3 also says a merge never rewrites pastoral records to point at a different Person, so an absorbed ancestor genuinely stays on the chain and the real question is whether to show them or the survivor who now carries the identity. That is Person Merge's to answer for every surface at once rather than this endpoint's to decide, and merge is Stage 3, so nothing today can reach it. Settle it with the merge.
 - **Whether a Person holding an open root row may be absorbed by a Person Merge.** §3 refuses a merge where the absorbed Person leads a Cell and says nothing about a root; §5 leaves succession undefined and forbids reassigning a root. So merging a duplicate root holder into the real person appears permitted — and §3 says a merge "never rewrites historical attendance, pastoral, or audit records to point to a different Person", so the seat row keeps naming the absorbed record. The resolved identity then has two open assignments, which §5 invariant 3 forbids and which no constraint can refuse, because the rows carry different `person_id`s. Raised by the fifth review of the tree import, which is the only thing in the system that creates root rows: the dry-run warning's whole force is that no remedy exists for a mis-seated root, and merge is the one remedy §3 offers for a record created in error. The warning is correct under §3 as written. Settle this before anyone needs it.

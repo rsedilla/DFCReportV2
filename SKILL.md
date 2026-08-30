@@ -674,9 +674,11 @@ A `CLOSED` Cell holds no open leadership assignment (Section 11), so it never bl
 **A backdated correction reaches only as far as it can be made legal.** Where `records.backdate_effective_date` (Section 7) is used to give the correction an effective date in the past, that date must be **strictly later** than the latest of:
 
 - the `started_at` of the person's current pastoral assignment;
-- the `ended_at` of every already-closed assignment touching them, **in either direction**.
+- the `ended_at` of every already-closed assignment touching them, **in either direction**;
+- the `ended_at` of every already-closed Cell leadership they held;
+- the `started_at` of every already-closed Cell membership they held.
 
-**Strictly later, not "at or after", and the difference is a real failure rather than pedantry.** Both bounds break at exact equality, for the same underlying reason: at the instant a row starts or ends, the corrected Network is already the one in force, so a comparison made at that instant sees the new value on one end of an edge and the unchanged value on the other.
+**Strictly later, not "at or after", and the difference is a real failure rather than pedantry.** Both pastoral bounds break at exact equality, for the same underlying reason: at the instant a row starts or ends, the corrected Network is already the one in force, so a comparison made at that instant sees the new value on one end of an edge and the unchanged value on the other.
 
 - At `eff` equal to the current assignment's `started_at`, the atomic pair closes that assignment at its own start. The resulting zero-length row is re-validated on the closing write and compared at that timestamp, where the person already resolves to the corrected Network while their old leader does not. The assignment was cross-Network for the whole of its life under the corrected value, so there is no instant at which it can honestly be closed.
 - At `eff` equal to the `ended_at` of a zero-length closed edge, the same happens on the Network side. The edge is selected and compared at its own timestamp, where the person resolves to the corrected Network. Being closed, it cannot be reassigned.
@@ -687,13 +689,32 @@ The reason there is a limit at all is that the remedy runs out. The check reache
 
 **The limit covers both directions because the check does.** The same-Network check on a Network change considers every edge touching the person as a person *and* as a leader (Section 5, Database enforcement). A closed edge on which they were the leader, ended after the effective date, has exactly the problem above and involves no row of their own — so a floor bounding only their own assignment would leave it unreachable.
 
-Open downline edges need no term of their own, because the refusal on open *pastoral* downline edges above has already refused the change while any exists. (The Cell refusal above it is a different rule and bounds nothing here; whether Cell relationships owe a floor term of their own is recorded as open in `CLAUDE.md`.) That is deliberate: a floor carrying a term that can never bind reads as though it were doing work.
+Open downline edges need no term of their own, because the refusal on open *pastoral* downline edges above has already refused the change while any exists. (The Cell refusals above it are different rules and bound nothing here; closed Cell relationships are bounded by the floor's own two Cell terms.) That is deliberate: a floor carrying a term that can never bind reads as though it were doing work.
 
 The case that term used to cover is worth keeping, because it is why the refusal has to be unconditional rather than date-aware. An open edge on which the person is the leader and which **began after** the effective date cannot be resolved at all: closing it at the effective date is impossible, since that precedes its own `started_at`, and closing it at its own start leaves it beginning after the effective date, so it is still selected and still compared. The refusal therefore reaches every open leader-side assignment whatever its dates, and a narrower rule that only refused edges overlapping the effective date would let this one through.
 
 Each term is a maximum over rows that may be empty, and an empty term contributes nothing. A Person encoded but not yet assigned has no rows at all, so their floor is unbounded and a correction may be backdated freely — there are no edges to strand.
 
 The floor's second term is written over **edges**, which are rows with a leader, so a Network root's own row never enters it: a row with a null `leader_id` is passed without comparison by the same-Network trigger and can never be an edge the correction has to strand.
+
+**The two Cell terms are bounded by a different mechanism from the pastoral ones, and reading them as the same shape gets one of them wrong.** A closed pastoral edge is bounded at its `ended_at` because `assert_network_change_keeps_edges` *selects* it: on a Network write it compares every edge with `ended_at` after the effective date. Nothing selects a Cell relationship at all — that trigger reads `pastoral_assignments` and no other table, and the Cell triggers fire only on writes to their own tables. A Cell relationship is therefore stranded not by being re-examined and failing, but by never being examined again: the comparison that validated it would now go the other way, and nothing will ever make it.
+
+Each Cell trigger compares as of one instant, and that instant is what each term has to clear.
+
+**A Cell membership is compared as of its own `started_at`**, member against the Cell's leader then in force (`assert_membership_same_network`). So the person's own membership is stranded exactly when the correction puts the corrected Network in force at or before that instant, and the exact bound is the membership's `started_at`. It is a row of their own, so nothing has to be inferred to find it.
+
+**A Cell leadership is bounded at its `ended_at`, for two reasons that hold over different stints**, and it is worth having both because either alone would look like an over-refusal.
+
+- **Where the stint ended in a handover, `ended_at` is exact.** The successor's row compares the outgoing leader's Network as of the successor's own `started_at`, and contiguity forces that instant to equal the outgoing `ended_at` (Section 10, and `assert_leadership_stays_in_network`). A correction dated at or before it makes the successor's assignment retroactively cross-Network — a row belonging to neither the corrected person nor the members.
+- **Where the stint ended in a closure there is no successor, and what is stranded is other people's rows.** Members who joined during that person's leadership were compared against *their* Network as of each membership's own start, and a correction reaching back into the stint moves it under them. Those memberships cannot be enumerated from the corrected person's own rows. Bounding past the end of the stint covers every one of them without trying.
+
+The over-refusal is confined to the second case and is small: a Cell that never held a member strands nobody, and its former leader is bounded anyway. It is accepted because the alternative is a bound that has to reason about other people's rows to decide one person's floor.
+
+**The two halves are deliberately not one clause, and must not be tidied into one.** They have different shapes because they are bounded by different mechanisms — a membership by the instant it was validated at, a leadership by the instant its successor was validated at, or by the end of the window in which other people's rows were. Stating both over `ended_at` would be sound, and it would refuse writes that are provably safe: everything between a membership's start and its end is a date at which that membership stays legal, because it is compared at its start and at no other instant.
+
+**Open Cell relationships contribute no term**, for the reason the open downline edges do not, above: the change is already refused while any exists.
+
+**One consequence differs from the pastoral one, and the difference is the reason for the split.** Clearing the blockage means ending the person's open membership, which closes it today. Were that term written over `ended_at`, the floor would fall on the current day and a correction would be unbackdatable for anyone who has ever been in a Cell, which is very nearly everybody. Written over `started_at` it falls on the day they joined, and the period before that stays reachable. The pastoral case genuinely does fix the effective date to today, as this section records below — but that is forced by the trigger selecting on `ended_at`, not chosen, and the two must not be made to agree by giving the Cell term a bound its own mechanism does not ask for.
 
 **A correction may not be dated at or before the moment the Network it corrects took effect.** This is separate from the floor above and is not one of its terms: it bounds the Network row rather than the pastoral edges. At that instant the correction would close the live Network row at its own `started_at`, and Section 5 makes such a row inert — no instant resolves to it — so the period the person spent in their former Network would disappear from every as-of query, and every past-period Network-scoped report for them would move, with nothing raised.
 
