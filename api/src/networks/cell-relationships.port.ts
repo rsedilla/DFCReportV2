@@ -88,4 +88,48 @@ export interface CellRelationshipsPort {
     executor: Db | Transaction<Database>,
     personId: string,
   ): Promise<NamedCell | null>;
+
+  /**
+   * How far back a Network correction for this person may be dated, as far as their
+   * **closed** Cell relationships are concerned, or null where they hold none
+   * (SKILL.md section 4, the floor's two Cell terms).
+   *
+   * The maximum of two different columns on two different tables, and the asymmetry
+   * is the rule rather than an oversight. Section 4 is explicit that the two halves
+   * must not be tidied into one.
+   *
+   * **A closed membership contributes its `started_at`, and that is exact.**
+   * `assert_membership_same_network` compares the member against the Cell's leader as
+   * of the membership's own `started_at` and at no other instant, so the row is
+   * stranded exactly when the corrected Network is in force at or before it. Nothing
+   * between that start and the membership's end strands anything: the comparison is
+   * never made again.
+   *
+   * **A closed leadership contributes its `ended_at`**, for two reasons that hold over
+   * different stints and that were re-derived here rather than carried across from the
+   * line above.
+   *
+   *   - Ended in a **handover**, it is exact. `assert_leadership_stays_in_network`
+   *     reads the outgoing leader's Network as of the *successor's* `started_at`, and
+   *     the contiguity check in that same function forces the two to be equal — so a
+   *     correction dated at or before this row's `ended_at` makes the successor's
+   *     assignment retroactively cross-Network.
+   *   - Ended in a **closure**, there is no successor, and what is stranded is other
+   *     people's rows: memberships opened during the stint, each compared against the
+   *     leader's Network as of its own start. Those cannot be reached from this
+   *     person's rows at all, and bounding past the end of the stint covers every one
+   *     of them.
+   *
+   * The second is the only over-refusal — a Cell that never held a member strands
+   * nobody — and section 4 accepts it, because the alternative is a bound that reasons
+   * about other people's rows to decide one person's floor.
+   *
+   * **Open rows contribute nothing**, and are not filtered out for tidiness: the two
+   * methods above refuse the change outright while either exists, so a term over them
+   * could never bind.
+   */
+  closedRelationshipFloorOf(
+    executor: Db | Transaction<Database>,
+    personId: string,
+  ): Promise<Date | null>;
 }

@@ -428,6 +428,52 @@ export class CellsReadService implements CellScopePort, CellRelationshipsPort {
   }
 
   /**
+   * `CellRelationshipsPort`. How far back a Network correction for this person may be
+   * dated, as far as their closed Cell relationships are concerned
+   * (SKILL.md section 4, the floor's two Cell terms).
+   *
+   * The port's own docblock carries why each half takes the column it takes; what is
+   * worth saying at the query is why the two are not one.
+   *
+   * **`max(ended_at)` over closed leaderships, `max(started_at)` over closed
+   * memberships.** Making them agree would be sound and would refuse safe writes:
+   * every date between a membership's start and its end leaves that membership legal,
+   * because `assert_membership_same_network` compares it at its start and nowhere
+   * else. Section 4 says in terms that the two must not be tidied into one, because
+   * the tidied form is the one that reads better.
+   *
+   * **`GREATEST` ignores nulls in PostgreSQL and is null only when every argument is**,
+   * which is section 4's "each term is a maximum over rows that may be empty, and an
+   * empty term contributes nothing". Raw SQL for that reason — the same reason
+   * `HierarchyService.backdateFloorFor` is raw, and the two are combined by the caller
+   * rather than here, because `networks` may not read `pastoral_assignments` through
+   * this module any more than this module may read them at all.
+   *
+   * **Both halves are restricted to closed rows.** An open row of either kind refuses
+   * the correction outright at the two methods above, so a term over one could never
+   * bind — and section 4 rejects a floor carrying a term that can never bind.
+   */
+  async closedRelationshipFloorOf(
+    executor: Db | Transaction<Database>,
+    personId: string,
+  ): Promise<Date | null> {
+    const result = await sql<{ floor: Date | null }>`
+      SELECT GREATEST(
+        (SELECT max(cl.ended_at)
+           FROM cell_leaderships cl
+          WHERE cl.person_id = ${personId}::uuid
+            AND cl.ended_at IS NOT NULL),
+        (SELECT max(cm.started_at)
+           FROM cell_memberships cm
+          WHERE cm.person_id = ${personId}::uuid
+            AND cm.ended_at IS NOT NULL)
+      ) AS floor
+    `.execute(executor);
+
+    return result.rows[0]?.floor ?? null;
+  }
+
+  /**
    * Whether this Person is a current Cell Leader (SKILL.md section 11).
    *
    * **Both halves, and the second cannot be shown to matter — which is stated here

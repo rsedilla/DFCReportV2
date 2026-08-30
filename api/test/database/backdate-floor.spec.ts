@@ -1,7 +1,9 @@
 import { Client } from 'pg';
 
 import { createTestDb, truncateAll } from '../setup/database';
-import { assignTo, createPerson, EPOCH } from '../setup/fixtures';
+import { assignTo, createCell, createPerson, EPOCH } from '../setup/fixtures';
+
+import { sql } from 'kysely';
 
 import type { Kysely } from 'kysely';
 import type { Database } from '../../src/database/schema';
@@ -348,6 +350,68 @@ describe('the backdate floor is a property of the schema (section 4)', () => {
       });
 
       expect(result.committed).toBe(true);
+    });
+  });
+
+  describe('the two Cell terms are not a property of the schema (section 4)', () => {
+    /**
+     * **This case asserts that the database lets the damage through**, which is the
+     * premise the two Cell terms rest on and the reason they are enforced in
+     * `networks` rather than by a constraint.
+     *
+     * `assert_network_change_keeps_edges` reads `pastoral_assignments` and no other
+     * table, and the Cell triggers fire only on writes to their own tables — so a
+     * correction that reaches back over a Cell membership writes no `cell_memberships`
+     * row and nothing re-examines it. The membership is left comparing a member in one
+     * Network against a leader in the other, permanently, with nothing raised.
+     *
+     * If a future migration ever does re-validate Cell relationships on a Network
+     * write, this case goes red — and that is the signal to re-derive the floor's Cell
+     * terms rather than to relax the assertion.
+     */
+    it('commits a correction that strands a closed Cell membership', async () => {
+      const manuel = await createPerson(db, { firstName: 'Manuel', network: 'MENS' });
+      const mark = await createPerson(db, { firstName: 'Mark', network: 'MENS' });
+      const grace = await createPerson(db, { firstName: 'Grace', network: 'WOMENS' });
+      const geraldine = await createPerson(db, { firstName: 'Geraldine', network: 'WOMENS' });
+
+      await assignTo(db, manuel.id, null);
+      await assignTo(db, geraldine.id, null);
+      await assignTo(db, grace.id, geraldine.id);
+      await assignTo(db, mark.id, manuel.id, ASSIGNED_AT);
+
+      // Both ends of the membership from one fixed clock, which is the per-period
+      // rule in `test/setup/fixtures.ts`.
+      const joinedAt = new Date('2026-05-10T19:00:00+08:00');
+      const leftAt = new Date('2026-06-20T18:00:00+08:00');
+
+      const cell = await createCell(db, { leader: manuel, createdAt: joinedAt });
+      await db
+        .insertInto('cell_memberships')
+        .values({ person_id: mark.id, cell_id: cell.id, started_at: joinedAt, ended_at: leftAt })
+        .execute();
+
+      // Dated before the membership began, so the corrected Network is in force at
+      // the instant the membership was validated at.
+      const result = await attemptCorrection({
+        personId: mark.id,
+        toNetwork: 'WOMENS',
+        newLeaderId: grace.id,
+        effectiveAt: new Date('2026-04-01T00:00:00+08:00'),
+      });
+
+      expect(result.committed).toBe(true);
+
+      // And the membership really is stranded, which is what makes the commit a
+      // defect rather than a harmless permission. Asserting only `committed` would
+      // pass against a fixture that never created a cross-Network situation at all.
+      const asOf = await sql<{ member: string; leader: string }>`
+        SELECT network_as_of(${mark.id}::uuid, ${joinedAt}::timestamptz)::text AS member,
+               network_as_of(${manuel.id}::uuid, ${joinedAt}::timestamptz)::text AS leader
+      `.execute(db);
+
+      expect(asOf.rows[0].member).toBe('WOMENS');
+      expect(asOf.rows[0].leader).toBe('MENS');
     });
   });
 });

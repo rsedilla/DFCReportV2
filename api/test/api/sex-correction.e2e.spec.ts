@@ -691,6 +691,146 @@ describe('sex correction (SKILL.md sections 4, 5, 7, 21, 22)', () => {
     });
   });
 
+  describe("the floor's two Cell terms (section 4)", () => {
+    /**
+     * Every instant here is a fixed constant, which is the per-*period* rule in
+     * `test/setup/fixtures.ts`: both ends of a period from one clock. Mixing a host
+     * `Date` with `clock_timestamp()` writes a period that ends before it begins on
+     * some runs only, and it has been shipped three times on this project.
+     *
+     * All of them are later than `MARK_ASSIGNED_AT`, so the Cell term is the one that
+     * binds. With a pastoral term above them these cases would pass against a floor
+     * that ignored Cell rows entirely, which is what they exist to refuse.
+     */
+    const LED_FROM = new Date('2026-04-03T19:00:00+08:00');
+    const LED_UNTIL = new Date('2026-04-30T18:00:00+08:00');
+    const JOINED_AT = new Date('2026-05-10T19:00:00+08:00');
+    const LEFT_AT = new Date('2026-06-20T18:00:00+08:00');
+
+    it('bounds on a closed membership start, and accepts a date inside that membership', async () => {
+      // **The second request is what pins the column**, and without it this case
+      // passes just as well against a term over `ended_at`.
+      //
+      // `assert_membership_same_network` compares the member against the Cell's
+      // leader as of the membership's own `started_at` and at no other instant, so
+      // every date after that start leaves the membership legal — it is never
+      // examined again. A term over `ended_at` would be sound and would refuse the
+      // second request here, which is the over-refusal section 4 rejects.
+      const manuelCell = await createCell(db, { leader: manuel, createdAt: JOINED_AT });
+
+      await db
+        .insertInto('cell_memberships')
+        .values({
+          person_id: mark.id,
+          cell_id: manuelCell.id,
+          started_at: JOINED_AT,
+          ended_at: LEFT_AT,
+        })
+        .execute();
+
+      const refused = await correct(mark.id, {
+        sex: 'FEMALE',
+        reason: 'Sex entered in error at encoding.',
+        pastoral_leader_id: grace.id,
+        effective_date: manilaDayOf(JOINED_AT),
+      });
+
+      expect(refused.status).toBe(409);
+      expect(refused.body.error.code).toBe('INVARIANT_VIOLATION');
+      expect(refused.body.error.details.earliest_effective_date).toBe('2026-05-11');
+
+      // **The wording, which is the `kind`.** A pastoral message here would send an
+      // administrator looking for an assignment that is not the problem — the reason
+      // section 4's three bounds do not share one message.
+      expect(refused.body.error.message).toMatch(/Cell relationship/);
+
+      const accepted = await correct(mark.id, {
+        sex: 'FEMALE',
+        reason: 'Sex entered in error at encoding.',
+        pastoral_leader_id: grace.id,
+        effective_date: '2026-06-01',
+      });
+
+      expect(accepted.status).toBe(200);
+      expect(accepted.body.effective_date).toBe('2026-06-01');
+
+      // And the membership it reached over is still legal, which is the property the
+      // column choice rests on: it is compared at its own start, where Mark still
+      // resolves to the Network he is being corrected out of.
+      const membership = await db
+        .selectFrom('cell_memberships')
+        .select('started_at')
+        .where('person_id', '=', mark.id)
+        .executeTakeFirstOrThrow();
+
+      expect(membership.started_at.getTime()).toBeLessThan(
+        new Date(accepted.body.effective_at).getTime(),
+      );
+    });
+
+    it('bounds on a closed leadership end, and refuses a date inside that stint', async () => {
+      // **Term over `cl.ended_at`, and a date inside the stint is what pins it.**
+      // Over `started_at` this correction would be accepted, and it would strand
+      // every membership opened in the Cell after 3 April — rows belonging to other
+      // people, which is why the bound cannot be read off Mark's own membership rows.
+      const own = await createCell(db, { leader: mark, createdAt: LED_FROM });
+      await closeCellDirectly(db, own.id, { reason: 'LEADER_STEPPED_DOWN', at: LED_UNTIL });
+
+      const refused = await correct(mark.id, {
+        sex: 'FEMALE',
+        reason: 'Sex entered in error at encoding.',
+        pastoral_leader_id: grace.id,
+        effective_date: '2026-04-15',
+      });
+
+      expect(refused.status).toBe(409);
+      expect(refused.body.error.code).toBe('INVARIANT_VIOLATION');
+      expect(refused.body.error.details.earliest_effective_date).toBe('2026-05-01');
+      expect(refused.body.error.message).toMatch(/Cell relationship/);
+
+      // The date it names is accepted, which is the property every floor case owes:
+      // an administrator handed a date must not be refused again.
+      const accepted = await correct(mark.id, {
+        sex: 'FEMALE',
+        reason: 'Sex entered in error at encoding.',
+        pastoral_leader_id: grace.id,
+        effective_date: '2026-05-01',
+      });
+
+      expect(accepted.status).toBe(200);
+      expect(accepted.body.effective_date).toBe('2026-05-01');
+    });
+
+    it('takes the later of the two Cell terms', async () => {
+      // Both present, and the membership start is the later — so a floor taking only
+      // the leadership half would accept a date that strands the membership. Neither
+      // subquery alone satisfies this case.
+      const own = await createCell(db, { leader: mark, createdAt: LED_FROM });
+      await closeCellDirectly(db, own.id, { reason: 'LEADER_STEPPED_DOWN', at: LED_UNTIL });
+
+      const manuelCell = await createCell(db, { leader: manuel, createdAt: JOINED_AT });
+      await db
+        .insertInto('cell_memberships')
+        .values({
+          person_id: mark.id,
+          cell_id: manuelCell.id,
+          started_at: JOINED_AT,
+          ended_at: LEFT_AT,
+        })
+        .execute();
+
+      const refused = await correct(mark.id, {
+        sex: 'FEMALE',
+        reason: 'Sex entered in error at encoding.',
+        pastoral_leader_id: grace.id,
+        effective_date: '2026-05-01',
+      });
+
+      expect(refused.status).toBe(409);
+      expect(refused.body.error.details.earliest_effective_date).toBe('2026-05-11');
+    });
+  });
+
   describe('authorization (sections 5 and 7)', () => {
     it('denies a Leader who does not hold the capability at all', async () => {
       const response = await correct(

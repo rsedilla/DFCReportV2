@@ -12,6 +12,27 @@ import type { Database, NetworkName, Sex } from '../database/schema';
 import type { Transaction } from 'kysely';
 
 /**
+ * Which bound refused a backdated correction, which decides only the wording
+ * (SKILL.md section 4). Three different facts, so three messages: a pastoral edge
+ * the correction would strand, a Cell relationship it would strand, and the Network
+ * row's own start, where the correction would erase a period rather than end one.
+ */
+type FloorKind = 'edges' | 'cell-relationships' | 'network-row';
+
+/**
+ * Kept beside the type so a fourth bound cannot be added with no message, which a
+ * ternary chain permits and a total record does not.
+ */
+const MESSAGE_FOR: Record<FloorKind, string> = {
+  edges:
+    'That effective date is too early: it would strand a pastoral assignment that cannot be corrected. Use the earliest date given here or later.',
+  'cell-relationships':
+    'That effective date is too early: it would reach back into a Cell relationship this person held, stranding memberships that cannot be corrected. Use the earliest date given here or later.',
+  'network-row':
+    'That effective date is at or before the moment the Network being corrected took effect, so the correction would erase that period rather than end it. Use the earliest date given here or later.',
+};
+
+/**
  * The `networks` module: Network assignment and its history.
  *
  * Network is effective-dated rather than a column on the Person, because a column
@@ -248,16 +269,18 @@ export class NetworksService {
     // that takes weeks rather than the one that takes minutes, which is the same
     // reason the root refusal fires before the disciple refusal above.
     //
-    // **Before the floor, like the disciple refusal.** Resolving either relationship
-    // writes a `cell_leaderships` or `cell_memberships` row and neither is a term in
-    // the floor, so this ordering is about the *message* rather than about the
-    // arithmetic: reporting a floor to somebody who is going to be refused anyway
+    // **Before the floor, like the disciple refusal**, and still for the message
+    // rather than the arithmetic. An *open* relationship contributes no floor term,
+    // precisely because this refusal has already rejected the change while one exists
+    // (section 4: a floor carrying a term that can never bind reads as though it were
+    // doing work). Reporting a floor to somebody who is going to be refused anyway
     // tells them to solve the wrong problem first.
     //
-    // Whether Cell relationships *should* contribute a floor term is a real gap and
-    // is recorded as open in `CLAUDE.md`: the refusal reaches only open rows, so a
-    // correction backdated into a stint since handed over still strands the
-    // memberships opened during it.
+    // **Resolving one does move the floor, on the request after this one.** Ending a
+    // membership closes it, and a closed membership contributes its `started_at` —
+    // not its `ended_at`, which is what stops clearing the blockage from fixing the
+    // effective date at today for everyone who has ever been in a Cell. Section 4
+    // carries that as the reason the two Cell terms take different columns.
     await this.assertHoldsNoCellRelationshipWithin(transaction, change.personId);
 
     const floor = await this.hierarchy.backdateFloorFor(
@@ -266,6 +289,18 @@ export class NetworksService {
       // Section 4: the same-Network trigger on a Network change selects edges in
       // both directions, so the limit covers both.
       'either-direction',
+    );
+
+    // **The floor has four terms across two modules' tables, so it is read twice and
+    // combined here.** `hierarchy` owns the pastoral terms and `cells` owns the two
+    // Cell ones; section 2 lets neither read the other's tables, and `networks` is the
+    // module performing the change, so combining them is its job rather than either
+    // owner's. The port is already bound at this point — the precondition above threw
+    // otherwise — and it is asked for again rather than captured, so that neither call
+    // site depends on the other having run.
+    const cellFloor = await this.cellsPortOrThrow(change.personId).closedRelationshipFloorOf(
+      transaction,
+      change.personId,
     );
 
     // **Two bounds, resolved to whichever binds, and refused once.**
@@ -290,10 +325,27 @@ export class NetworksService {
     // assignment, and a Network row, whose timestamps equal the effective instant.
     // Checking only when backdating would leave that to surface as a constraint
     // violation.
-    const bound =
-      floor !== null && floor.getTime() >= open.started_at.getTime()
-        ? ({ at: floor, kind: 'edges' } as const)
-        : ({ at: open.started_at, kind: 'network-row' } as const);
+    const candidates: { at: Date; kind: FloorKind }[] = [];
+
+    if (floor !== null) {
+      candidates.push({ at: floor, kind: 'edges' });
+    }
+
+    if (cellFloor !== null) {
+      candidates.push({ at: cellFloor, kind: 'cell-relationships' });
+    }
+
+    // Always last, and never null, so the list is never empty.
+    candidates.push({ at: open.started_at, kind: 'network-row' });
+
+    // **Ties keep the earlier candidate**, so the preference order is the push order
+    // above. That preserves what this did before the Cell terms existed, where a
+    // pastoral floor equal to the Network row's start named the edges — and a tie
+    // between two of them is one date with two true explanations, so which is named
+    // decides only the wording.
+    const bound = candidates.reduce((best, candidate) =>
+      candidate.at.getTime() > best.at.getTime() ? candidate : best,
+    );
 
     if (change.effectiveAt.getTime() <= bound.at.getTime()) {
       throw this.floorBreach(change, bound.at, bound.kind);
@@ -342,12 +394,13 @@ export class NetworksService {
     change: { personId: string; backdated: boolean },
     bound: Date,
     /**
-     * What the bound is, which decides only the wording. The two are different
-     * facts — a pastoral edge that could not be corrected, and the Network row's
-     * own start — and one message covering both would tell an administrator with
-     * no pastoral assignment that they had stranded one.
+     * What the bound is, which decides only the wording. The three are different
+     * facts — a pastoral edge that could not be corrected, a Cell relationship that
+     * could not be, and the Network row's own start — and one message covering them
+     * all would tell an administrator with no pastoral assignment that they had
+     * stranded one.
      */
-    kind: 'edges' | 'network-row',
+    kind: FloorKind,
   ): InvariantViolationError {
     const earliest = manilaDayAfter(bound);
     const submittable = startOfManilaDay(earliest).getTime() <= Date.now();
@@ -387,12 +440,10 @@ export class NetworksService {
       );
     }
 
-    return new InvariantViolationError(
-      kind === 'edges'
-        ? 'That effective date is too early: it would strand a pastoral assignment that cannot be corrected. Use the earliest date given here or later.'
-        : 'That effective date is at or before the moment the Network being corrected took effect, so the correction would erase that period rather than end it. Use the earliest date given here or later.',
-      { person_id: change.personId, earliest_effective_date: earliest },
-    );
+    return new InvariantViolationError(MESSAGE_FOR[kind], {
+      person_id: change.personId,
+      earliest_effective_date: earliest,
+    });
   }
 
   /**
@@ -412,34 +463,11 @@ export class NetworksService {
   }
 
   /**
-   * Section 4: a Network change is refused while the person holds either Cell
-   * relationship.
-   *
-   * **Both halves, and they are separate rules rather than one.** Leadership is
-   * refused because a Cell takes its Network from its leader, so the change would
-   * carry the Cell across and strand every member. Membership is refused because the
-   * person's own membership becomes a cross-Network relationship. Neither is reached
-   * by the disciple refusal above: membership does not mirror pastoral assignment, so
-   * a member need not lead anything and need not sit under the Cell's leader.
-   *
-   * **What makes this a domain check rather than a constraint** is that it is a
-   * precondition on the state the request *arrives* in. A deferred trigger sees only
-   * commit-time state, so a transaction that resolved the Cell and performed the
-   * correction together would pass it; an immediate one would enforce statement
-   * ordering instead, which an implementer clears by resolving the Cell first.
-   * Section 4 says this, and migration 0009 records the same trap for a sibling
-   * trigger.
-   *
-   * **Naming the Cells is a disclosure, and it is safe here for the reason the
-   * disciple refusal gives for naming people**: section 8 protects Cell membership
-   * and Cell IDs for somebody outside the reader's scope, and every capability
-   * reaching this path is held at Whole Church only (section 7). A narrower grant
-   * would make this the disclosure of a branch the actor does not oversee.
+   * The bound port, or a deployment fault. Two callers now need it — the
+   * precondition on open relationships, and section 4's two Cell floor terms — so
+   * the reasoning below lives in one place rather than being copied to the second.
    */
-  private async assertHoldsNoCellRelationshipWithin(
-    transaction: Transaction<Database>,
-    personId: string,
-  ): Promise<void> {
+  private cellsPortOrThrow(personId: string): CellRelationshipsPort {
     if (!this.cells) {
       // **A wiring fault, refused rather than skipped** — unbound, this check cannot
       // run, and section 4 states the rule absolutely. `CELL_SCOPE_PORT` sets that
@@ -472,7 +500,41 @@ export class NetworksService {
       );
     }
 
-    const leaderships = await this.cells.openLeadershipsOf(transaction, personId);
+    return this.cells;
+  }
+
+  /**
+   * Section 4: a Network change is refused while the person holds either Cell
+   * relationship.
+   *
+   * **Both halves, and they are separate rules rather than one.** Leadership is
+   * refused because a Cell takes its Network from its leader, so the change would
+   * carry the Cell across and strand every member. Membership is refused because the
+   * person's own membership becomes a cross-Network relationship. Neither is reached
+   * by the disciple refusal above: membership does not mirror pastoral assignment, so
+   * a member need not lead anything and need not sit under the Cell's leader.
+   *
+   * **What makes this a domain check rather than a constraint** is that it is a
+   * precondition on the state the request *arrives* in. A deferred trigger sees only
+   * commit-time state, so a transaction that resolved the Cell and performed the
+   * correction together would pass it; an immediate one would enforce statement
+   * ordering instead, which an implementer clears by resolving the Cell first.
+   * Section 4 says this, and migration 0009 records the same trap for a sibling
+   * trigger.
+   *
+   * **Naming the Cells is a disclosure, and it is safe here for the reason the
+   * disciple refusal gives for naming people**: section 8 protects Cell membership
+   * and Cell IDs for somebody outside the reader's scope, and every capability
+   * reaching this path is held at Whole Church only (section 7). A narrower grant
+   * would make this the disclosure of a branch the actor does not oversee.
+   */
+  private async assertHoldsNoCellRelationshipWithin(
+    transaction: Transaction<Database>,
+    personId: string,
+  ): Promise<void> {
+    const cells = this.cellsPortOrThrow(personId);
+
+    const leaderships = await cells.openLeadershipsOf(transaction, personId);
 
     if (leaderships.length > 0) {
       throw new InvariantViolationError(
@@ -485,7 +547,7 @@ export class NetworksService {
       );
     }
 
-    const membership = await this.cells.openMembershipOf(transaction, personId);
+    const membership = await cells.openMembershipOf(transaction, personId);
 
     if (membership !== null) {
       throw new InvariantViolationError(
