@@ -1,7 +1,9 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { sql } from 'kysely';
 
+import { type CellScopePort } from '../auth/authorization/cell-scope.port';
 import { DATABASE, type Db } from '../database/database.module';
+import { type CellRelationshipsPort } from '../networks/cell-relationships.port';
 
 import { CURSOR_INSTANT_FORMAT } from './leadership-request-cursor';
 
@@ -28,7 +30,7 @@ import type { Transaction } from 'kysely';
  * nothing pointing back, because this module never imports `auth`.
  */
 @Injectable()
-export class CellsReadService {
+export class CellsReadService implements CellScopePort, CellRelationshipsPort {
   constructor(@Inject(DATABASE) private readonly db: Db) {}
 
   /**
@@ -353,12 +355,18 @@ export class CellsReadService {
    * and cannot import this module without closing a cycle, so it declares a port and
    * this implements it.
    *
-   * The `ACTIVE` join follows section 11's definition of a current Cell leadership.
-   * Migration 0009 refuses a CLOSED Cell holding an open assignment, so the join
-   * cannot change the answer today — it is written because the rule that makes the
-   * two agree is a constraint trigger, and `pg_restore --disable-triggers` skips one.
-   * That is the same argument `isCurrentCellLeaderWithin` below records for its own
-   * identical join.
+   * **No `ACTIVE` filter, and the first version had one on a reason that pointed the
+   * wrong way.** It cited `isCurrentCellLeaderWithin`'s restore argument —
+   * `pg_restore --disable-triggers` skips the trigger keeping `cells.state` and these
+   * rows in step. There the join **withholds** a qualification and so fails closed: a
+   * leader whose Cell is closed is refused an account. Here it would **remove a
+   * blocker**: an open leadership on a CLOSED Cell would be filtered out and the
+   * Network change would proceed. The same argument, the opposite consequence.
+   *
+   * So this asks only what section 4 needs — does an open leadership row exist —
+   * and blocks on it whatever state the Cell is in. Unreachable through any operation,
+   * because migration 0009 refuses that pair from both sides; in the restore state
+   * where it is reachable, blocking is the safe answer for a precondition.
    *
    * Ordered by Cell ID so a refusal naming several Cells names them the same way
    * twice, which a client rendering the list depends on.
@@ -373,7 +381,6 @@ export class CellsReadService {
       .select(['cells.id as id', 'cells.cell_id as cell_id'])
       .where('cell_leaderships.person_id', '=', personId)
       .where('cell_leaderships.ended_at', 'is', null)
-      .where('cells.state', '=', 'ACTIVE')
       .orderBy('cells.cell_id')
       .execute();
 
@@ -387,13 +394,15 @@ export class CellsReadService {
    * unique index over the person — so this returns one row rather than a list, and
    * the index is what makes that safe rather than an assumption.
    *
-   * **No `ACTIVE` filter, unlike the leaderships above, and the asymmetry is the
-   * schema's.** Migration 0009 refuses a CLOSED Cell that still holds an open
-   * membership, exactly as it does for leadership — but a closed Cell's memberships
-   * are ended by the closure itself (section 10, *What closing does*), so an open
-   * membership implies an `ACTIVE` Cell by a different route. The join is here for
-   * the Cell's handle rather than as a filter, and adding a redundant one would
-   * suggest the two cases differ in a way they do not.
+   * **No `ACTIVE` filter, matching the leaderships above, because the schema is
+   * symmetric.** An earlier version of this said the asymmetry between the two
+   * queries was the schema's; it was not, and there is no asymmetry now.
+   * `assert_cell_memberships_match_state` refuses a CLOSED Cell holding an open
+   * membership, fired from both tables, exactly as the leadership rule is — and
+   * section 10's *What closing does* ends leadership and memberships in the same
+   * list. The two facts are identical and neither query filters on them.
+   *
+   * The join is here for the Cell's handle rather than as a filter.
    */
   async openMembershipOf(
     executor: Db | Transaction<Database>,

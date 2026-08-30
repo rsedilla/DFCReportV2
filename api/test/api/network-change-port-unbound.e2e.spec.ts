@@ -95,9 +95,14 @@ describe('a Network change with the Cell-relationships port unbound (section 4)'
         pastoral_leader_id: grace.id,
       });
 
-    expect(response.status).toBe(409);
-    expect(response.body.error.code).toBe('INVARIANT_VIOLATION');
-    expect(response.body.error.message).toContain('cannot check');
+    // **500, and the status is the point rather than a detail.** Section 22 stores a
+    // 4xx against the idempotency key and releases a 5xx. An unbound port reaches no
+    // decision about the record — it is fixed by a redeploy, after which the same
+    // request should succeed — so a stored 409 would replay this refusal for the whole
+    // retention to a client retrying an unchanged body. The first version asserted 409
+    // and pinned the defect.
+    expect(response.status).toBe(500);
+    expect(response.body.error.code).toBe('INTERNAL_ERROR');
 
     // **Refused means nothing written.** The point of failing closed is that a
     // wiring fault cannot let a Network change through unverified, so the Network

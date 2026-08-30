@@ -25,12 +25,17 @@ export class NetworksService {
     private readonly hierarchy: HierarchyService,
     /**
      * **Optional in the injector and required in effect** (`cell-relationships.port.ts`).
-     * `NetworksModule` is imported by `authorization`, `cells` and `people`, and only
-     * `AppModule` can bind an implementation, so the parameter cannot be mandatory
-     * without breaking every graph that does not include `cells`. What makes that safe
-     * is the refusal below: an unbound port closes the Network change rather than
-     * waving it through, which is the reading `CELL_SCOPE_PORT` already gives for the
-     * same situation.
+     * What makes that safe is the refusal below: an unbound port closes the Network
+     * change rather than waving it through, which is the reading `CELL_SCOPE_PORT`
+     * already gives for the same situation.
+     *
+     * *An earlier version said the parameter could not be mandatory, because only
+     * `AppModule` could bind an implementation. Both halves were wrong: the binding is
+     * a `@Global()` module, so every context that constructs this service has the
+     * token, and a mandatory injection would work today.* Whether it should be is
+     * recorded as open in `CLAUDE.md` — it would move a wiring fault to startup,
+     * where the module-graph gate already lives, at the cost of a deployment failing
+     * to boot rather than losing one operation.
      */
     @Optional()
     @Inject(CELL_RELATIONSHIPS_PORT)
@@ -112,20 +117,17 @@ export class NetworksService {
    * the change forces is the caller's, performed in this same transaction at this
    * same instant.
    *
-   * **Section 4's Cell obligation is not enforced here yet, and the reason this
-   * comment used to give has stopped being true.** It said neither table existed;
-   * both have since migration 0009. What is true now is narrower: section 4 settled
-   * the *leadership* half on 2026-08-30 — a Network change is refused while the
-   * person holds an open Cell leadership assignment — and this method does not yet
-   * implement it. The *membership* half was settled the same day and on its own terms:
-   * refused while they hold an open Cell membership, cleared by ending that membership,
-   * which is one authorized operation rather than a handover. Leadership is refused
-   * first, so somebody holding both is told about the obligation that takes weeks.
+   * **Section 4's Cell obligation is enforced here**, in
+   * `assertHoldsNoCellRelationshipWithin` below: a Network change is refused while the
+   * person holds an open Cell leadership assignment, and refused while they hold an
+   * open Cell membership. Leadership is refused first, so somebody holding both is
+   * told about the obligation that takes weeks rather than the one that takes minutes.
    *
-   * Both belong here, beside the pastoral precondition above, which is where
-   * `docs/ROADMAP.md` books them. Until they land, section 4 states two rules nothing
-   * enforces — named here rather than left for a reader to infer from a passing test
-   * suite.
+   * *This block has now been wrong in both directions.* It first said the obligation
+   * was unenforced because neither table existed, which stopped being true at
+   * migration 0009; it was corrected to say the rules were settled and unbuilt, which
+   * stopped being true in the commit that built them. Both were accurate when written
+   * and neither was revisited by the change that falsified it.
    */
   async changeWithin(
     transaction: Transaction<Database>,
@@ -140,8 +142,16 @@ export class NetworksService {
       reason: string;
     },
   ): Promise<{ from: NetworkName }> {
-    // **Before anything is read.** Every precondition below is a statement about
-    // pastoral edges, and the deferred triggers cannot see an edge opened
+    // **Before anything is read.** Every precondition below was a statement about
+    // pastoral edges when this was written, and two of them are now about Cell
+    // relationships. The lock covers three of their four writers — a leadership
+    // request's approval and both membership writes take it — and not the fourth:
+    // direct Cell creation during initial encoding (section 2) takes no person lock,
+    // so it and a Network change can interleave. Narrow, because a Cell created that
+    // way holds no members yet and the path closes with the phase, and named here
+    // rather than left to be discovered.
+    //
+    // The deferred triggers cannot see an edge opened
     // concurrently and committed just after this transaction's own comparison. The
     // lock is what makes the refusals mean something under concurrency; see
     // `lockPersonsWithin`.
@@ -416,15 +426,28 @@ export class NetworksService {
     personId: string,
   ): Promise<void> {
     if (!this.cells) {
-      // **A wiring fault, refused rather than skipped.** The port is optional in the
-      // injector because `NetworksModule` is imported by three modules that cannot
-      // bind it; unbound, this check cannot run, and section 4 states the rule
-      // absolutely. `CELL_SCOPE_PORT` sets the precedent for the same situation: a
-      // missing binding closes the operation rather than opening it.
-      throw new InvariantViolationError(
-        'This deployment cannot check whether that person holds a Cell relationship, so ' +
-          'the Network change is refused (SKILL.md section 4).',
-        { person_id: personId },
+      // **A wiring fault, refused rather than skipped** — unbound, this check cannot
+      // run, and section 4 states the rule absolutely. `CELL_SCOPE_PORT` sets that
+      // precedent: a missing binding closes the operation rather than opening it.
+      //
+      // **A plain `Error`, so the filter renders 500 and section 22 releases the
+      // idempotency key.** The first version threw `InvariantViolationError`, and a
+      // 409 is *stored* against the key and replayed for the whole retention — so a
+      // client retrying the unchanged body after the deployment was fixed would be
+      // served the refusal for ever. Section 22 is explicit that a transient condition
+      // reaching no decision must be a 5xx, and an unbound port reaches none: the
+      // record is not one "the rules reject however it was submitted", it is one
+      // nothing could evaluate.
+      //
+      // *The `CELL_SCOPE_PORT` precedent does not carry to the status, only to the
+      // refusal.* That one is thrown by a **guard**, and `AppModule` registers the
+      // idempotency interceptor after both guards deliberately, so no key exists when
+      // it fires and the store/release split never applies to it. Reusing its 4xx here
+      // was section 25 rule 19 — the shape without its reason.
+      throw new Error(
+        `Cannot check Cell relationships for person ${personId}: CELL_RELATIONSHIPS_PORT ` +
+          'is not bound, so the SKILL.md section 4 precondition on a Network change ' +
+          'cannot be evaluated. This is a deployment fault.',
       );
     }
 

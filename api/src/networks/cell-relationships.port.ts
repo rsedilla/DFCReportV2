@@ -15,15 +15,28 @@ import type { Transaction } from 'kysely';
  * `cell_leaderships` and `cell_memberships`, so the answer can only come from that
  * module — and `cells` already imports `NetworksModule` to compare Networks, so a
  * dependency the other way would be a cycle. The interface is declared here, where
- * `networks` needs it; `cells` implements it; `AppModule` binds the two. That is the
- * inversion `CELL_SCOPE_PORT` and `EMAIL_PORT` already use in this codebase.
+ * `networks` needs it; `cells` implements it; `CellRelationshipsBindingModule` binds
+ * the two. That is the inversion `CELL_SCOPE_PORT` and `EMAIL_PORT` already use.
+ *
+ * *Not `AppModule`, which is where this sentence said and where the binding was first
+ * put.* Nest resolves a provider's dependencies in the module that registers it, and
+ * `NetworksService` is registered in `NetworksModule`, so a provider in `AppModule`'s
+ * own list never reaches it. The sentence was inherited verbatim from
+ * `cell-scope.port.ts`, where it is true because the guard is registered globally.
  *
  * **Absent, the Network change is refused**, on the precedent `CELL_SCOPE_PORT` sets
  * for the same situation: "a missing binding closes every Cell-scoped endpoint rather
- * than opening one". The port must be optional, because `NetworksModule` is imported
- * by `authorization`, `cells` and `people` while only `AppModule` can bind an
- * implementation — so an unbound port is a wiring fault, and the fail-open reading
- * would let one silently disable a rule section 4 states absolutely.
+ * than opening one". The fail-open reading would let a wiring fault silently disable a
+ * rule section 4 states absolutely.
+ *
+ * **Optional is a choice rather than a necessity, and it is recorded as open.** An
+ * earlier version of this said only `AppModule` could bind an implementation, so the
+ * injection had to be optional. That is false: a `@Global()` binding puts the token in
+ * every context, so a mandatory injection would work today and would move a wiring
+ * fault to startup, where `test/unit/module-graph.spec.ts` already catches that class
+ * in seconds without a database. What optional buys is that a live deployment loses
+ * one operation rather than failing to boot. Both are defensible; `CLAUDE.md` carries
+ * the question.
  *
  * Every method takes the caller's executor. The checks run inside the transaction
  * that performs the change, so a pooled read would both answer from the state the
@@ -45,7 +58,10 @@ export interface CellRelationshipsPort {
    *
    * Section 11 makes a current Cell leadership an open row on an `ACTIVE` Cell, and
    * a `CLOSED` Cell holds no open leadership at all — so a closed Cell never blocks
-   * a correction, which falls out of the schema rather than needing a filter here.
+   * a correction, which falls out of the schema rather than being filtered for. The
+   * implementation asks only whether an open row exists, and blocks on one whatever
+   * state its Cell is in, which is the safe answer in the restore state where the
+   * schema's guarantee is the thing that has failed.
    *
    * A person may lead many (section 10), so this returns a list and the refusal
    * names all of them: an administrator told about one Cell, who resolves it and is

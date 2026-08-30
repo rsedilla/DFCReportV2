@@ -28,9 +28,13 @@ import { CellsReadService } from './cells.read.service';
  * module receives an implementation it may not depend on, and this codebase already
  * uses that for `DATABASE`, `APP_CONFIG`, `AuditService` and `IdempotencyService`.
  *
- * **A module of its own rather than `@Global()` on `CellsModule`**, which would
- * publish creation, closure, membership and configuration to every module in the
- * application to deliver one read. What is global here is one token.
+ * **A module of its own rather than `@Global()` on `CellsModule`.** A global module
+ * publishes its *exports*, and `CellsModule` exports `CellsReadService` alone — so
+ * that would not, as an earlier version of this said, publish creation, closure,
+ * membership and configuration. What it would do is put a module carrying a controller
+ * and six providers into the global registry to deliver one read, and make every
+ * module in the application a legitimate consumer of a service only one of them needs.
+ * What is global here is one token.
  */
 @Global()
 @Module({

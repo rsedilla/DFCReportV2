@@ -299,10 +299,14 @@ describe('sex correction (SKILL.md sections 4, 5, 7, 21, 22)', () => {
       });
 
       expect(response.status).toBe(409);
-      expect(response.body.error.details.cells).toHaveLength(2);
-      expect(
-        (response.body.error.details.cells as { cell_id: string }[]).map((c) => c.cell_id).sort(),
-      ).toEqual([first.cellId, second.cellId].sort());
+      // **Compared in order rather than sorted on both sides**, which is what makes
+      // `openLeadershipsOf`'s `ORDER BY cells.cell_id` pinned: sorting here would leave
+      // the query free to order by anything, including the random UUID, with this case
+      // green. Cell IDs come off a sequence, so `first` precedes `second`.
+      expect(response.body.error.details.cells).toEqual([
+        { id: first.id, cell_id: first.cellId },
+        { id: second.id, cell_id: second.cellId },
+      ]);
     });
 
     it('refuses while the person holds a Cell membership', async () => {
