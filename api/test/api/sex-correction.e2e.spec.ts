@@ -6,7 +6,15 @@ import request from 'supertest';
 
 import { manilaDayOf } from '../../src/common/time/manila';
 import { createTestDb, truncateAll } from '../setup/database';
-import { assignTo, createAccount, createPerson, createTestApp, EPOCH } from '../setup/fixtures';
+import {
+  assignTo,
+  closeCellDirectly,
+  createAccount,
+  createCell,
+  createPerson,
+  createTestApp,
+  EPOCH,
+} from '../setup/fixtures';
 
 import type { INestApplication } from '@nestjs/common';
 import type { Kysely } from 'kysely';
@@ -242,6 +250,134 @@ describe('sex correction (SKILL.md sections 4, 5, 7, 21, 22)', () => {
         .execute();
 
       expect(networks).toHaveLength(2);
+    });
+  });
+
+  describe('refused while the person holds a Cell relationship (section 4)', () => {
+    // Settled on 2026-08-30, and the second half of section 4's Cell obligation. The
+    // failure it prevents is invisible to the schema: `assert_membership_same_network`
+    // compares both sides as of the membership's own `started_at`, so after a Network
+    // change the comparison instant precedes it, both sides still resolve to the old
+    // Network, and no trigger objects — even if the row were written again.
+
+    it('refuses while the person leads a Cell, naming it', async () => {
+      const cell = await createCell(db, { leader: mark });
+
+      const response = await correct(mark.id, {
+        sex: 'FEMALE',
+        reason: 'Sex entered in error at encoding.',
+        pastoral_leader_id: grace.id,
+      });
+
+      expect(response.status).toBe(409);
+      expect(response.body.error.code).toBe('INVARIANT_VIOLATION');
+      // Naming the Cell is what makes the refusal actionable, and is safe only
+      // because every capability reaching this path is Whole Church (section 7).
+      expect(response.body.error.details.cells).toEqual([{ id: cell.id, cell_id: cell.cellId }]);
+
+      // Refused means nothing written: the Network row is untouched.
+      const networks = await db
+        .selectFrom('network_assignments')
+        .select('network')
+        .where('person_id', '=', mark.id)
+        .where('ended_at', 'is', null)
+        .executeTakeFirstOrThrow();
+      expect(networks.network).toBe('MENS');
+    });
+
+    it('names every Cell a person leads, not just the first', async () => {
+      // Section 10 permits one leader to lead many. An administrator told about one
+      // Cell, who resolves it and is then refused for a second, learns the shape of
+      // the obligation one Cell at a time.
+      const first = await createCell(db, { leader: mark });
+      const second = await createCell(db, { leader: mark, category: 'COUPLE' });
+
+      const response = await correct(mark.id, {
+        sex: 'FEMALE',
+        reason: 'Sex entered in error at encoding.',
+        pastoral_leader_id: grace.id,
+      });
+
+      expect(response.status).toBe(409);
+      expect(response.body.error.details.cells).toHaveLength(2);
+      expect(
+        (response.body.error.details.cells as { cell_id: string }[]).map((c) => c.cell_id).sort(),
+      ).toEqual([first.cellId, second.cellId].sort());
+    });
+
+    it('refuses while the person holds a Cell membership', async () => {
+      // Reached by nothing the leadership half does: Mark leads no Cell here, and
+      // membership does not mirror pastoral assignment, so the Cell's leader need not
+      // be anywhere near him.
+      const manuelCell = await createCell(db, { leader: manuel });
+      await db
+        .insertInto('cell_memberships')
+        .values({ person_id: mark.id, cell_id: manuelCell.id, started_at: new Date() })
+        .execute();
+
+      const response = await correct(mark.id, {
+        sex: 'FEMALE',
+        reason: 'Sex entered in error at encoding.',
+        pastoral_leader_id: grace.id,
+      });
+
+      expect(response.status).toBe(409);
+      expect(response.body.error.code).toBe('INVARIANT_VIOLATION');
+      expect(response.body.error.details.cell).toEqual({
+        id: manuelCell.id,
+        cell_id: manuelCell.cellId,
+      });
+    });
+
+    it('reports leadership before membership where the person holds both', async () => {
+      // Section 4 fixes the order so somebody holding both is told about the
+      // obligation that takes weeks — a handover — rather than the one that takes
+      // minutes. Swapping the two checks reddens this and nothing else.
+      const own = await createCell(db, { leader: mark });
+      const manuelCell = await createCell(db, { leader: manuel });
+      await db
+        .insertInto('cell_memberships')
+        .values({ person_id: mark.id, cell_id: manuelCell.id, started_at: new Date() })
+        .execute();
+
+      const response = await correct(mark.id, {
+        sex: 'FEMALE',
+        reason: 'Sex entered in error at encoding.',
+        pastoral_leader_id: grace.id,
+      });
+
+      expect(response.status).toBe(409);
+      expect(response.body.error.details.cells).toEqual([{ id: own.id, cell_id: own.cellId }]);
+      expect(response.body.error.details.cell).toBeUndefined();
+    });
+
+    it('accepts the correction once the Cell has been closed and the membership ended', async () => {
+      const own = await createCell(db, { leader: mark });
+      const manuelCell = await createCell(db, { leader: manuel });
+      await db
+        .insertInto('cell_memberships')
+        .values({ person_id: mark.id, cell_id: manuelCell.id, started_at: new Date() })
+        .execute();
+
+      await closeCellDirectly(db, own.id, { reason: 'LEADER_STEPPED_DOWN' });
+      await db
+        .updateTable('cell_memberships')
+        .set({ ended_at: new Date() })
+        .where('person_id', '=', mark.id)
+        .where('ended_at', 'is', null)
+        .execute();
+
+      const response = await correct(mark.id, {
+        sex: 'FEMALE',
+        reason: 'Sex entered in error at encoding.',
+        pastoral_leader_id: grace.id,
+      });
+
+      // **The refusal clears, which is what makes it a precondition rather than a
+      // bar.** A closed Cell holds no open leadership (section 11), so it never
+      // blocks — that falls out of the schema rather than needing a filter.
+      expect(response.status).toBe(200);
+      expect(response.body).toMatchObject({ id: mark.id, sex: 'FEMALE' });
     });
   });
 

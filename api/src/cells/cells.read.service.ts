@@ -345,6 +345,72 @@ export class CellsReadService {
   }
 
   /**
+   * `CellRelationshipsPort`. Every `ACTIVE` Cell this person currently leads
+   * (SKILL.md section 4, section 11).
+   *
+   * **For the Network-change precondition in `networks`**, which refuses a change
+   * while the person leads a Cell. `networks` cannot read these tables (section 2)
+   * and cannot import this module without closing a cycle, so it declares a port and
+   * this implements it.
+   *
+   * The `ACTIVE` join follows section 11's definition of a current Cell leadership.
+   * Migration 0009 refuses a CLOSED Cell holding an open assignment, so the join
+   * cannot change the answer today — it is written because the rule that makes the
+   * two agree is a constraint trigger, and `pg_restore --disable-triggers` skips one.
+   * That is the same argument `isCurrentCellLeaderWithin` below records for its own
+   * identical join.
+   *
+   * Ordered by Cell ID so a refusal naming several Cells names them the same way
+   * twice, which a client rendering the list depends on.
+   */
+  async openLeadershipsOf(
+    executor: Db | Transaction<Database>,
+    personId: string,
+  ): Promise<{ id: string; cellId: string }[]> {
+    const rows = await executor
+      .selectFrom('cell_leaderships')
+      .innerJoin('cells', 'cells.id', 'cell_leaderships.cell_id')
+      .select(['cells.id as id', 'cells.cell_id as cell_id'])
+      .where('cell_leaderships.person_id', '=', personId)
+      .where('cell_leaderships.ended_at', 'is', null)
+      .where('cells.state', '=', 'ACTIVE')
+      .orderBy('cells.cell_id')
+      .execute();
+
+    return rows.map((row) => ({ id: row.id, cellId: row.cell_id }));
+  }
+
+  /**
+   * `CellRelationshipsPort`. The Cell this person currently belongs to, or null.
+   *
+   * Section 10 gives a person at most one active membership, enforced by a partial
+   * unique index over the person — so this returns one row rather than a list, and
+   * the index is what makes that safe rather than an assumption.
+   *
+   * **No `ACTIVE` filter, unlike the leaderships above, and the asymmetry is the
+   * schema's.** Migration 0009 refuses a CLOSED Cell that still holds an open
+   * membership, exactly as it does for leadership — but a closed Cell's memberships
+   * are ended by the closure itself (section 10, *What closing does*), so an open
+   * membership implies an `ACTIVE` Cell by a different route. The join is here for
+   * the Cell's handle rather than as a filter, and adding a redundant one would
+   * suggest the two cases differ in a way they do not.
+   */
+  async openMembershipOf(
+    executor: Db | Transaction<Database>,
+    personId: string,
+  ): Promise<{ id: string; cellId: string } | null> {
+    const row = await executor
+      .selectFrom('cell_memberships')
+      .innerJoin('cells', 'cells.id', 'cell_memberships.cell_id')
+      .select(['cells.id as id', 'cells.cell_id as cell_id'])
+      .where('cell_memberships.person_id', '=', personId)
+      .where('cell_memberships.ended_at', 'is', null)
+      .executeTakeFirst();
+
+    return row ? { id: row.id, cellId: row.cell_id } : null;
+  }
+
+  /**
    * Whether this Person is a current Cell Leader (SKILL.md section 11).
    *
    * **Both halves, and the second cannot be shown to matter — which is stated here

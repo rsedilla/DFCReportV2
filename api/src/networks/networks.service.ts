@@ -1,10 +1,12 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable, Optional } from '@nestjs/common';
 
 import { InvariantViolationError } from '../common/errors/api-error';
 import { manilaDayAfter, startOfManilaDay } from '../common/time/manila';
 import { type Db } from '../database/database.module';
 import { lockPersonsWithin } from '../database/person-lock';
 import { HierarchyService } from '../hierarchy/hierarchy.service';
+
+import { CELL_RELATIONSHIPS_PORT, type CellRelationshipsPort } from './cell-relationships.port';
 
 import type { Database, NetworkName, Sex } from '../database/schema';
 import type { Transaction } from 'kysely';
@@ -19,7 +21,21 @@ import type { Transaction } from 'kysely';
  */
 @Injectable()
 export class NetworksService {
-  constructor(private readonly hierarchy: HierarchyService) {}
+  constructor(
+    private readonly hierarchy: HierarchyService,
+    /**
+     * **Optional in the injector and required in effect** (`cell-relationships.port.ts`).
+     * `NetworksModule` is imported by `authorization`, `cells` and `people`, and only
+     * `AppModule` can bind an implementation, so the parameter cannot be mandatory
+     * without breaking every graph that does not include `cells`. What makes that safe
+     * is the refusal below: an unbound port closes the Network change rather than
+     * waving it through, which is the reading `CELL_SCOPE_PORT` already gives for the
+     * same situation.
+     */
+    @Optional()
+    @Inject(CELL_RELATIONSHIPS_PORT)
+    private readonly cells?: CellRelationshipsPort,
+  ) {}
 
   /**
    * The person's Network as it stood at `at`, or null where none was recorded
@@ -202,6 +218,23 @@ export class NetworksService {
       );
     }
 
+    // **Then the Cell relationships, and leadership before membership** (section 4).
+    // The order is the section's: somebody holding both is told about the obligation
+    // that takes weeks rather than the one that takes minutes, which is the same
+    // reason the root refusal fires before the disciple refusal above.
+    //
+    // **Before the floor, like the disciple refusal.** Resolving either relationship
+    // writes a `cell_leaderships` or `cell_memberships` row and neither is a term in
+    // the floor, so this ordering is about the *message* rather than about the
+    // arithmetic: reporting a floor to somebody who is going to be refused anyway
+    // tells them to solve the wrong problem first.
+    //
+    // Whether Cell relationships *should* contribute a floor term is a real gap and
+    // is recorded as open in `CLAUDE.md`: the refusal reaches only open rows, so a
+    // correction backdated into a stint since handed over still strands the
+    // memberships opened during it.
+    await this.assertHoldsNoCellRelationshipWithin(transaction, change.personId);
+
     const floor = await this.hierarchy.backdateFloorFor(
       transaction,
       change.personId,
@@ -351,5 +384,74 @@ export class NetworksService {
   /** The person's Network as it stands now. */
   async currentNetwork(executor: Db, personId: string): Promise<NetworkName | null> {
     return this.networkAsOf(executor, personId, new Date());
+  }
+
+  /**
+   * Section 4: a Network change is refused while the person holds either Cell
+   * relationship.
+   *
+   * **Both halves, and they are separate rules rather than one.** Leadership is
+   * refused because a Cell takes its Network from its leader, so the change would
+   * carry the Cell across and strand every member. Membership is refused because the
+   * person's own membership becomes a cross-Network relationship. Neither is reached
+   * by the disciple refusal above: membership does not mirror pastoral assignment, so
+   * a member need not lead anything and need not sit under the Cell's leader.
+   *
+   * **What makes this a domain check rather than a constraint** is that it is a
+   * precondition on the state the request *arrives* in. A deferred trigger sees only
+   * commit-time state, so a transaction that resolved the Cell and performed the
+   * correction together would pass it; an immediate one would enforce statement
+   * ordering instead, which an implementer clears by resolving the Cell first.
+   * Section 4 says this, and migration 0009 records the same trap for a sibling
+   * trigger.
+   *
+   * **Naming the Cells is a disclosure, and it is safe here for the reason the
+   * disciple refusal gives for naming people**: section 8 protects Cell membership
+   * and Cell IDs for somebody outside the reader's scope, and every capability
+   * reaching this path is held at Whole Church only (section 7). A narrower grant
+   * would make this the disclosure of a branch the actor does not oversee.
+   */
+  private async assertHoldsNoCellRelationshipWithin(
+    transaction: Transaction<Database>,
+    personId: string,
+  ): Promise<void> {
+    if (!this.cells) {
+      // **A wiring fault, refused rather than skipped.** The port is optional in the
+      // injector because `NetworksModule` is imported by three modules that cannot
+      // bind it; unbound, this check cannot run, and section 4 states the rule
+      // absolutely. `CELL_SCOPE_PORT` sets the precedent for the same situation: a
+      // missing binding closes the operation rather than opening it.
+      throw new InvariantViolationError(
+        'This deployment cannot check whether that person holds a Cell relationship, so ' +
+          'the Network change is refused (SKILL.md section 4).',
+        { person_id: personId },
+      );
+    }
+
+    const leaderships = await this.cells.openLeadershipsOf(transaction, personId);
+
+    if (leaderships.length > 0) {
+      throw new InvariantViolationError(
+        'That person still leads a Cell. Hand each Cell to a new leader, or close it, then ' +
+          'make this change.',
+        {
+          person_id: personId,
+          cells: leaderships.map((cell) => ({ id: cell.id, cell_id: cell.cellId })),
+        },
+      );
+    }
+
+    const membership = await this.cells.openMembershipOf(transaction, personId);
+
+    if (membership !== null) {
+      throw new InvariantViolationError(
+        'That person still belongs to a Cell. End that membership first, then make this ' +
+          'change; they can join a Cell in their new Network afterwards.',
+        {
+          person_id: personId,
+          cell: { id: membership.id, cell_id: membership.cellId },
+        },
+      );
+    }
   }
 }
