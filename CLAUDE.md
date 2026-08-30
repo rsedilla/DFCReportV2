@@ -6399,6 +6399,99 @@ still missing.
 Written to `SKILL.md` Section 10 (*Creating a Cell*) and Section 22, and verified by grepping
 both for each rule rather than by asserting it here.
 
+### 2026-08-30 — A Network change is refused while the person leads a Cell
+
+Stage 3's last item, and the second half of Section 4's closing paragraph: a Network change
+must not leave the person holding relationships the homogeneous-network rule no longer
+permits. Section 4 settled the pastoral half on 2026-08-22 and left the Cell half undefined,
+because neither `cells` nor `cell_leaderships` existed yet.
+
+**Refused, on the same terms as the pastoral half.** The remedy is a handover through
+request-and-approve, or a closure, both separately authorized and separately audited. Once
+the person leads no Cell, the correction is retried.
+
+*Both are Section 10 operations; only closure is built on `main` today.* Approval of a
+leadership request lands with `feat/cell-leadership-approval`, so until that merges the
+only remedy an installation can actually perform is closing the Cell — which sharpens the
+cost recorded below rather than changing the rule. An earlier version of this entry said
+both were built, which was true of the branch it was written beside and not of the tree it
+was committed to.
+
+Worth stating plainly because the question is usually framed as a choice between refusing and
+handing over, and those are not alternatives: **refusing is the mechanism, and a handover is
+one of the two ways to clear it.** The genuine alternative was to cascade — let the change
+through and carry the Cell across with its leader.
+
+**Cascading is rejected on the argument Section 4 already made once.** Where a Cell holds a
+dozen members, moving them is a dozen pastoral decisions, and an administrator supplying
+destinations inside a data-correction form is exactly what that section refused for the
+pastoral case. Section 10 gives those decisions their own operation with an explicit recorded
+choice about every member.
+
+**The failure it prevents is silent, which is what decides it.** A Cell takes its Network from
+its leader, and membership is compared against that Network only when a membership row is
+written. So a leader's Network change carries the Cell across and leaves every existing member
+on the wrong side of the rule with **nothing raised** — coverage, attendance and
+classification all keep computing. Migration 0009 names this as the widest of its three
+uncovered paths, and the cross-Network approval case on `feat/cell-leadership-approval` had
+to exploit it to build a fixture, which is how sharply reachable it is. *That test is on that
+branch and not this one, which is spec-only; an earlier version of this sentence said "this
+branch's own".*
+
+**A Cell with no members is refused too.** The Cell carries a Network itself, so flipping it
+part-way through its life moves every past-period figure for it, against Section 3's
+reproducibility guarantee. A roster-dependent rule would also make the refusal depend on
+something the administrator cannot see from the correction form.
+
+**It is a domain-layer rule, and the reason is the pastoral half's own rather than a new
+one.** A deferred check sees only commit-time state, so a transaction that resolves the
+conflict and performs the correction together commits legally — which is exactly what
+Section 4 says about disciples. Making the trigger immediate does not rescue it either: that
+enforces statement *ordering* rather than the precondition, so an implementer who resolves
+the Cell first still passes, and migration 0009 records that trap for the sibling trigger.
+The refusal is about the state the request arrives in, and no constraint observes arrival
+state.
+
+*An earlier version called this "a different reason worth checking rather than assuming",
+and `SKILL.md` said "the reason the pastoral half gives above" — so the two documents
+disagreed about whether the reasoning was borrowed. `SKILL.md` had it right. What differs is
+only that one describes a trigger that exists and the other one that would have to be
+written, which is a difference in subject rather than in reason.*
+
+**The cost is accepted in writing.** Finding a new leader for a Cell takes weeks, not an
+afternoon, so somebody whose record is wrong stays wrong until the Cell is resolved or closed.
+Section 4 accepts the identical cost for the pastoral half. The alternative is a correction
+that quietly invalidates every membership in the Cell.
+
+**The membership half is settled with it, and separately rather than by symmetry.** A Network
+change is refused while the person holds a Cell membership too. Section 10 left the choice to
+Section 4 — "resolve both together or reject the change" — and the failure is identical in
+kind: the membership is compared as of its own `started_at`, so after a change it is a
+cross-Network relationship no check revisits.
+
+It is reached by nothing the leadership half does, which is why it needed its own decision:
+membership does not mirror pastoral assignment, so an ordinary member need not lead anything
+and need not be pastorally under the Cell's leader.
+
+**The remedy is to end the membership, not to move it**, and that is a finding rather than a
+wording choice. A person still in the Men's Network cannot be moved into a Women's Cell first
+— the new membership would be compared at its own start with member and leader in different
+Networks, and refused. The order is end, correct, then add them to a Cell in the Network they
+now belong to.
+
+That is what makes this half cheap where the leadership half is expensive: one authorized
+operation the same afternoon, nobody waiting weeks, no Cell closed, no second party. Settling
+it by symmetry with the leadership rule would have imported a cost it does not have.
+
+**Leadership is refused before membership**, so somebody holding both is told about the
+obligation that takes weeks rather than the one that takes minutes. Section 4 already fixes an
+order for that reason, the root refusal before the disciple refusal. That closes one of the
+three Stop Conditions the review raised; the other two — the backdate floor, and whether a
+narrower grant could make naming the Cells a disclosure — are on the open list.
+
+Written to `SKILL.md` Section 4, and verified by grepping that section for both rules rather
+than by asserting it here.
+
 ### Open — awaiting a ruling
 
 **One item awaits a ruling, and it blocks Stage 5. Thirty-six other things are
@@ -6476,7 +6569,7 @@ Two related questions have defined behaviour and are recorded in `SKILL.md` §12
 - **What Section 8 permits a refusal to reveal by its existence.** The source-Cell refusal no longer names a Cell or asserts a membership, but its *shape* still carries one bit: with the actor authorized over their own Cell and any `person_id` in the church — and Section 8 publishes every Person's identifier church-wide — a 403 means that person holds a membership somewhere the actor cannot see, and a 201 means they do not. The quiet outcome is the hit and the loud one is the miss, which is the reverse of the arrangement the 2026-08-22 create-probe ruling was willing to accept, and that ruling closed the leak rather than resting on loudness. This one cannot be closed by redacting anything: the refusal is required by the authorization rule itself. The source-Cell reading it used to defer to was settled by the closure pre-flight above, which did not answer this: what a refusal may disclose by *existing* is still open, and is now the last part of that question standing.
 - **Whether "Admin" in Sections 2 and 10 is a role requirement or a description of who holds the capabilities.** Section 2 settled this once, for the tree import, in the direction of "the role is required, and the capabilities alone are not enough" — and stated it in that paragraph rather than as a general rule. Direct creation is given to Admin in the same section and again in Section 10, and slice 2 reads it the same way and checks the role. If that reading is right, the two places should say it in the words Section 2 already uses for the import, because the next reader derives it from a neighbouring paragraph or not at all. If it is *not* right, then Section 7's permission to grant `cell.approve_leadership` explicitly makes request-and-approve optional for its holder over their own subtree, and Section 10 needs to say why that is acceptable. Nothing is blocked either way: the conservative reading is what is implemented.
 - **Whether a Cell's first leadership row may be corrected to a leader of the other Network, and whether a closed leadership row may be written at all.** Two halves of one question, both raised by the fourth review pass. Migration 0009 refuses a Section 5 correction that closes a Cell's first leadership row and opens one naming a person of the other Network: the zero-length row is selected as the predecessor and the leader-to-leader Network rule fires. That may well be right — a Cell created under a wrong-Network leader had the wrong Network for its whole life, and Section 10 gives `CREATED_IN_ERROR` for a Cell that should not exist — but Section 10 states that rule about a *handover*, and nothing distinguishes a correction from one. The second half is narrower and has no answer at all: `cell_leadership_is_opened_open` now refuses a leadership row written already closed, because no operation Sections 10 or 11 define writes one, and that forecloses correcting a closed historical stint. Neither is reachable today. Settle both with the handover-approval endpoint, which is where Section 10 makes the refusal.
-- **Which side moves when a Cell leader's Network changes.** Section 4's last paragraph says a Network change must not leave the person holding relationships the homogeneous-network rule no longer permits, and that where a choice arises it is flagged for authorized human resolution rather than guessed. For pastoral relationships Section 4 is concrete: the change is refused while the person leads anyone, and each disciple is moved by an ordinary reassignment first. For Cell **leadership** it says nothing concrete, and leading a Cell is a different relationship from discipling someone (Section 1, principle 3), so Section 4's refusal does not reach it. A Network change on a Cell's leader therefore moves the Cell's own Network and strands every member of every Cell they lead, and nothing raises. Refusing the change while they lead a Cell would be the Section 3 archival shape and would be consistent; requiring the Cell to be handed over first is a different pastoral decision. `docs/ROADMAP.md` books the work as Stage 3's last item without settling the rule. Settle it before the `networks` precondition grows its Cell half.
+- **Whether Cell relationships owe a term in Section 4's backdate floor.** The leadership refusal reaches only *open* assignments, and the floor's terms are over pastoral rows alone. So a correction backdated into a period the person led a Cell they have since handed over is unbounded: memberships opened during that stint compare, at their own `started_at`, as member-in-old-Network against leader-in-new, and nothing re-validates them because no `cell_memberships` row is written and the Network trigger reads only `pastoral_assignments`. That is the failure this ruling exists to prevent, reached through a date field instead of an open row. The pastoral half needed both a refusal *and* term (b) for precisely this reason, and Section 4 explains why; the Cell half has the refusal and no term. What the term should range over — closed leadership stints, closed memberships, or nothing because the pastoral floor usually dominates — is a ruling rather than something to infer from the neighbouring paragraph.
 - **What the duplicate-candidate lookup does when its list exceeds `limit`.** `GET /people/duplicate-candidates` computes every candidate, returns `visible.slice(0, limit)`, and answers `next_cursor: null` — which §22's pagination rule reads as "this is the last page" over a set that was truncated, with no cursor to reach the rest. The `slice` is pre-existing; the ordering rule settled on 2026-08-28 (below) is what makes it consequential. In-scope candidates now always precede withheld ones, so the withheld tail is the **first** thing a truncation removes — the cross-branch duplicate §3 says the church-wide lookup exists to catch — and the client chooses `limit`, down to 1. Not *exactly* those: at a `limit` below the in-scope count it drops in-scope candidates too, and the point is which candidates it reaches first. Three answers are defensible and none is derivable: page the list honestly, refuse to truncate it at all, or state in §3 and §22 that the list is truncated and which candidates may be dropped. **The in-scope group's own internal order has to be settled in the same ruling**, because a page boundary over an unordered set is not pageable. `findDuplicates` issues its population query with no `ORDER BY` and `findCandidates` sorts by tier alone, so within one tier the in-scope order is PostgreSQL's physical row order. That is no disclosure — everything in that group is fully visible to the viewer — but it means that below the in-scope count, *which* in-scope candidates survive a truncation can differ between two identical requests. Raised by `architecture-guardian` on `fix/duplicate-candidate-oracle`, twice, and by the ordering rule itself: §3 now asks that any new decision the list is subjected to — it names a narrowing, a sort, a page boundary and a count — be treated as a disclosure until it is shown to be a function of what the viewer may already know. This is the one page boundary that exists, and nothing has shown it. Not blocking while the default limit of 50 exceeds any candidate list this church produces.
 - **Whether a pastoral path renders an absorbed Person or the survivor.** Every other `persons` read in the application filters `merged_into_id`; the path's name lookup deliberately does not, because on a lookup a filtered row is simply not found while on a path it is a *hole*, and a path with a hole reads as a shorter chain rather than as an error. Section 3 also says a merge never rewrites pastoral records to point at a different Person, so an absorbed ancestor genuinely stays on the chain and the real question is whether to show them or the survivor who now carries the identity. That is Person Merge's to answer for every surface at once rather than this endpoint's to decide, and merge is Stage 3, so nothing today can reach it. Settle it with the merge.
 - **Whether a Person holding an open root row may be absorbed by a Person Merge.** §3 refuses a merge where the absorbed Person leads a Cell and says nothing about a root; §5 leaves succession undefined and forbids reassigning a root. So merging a duplicate root holder into the real person appears permitted — and §3 says a merge "never rewrites historical attendance, pastoral, or audit records to point to a different Person", so the seat row keeps naming the absorbed record. The resolved identity then has two open assignments, which §5 invariant 3 forbids and which no constraint can refuse, because the rows carry different `person_id`s. Raised by the fifth review of the tree import, which is the only thing in the system that creates root rows: the dry-run warning's whole force is that no remedy exists for a mis-seated root, and merge is the one remedy §3 offers for a record created in error. The warning is correct under §3 as written. Settle this before anyone needs it.

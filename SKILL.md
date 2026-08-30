@@ -631,6 +631,46 @@ It also removes the need for the correction itself to carry more than one reassi
 
 **The two sides would have taken different destinations, which is why doing them separately is also clearer.** The person being corrected moves to a leader in their **new** Network — they are the one whose Network is changing, and the trigger compares their replacement edge against the corrected value already in force. A disciple moves within their **own, unchanged** Network, because nothing about them has changed. Those are two different rules, applied by two different people at two different times, and running them through one endpoint invited applying one rule to both.
 
+**A Network change is refused while the person leads a Cell**, on the same terms and for the same reason. If they hold any open Cell leadership assignment (Section 11), the change is rejected, naming the Cells that must be resolved first. Each is resolved by handing it to a new leader through request-and-approve, or by closing it — both ordinary, separately authorized, separately audited operations (Section 10) — and the Network change is attempted again once none remains.
+
+It is refused with `INVARIANT_VIOLATION` (Section 22): a Network change leaving a Cell stranded is a record the rules reject however it was submitted and whoever submitted it, which is what that code means, and it is what the pastoral refusal beside it already answers.
+
+**Naming the Cells is a disclosure, and it is safe for the reason the pastoral refusal gives for naming disciples**: Section 8 protects Cell membership and Cell IDs for a person outside the reader's scope, and every capability that reaches this path is held at Whole Church only (Section 7). A narrower grant would make this the disclosure of a branch the actor does not oversee, and the refusal would have to name a count rather than the Cells.
+
+**A Network change is refused while the person holds a Cell membership**, on the same terms. Section 10 leaves the choice to this section — "resolve both together or reject the change" — and rejecting is what the leadership half above already does, for a failure that is identical in kind: the membership is compared as of its own `started_at`, so after the change it is a cross-Network relationship no check will ever revisit.
+
+The membership half is reached by nothing the leadership half does. Membership does not mirror pastoral assignment (Section 10), so an ordinary member of a Cell need not be pastorally under its leader and need not lead anything at all — refusing while a person *leads* catches none of it.
+
+**The remedy is to end the membership, not to move it, and the difference is not stylistic.** A person in the Men's Network cannot be moved into a Women's Cell first: the membership would be compared at its own start with the member in one Network and the leader in the other, and refused. So the order is end the membership, correct the Network, then add them to a Cell in the Network they now belong to. Only the first step blocks the correction, and it is one authorized operation an administrator performs the same afternoon (Section 10).
+
+That is why this half is settled separately rather than by symmetry: it shares the leadership half's justification and none of its cost. Nobody waits weeks, no Cell is closed, and no second party is required.
+
+**Leadership is refused before membership**, so that a person who holds both is told about the obligation that takes weeks rather than the one that takes minutes. This section already fixes an order for the same reason — the root refusal fires before the disciple refusal so a root is refused for the reason that actually applies.
+
+**What it prevents is invisible to every check the schema has, and that is what makes the refusal worth its cost.** A Cell takes its Network from its leader, so letting the leader's Network change carries the Cell across and leaves every existing member on the wrong side of a rule the system otherwise holds absolutely — and **nothing raises**.
+
+The reason is stronger than it first appears, and stating it loosely invites the wrong fix. `assert_membership_same_network` compares both sides **as of the membership's own `started_at`**, not as of now, because a membership must have been legal when it was opened. So the comparison instant precedes the Network change, both sides still resolve to the old Network, and the trigger would not object *even if the row were written again*. It is not that the rows are never rewritten; it is that rewriting them would not help.
+
+**What does surface, immediately, is the Cell's ability to function.** No further member from the roster's own Network can be added, because a new membership is compared at its own start with the member in one Network and the leader in the other. And the Cell becomes unhandoverable: the leadership trigger refuses an incoming leader who shares neither the outgoing leader's Network nor the members', and after the change no one person satisfies both. So permitting the change destroys the first of the two remedies this rule names, leaving closure as the only exit — which is an argument for refusing rather than merely a consequence of it.
+
+The reports stay silent throughout. Coverage, attendance and classification all keep computing, and the discrepancy surfaces when somebody asks why a Network's figures contain people who are not in it.
+
+**The alternative was to cascade**, moving or dispersing every member as part of the correction. It is rejected on the argument this section already makes for the pastoral half: where a Cell holds a dozen members, that is a dozen pastoral decisions, and an administrator supplying their destinations inside a data-correction form is the shape both alternatives above were refused for. Section 10 gives those decisions their own operation, with an explicit recorded choice about every member; a correction must not make them by rule.
+
+**A Cell with no members is refused too, and the uniform rule is deliberate.** A Cell's Network is fixed from the moment it is created: no operation this specification defines moves one between Networks, and Section 10 keeps it that way from both ends — approval refuses a request whose prospective leader has had their Network changed, and refuses a handover where the incoming and outgoing leaders do not share one. A Network change on the sitting leader is the one route that would move it, and it moves it silently. That is the ground for refusing, and it does not depend on the Cell holding anybody.
+
+*An earlier version argued instead that a Cell whose Network flips makes past-period figures move, against Section 3's reproducibility guarantee. That is not so, and this section says the opposite four paragraphs below: `cells` carries no Network column, a Cell's Network is derived from its leader's, and Network is effective-dated — so re-running March still resolves March's Network and no past figure moves. The claim would be true only of a report resolving a Cell's Network through its leader's* current *Network, which Section 3 forbids.*
+
+A narrower rule would also make the refusal depend on a roster the administrator cannot see from where they are standing.
+
+A `CLOSED` Cell holds no open leadership assignment (Section 11), so it never blocks a correction. This rule reaches only Cells that are still running.
+
+**This is a domain-layer rule and the database cannot hold it either**, for the reason the pastoral half gives above: the refusal is a precondition on the state the request *arrives* in, and a commit-time check sees only the state it ends in — which a transaction resolving the Cell and performing the correction together would satisfy. Both belong in `networks`, beside the pastoral precondition, and are owed tests at the API layer. Unlike the pastoral half above, which is built, these state rules the endpoint does not yet enforce — the change that enforces them is the next one, and until it lands the refusals exist on paper only.
+
+**The cost is a correction blocked behind a pastoral decision, and it is larger here than for the pastoral half.** Moving a disciple is one authorized call an administrator can make the same afternoon. Handing a Cell over is request-and-approve: a second party, and a person judged ready to lead, which is weeks rather than hours. The only remedy an administrator can perform alone is closing the Cell, and closing a working Cell to correct a data-entry error is a real cost rather than a nominal one.
+
+*This is stated as a difference because an earlier version called it identical to the pastoral cost, which this section does not accept anywhere and which is not true of the remedies.* It is accepted because the alternative is a correction that silently invalidates every membership in the Cell and leaves it unable to take a new member or change hands.
+
 **A backdated correction reaches only as far as it can be made legal.** Where `records.backdate_effective_date` (Section 7) is used to give the correction an effective date in the past, that date must be **strictly later** than the latest of:
 
 - the `started_at` of the person's current pastoral assignment;
@@ -647,7 +687,7 @@ The reason there is a limit at all is that the remedy runs out. The check reache
 
 **The limit covers both directions because the check does.** The same-Network check on a Network change considers every edge touching the person as a person *and* as a leader (Section 5, Database enforcement). A closed edge on which they were the leader, ended after the effective date, has exactly the problem above and involves no row of their own — so a floor bounding only their own assignment would leave it unreachable.
 
-Open downline edges need no term of their own, because the rule above has already refused the change while any exists. That is deliberate: a floor carrying a term that can never bind reads as though it were doing work.
+Open downline edges need no term of their own, because the refusal on open *pastoral* downline edges above has already refused the change while any exists. (The Cell refusal above it is a different rule and bounds nothing here; whether Cell relationships owe a floor term of their own is recorded as open in `CLAUDE.md`.) That is deliberate: a floor carrying a term that can never bind reads as though it were doing work.
 
 The case that term used to cover is worth keeping, because it is why the refusal has to be unconditional rather than date-aware. An open edge on which the person is the leader and which **began after** the effective date cannot be resolved at all: closing it at the effective date is impossible, since that precedes its own `started_at`, and closing it at its own start leaves it beginning after the effective date, so it is still selected and still compared. The refusal therefore reaches every open leader-side assignment whatever its dates, and a narrower rule that only refused edges overlapping the effective date would let this one through.
 
@@ -673,7 +713,7 @@ This is why the refusal names a **date** rather than echoing the floor. An admin
 
 The cost is real and is accepted: closed periods keep the Network that was recorded for them, including where it is now known to be wrong. Two things make that the better failure. Those periods have already been reported, and Section 3 guarantees a re-run reproduces what was reported — a correction reaching into them would move totals for months a leader may be holding on paper. And a person's Network is derived from sex, which the correction is fixing; the reported figures for a closed month reflected the church's understanding at the time, which is what a historical report is for. Where the true history genuinely matters, it belongs in the audit entry the correction already writes (Section 21), not in a rewritten relationship row.
 
-The same applies to Cell membership and Cell leadership: a Network change must not leave the person holding relationships that the homogeneous-network rule no longer permits. Where resolving this requires choosing between legitimately different facts, flag it for authorized human resolution rather than guessing (Section 3, Person Merge).
+Both Cell relationships are now settled above: a Network change is refused while the person leads a Cell, and refused while they hold a Cell membership. Neither is flagged for human resolution any longer, because neither requires choosing between legitimately different facts — the conflict is resolved first, by an ordinary authorized operation, and the correction is retried. Where some *other* relationship does require that choice, flag it rather than guessing (Section 3, Person Merge).
 
 ---
 
