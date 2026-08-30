@@ -5,12 +5,19 @@ import type { Db } from './database.module';
 /**
  * `DateStyle`, pinned by the application rather than inherited from the server.
  *
- * **The failure this prevents is silent and total.** `node-postgres` parses a
- * `timestamptz` by reading the text the server sends, and its parser expects the ISO
- * output format. Under `SQL`, `Postgres` or `German` it does not fail — it returns
- * **`null`**. So every timestamp the API reads comes back empty: `started_at`,
+ * **The failure this prevents is silent.** `node-postgres` parses a `timestamptz` by
+ * reading the text the server sends, and its parser expects the ISO output format.
+ * Under `SQL`, `Postgres` or `German` it does not fail — it returns **`null`**. So
+ * every `timestamptz` and `timestamp` the API reads comes back empty: `started_at`,
  * `ended_at`, `requested_at`, every effective-dated period and every audit entry,
  * with nothing raised anywhere.
+ *
+ * **A `date` fails differently, thirty lines above the pin in `database.module.ts`.**
+ * The OID-1082 parser there returns the server's raw text rather than an instant, and
+ * raw text is not null under a non-ISO style — it is `15.06.1985`, a well-formed
+ * string of the wrong shape, satisfying `PersonsTable.birth_date`'s declared `string`
+ * and flowing into a section 22 date-only field. That parser's unstated assumption,
+ * that the text is `YYYY-MM-DD`, is what this pin guarantees.
  *
  * Section 5's as-of queries, section 4's backdate floor and section 20's period
  * boundaries are all built on those columns. A deployment could satisfy every test in
@@ -22,30 +29,38 @@ import type { Db } from './database.module';
  * machines already, and the variation happens to have been harmless only because both
  * are ISO.
  *
- * **Pinned rather than asserted alone, which is where this parts company with the
- * isolation level.** Section 24 records READ COMMITTED as a dependency and checks it by
- * reading `SHOW transaction_isolation` from the server, because a client cannot set
- * another session's default and the application genuinely depends on how the server is
- * configured. `DateStyle` is not like that: libpq takes it in the startup packet, so
- * the application can simply stop depending on the server. Reusing the isolation
- * level's shape here would be section 25 rule 19 — the same shape without the reason
- * that gave it that shape.
+ * **This is the same kind of setting as the isolation level, and a first version of
+ * this file said otherwise.** It claimed isolation must be asserted rather than set
+ * because a client cannot set another session's default. That is false —
+ * `default_transaction_isolation` arrives in the startup packet by exactly the
+ * mechanism used here, verified in one connection — and the section 25 rule 19 claim
+ * built on that asymmetry was itself rule 19, applied to a distinction that does not
+ * exist.
  *
- * The assertion below is therefore not a check on the server. It is a check that the
- * pin took effect, which is what makes the pin something other than a line nobody
- * would notice being deleted.
+ * What separates them is the failure rather than the mechanism: a wrong `DateStyle`
+ * corrupts every date in silence, while a wrong isolation level removes a guarantee a
+ * test asserts. Whether isolation should be pinned here too is recorded as open.
+ *
+ * The assertion below is not a check on the server: once the pin is in place the
+ * server no longer reaches the application. It is a check that the pin took effect,
+ * which is what makes the pin something other than a line nobody would notice being
+ * deleted — and it has a case of its own, since `pg` lets a `DATABASE_URL` carrying
+ * its own `?options=` supersede the pool's and discard the pin silently.
  */
 export const DATE_STYLE = 'ISO, MDY';
 
 /**
  * The libpq startup option carrying it, for the pool.
  *
- * `MDY` is the input half and nothing here depends on it: section 22 sends date-only
- * fields as `YYYY-MM-DD`, which is unambiguous under every input order, and every
- * other value is a bound parameter rather than a literal the server has to parse. It
- * is pinned anyway so that two deployments cannot disagree about something this cheap
- * to fix — but `ISO` is the half that matters, and it is the half the check enforces
- * a reason for.
+ * `MDY` is the input half and nothing here depends on it — checked rather than
+ * assumed: migrations carry no date literals, the tree import refuses a birthday that
+ * is not ISO, and the one rendered instant goes through `to_char` with an explicit
+ * format. Being a *bound parameter* is not what makes the rest safe, which an earlier
+ * version of this sentence claimed: `pg` sends every parameter as text, and it is
+ * being rendered ISO-8601 that makes the server's input order irrelevant.
+ *
+ * It is pinned anyway so that two deployments cannot disagree about something this
+ * cheap to fix — but `ISO` is the half that matters.
  */
 export const DATE_STYLE_OPTION = '-c DateStyle=ISO,MDY';
 
@@ -67,9 +82,13 @@ export class DateStyleError extends Error {
  * Refuse the reported value unless it is exactly what the pool pins.
  *
  * Exact rather than "starts with ISO", although only the ISO half breaks the parser.
- * The pin sets both halves, so anything else means the startup option did not arrive
- * — and that is worth failing on whichever half differs, because the next thing it
- * would silently not apply is the half that matters.
+ * The pin sets both halves, so a difference in either is a sign the option did not
+ * arrive as intended — worth failing on, because the next thing that would silently
+ * not apply is the half that matters.
+ *
+ * Not quite "did not arrive": a partial `-c DateStyle=ISO` would arrive and leave the
+ * input half inherited. Nothing sends that, and the check is written for the sign
+ * rather than for a specific cause.
  */
 export function checkDateStyle(reported: string): void {
   if (reported !== DATE_STYLE) {

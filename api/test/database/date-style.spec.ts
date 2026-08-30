@@ -7,6 +7,9 @@ import {
   DATE_STYLE_OPTION,
   DateStyleError,
 } from '../../src/database/date-style';
+import { Test } from '@nestjs/testing';
+
+import { DATABASE, DatabaseModule } from '../../src/database/database.module';
 import { createTestApp } from '../setup/fixtures';
 
 import type { Database } from '../../src/database/schema';
@@ -21,12 +24,26 @@ import type { Database } from '../../src/database/schema';
  * it is worth seeing in a test rather than trusting a comment about it.
  *
  * **These cases change a database-level setting**, which is why they are careful. The
- * new default reaches only connections opened after it, both probe connections are
- * opened and closed inside the test, and the reset runs in `finally`. Nothing else
- * runs concurrently: `npm test` is `jest --runInBand`. If a run is killed between the
- * `ALTER` and the reset, the scratch database keeps a hostile default until somebody
- * runs `ALTER DATABASE <db> RESET DateStyle` — which is recoverable, and is the reason
- * the setting is applied to the database rather than to the role.
+ * new default reaches only connections opened after it, every probe connection is
+ * opened and closed inside the test, and the reset runs in `finally`.
+ *
+ * **`--runInBand` bounds jest and not the cluster**, and an earlier version of this
+ * comment leaned on it as though it bounded both. The setting is visible to every
+ * session connecting to this database from any process — a second `npm test`, a
+ * `psql`, a `start:dev` pointed at the scratch database — and decision 0146 records an
+ * orphaned run against `dfc_ci` actually happening here. During the window such a
+ * session reads every timestamp as null. The window is a few milliseconds and the
+ * reset is unconditional; the exposure is real and is stated rather than argued away.
+ *
+ * If a run is killed between the `ALTER` and the reset, the scratch database keeps a
+ * hostile default until somebody runs `ALTER DATABASE <db> RESET DateStyle`. It is
+ * applied to the database rather than the role because a role-level setting would
+ * follow that role to `dfc_dev`; both are equally recoverable, which an earlier
+ * version gave as the reason and is not a distinguishing one.
+ *
+ * **This needs ownership of the database**, which `dfc_ci` has today. The open item on
+ * least-privilege credentials would take that away, and these cases would fail in a
+ * way that reads as a defect in the pin rather than in the harness.
  *
  * Fixture data is invented (CLAUDE.md, Secrets).
  */
@@ -90,10 +107,11 @@ describe('DateStyle is pinned by the connection, not inherited (SKILL.md section
   });
 
   it('starts the application against a hostile default, which is what pins the pool', async () => {
-    // **This is the case that fails if the `options` line leaves the pool.** The three
-    // above open their own connections and pass the option by hand, so none of them
-    // can tell whether the application's pool carries it; this one builds the real
-    // thing while the database default is hostile.
+    // **This is the case that fails if the `options` line leaves the pool.** The two
+    // above open their own connections — one passing the option by hand and one
+    // deliberately passing none — so neither can tell whether the application's pool
+    // carries it; this one builds the real thing while the database default is
+    // hostile.
     //
     // `DatabaseModule.onApplicationBootstrap` reads `DateStyle` back and throws unless
     // the pin took effect, so an unpinned pool cannot finish starting here.
@@ -117,6 +135,37 @@ describe('DateStyle is pinned by the connection, not inherited (SKILL.md section
       await expect(assertDateStyle(hostile)).rejects.toThrow(DateStyleError);
     } finally {
       await hostile.destroy();
+    }
+  });
+
+  it('refuses to finish starting where the pool it is given is not pinned', async () => {
+    // **This pins the wiring, which neither case above reaches.** Removing
+    // `DatabaseModule.onApplicationBootstrap` altogether leaves both of them green:
+    // the one above still starts an application whose pool *is* pinned, and the one
+    // below calls `assertDateStyle` directly and never constructs the module. So the
+    // guard for the guard was missing, and four places claimed the check is what stops
+    // the pin being a line nobody would notice being deleted — while its own call site
+    // was exactly such a line.
+    //
+    // The pool is handed over unpinned rather than the database default being made
+    // hostile, so this case needs no `ALTER` and cannot leak one.
+    const hostile = new Kysely<Database>({
+      dialect: new PostgresDialect({
+        pool: new Pool({ connectionString: url, options: '-c DateStyle=German,DMY' }),
+      }),
+    });
+
+    const moduleRef = await Test.createTestingModule({ imports: [DatabaseModule] })
+      .overrideProvider(DATABASE)
+      .useValue(hostile)
+      .compile();
+
+    const app = moduleRef.createNestApplication();
+
+    try {
+      await expect(app.init()).rejects.toThrow(DateStyleError);
+    } finally {
+      await app.close();
     }
   });
 
