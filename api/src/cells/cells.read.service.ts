@@ -23,7 +23,8 @@ import type { Transaction } from 'kysely';
  * The seam is `AuthorizationModule`'s, re-derived rather than copied: what `auth`
  * needs is a question, and importing a module of creation and closure operations to
  * ask it would put the whole of `cells` into `auth`'s surface. The graph runs
- * `auth -> cells -> {people, networks, authorization, admin/settings, audit}` with
+ * `auth -> cells -> {people, networks, hierarchy, authorization, admin/settings,
+ * audit}` with
  * nothing pointing back, because this module never imports `auth`.
  */
 @Injectable()

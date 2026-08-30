@@ -247,7 +247,10 @@ describe('Cell leadership approval (section 10)', () => {
       // transaction while `clock_timestamp()` advances within it. `audit_log.occurred_at`
       // defaults to `now()`, and the entries are written *after* the Cell — so under the
       // defect the two are exactly equal, and under the rule the Cell is strictly later.
-      // Reverting `insert-cell.ts` to `DEFAULT VALUES` reddens this and nothing else.
+      // Reverting `insert-cell.ts` to `DEFAULT VALUES` reddens this. *It reddens the
+      // case below too, which said "and nothing else" until that case existed:
+      // transaction start precedes the released instant as well.* What the two pin
+      // apart is the clock source here and the ordering there.
       const requestId = await pendingNewCell(markAccount, juan.id);
       const response = await approve(admin, requestId).expect(200);
 
@@ -300,8 +303,13 @@ describe('Cell leadership approval (section 10)', () => {
         const pending = approve(admin, requestId).then((response) => response);
         await waitForBlockedBy(pid);
 
-        // Read after the approval is demonstrably stuck, so it is strictly before any
-        // instant the approval can go on to take.
+        // Read after the approval is demonstrably stuck, so it precedes any instant the
+        // approval can go on to take — **on the assumption that this process and
+        // PostgreSQL share a clock**, which is a host clock compared against a database
+        // one. True locally and in CI, and unbounded in general: CLAUDE.md carries the
+        // multi-instance skew question as open. `toBeGreaterThanOrEqual` rather than a
+        // strict comparison for the same reason, since a millisecond of skew either way
+        // is not what this case is about.
         const released = new Date();
         await blocker.query('ROLLBACK');
 
@@ -790,6 +798,101 @@ describe('Cell leadership approval (section 10)', () => {
       .expect(422);
 
     expect(response.body.error.code).toBe('VALIDATION_FAILED');
+  });
+
+  describe('the two lock classes a handover takes (section 5)', () => {
+    // **Section 5 requires the demonstration, not the assertion**: "an operation needing
+    // both classes demonstrates its ordering, its lock strengths and what bounds each
+    // wait against concurrent writers, and every clause above is held by a case that
+    // fails without it. A clause with nothing that can fail on it is how the third
+    // attempt looked right."
+    //
+    // A handover needs both — advisory locks on the two leaders, then the `cells` row at
+    // `FOR SHARE`. The `NEW_CELL` case above exercises neither the Cell lock nor the
+    // ordering between the classes, because a new Cell does not exist to be locked.
+
+    it('takes the leaders before the Cell, never the other way round', async () => {
+      const requestId = await pendingHandover(markAccount, juan.id, markCell.id);
+
+      const holder = new Client({ connectionString: process.env.DATABASE_URL });
+      const prober = new Client({ connectionString: process.env.DATABASE_URL });
+      await holder.connect();
+      await prober.connect();
+
+      try {
+        const holderPid = Number(
+          (await holder.query<{ pid: string }>('SELECT pg_backend_pid() AS pid')).rows[0].pid,
+        );
+
+        // The outgoing leader. `lockPersonsWithin` sorts by lock key, so holding either
+        // of the two stops the approval before it reaches the Cell whichever order the
+        // keys happen to fall in.
+        await holder.query('BEGIN');
+        await holder.query('SELECT pg_advisory_xact_lock(hashtextextended($1::uuid::text, 0))', [
+          mark.id,
+        ]);
+
+        const approving = approve(admin, requestId).then((response) => response);
+        await waitForBlockedBy(holderPid);
+
+        // **The Cell row is free, so the approval has not reached it.** Bounded, so a
+        // service taking its Cell lock first fails this as a timeout rather than
+        // hanging the run.
+        await prober.query('BEGIN');
+        await prober.query("SET LOCAL lock_timeout = '2s'");
+        await prober.query('SELECT id FROM cells WHERE id = $1 FOR NO KEY UPDATE', [markCell.id]);
+        await prober.query('ROLLBACK');
+
+        await holder.query('ROLLBACK');
+
+        expect((await approving).status).toBe(200);
+      } finally {
+        try {
+          await holder.query('ROLLBACK');
+          await prober.query('ROLLBACK');
+        } finally {
+          await holder.end();
+          await prober.end();
+        }
+      }
+    }, 30000);
+
+    it('takes the Cell row, and gives up on it within the bound', async () => {
+      const requestId = await pendingHandover(markAccount, juan.id, markCell.id);
+
+      const blocker = new Client({ connectionString: process.env.DATABASE_URL });
+      await blocker.connect();
+
+      try {
+        await blocker.query('BEGIN');
+        // `FOR NO KEY UPDATE` conflicts with the `FOR SHARE` `CellLock.ReadsTheState`
+        // takes, and **not** with the `FOR KEY SHARE` a `cell_leaderships` insert takes
+        // through its foreign key. So this blocks the approval only if it genuinely
+        // takes the Cell lock: delete `lockCellsWithin` and the approval sails past a
+        // held row and answers 200.
+        await blocker.query('SELECT id FROM cells WHERE id = $1 FOR NO KEY UPDATE', [markCell.id]);
+
+        let timer: NodeJS.Timeout | undefined;
+        const response = await Promise.race([
+          approve(admin, requestId),
+          new Promise<never>((_, reject) => {
+            timer = setTimeout(
+              () => reject(new Error('The approval was still waiting after 8s: no lock_timeout.')),
+              8000,
+            );
+          }),
+        ]).finally(() => clearTimeout(timer));
+
+        expect(response.status).toBe(503);
+        expect(response.body.error.code).toBe('RESOURCE_BUSY');
+      } finally {
+        try {
+          await blocker.query('ROLLBACK');
+        } finally {
+          await blocker.end();
+        }
+      }
+    }, 30000);
   });
 
   it('bounds the wait when declining a request another transaction holds', async () => {

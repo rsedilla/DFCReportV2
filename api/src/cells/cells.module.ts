@@ -35,10 +35,15 @@ import { CellsService } from './cells.service';
  * than on every authenticated request.
  *
  * **It touches no table it does not own.** Creating a Cell reads the prospective
- * leader through `people`, its open pastoral assignment through `hierarchy`, writes
- * its audit entries through `audit`, and asks `admin/settings` whether the encoding
- * phase is open — each through the service owning that table, inside the transaction
- * this module opens.
+ * leader through `people`, its open pastoral assignment through `hierarchy`, both
+ * leaders' Networks through `networks`, writes its audit entries through `audit`, and
+ * asks `admin/settings` whether the encoding phase is open — each through the service
+ * owning that table, inside the transaction this module opens.
+ *
+ * *This enumeration exists to evidence section 2 and has twice been edited without
+ * being completed: `hierarchy` was added while `networks` was missing, in the batch
+ * correcting the graph sentence six lines above, which had listed `networks` all
+ * along.*
  *
  * Six services, and the split is the one `people` already settled: `CellsService`,
  * `CellsLeadershipRequestService`, `CellsMembershipService`,

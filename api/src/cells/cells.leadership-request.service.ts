@@ -560,17 +560,20 @@ export class CellsLeadershipRequestService {
         );
       }
 
-      // The locks were chosen from the pre-read. `requested_by` is immutable, so this
-      // cannot differ — asserted rather than assumed, because if it ever did the
-      // requester whose scope is about to be evaluated would not be the one the
-      // authority was read for.
-      // **`requested_by` and `cell_id`, because the locks were chosen from both.**
       // **`requested_by` and `cell_id`, and they are here for different reasons.**
       // `requested_by` chooses whose authority was read before the transaction, not
       // what was locked; `cell_id` chooses which `cells` row was locked and whose
       // leadership was looked up. `cell_leadership_request_is_final` freezes the first
       // and not the second (migration 0009), so only one of the two would be safe to
       // argue rather than check.
+      //
+      // **None of these three messages advises a retry, and that is deliberate.** All
+      // are 4xx, so section 22 stores the answer against the idempotency key; this route
+      // accepts no body, so a resubmission is by definition the bare retry of an
+      // unchanged body that the 2026-08-27 ruling says reuses the key — and the client
+      // would be served the stored refusal for the whole retention. Advice a compliant
+      // client cannot follow is worse than none, and it is the shape CLAUDE.md's open
+      // item on this already names.
       //
       // All three disjuncts are unreachable today: `requested_by` is frozen, and
       // `cell_id`'s nullness is tied to `kind` by a check constraint while `kind` is
@@ -593,7 +596,7 @@ export class CellsLeadershipRequestService {
       ) {
         throw new InvariantViolationError(
           'This request changed while it was being approved, so the locks it took no ' +
-            'longer cover what it would write. Submit the approval again.',
+            'longer cover what it would write.',
           { request_id: request.id },
         );
       }
@@ -962,8 +965,8 @@ export class CellsLeadershipRequestService {
       // built before the transaction, does not cover.*
       throw new InvariantViolationError(
         'That Cell acquired its leadership assignment while this approval was starting, ' +
-          'so the approval holds no lock on the leader it would hand over from. Submit ' +
-          'it again (SKILL.md section 11).',
+          'so the approval holds no lock on the leader it would hand over from ' +
+          '(SKILL.md section 11).',
         { cell_id: cell.cell_id },
       );
     }
@@ -974,7 +977,7 @@ export class CellsLeadershipRequestService {
       // lock here was taken cleanly.
       throw new InvariantViolationError(
         'This Cell changed hands while the approval was being made, so the leader it ' +
-          'locked is no longer the one it would hand over from. Submit the approval again.',
+          'locked is no longer the one it would hand over from.',
         { cell_id: cell.cell_id },
       );
     }
