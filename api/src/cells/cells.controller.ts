@@ -18,6 +18,7 @@ import { CellsMembershipService } from './cells.membership.service';
 import { CellsService } from './cells.service';
 import {
   AddCellMemberDto,
+  ApproveLeadershipRequestDto,
   CellMembersDto,
   ChangeCellCategoryDto,
   ChangeCellScheduleDto,
@@ -35,8 +36,10 @@ import {
  * ordinary: while initial encoding is open, Admin creates a Cell and its leadership
  * assignment directly. Everything else here is an ordinary section 10 operation, and
  * each resolves scope through the Cell's leader rather than through the person named.
- * Request-and-approve and the handover workflow arrive with their own slices, and
- * each carries its own capability.
+ * Request-and-approve is complete here, for both kinds: a request, the Admin queue,
+ * a decline and an approval. `cell.request_leadership` guards step one against the
+ * prospective leader; `cell.approve_leadership` guards the other three against the
+ * church, because section 7 gives it to Admin alone at Whole Church only.
  */
 @Controller('cells')
 export class CellsController {
@@ -329,6 +332,46 @@ export class CellsController {
     @Query() query: LeadershipRequestQueueDto,
   ): Promise<Record<string, unknown>> {
     return this.requests.pendingQueue({ limit: query.limit, cursor: query.cursor });
+  }
+
+  /**
+   * `POST /api/v1/cells/leadership-requests/{request_id}/approve` — step two
+   * (SKILL.md section 10, *Step two — Admin approves*).
+   *
+   * **`cell.approve_leadership`, against the church**, exactly as the decline beside it:
+   * section 7 gives that capability one scope and one only, so a grant issued narrower
+   * covers nothing and is refused `SCOPE_DENIED`, and a church target is what "at Whole
+   * Church" means.
+   *
+   * **The guard is not what stops an actor approving their own request.** Section 10
+   * makes that a per-request control that "must be checked on every approval" and holds
+   * "even where one person happens to hold both capabilities" — Admin holds both by
+   * default. It is a domain check in the service, and migration 0009 carries it as
+   * `..._approver_is_not_requester` besides.
+   *
+   * **Not resolved against the prospective leader**, which the request path does: that
+   * person is not in this route, and reaching into the row to resolve a target would
+   * make the guard depend on a read it does not do. It changes no outcome, since
+   * `scopeCovers` returns before any target is read for a Whole Church grant.
+   *
+   * `/approve` rather than `/approval`, so the pair matches the `/decline` beside it.
+   * `/closure` is a noun because a closure is a record the Cell carries; approving and
+   * declining are decisions on the request row, which carries its own state.
+   *
+   * `{request_id}` is validated by `UuidParamPipe`: the guard resolves no target from
+   * it, so section 7 requires the route to validate its own path parameter rather than
+   * let a non-UUID reach a `uuid` comparison as a database error.
+   */
+  @Post('leadership-requests/:request_id/approve')
+  @RequiresCapability(Capability.CellApproveLeadership, { kind: 'church' })
+  @HttpCode(200)
+  async approveLeadershipRequest(
+    @Param('request_id', new UuidParamPipe('request_id')) requestId: string,
+    @Body() _body: ApproveLeadershipRequestDto,
+    @CurrentActor() actor: Actor,
+    @CurrentIdempotency() claim: CurrentClaim,
+  ): Promise<Record<string, unknown>> {
+    return this.requests.approve(requestId, actor, claim);
   }
 
   /**

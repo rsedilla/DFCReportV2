@@ -27,8 +27,8 @@ import type { TestAccount, TestCell, TestPerson } from '../setup/fixtures';
  * indexes. What is here is the endpoint's half: who may submit one, the Cell check a
  * handover carries, who may decline, and the queue.
  *
- * **Approval is not here and is not built.** It is the half that writes Cells,
- * leadership assignments and accounts, and it lands as its own slice.
+ * **Approval is not here, and is built**: it writes Cells and leadership assignments,
+ * so it has a suite of its own in `cell-leadership-approval.e2e.spec.ts`.
  *
  * Fixture names and email addresses are invented (CLAUDE.md, Secrets).
  */

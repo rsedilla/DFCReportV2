@@ -6215,9 +6215,193 @@ Also: a sentence asserting that a `NETWORK` grant "compares a Network that for t
 their own" was true of one of the two grants that can be issued, and is narrowed to say the
 grant covers the actor wherever it names their own Network.
 
+### 2026-08-30 — Approval records the leadership and leaves the account pending
+
+Settled before the approval endpoint is written, which is the pattern the rest of Stage 3
+went well on. Found by reading Sections 10, 6 and 3 whole rather than at a keyboard: the
+rule as written could not be implemented at all.
+
+**Section 10 said approval performs the account step "in a single transaction", and
+nothing on that path carries what the step needs.** Section 6's first requirement for a
+new Cell Leader is "Require email", and it never says who supplies one. Section 3 keeps
+email off the Person deliberately — it is a login credential rather than an attribute, and
+were it editable under `people.edit_basic` a leader could repoint a downline leader's
+address and take over the account through a password reset. A request records none either;
+`cell_leadership_requests` has no such column. So the address can only arrive from the
+actor, and the approval path has nowhere for it to arrive.
+
+**Approval therefore records the Cell and the leadership and leaves the account step
+pending**, writing the audit entry Section 21 already names for that state, with
+`POST /api/v1/accounts` provisioning afterwards.
+
+The reason is Section 6's own, and it is stated there in terms: "an actor authorized only
+to assign Cell leadership may record the leadership assignment, but must not thereby cause
+an account to be created or an activation email to be sent. The account step is left
+pending for an authorized actor and is separately audit logged." Section 10 was describing
+a step Section 6 already contemplates deferring.
+
+Two further reasons, neither of which is the arithmetic of who holds which capability.
+Provisioning is where the dual-authorization rule, the Senior Pastor seat and the
+duplicate-address refusal live, and one place that gets those right is better than two —
+this also makes direct creation and approval behave identically, since the initial-encoding
+path already leaves the account pending. And **an activation email cannot be sent inside a
+transaction**: folding the step in puts a delivery failure behind a committed Cell, which
+is the shape this repository has already shipped once, where an endpoint committed its
+idempotency completion and then failed on a send, handing the client an error while the
+store held the success every retry replayed.
+
+Two alternatives were weighed and refused.
+
+**The approval body carrying the email** is the only option that honours Section 10 as
+written and is one action for Admin. It was refused because a duplicate address would roll
+back the whole Cell creation, because the send still could not be inside the transaction
+so the "single transaction" is not literal either way, and because it has Admin supplying
+an address for somebody they may never have met.
+
+**The request capturing the email at submission** is better on that last point — the
+requester is the upline, who knows the disciple. It was refused on what it stores: a
+person's email address on a `PENDING` row that may be declined, and a declined request is
+retained permanently as the record of how a leader was developed (Section 10). It also
+needs a column on a merged migration, and the address can be stale by the time approval
+happens.
+
+**The cost is accepted in writing rather than discovered.** Approving a new Cell and
+provisioning its leader's account are two actions rather than one, and Section 19 justifies
+the Admin queue partly on a pending request "holding up an account" — under this ruling
+approval moves that block rather than clearing it. What stops it being silent is the audit
+entry, which is why Section 21 has one; a dashboard tile surfacing Cell Leaders without
+accounts is the natural follow-on and is not built here.
+
+Written to `SKILL.md` Section 10 (*Creating a Cell*), and verified by grepping that section
+for the rule rather than by asserting it here.
+
+### 2026-08-30 — Three rulings the approval endpoint needed, and a condition nothing could evaluate
+
+Settled before a line of approval code, by reading Sections 10, 11, 7, 21 and 22 whole —
+the pattern the rest of Stage 3 went well on, and the pattern that produced the withdrawal
+of 2026-08-28 when it was skipped. Section 10 specifies approval closely enough to build and
+leaves three things an endpoint cannot avoid answering. One of them is a condition the
+section states and no implementation can evaluate.
+
+**"Had their Network changed" is caught by the subtree condition, and the fourth condition
+is withdrawn.** Section 10's revalidation list named it beside "archived", "absorbed by a
+Merge" and "moved outside the requester's authorized subtree" — and nothing records the
+prospective leader's Network when the request is made. `cell_leadership_requests` carries no
+such column, so the condition had no baseline and could not be evaluated at all. It is the
+same shape as the closure floor: a rule stated in prose that the schema cannot answer.
+
+It needs no baseline. A Network change forces a pastoral reassignment into the new Network
+at the same instant (Section 4), and `assert_assignment_same_network` makes a cross-Network
+pastoral edge impossible (Section 5) — so every ancestor of the moved person is in the other
+Network, the requester is not among them, and the subtree condition fires. The refusal then
+names the thing that actually changed: the pastoral relationship the request rested on.
+
+**The residual is one scope value, and the first version of this entry called it "a
+wider grant".** That was wrong and the review caught it. Every role holds
+`cell.request_leadership` at `SUBTREE_EXCL_SELF`, so the ordinary case is covered entirely;
+of the wider values an Admin-issued grant may carry, a `NETWORK` grant catches a Network
+change *more* directly than the subtree condition does, because `scopeCovers` compares the
+person's current Network against the granted one. Only `WHOLE_CHURCH` misses it, returning
+true on its first line before the target is read.
+
+Section 10 itself calls a Network grant wider, eighty lines above the sentence that had said
+wider grants miss this — so the claim was refutable from the section it was being written
+into. Nothing is corrupted where it does miss: a new Cell inherits its leader's Network as it
+stands at approval, and a handover is refused by the leader-to-leader check. What survives is
+a stale request nobody is told about, which is a pastoral cost.
+
+That the wider grant is possible at all is the open item this log already carries: whether
+Section 7 should refuse a grant of `cell.request_leadership` wider than `SUBTREE_EXCL_SELF`.
+This ruling does not settle it and does not depend on it either way.
+
+Recording the Network on the request was the alternative and was rejected: a column, a
+migration and a rule, bought to detect a state the tree already reports and whose only
+undetected form is harmless.
+
+**Both revalidations are asked of the requester, and asked whole.** Each is the question the
+request step itself asked — `cell.request_leadership` over the prospective leader,
+`cell.manage_lifecycle` over the Cell — put to the account in `requested_by` rather than to
+the approver. Section 10 already required that for the Cell and gave the reason; this states
+it for both and settles what the predicate is.
+
+**One refusal, and which half moved is deliberately not distinguished.** Re-evaluating the
+whole of the requester's authority answers no where the person or the Cell moved out of
+reach, and equally where the requester has since lost the capability or the role carrying it.
+Those are different facts and they get one answer. That is "the state at approval governs"
+applied without qualification, and it takes the conservative direction where Section 10 would
+otherwise be silent — the 2026-08-24 reasoning on an explicit null birthday, that a
+relaxation must not become a capability by omission.
+
+*The first version of this entry, and the Section 10 sentence it was written into, both said
+the predicate also answers no where the requester's account has been **disabled**. That is
+false, and it was false when committed.* `activeRoles` and `effective` join `accounts` and
+filter on neither `status` nor anything derived from it, so a disabled account keeps every
+role and grant it held; Section 6 makes disablement an authentication decision, which stops
+the holder signing in rather than emptying their authority. The claim was checked against the
+service before any approval code was written and corrected in the next commit — which is
+the only reason it is a correction rather than the seventh false "written to Section x" claim
+in this log. Section 10 now states the limit rather than the opposite: account status is not
+consulted, and an approval is not evidence that the requester could still act today.
+
+Whether it *should* be consulted is deliberately not opened. It is a rule about what a grant
+means, so it belongs to Section 7 and to all twenty-seven capabilities at once rather than to
+this endpoint, and inventing it here would be the shape this log keeps recording — a rule
+adopted from a neighbouring sentence by its shape rather than by re-deriving why it has
+it.
+
+**The strict reading is safe here and was terminal for declining**, which is the distinction
+worth keeping. The 2026-08-30 ruling on self-decline refused a strict reading because a
+single-Admin deployment would have left a request approvable by nobody and declinable by
+nobody, `PENDING` for ever, with the per-leader index blocking every later request for that
+person. Nothing here strands: declining stays available on every pending request, so a
+request whose requester has left is declined `SUBMITTED_IN_ERROR` and submitted afresh by
+whoever now holds the relationship. It answers `SCOPE_DENIED`, which Section 22 reserves for
+a statement about an actor's authority over a target.
+
+It costs one accessor. `cells` cannot read `accounts` (Section 2), so resolving the
+requester's Person to build the `Actor` that `scopeCovers` needs is a small addition on
+`AuthorizationService`, which owns that table. `coversWith` thereby acquires its first caller
+asking a counterfactual about somebody other than the acting account; its guard that the
+authority and the actor name one account is unaffected, because both name the requester.
+
+**The account-pending audit entry is written on every approval of either kind,
+unconditionally.** Section 10 said a handover to somebody who already leads a Cell leaves
+"nothing pending at all", which reads as a condition on the entry, and that sentence is
+amended.
+
+Leading a Cell and holding an account are not the same fact, and the state where they part
+company is the one the entry exists for. Direct creation during initial encoding and every
+earlier approval both produce a current Cell Leader with the account step still pending
+(Section 6, Section 7), so conditioning on Cell leadership suppresses the entry in precisely
+the case where an account is genuinely owed.
+
+**The honest test is one this module may not perform, and the module graph is what decides
+it.** Whether an Account exists for that Person is an `auth` fact. `auth` imports `cells` so
+that provisioning can ask whether a Person is a current Cell Leader (Section 6), and asking
+back would close the cycle the 2026-08-24 seam ruling removed. So the choice was never
+between three options; it was between over-recording and under-recording, and a spurious
+entry is resolved by looking while a missing one leaves the only trace of a pending account
+nowhere at all. It also matches what `CellsService.createDirectly` already writes.
+
+**`/approve` rather than `/approval`.** The merged sibling is `POST .../decline`, and a pair
+that reads `/approval` and `/decline` is one word of inconsistency on an API Section 22 makes
+additive-only — the moment before a client depends on a name is the only moment to fix it,
+which is the argument that renamed `leader_id` to `pastoral_leader_id`. `/closure` is a noun
+because a closure is a record the Cell carries; approving and declining are decisions on the
+request row, which carries its own state and mints no record of its own.
+
+**Section 22's route list gained all four leadership-request routes**, which the request
+slice built and did not document. That is not this ruling's subject and is fixed with it,
+on the precedent of 2026-08-23: a pre-existing gap of the class a branch is about is closed
+by that branch, because leaving it means the next reader checks the citation and finds it
+still missing.
+
+Written to `SKILL.md` Section 10 (*Creating a Cell*) and Section 22, and verified by grepping
+both for each rule rather than by asserting it here.
+
 ### Open — awaiting a ruling
 
-**One item awaits a ruling, and it blocks Stage 5. Thirty-four other things are
+**One item awaits a ruling, and it blocks Stage 5. Thirty-six other things are
 unsettled, none of them blocking. They are listed at the end, so this section is the
 whole of what is open.**
 
@@ -6226,7 +6410,7 @@ and the italic below it. The batch that added the thirty-second bullet updated t
 alone, because the instruction to recount lives only in the italic, and the bolded twin
 is what a reader meets first. Anyone adding a bullet updates both.*
 
-*Thirty-four distinct items across thirty-four bullets. Three arrived with the leadership
+*Thirty-six distinct items across thirty-six bullets. Two arrived with the Cell leadership approval slice, both escalated by its first architecture-guardian pass: which kind of target a leadership audit entry carries, and whether a request's `cell_id` should be frozen while it is PENDING. A third was *widened* rather than added by that slice's third pass — the error code a stale-premise refusal answers — and a batch that claimed to widen it duplicated it instead, which is why this sentence is one a reader should not trust without recounting. Three arrived with the leadership
 request slice — the third being whether the application should pin the database session's
 `DateStyle`, raised by the third review pass. The first two are: how a requester sees the outcome of a request they submitted, which
 section 19 requires and section 7 names no capability for, and whether section 7 should
@@ -6277,7 +6461,15 @@ Two related questions have defined behaviour and are recorded in `SKILL.md` §12
 - **How a requester sees the outcome of a request they submitted.** Section 19 puts "the outcome of a Cell leadership request the user submitted, of either kind" in every user's own outstanding work, and section 7 names no capability for such a route. `cell.request_leadership` is `SUBTREE_EXCL_SELF`, so it resolves against neither the caller nor the church; `cell.approve_leadership` is Admin's alone and is what guards the queue; and section 7's no-capability exemption is narrower than it looks — its examples are "reading their own claims, signing out, ending their own sessions", which is the caller's *session* rather than rows their account created. Three answers look defensible and none is derivable: widen that exemption to an endpoint returning only rows the caller created, add a twenty-eighth capability, or read it under `cell.view_subtree` against an `actor` target — which is the shape `GET /people/duplicate-candidates` already uses for a church-wide read one domain over, so this is a new reading of an existing capability rather than an unbuildable surface. Not blocking, and the Admin queue built in this slice is the half approval actually needs — the requester's view is a dashboard tile and there is no dashboard yet. Settle it with the first screens, which is also when its shape will be visible.
 - **Whether reading a Cell's roster deserves a read capability of its own.** `GET /api/v1/cells/{id}/members` is guarded by `cell.manage_membership`, resolved against the Cell — the same target its write routes declare, chosen because §7 declares its capability list closed and inventing a name for a read is not available. The consequence is client-visible and one-directional: §7 makes `read_only` valid only on a read capability, so a grant of `cell.manage_membership` cannot be issued read-only, and nobody can be given roster visibility without also being given the power to change the roster. That is strictly more restrictive than the alternative rather than a leak, which is why it was safe to ship. What would settle it is the first screen that wants to *show* a Cell's members to somebody who should not move them — a report view, or an upline leader reviewing a branch — and Stage 5's reporting reads will ask the same question about every Cell-scoped read at once. Settle it there rather than for this route alone.
 - **What category a closed Cell has, for a report inside the month it closed.** Section 10 requires historical reports to use "the category valid at the time being reported", and the closure ruling of 2026-08-29 makes a closure end the open category row on its effective date. So a Cell closed on 10 March has no category row valid at 31 March, and Section 12 evaluates classification as of the end of the reporting month. Contained today rather than broken: Section 10 says every count of Cells and Cell categories means active Cells unless a report says otherwise, so nothing currently asks the question. Three answers look defensible — read the last category the Cell held, treat a closed Cell as having none and exclude it, or evaluate the category as of the closure date rather than the month end — and choosing between them wants a real report in front of it. Settle it in Stage 5 with the reporting queries, and note that the same question does **not** arise for the schedule row, whose closure is the point: a closed Cell must stop deriving scheduled meetings.
-- **Whether a floor breached with no effective date supplied answers `RESOURCE_BUSY` rather than `INVARIANT_VIOLATION`.** `NetworksService.floorBreach` returns a 409 whose message says "Retry in a moment" — the status and the advice on opposite sides of Section 22's store/release split, since a 4xx is stored against the idempotency key and replayed for the whole retention. `PeopleReassignmentService.reassignmentTooEarly` has answered `RESOURCE_BUSY` for the same case on the sibling path since `216be37` (2026-08-23), and Section 5 still describes that path as answering `INVARIANT_VIOLATION`, so the specification has been wrong about it since. Changing it is a ruling rather than a fix, and needs **two** amendments neither of which is derivable: Section 4 says an undated correction "always succeeds" and has no floor to clear, which the branch contradicts — reachable because the comparison is `<=` and `new Date()` is millisecond-resolution, so a Person encoded and corrected inside one millisecond collides; and Section 22 defines `RESOURCE_BUSY` as a wait that timed out or a deadlock victim, which this is neither, the lock having been acquired cleanly. Deliberately split out of the issue #16 fix rather than settled inside it. It is pinned by nothing on either path today, and it is deterministically stageable — but by a raw `network_assignments` row starting in the **future**, not at `now()`. Now that the instant is read after the lock, a row starting at `now()` leaves `effectiveAt >= bound.at` and the branch fires only on exact millisecond equality, which is a coin flip rather than a test. Nothing bounds `started_at`: the table carries `period_ordered` and no more.
+- **What error code a refusal answers when a value read before a lock differs from the value under it** *(widened 2026-08-30 from the `floorBreach` case it began as, when the Cell approval endpoint met the same question; a fix batch briefly answered it in code and was reverted, and a later one claimed to fold this bullet and concatenated it instead — so the halves disagreed on reachability until the fourth pass)*. Section 22 reserves `RESOURCE_BUSY` for an elapsed wait or a deadlock victim, `INVARIANT_VIOLATION` for a record the rules reject however it was submitted, and `VERSION_CONFLICT` for a record that changed since it was read, with a body shape Section 14 fixes and none of these refusals carries. A stale premise under a **cleanly taken** lock is none of the three as written.
+
+  What makes it more than pedantry is Section 22's store/release split: a 4xx is stored against the idempotency key and replayed for the retention, so a refusal whose remedy is another attempt has to be either a 5xx or a 4xx whose message tells the client to mint a new key. Both are defensible and the codebase currently does both.
+
+  **Five sites, and they do not divide the way a first count suggested.** By code: `CellsClosureService.closureTooEarly` and `PeopleReassignmentService` answer `RESOURCE_BUSY` (503); `NetworksService.floorBreach` and `CellsLeadershipRequestService.approve`, at three refusals, answer `INVARIANT_VIOLATION` (409). By **reachability**, which is the division that matters and which an earlier version of this bullet got flatly wrong by calling all of them unreachable: `approve`'s three are genuinely unreachable — `cell_leadership_request_is_final` freezes `kind` and `requested_by`, check constraints tie `cell_id`'s nullness to `kind`, and the only writers of the table are submit, decline and approve. The two floor branches are **reachable**, by an exact-instant collision, and both files say so about themselves. `closureTooEarly` additionally records a *reason* for the asymmetry — that backdating can leave a row ahead of the clock — which does not follow, since backdating writes rows behind it; whoever settles this should re-derive that rather than transcribe it, because if it is wrong the two floor sites are one case rather than two.
+
+  **And the scope sentence above is narrower than the question.** Bounded to a server-side pre-read, the five are the whole class. Read as this bullet's own `VERSION_CONFLICT` framing invites — a premise that went stale under a lock — there is a sixth, and it is the only member reachable in ordinary use: `CellsClosureService`'s member-list check, where the roster the client read differs from the state under the lock. It differs in one way that supports the 409 rather than undermining it: the resubmitted body *changes*, so the client mints a new key and the advice is followable. Whether it is the `VERSION_CONFLICT` Section 22 describes is part of this question.
+
+  The `floorBreach` half also needs Section 4 amended: it says an undated correction "always succeeds", which that branch contradicts. Settle all of it at once and write it into Section 22, which is where three client codebases look — and change every site, because two of them answer differently from the other three and one of them is not on the list a narrower reading would produce.
 - **Whether the archived-and-merged refusals should be database constraints.** Section 10 gained three refusals on 2026-08-29 — an archived Person, a merged Person, and somebody already in the Cell — and the first two are the same rule `assertLeaderIsAssignable` enforces for a pastoral edge. Both are application-layer checks: contrary to what Section 10 said when the question was first written, `pastoral_assignments` carries **no** constraint for archived-or-merged either, so there is no asymmetry and the question is whether *either* should become one. The Definition of Done says an invariant expressible as a constraint exists as one, and this one is expressible — a membership under an archived Person is the corruption Section 3 refuses when archiving somebody who leads a Cell, reached one relationship over. What argues the other way is that both facts live in `people`'s tables while the constraint would sit on `cells`', so it is a trigger reading across a module boundary rather than an index. Not blocking: the checks refuse today and answer `INVARIANT_VIOLATION`; what a constraint would add is enforcement under a restore, which is the argument the Senior Pastor slot and the root seat both turned on.
 - **Whether a path identifier should be validated as strictly as one in a body.** `class-validator`'s `@IsUUID()` pins the version and variant nibbles and is on every DTO; `isUuid` — the repository's own predicate, used by the guard and by `UuidParamPipe` — does not. So `POST /cells/{id}/members` refuses as `person_id` a value the `DELETE` beside it accepts in the path. Every identifier in the database is a v4 and PostgreSQL's `uuid` takes both, so nothing is broken; what is unsettled is which predicate the API means, and Section 3's provision for a client-generated Person UUID is the case that would decide it.
 - **Whether the nil UUID should be reserved.** Two call sites now hand `authorize` `00000000-0000-0000-0000-000000000000` — the capability guard, for a Cell it cannot place, and `CellsLeadershipRequestService`, for a handover whose Cell must not be shown to exist; the constant is shared in `common/identifiers.ts` rather than copied. It is handed over as the target of an object the caller cannot be shown to exist, so that an absent Cell refuses exactly as an out-of-scope one does. Nothing today can create a Person with that identifier — no endpoint accepts a client-supplied `id`, and every column defaults to `gen_random_uuid()` — but nothing forbids it either, and a Person holding it inside an actor's subtree would make every unplaceable Cell "covered" for that actor. The sentinel-free equivalent is to let the port's null reach `scopeCovers` the way `personBehind` already does for an absent Account. Settle it if Section 3's client-generated identifier is ever built.
@@ -6305,4 +6497,6 @@ Two related questions have defined behaviour and are recorded in `SKILL.md` §12
 - **What the native clients owe on accessibility.** `SKILL.md` §23 binds the web application to WCAG 2.2 AA and says the equivalent obligation for a native client is the platform accessibility API rather than WCAG. Which platform guarantees, and what would fail a build, is a ruling to make when the client is.
 
 - **Whether the liveness probe should share the application connection pool.** §24 now records that it does, and that pool exhaustion therefore presents to the platform as a dead process — so the response is a restart that discards the transactions still making progress. A separate connection, or a probe that does not reach the database, are both defensible and mean different things by "healthy". Deployment work with a ruling attached, alongside the database-role item above.
+- **Which kind of target a Cell leadership audit entry carries.** Section 21 groups "Cell leadership opened, ended, or changed" in one bullet, and Section 7 resolves an audit entry's scope through its target — so the three should presumably agree, and they do not. `cell_leadership.opened` targets the **person**, while `cell_leadership.ended` and `cell_leadership.changed` target the **Cell**. A reader searching one person's leadership history therefore finds the appointment and not the handover that took it away, and a leader whose scope covers the person but not the Cell sees one and not the other. The divergence between `opened` and `ended` predates the approval endpoint; that endpoint picked the Cell for `changed`, matching its neighbour, without the question having been settled. Both readings are defensible — the Cell is what Section 21 says a reader asks about ("who led a Cell before a handover"), and the person is what Section 16 counts by. Settle it before Stage 5 builds anything that reads this log by target, and note that changing it later rewrites nothing: `audit_log` is append-only, so a change applies from that point forward and leaves the log heterogeneous unless the old entries are read with both target kinds in mind.
+- **Whether `cell_leadership_requests.cell_id` should be frozen while a request is `PENDING`.** Migration 0009's finality trigger freezes what a request asks *about* — its kind, the person it names, who submitted it and when — and deliberately leaves the category, day and time writable so a mistyped time is corrected rather than declined and resubmitted. It says nothing about `cell_id`, which for a `HANDOVER` names the Cell itself. Nothing writes it on a `PENDING` row today, so this is not a live hole; what makes it worth settling is that approval chooses its lock list from that value before the transaction opens, and its under-lock re-check defends the value rather than relying on the trigger. If a revision path is ever added — correcting a handover that named the wrong Cell — the question becomes load-bearing in a place nobody would think to look.
 - **Whether `audit_log`'s append-only guarantee tolerates `TRUNCATE`.** §5 records the exemption for history tables and leans it on a least-privilege role that does not exist, which is already open above. §21 says nothing at all, and the test suite truncates `audit_log` before every test. Same answer as the `TRUNCATE` question above, most likely, but it is not written down for the one table whose whole purpose is that nothing removes a row.

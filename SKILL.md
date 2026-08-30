@@ -2164,7 +2164,17 @@ Admin holds approval because approving a new Cell Leader means provisioning thei
 
 **Approval revalidates the target.** The state at approval governs, never the state at request.
 
-**The prospective leader**, for both kinds. Reject the request, creating nothing, where they have since been archived (Section 3), absorbed by a Merge (Section 3), moved outside the requester's authorized subtree, or had their Network changed (Section 4). For a new Cell, approval must also confirm that they and their pastoral leader share a Network, because a Cell inherits its leader's Network and Section 5 forbids a cross-Network edge.
+**The prospective leader**, for both kinds. Reject the request, creating nothing, where they have since been archived (Section 3), absorbed by a Merge (Section 3), or moved outside the requester's authorized subtree. For a new Cell, approval must also confirm that they and their pastoral leader share a Network, because a Cell inherits its leader's Network and Section 5 forbids a cross-Network edge.
+
+**A Network change is caught by the subtree condition rather than by a condition of its own**, and that is said here because the obvious reading of it cannot be built. An earlier version of this list named "had their Network changed" as a fourth condition. Nothing records the prospective leader's Network when the request is made — `cell_leadership_requests` carries no such column — so the condition had no baseline to compare against, and no implementation could evaluate it.
+
+It needs none. A Network change forces a pastoral reassignment into the new Network at the same instant (Section 4), and no pastoral edge crosses Networks (Section 5) — so every ancestor of the moved person is now in the other Network, the requester is not among them, and the subtree condition above fires. The request is then refused for the thing that actually changed: the pastoral relationship it rested on no longer exists.
+
+**The residual is one scope value, and naming it as "a wider grant" would be wrong.** Every role holds `cell.request_leadership` at subtree-excluding-self (Section 7), so the ordinary case is covered entirely. Of the wider values an Admin-issued grant may carry, a **Network** grant catches a Network change more directly than the subtree condition does — scope is decided against the person's *current* Network, and after a change that is no longer the granted one. Only a **Whole Church** grant misses it, because scope is satisfied before the target is read at all.
+
+Nothing is corrupted where it does miss. A new Cell inherits its leader's Network as it stands at approval, which is correct, and a handover is refused by the leader-to-leader check below. What survives is a request gone stale with nobody told, which is a pastoral cost rather than a data one.
+
+Recording the Network on the request and comparing it at approval was the alternative, and it was rejected: a column, a migration and a rule, bought to detect a state the tree already reports and whose only undetected form is harmless.
 
 **The Cell, for a handover.** Reject where it has since been closed; where the incoming leader and the Cell's current leader do not share a Network, for the same reason; where the Cell's leader is now the person the request names, since a handover that changes nothing is refused (above); and **where the Cell has moved outside the requester's authorized scope**.
 
@@ -2172,17 +2182,38 @@ That last one is not hypothetical, and it is why both objects are revalidated ra
 
 Without revalidation, approval creates an active leadership assignment for an archived Person and proceeds to provision their credentials — precisely the outcome Section 3's archive guard exists to prevent.
 
+**Both conditions are asked of the requester, and asked whole.** Each is the question the request step itself asked — `cell.request_leadership` over the prospective leader, `cell.manage_lifecycle` over the Cell — put to the account named in `requested_by` rather than to the approver, for the reason the two paragraphs above give.
+
+**One refusal covers both halves of that question, and which half moved is not distinguished.** The predicate is the whole of the requester's authority, so it answers no where the person or the Cell moved out of reach, and equally where the requester has since lost the capability or the role carrying it. That is "the state at approval governs" applied without qualification, and the conservative direction is taken where this section would otherwise be silent: a relaxation must not become a capability by omission.
+
+**Account status is not part of that predicate, and saying so is the point.** A disabled Account keeps its roles and its grants — Section 6 makes disablement an authentication decision, so it stops the holder signing in rather than emptying their authority — and a request submitted by an account since disabled is therefore still approvable. Consulting status here would be a rule about what a grant means, which belongs to Section 7 and to every capability at once rather than to this endpoint. It is named because the opposite reads as obvious and would otherwise be assumed: an approval is not evidence that the requester could still act today.
+
+**It strands nothing**, which is what makes the strict reading safe here where it was terminal for declining. Declining stays available on every pending request, so a request whose requester has left is declined `SUBMITTED_IN_ERROR` and submitted afresh by whoever now holds that pastoral relationship — the honest record, because the judgement the request expressed no longer has anybody standing behind it. It answers `SCOPE_DENIED`, which is what Section 22 reserves for a statement about an actor's authority over a target.
+
 **On approving a new Cell**, in a single transaction:
 
 - the Cell is created as `ACTIVE`, with a server-assigned Cell ID (above)
 - its category history row opens (Category changes, above)
 - its schedule row opens (Schedule changes, above)
 - the Cell leadership assignment is created for the named leader (Section 11)
-- the account step for that leader proceeds (Section 6)
+
+**The account is not created in that transaction, and the leader is left with the account step pending.** Approval writes the audit entry Section 21 names for exactly this state — "Cell leadership assignment left with account provisioning pending" — and the account is provisioned afterwards through `POST /api/v1/accounts`.
+
+**That entry is written on every approval of either kind, unconditionally**, and the qualification that reads naturally here is the one to avoid. It is tempting to skip it where the incoming leader already leads a Cell, on the grounds that they already have an account — but leading a Cell and holding an account are not the same fact, and the state where the two part company is the one this entry exists for. Direct creation during initial encoding (Section 2) and every earlier approval both produce a current Cell Leader with the account step still pending, so conditioning on Cell leadership suppresses the entry in precisely the case where an account is genuinely owed.
+
+The honest test — whether an Account exists for that Person — is not one this module may perform. `cells` does not read `accounts`: Section 6 has `auth` ask `cells` whether a Person is a current Cell Leader before it may provision a `LEADER` account, so the dependency runs that way, and asking back would close the cycle Section 2 keeps open.
+
+So the entry over-records rather than under-records, and the trade is deliberate. A spurious entry says an account was pending for somebody who had one, which the next reader resolves by looking; a missing entry leaves the only trace of a genuinely pending account nowhere at all.
+
+The reason is Section 6's own, stated there and applied here: "an actor authorized only to assign Cell leadership may record the leadership assignment, but must not thereby cause an account to be created or an activation email to be sent. The account step is left pending for an authorized actor and is separately audit logged." Section 6 also requires an email address before an account exists, and nothing on the approval path carries one — a Person holds no email (Section 3), and a request records none.
+
+Two further reasons it is not folded in. Provisioning is where the dual-authorization rule, the Senior Pastor seat and the duplicate-address refusal live (Section 6, Section 7), and one place that gets those right is better than two. And an activation email cannot be sent inside a transaction, so folding the step in would put a delivery failure behind a committed Cell: an endpoint that commits its idempotency completion and then fails hands the client an error while the store holds the success every retry replays (Section 22).
+
+The cost is that approving a new Cell and provisioning its leader's account are two actions rather than one. That is the same shape Section 2 already accepts for the Cells created during initial encoding, and the audit entry is what stops it being silent.
 
 The category and schedule rows are not optional extras. A Cell created without a schedule row has no derivable set of scheduled meetings, and therefore no coverage figure for its first month (Section 12).
 
-**On approving a handover**, in a single transaction: the outgoing leadership assignment ends, the incoming one opens at the same instant, and the account step for the new leader proceeds (Section 6). One transaction is not a preference — Section 11 requires an `ACTIVE` Cell to hold exactly one leadership assignment, and the two writes pass through a state that satisfies neither on its own.
+**On approving a handover**, in a single transaction: the outgoing leadership assignment ends and the incoming one opens at the same instant. The account step is left pending on the same rule as above, and its entry is written here too — an incoming leader who already leads a Cell will commonly have an account already (Section 6: one Person has one account however many Cells they lead), and that is exactly the case the paragraph above declines to test for. One transaction is not a preference — Section 11 requires an `ACTIVE` Cell to hold exactly one leadership assignment, and the two writes pass through a state that satisfies neither on its own.
 
 Nothing else about the Cell changes. It keeps its Cell ID, its category history and its schedule history, because none of those is a fact about who leads it. Its members stay where they are: they belong to the Cell, not to the person who was leading it.
 
@@ -3415,6 +3446,12 @@ GET  /api/v1/dcc/events/{id}/roster
 POST /api/v1/dcc/events/{id}/submit
 
 POST /api/v1/cells                       direct creation, initial encoding only
+
+POST /api/v1/cells/leadership-requests     step one: a new Cell, or a handover
+GET  /api/v1/cells/leadership-requests     the Admin queue: pending, either kind
+POST /api/v1/cells/leadership-requests/{request_id}/approve
+POST /api/v1/cells/leadership-requests/{request_id}/decline  with a reason from the fixed list
+
 GET  /api/v1/cells/{id}
 PUT  /api/v1/cells/{id}/category           effective the day it is made
 PUT  /api/v1/cells/{id}/schedule           effective the first of next month
