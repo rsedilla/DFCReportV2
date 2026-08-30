@@ -2178,11 +2178,18 @@ Without revalidation, approval creates an active leadership assignment for an ar
 - its category history row opens (Category changes, above)
 - its schedule row opens (Schedule changes, above)
 - the Cell leadership assignment is created for the named leader (Section 11)
-- the account step for that leader proceeds (Section 6)
+
+**The account is not created in that transaction, and the leader is left with the account step pending.** Approval writes the audit entry Section 21 names for exactly this state — "Cell leadership assignment left with account provisioning pending" — and the account is provisioned afterwards through `POST /api/v1/accounts`.
+
+The reason is Section 6's own, stated there and applied here: "an actor authorized only to assign Cell leadership may record the leadership assignment, but must not thereby cause an account to be created or an activation email to be sent. The account step is left pending for an authorized actor and is separately audit logged." Section 6 also requires an email address before an account exists, and nothing on the approval path carries one — a Person holds no email (Section 3), and a request records none.
+
+Two further reasons it is not folded in. Provisioning is where the dual-authorization rule, the Senior Pastor seat and the duplicate-address refusal live (Section 6, Section 7), and one place that gets those right is better than two. And an activation email cannot be sent inside a transaction, so folding the step in would put a delivery failure behind a committed Cell: an endpoint that commits its idempotency completion and then fails hands the client an error while the store holds the success every retry replays (Section 22).
+
+The cost is that approving a new Cell and provisioning its leader's account are two actions rather than one. That is the same shape Section 2 already accepts for the Cells created during initial encoding, and the audit entry is what stops it being silent.
 
 The category and schedule rows are not optional extras. A Cell created without a schedule row has no derivable set of scheduled meetings, and therefore no coverage figure for its first month (Section 12).
 
-**On approving a handover**, in a single transaction: the outgoing leadership assignment ends, the incoming one opens at the same instant, and the account step for the new leader proceeds (Section 6). One transaction is not a preference — Section 11 requires an `ACTIVE` Cell to hold exactly one leadership assignment, and the two writes pass through a state that satisfies neither on its own.
+**On approving a handover**, in a single transaction: the outgoing leadership assignment ends and the incoming one opens at the same instant. The account step is left pending on the same rule as above, and where the incoming leader already leads a Cell they already have an account, so there is nothing pending at all (Section 6: one Person has one account however many Cells they lead). One transaction is not a preference — Section 11 requires an `ACTIVE` Cell to hold exactly one leadership assignment, and the two writes pass through a state that satisfies neither on its own.
 
 Nothing else about the Cell changes. It keeps its Cell ID, its category history and its schedule history, because none of those is a fact about who leads it. Its members stay where they are: they belong to the Cell, not to the person who was leading it.
 
