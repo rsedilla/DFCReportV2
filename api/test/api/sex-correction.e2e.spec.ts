@@ -701,6 +701,28 @@ describe('sex correction (SKILL.md sections 4, 5, 7, 21, 22)', () => {
       // *pastoral* wording pins the tie direction: the bound is resolved by a reduce
       // that keeps the earlier candidate, so `>` becoming `>=` would name the Network
       // row here and change nothing else in the suite.
+      // **The premise, asserted rather than assumed.** Both bounds are `EPOCH` only
+      // because `createPerson` and `assignTo` happen to default to it. If either default
+      // moved, this would quietly become a plain pastoral-floor case and would stop
+      // distinguishing `>` from `>=` while still passing on the wording.
+      const premise = await db
+        .selectFrom('network_assignments')
+        .innerJoin(
+          'pastoral_assignments',
+          'pastoral_assignments.person_id',
+          'network_assignments.person_id',
+        )
+        .select([
+          'network_assignments.started_at as network_started_at',
+          'pastoral_assignments.started_at as assignment_started_at',
+        ])
+        .where('network_assignments.person_id', '=', grace.id)
+        .where('network_assignments.ended_at', 'is', null)
+        .where('pastoral_assignments.ended_at', 'is', null)
+        .executeTakeFirstOrThrow();
+
+      expect(premise.network_started_at.getTime()).toBe(premise.assignment_started_at.getTime());
+
       const response = await correct(grace.id, {
         sex: 'MALE',
         reason: 'Sex entered in error at encoding.',
@@ -860,6 +882,57 @@ describe('sex correction (SKILL.md sections 4, 5, 7, 21, 22)', () => {
 
       expect(accepted.status).toBe(200);
       expect(accepted.body.effective_date).toBe('2026-06-02');
+    });
+
+    it('ignores a handover in a Cell the person was not a member of', async () => {
+      // **The correlation, and nothing else pinned it.** Dropping
+      // `spanned.cell_id = cm.cell_id` was green across the whole suite until this
+      // case: every other fixture has one Cell, or a second whose handover falls
+      // outside the membership window. Uncorrelated, the term picks up any Cell's
+      // handover and over-refuses a correction that strands nothing.
+      //
+      // Mark's own Cell never changes hands, so his term is the join instant. The
+      // other Cell changes hands inside his membership window and has nothing to do
+      // with him.
+      const marco = await createPerson(db, { firstName: 'Marco', network: 'MENS' });
+      await assignTo(db, marco.id, manuel.id);
+
+      const manuelCell = await createCell(db, { leader: manuel, createdAt: JOINED_AT });
+      await db
+        .insertInto('cell_memberships')
+        .values({
+          person_id: mark.id,
+          cell_id: manuelCell.id,
+          started_at: JOINED_AT,
+          ended_at: LEFT_AT,
+        })
+        .execute();
+
+      const otherCell = await createCell(db, { leader: raymond, createdAt: LED_FROM });
+      await db.transaction().execute(async (trx) => {
+        await trx
+          .updateTable('cell_leaderships')
+          .set({ ended_at: HANDED_OVER_AT })
+          .where('cell_id', '=', otherCell.id)
+          .where('ended_at', 'is', null)
+          .execute();
+        await trx
+          .insertInto('cell_leaderships')
+          .values({ person_id: marco.id, cell_id: otherCell.id, started_at: HANDED_OVER_AT })
+          .execute();
+      });
+
+      // The same date the `extends` case above is refused at, and here it is accepted
+      // — the difference being whose Cell changed hands.
+      const accepted = await correct(mark.id, {
+        sex: 'FEMALE',
+        reason: 'Sex entered in error at encoding.',
+        pastoral_leader_id: grace.id,
+        effective_date: '2026-06-01',
+      });
+
+      expect(accepted.status).toBe(200);
+      expect(accepted.body.effective_date).toBe('2026-06-01');
     });
 
     it('does not extend to a handover at the instant the membership ended', async () => {

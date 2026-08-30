@@ -6655,6 +6655,49 @@ them. The floor is what keeps that bargain honest: it refuses any date that woul
 comparison some row still depends on, and permits only dates that leave the record merely
 out of date.
 
+
+**A second pass, scoped to the fix batch, found nothing behavioural.** It confirmed the
+membership fix by re-deriving the join predicate against the member scan, and enumerated
+every reader of a closed Cell row where the corrected person's Network is an operand —
+five sites, all in migration 0009, each cleared by one of the two terms. There is no
+third reader. That is the convergence the previous slices took four and five passes to
+reach.
+
+What it found was one **new** false reason, in `SKILL.md` rather than in a comment: the
+settlement paragraph listed three consequences of stranding an open membership, and the
+first — that the Cell can take no further member from its own roster's Network — is false
+on the member side. `assert_membership_same_network` compares a joining member against the
+Cell's **leader**, never against the members already in it. Those three consequences are
+Section 4's for a change to the *leader's* Network, carried across without re-deriving
+which survive. Section 25 rule 19, in the paragraph settling a Stop Condition, in the batch
+whose own entry says every false statement here is a true conclusion with a false reason.
+
+It also found the ruling's **bolded thesis** and the open-list italic still stating
+`started_at` alone, four lines above a paragraph that had been corrected. The lesson is
+already in this log verbatim, from 2026-08-23: a heading is what gets skimmed and quoted,
+so a stale one travels further than a stale paragraph.
+
+**Of the four mutations that pass reported as unrun, running them settled three
+differently than reading them had.** The correlation `spanned.cell_id = cm.cell_id` was
+genuinely unpinned and is pinned now, by a case with a second Cell whose handover falls
+inside the membership window and which the corrected person never belonged to —
+uncorrelated, the term picks up any Cell's handover and over-refuses. The lower bound
+`>=` against `>` is unreachable, needing two identical `clock_timestamp()` reads, and is
+declared in the docblock rather than pinned by a fixture that cannot arise.
+
+**`max` against `min` was reported as green and is already caught**, which is worth
+recording because the reason is not obvious: a Cell's *own first leadership row* starts at
+the Cell's `created_at` and therefore sits inside any membership opened at that instant,
+so a window holding one handover already holds two rows. The existing case reddens. Run
+rather than accepted — the same discipline the report itself asks for, applied to the
+report.
+
+**`dea0031`'s commit message overclaims one pin.** It says "Also pinned: the network-row
+push"; the three cases that batch added do not pin it. What catches a crude deletion is
+the pre-existing case refusing an effective date at the instant the Network row began,
+where an empty candidate list makes the seedless `reduce` throw. The message is immutable
+and stands; this is the correction.
+
 ### Open — awaiting a ruling
 
 **One item awaits a ruling, and it blocks Stage 5. Thirty-six other things are

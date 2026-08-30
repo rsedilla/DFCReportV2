@@ -475,6 +475,13 @@ export class CellsReadService implements CellScopePort, CellRelationshipsPort {
    * — and the pastoral terms are combined by the caller rather than here, because
    * `pastoral_assignments` is not this module's to read.
    *
+   * **The window's lower bound is inclusive and nothing can fail against it.** A
+   * leadership starting at the exact instant a membership starts needs two identical
+   * `clock_timestamp()` reads, which no operation produces — so `>=` against `>` is
+   * green, and it is declared here rather than pinned by a fixture that could not arise.
+   * Inclusive is still the correct reading of the member scan, which takes
+   * `cm.started_at <= v_row.started_at`.
+   *
    * **Both halves are restricted to closed rows, and the two filters are not alike.**
    * `cl.ended_at IS NOT NULL` on the leadership half is a no-op, since `max` ignores
    * nulls; it is written for the reader. `cm.ended_at IS NOT NULL` on the membership half
