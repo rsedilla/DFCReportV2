@@ -226,13 +226,15 @@ export type AuditAction =
   // **An earlier version of this comment argued a closure needed no such entry**,
   // because the ending "is not a separate decision, and its date is the closure's".
   // That is the argument the membership pair above rejects, and section 21 makes no
-  // exception for leadership. A closure writes one with a null incoming leader, which
-  // is what distinguishes it from a handover in the log.
+  // exception for leadership. A closure writes one with a null incoming leader.
   //
-  // *An earlier version of this said "the opened half arrives with the handover
-  // workflow". Both halves of that were wrong: `cell_leadership.opened` is above and
-  // predates it, written by direct creation, and a handover writes neither of these —
-  // it is one action and writes `changed`, below.*
+  // *Two earlier claims about this are withdrawn.* It said "the opened half arrives with
+  // the handover workflow" — `cell_leadership.opened` is above, predates it, and is
+  // written by direct creation. And it said the null incoming leader "is what
+  // distinguishes a closure from a handover in the log", which stopped being true the
+  // moment a handover got an action of its own: a handover writes neither of these, it
+  // is one action and writes `changed`, below. What a closure's entry is distinguished
+  // *from* is nothing — it is the only writer of this action.
   | 'cell_leadership.ended'
   // A handover, which is one action rather than an ending beside an opening: section
   // 10 has the outgoing assignment end and the incoming one open "at the same

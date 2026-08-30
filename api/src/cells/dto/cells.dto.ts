@@ -192,23 +192,6 @@ export class LeadershipRequestQueueDto {
  * (section 1, principle 7). A decline records that a Cell was not opened at this time
  * and never an assessment of the person.
  */
-/**
- * `POST /api/v1/cells/leadership-requests/{request_id}/approve` (SKILL.md section 10).
- *
- * **Empty, and declared rather than omitted.** An approval carries no fields: section
- * 10 says everything takes effect at approval and that "nothing about a request is
- * backdated to when it was made", so there is no effective date to send; the category,
- * day and time a `NEW_CELL` asks for are already on the request row, and a handover
- * names its Cell there.
- *
- * The class exists so that `forbidNonWhitelisted` refuses a body carrying anything at
- * all. Without a DTO the extra property is silently dropped, and a client sending
- * `effective_date` would be answered 200 by a server that ignored it — which is the
- * shape section 10's "everything takes effect at approval" most invites somebody to
- * try. Refusing says so.
- */
-export class ApproveLeadershipRequestDto {}
-
 export class DeclineLeadershipRequestDto {
   @IsIn(DECLINE_REASONS)
   reason!: CellDeclineReason;
@@ -259,6 +242,23 @@ export class DeclineLeadershipRequestDto {
   @MaxLength(500)
   note?: string;
 }
+
+/**
+ * `POST /api/v1/cells/leadership-requests/{request_id}/approve` (SKILL.md section 10).
+ *
+ * **Empty, and declared rather than omitted.** An approval carries no fields: section
+ * 10 says everything takes effect at approval and that "nothing about a request is
+ * backdated to when it was made", so there is no effective date to send; the category,
+ * day and time a `NEW_CELL` asks for are already on the request row, and a handover
+ * names its Cell there.
+ *
+ * The class exists so that `forbidNonWhitelisted` refuses a body carrying anything at
+ * all. Without a DTO the extra property is silently dropped, and a client sending
+ * `effective_date` would be answered 200 by a server that ignored it — which is the
+ * shape section 10's "everything takes effect at approval" most invites somebody to
+ * try. Refusing says so.
+ */
+export class ApproveLeadershipRequestDto {}
 
 /**
  * `POST /api/v1/cells/{id}/members` (SKILL.md section 10).

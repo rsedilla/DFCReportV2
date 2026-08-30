@@ -3,6 +3,7 @@ import { Module } from '@nestjs/common';
 import { SettingsModule } from '../admin/settings/settings.module';
 import { AuditModule } from '../audit/audit.module';
 import { AuthorizationModule } from '../auth/authorization/authorization.module';
+import { HierarchyModule } from '../hierarchy/hierarchy.module';
 import { NetworksModule } from '../networks/networks.module';
 import { PeopleModule } from '../people/people.module';
 
@@ -27,8 +28,8 @@ import { CellsService } from './cells.service';
  * would import `auth` right back if it took the whole of it to ask an authorization
  * question. What it needs is the question, not the module.
  *
- * The graph runs `auth -> cells -> {people, networks, authorization, admin/settings,
- * audit}`
+ * The graph runs `auth -> cells -> {people, networks, hierarchy, authorization,
+ * admin/settings, audit}`
  * with nothing pointing back. `test/unit/module-graph.spec.ts` builds the injector
  * without a database, which is what makes a wiring mistake fail in seconds rather
  * than on every authenticated request.
@@ -47,7 +48,14 @@ import { CellsService } from './cells.service';
  * ownership, is unaffected by it.
  */
 @Module({
-  imports: [PeopleModule, NetworksModule, AuthorizationModule, SettingsModule, AuditModule],
+  imports: [
+    PeopleModule,
+    NetworksModule,
+    HierarchyModule,
+    AuthorizationModule,
+    SettingsModule,
+    AuditModule,
+  ],
   controllers: [CellsController],
   providers: [
     CellsService,

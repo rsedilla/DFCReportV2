@@ -44,6 +44,19 @@ export interface NewCell {
  * Two copies of a statement whose whole point is that four rows share one instant is
  * two copies free to drift on exactly the property that matters.
  *
+ * **`clock_timestamp()` rather than the column's `DEFAULT now()`, and that is section
+ * 5 rather than taste.** `now()` is transaction start, and these four rows carry their
+ * instant into `assert_leadership_stays_in_network`, which evaluates
+ * `network_as_of(leader, started_at)`. Approval takes an advisory lock on the
+ * prospective leader and may wait up to three seconds for it, so a `now()` stamp
+ * predates the lock and the trigger would then be comparing a Network as it stood
+ * before a change the lock exists to serialize against. Section 5: an operation "reads
+ * its effective instant after the lock, not before it".
+ *
+ * The first version used `DEFAULT VALUES`, carried over from `createDirectly` -- which
+ * takes no locks at all, so `now()` was correct there and the reason did not travel
+ * (section 25 rule 19). It is correct for that caller under either clock.
+ *
  * It deliberately writes no audit entry and takes no idempotency claim. Those differ
  * between the two callers — section 21 names a separate action for a Cell "created
  * directly by Admin during initial encoding" — and folding them in would make this
@@ -61,7 +74,7 @@ export async function insertCellWithin(
     created_at: Date;
   }>`
       WITH new_cell AS (
-        INSERT INTO cells DEFAULT VALUES
+        INSERT INTO cells (created_at) VALUES (clock_timestamp())
         RETURNING id, cell_id, created_at
       ), category AS (
         INSERT INTO cell_categories (cell_id, category, actor_id, started_at)

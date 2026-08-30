@@ -11,6 +11,7 @@ import { Capability } from '../auth/authorization/capabilities';
 import {
   InvariantViolationError,
   NotFoundError,
+  ResourceBusyError,
   ScopeDeniedError,
   ValidationFailedError,
 } from '../common/errors/api-error';
@@ -18,6 +19,7 @@ import { NIL_UUID, sameId } from '../common/identifiers';
 import { IdempotencyService } from '../common/idempotency/idempotency.service';
 import { CellLock, lockCellsWithin } from '../database/cell-lock';
 import { DATABASE, type Db } from '../database/database.module';
+import { HierarchyService } from '../hierarchy/hierarchy.service';
 import { boundLockWaitsWithin, lockPersonsWithin } from '../database/person-lock';
 import { NetworksService } from '../networks/networks.service';
 import { PeopleReadService } from '../people/people.read.service';
@@ -98,6 +100,7 @@ export class CellsLeadershipRequestService {
     private readonly cells: CellsReadService,
     private readonly people: PeopleReadService,
     private readonly networks: NetworksService,
+    private readonly hierarchy: HierarchyService,
   ) {}
 
   /**
@@ -297,6 +300,15 @@ export class CellsLeadershipRequestService {
     claim: CurrentClaim,
   ): Promise<Record<string, unknown>> {
     return this.db.transaction().execute(async (trx) => {
+      // **The bound, which this operation owes and did not set** (section 5). It takes
+      // a row lock and locks no person, so `lockPersonsWithin`'s early return never
+      // sets `lock_timeout` for it -- "a caller that takes row locks must set the bound
+      // itself where its person list can be empty". Approval is what made that
+      // reachable: it now holds this same row across an entire Cell creation, so a
+      // concurrent decline can wait on a transaction doing three seconds of lock waits
+      // of its own, in a bounded pool the liveness probe shares (section 24).
+      await boundLockWaitsWithin(trx);
+
       // `FOR UPDATE`, because two concurrent declines would otherwise both read
       // `PENDING` and both write a decision — and the second would be refused by the
       // finality trigger as a `restrict_violation`, which nothing classifies. That
@@ -542,11 +554,25 @@ export class CellsLeadershipRequestService {
       // cannot differ — asserted rather than assumed, because if it ever did the
       // requester whose scope is about to be evaluated would not be the one the
       // authority was read for.
-      if (!sameId(request.requested_by, pre.requested_by)) {
-        throw new InvariantViolationError(
-          'This request changed while it was being approved. Retry.',
-          { request_id: request.id },
-        );
+      // **`requested_by` and `cell_id`, because the locks were chosen from both.**
+      // `cell_leadership_request_is_final` freezes the kind, the person named, the
+      // requester and the requested-at instant -- and *not* `cell_id`, which decides
+      // which `cells` row was locked and whose leader was looked up. An earlier version
+      // of the comment above listed the frozen four and called the pre-read safe on
+      // their account, which is broader than the trigger. Nothing writes `cell_id` on a
+      // PENDING row today, so both branches are unreachable; they are checked rather
+      // than argued away, because the argument is what would go stale.
+      //
+      // `RESOURCE_BUSY` rather than a 409: section 22 stores a 4xx against the
+      // idempotency key and releases a 5xx, and the remedy here is a retry -- so a
+      // stored 409 would replay this refusal for the whole retention, which is the dead
+      // end the 2026-08-23 `RESOURCE_BUSY` ruling exists to prevent.
+      if (
+        !sameId(request.requested_by, pre.requested_by) ||
+        (request.cell_id === null) !== (pre.cell_id === null) ||
+        (request.cell_id !== null && pre.cell_id !== null && !sameId(request.cell_id, pre.cell_id))
+      ) {
+        throw new ResourceBusyError({ request_id: request.id });
       }
 
       const decision = await this.assertApprovableWithin(trx, request, {
@@ -708,6 +734,10 @@ export class CellsLeadershipRequestService {
    * a pastoral reassignment into the new Network at the same instant (section 4) and
    * no pastoral edge crosses Networks (section 5), so the moved person leaves the
    * requester's subtree and the check below fires.
+   *
+   * A `NETWORK`-scoped grant catches it more directly still, comparing the person's
+   * current Network against the granted one. `WHOLE_CHURCH` is the one value that
+   * misses it, because `scopeCovers` is satisfied before the target is read.
    */
   private async assertApprovableWithin(
     trx: Transaction<Database>,
@@ -762,7 +792,15 @@ export class CellsLeadershipRequestService {
         'The person this request names is no longer within the authorized subtree of the ' +
           'leader who requested it. Decline it; whoever now holds that pastoral ' +
           'relationship may submit another (SKILL.md section 10).',
-        { capability: Capability.CellRequestLeadership },
+        // **Whose authority failed, and it is not the caller's.** Section 22 splits its
+        // two codes so an administrator knows which half to fix; without naming the
+        // subject, an Admin reading `capability` here audits their own grants and finds
+        // nothing wrong, because the refusal is about the requester's reach.
+        {
+          capability: Capability.CellRequestLeadership,
+          subject: 'requester',
+          requested_by: context.requester.accountId,
+        },
       );
     }
 
@@ -801,20 +839,21 @@ export class CellsLeadershipRequestService {
     trx: Transaction<Database>,
     personId: string,
   ): Promise<void> {
-    const edge = await trx
-      .selectFrom('pastoral_assignments')
-      .select(['leader_id'])
-      .where('person_id', '=', personId)
-      .where('ended_at', 'is', null)
-      .executeTakeFirst();
+    // **Through `hierarchy`, which owns `pastoral_assignments`** (section 2, Modules).
+    // The first version selected from that table here, which section 2 permits for
+    // exactly one shape -- "a read joined onto a query rooted in a table the reading
+    // module owns" -- and this is a standalone read rooted in another module's table.
+    // `openAssignmentOf` is the same query and already takes an executor; it is the
+    // identical defect and remedy CLAUDE.md records for `attachExistingWithin`.
+    const edge = await this.hierarchy.openAssignmentOf(trx, personId);
 
-    if (!edge || edge.leader_id === null) {
+    if (!edge || edge.leaderId === null) {
       return;
     }
 
     const [personNetwork, leaderNetwork] = await Promise.all([
       this.networks.currentNetwork(trx, personId),
-      this.networks.currentNetwork(trx, edge.leader_id),
+      this.networks.currentNetwork(trx, edge.leaderId),
     ]);
 
     if (personNetwork !== null && leaderNetwork !== null && personNetwork !== leaderNetwork) {
@@ -887,14 +926,24 @@ export class CellsLeadershipRequestService {
     //
     // Refused rather than trusted, because if it ever did the person whose Network is
     // about to be compared would be one this transaction never locked.
-    if (
-      context.outgoingBeforeLock === null ||
-      !sameId(outgoingLeaderId, context.outgoingBeforeLock)
-    ) {
+    if (context.outgoingBeforeLock === null) {
+      // A Cell that had no leadership row when the lock list was built and has one now.
+      // No operation produces it -- an `ACTIVE` Cell always has exactly one, and a
+      // `CLOSED` one is refused above -- and nothing changed hands, so the refusal
+      // below would be the wrong sentence. Kept as a guard against a state the schema
+      // forbids rather than removed, because the alternative is comparing against a
+      // person nobody locked.
       throw new InvariantViolationError(
-        'This Cell changed hands while the approval was being made. Retry.',
+        'That Cell had no leadership assignment when this approval began, so there is ' +
+          'nobody to hand it over from (SKILL.md section 11).',
         { cell_id: cell.cell_id },
       );
+    }
+
+    if (!sameId(outgoingLeaderId, context.outgoingBeforeLock)) {
+      // `RESOURCE_BUSY` for the reason above: the remedy is a retry, and a stored 409
+      // would replay the refusal for the key's whole retention (section 22).
+      throw new ResourceBusyError({ cell_id: cell.cell_id });
     }
 
     if (sameId(outgoingLeaderId, request.prospective_leader_id)) {
@@ -941,7 +990,11 @@ export class CellsLeadershipRequestService {
         'This Cell is no longer within the authorized scope of the leader who requested the ' +
           'handover. Decline it; whoever now oversees the Cell may submit another ' +
           '(SKILL.md section 10).',
-        { capability: Capability.CellManageLifecycle },
+        {
+          capability: Capability.CellManageLifecycle,
+          subject: 'requester',
+          requested_by: context.requester.accountId,
+        },
       );
     }
 

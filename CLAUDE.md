@@ -6296,12 +6296,19 @@ pastoral edge impossible (Section 5) — so every ancestor of the moved person i
 Network, the requester is not among them, and the subtree condition fires. The refusal then
 names the thing that actually changed: the pastoral relationship the request rested on.
 
-**The residual is written into Section 10 rather than discovered.** Every role holds
-`cell.request_leadership` at `SUBTREE_EXCL_SELF` (Section 7), so the ordinary case is covered
-entirely; a requester holding an Admin-issued *wider* grant passes the subtree test and does
-not see the change. Nothing is corrupted — a new Cell inherits its leader's Network as it
-stands at approval, which is correct, and a handover is refused by the leader-to-leader
-check. What survives is a stale request nobody is told about, which is a pastoral cost.
+**The residual is one scope value, and the first version of this entry called it "a
+wider grant".** That was wrong and the review caught it. Every role holds
+`cell.request_leadership` at `SUBTREE_EXCL_SELF`, so the ordinary case is covered entirely;
+of the wider values an Admin-issued grant may carry, a `NETWORK` grant catches a Network
+change *more* directly than the subtree condition does, because `scopeCovers` compares the
+person's current Network against the granted one. Only `WHOLE_CHURCH` misses it, returning
+true on its first line before the target is read.
+
+Section 10 itself calls a Network grant wider, eighty lines above the sentence that had said
+wider grants miss this — so the claim was refutable from the section it was being written
+into. Nothing is corrupted where it does miss: a new Cell inherits its leader's Network as it
+stands at approval, and a handover is refused by the leader-to-leader check. What survives is
+a stale request nobody is told about, which is a pastoral cost.
 
 That the wider grant is possible at all is the open item this log already carries: whether
 Section 7 should refuse a grant of `cell.request_leadership` wider than `SUBTREE_EXCL_SELF`.
@@ -6394,7 +6401,7 @@ both for each rule rather than by asserting it here.
 
 ### Open — awaiting a ruling
 
-**One item awaits a ruling, and it blocks Stage 5. Thirty-four other things are
+**One item awaits a ruling, and it blocks Stage 5. Thirty-six other things are
 unsettled, none of them blocking. They are listed at the end, so this section is the
 whole of what is open.**
 
@@ -6403,7 +6410,7 @@ and the italic below it. The batch that added the thirty-second bullet updated t
 alone, because the instruction to recount lives only in the italic, and the bolded twin
 is what a reader meets first. Anyone adding a bullet updates both.*
 
-*Thirty-four distinct items across thirty-four bullets. Three arrived with the leadership
+*Thirty-six distinct items across thirty-six bullets. Two arrived with the Cell leadership approval slice, both escalated by its first architecture-guardian pass: which kind of target a leadership audit entry carries, and whether a request's `cell_id` should be frozen while it is PENDING. Three arrived with the leadership
 request slice — the third being whether the application should pin the database session's
 `DateStyle`, raised by the third review pass. The first two are: how a requester sees the outcome of a request they submitted, which
 section 19 requires and section 7 names no capability for, and whether section 7 should
@@ -6482,4 +6489,6 @@ Two related questions have defined behaviour and are recorded in `SKILL.md` §12
 - **What the native clients owe on accessibility.** `SKILL.md` §23 binds the web application to WCAG 2.2 AA and says the equivalent obligation for a native client is the platform accessibility API rather than WCAG. Which platform guarantees, and what would fail a build, is a ruling to make when the client is.
 
 - **Whether the liveness probe should share the application connection pool.** §24 now records that it does, and that pool exhaustion therefore presents to the platform as a dead process — so the response is a restart that discards the transactions still making progress. A separate connection, or a probe that does not reach the database, are both defensible and mean different things by "healthy". Deployment work with a ruling attached, alongside the database-role item above.
+- **Which kind of target a Cell leadership audit entry carries.** Section 21 groups "Cell leadership opened, ended, or changed" in one bullet, and Section 7 resolves an audit entry's scope through its target — so the three should presumably agree, and they do not. `cell_leadership.opened` targets the **person**, while `cell_leadership.ended` and `cell_leadership.changed` target the **Cell**. A reader searching one person's leadership history therefore finds the appointment and not the handover that took it away, and a leader whose scope covers the person but not the Cell sees one and not the other. The divergence between `opened` and `ended` predates the approval endpoint; that endpoint picked the Cell for `changed`, matching its neighbour, without the question having been settled. Both readings are defensible — the Cell is what Section 21 says a reader asks about ("who led a Cell before a handover"), and the person is what Section 16 counts by. Settle it before Stage 5 builds anything that reads this log by target, and note that changing it later rewrites nothing: `audit_log` is append-only, so a change applies from that point forward and leaves the log heterogeneous unless the old entries are read with both target kinds in mind.
+- **Whether `cell_leadership_requests.cell_id` should be frozen while a request is `PENDING`.** Migration 0009's finality trigger freezes what a request asks *about* — its kind, the person it names, who submitted it and when — and deliberately leaves the category, day and time writable so a mistyped time is corrected rather than declined and resubmitted. It says nothing about `cell_id`, which for a `HANDOVER` names the Cell itself. Nothing writes it on a `PENDING` row today, so this is not a live hole; what makes it worth settling is that approval chooses its lock list from that value before the transaction opens, and its under-lock re-check defends the value rather than relying on the trigger. If a revision path is ever added — correcting a handover that named the wrong Cell — the question becomes load-bearing in a place nobody would think to look.
 - **Whether `audit_log`'s append-only guarantee tolerates `TRUNCATE`.** §5 records the exemption for history tables and leans it on a least-privilege role that does not exist, which is already open above. §21 says nothing at all, and the test suite truncates `audit_log` before every test. Same answer as the `TRUNCATE` question above, most likely, but it is not written down for the one table whose whole purpose is that nothing removes a row.

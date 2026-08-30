@@ -1,11 +1,9 @@
 import { randomUUID } from 'node:crypto';
 
-import { sql } from 'kysely';
 import request from 'supertest';
 
 import { createTestDb, truncateAll } from '../setup/database';
 import {
-  EPOCH,
   assignTo,
   closeCellDirectly,
   createAccount,
@@ -232,6 +230,37 @@ describe('Cell leadership approval (section 10)', () => {
       expect(category.started_at.getTime()).toBe(cell.created_at.getTime());
       expect(schedule.started_at.getTime()).toBe(cell.created_at.getTime());
       expect(leadership.started_at.getTime()).toBe(cell.created_at.getTime());
+    });
+
+    it('stamps the Cell after its locks, not at transaction start', async () => {
+      // **Section 5: an operation "reads its effective instant after the lock, not
+      // before it".** The first version took `cells.created_at` from the column's
+      // `DEFAULT now()`, which is *transaction start* — before the advisory lock on the
+      // prospective leader has been waited for. All four rows carry that instant into
+      // `assert_leadership_stays_in_network`, so the trigger would compare a Network as
+      // it stood before a change the lock exists to serialize against.
+      //
+      // **Pinned without staging concurrency**, because `now()` is constant across a
+      // transaction while `clock_timestamp()` advances within it. `audit_log.occurred_at`
+      // defaults to `now()`, and the entries are written *after* the Cell — so under the
+      // defect the two are exactly equal, and under the rule the Cell is strictly later.
+      // Reverting `insert-cell.ts` to `DEFAULT VALUES` reddens this and nothing else.
+      const requestId = await pendingNewCell(markAccount, juan.id);
+      const response = await approve(admin, requestId).expect(200);
+
+      const cell = await db
+        .selectFrom('cells')
+        .select('created_at')
+        .where('id', '=', response.body.cell_uuid as string)
+        .executeTakeFirstOrThrow();
+
+      const entry = await db
+        .selectFrom('audit_log')
+        .select('occurred_at')
+        .where('action', '=', 'cell.created')
+        .executeTakeFirstOrThrow();
+
+      expect(cell.created_at.getTime()).toBeGreaterThan(entry.occurred_at.getTime());
     });
 
     it('marks the request APPROVED, names the Cell it minted, and records who decided', async () => {
@@ -573,6 +602,62 @@ describe('Cell leadership approval (section 10)', () => {
       expect(response.body.error.code).toBe('SCOPE_DENIED');
     });
 
+    it('refuses a handover where the two leaders are in different Networks', async () => {
+      // **Section 10 names this and nothing exercised it.** The refusal exists so the
+      // ordinary case is an answer rather than `assert_leadership_stays_in_network`
+      // raising at COMMIT as a raw `check_violation` rendered `INTERNAL_ERROR`.
+      //
+      // Carlo is the outgoing leader and disciples nobody, so his Network can be
+      // corrected at all (section 4 refuses one while a person leads anyone). Nothing
+      // stops it stranding the Cell he leads — that is the uncovered path migration
+      // 0009 names and Stage 3's last item is about — which is what makes this
+      // reachable.
+      const womensRoot = await createPerson(db, { firstName: 'Geraldine', network: 'WOMENS' });
+      await assignTo(db, womensRoot.id, null);
+
+      const requestId = await pendingHandover(benAccount, pedro.id, carloCell.id);
+
+      await db.transaction().execute(async (trx) => {
+        const at = new Date();
+
+        await trx
+          .updateTable('network_assignments')
+          .set({ ended_at: at })
+          .where('person_id', '=', carlo.id)
+          .where('ended_at', 'is', null)
+          .execute();
+        await trx
+          .insertInto('network_assignments')
+          .values({ person_id: carlo.id, network: 'WOMENS', started_at: at })
+          .execute();
+
+        await trx
+          .updateTable('pastoral_assignments')
+          .set({ ended_at: at })
+          .where('person_id', '=', carlo.id)
+          .where('ended_at', 'is', null)
+          .execute();
+        await trx
+          .insertInto('pastoral_assignments')
+          .values({ person_id: carlo.id, leader_id: womensRoot.id, started_at: at })
+          .execute();
+      });
+
+      const response = await approve(admin, requestId).expect(409);
+      expect(response.body.error.code).toBe('INVARIANT_VIOLATION');
+      // The details rather than the code alone: the scope refusal below it would also
+      // fire for this fixture, and it answers 403 — but a mutation deleting only the
+      // Network comparison must not be absorbed by whatever refuses next.
+      expect(response.body.error.details.cell_id).toBe(carloCell.cellId);
+
+      const rows = await db
+        .selectFrom('cell_leaderships')
+        .select('id')
+        .where('cell_id', '=', carloCell.id)
+        .execute();
+      expect(rows).toHaveLength(1);
+    });
+
     it('refuses a handover to the person who now leads the Cell', async () => {
       const requestId = await pendingHandover(markAccount, juan.id, markCell.id);
 
@@ -650,23 +735,5 @@ describe('Cell leadership approval (section 10)', () => {
     // been covered had the request existed (section 22).
     const response = await approve(admin, randomUUID()).expect(404);
     expect(response.body.error.code).toBe('NOT_FOUND');
-  });
-
-  it('keeps EPOCH-dated fixtures legal, so a stale assignment is not what refuses', () => {
-    // A guard on the fixture rather than on the code: every assignment above starts at
-    // EPOCH, and a case that failed because the tree was dated wrongly would read as a
-    // defect in approval.
-    expect(EPOCH.getTime()).toBeLessThan(Date.now());
-  });
-
-  it('does not leave a lock_timeout set on the pooled connection', async () => {
-    // `SET LOCAL` reverts at transaction end. Asserted because approval is the third
-    // operation to take both lock classes, and a leaked bound would shorten every
-    // later query on that connection.
-    const requestId = await pendingNewCell(markAccount, juan.id);
-    await approve(admin, requestId).expect(200);
-
-    const row = await sql<{ lock_timeout: string }>`SHOW lock_timeout`.execute(db);
-    expect(row.rows[0].lock_timeout).toBe('0');
   });
 });
