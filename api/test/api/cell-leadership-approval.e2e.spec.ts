@@ -394,11 +394,10 @@ describe('Cell leadership approval (section 10)', () => {
       // targets, so `opened` naming the person and `ended` naming the Cell went
       // unobserved through the whole of Stage 3.
       //
-      // Section 7 resolves an entry through its target, and resolves a leadership
-      // through the Cell — falling back to its last leader once the Cell is closed,
-      // which is what keeps a closed Cell's record with whoever led it. A
-      // person-targeted entry has no such fallback and follows that person's later
-      // pastoral reassignment instead.
+      // Section 7 resolves an entry through its target, and lists "a Cell, a Cell
+      // meeting, a membership or a leadership" as resolving one way — so this entry is
+      // read by the rule written for what it is about, as `ended` and `changed` already
+      // were.
       const requestId = await pendingNewCell(markAccount, juan.id);
       const response = await approve(admin, requestId).expect(200);
 

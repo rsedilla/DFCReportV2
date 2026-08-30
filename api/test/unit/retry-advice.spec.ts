@@ -5,12 +5,27 @@ import { join } from 'node:path';
  * Advice must sit on the same side of section 22's store/release split as the status
  * carrying it (the ruling of 2026-08-31, written into section 22).
  *
- * **Why a scan over the source rather than a case per refusal.** The rule is decided
- * per call site, and the four sites the ruling moved are between them almost
- * unreachable: three in `approve` are frozen by `cell_leadership_request_is_final` and
- * a check constraint tying `cell_id`'s nullness to a frozen `kind`, so no request this
- * API accepts can reach them. An end-to-end case cannot pin what it cannot reach, and a
- * fixture contrived to reach them would assert against a state the database refuses.
+ * **Why a scan over the source rather than a case per refusal.** The rule is decided per
+ * call site, and of the four sites the 2026-08-31 ruling moved, three cannot be reached
+ * by any request this API accepts — for three different reasons, which is worth stating
+ * because one of them is weaker than the others:
+ *
+ * - the pre-read comparison in `approve` guards three values. `requested_by` is frozen
+ *   by `cell_leadership_request_is_final`, and `cell_id`'s *nullness* is tied to a
+ *   frozen `kind` by a check constraint — both enforced in the database. `cell_id`'s
+ *   **value** on a PENDING handover is frozen by nothing; it is unreached because no
+ *   code writes it, and whether it should be frozen is on `CLAUDE.md`'s open list;
+ * - the two refusals in `assertHandoverApprovableWithin` rest on none of that: a closed
+ *   Cell is refused earlier by `state`, `cell_leadership_requests_one_pending_handover`
+ *   permits one pending handover per Cell, and both callers of `insert-cell.ts` write a
+ *   different Cell.
+ *
+ * An end-to-end case cannot pin what it cannot reach, and a fixture contrived to reach
+ * them would assert against a state the database refuses.
+ *
+ * *A first version of this docblock gave one argument — the trigger and the check
+ * constraint — for all of them. It covers two of the three values in the first site and
+ * nothing in the other two, which is the shape section 25 rule 19 is about.*
  *
  * What *is* checkable is the pairing, and it is checkable everywhere at once —
  * including at sites Stage 4 has not written yet, which is the point. The defect this
@@ -21,8 +36,9 @@ import { join } from 'node:path';
  * **The two halves are not one rule stated twice.**
  *
  * A stored refusal (4xx) may not tell the client to retry, because a retry of that key
- * replays the refusal. It may tell the client to change the body and mint a new key,
- * which is the only thing that works.
+ * replays the refusal. What it owes instead is what to change; section 22 deliberately
+ * does *not* also require it to say that a new key is needed, because the rule that a
+ * key belongs to a body already settles that for a client changing one.
  *
  * A released refusal (5xx) may not tell the client to mint a new key, because the key
  * was released and is the right one to reuse. Sending the client to mint one is not

@@ -140,11 +140,9 @@ describe('cells: direct creation during initial encoding (sections 2 and 10)', (
     //
     // **`cell_leadership.opened` names the Cell**, since the ruling of 2026-08-31, and
     // this case asserted `person` until then. Section 7 resolves an audit entry's scope
-    // through its target and resolves a leadership through the Cell's leader as of the
-    // period, falling back to its last leader once the Cell is closed — so a
-    // person-targeted entry would be read by a different rule from the `ended` and
-    // `changed` entries beside it, and only the Cell's rule keeps a closed Cell's
-    // record with whoever led it.
+    // through its target, and gives a leadership one resolution and a Person another —
+    // so a person-targeted entry is read by a different rule from the `ended` and
+    // `changed` entries beside it, about the same thing.
     //
     // The leader is still asserted, from `after` rather than from the target, which is
     // where section 21 requires the incoming leader to be. That is what makes the

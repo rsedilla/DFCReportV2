@@ -40,8 +40,7 @@ cursor cannot answer differently by being written on a different day. That is th
 lesson of how these three came to agree.
 
 **It is what Section 22 does everywhere else it has had this choice.** A request body
-nested past twenty levels is refused rather than walked to the bound, and the section
-gives the reason
+nested past twenty levels is "refused, not truncated", and the section gives the reason
 in general terms: accepting the request and quietly doing something other than what was
 asked is worse than refusing, because it is the requests nobody looks at that get the
 silent treatment. A Cell closure naming more than 500 members "refuses rather than

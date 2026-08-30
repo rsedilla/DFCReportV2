@@ -139,18 +139,16 @@ export class CellsService {
         actorId: actor.accountId,
         action: 'cell_leadership.opened',
         // **The Cell, on section 21's rule for all three leadership actions.** Scope
-        // resolves an audit entry through its target (section 7), and section 7
-        // resolves a leadership through the Cell's leader as of the period, falling
-        // back to its last leader once the Cell is closed — so a Cell target is read
-        // by the rule written for what the entry is about, and the fallback keeps a
-        // closed Cell's record with the leader who led it.
+        // resolves an audit entry through its target (section 7), and section 7 gives
+        // "a Cell, a Cell meeting, a membership or a leadership" one resolution — so a
+        // Cell target is read by the rule written for what this entry is about.
         //
         // *This named the person until 2026-08-31, while `ended` and `changed` named
-        // the Cell, and nothing had decided the split. What it cost is narrower than
-        // scope: at the instant this is written the Cell resolves through this same
-        // person, so the two targets part company only after a later handover. The
-        // reason to move it is the fallback above and three entries about one thing
-        // being read by one rule.*
+        // the Cell, and nothing had decided the split. Where exactly the two targets
+        // give different answers is deliberately not claimed here: section 7 resolves a
+        // Cell "as of the period being viewed" and an audit entry is an instant, which
+        // is on CLAUDE.md's open list. Two drafts asserted a mechanism and both were
+        // refuted; the rule does not rest on one.*
         targetType: 'cell',
         targetId: created.id,
         // Section 21 asks a leadership entry to carry "the outgoing and the incoming

@@ -11,7 +11,10 @@ succeed?**
   `RESOURCE_BUSY` (503), and the client retries **with the same `Idempotency-Key`**.
 - **No** — the body must change before any attempt can succeed. That is a decision about
   this body, it answers `INVARIANT_VIOLATION` (409), and the message names what to
-  change and says a new key is needed.
+  change. It is not additionally required to say that a new key is needed: Section 22's
+  own rule that a key belongs to a body already settles that for a client changing one,
+  and a requirement with no conforming site and nothing able to fail on it is the shape
+  decision 0142 is named after. A draft of this ruling carried that clause.
 
 ## Why the question is the status rather than the wording
 
@@ -51,7 +54,8 @@ The **value** of `cell_id` on a `PENDING` handover is frozen by nothing; it is u
 because no code writes it, and whether it should be frozen is on `CLAUDE.md`'s open list.
 The two handover refusals rest on neither: a closed Cell is refused earlier by `state`,
 `cell_leadership_requests_one_pending_handover` permits one pending handover per Cell,
-and the two writers of `insert-cell.ts` both write a different Cell.
+and both callers of `insert-cell.ts` — which holds the only other writer of
+`cell_leaderships` — write a different Cell.
 
 So the refusals are placed by what they would answer if reached, which is the only thing
 about them a ruling can decide. A first version of this said all three were frozen by the
@@ -125,9 +129,12 @@ before a lock that no longer holds under it. The three share one property and it
 property the code branches on — no decision was reached, and the same request may
 succeed on its next attempt.
 
-Section 4 and Section 10 each say an undated submission "always succeeds", and both are
-corrected: it always clears the floor except where a record for the same subject carries
-the very instant the submission is taking, and that case answers `RESOURCE_BUSY`.
+**Section 4** says an undated correction "always succeeds", and is corrected: it clears
+the floor except where a record for the same person carries the very instant the
+correction is taking, and that case answers `RESOURCE_BUSY`. **Section 10 says the same
+words about a closure and is left alone**, for the reason the re-derivation above gives —
+its bound is inclusive, so no collision can refuse an undated closure. A draft of this
+ruling amended it too, which was the false rule that draft produced.
 
 ## What was rejected
 

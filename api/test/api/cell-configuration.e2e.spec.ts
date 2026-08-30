@@ -201,15 +201,23 @@ describe('cell configuration (section 10)', () => {
       );
 
       const rows = await categoryRows(markCell.id);
-      // **The same 1000ms of slack the two assertions above already take, and for the
-      // same reason.** `started_at` is `clock_timestamp()` — the *database's* clock —
-      // and `Date.now()` is this process's, so the two ends of this comparison come
-      // from different clocks, which `test/setup/fixtures.ts` names as a hazard. With
-      // no slack a forward difference of a single millisecond fails a correct run, and
-      // it did: this case failed once in a full-suite run and passed on the next.
+      // **Bounded from both sides, with the same 1000ms the two assertions above take.**
+      // `started_at` is `clock_timestamp()` — the *database's* clock — and `Date.now()`
+      // is this process's, so the two ends of this comparison came from different
+      // clocks, which `test/setup/fixtures.ts` names as a hazard. With no slack at all a
+      // forward difference of a single millisecond fails a correct run, and it did: this
+      // case failed once in a full-suite run here and passed on the next.
       //
-      // The slack costs the assertion nothing. What it is for is "now rather than the
-      // first of next month", and next month is thirty days away.
+      // **1000ms is copied from its neighbours, not derived.** Nothing in this
+      // repository bounds host-to-database skew — that is on CLAUDE.md's open list — so
+      // this is a tolerance wide enough to absorb it rather than a limit anything
+      // guarantees. It costs the assertion nothing, because what the case discriminates
+      // against is the schedule rule's instant, and the first of next month is weeks
+      // away in both directions.
+      //
+      // The lower bound is the half that was missing: with only an upper one, a row
+      // stamped in the *past* passed, and the rule is that the change takes effect now.
+      expect(rows[1].started_at.getTime()).toBeGreaterThanOrEqual(before - 1000);
       expect(rows[1].started_at.getTime()).toBeLessThanOrEqual(Date.now() + 1000);
     });
 

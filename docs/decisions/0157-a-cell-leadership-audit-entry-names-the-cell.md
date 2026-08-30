@@ -22,17 +22,21 @@ approval picked the Cell for `changed` because its neighbour had it, which is Se
 25 rule 19 — a shape reused without re-deriving why it had that shape — and the
 question was raised rather than settled at the time.
 
-The consequence is real and it is narrower than the first version of this ruling said,
-which is worth getting right: an overstated reason is one a later reader disproves, and
-then discounts the rule along with it.
+The consequence is that Section 7 reads the three by two different rules — it resolves
+an audit entry **through its target**, and it gives a leadership one resolution and a
+Person another. A reader searching one person's leadership history also finds the opening
+and not the ending, which is a search rather than a permission.
 
-Section 7 resolves an audit entry's scope **through its target**, and it resolves a Cell
-through *its leader*. So at the instant an `opened` entry is written the two targets
-resolve to the same person's pastoral position, and they diverge only after a later
-handover — and only for a reader holding `audit.view` at a scope narrower than Whole
-Church, which is the default for both roles that hold it and which Section 7 notes makes
-the target moot. What is left is a reader searching one person's leadership history
-finding the opening and not the ending, which is a search rather than a permission.
+**Exactly where the two rules give different answers is not stated here, because it
+cannot be yet.** Section 7 resolves a Cell through "the Cell's leader as of the period
+being viewed", and an audit entry is an instant rather than a period; the two readings of
+that phrase put the divergence in different places. It is recorded as open in `CLAUDE.md`.
+
+*Two drafts of this ruling asserted a mechanism anyway, and each was refuted. The first
+said a reader whose scope covered the person and not the Cell saw an appointment with no
+ending; the second said the targets part company after a later handover. Both rest on one
+reading of that phrase without saying which, and the ruling needs neither — which is the
+point of writing it down rather than a third time.*
 
 ## Why the Cell
 
@@ -43,12 +47,17 @@ where the Cell is closed". A Cell-targeted entry therefore resolves by the rule 
 for the thing the entry is about. A person-targeted one resolves through that person's
 pastoral position, which is a different rule reaching a different answer.
 
-**The fallback clause is what decides it rather than the general shape.** Section 7
-gives a closed Cell's history to the leader who led it, and Sections 10 and 15 require
-that. A closure writes `cell_leadership.ended`; if that entry resolved through the
-person, the outgoing leader's later pastoral reassignment would move who can read the
-record of a Cell they closed. Resolving through the Cell is stable in exactly the sense
-the period clause means.
+**What Section 7 says about a leadership is the whole of the argument, and it is enough.**
+It lists "a Cell, a Cell meeting, a membership or a leadership" together and gives them
+one resolution. A leadership audit entry is an entry about a leadership; resolving it by
+the rule Section 7 wrote for one needs no further justification, and is what makes the
+three entries answerable by a single reader.
+
+*The closed-Cell fallback was offered here as the deciding reason and is withdrawn. For
+the `cell_leadership.ended` entry a closure writes, the Cell's last leader is the same
+person a person target would have named, so the fallback resolves both the same way and
+decides nothing between them. It matters for reading a closed Cell's history, which is
+Sections 10 and 15's requirement and is true whatever this entry's target is.*
 
 **Section 21's own reader-question is Cell-shaped.** It says a reader "asking who led a
 Cell before a handover must find it here". The question names a Cell, so the entry a
