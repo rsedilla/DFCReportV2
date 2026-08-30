@@ -6181,7 +6181,15 @@ one dedicated `Client` rather than a pool, across all five styles. The format st
 shared with the query rather than copied, because a test carrying its own copy keeps
 passing after the query's has changed.
 
-**The orphaned-docblock fix created two more orphans, in the two files it touched.** Moving
+**The orphaned-docblock fix created two more orphans, in the two files it touched — and
+then a third, in the file the fix was originally about.** Sharing the format string
+between the query and its test put `CURSOR_INSTANT_FORMAT`'s docblock between
+`CURSOR_INSTANT`'s and `CURSOR_INSTANT`, so the long block describing the rendering
+documented nothing and the regex it describes had none. Caught by reading the file after
+the pass reported, not by the pass. Four instances on this branch, three of them created
+by a fix for one of the others, which is enough to say the fix is the hazard: inserting a
+documented declaration next to a documented declaration is where this happens, and the
+check is to read the two lines above every `export` a batch adds.** Moving
 `NIL_UUID` out of the guard left its docblock behind, floating between two import blocks
 and describing nothing; inserting it into `common/identifiers.ts` put it between
 `canonicalId`'s docblock and `canonicalId`, so the twenty-six-line rationale for the whole

@@ -42,6 +42,13 @@ export interface LeadershipRequestCursor {
 }
 
 /**
+ * The `to_char` format the ordering key is rendered with, shared so the query and the
+ * test that pins its rendering cannot drift apart — a test carrying its own copy of the
+ * format would keep passing after the query's changed.
+ */
+export const CURSOR_INSTANT_FORMAT = 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"';
+
+/**
  * The one rendering `requested_at` is ever carried in: ISO 8601, UTC, microseconds,
  * `2026-08-30T05:08:54.622914Z`.
  *
@@ -61,13 +68,6 @@ export interface LeadershipRequestCursor {
  * *An earlier version matched the cast's rendering and called it "the only shape this
  * cursor ever carries", which was true of this machine and of nothing else.*
  */
-/**
- * The `to_char` format the ordering key is rendered with, shared so the query and the
- * test that pins its rendering cannot drift apart — a test carrying its own copy of the
- * format would keep passing after the query's changed.
- */
-export const CURSOR_INSTANT_FORMAT = 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"';
-
 export const CURSOR_INSTANT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}Z$/;
 
 export interface LeadershipRequestRow {
