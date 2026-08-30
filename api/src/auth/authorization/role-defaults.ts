@@ -43,8 +43,11 @@ const SENIOR_PASTOR: RoleDefaults = {
   [Capability.CellManageMembership]: ScopeType.WholeChurch,
   [Capability.CellManageLeadership]: ScopeType.WholeChurch,
   [Capability.CellManageConfiguration]: ScopeType.WholeChurch,
-  // Held at subtree scope by every role: naming oneself on a request is
-  // prohibited for everyone (section 10).
+  // Held at subtree scope by every role, because section 10 prohibits naming oneself
+  // for everyone. **The default carries the prohibition; it does not enforce it** — a
+  // wider grant is an ordinary row section 7 does not refuse, and `scopeCovers` returns
+  // before the target is read at Whole Church. `CellsLeadershipRequestService.request`
+  // is what makes section 10's "at any scope" true.
   [Capability.CellRequestLeadership]: ScopeType.SubtreeExclSelf,
   [Capability.CellManageLifecycle]: ScopeType.WholeChurch,
   [Capability.ReportsViewSubtree]: ScopeType.WholeChurch,

@@ -5,6 +5,23 @@ import { ValidationFailedError } from './errors/api-error';
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
+ * A target that resolves to nobody.
+ *
+ * Handed to `authorize` for an object the caller cannot be shown to exist — the
+ * capability guard uses it for a Cell it cannot place, and a domain layer that resolves
+ * its own second object uses it for the same reason. Section 22 requires an absent
+ * record and an out-of-scope one to be indistinguishable, and a target nothing resolves
+ * to is what makes them so: every scope narrower than Whole Church fails to cover it,
+ * and Whole Church returns before the target is read.
+ *
+ * Here rather than in either caller, because two copies of a sentinel with a rule
+ * attached are two copies free to drift — the reason `CURSOR_MAX_LENGTH` lives in
+ * `common/` as well. Whether this identifier should be *reserved* against a real Person
+ * ever holding it is recorded as open in `CLAUDE.md`.
+ */
+export const NIL_UUID = '00000000-0000-0000-0000-000000000000';
+
+/**
  * The canonical form of an identifier, for comparison in application code.
  *
  * **PostgreSQL compares a `uuid` column case-insensitively and JavaScript does

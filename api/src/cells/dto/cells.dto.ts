@@ -17,9 +17,26 @@ import { Max, Min, ValidateIf } from 'class-validator';
 
 import { CURSOR_MAX_LENGTH } from '../../common/cursor';
 
-import type { CellCategory, CellClosureReason } from '../../database/schema';
+import type {
+  CellCategory,
+  CellClosureReason,
+  CellDeclineReason,
+  CellRequestKind,
+} from '../../database/schema';
 
 const CATEGORIES: CellCategory[] = ['YOUTH', 'YOUNG_PRO', 'COUPLE'];
+
+/** Section 10: `kind` is a closed enumeration; a third value is an amendment. */
+const REQUEST_KINDS: CellRequestKind[] = ['NEW_CELL', 'HANDOVER'];
+
+/** Section 10, *Declining*. Fixed, and not administrator-configurable. */
+const DECLINE_REASONS: CellDeclineReason[] = [
+  'LEADER_DEVELOPMENT_CONTINUING',
+  'TIMING_DEFERRED',
+  'DUPLICATE_REQUEST',
+  'SUBMITTED_IN_ERROR',
+  'OTHER',
+];
 
 /**
  * Section 10, *Closure reasons*, and the list is closed.
@@ -75,6 +92,155 @@ export class CreateCellDto {
     message: 'time_of_day must be HH:MM or HH:MM:SS, in Asia/Manila wall-clock time',
   })
   time_of_day!: string;
+}
+
+/**
+ * `POST /api/v1/cells/leadership-requests` (SKILL.md section 10, *Creating a Cell*).
+ *
+ * **One shape for both kinds, because section 10 makes it one workflow.** Both carry
+ * the same state machine, the same decline reasons, the same approver and the same two
+ * steps, and section 10 says in terms that splitting them "would duplicate all four and
+ * let them drift". `kind` decides which of the remaining fields are required, exactly as
+ * it decides which columns migration 0009 requires.
+ *
+ * `cell_id` is the one field meaning something different in each: for a handover it
+ * names the Cell at request, and for a new Cell nothing names one until approval mints
+ * it. It is refused rather than ignored on a `NEW_CELL` request — the database has a
+ * check constraint saying a `PENDING` `NEW_CELL` names no Cell, and a client that sent
+ * one meant something the workflow cannot do.
+ */
+export class CreateLeadershipRequestDto {
+  @IsIn(REQUEST_KINDS)
+  kind!: CellRequestKind;
+
+  /**
+   * The person the request says is ready to lead.
+   *
+   * **The guard resolves scope against this field**, at subtree-excluding-self — the
+   * one place in the system where a scope value does that work, because the object the
+   * scope is about is also the one object the actor may not be (section 7, section 10).
+   */
+  @IsUUID()
+  prospective_leader_id!: string;
+
+  /** Required for a new Cell, refused for a handover: a handover changes no schedule. */
+  @ValidateIf((dto: CreateLeadershipRequestDto) => dto.kind === 'NEW_CELL')
+  @IsIn(CATEGORIES)
+  category?: CellCategory;
+
+  /** ISO 8601 day number, 1 Monday to 7 Sunday, as `CreateCellDto` (section 20). */
+  @ValidateIf((dto: CreateLeadershipRequestDto) => dto.kind === 'NEW_CELL')
+  @IsInt()
+  @Min(1)
+  @Max(7)
+  day_of_week?: number;
+
+  /** Asia/Manila wall-clock time with no offset of its own, as `CreateCellDto`. */
+  @ValidateIf((dto: CreateLeadershipRequestDto) => dto.kind === 'NEW_CELL')
+  @Matches(/^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/, {
+    message: 'time_of_day must be HH:MM or HH:MM:SS, in Asia/Manila wall-clock time',
+  })
+  time_of_day?: string;
+
+  /**
+   * The Cell being handed over. Required for a handover, and refused for a new Cell.
+   *
+   * **Only the first half is here.** Two `@ValidateIf`s on one property are **ANDed**,
+   * not replaced — `class-validator` collects every conditional and skips the property
+   * if any returns false — so "present and a UUID for a handover" and "absent for a new
+   * Cell" cannot both be expressed here, because their conjunction is unsatisfiable.
+   * (*An earlier version of this said the second condition replaced the first. The
+   * conclusion was right and the mechanism was not.*) The refusal lives in the service,
+   * beside the other rules `kind` decides, and `forbidNonWhitelisted` cannot help
+   * because the field is whitelisted on this DTO.
+   */
+  @ValidateIf((dto: CreateLeadershipRequestDto) => dto.kind === 'HANDOVER')
+  @IsUUID()
+  cell_id?: string;
+}
+
+/**
+ * `GET /api/v1/cells/leadership-requests` (SKILL.md section 19, section 22).
+ *
+ * The same two parameters section 22 fixes for every collection, and the same bounds
+ * the Cell roster carries: a default of 50, a maximum of 200, and an opaque cursor
+ * bounded by the shared guard in `common/cursor.ts`.
+ */
+export class LeadershipRequestQueueDto {
+  /** Section 22: defaults to 50, maximum 200. */
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(200)
+  limit?: number;
+
+  /** The `next_cursor` of the previous page, passed back unmodified (section 22). */
+  @IsOptional()
+  @IsString()
+  @Length(1, CURSOR_MAX_LENGTH)
+  cursor?: string;
+}
+
+/**
+ * `POST /api/v1/cells/leadership-requests/{request_id}/decline`
+ * (SKILL.md section 10, *Declining*).
+ *
+ * The list is fixed and not administrator-configurable (section 10). It is short and
+ * neutral by design: a decline is a durable record about a named person, and an
+ * unconstrained free-text field is exactly where a judgmental label would be written
+ * (section 1, principle 7). A decline records that a Cell was not opened at this time
+ * and never an assessment of the person.
+ */
+export class DeclineLeadershipRequestDto {
+  @IsIn(DECLINE_REASONS)
+  reason!: CellDeclineReason;
+
+  /**
+   * Required where the reason is `OTHER`, and **permitted with any other reason**.
+   *
+   * *An earlier version said "refused otherwise", which was a rule section 10 does not
+   * have — its shape says only "nullable, required where the reason is `OTHER`", and
+   * migration 0009's `..._note_only_with_reason` permits a note beside any reason.
+   * Nothing refused it either, so the sentence was false of the code as well as of the
+   * specification.*
+   *
+   * **The `|| note !== undefined` disjunct is what makes the bounds apply at all**, and
+   * dropping it is how the sentence came to be false. `@ValidateIf` gates the
+   * *validators* on a property, so with the condition on the reason alone the minimum
+   * and the 500-character maximum were inert for four of the five reasons and a
+   * 5,000-character note was accepted. That is `CloseCellDto.note`'s shape, and this is
+   * the half of it that was reused without its reason being re-derived (section 25 rule
+   * 19).
+   *
+   * *An earlier version of this said the **trim** was inert too, and that the note was
+   * "stored untrimmed". It was not: `@Transform` is a `class-transformer` decorator and
+   * `ValidationPipe` runs `plainToInstance` before `validate`, so the transform runs
+   * whatever `@ValidateIf` decides — as `CloseCellDto.note` says twenty lines below, in
+   * this same file. Reproduced: the 5,000-character note was stored **trimmed**. The
+   * defect was the missing bound and not the missing trim, and the wrong reason travelled
+   * into `CLAUDE.md`, a commit message and a test comment.*
+   *
+   * **Trimmed, then required to be non-empty**, because the database compares
+   * `btrim(coalesce(note, '')) <> ''` — `@MinLength(1)` alone accepts two spaces and
+   * turns a documented refusal into a constraint violation rendered `INTERNAL_ERROR`.
+   *
+   * **An explicit `null` is refused, and that is a decision rather than a side effect.**
+   * `null !== undefined`, so it satisfies the condition above and then fails `@IsString`.
+   * Omitting the field is how a decline carries no note; sending `null` says something
+   * this endpoint does not define, and the conservative direction is taken deliberately
+   * — the 2026-08-24 ruling on an explicit null birthday is the precedent, and its point
+   * is that a nullable column must not become a capability nobody decided on. Verified
+   * against the installed `class-validator` rather than assumed.
+   */
+  @ValidateIf(
+    (dto: DeclineLeadershipRequestDto) => dto.reason === 'OTHER' || dto.note !== undefined,
+  )
+  @IsString()
+  @Transform(({ value }: { value: unknown }) => (typeof value === 'string' ? value.trim() : value))
+  @MinLength(1)
+  @MaxLength(500)
+  note?: string;
 }
 
 /**

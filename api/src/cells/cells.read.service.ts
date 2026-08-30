@@ -1,7 +1,11 @@
 import { Inject, Injectable } from '@nestjs/common';
+import { sql } from 'kysely';
 
 import { DATABASE, type Db } from '../database/database.module';
 
+import { CURSOR_INSTANT_FORMAT } from './leadership-request-cursor';
+
+import type { LeadershipRequestCursor, LeadershipRequestRow } from './leadership-request-cursor';
 import type { RosterCursor } from './roster-cursor';
 import type { Database } from '../database/schema';
 import type { Transaction } from 'kysely';
@@ -180,6 +184,86 @@ export class CellsReadService {
       first_name: row.first_name,
       started_at: row.started_at,
     }));
+  }
+
+  /**
+   * Pending Cell leadership requests, oldest first (SKILL.md section 19, *Admin
+   * dashboard*; section 10).
+   *
+   * **Both kinds, on one queue**, which section 19 states and gives the reason for: "a
+   * request nobody can see is a request nobody acts on, and a pending one changes
+   * nothing until it is decided". A new Cell additionally holds up an account (section
+   * 6), which a handover does only where the incoming leader does not already lead one
+   * — a difference in urgency rather than in whether it belongs here.
+   *
+   * **`PENDING` only.** Section 19 asks for the queue, and a decided request is not on
+   * it. The decided ones are the requester's own outstanding work in section 19's other
+   * list, which is a different surface with a different reader and no capability that
+   * can guard it today — recorded as open in `CLAUDE.md` rather than answered here.
+   *
+   * No scope filter, and that is the capability rather than an omission:
+   * `cell.approve_leadership` is Admin's alone at Whole Church (section 7), so every
+   * caller who reaches this sees the same queue.
+   */
+  async pendingLeadershipRequestsWithin(
+    executor: Db | Transaction<Database>,
+    page: { limit: number; after?: LeadershipRequestCursor | null } = { limit: 50 },
+  ): Promise<LeadershipRequestRow[]> {
+    const after = page.after ?? null;
+
+    return (
+      executor
+        .selectFrom('cell_leadership_requests')
+        .select([
+          'id',
+          'kind',
+          'prospective_leader_id',
+          'requested_by',
+          'requested_at',
+          'cell_id',
+          // **The ordering key at the column's own precision**, which the `Date` beside
+          // it is not: `timestamptz` holds microseconds and the driver parses it into a
+          // JS `Date`, which holds milliseconds. A cursor built from
+          // `requested_at.toISOString()` is therefore *earlier* than the row it came
+          // from, so `requested_at > cursor` matches that row again and the page repeats
+          // its last row instead of advancing. Found by the paging case rather than
+          // reasoned about.
+          //
+          // **`to_char` with an explicit format rather than a cast to `text`**, because
+          // a cast renders according to the session's `DateStyle`, which nothing in this
+          // repository sets and which the deployment controls — this machine's server
+          // already runs `ISO, DMY` rather than the default `ISO, MDY`. Under `SQL`,
+          // `Postgres` or `German` every cursor the server emits fails the decoder's
+          // format check on the way back in, so the client is silently served page one
+          // for ever. `to_char` is `DateStyle`-independent, and ISO 8601 input parses
+          // back the same way under any of them because it is unambiguous.
+          sql<string>`to_char(requested_at at time zone 'UTC', ${sql.lit(CURSOR_INSTANT_FORMAT)})`.as(
+            'requested_at_key',
+          ),
+        ])
+        .where('state', '=', 'PENDING')
+        // Spelled out rather than expressed as a row comparison against a looked-up key,
+        // for the reason `leadership-request-cursor.ts` records: the looked-up form does
+        // not compile to anything PostgreSQL can plan.
+        .$if(after !== null, (query) =>
+          query.where((eb) => {
+            const key = after as LeadershipRequestCursor;
+
+            // Cast on the parameter rather than converting in JavaScript, so the
+            // comparison happens at the column's own precision.
+            const at = sql<Date>`${key.requestedAt}::timestamptz`;
+
+            return eb.or([
+              eb('requested_at', '>', at),
+              eb.and([eb('requested_at', '=', at), eb('id', '>', key.id)]),
+            ]);
+          }),
+        )
+        .orderBy('requested_at')
+        .orderBy('id')
+        .limit(page.limit)
+        .execute()
+    );
   }
 
   /**

@@ -13,6 +13,7 @@ import { UuidParamPipe } from '../common/uuid-param.pipe';
 
 import { CellsClosureService } from './cells.closure.service';
 import { CellsConfigurationService } from './cells.configuration.service';
+import { CellsLeadershipRequestService } from './cells.leadership-request.service';
 import { CellsMembershipService } from './cells.membership.service';
 import { CellsService } from './cells.service';
 import {
@@ -22,6 +23,9 @@ import {
   ChangeCellScheduleDto,
   CloseCellDto,
   CreateCellDto,
+  CreateLeadershipRequestDto,
+  DeclineLeadershipRequestDto,
+  LeadershipRequestQueueDto,
 } from './dto/cells.dto';
 
 /**
@@ -41,6 +45,7 @@ export class CellsController {
     private readonly membership: CellsMembershipService,
     private readonly configuration: CellsConfigurationService,
     private readonly closure: CellsClosureService,
+    private readonly requests: CellsLeadershipRequestService,
   ) {}
 
   /**
@@ -247,6 +252,118 @@ export class CellsController {
       actor,
       claim,
     );
+  }
+
+  /**
+   * `POST /api/v1/cells/leadership-requests` — step one (SKILL.md section 10).
+   *
+   * **The guard resolves the prospective leader**, at subtree-excluding-self. Section
+   * 10: "the prospective leader is what the scope is about, because the thing being
+   * decided is whether that person should lead". That scope value is used by this one
+   * capability alone, chosen so the object it resolves against is the one object the
+   * actor may not be (section 7).
+   *
+   * **It is not what enforces "no holder, at any scope, may name themselves"**, which an
+   * earlier version of this docblock said: `scopeCovers` returns true before the target
+   * is read for a Whole Church grant, and section 7 refuses no grant for being too wide.
+   * Section 10's prohibition is a domain check in the service.
+   *
+   * A handover carries a second object, the Cell, and section 7 settles where that
+   * goes: the guard checks one target, and a rule about anything else is a check in
+   * the owning module.
+   */
+  @Post('leadership-requests')
+  @RequiresCapability(Capability.CellRequestLeadership, {
+    kind: 'person',
+    from: 'body.prospective_leader_id',
+  })
+  async requestLeadership(
+    @Body() body: CreateLeadershipRequestDto,
+    @CurrentActor() actor: Actor,
+    @CurrentIdempotency() claim: CurrentClaim,
+  ): Promise<Record<string, unknown>> {
+    return this.requests.request(
+      {
+        kind: body.kind,
+        prospectiveLeaderId: body.prospective_leader_id,
+        category: body.category,
+        dayOfWeek: body.day_of_week,
+        timeOfDay: body.time_of_day,
+        cellId: body.cell_id,
+      },
+      actor,
+      claim,
+    );
+  }
+
+  /**
+   * `GET /api/v1/cells/leadership-requests` — the Admin queue (section 19, section 10).
+   *
+   * **`cell.approve_leadership`, against the church**, which is the capability that
+   * decides these requests: whoever may approve or decline one may see the queue of
+   * them, and nobody else. Section 7 gives that capability one scope only, so a grant
+   * issued narrower covers nothing and is refused `SCOPE_DENIED`.
+   *
+   * **Section 19's other list is not this one and is not built.** It puts "the outcome
+   * of a Cell leadership request the user submitted" in every user's own outstanding
+   * work — a different population and a different reader. **Section 7 names no
+   * capability for it**: `cell.request_leadership` is `SUBTREE_EXCL_SELF`, so it
+   * resolves against neither the caller nor the church, and section 7's no-capability
+   * exemption covers an endpoint acting "on the caller's own session" rather than one
+   * returning rows their account created.
+   *
+   * *Not that none **can**, which an earlier version of this said.* `cell.view_subtree`
+   * against `{ kind: 'actor' }` is the shape `GET /people/duplicate-candidates` already
+   * uses for a church-wide read, one domain over — a new reading of an existing
+   * capability rather than a new capability, and defensible. It is recorded as open in
+   * `CLAUDE.md` with the alternatives because which of them is right is not derivable,
+   * not because the surface is unbuildable.
+   *
+   * That surface is not blocking: this queue is what approval needs, the way the roster
+   * route was what the closure needed, while the requester's view is a dashboard tile
+   * with no dashboard yet.
+   */
+  @Get('leadership-requests')
+  @RequiresCapability(Capability.CellApproveLeadership, { kind: 'church' })
+  async leadershipRequestQueue(
+    @Query() query: LeadershipRequestQueueDto,
+  ): Promise<Record<string, unknown>> {
+    return this.requests.pendingQueue({ limit: query.limit, cursor: query.cursor });
+  }
+
+  /**
+   * `POST /api/v1/cells/leadership-requests/{request_id}/decline` (section 10).
+   *
+   * **`cell.approve_leadership`, against the church.** Section 7 gives that capability
+   * one scope and one only, so a grant issued narrower covers nothing and is refused
+   * `SCOPE_DENIED`; a church target is what "at Whole Church" means and is the same
+   * choice the closure endpoint makes for `records.backdate_effective_date`. Declining
+   * is the same authority as approving because it is the same decision, taken the
+   * other way.
+   *
+   * **Not resolved against the prospective leader**, which the request path does: that
+   * person is not in this route, and reaching into the row to resolve a target would
+   * make the guard depend on a read it does not do. It changes no outcome — section 7
+   * makes this capability Whole-Church-only, so `scopeCovers` returns before any target
+   * is read.
+   *
+   * The requester may decline their own request (section 10, and the ruling of
+   * 2026-08-30), so there is no self-check here to match the one on approval.
+   *
+   * `{request_id}` is validated by `UuidParamPipe`: the guard resolves no target from
+   * it, so section 7 requires the route to validate its own path parameter rather than
+   * let a non-UUID reach a `uuid` comparison as a database error.
+   */
+  @Post('leadership-requests/:request_id/decline')
+  @RequiresCapability(Capability.CellApproveLeadership, { kind: 'church' })
+  @HttpCode(200)
+  async declineLeadershipRequest(
+    @Param('request_id', new UuidParamPipe('request_id')) requestId: string,
+    @Body() body: DeclineLeadershipRequestDto,
+    @CurrentActor() actor: Actor,
+    @CurrentIdempotency() claim: CurrentClaim,
+  ): Promise<Record<string, unknown>> {
+    return this.requests.decline(requestId, body.reason, body.note, actor, claim);
   }
 
   /**

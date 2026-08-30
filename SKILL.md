@@ -1468,7 +1468,7 @@ Authorization is expressed as two independent dimensions that combine to form Ac
 
 The four scope values are a closed enumeration. A guard cannot fail closed against an open one, so do not add a fifth without amending this specification.
 
-`SUBTREE_EXCL_SELF` is used by `cell.request_leadership` alone, where the object the scope is about — the prospective leader — is also the one object the actor may not be (Section 10). A handover carries a second object, the Cell, and that one is a domain check rather than part of the scope, on the rule below. Everywhere else `OWN_SUBTREE` includes the actor, deliberately — a leader edits their own basic details and records their own attendance. Where a rule forbids acting on oneself but the grant must still reach oneself as a *source* — pastoral reassignment, Section 5 invariant 4 — the prohibition is a domain check, not a scope value (How grants are held, below).
+`SUBTREE_EXCL_SELF` is used by `cell.request_leadership` alone, where the object the scope is about — the prospective leader — is also the one object the actor may not be (Section 10). A handover carries a second object, the Cell, and that one is a domain check rather than part of the scope, on the rule below. Everywhere else `OWN_SUBTREE` includes the actor, deliberately — a leader edits their own basic details and records their own attendance. Where a rule forbids acting on oneself the prohibition is a domain check rather than a scope value — whether or not the grant must still reach oneself as a *source*, as it must for pastoral reassignment (Section 5 invariant 4). `cell.request_leadership` is not an exception to that: its scope value is chosen to match the prohibition and does not enforce it, for the reason given under *How grants are held* below.
 
 Scope resolves against a target. Where the target is a Person, it resolves through their pastoral position. Where it is not:
 
@@ -1629,7 +1629,9 @@ A request is allowed where **any** active role default or active grant for that 
 
 Those conditions are enforced in the owning module's domain layer — `hierarchy` for Section 5, `cells` for the Section 10 workflow — and are additional to the guard, never a substitute for it and never expressible as a scope value. A developer who implements the guard and believes the rule is implemented has built half of it.
 
-`SUBTREE_EXCL_SELF` exists for the one case where a scope value genuinely does the work: `cell.request_leadership`, where the object the scope resolves against *is* the object the actor may not be (Section 10).
+`SUBTREE_EXCL_SELF` exists for the one case where a scope value is *chosen* to match a prohibition: `cell.request_leadership`, where the object the scope resolves against is the object the actor may not be (Section 10).
+
+**It does not enforce that prohibition, and must not be relied on to.** Section 10's rule is categorical — "no holder of the capability, at any scope, may name themselves" — and a scope value delivers it only while the grant carries that scope. A grant of this capability at `NETWORK` or `WHOLE_CHURCH` is an ordinary row: this section permits authority beyond a role's defaults, and the rule refusing a grant for being too *narrow* has no counterpart refusing one for being too wide. At Whole Church the scope check returns before the target is read at all. The prohibition is therefore a domain check in the module that owns the workflow, exactly as it is for Section 5 invariant 4 — which Section 10 names as the same prohibition for the same reason.
 
 A grant is revoked by setting `revoked_at`, never by deleting the row. The history of who could do what, and when, is part of the audit record.
 
@@ -2144,6 +2146,14 @@ A handover is what a leader stepping down means where the Cell continues. Where 
 
 The Cell is the second object and carries its own rule: **the actor must have the Cell within their authorized scope**, on the same terms that govern closing it — its current leader, any leader upline of them acting within their own subtree, Admin, or a Senior Pastor. Without it an unrelated upline could give away a Cell belonging to a branch they have nothing to do with. Section 7 settles the shape: the guard checks one target, and a rule about a second object is a check in the owning module.
 
+**That check resolves `cell.manage_lifecycle` against the Cell's leader**, which is what "the same terms that govern closing it" means and is stated here so the next implementer converts the sentence above the same way this one did. The list of holders is not restated in code: resolving the capability against the Cell's leader is what produces it. `OWN_SUBTREE` is a Leader's default for that capability, and Admin and the Senior Pastors hold it at Whole Church, which is how the other names on the list are reached.
+
+*Not `NETWORK`, and an earlier version of this paragraph said "`OWN_SUBTREE`, `NETWORK` and `WHOLE_CHURCH` resolve to exactly that set". A Network-scoped grant covers every Cell in a Network irrespective of pastoral position, which is wider than the list above — "any leader upline of them **acting within their own subtree**". No role holds it at that scope by default, so the gap opens only through an explicit Admin-issued grant, and it is the same gap closing a Cell already has (Cell lifecycle, below). It is named here rather than smoothed over, because the sentence was the stated reason for not restating the list in code.*
+
+**It cannot be `cell.request_leadership`**, which the guard has already used. That capability is held at subtree **excluding self**, and the commonest handover there is has the actor *as* the Cell's current leader — a leader stepping down and naming their own disciple. Resolving the Cell through a self-excluding scope would refuse precisely the case this workflow exists for.
+
+The consequence is narrow and is accepted rather than discovered: an actor granted `cell.request_leadership` and not `cell.manage_lifecycle` cannot request a handover. No role is in that position by default, and the outcome reads correctly in any case — somebody who could not close a Cell also cannot give it away.
+
 No holder of the capability, at any scope, may name themselves. Without that exclusion a leader whose only Cell has closed — who keeps their account (Section 11) — could restore their own Current Cell Leader status, re-enter New Cell Leaders for the period, and restore their upline's Leaders-with-12+ count, with no upline involved and with Admin, who has no pastoral basis to judge readiness, as the only reviewer. Section 5, invariant 4 writes the same prohibition for pastoral assignment, for the same reason.
 
 **Step two — Admin approves.** The capability is `cell.approve_leadership`, held by Admin only and granted to no other role.
@@ -2228,6 +2238,18 @@ Declined requests are retained — they are part of the record of how a leader w
 - `OTHER` — requires a note
 
 The list is fixed and not administrator-configurable, for the reason given in Section 13. It is deliberately short and neutral. A decline is a durable record about a named person, and an unconstrained free-text field is exactly where a judgmental label about a prospective leader would be written (Section 1, Principle 7). A decline records that a Cell was not opened at this time. It never records an assessment of the person.
+
+**The requester may decline their own request.** The prohibition above is on *approving* one, and the reason it exists does not carry: the requester benefits from an approval, which is why a second party is required for it, and benefits from a decline not at all. `SUBMITTED_IN_ERROR` is in the fixed list for exactly this, and it is the reason a requester will ordinarily use — a leader who named the wrong person, or who has since learned that the timing is wrong, withdrawing their own request.
+
+Stated rather than left to fall out of the silence, because the alternative is terminal rather than merely stricter. `cell.approve_leadership` is Admin's alone (Section 7), so on a deployment with one Admin a request that Admin submitted could be approved by nobody — correctly — and declined by nobody either. It would stay `PENDING` for ever, and the per-leader uniqueness rule above would then block every future `NEW_CELL` request for that prospective leader, permanently.
+
+A decline still carries `cell.approve_leadership`, so an ordinary leader cannot decline their own request; the case this rule reaches is an Admin who submitted one. It changes nothing about who may *approve*.
+
+**A decision is final.** A `DECLINED` request is never later approved, an `APPROVED` one is never reversed, and neither is returned to `PENDING`. What a request asked — its kind, the person it names, who submitted it and when — is immutable from the moment it is written; the category, day and time a `NEW_CELL` request asks *for* stay writable while it is `PENDING`, so a mistyped time is corrected rather than declined and resubmitted.
+
+The way forward from a decline is a new request, not a revived one. That keeps the declined row as what this section already requires it to be — the record of how a leader was developed — and keeps `decided_by` and `decided_at` answering who decided and when, which a re-decision would overwrite. Where a decline was `TIMING_DEFERRED` and the timing has since changed, submitting again is the honest record: two requests, two dates, one outcome each.
+
+Reversing an approval is a different operation and is not this one. A Cell created in error is closed (`CREATED_IN_ERROR`, Cell lifecycle below), and a handover completed in error is corrected by handing the Cell back — each an ordinary authorized action with its own audit entry, rather than a decision rewritten in place.
 
 **Seeing the queue.** Pending requests appear on the Admin dashboard (Section 19), and a request's outcome appears to the requester in their own outstanding work (Section 19). Neither is a notification; notifications remain confined to Section 13. This surface is necessary rather than optional: a pending request holds up a real leader's account provisioning, so the person who can act on it must be able to see it.
 
@@ -3297,7 +3319,7 @@ Audit important actions, including:
 - Role/permission changes
 - Attendance submission on behalf
 - Attendance corrections
-- Cell leadership requested, with the kind
+- Cell leadership request submitted, with the kind
 - Cell leadership request approved, with the kind
 - Cell leadership request declined, with the kind and the reason
 - Cell leadership opened, ended, or changed, carrying the outgoing and the incoming leader where each exists — a reader asking who led a Cell before a handover must find it here, which is the same requirement Section 5 makes of a pastoral transfer
