@@ -227,9 +227,19 @@ export type AuditAction =
   // because the ending "is not a separate decision, and its date is the closure's".
   // That is the argument the membership pair above rejects, and section 21 makes no
   // exception for leadership. A closure writes one with a null incoming leader, which
-  // is what distinguishes it from a handover in the log. The opened half arrives with
-  // the handover workflow.
+  // is what distinguishes it from a handover in the log.
+  //
+  // *An earlier version of this said "the opened half arrives with the handover
+  // workflow". Both halves of that were wrong: `cell_leadership.opened` is above and
+  // predates it, written by direct creation, and a handover writes neither of these —
+  // it is one action and writes `changed`, below.*
   | 'cell_leadership.ended'
+  // A handover, which is one action rather than an ending beside an opening: section
+  // 10 has the outgoing assignment end and the incoming one open "at the same
+  // instant", in one statement, so a log splitting them would report two events at one
+  // timestamp and leave a reader to pair them. The entry carries both leaders, which
+  // is what section 21 asks of it.
+  | 'cell_leadership.changed'
   // Section 21 names three request actions, all under one noun: "Cell leadership
   // request submitted / approved / declined, with the kind" (and the reason, for a
   // decline).
@@ -245,10 +255,12 @@ export type AuditAction =
   // "including", so rewording one bullet is a wording change rather than a rule change
   // — and it is the amendment rather than a comment here that keeps the two agreeing.
   //
-  // `approved` is deliberately absent until the approval endpoint emits it. A member
-  // of a closed union that nothing writes is the shape this repository has already
-  // removed once, from `PRECONDITION_CODES`.
+  // `approved` arrived with the approval endpoint rather than ahead of it, on the rule
+  // this comment previously stated as a promise: a member of a closed union that
+  // nothing writes is the shape this repository has already removed once, from
+  // `PRECONDITION_CODES`.
   | 'cell_leadership_request.submitted'
+  | 'cell_leadership_request.approved'
   | 'cell_leadership_request.declined';
 
 export interface AuditLogTable {

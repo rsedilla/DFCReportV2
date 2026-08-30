@@ -1,4 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
+import { sql } from 'kysely';
 
 import { AuditService } from '../audit/audit.service';
 import {
@@ -15,9 +16,14 @@ import {
 } from '../common/errors/api-error';
 import { NIL_UUID, sameId } from '../common/identifiers';
 import { IdempotencyService } from '../common/idempotency/idempotency.service';
+import { CellLock, lockCellsWithin } from '../database/cell-lock';
 import { DATABASE, type Db } from '../database/database.module';
+import { boundLockWaitsWithin, lockPersonsWithin } from '../database/person-lock';
+import { NetworksService } from '../networks/networks.service';
+import { PeopleReadService } from '../people/people.read.service';
 
 import { CellsReadService } from './cells.read.service';
+import { insertCellWithin } from './insert-cell';
 import {
   decodeLeadershipRequestCursor,
   encodeLeadershipRequestCursor,
@@ -32,6 +38,28 @@ import type {
 } from '../database/schema';
 import type { Transaction } from 'kysely';
 
+/** The columns approval reads from a `PENDING` request under its row lock. */
+interface PendingRequest {
+  id: string;
+  kind: CellRequestKind;
+  state: string;
+  prospective_leader_id: string;
+  requested_by: string;
+  cell_id: string | null;
+  category: CellCategory | null;
+  day_of_week: number | null;
+  time_of_day: string | null;
+}
+
+/** What an approval did, shared by both kinds so the caller writes one record. */
+interface AppliedApproval {
+  /** The instant the write took effect, and the request's `decided_at`. */
+  at: Date;
+  cellId: string;
+  cellUuid: string;
+  outgoingLeaderId: string | null;
+}
+
 export interface LeadershipRequestInput {
   kind: CellRequestKind;
   prospectiveLeaderId: string;
@@ -45,11 +73,16 @@ export interface LeadershipRequestInput {
  * The Cell leadership request workflow: step one, and its decline
  * (SKILL.md section 10, *Creating a Cell*).
  *
- * **A request creates nothing.** Section 10: a `PENDING` request "creates no Cell,
- * holds no members, records no attendance, changes no leadership, and appears in no
- * count or metric". That is what lets this service exist without touching `cells`,
- * `cell_leaderships`, `cell_categories`, `cell_schedules` or `accounts` — approval
- * writes all of those in one transaction, and it lands separately.
+ * **A request creates nothing; an approval creates everything.** Section 10: a
+ * `PENDING` request "creates no Cell, holds no members, records no attendance, changes
+ * no leadership, and appears in no count or metric". `request` and `decline` therefore
+ * touch only `cell_leadership_requests`; `approve` is where `cells`,
+ * `cell_categories`, `cell_schedules` and `cell_leaderships` are written, in one
+ * transaction.
+ *
+ * `accounts` is the one it still does not touch, and that is section 10's ruling of
+ * 2026-08-30 rather than an omission: approval records the leadership and leaves the
+ * account step pending, writing the entry section 21 names for that state.
  *
  * **One service for both kinds, because section 10 makes it one workflow.** Both carry
  * the same state machine, the same decline reasons, the same approver and the same two
@@ -63,6 +96,8 @@ export class CellsLeadershipRequestService {
     private readonly audit: AuditService,
     private readonly idempotency: IdempotencyService,
     private readonly cells: CellsReadService,
+    private readonly people: PeopleReadService,
+    private readonly networks: NetworksService,
   ) {}
 
   /**
@@ -340,6 +375,266 @@ export class CellsLeadershipRequestService {
   }
 
   /**
+   * Approve a pending request: mint the Cell, or hand an existing one over
+   * (SKILL.md section 10, *Step two — Admin approves*).
+   *
+   * **The guard has declared `cell.approve_leadership` against the church**, which
+   * section 7 gives to Admin alone at Whole Church only — so a grant issued narrower
+   * covers nothing and is refused `SCOPE_DENIED` before this runs.
+   *
+   * **What this method owes on top of that is section 10's per-request control**: "no
+   * actor may approve a request they submitted", which holds "even where one person
+   * happens to hold both capabilities" and must not be left to the two capabilities
+   * never meeting in one actor. Migration 0009 carries the same rule as
+   * `..._approver_is_not_requester`; this is here so the answer is a sentence rather
+   * than a constraint violation rendered `INTERNAL_ERROR`.
+   *
+   * **Everything takes effect at approval, never at request**, so there is no effective
+   * date to send and none is accepted. Section 16 counts New Cell Leaders by when a
+   * leadership assignment starts, and section 10 is explicit that a request made on 30
+   * September and approved on 2 October belongs to October.
+   *
+   * **One instant, taken from the write itself.** A new Cell's four rows share the
+   * Cell's `created_at`, and a handover's two share the closing row's `ended_at`;
+   * `decided_at` is that same value rather than a second clock read. Migration 0009
+   * refuses a handover whose two rows differ by so much as a microsecond, and its own
+   * comment names the cause: "any approval endpoint that reads the clock twice produces
+   * this shape by accident."
+   */
+  async approve(
+    requestId: string,
+    actor: Actor,
+    claim: CurrentClaim,
+  ): Promise<Record<string, unknown>> {
+    // ------------------------------------------------------------------
+    // On the pool, before the transaction opens (section 24). `authorityFor` and
+    // `actorFor` each read a table, and asking a bounded pool for a second
+    // connection while holding one is the liveness hazard that section names.
+    // ------------------------------------------------------------------
+    // **The actor's own authority is deliberately not read here.** Every scope
+    // question this operation asks is about the *requester* (section 10), and the only
+    // thing asked of the approver is `cell.approve_leadership`, which the guard has
+    // already decided against the church — section 7 gives it at Whole Church only, so
+    // there is no narrower reach left for a domain check to test.
+    //
+    // **Read once here to learn whom to lock, then read again under the lock.** The
+    // person locks must be taken before any `cells` row lock (section 5), and the
+    // people this operation touches are named by the request rather than by the
+    // caller — so the list cannot be built without reading it first. What makes the
+    // pre-read safe is that migration 0009's finality trigger makes a request's kind,
+    // the person it names, who submitted it and when immutable from the moment it is
+    // written: the values the locks are chosen from cannot change under this.
+    const pre = await this.db
+      .selectFrom('cell_leadership_requests')
+      .select(['id', 'kind', 'prospective_leader_id', 'requested_by', 'cell_id'])
+      .where('id', '=', requestId)
+      .executeTakeFirst();
+
+    if (!pre) {
+      // Safe as a `NOT_FOUND` rather than a denial: the guard admits only a Whole
+      // Church holder of `cell.approve_leadership`, so every caller reaching here
+      // would have been covered had the request existed — which is exactly the actor
+      // section 22 reserves `NOT_FOUND` for.
+      throw new NotFoundError('No such leadership request.');
+    }
+
+    const requester = await this.authorization.actorFor(pre.requested_by);
+
+    if (requester === null) {
+      // Unreachable while `requested_by` references `accounts` and section 5 refuses
+      // to delete a row that carries authority history. Refused rather than assumed
+      // away, because the alternative is evaluating the requester's scope against
+      // nobody and silently approving.
+      throw new InvariantViolationError(
+        'The account that submitted this request no longer exists, so the scope it was ' +
+          'submitted under cannot be revalidated (SKILL.md section 10).',
+        { request_id: pre.id },
+      );
+    }
+
+    const requesterAuthority = await this.authorization.authorityFor(pre.requested_by);
+
+    // The outgoing leader, for a handover, so the lock list is complete. Re-read
+    // under the locks below; this value decides nothing.
+    const outgoingBeforeLock =
+      pre.kind === 'HANDOVER' && pre.cell_id !== null
+        ? await this.cells.leaderForScope(pre.cell_id)
+        : null;
+
+    return this.db.transaction().execute(async (trx) => {
+      // ------------------------------------------------------------------
+      // The locks, in the order section 5 fixes: the bound, then people, then Cells.
+      // ------------------------------------------------------------------
+      await boundLockWaitsWithin(trx);
+
+      // Both leaders, because both Networks are compared. `assert_leadership_stays_
+      // in_network` reads `network_as_of` for the incoming leader and for the row it
+      // succeeds, and a Network change on either is exactly what the advisory lock
+      // serializes against (section 5). The prospective leader always needs one: a
+      // person who leads nobody may have their Network corrected freely (section 4),
+      // so "they lead a Cell already" is not a reason to skip it. The helper sorts by
+      // lock key; this call site must not.
+      await lockPersonsWithin(
+        trx,
+        [pre.prospective_leader_id, outgoingBeforeLock].filter((id): id is string => id !== null),
+      );
+
+      // `FOR SHARE`: this operation does not write the `cells` row, and depends on its
+      // `state` staying put — the same strength `CellLock.ReadsTheState` documents. It
+      // conflicts with the `FOR NO KEY UPDATE` a closure takes, which is what stops a
+      // Cell closing underneath a handover, and it does not conflict with itself.
+      if (pre.kind === 'HANDOVER' && pre.cell_id !== null) {
+        await lockCellsWithin(trx, [{ cellId: pre.cell_id, strength: CellLock.ReadsTheState }]);
+      }
+
+      // ------------------------------------------------------------------
+      // What the locks make it safe to decide.
+      // ------------------------------------------------------------------
+
+      // `FOR UPDATE` on the request, so two concurrent approvals cannot both read
+      // `PENDING`. The second would otherwise be refused by the finality trigger as a
+      // `restrict_violation`, which nothing classifies.
+      const request = await trx
+        .selectFrom('cell_leadership_requests')
+        .select([
+          'id',
+          'kind',
+          'state',
+          'prospective_leader_id',
+          'requested_by',
+          'cell_id',
+          'category',
+          'day_of_week',
+          'time_of_day',
+        ])
+        .where('id', '=', requestId)
+        .forUpdate()
+        .executeTakeFirst();
+
+      if (!request) {
+        throw new NotFoundError('No such leadership request.');
+      }
+
+      if (request.state !== 'PENDING') {
+        throw new InvariantViolationError(
+          'That request was already decided. A decision is never withdrawn or rewritten ' +
+            '(SKILL.md section 10, *Declining*). The way forward from a decline is a new ' +
+            'request.',
+          { request_id: request.id, state: request.state },
+        );
+      }
+
+      // **Section 10's enforceable control**, and it is checked here rather than
+      // inferred from who holds what: "do not rely instead on the two capabilities
+      // never meeting in one actor — Admin holds both by default, and separation
+      // expressed only through role defaults is separation an Admin-issued grant can
+      // undo". `sameId` rather than `===` because this refuses, so it fails *open*: a
+      // mis-cased identifier would skip it (section 7, the 2026-08-23 rule).
+      if (sameId(request.requested_by, actor.accountId)) {
+        throw new ScopeDeniedError(
+          'You submitted this request, so you may not approve it. Approving a new Cell ' +
+            'Leader needs a second party (SKILL.md section 10).',
+          { capability: Capability.CellApproveLeadership },
+        );
+      }
+
+      // The locks were chosen from the pre-read. `requested_by` is immutable, so this
+      // cannot differ — asserted rather than assumed, because if it ever did the
+      // requester whose scope is about to be evaluated would not be the one the
+      // authority was read for.
+      if (!sameId(request.requested_by, pre.requested_by)) {
+        throw new InvariantViolationError(
+          'This request changed while it was being approved. Retry.',
+          { request_id: request.id },
+        );
+      }
+
+      const decision = await this.assertApprovableWithin(trx, request, {
+        actor,
+        requester,
+        requesterAuthority,
+        outgoingBeforeLock,
+      });
+
+      // ------------------------------------------------------------------
+      // The writes.
+      // ------------------------------------------------------------------
+      const applied =
+        request.kind === 'NEW_CELL'
+          ? await this.approveNewCellWithin(trx, request, actor)
+          : await this.handOverWithin(trx, request, decision, actor);
+
+      await trx
+        .updateTable('cell_leadership_requests')
+        .set({
+          state: 'APPROVED',
+          decided_by: actor.accountId,
+          decided_at: applied.at,
+          // "For NEW_CELL, null until approval sets it" (section 10), which
+          // `..._new_cell_names_its_cell_at_approval` requires of an APPROVED row. A
+          // handover already names its Cell and the value is unchanged.
+          cell_id: applied.cellUuid,
+        })
+        .where('id', '=', request.id)
+        .execute();
+
+      // Section 21: "Cell leadership request approved, with the kind." The prospective
+      // leader is the target, matching the submitted and declined entries, because a
+      // reader asking how a leader was developed searches on the person.
+      await this.audit.writeWithin(trx, {
+        actorId: actor.accountId,
+        action: 'cell_leadership_request.approved',
+        targetType: 'person',
+        targetId: request.prospective_leader_id,
+        before: { request_id: request.id, state: 'PENDING' },
+        after: {
+          request_id: request.id,
+          kind: request.kind,
+          state: 'APPROVED',
+          cell_id: applied.cellId,
+          cell_uuid: applied.cellUuid,
+        },
+      });
+
+      // **Section 21 lists this as an action in its own right**: "Cell leadership
+      // assignment left with account provisioning pending". Section 10 requires it on
+      // every approval of either kind, unconditionally — leading a Cell and holding an
+      // account are not the same fact, and a current Cell Leader with the account step
+      // still pending is exactly what direct creation and every earlier approval both
+      // produce. The honest test is whether an Account exists, and `cells` may not ask
+      // it: `auth` imports this module, so a read back would close the cycle section 2
+      // keeps open.
+      await this.audit.writeWithin(trx, {
+        actorId: actor.accountId,
+        action: 'cell_leadership.account_pending',
+        targetType: 'person',
+        targetId: request.prospective_leader_id,
+        after: { cell_id: applied.cellId },
+      });
+
+      const response = {
+        id: request.id,
+        kind: request.kind,
+        state: 'APPROVED',
+        decided_at: applied.at.toISOString(),
+        cell_id: applied.cellId,
+        cell_uuid: applied.cellUuid,
+        cell_leader_id: request.prospective_leader_id,
+        // Null on a new Cell, which succeeds nobody. Section 21 asks a leadership
+        // entry to carry "the outgoing and the incoming leader where each exists", and
+        // the response says the same so a client need not read the log to render it.
+        outgoing_cell_leader_id: applied.outgoingLeaderId,
+      };
+
+      // Last statement in the transaction, holding the key's row lock, and recording
+      // exactly what the endpoint returns (CLAUDE.md, Write endpoints).
+      await this.idempotency.completeWithin(trx, { ...claim, status: 200, body: response });
+
+      return response;
+    });
+  }
+
+  /**
    * The Admin queue: pending requests of either kind, oldest first (section 19).
    *
    * **A read, so it takes no idempotency claim and opens no transaction.** The query
@@ -384,6 +679,421 @@ export class CellsLeadershipRequestService {
               id: last.id,
             })
           : null,
+    };
+  }
+
+  /**
+   * Section 10's revalidation, in full: "the state at approval governs, never the
+   * state at request".
+   *
+   * **Both conditions are asked of the requester, not of the approver**, and asked
+   * whole. Each is the question the request step itself asked —
+   * `cell.request_leadership` over the prospective leader, `cell.manage_lifecycle`
+   * over the Cell — put to the account in `requested_by`. Section 10 gives the reason
+   * for the Cell: its leader may be pastorally reassigned while the request sits
+   * pending, which carries it out of the requester's subtree, and approving anyway
+   * completes a handover of a Cell they no longer oversee.
+   *
+   * **One refusal covers both halves, and which moved is not distinguished.** The
+   * predicate is the whole of the requester's authority, so it answers no where the
+   * person or the Cell moved out of reach and equally where the requester has since
+   * lost the capability or the role carrying it. Account status is deliberately not
+   * part of it — a disabled account keeps its roles and grants, because section 6
+   * makes disablement an authentication decision, and consulting status here would be
+   * a rule about what a grant means and so section 7's rather than this endpoint's.
+   *
+   * **"Had their Network changed" is not a condition of its own**, and section 10 now
+   * says why: nothing records the prospective leader's Network at request time, so it
+   * had no baseline and could not be evaluated. It needs none. A Network change forces
+   * a pastoral reassignment into the new Network at the same instant (section 4) and
+   * no pastoral edge crosses Networks (section 5), so the moved person leaves the
+   * requester's subtree and the check below fires.
+   */
+  private async assertApprovableWithin(
+    trx: Transaction<Database>,
+    request: PendingRequest,
+    context: {
+      actor: Actor;
+      requester: Actor;
+      requesterAuthority: ActorAuthority;
+      outgoingBeforeLock: string | null;
+    },
+  ): Promise<{ outgoingLeaderId: string | null }> {
+    const person = await this.people.forDecisionWithin(trx, request.prospective_leader_id);
+
+    if (!person) {
+      throw new InvariantViolationError('The person this request names no longer exists.', {
+        person_id: request.prospective_leader_id,
+      });
+    }
+
+    // The two refusals every path in this system makes about a target Person. Section
+    // 10 names both here in terms: reject where they have since been absorbed by a
+    // Merge or archived, "creating nothing" — without which approval would open an
+    // active leadership assignment for an archived Person and proceed to provision
+    // their credentials, the outcome section 3's archive guard exists to prevent.
+    if (person.mergedIntoId !== null) {
+      throw new InvariantViolationError(
+        'That person was absorbed by a merge since this request was submitted. Decline it ' +
+          'and submit one naming the surviving Person (SKILL.md section 10).',
+        { person_id: request.prospective_leader_id },
+      );
+    }
+
+    if (person.isArchived) {
+      throw new InvariantViolationError(
+        'That person has been archived since this request was submitted, so they cannot be ' +
+          'given a Cell to lead. Restore them first, which is a separate and separately ' +
+          'audited decision (SKILL.md section 10).',
+        { person_id: request.prospective_leader_id },
+      );
+    }
+
+    if (
+      !(await this.authorization.coversWith(
+        trx,
+        context.requester,
+        context.requesterAuthority,
+        Capability.CellRequestLeadership,
+        { kind: 'person', personId: request.prospective_leader_id },
+      ))
+    ) {
+      throw new ScopeDeniedError(
+        'The person this request names is no longer within the authorized subtree of the ' +
+          'leader who requested it. Decline it; whoever now holds that pastoral ' +
+          'relationship may submit another (SKILL.md section 10).',
+        { capability: Capability.CellRequestLeadership },
+      );
+    }
+
+    if (request.kind === 'NEW_CELL') {
+      await this.assertNewCellNetworkWithin(trx, request.prospective_leader_id);
+      return { outgoingLeaderId: null };
+    }
+
+    return {
+      outgoingLeaderId: await this.assertHandoverApprovableWithin(trx, request, context),
+    };
+  }
+
+  /**
+   * Section 10: for a new Cell, "approval must also confirm that they and their
+   * pastoral leader share a Network, because a Cell inherits its leader's Network and
+   * Section 5 forbids a cross-Network edge."
+   *
+   * **Nothing can fail against this, and that is stated here rather than left for
+   * somebody to find by deleting it.** `assert_assignment_same_network` makes a
+   * cross-Network pastoral edge impossible on every write (section 5), so no operation
+   * this system offers can produce the state this refuses. It is written anyway on the
+   * reasoning `CellsReadService.isCurrentCellLeaderWithin` already records for its own
+   * unfalsifiable half: the rule that makes the two agree is a **constraint trigger**,
+   * and `pg_restore --disable-triggers` skips one — the argument this repository has
+   * made twice before, for the Senior Pastor slot and the Network root seat.
+   *
+   * **A person with no pastoral leader is not refused**, because section 5 invariant 3
+   * makes zero open assignments legitimate for three kinds of Person and section 10
+   * asks only that leader and pastoral leader *share* a Network where there is one.
+   * Refusing would invent a rule. A person with no **Network** row is a different
+   * matter and is refused by `assert_leadership_stays_in_network` at commit, which is
+   * the only state that leaves a Cell's Network underivable.
+   */
+  private async assertNewCellNetworkWithin(
+    trx: Transaction<Database>,
+    personId: string,
+  ): Promise<void> {
+    const edge = await trx
+      .selectFrom('pastoral_assignments')
+      .select(['leader_id'])
+      .where('person_id', '=', personId)
+      .where('ended_at', 'is', null)
+      .executeTakeFirst();
+
+    if (!edge || edge.leader_id === null) {
+      return;
+    }
+
+    const [personNetwork, leaderNetwork] = await Promise.all([
+      this.networks.currentNetwork(trx, personId),
+      this.networks.currentNetwork(trx, edge.leader_id),
+    ]);
+
+    if (personNetwork !== null && leaderNetwork !== null && personNetwork !== leaderNetwork) {
+      throw new InvariantViolationError(
+        'That person and their pastoral leader are in different Networks, so a Cell for ' +
+          'them would inherit a Network its leader does not belong to (SKILL.md sections 5 ' +
+          'and 10).',
+        { person_id: personId },
+      );
+    }
+  }
+
+  /**
+   * The Cell half of section 10's revalidation, for a handover.
+   *
+   * Four refusals, and section 10 states each: reject where the Cell has since been
+   * closed; where the incoming leader and the Cell's current leader do not share a
+   * Network; where the Cell's leader is now the person the request names, "since a
+   * handover that changes nothing is refused"; and where the Cell has moved outside
+   * the requester's authorized scope.
+   *
+   * Returns the outgoing leader, which the write and the audit entry both need.
+   */
+  private async assertHandoverApprovableWithin(
+    trx: Transaction<Database>,
+    request: PendingRequest,
+    context: {
+      requester: Actor;
+      requesterAuthority: ActorAuthority;
+      outgoingBeforeLock: string | null;
+    },
+  ): Promise<string> {
+    const cell = await trx
+      .selectFrom('cells')
+      .select(['id', 'cell_id', 'state'])
+      .where('id', '=', request.cell_id as string)
+      .executeTakeFirst();
+
+    if (!cell) {
+      // Unreachable: `cell_leadership_requests.cell_id` references `cells`, and
+      // migration 0009 refuses a DELETE on that table outright.
+      throw new InvariantViolationError('The Cell this request names no longer exists.', {
+        request_id: request.id,
+      });
+    }
+
+    if (cell.state === 'CLOSED') {
+      throw new InvariantViolationError(
+        'That Cell has been closed since this request was submitted, so it cannot be handed ' +
+          'to anyone. A closure is never reversed (SKILL.md section 10).',
+        { cell_id: cell.cell_id },
+      );
+    }
+
+    const outgoingLeaderId = await this.cells.leaderForScopeWithin(trx, cell.id);
+
+    if (outgoingLeaderId === null) {
+      throw new InvariantViolationError(
+        'That Cell cannot be resolved to a leader, so there is no authority to check ' +
+          'against (SKILL.md section 11).',
+      );
+    }
+
+    // **The lock list was built from a pre-read, and this is what makes that safe
+    // rather than assumed.** The outgoing leader can change only through an operation
+    // that writes `cell_leaderships`, and there are three: a closure, which is refused
+    // above by `state`; a `NEW_CELL` approval, which writes a different Cell; and
+    // another handover approval, which needs a second PENDING handover for this Cell
+    // and `..._one_pending_handover` permits only one. So this cannot differ.
+    //
+    // Refused rather than trusted, because if it ever did the person whose Network is
+    // about to be compared would be one this transaction never locked.
+    if (
+      context.outgoingBeforeLock === null ||
+      !sameId(outgoingLeaderId, context.outgoingBeforeLock)
+    ) {
+      throw new InvariantViolationError(
+        'This Cell changed hands while the approval was being made. Retry.',
+        { cell_id: cell.cell_id },
+      );
+    }
+
+    if (sameId(outgoingLeaderId, request.prospective_leader_id)) {
+      // Section 10: "where the Cell's leader is now the person the request names,
+      // since a handover that changes nothing is refused". The request step refuses
+      // this too; it is reachable here because the Cell may have been handed to that
+      // person in between.
+      throw new InvariantViolationError(
+        'That person already leads this Cell, so there is nothing to hand over ' +
+          '(SKILL.md section 10).',
+        { cell_id: cell.cell_id, person_id: request.prospective_leader_id },
+      );
+    }
+
+    const [incomingNetwork, outgoingNetwork] = await Promise.all([
+      this.networks.currentNetwork(trx, request.prospective_leader_id),
+      this.networks.currentNetwork(trx, outgoingLeaderId),
+    ]);
+
+    if (incomingNetwork === null || incomingNetwork !== outgoingNetwork) {
+      // `assert_leadership_stays_in_network` enforces this and raises at COMMIT as a
+      // raw `check_violation`, which `ApiExceptionFilter` renders `INTERNAL_ERROR`.
+      // The constraint stays the enforcement — it sees a Network change this
+      // transaction's locks did not serialize — and this is what makes the ordinary
+      // case an answer.
+      throw new InvariantViolationError(
+        'The incoming leader and this Cell’s current leader are in different Networks. ' +
+          'A Cell takes its Network from its leader, and a Network is homogeneous ' +
+          '(SKILL.md sections 4 and 10).',
+        { cell_id: cell.cell_id },
+      );
+    }
+
+    if (
+      !(await this.authorization.coversWith(
+        trx,
+        context.requester,
+        context.requesterAuthority,
+        Capability.CellManageLifecycle,
+        { kind: 'person', personId: outgoingLeaderId },
+      ))
+    ) {
+      throw new ScopeDeniedError(
+        'This Cell is no longer within the authorized scope of the leader who requested the ' +
+          'handover. Decline it; whoever now oversees the Cell may submit another ' +
+          '(SKILL.md section 10).',
+        { capability: Capability.CellManageLifecycle },
+      );
+    }
+
+    return outgoingLeaderId;
+  }
+
+  /**
+   * On approving a new Cell, in a single transaction (SKILL.md section 10): the Cell
+   * as `ACTIVE` with a server-assigned Cell ID, its category row, its schedule row and
+   * the leadership assignment.
+   *
+   * The statement is shared with `CellsService.createDirectly` rather than repeated —
+   * `insert-cell.ts` carries why all four rows must come from one expression.
+   */
+  private async approveNewCellWithin(
+    trx: Transaction<Database>,
+    request: PendingRequest,
+    actor: Actor,
+  ): Promise<AppliedApproval> {
+    const created = await insertCellWithin(
+      trx,
+      {
+        cellLeaderId: request.prospective_leader_id,
+        category: request.category as CellCategory,
+        dayOfWeek: request.day_of_week as number,
+        timeOfDay: request.time_of_day as string,
+      },
+      actor.accountId,
+    );
+
+    await this.audit.writeWithin(trx, {
+      actorId: actor.accountId,
+      action: 'cell.created',
+      targetType: 'cell',
+      targetId: created.id,
+      after: {
+        cell_id: created.cellId,
+        state: 'ACTIVE',
+        cell_leader_id: request.prospective_leader_id,
+        category: request.category,
+        day_of_week: request.day_of_week,
+        time_of_day: request.time_of_day,
+        // The counterpart of `created_during_initial_encoding` on the direct path:
+        // this Cell came through request-and-approve, and the entry says which.
+        approved_request_id: request.id,
+      },
+    });
+
+    // Section 11 makes this a fact of its own rather than a detail of the Cell: it is
+    // what makes the person a current Cell Leader, and section 16 counts New Cell
+    // Leaders by when a leadership assignment starts.
+    await this.audit.writeWithin(trx, {
+      actorId: actor.accountId,
+      action: 'cell_leadership.opened',
+      targetType: 'person',
+      targetId: request.prospective_leader_id,
+      after: {
+        cell_id: created.cellId,
+        cell_uuid: created.id,
+        cell_leader_id: request.prospective_leader_id,
+      },
+    });
+
+    return {
+      at: created.createdAt,
+      cellId: created.cellId,
+      cellUuid: created.id,
+      outgoingLeaderId: null,
+    };
+  }
+
+  /**
+   * On approving a handover, in a single transaction (SKILL.md section 10): "the
+   * outgoing leadership assignment ends and the incoming one opens at the same
+   * instant".
+   *
+   * **One statement, because the two instants must be identical and not merely close.**
+   * `assert_leadership_stays_in_network` refuses the pair unless the predecessor's
+   * `ended_at` equals this row's `started_at` exactly, and its own comment names the
+   * cause of the near-miss: an approval that reads the clock twice. Taking the incoming
+   * row's `started_at` from the closing row's `RETURNING` makes them one value.
+   *
+   * `clock_timestamp()` rather than `now()`, which is transaction start: these rows are
+   * written after a lock wait of up to three seconds, and stamping them with the
+   * instant the request arrived would place the handover before writes it followed.
+   *
+   * Section 11's exactly-one-leader rule is a **deferred** constraint trigger, which is
+   * what lets the pair through: it sees only the state this transaction ends in, and in
+   * between the Cell momentarily has none.
+   */
+  private async handOverWithin(
+    trx: Transaction<Database>,
+    request: PendingRequest,
+    decision: { outgoingLeaderId: string | null },
+    actor: Actor,
+  ): Promise<AppliedApproval> {
+    const cellUuid = request.cell_id as string;
+
+    const moved = await sql<{ started_at: Date }>`
+      WITH closed AS (
+        UPDATE cell_leaderships
+           SET ended_at = clock_timestamp()
+         WHERE cell_id = ${cellUuid}::uuid
+           AND ended_at IS NULL
+        RETURNING ended_at
+      )
+      INSERT INTO cell_leaderships (person_id, cell_id, started_at)
+      SELECT ${request.prospective_leader_id}::uuid, ${cellUuid}::uuid, ended_at FROM closed
+      RETURNING started_at
+    `.execute(trx);
+
+    const opened = moved.rows[0];
+
+    if (!opened) {
+      // Unreachable through any operation: migration 0009 gives an `ACTIVE` Cell
+      // exactly one open leadership, and the Cell was confirmed `ACTIVE` under a
+      // `FOR SHARE` above. Refused rather than left to the deferred trigger, which
+      // would raise `check_violation` at COMMIT and render `INTERNAL_ERROR`.
+      throw new InvariantViolationError(
+        'That Cell had no open leadership assignment to hand over (SKILL.md section 11).',
+        { request_id: request.id },
+      );
+    }
+
+    const cell = await trx
+      .selectFrom('cells')
+      .select('cell_id')
+      .where('id', '=', cellUuid)
+      .executeTakeFirstOrThrow();
+
+    // Section 21: "Cell leadership opened, ended, or changed, carrying the outgoing and
+    // the incoming leader where each exists — a reader asking who led a Cell before a
+    // handover must find it here". One entry rather than an `ended` and an `opened`,
+    // because a handover is one action and section 21 names `changed` for it.
+    await this.audit.writeWithin(trx, {
+      actorId: actor.accountId,
+      action: 'cell_leadership.changed',
+      targetType: 'cell',
+      targetId: cellUuid,
+      before: { cell_leader_id: decision.outgoingLeaderId },
+      after: {
+        cell_leader_id: request.prospective_leader_id,
+        cell_id: cell.cell_id,
+        changed_at: opened.started_at.toISOString(),
+      },
+    });
+
+    return {
+      at: opened.started_at,
+      cellId: cell.cell_id,
+      cellUuid,
+      outgoingLeaderId: decision.outgoingLeaderId,
     };
   }
 

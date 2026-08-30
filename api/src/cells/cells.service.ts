@@ -1,5 +1,4 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { sql } from 'kysely';
 
 import { SettingsService } from '../admin/settings/settings.service';
 import { AuditService } from '../audit/audit.service';
@@ -13,6 +12,8 @@ import {
 import { IdempotencyService } from '../common/idempotency/idempotency.service';
 import { DATABASE, type Db } from '../database/database.module';
 import { PeopleReadService } from '../people/people.read.service';
+
+import { insertCellWithin } from './insert-cell';
 
 import type { CurrentClaim } from '../common/idempotency/current-idempotency.decorator';
 import type { CellCategory, Database } from '../database/schema';
@@ -110,7 +111,7 @@ export class CellsService {
         );
       }
 
-      const created = await this.insertCellWithin(trx, input, actor.accountId);
+      const created = await insertCellWithin(trx, input, actor.accountId);
 
       await this.audit.writeWithin(trx, {
         actorId: actor.accountId,
@@ -191,61 +192,6 @@ export class CellsService {
 
       return response;
     });
-  }
-
-  /**
-   * The Cell, its category row, its schedule row and its leadership assignment.
-   *
-   * **One statement, and section 10 requires it to be.** The schedule row starts at
-   * the Cell's `created_at` — a Cell created part-way through a month opens its
-   * first schedule row at creation rather than on a first of month — and equality
-   * with a column on another table is exact: `created_at DEFAULT now()` beside an
-   * application-computed timestamp differs by microseconds and aborts every
-   * creation, "with a failure that reads as a clock problem rather than as a rule".
-   * Taking the value from the same expression is what section 10 prescribes.
-   *
-   * Migration 0009 refuses each half of a partly-built Cell independently: an
-   * `ACTIVE` Cell has exactly one leadership assignment, an open category row and
-   * an open schedule row. Those are deferred constraint triggers, so they see the
-   * state this transaction ends in rather than the order these rows arrive in.
-   */
-  private async insertCellWithin(
-    trx: Transaction<Database>,
-    input: CreateCellDirectlyInput,
-    actorId: string,
-  ): Promise<{ id: string; cellId: string; timeOfDay: string; createdAt: Date }> {
-    const result = await sql<{
-      id: string;
-      cell_id: string;
-      time_of_day: string;
-      created_at: Date;
-    }>`
-      WITH new_cell AS (
-        INSERT INTO cells DEFAULT VALUES
-        RETURNING id, cell_id, created_at
-      ), category AS (
-        INSERT INTO cell_categories (cell_id, category, actor_id, started_at)
-        SELECT id, ${input.category}::cell_category, ${actorId}::uuid, created_at FROM new_cell
-      ), schedule AS (
-        INSERT INTO cell_schedules (cell_id, day_of_week, time_of_day, actor_id, started_at)
-        SELECT id, ${input.dayOfWeek}::smallint, ${input.timeOfDay}::time, ${actorId}::uuid, created_at
-          FROM new_cell
-      ), leadership AS (
-        INSERT INTO cell_leaderships (person_id, cell_id, started_at)
-        SELECT ${input.cellLeaderId}::uuid, id, created_at FROM new_cell
-      )
-      SELECT nc.id, nc.cell_id, ${input.timeOfDay}::time::text AS time_of_day, nc.created_at
-        FROM new_cell nc
-    `.execute(trx);
-
-    const row = result.rows[0];
-
-    return {
-      id: row.id,
-      cellId: row.cell_id,
-      timeOfDay: row.time_of_day,
-      createdAt: row.created_at,
-    };
   }
 
   /**
