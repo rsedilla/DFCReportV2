@@ -6715,8 +6715,16 @@ computed. Right conclusion, wrong row.
 
 The subject was carried across from `CellsClosureService`'s own inclusivity rationale,
 which is written about a membership closed at its own `started_at`. Section 25 rule 19,
-inside the comment written to close a Section 25 rule 19 finding — the third time on this
-branch that the rule has failed in the act of being applied.
+inside the comment written to close a Section 25 rule 19 finding.
+
+*That sentence first said "the third time on this branch", and there are two: the three
+consequences carried from the leader case into the member-side settlement, and this one.
+The candidate third is the original defect, and the entry above classifies it correctly as
+the older and separate fault — a mechanism checked over the part of its range being looked
+at — while the uniform-`ended_at` refusal is rule 19 **succeeding**. A count asserted from
+memory rather than enumerated, in a paragraph about carrying a claim across without
+re-deriving it, and two screens below this log's own "a miscount inside the entry
+correcting a miscount".*
 
 **Two imprecisions, both true in conclusion.** Section 4's surviving consequence named the
 member scan as the mechanism that stops a stranded Cell changing hands, and that closes one
@@ -6739,6 +6747,42 @@ window, so the pin no longer depends on a fixture artefact.
 `extends`: a case asserting that something is *accepted* cannot distinguish a term that is
 correctly narrow from one that is absent. Said in the comment rather than left for somebody
 to discover by deleting the term and finding this case still green.
+
+
+**A fourth pass confirmed the batch and found one miscount, above. It also supplied a
+mechanism for an intermittent failure this branch did not cause and does widen the window
+for**, which is worth recording because "did not reproduce" had been the whole of the
+account.
+
+One full run failed a single test; eight subsequent runs are green, three of them
+targeting the timing-sensitive suites. The mechanism is a **fixed wall-clock deadline
+racing pre-lock work**. `api/test/api/person-lock.e2e.spec.ts` holds an advisory lock,
+dispatches a request, and polls `pg_locks` for a waiter every 50 ms against a 2.5-second
+budget — shorter than the code's own three-second `lock_timeout`, deliberately, because
+past that the waiter is gone. Between dispatch and `pg_advisory_xact_lock` the request has
+to complete an HTTP round trip, verify a token, run the guard's `account_roles` and
+`capability_grants` reads and any subtree walk, validate its DTO and open a transaction. On
+a machine loaded enough to take 433 seconds over a suite that elsewhere takes 219, that
+work exceeding 2.5 seconds is ordinary — and then `waiting` stays zero and the assertion
+fails **while the system is behaving correctly**. `invariants.spec.ts` has the same shape
+with bounded attempt counts.
+
+The branch does not introduce it: those deadlines and the lock code are untouched. It
+widens the window, by adding five end-to-end cases that create Cells, take person locks and
+run full requests, on a suite that is now 987 tests.
+
+**It is not fixed here, and that is a scope judgement rather than an oversight.** The fix
+is to make the probes' budget a function of observed progress — poll until the waiter
+appears *or* the request settles — rather than of a wall clock the machine's load can
+outrun. That is a change to concurrency tests on a branch about a backdate floor, and this
+repository has already recorded a fix batch destroying a test's ability to fail. It is
+flagged for its own change instead.
+
+Two weaker candidates are named so they are not rediscovered: a fixture reading
+`new Date()` while the refusal re-reads `Date.now()`, which flips the "names no date" branch
+if the two straddle Manila midnight — real, and around one run in ten million; and the
+30-second case timeout against a 2× slowdown for the probes that poll for five seconds while
+holding connections.
 
 ### Open — awaiting a ruling
 
