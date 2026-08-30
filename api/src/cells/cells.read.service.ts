@@ -24,7 +24,7 @@ import type { Transaction } from 'kysely';
  * needs is a question, and importing a module of creation and closure operations to
  * ask it would put the whole of `cells` into `auth`'s surface. The graph runs
  * `auth -> cells -> {people, networks, hierarchy, authorization, admin/settings,
- * audit}` with
+ * audit}` (the same set `cells.module.ts` enumerates) with
  * nothing pointing back, because this module never imports `auth`.
  */
 @Injectable()

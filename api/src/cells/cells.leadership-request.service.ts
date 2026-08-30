@@ -567,15 +567,23 @@ export class CellsLeadershipRequestService {
       // and not the second (migration 0009), so only one of the two would be safe to
       // argue rather than check.
       //
-      // **None of these three messages advises a retry, and that is deliberate.** All
-      // are 4xx, so section 22 stores the answer against the idempotency key; this route
-      // accepts no body, so a resubmission is by definition the bare retry of an
-      // unchanged body that the 2026-08-27 ruling says reuses the key — and the client
-      // would be served the stored refusal for the whole retention. Advice a compliant
-      // client cannot follow is worse than none, and it is the shape CLAUDE.md's open
-      // item on this already names.
+      // **The remedy is a fresh attempt under a new `Idempotency-Key`, and the message
+      // says so.** A stale-premise refusal is a 4xx, so section 22 stores it against the
+      // key that was used; retrying under that key replays it for the whole retention.
+      // What follows is that the next attempt needs a *new* key, not that no advice can
+      // be given {M} section 22 fixes when a key must be new ("the moment the body
+      // changes") and nowhere forbids a fresh key for a fresh attempt, and it says in
+      // terms that a client "mints a new key" on any refusal leaving something to
+      // correct.
       //
-      // All three disjuncts are unreachable today: `requested_by` is frozen, and
+      // *A previous batch removed the advice outright, reading "only a bare retry of an
+      // unchanged body reuses one" as a prohibition on minting a new key. That is
+      // stronger than section 22 supports, and it left three refusals stating a fact
+      // with no next step.* The same wording is owed at the two handover refusals in
+      // `assertHandoverApprovableWithin`, which is why each carries it rather than
+      // relying on this paragraph three hundred lines away.
+      //
+      // The three disjuncts below are unreachable today: `requested_by` is frozen, and
       // `cell_id`'s nullness is tied to `kind` by a check constraint while `kind` is
       // frozen. They are checked because the *argument* is what goes stale, and a
       // revision path for a pending request would make the third live.
@@ -596,7 +604,8 @@ export class CellsLeadershipRequestService {
       ) {
         throw new InvariantViolationError(
           'This request changed while it was being approved, so the locks it took no ' +
-            'longer cover what it would write.',
+            'longer cover what it would write. Submit it again under a new ' +
+            'Idempotency-Key.',
           { request_id: request.id },
         );
       }
@@ -945,10 +954,16 @@ export class CellsLeadershipRequestService {
 
     // **The lock list was built from a pre-read, and this is what makes that safe
     // rather than assumed.** The outgoing leader can change only through an operation
-    // that writes `cell_leaderships`, and there are three: a closure, which is refused
-    // above by `state`; a `NEW_CELL` approval, which writes a different Cell; and
-    // another handover approval, which needs a second PENDING handover for this Cell
-    // and `..._one_pending_handover` permits only one. So this cannot differ.
+    // that writes `cell_leaderships`, and there are four: a closure, which is refused
+    // above by `state`; a `NEW_CELL` approval and direct creation during initial
+    // encoding, which both go through `insert-cell.ts` and both write a *different*
+    // Cell; and another handover approval, which needs a second PENDING handover for
+    // this Cell and `..._one_pending_handover` permits only one. So this cannot differ.
+    //
+    // *Counted as three until the fourth pass: `insert-cell.ts` has two callers and
+    // only one was named. The conclusion is unchanged, because the reason given for a
+    // NEW_CELL approval — it writes a different Cell — is the same reason direct
+    // creation does not matter.*
     //
     // Refused rather than trusted, because if it ever did the person whose Network is
     // about to be compared would be one this transaction never locked.
@@ -965,8 +980,8 @@ export class CellsLeadershipRequestService {
       // built before the transaction, does not cover.*
       throw new InvariantViolationError(
         'That Cell acquired its leadership assignment while this approval was starting, ' +
-          'so the approval holds no lock on the leader it would hand over from ' +
-          '(SKILL.md section 11).',
+          'so the approval holds no lock on the leader it would hand over from. Submit ' +
+          'it again under a new Idempotency-Key (SKILL.md section 11).',
         { cell_id: cell.cell_id },
       );
     }
@@ -977,7 +992,8 @@ export class CellsLeadershipRequestService {
       // lock here was taken cleanly.
       throw new InvariantViolationError(
         'This Cell changed hands while the approval was being made, so the leader it ' +
-          'locked is no longer the one it would hand over from.',
+          'locked is no longer the one it would hand over from. Submit it again under a ' +
+          'new Idempotency-Key.',
         { cell_id: cell.cell_id },
       );
     }

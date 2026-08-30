@@ -307,9 +307,14 @@ describe('Cell leadership approval (section 10)', () => {
         // approval can go on to take — **on the assumption that this process and
         // PostgreSQL share a clock**, which is a host clock compared against a database
         // one. True locally and in CI, and unbounded in general: CLAUDE.md carries the
-        // multi-instance skew question as open. `toBeGreaterThanOrEqual` rather than a
-        // strict comparison for the same reason, since a millisecond of skew either way
-        // is not what this case is about.
+        // multi-instance skew question as open.
+        //
+        // **`toBeGreaterThanOrEqual` is about resolution, not skew**, and an earlier
+        // version of this comment said skew. `>=` differs from `>` by admitting exact
+        // equality and nothing else, so it tolerates no skew in either direction; what
+        // it admits is a correct run whose two instants land in the same millisecond,
+        // `released` being a host `Date` and the driver truncating `timestamptz` to
+        // milliseconds.
         const released = new Date();
         await blocker.query('ROLLBACK');
 
@@ -833,13 +838,21 @@ describe('Cell leadership approval (section 10)', () => {
         ]);
 
         const approving = approve(admin, requestId).then((response) => response);
-        await waitForBlockedBy(holderPid);
+
+        // **A shorter poll here than the helper's default, because this case spends the
+        // rest of the approval's 3s bound itself.** The probe below adds a `BEGIN`, a
+        // `SET LOCAL`, a bounded `SELECT` and a `ROLLBACK` inside the same wait, so the
+        // helper's 2s budget — justified as "deliberately under the service's 3s
+        // `lock_timeout`" on the assumption that it is the only thing in that window —
+        // no longer leaves room. 1s of poll plus a 1s probe bound keeps the total under
+        // the wait on a slow runner.
+        await waitForBlockedBy(holderPid, 50);
 
         // **The Cell row is free, so the approval has not reached it.** Bounded, so a
         // service taking its Cell lock first fails this as a timeout rather than
         // hanging the run.
         await prober.query('BEGIN');
-        await prober.query("SET LOCAL lock_timeout = '2s'");
+        await prober.query("SET LOCAL lock_timeout = '1s'");
         await prober.query('SELECT id FROM cells WHERE id = $1 FOR NO KEY UPDATE', [markCell.id]);
         await prober.query('ROLLBACK');
 
@@ -853,6 +866,53 @@ describe('Cell leadership approval (section 10)', () => {
         } finally {
           await holder.end();
           await prober.end();
+        }
+      }
+    }, 30000);
+
+    it('takes the Cell at FOR SHARE, which an ordinary add into it does not wait on', async () => {
+      // **Section 5's third clause: the lock *strength*.** The two cases either side pin
+      // the ordering and the bound and leave this free — `CellLock` offers exactly two
+      // values, and swapping `ReadsTheState` for `WritesTheRow` keeps both of them green.
+      //
+      // **The discriminating holder is `FOR SHARE`, and the review's suggested
+      // `FOR KEY SHARE` is not.** PostgreSQL's matrix has `FOR KEY SHARE` compatible
+      // with both `FOR SHARE` and `FOR NO KEY UPDATE`, so a `FOR KEY SHARE` holder lets
+      // the mutant through exactly as it lets the real thing through. A `FOR SHARE`
+      // holder does not: `FOR SHARE` is compatible with itself and conflicts with
+      // `FOR NO KEY UPDATE`. So this succeeds only while the operation asks for the
+      // weaker of the two.
+      //
+      // What the strength buys is stated in `cell-lock.ts`: `FOR NO KEY UPDATE` would
+      // conflict with the `FOR SHARE` that `assert_cell_memberships_match_state` takes
+      // at commit, so an approval in flight would make a concurrent add into the same
+      // Cell wait, and possibly time out. That is behaviour, not taste.
+      const requestId = await pendingHandover(markAccount, juan.id, markCell.id);
+
+      const holder = new Client({ connectionString: process.env.DATABASE_URL });
+      await holder.connect();
+
+      try {
+        await holder.query('BEGIN');
+        await holder.query('SELECT id FROM cells WHERE id = $1 FOR SHARE', [markCell.id]);
+
+        let timer: NodeJS.Timeout | undefined;
+        const response = await Promise.race([
+          approve(admin, requestId),
+          new Promise<never>((_, reject) => {
+            timer = setTimeout(
+              () => reject(new Error('The approval was still waiting after 8s.')),
+              8000,
+            );
+          }),
+        ]).finally(() => clearTimeout(timer));
+
+        expect(response.status).toBe(200);
+      } finally {
+        try {
+          await holder.query('ROLLBACK');
+        } finally {
+          await holder.end();
         }
       }
     }, 30000);
@@ -957,14 +1017,19 @@ describe('Cell leadership approval (section 10)', () => {
  * own pid is genuinely unknown, being a pooled connection inside the application; the
  * blocker's is not.
  */
-async function waitForBlockedBy(blockerPid: number): Promise<void> {
+async function waitForBlockedBy(blockerPid: number, attempts = 100): Promise<void> {
   const probe = createTestDb();
 
   try {
-    // 100 x 20ms = 2s, deliberately under the service's 3s `lock_timeout`: a wider
-    // budget lets a slow-but-correct run time out here and report the same message a
-    // genuine regression produces, which is a diagnostic that lies.
-    for (let attempt = 0; attempt < 100; attempt += 1) {
+    // 20ms a turn, and the default 100 turns is 2s — deliberately under the service's 3s
+    // `lock_timeout`, because a wider budget lets a slow-but-correct run time out here
+    // and report the same message a genuine regression produces, which is a diagnostic
+    // that lies.
+    //
+    // **The budget is a parameter because that reasoning assumes the poll is the only
+    // thing inside the service's wait**, and a caller that goes on to do work of its own
+    // in that window has less of it to spend. One does.
+    for (let attempt = 0; attempt < attempts; attempt += 1) {
       const waiting = await sql<{ count: string }>`
         SELECT count(*) AS count
           FROM pg_stat_activity

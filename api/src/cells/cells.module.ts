@@ -34,16 +34,22 @@ import { CellsService } from './cells.service';
  * without a database, which is what makes a wiring mistake fail in seconds rather
  * than on every authenticated request.
  *
- * **It touches no table it does not own.** Creating a Cell reads the prospective
- * leader through `people`, its open pastoral assignment through `hierarchy`, both
- * leaders' Networks through `networks`, writes its audit entries through `audit`, and
- * asks `admin/settings` whether the encoding phase is open — each through the service
- * owning that table, inside the transaction this module opens.
+ * **It touches no table it does not own.** Every cross-module read goes through the
+ * service owning that table, inside the transaction this module opens: `people` for a
+ * Person's identity and lifecycle, `hierarchy` for an open pastoral assignment,
+ * `networks` for a Network in force, `authorization` for roles, grants and the Account
+ * behind an actor, `audit` for its entries, and `admin/settings` for the
+ * initial-encoding flag. `IdempotencyService` writes `idempotency_keys`, which section
+ * 2 assigns to no module.
  *
- * *This enumeration exists to evidence section 2 and has twice been edited without
- * being completed: `hierarchy` was added while `networks` was missing, in the batch
- * correcting the graph sentence six lines above, which had listed `networks` all
- * along.*
+ * *Written as the whole set rather than as one operation's reads, because naming an
+ * operation is what kept getting it wrong.* Three successive batches left this short by
+ * one {M} `networks`, then `authorization` {M} while the graph sentence six lines above
+ * listed both all along; and it attributed the `hierarchy` and `networks` reads to
+ * creating a Cell, which does neither. Both belong to approval
+ * (`CellsLeadershipRequestService`), and its Network comparison for a new Cell is
+ * between the prospective leader and their *pastoral* leader, not between two Cell
+ * leaders.
  *
  * Six services, and the split is the one `people` already settled: `CellsService`,
  * `CellsLeadershipRequestService`, `CellsMembershipService`,
