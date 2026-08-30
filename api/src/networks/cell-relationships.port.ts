@@ -31,12 +31,18 @@ import type { Transaction } from 'kysely';
  *
  * **Optional is a choice rather than a necessity, and it is recorded as open.** An
  * earlier version of this said only `AppModule` could bind an implementation, so the
- * injection had to be optional. That is false: a `@Global()` binding puts the token in
- * every context, so a mandatory injection would work today and would move a wiring
- * fault to startup, where `test/unit/module-graph.spec.ts` already catches that class
- * in seconds without a database. What optional buys is that a live deployment loses
- * one operation rather than failing to boot. Both are defensible; `CLAUDE.md` carries
- * the question.
+ * injection had to be optional. That is false, though the true statement is narrower
+ * than the correction first made: a `@Global()` module publishes its exports to every
+ * module *of a graph that includes it*, not to every context anywhere. A mandatory
+ * injection works today because the one test graph that omits the binding
+ * (`cycle-safety.spec.ts`) constructs no `NetworksService` — which is "no such graph
+ * exists yet" rather than "the token is always there".
+ *
+ * Mandatory would move a wiring fault to startup, where `test/unit/module-graph.spec.ts`
+ * already catches that class in seconds without a database; optional buys a live
+ * deployment losing one operation rather than failing to boot. Both are defensible;
+ * `CLAUDE.md` carries the question, and it should be settled from this paragraph rather
+ * than from the first one.
  *
  * Every method takes the caller's executor. The checks run inside the transaction
  * that performs the change, so a pooled read would both answer from the state the
@@ -54,7 +60,8 @@ export interface NamedCell {
 
 export interface CellRelationshipsPort {
   /**
-   * Every `ACTIVE` Cell this person currently leads.
+   * Every Cell this person currently leads — every open leadership row, whatever
+   * state its Cell is in.
    *
    * Section 11 makes a current Cell leadership an open row on an `ACTIVE` Cell, and
    * a `CLOSED` Cell holds no open leadership at all — so a closed Cell never blocks

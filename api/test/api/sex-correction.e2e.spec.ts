@@ -289,8 +289,46 @@ describe('sex correction (SKILL.md sections 4, 5, 7, 21, 22)', () => {
       // Section 10 permits one leader to lead many. An administrator told about one
       // Cell, who resolves it and is then refused for a second, learns the shape of
       // the obligation one Cell at a time.
-      const first = await createCell(db, { leader: mark });
-      const second = await createCell(db, { leader: mark, category: 'COUPLE' });
+      // **Created in the order that makes the assertion disagree with heap order.**
+      // `cell_id` is `CELL-` plus a zero-padded sequence value, so it ascends with
+      // creation and a sequential scan returns freshly inserted rows in that same
+      // order — which means deleting the `ORDER BY` would leave a creation-ordered
+      // assertion green, deterministically. The first Cell is given an explicit high
+      // handle so that handle order and creation order are opposites, and both the
+      // deletion and a switch to `cells.id` redden.
+      // **The handle and the UUID are both chosen, and they sort opposite ways.**
+      // `cell_id` is immutable once written (`cells_record_is_final`), so the high
+      // handle is set at insert; the `id` is set low so that `ORDER BY cells.id` would
+      // put this Cell *first* while `ORDER BY cells.cell_id` puts it last. That makes
+      // all three states distinguishable deterministically: the correct ordering, the
+      // ordering deleted (heap order, which is insertion order), and the ordering moved
+      // to the UUID — which is otherwise a coin flip, and this repository has twice
+      // recorded that a mutation caught on some runs is not a pin.
+      //
+      // Four rows from one statement, sharing the Cell's `created_at`, because
+      // migration 0009 refuses a partly-built Cell and requires the schedule row to
+      // start exactly there.
+      const highHandle = (
+        await sql<{ id: string }>`
+          WITH new_cell AS (
+            INSERT INTO cells (id, cell_id)
+            VALUES ('00000000-0000-4000-8000-000000000001'::uuid, 'CELL-999900')
+            RETURNING id, created_at
+          ), category AS (
+            INSERT INTO cell_categories (cell_id, category, started_at)
+            SELECT id, 'YOUTH'::cell_category, created_at FROM new_cell
+          ), schedule AS (
+            INSERT INTO cell_schedules (cell_id, day_of_week, time_of_day, started_at)
+            SELECT id, 6::smallint, '18:00'::time, created_at FROM new_cell
+          ), leadership AS (
+            INSERT INTO cell_leaderships (person_id, cell_id, started_at)
+            SELECT ${mark.id}::uuid, id, created_at FROM new_cell
+          )
+          SELECT id FROM new_cell
+        `.execute(db)
+      ).rows[0];
+
+      const lowHandle = await createCell(db, { leader: mark, category: 'COUPLE' });
 
       const response = await correct(mark.id, {
         sex: 'FEMALE',
@@ -299,14 +337,16 @@ describe('sex correction (SKILL.md sections 4, 5, 7, 21, 22)', () => {
       });
 
       expect(response.status).toBe(409);
-      // **Compared in order rather than sorted on both sides**, which is what makes
-      // `openLeadershipsOf`'s `ORDER BY cells.cell_id` pinned: sorting here would leave
-      // the query free to order by anything, including the random UUID, with this case
-      // green. Cell IDs come off a sequence, so `first` precedes `second`.
+      // Compared in order rather than sorted on both sides: sorting would leave the
+      // query free to order by anything at all.
       expect(response.body.error.details.cells).toEqual([
-        { id: first.id, cell_id: first.cellId },
-        { id: second.id, cell_id: second.cellId },
+        { id: lowHandle.id, cell_id: lowHandle.cellId },
+        { id: highHandle.id, cell_id: 'CELL-999900' },
       ]);
+
+      // The two orders genuinely differ, which is what makes the assertion a pin
+      // rather than a restatement of insertion order.
+      expect(lowHandle.cellId < 'CELL-999900').toBe(true);
     });
 
     it('refuses while the person holds a Cell membership', async () => {
@@ -316,7 +356,16 @@ describe('sex correction (SKILL.md sections 4, 5, 7, 21, 22)', () => {
       const manuelCell = await createCell(db, { leader: manuel });
       await db
         .insertInto('cell_memberships')
-        .values({ person_id: mark.id, cell_id: manuelCell.id, started_at: new Date() })
+        // **`clock_timestamp()`, not `new Date()`.** The Cell's leadership row starts at
+        // the database's clock; a host `Date` a few milliseconds behind it makes the
+        // membership predate the leadership, and `assert_membership_same_network`
+        // correctly refuses — "had no leader as of ...". That is what failed once,
+        // was wrongly written off as a flake, and then reproduced.
+        .values({
+          person_id: mark.id,
+          cell_id: manuelCell.id,
+          started_at: sql<Date>`clock_timestamp()`,
+        })
         .execute();
 
       const response = await correct(mark.id, {
@@ -341,7 +390,16 @@ describe('sex correction (SKILL.md sections 4, 5, 7, 21, 22)', () => {
       const manuelCell = await createCell(db, { leader: manuel });
       await db
         .insertInto('cell_memberships')
-        .values({ person_id: mark.id, cell_id: manuelCell.id, started_at: new Date() })
+        // **`clock_timestamp()`, not `new Date()`.** The Cell's leadership row starts at
+        // the database's clock; a host `Date` a few milliseconds behind it makes the
+        // membership predate the leadership, and `assert_membership_same_network`
+        // correctly refuses — "had no leader as of ...". That is what failed once,
+        // was wrongly written off as a flake, and then reproduced.
+        .values({
+          person_id: mark.id,
+          cell_id: manuelCell.id,
+          started_at: sql<Date>`clock_timestamp()`,
+        })
         .execute();
 
       const response = await correct(mark.id, {
@@ -360,7 +418,16 @@ describe('sex correction (SKILL.md sections 4, 5, 7, 21, 22)', () => {
       const manuelCell = await createCell(db, { leader: manuel });
       await db
         .insertInto('cell_memberships')
-        .values({ person_id: mark.id, cell_id: manuelCell.id, started_at: new Date() })
+        // **`clock_timestamp()`, not `new Date()`.** The Cell's leadership row starts at
+        // the database's clock; a host `Date` a few milliseconds behind it makes the
+        // membership predate the leadership, and `assert_membership_same_network`
+        // correctly refuses — "had no leader as of ...". That is what failed once,
+        // was wrongly written off as a flake, and then reproduced.
+        .values({
+          person_id: mark.id,
+          cell_id: manuelCell.id,
+          started_at: sql<Date>`clock_timestamp()`,
+        })
         .execute();
 
       await closeCellDirectly(db, own.id, { reason: 'LEADER_STEPPED_DOWN' });

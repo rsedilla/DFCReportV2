@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
+import { Logger } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import request from 'supertest';
 
@@ -29,13 +30,20 @@ import type { TestAccount, TestPerson } from '../setup/fixtures';
  * in `AppModule`'s provider list, which is the wrong context: Nest resolves a
  * provider's dependencies in the module that *registers* it, and `NetworksService` is
  * registered in `NetworksModule`. Fifteen existing sex-correction cases turned red at
- * once with exactly the message below — which is what a fail-open reading would have
+ * once — which is what a fail-open reading would have
  * turned into a silent hole in a rule section 4 states absolutely.
+ *
+ * *An earlier version of this said "with exactly the message below". The message
+ * assertion was deleted when the refusal moved to 500, and the message itself was
+ * rewritten — so the sentence pointed at nothing.*
  */
 describe('a Network change with the Cell-relationships port unbound (section 4)', () => {
   let app: INestApplication;
   let db: Kysely<Database>;
   let admin: TestAccount;
+  /** Everything the exception filter logs at `error` during a case. */
+  let logged: string[];
+  let loggerSpy: jest.SpyInstance;
   let mark: TestPerson;
   let grace: TestPerson;
 
@@ -65,6 +73,11 @@ describe('a Network change with the Cell-relationships port unbound (section 4)'
   beforeEach(async () => {
     await truncateAll(db);
 
+    logged = [];
+    loggerSpy = jest.spyOn(Logger.prototype, 'error').mockImplementation((...args: unknown[]) => {
+      logged.push(args.map((arg) => String(arg)).join(' '));
+    });
+
     const oriel = await createPerson(db, { firstName: 'Oriel', network: 'MENS' });
     const geraldine = await createPerson(db, { firstName: 'Geraldine', network: 'WOMENS' });
     await assignTo(db, oriel.id, null);
@@ -77,6 +90,10 @@ describe('a Network change with the Cell-relationships port unbound (section 4)'
 
     admin = await createAccount(app, db, { person: oriel, roles: ['ADMIN'] });
     nameSeniorPastors(app, []);
+  });
+
+  afterEach(() => {
+    loggerSpy.mockRestore();
   });
 
   afterAll(async () => {
@@ -103,6 +120,15 @@ describe('a Network change with the Cell-relationships port unbound (section 4)'
     // and pinned the defect.
     expect(response.status).toBe(500);
     expect(response.body.error.code).toBe('INTERNAL_ERROR');
+
+    // **The log, because the status alone no longer distinguishes anything.** Moving to
+    // 500 was right and cost this suite its pin: with the guard replaced by a non-null
+    // assertion, `this.cells!.openLeadershipsOf(...)` raises a `TypeError`, which the
+    // filter also renders 500 / `INTERNAL_ERROR` — so both assertions above pass against
+    // a service that checks nothing. Verified by running that mutation. `INTERNAL_ERROR`
+    // carries a fixed body, so nothing in the response can tell a deliberate refusal
+    // from a crash; the log can, and it is what an operator diagnoses this from.
+    expect(logged.join(' ')).toContain('CELL_RELATIONSHIPS_PORT');
 
     // **Refused means nothing written.** The point of failing closed is that a
     // wiring fault cannot let a Network change through unverified, so the Network

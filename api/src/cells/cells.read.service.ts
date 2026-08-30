@@ -3,7 +3,7 @@ import { sql } from 'kysely';
 
 import { type CellScopePort } from '../auth/authorization/cell-scope.port';
 import { DATABASE, type Db } from '../database/database.module';
-import { type CellRelationshipsPort } from '../networks/cell-relationships.port';
+import { type CellRelationshipsPort, type NamedCell } from '../networks/cell-relationships.port';
 
 import { CURSOR_INSTANT_FORMAT } from './leadership-request-cursor';
 
@@ -347,7 +347,8 @@ export class CellsReadService implements CellScopePort, CellRelationshipsPort {
   }
 
   /**
-   * `CellRelationshipsPort`. Every `ACTIVE` Cell this person currently leads
+   * `CellRelationshipsPort`. Every Cell this person currently leads — every open
+   * leadership row, whatever state its Cell is in
    * (SKILL.md section 4, section 11).
    *
    * **For the Network-change precondition in `networks`**, which refuses a change
@@ -365,8 +366,15 @@ export class CellsReadService implements CellScopePort, CellRelationshipsPort {
    *
    * So this asks only what section 4 needs — does an open leadership row exist —
    * and blocks on it whatever state the Cell is in. Unreachable through any operation,
-   * because migration 0009 refuses that pair from both sides; in the restore state
-   * where it is reachable, blocking is the safe answer for a precondition.
+   * because migration 0009 refuses that pair from both sides.
+   *
+   * **In the restore state where it is reachable, blocking is safe but not free**, and
+   * saying only "safe" understates it. The refusal tells the administrator to hand the
+   * Cell over or close it, and both refuse a CLOSED Cell — so that person's Network
+   * change is performable by no route until the data is repaired. Fail-closed is still
+   * right, because section 4 states the rule absolutely and a corrupted restore is a
+   * repair situation rather than an operating one; what is not right is a paragraph
+   * that implies the remedy still works.
    *
    * Ordered by Cell ID so a refusal naming several Cells names them the same way
    * twice, which a client rendering the list depends on.
@@ -374,7 +382,7 @@ export class CellsReadService implements CellScopePort, CellRelationshipsPort {
   async openLeadershipsOf(
     executor: Db | Transaction<Database>,
     personId: string,
-  ): Promise<{ id: string; cellId: string }[]> {
+  ): Promise<NamedCell[]> {
     const rows = await executor
       .selectFrom('cell_leaderships')
       .innerJoin('cells', 'cells.id', 'cell_leaderships.cell_id')
@@ -407,7 +415,7 @@ export class CellsReadService implements CellScopePort, CellRelationshipsPort {
   async openMembershipOf(
     executor: Db | Transaction<Database>,
     personId: string,
-  ): Promise<{ id: string; cellId: string } | null> {
+  ): Promise<NamedCell | null> {
     const row = await executor
       .selectFrom('cell_memberships')
       .innerJoin('cells', 'cells.id', 'cell_memberships.cell_id')

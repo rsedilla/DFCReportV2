@@ -30,9 +30,11 @@ export class NetworksService {
      * already gives for the same situation.
      *
      * *An earlier version said the parameter could not be mandatory, because only
-     * `AppModule` could bind an implementation. Both halves were wrong: the binding is
-     * a `@Global()` module, so every context that constructs this service has the
-     * token, and a mandatory injection would work today.* Whether it should be is
+     * `AppModule` could bind an implementation. That was wrong; so was the first
+     * correction, which said a `@Global()` binding puts the token in every context. It
+     * reaches every module of a graph that *includes* it, and a mandatory injection
+     * works today only because the one test graph omitting it constructs no
+     * `NetworksService`.* Whether it should be mandatory is
      * recorded as open in `CLAUDE.md` — it would move a wiring fault to startup,
      * where the module-graph gate already lives, at the cost of a deployment failing
      * to boot rather than losing one operation.
@@ -104,7 +106,7 @@ export class NetworksService {
    * Changes a person's Network inside a caller's transaction: the open row is
    * closed and the new one opened, both at `effectiveAt` (SKILL.md section 4).
    *
-   * **The two preconditions section 4 states are enforced here**, and section 4
+   * **Section 4's preconditions are enforced here**, and section 4
    * says so by name — not because this is a convenient place, but because neither
    * is a constraint the database can hold. The same-Network trigger is
    * `DEFERRABLE INITIALLY DEFERRED` and sees only the state at commit, so a
@@ -144,12 +146,22 @@ export class NetworksService {
   ): Promise<{ from: NetworkName }> {
     // **Before anything is read.** Every precondition below was a statement about
     // pastoral edges when this was written, and two of them are now about Cell
-    // relationships. The lock covers three of their four writers — a leadership
-    // request's approval and both membership writes take it — and not the fourth:
-    // direct Cell creation during initial encoding (section 2) takes no person lock,
-    // so it and a Network change can interleave. Narrow, because a Cell created that
-    // way holds no members yet and the path closes with the phase, and named here
-    // rather than left to be discovered.
+    // relationships. There are five writers of those two tables, and the lock covers
+    // them unevenly — an earlier version of this comment said four and omitted
+    // closure, which is the one that is neither covered nor uncovered:
+    //
+    //   - a leadership request's approval locks the prospective leader;
+    //   - both membership writes lock the person;
+    //   - a **closure** locks only the members it disperses, so it ends the outgoing
+    //     leader's row while holding no lock on that leader;
+    //   - **direct Cell creation** during initial encoding (section 2) takes none.
+    //
+    // What survives is narrower than "covered": the only uncovered *opener* is direct
+    // creation, because a closure merely ends a leadership and a relationship that is
+    // genuinely gone cannot strand anyone. And a Cell created during initial encoding
+    // holds no members yet, and that path closes with the phase. Named rather than
+    // left to be discovered, and stated as a list because the count is what went
+    // wrong.
     //
     // The deferred triggers cannot see an edge opened
     // concurrently and committed just after this transaction's own comparison. The
@@ -440,10 +452,16 @@ export class NetworksService {
       // nothing could evaluate.
       //
       // *The `CELL_SCOPE_PORT` precedent does not carry to the status, only to the
-      // refusal.* That one is thrown by a **guard**, and `AppModule` registers the
-      // idempotency interceptor after both guards deliberately, so no key exists when
-      // it fires and the store/release split never applies to it. Reusing its 4xx here
-      // was section 25 rule 19 — the shape without its reason.
+      // refusal.* That one is thrown by a **guard**, and Nest runs every guard before
+      // any interceptor, so no idempotency key exists when it fires and the
+      // store/release split never applies to it. Reusing its 4xx here was section 25
+      // rule 19 — the shape without its reason.
+      //
+      // *An earlier version credited `AppModule`'s provider order for that, which is
+      // not what produces it: the ordering of `APP_GUARD` against `APP_INTERCEPTOR`
+      // decides nothing, and only the two guards' order relative to each other. The
+      // conclusion held and the mechanism was wrong, which is the fault this whole
+      // paragraph is about.*
       throw new Error(
         `Cannot check Cell relationships for person ${personId}: CELL_RELATIONSHIPS_PORT ` +
           'is not bound, so the SKILL.md section 4 precondition on a Network change ' +
