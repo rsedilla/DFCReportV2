@@ -3973,6 +3973,26 @@ A deployment that changes `default_transaction_isolation` therefore silently rem
 
 **The liveness probe currently shares that pool**, and answers by reaching the database. So pool exhaustion presents to the platform as a dead process, and the response is a restart that discards the transactions still making progress — turning contention into lost work. Whether the probe should keep sharing the pool, and whether "healthy" should mean "can reach the database", is an operational decision recorded as open in `CLAUDE.md` rather than settled here.
 
+### DateStyle
+
+**The application pins `DateStyle` on every connection rather than inheriting it**, in the connection's startup packet, as `ISO, MDY`. It reads the value back when it starts and **refuses to start** unless the pin took effect.
+
+**What it prevents is silent.** The driver parses a `timestamptz` from the text the server sends and expects the ISO output format. Under `SQL`, `Postgres` or `German` it does not fail: it returns **null**. Every `timestamptz` and `timestamp` the API reads then comes back empty — `started_at`, `ended_at`, every effective-dated period and every audit entry — with nothing raised. Section 5's as-of queries, Section 4's backdate floor and Section 20's period boundaries are all built on those columns, so a deployment could pass every test in this repository and still answer "who led this person in March" with nothing at all.
+
+**A `date` column fails differently, and the difference matters.** The OID-1082 parser is overridden so a `date` comes back as the server's raw text rather than as an instant (Section 22, date-only fields). That text is not null under a non-ISO style — it is `15.06.1985`, a well-formed string of the wrong shape, flowing straight into a date-only response field and satisfying every type in its path. So the pin closes two silent failures with different signatures, and the raw-text parser's unstated assumption — that the text is `YYYY-MM-DD` — is what this guarantees.
+
+The setting is deployment-controlled and demonstrably varies: this project's own development server runs `ISO, DMY` rather than PostgreSQL's default `ISO, MDY`, which has been harmless only because both are ISO.
+
+**The startup check is a check on the pin, not on the server.** Once the pin is in place the server's configuration no longer reaches the application, so there is nothing left to assert about it. What the check earns is that the pin cannot be removed, or fail to arrive, without the application refusing to start rather than serving empty dates — and it has a case of its own: a `DATABASE_URL` carrying its own `?options=` supersedes the pool's, so a connection string can discard the pin silently, and this is the only thing that would catch it.
+
+**`DateStyle` and the isolation level above are the same kind of setting, and an earlier version of this section said otherwise.** It claimed isolation must be asserted rather than set because a client cannot set another session's default. That is false: `default_transaction_isolation` is settable in the startup packet by exactly the mechanism used here, verified in one connection against this project's own database. The two are not different in kind, and any argument for pinning one that rests on the other being unpinnable is refutable.
+
+What actually distinguishes them is the failure, not the mechanism. A wrong `DateStyle` corrupts every date silently; a wrong isolation level removes an authorization guarantee that a test asserts and a reviewer can reason about. Whether the isolation level should be pinned here too is a real question this raised, and it is recorded as open rather than answered in passing.
+
+**`MDY` is the input half, and nothing here depends on it** — checked rather than assumed. Migrations carry no date literals; the tree import refuses a birthday that is not ISO; the one rendered instant goes through `to_char` with an explicit format; and every value the driver sends is rendered ISO-8601 before the server parses it. It is *being ISO* that makes those safe rather than their being bound parameters. The input half is pinned for determinism, and the check requires both halves because a partial option is a sign the rest did not arrive as intended.
+
+**Two consequences, neither of them hidden.** The migration runner opens its own connection and does not go through this pool, so it inherits the server's style; nothing it writes is a client-side timestamp, and its one timestamp read raises a `TypeError` on a null rather than continuing quietly, so the gap is real, narrow and self-announcing. And the application now requires a reachable database to *finish starting*, where before the pool was lazy — under an orchestrator a database that is not yet up becomes a failed boot rather than a process that recovers when it appears.
+
 ---
 
 ## 25. Coding-Agent Rules
