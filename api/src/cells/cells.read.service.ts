@@ -8,7 +8,7 @@ import { type CellRelationshipsPort, type NamedCell } from '../networks/cell-rel
 import { CURSOR_INSTANT_FORMAT } from './leadership-request-cursor';
 
 import type { LeadershipRequestCursor, LeadershipRequestRow } from './leadership-request-cursor';
-import type { RosterCursor } from './roster-cursor';
+import type { RosterCursor } from '../common/roster-cursor';
 import type { Database } from '../database/schema';
 import type { Transaction } from 'kysely';
 

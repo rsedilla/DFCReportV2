@@ -1,6 +1,14 @@
 import { Module } from '@nestjs/common';
 
+import { AuditModule } from '../audit/audit.module';
+import { AuthModule } from '../auth/auth.module';
+import { AuthorizationModule } from '../auth/authorization/authorization.module';
+import { HierarchyModule } from '../hierarchy/hierarchy.module';
+import { PeopleModule } from '../people/people.module';
+
+import { DccAttendanceService } from './dcc-attendance.service';
 import { DccCalendarService } from './dcc-calendar.service';
+import { DccController } from './dcc.controller';
 
 /**
  * Owns `dcc_events`, `dcc_attendance`, `cell_meetings`, `cell_attendance` and
@@ -10,9 +18,26 @@ import { DccCalendarService } from './dcc-calendar.service';
  * anything this module's services can answer. That is what gives the section 13
  * and section 14 rules one home — the submission window, the meeting statuses, the
  * append-only correction, and the two version units — rather than four.
+ *
+ * **It touches no table it does not own.** `hierarchy` answers every question about
+ * a pastoral assignment, including the dated ones section 9 needs; `people` answers
+ * identity and lifecycle; `auth` answers whether a Person holds an account, which is
+ * what decides a checklist (section 9); `authorization` answers scope; `audit` writes
+ * its entries. `IdempotencyService` writes `idempotency_keys`, which section 2
+ * assigns to no module.
+ *
+ * **It imports `AuthModule` as well as `AuthorizationModule`**, which no other
+ * domain module does. The reason is `AccountsRepository`: section 9 routes a
+ * submission to "the nearest upline leader who does" hold an account, so the
+ * checklist is decided by a fact about `accounts`, and `auth` owns that table. There
+ * is no cycle — `auth -> cells` and nothing imports `attendance` — but the edge is
+ * named here because it is the one place a domain module depends on authentication
+ * rather than on authorization, and a reader is entitled to know it was deliberate.
  */
 @Module({
-  providers: [DccCalendarService],
+  imports: [HierarchyModule, PeopleModule, AuthModule, AuthorizationModule, AuditModule],
+  controllers: [DccController],
+  providers: [DccCalendarService, DccAttendanceService],
   exports: [DccCalendarService],
 })
 export class AttendanceModule {}

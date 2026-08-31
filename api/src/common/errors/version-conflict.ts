@@ -15,12 +15,13 @@ import { ApiError, ApiErrorCode } from './api-error';
  * impossible to construct rather than merely discouraged — the same reasoning
  * section 2 gives for a guard that fails closed.
  *
- * The mechanism that raises this arrives with the first versioned record, which
- * is Cell attendance in Stage 4 (`docs/ROADMAP.md`). The envelope is built now
- * because section 23 puts version checks among the things required from the first
- * write endpoint rather than retrofitted, and because a client renders its
- * resolution dialog directly from this body — so the body has to be right before
- * a phone depends on it, not after.
+ * The envelope was built before anything raised it, because section 23 puts
+ * version checks among the things required from the first write endpoint rather
+ * than retrofitted, and because a client renders its resolution dialog directly
+ * from this body — so the body had to be right before a phone depended on it. The
+ * first record to raise it is a DCC attendance row (section 9), not the Cell
+ * attendance an earlier version of this paragraph predicted; Cell meetings follow
+ * in the same stage.
  */
 
 /** One side of the conflict: what was recorded, by whom, and when. */
@@ -38,7 +39,18 @@ export interface ConflictSide {
 
 export class VersionConflictError extends ApiError {
   constructor(params: {
-    submittedVersion: number;
+    /**
+     * The version the client read, or null where it read no record.
+     *
+     * **Null is a real case and there are exactly two** (section 22, *Write
+     * conflicts*): a Cell meeting, which has no row until it is reported, and a
+     * person's first DCC record for an event. In both, two writers create a record
+     * that does not exist yet and neither holds a version to be stale, so the loser
+     * meets a unique index instead. The response still carries both sides — what
+     * this client tried to record, against what is now stored — because that is
+     * what section 14 requires a person to choose between.
+     */
+    submittedVersion: number | null;
     currentVersion: number;
     submitted: ConflictSide;
     current: ConflictSide;

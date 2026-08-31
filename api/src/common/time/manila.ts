@@ -108,6 +108,32 @@ export function startOfManilaDay(day: string): Date {
 }
 
 /**
+ * The last instant of an Asia/Manila day, as an instant.
+ *
+ * A day is a period and every effective-dated table in this schema is read at an
+ * *instant*, so a rule phrased over a day — section 9 fixes a DCC responsible
+ * leader "as of the event date" — has to name one. This is that instant.
+ *
+ * **The last millisecond, not the first instant of the next day.** Rows are in
+ * force over `[started_at, ended_at)`, so an assignment beginning exactly at
+ * midnight belongs to the following day; handing that midnight back as "the end of
+ * this day" would pick it up. Stepping back one millisecond is what excludes it,
+ * and it costs the final millisecond of the day: an assignment whose boundary lands
+ * inside it resolves to its predecessor. Nothing in this system can place a
+ * boundary there deliberately — an effective date is a day, and an undated write
+ * takes `clock_timestamp()` — so the exposure is one clock tick in 86.4 million per
+ * day, against a rule that has to name some instant.
+ *
+ * A millisecond rather than a microsecond because that is the resolution both ends
+ * share: PostgreSQL stores `timestamptz` to the microsecond and a JavaScript `Date`
+ * holds milliseconds, so a microsecond step would not survive the round trip and
+ * would silently become no step at all.
+ */
+export function endOfManilaDay(day: string): Date {
+  return new Date(startOfManilaDay(manilaDayAfter(startOfManilaDay(day))).getTime() - 1);
+}
+
+/**
  * The Asia/Manila day after the day this instant falls in.
  *
  * This is the arithmetic behind section 4's backdate floor. The floor is an

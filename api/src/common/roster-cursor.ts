@@ -1,7 +1,28 @@
-import { unresolvableCursor } from '../common/cursor';
+import { unresolvableCursor } from './cursor';
 
 /**
- * The opaque cursor `GET /api/v1/cells/{id}/members` pages by (SKILL.md section 22).
+ * The opaque cursor for a collection ordered by `(last_name, first_name, member_id)`
+ * (SKILL.md section 22).
+ *
+ * **Two routes page by exactly this key**, in two modules, which is why the file is
+ * here rather than in either: `GET /api/v1/cells/{id}/members` and
+ * `GET /api/v1/dcc/events/{id}/roster`. It was `cells/roster-cursor.ts` until the
+ * second arrived (decision 0174) — and what it does *not* know is how the key is
+ * compared, deliberately. The Cell roster compares it in SQL as a lexicographic
+ * keyset; the DCC checklist compares it against a list its own service assembled by
+ * walking the pastoral tree, because there is no single query to key. The wire format
+ * is the part a client sees and the part that was going to diverge; the comparison is
+ * each route's own.
+ *
+ * The two other cursors in this API keep their own pairs and are not an oversight.
+ * `people.controller.ts` keys on two names and a UUID and `leadership-request-cursor.ts`
+ * on an instant and a UUID, needing a format predicate neither of the others does — so
+ * one generic pair over all four would be a type parameter plus a per-route validator,
+ * which is most of what each file already holds. Sharing happens where the key is
+ * identical, and there it is not optional: a fourth file re-deriving these same three
+ * fields is exactly how the history below repeats.
+ *
+ * The history is the Cell roster's, and it is kept because it is why the file exists.
  *
  * **It carries all three ordering keys, and that is the whole reason this file
  * exists.** A first version carried the Member ID alone and looked up the other two

@@ -1,5 +1,5 @@
 import { CURSOR_MAX_LENGTH, NAME_FIELD_MAX_LENGTH } from '../../src/common/cursor';
-import { decodeRosterCursor, encodeRosterCursor } from '../../src/cells/roster-cursor';
+import { decodeRosterCursor, encodeRosterCursor } from '../../src/common/roster-cursor';
 
 /**
  * The roster cursor (SKILL.md section 22, *Pagination*).

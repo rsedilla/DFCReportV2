@@ -532,6 +532,109 @@ export class HierarchyService {
     return row === undefined ? null : `${row.first_name} ${row.last_name}`;
   }
 
+  /**
+   * The immediate children of a leader **as of an instant**, whether or not they
+   * qualify as leaders.
+   *
+   * The dated counterpart of `directChildrenOf`, and it exists because attendance
+   * is the first domain to ask a tree question about the past. Section 9 fixes a
+   * person's responsible leader "as of the event date" and a DCC checklist is the
+   * inverse of that relation, so reading the currently open row would move a
+   * historical roster every time somebody is reassigned.
+   *
+   * `[started_at, ended_at)` — the half-open period every effective-dated table in
+   * this schema uses. A row ending exactly at `at` is not in force at `at`, which
+   * is what makes a close-and-open pair sharing one instant resolve to the
+   * successor rather than to both.
+   */
+  async directChildrenAsOf(executor: Db, personId: string, at: Date): Promise<string[]> {
+    const rows = await executor
+      .selectFrom('pastoral_assignments')
+      .select('person_id')
+      .where('leader_id', '=', personId)
+      .where('started_at', '<=', at)
+      .where((eb) => eb.or([eb('ended_at', 'is', null), eb('ended_at', '>', at)]))
+      .execute();
+
+    return rows.map((row) => row.person_id);
+  }
+
+  /**
+   * The assignment row in force for a person at an instant, or null where they had
+   * none.
+   *
+   * **The three states section 9 insists are different.** `null` is a Person with
+   * no assignment row at that instant, whose DCC attendance cannot be recorded
+   * because there is no responsible leader to record it against. A row with
+   * `leaderId: null` is a Network root, which is the intended state rather than
+   * missing data. Anything else is an ordinary edge. Returning `string | null`
+   * would collapse the first two, which is the mistake `OpenAssignment` above
+   * exists to prevent on the write side.
+   */
+  async assignmentAsOf(
+    executor: Db,
+    personId: string,
+    at: Date,
+  ): Promise<{ leaderId: string | null } | null> {
+    const row = await executor
+      .selectFrom('pastoral_assignments')
+      .select('leader_id')
+      .where('person_id', '=', personId)
+      .where('started_at', '<=', at)
+      .where((eb) => eb.or([eb('ended_at', 'is', null), eb('ended_at', '>', at)]))
+      .executeTakeFirst();
+
+    return row === undefined ? null : { leaderId: row.leader_id };
+  }
+
+  /**
+   * The same read for many people at once, as a map missing the ones who had no
+   * row.
+   *
+   * A roster resolves a responsible leader per person, and a submission carries
+   * many people at once (section 14), so the per-person form would issue one query
+   * per name on the checklist.
+   */
+  async assignmentsAsOf(
+    executor: Db,
+    personIds: readonly string[],
+    at: Date,
+  ): Promise<Map<string, { leaderId: string | null }>> {
+    if (personIds.length === 0) {
+      return new Map();
+    }
+
+    const rows = await executor
+      .selectFrom('pastoral_assignments')
+      .select(['person_id', 'leader_id'])
+      .where('person_id', 'in', [...personIds])
+      .where('started_at', '<=', at)
+      .where((eb) => eb.or([eb('ended_at', 'is', null), eb('ended_at', '>', at)]))
+      .execute();
+
+    return new Map(rows.map((row) => [row.person_id, { leaderId: row.leader_id }]));
+  }
+
+  /**
+   * The Network roots as of an instant — the people holding a row with no leader
+   * above them (section 5, Network roots).
+   *
+   * They have no responsible leader and appear on no leader's checklist, so
+   * section 9 puts them on the checklist of a Whole Church holder instead. This is
+   * how that list is found.
+   */
+  async rootsAsOf(executor: Db, at: Date): Promise<string[]> {
+    const rows = await executor
+      .selectFrom('pastoral_assignments')
+      .select('person_id')
+      .where('leader_id', 'is', null)
+      .where('started_at', '<=', at)
+      .where((eb) => eb.or([eb('ended_at', 'is', null), eb('ended_at', '>', at)]))
+      .execute();
+
+    return rows.map((row) => row.person_id);
+  }
+
   /** The immediate children of a leader, whether or not they qualify as leaders. */
   async directChildrenOf(personId: string): Promise<string[]> {
     const rows = await this.db

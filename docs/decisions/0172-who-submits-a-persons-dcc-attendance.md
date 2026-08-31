@@ -82,4 +82,4 @@ whether the record exists rather than who entered it.
 
 Decision 0172, indexed in [CLAUDE.md](../../CLAUDE.md).
 
-Previous: [2026-08-31 — Four rulings the DCC recording path needed, settled before the code](0171-four-rulings-the-dcc-recording-path-needed.md)
+Previous: [2026-08-31 — Four rulings the DCC recording path needed, settled before the code](0171-four-rulings-the-dcc-recording-path-needed.md) | Next: [2026-08-31 — Seven settlements from building DCC recording](0173-seven-settlements-from-building-dcc-recording.md)

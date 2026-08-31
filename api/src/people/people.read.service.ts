@@ -45,6 +45,16 @@ export interface PersonForDecision {
    * caller rendering this is rendering what somebody typed.
    */
   firstName: string;
+  /**
+   * The family name on its own, for **ordering** rather than for addressing.
+   *
+   * Section 8 orders the church-wide directory by `(last_name, first_name, id)`, and
+   * two collections page by `(last_name, first_name, member_id)` — so a caller
+   * assembling a list in application code needs this half of the name as a field
+   * rather than by splitting `fullName`, which is not splittable: a middle name sits
+   * between them and a generational suffix lives inside this one (section 3).
+   */
+  lastName: string;
   mergedIntoId: string | null;
   isArchived: boolean;
 }
@@ -118,9 +128,64 @@ export class PeopleReadService {
       id: person.id,
       fullName: composeName(person),
       firstName: person.first_name,
+      lastName: person.last_name,
       mergedIntoId: person.merged_into_id,
       isArchived: person.state === 'ARCHIVED',
     };
+  }
+
+  /**
+   * The same read for many people at once, as a map missing anyone with no row.
+   *
+   * An attendance roster decides per person whether they may be recorded — an
+   * archived Person may not be, and a merged one is a record that has been
+   * absorbed — and a DCC submission carries the whole checklist (section 14). The
+   * per-person form would issue one query per name, twice: once to build the list
+   * and once to write it.
+   *
+   * It composes the same `PersonForDecision` rather than a narrower shape, so a
+   * caller deciding about one person and a caller deciding about fifty are reading
+   * the same fields through the same lens.
+   */
+  async forDecisionsWithin(
+    executor: Db,
+    personIds: readonly string[],
+  ): Promise<Map<string, PersonForDecision>> {
+    if (personIds.length === 0) {
+      return new Map();
+    }
+
+    const rows = await executor
+      .selectFrom('persons')
+      .leftJoin('person_lifecycle', (join) =>
+        join
+          .onRef('person_lifecycle.person_id', '=', 'persons.id')
+          .on('person_lifecycle.ended_at', 'is', null),
+      )
+      .select([
+        'persons.id as id',
+        'persons.first_name as first_name',
+        'persons.middle_name as middle_name',
+        'persons.last_name as last_name',
+        'persons.merged_into_id as merged_into_id',
+        'person_lifecycle.state as state',
+      ])
+      .where('persons.id', 'in', [...personIds])
+      .execute();
+
+    return new Map(
+      rows.map((row) => [
+        row.id,
+        {
+          id: row.id,
+          fullName: composeName(row),
+          firstName: row.first_name,
+          lastName: row.last_name,
+          mergedIntoId: row.merged_into_id,
+          isArchived: row.state === 'ARCHIVED',
+        },
+      ]),
+    );
   }
 
   /**

@@ -1913,6 +1913,24 @@ Removing a Sunday from the DCC calendar is a deliberate Admin action, never infe
 
 A leader who has not yet submitted their people's attendance for an event that did take place is a reporting gap, not a cancelled service. Those are tracked as coverage.
 
+### What an event takes a record for
+
+Three states stop an event taking one, and a submission against any of them is refused: a **removed** Sunday, an event whose **Manila day has not begun**, and one whose **month has closed**. The first two answer `INVARIANT_VIOLATION` and the third `PERIOD_CLOSED`, which Section 22 gives its own code for the reason it gives — the record is not wrong, the period is shut, and only Admin may amend it.
+
+**The roster read answers rather than refusing.** `GET /api/v1/dcc/events/{id}/roster` succeeds for all three, says the event is not recordable and why, and carries the checklist. A removal must be visible on any report covering that month (above), and a 409 on a read leaves a client with nothing to render but an error.
+
+**The checklist is a paginated collection**, on Section 22's ordinary terms: `limit`, an opaque `cursor`, and `(last_name, first_name, member_id)` as the order — the same key `GET /api/v1/cells/{id}/members` pages by. Nothing here bounds a checklist's size: it is a leader's direct pastoral children *plus* the children of every account-less leader beneath them, and the covering arrangement that grows it can persist (below). A client submits what it has read, page by page or in one request; a submission is not required to carry the whole checklist.
+
+### What a submission does with each line
+
+A submission is one leader's whole checklist, so most of its lines repeat what is already recorded. Three rules follow, and each is about a line rather than about the request.
+
+- **A line whose value equals the stored one writes nothing.** No new row and no version bump. Superseding to record the same fact writes a history entry saying nothing happened, and moves a version every other client then has to resolve against — so a leader fixing one name would invalidate every other client's copy of the roster. It also decides the capability: an unchanged line is not an amendment, so it sits under `dcc.take_attendance`.
+- **A person is named once.** Two lines for one person are two claims about one record, and applying both would supersede the first from inside a single request. Refused rather than de-duplicated: which the leader meant is not something the server can decide, and taking the last silently discards a claim somebody made.
+- **A correction reason belongs only to a correction.** On a line creating a record it has no subject, and stored it would afterwards read as a reason for the original. It stays optional on a correction, matching the nullable column above — requiring one per changed line puts a dialog in front of a leader who noticed one mistake in twenty names.
+
+A version sent for a person with no record is **not** a `VERSION_CONFLICT`: there is no second value to show, which Section 22 says is what a conflict must carry. It is an `INVARIANT_VIOLATION`, and it is unreachable from any state a client could have read — nothing removes a `dcc_attendance` row, so a live row exists once one ever has.
+
 ### DCC submission window
 
 DCC attendance for a calendar month may be recorded or corrected until the end of the 7th of the following month, Asia/Manila — the same close as Cell attendance (Section 13), where the boundary is stated and given its reason. After that the month is closed, and only Admin may amend it, using `records.backdate_effective_date` (Section 7), with a reason, audit logged, and invalidating that month's stored figures (Section 20).
@@ -3670,6 +3688,7 @@ Audit important actions, including:
 - Role/permission changes
 - Attendance submission on behalf
 - Attendance corrections
+  - **Both target the Person, and a leader recording their own checklist writes no entry at all.** The list above names these two and names no ordinary first submission, which reads as an omission until the append-only shape is taken into account: an attendance record *is* an entry, carrying its actor, its timestamp and its own history (Sections 9 and 13). An entry per line would double every submission for no fact nobody already has. The target is the Person because Section 7 resolves an entry's scope through its target, a Person resolves through their pastoral position, and a DCC event resolves through nothing — so an entry against the event would be readable by nobody, which is the defect this list's Cell leadership entries were corrected for. "On behalf" is measured against the responsible leader rather than against the checklist: a covering upline is on their own checklist and is still recording somebody else's obligation (Section 9)
 - Cell leadership request submitted, with the kind
 - Cell leadership request approved, with the kind
 - Cell leadership request declined, with the kind and the reason

@@ -202,6 +202,18 @@ export type AuditAction =
   // a Sunday — one entry per event, targeting the event's own date, which is what
   // section 9 makes the identity of an event.
   | 'dcc_event.created'
+  // Section 21 lists "Attendance submission on behalf" and "Attendance corrections"
+  // and lists no ordinary first submission, so these are the two that exist. A
+  // submission a leader makes for their own checklist writes no entry: it is the
+  // record itself, and `dcc_attendance` is append-only and carries its actor.
+  //
+  // **Both target the Person**, on the reasoning that settled the Cell leadership
+  // trio above. Section 7 resolves an audit entry's scope through its target, a
+  // Person resolves through their pastoral position, and section 7 says in terms
+  // that a DCC event "resolves through nothing" -- so an entry targeting the event
+  // would be readable by nobody's scope.
+  | 'dcc_attendance.submitted_on_behalf'
+  | 'dcc_attendance.corrected'
   | 'cell_leadership.opened'
   // Section 21 lists this as an action in its own right: "Cell leadership assignment
   // left with account provisioning pending". It names a state rather than an actor,

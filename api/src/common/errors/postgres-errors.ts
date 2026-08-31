@@ -14,6 +14,32 @@ export const LOCK_NOT_AVAILABLE = '55P03';
 /** `deadlock_detected`: the database chose this transaction as the victim (section 5). */
 export const DEADLOCK_DETECTED = '40P01';
 
+/** `unique_violation`: a unique index refused a row (section 22, *Write conflicts*). */
+export const UNIQUE_VIOLATION = '23505';
+
+/**
+ * Whether a thrown value is PostgreSQL refusing a row on a unique index.
+ *
+ * **It is a conflict rather than a defect, and only on the indexes that make it
+ * one.** Section 22 names two records that do not exist until they are reported —
+ * a Cell meeting and a person's DCC attendance — and says of the race between two
+ * first submissions that "a uniqueness violation left to surface on its own is an
+ * `INTERNAL_ERROR` on an ordinary race". So the caller that provoked it turns it
+ * into the `VERSION_CONFLICT` that section states, and every other unique index in
+ * this schema keeps failing loudly.
+ *
+ * The classification is deliberately not made here. This answers what PostgreSQL
+ * said; which index it was, and whether that index has a conflict to report, is a
+ * question only the operation knows.
+ */
+export function isUniqueViolation(error: unknown): boolean {
+  if (typeof error !== 'object' || error === null || !('code' in error)) {
+    return false;
+  }
+
+  return (error as { code?: unknown }).code === UNIQUE_VIOLATION;
+}
+
 /**
  * Whether a thrown value is PostgreSQL reporting a wait this transaction lost.
  *
