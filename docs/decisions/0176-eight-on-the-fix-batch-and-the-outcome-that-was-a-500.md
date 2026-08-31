@@ -23,9 +23,17 @@ original comparison, so every conflict reported after a race reinstated exactly 
 response the exemption exists to prevent, and a stale-but-agreeing line early in a
 submission would mask the honest conflict about whoever actually lost.
 
-**The check is now one function both callers use.** Not as tidiness: the two are the
-same rule at two moments, and nothing prevented them from being changed apart. The
-first batch demonstrated that by changing them apart.
+**The check was to become one function both callers use.** Not as tidiness: the two
+are the same rule at two moments, and nothing prevented them from being changed apart.
+The first batch demonstrated that by changing them apart.
+
+*It was not done in this batch, and this paragraph said it was.* The edit that would
+have replaced the in-transaction loop was in a script that aborted on a later assertion
+before writing anything; the function was added, one caller was moved to it, and the
+commit message, this ruling and the function's own docblock all asserted a
+consolidation that had not happened. Decision 0177 records it, along with the pass that
+found it — the third false "this was done" claim on this project, and the second found
+by a reviewer counting call sites.*
 
 ## 2. A lost race has three outcomes, not two, and the third was a 500
 
@@ -44,14 +52,22 @@ decision about the body, which is what `RESOURCE_BUSY` means, and Section 22's t
 condition names it exactly: "a premise read before a lock no longer held under it". A
 5xx also releases the idempotency key, which is what the retry needs.
 
-**A fourth outcome does not exist, and the test asserting it was passing for the wrong
-reason.** A correction race between two writers cannot produce a `VERSION_CONFLICT`,
-because `present` is a boolean: to block on the predecessor's row lock the loser must
-disagree with the value standing *before* the race, and with two values that means it
-agrees with the value the winner wrote. The case that stood here submitted the
-pre-race value instead, which is unchanged — so it wrote nothing, never took the lock,
-and never raced. It has been replaced by the reasoning, because the next person to
-look will otherwise write it again.
+**This ruling then claimed a fourth outcome does not exist, and that was wrong twice
+over.** The argument was that `present` is a boolean, so a loser that disagrees with
+the pre-race value must agree with what the winner wrote. It bounds the number of
+*values* and not the number of *commits*: the loser re-reads holding no lock, and an
+even number of further writes returns the stored value to the one it disagrees with, so
+a correction race does produce a `VERSION_CONFLICT`. Two writes by one account are
+enough.
+
+And the case deleted on that argument had not been "passing for the wrong reason". It
+submitted the **post**-race value, so it was a correction, it did take the lock, it did
+assert a waiter, and it did race. What had changed was its *answer*: 409 became 503 when
+an unchanged line stopped taking part in the version check. Re-pinning it at 503 was the
+fix; deleting it removed the only coverage of the zero-row supersede.
+
+Both are corrected in decision 0177, which restores that case and adds the conflict this
+paragraph said was impossible.
 
 ## 3. Two derivations of one fact, and the audit entry took the wrong one
 
@@ -85,10 +101,16 @@ own row lock. Two rows of one chain were both live across that interval.
 
 Migration 0012 states the model this breaks — "the two ends of one period: the row is
 the live record from the first until the second" — and constrains only *within* a row,
-so nothing refused it. The closing instant is now returned and handed to the successor,
-so the chain is contiguous. **There is no constraint for this**, and that is stated
-rather than left implied: a between-row check would be a trigger, and the enforcement
-here is the `RETURNING` plus the case that asserts it.
+so nothing refused it. The closing instant was returned and handed to the successor —
+which **did not work**, and decision 0177 records why: node-postgres renders
+`timestamptz` as a JavaScript `Date`, so a `clock_timestamp()` of `…883142+08` came back
+as `…883+08` and the successor still began 142µs before its predecessor ended. The
+overlap shrank from the transaction's duration to under a millisecond and stayed, and
+the case written to assert contiguity compared two truncated values and could not fail
+on it.
+
+**There is no constraint for this**, which is why it survived: a between-row check would
+be a trigger, and migration 0012 constrains only within a row.
 
 ## What was corrected without changing a rule
 
@@ -111,7 +133,8 @@ here is the `RETURNING` plus the case that asserts it.
 
 Two `cell_attendance` fixtures in `test/database/attendance.spec.ts` stamped
 `superseded_at` from the host clock against a `recorded_at` from the database, and
-migration 0012 refused them. They had been green since the table existed. That is the
+migration 0012 refused them. They had been green since the table existed, which on this
+branch means since migration 0011 three commits earlier — they never reached `main`. That is the
 argument for a constraint over a convention, made by the constraint rather than about
 it.
 
@@ -129,4 +152,4 @@ whoever writes that test.
 
 Decision 0176, indexed in [CLAUDE.md](../../CLAUDE.md).
 
-Previous: [2026-08-31 — Eleven on the DCC recording review, and the one that was a disclosure](0175-eleven-on-the-dcc-recording-review-and-the-one-that-was-a-disclosure.md)
+Previous: [2026-08-31 — Eleven on the DCC recording review, and the one that was a disclosure](0175-eleven-on-the-dcc-recording-review-and-the-one-that-was-a-disclosure.md) | Next: [2026-08-31 — Six on the third pass, and a fix that was never applied](0177-six-on-the-third-pass-and-a-fix-that-was-never-applied.md)

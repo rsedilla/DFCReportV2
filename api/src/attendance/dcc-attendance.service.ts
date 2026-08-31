@@ -328,23 +328,16 @@ export class DccAttendanceService {
       // them". Two identical values is not a choice, and section 14 resolves a
       // conflict by a person. The version guards against overwriting a change nobody
       // saw; a line that writes nothing overwrites nothing.
-      for (const { record, outcome } of planned) {
-        if (outcome === 'UNCHANGED') {
-          continue;
-        }
+      const stale = firstStaleLine(records, live);
 
-        const stored = live.get(record.person_id) ?? null;
-        const current = stored === null ? null : stored.version;
-
-        if (record.version !== current) {
-          throw await this.conflictFor(
-            trx,
-            actor,
-            record,
-            stored,
-            identities.get(record.person_id),
-          );
-        }
+      if (stale !== null) {
+        throw await this.conflictFor(
+          trx,
+          actor,
+          stale.record,
+          stale.stored,
+          identities.get(stale.record.person_id),
+        );
       }
 
       const written = await this.applyWithin(trx, { event, actor, planned, assignments, live });
@@ -766,7 +759,7 @@ export class DccAttendanceService {
 
       const stored = params.live.get(personId) ?? null;
       const successorId = randomUUID();
-      let closedAt: Date | null = null;
+      let closedThisRow = false;
 
       if (stored !== null) {
         // Supersede first, on a predicate that also serializes. Two concurrent
@@ -806,12 +799,13 @@ export class DccAttendanceService {
           // refuses the inverted row whoever writes it. Between rows there is no
           // constraint and this `RETURNING` is the whole of the enforcement.
           .set({ superseded_at: sql<Date>`clock_timestamp()`, superseded_by: successorId })
-          .returning('superseded_at')
           .where('id', '=', stored.id)
           .where('superseded_at', 'is', null)
           .executeTakeFirst();
 
-        closedAt = closed?.superseded_at ?? null;
+        // Whether the row was ours to close. The **instant** is deliberately not
+        // carried back: see the successor's `recorded_at` below.
+        closedThisRow = Number(closed.numUpdatedRows) === 1;
 
         // **No check on the row count here, and that is deliberate.** A supersede that
         // matches nothing means somebody closed this row between the version check and
@@ -852,9 +846,27 @@ export class DccAttendanceService {
           dcc_event_id: params.event.id,
           person_id: personId,
           present: record.present,
-          // The predecessor's closing instant, so the chain is contiguous rather than
-          // overlapping. A create has no predecessor and takes the column default.
-          ...(closedAt === null ? {} : { recorded_at: closedAt }),
+          // **The predecessor's closing instant, read in SQL and never through this
+          // process.** A create has no predecessor and takes the column default.
+          //
+          // A first version returned `superseded_at` from the `UPDATE` and handed the
+          // value back here, which does not work and passed anyway: node-postgres
+          // renders `timestamptz` as a JavaScript `Date`, which holds milliseconds,
+          // so a `clock_timestamp()` of `…883142+08` came back as `…883+08` and the
+          // successor began 142µs *before* its predecessor ended. The overlap it was
+          // written to remove shrank from the transaction's duration to under a
+          // millisecond and stayed. The case asserting contiguity could not fail on
+          // it either, because both sides came back through the same driver and were
+          // truncated to the same millisecond.
+          //
+          // That is the identical mechanism this branch documented two files over and
+          // migration 0012 caught in two fixtures — committed here in the same change.
+          // The instant now stays in the database from end to end.
+          ...(closedThisRow
+            ? {
+                recorded_at: sql<Date>`(SELECT superseded_at FROM dcc_attendance WHERE id = ${stored?.id})`,
+              }
+            : {}),
           // Frozen on the first row and carried by every successor. Section 9 fixes
           // it as of the event and section 14 lists it among what a correction
           // preserves — re-resolving it would move a recorded attendance between

@@ -643,17 +643,28 @@ describe('DCC recording (sections 9 and 14)', () => {
       // so it is carried rather than resolved again.
       expect(live?.responsible_leader_id).toBe(manuel.id);
 
-      // **The chain does not overlap itself.** The successor begins exactly where its
-      // predecessor ended. Left to the column default its `recorded_at` would be
-      // `now()` — the instant the transaction *began* — while the close happens at
-      // `clock_timestamp()` during it, so both rows would be live across the interval
-      // the transaction had already spent: the checklist descent, a scope check per
-      // line, and the wait on the predecessor's own row lock. Migration 0012 constrains
-      // only within a row and cannot see this.
-      expect(superseded?.superseded_at).toBeInstanceOf(Date);
-      expect((live?.recorded_at as Date).getTime()).toBeGreaterThanOrEqual(
-        (superseded?.superseded_at as Date).getTime(),
-      );
+      // **The chain does not overlap itself, asserted in SQL.**
+      //
+      // Comparing two JavaScript `Date`s here cannot fail: node-postgres renders
+      // `timestamptz` with millisecond precision, so a predecessor ending at
+      // `…883142+08` and a successor beginning at `…883+08` both arrive as `883` and
+      // the assertion reads `883 >= 883`. That is exactly how the first attempt at this
+      // rule shipped — the successor really began 142µs before its predecessor ended,
+      // and this case passed. The comparison has to happen where the microseconds are.
+      const chain = await sql<{ overlaps: boolean; gap: string }>`
+        SELECT successor.recorded_at < predecessor.superseded_at AS overlaps,
+               (successor.recorded_at - predecessor.superseded_at)::text AS gap
+          FROM dcc_attendance predecessor
+          JOIN dcc_attendance successor ON successor.id = predecessor.superseded_by
+         WHERE predecessor.dcc_event_id = ${eventId}
+      `.execute(db);
+
+      expect(chain.rows).toHaveLength(1);
+      expect(chain.rows[0].overlaps).toBe(false);
+
+      // Exactly contiguous rather than merely non-overlapping: the successor begins at
+      // the instant the predecessor ended, because it is read from that row in SQL.
+      expect(chain.rows[0].gap).toBe('00:00:00');
     });
 
     it('keeps the responsible leader when a reassignment is backdated behind the event', async () => {
@@ -1294,9 +1305,19 @@ describe('DCC recording (sections 9 and 14)', () => {
 
         // The same value the holder is writing, so once the holder commits there is
         // nothing to disagree about.
-        const attempt = submit(manuelAccount, eventId, [
-          { person_id: mark.id, present: true, version: null },
-        ]);
+        //
+        // The key is held, because the retry below has to present **this** one: the
+        // refusal says "retry with the same key", and decision 0158's question — could
+        // this same body, resubmitted unchanged, succeed? — is the whole basis for a
+        // 503 rather than a 409. A retry under a fresh key with a different body tests
+        // neither.
+        const key = randomUUID();
+        const attempt = submit(
+          manuelAccount,
+          eventId,
+          [{ person_id: mark.id, present: true, version: null }],
+          key,
+        );
         const inFlight = track(attempt);
 
         const waiters = await countWhileInFlight(
@@ -1320,12 +1341,18 @@ describe('DCC recording (sections 9 and 14)', () => {
         expect(response.status).toBe(503);
         expect(response.body.error.code).toBe('RESOURCE_BUSY');
 
-        // And the retry it advises does succeed, writing nothing.
-        const retry = await submit(manuelAccount, eventId, [
-          { person_id: mark.id, present: true, version: 1 },
-        ]).expect(201);
+        // **The same key and the same body**, which is what the refusal advises and
+        // what a 5xx makes possible: section 22 releases the claim on a 5xx rather than
+        // storing it, so this re-executes rather than replaying the failure.
+        const retry = await submit(
+          manuelAccount,
+          eventId,
+          [{ person_id: mark.id, present: true, version: null }],
+          key,
+        ).expect(201);
 
         expect(retry.body.unchanged).toBe(1);
+        expect(retry.body.created).toBe(0);
         expect(await liveRows(eventId)).toHaveLength(1);
       } finally {
         await holder.query('ROLLBACK').catch(() => undefined);
@@ -1333,17 +1360,164 @@ describe('DCC recording (sections 9 and 14)', () => {
       }
     });
 
-    // **There is no fourth case, and the one that was written here was unreachable.**
-    // A correction race between two writers cannot produce a `VERSION_CONFLICT`,
-    // because `present` is a boolean and there are only two values to hold. To block on
-    // the predecessor's row lock at all, the loser must disagree with the value that
-    // stood *before* the race — and with two values that means it agrees with the value
-    // the winner wrote, so by the time it re-reads there is nothing to choose between.
-    //
-    // A test asserting a 409 there stood for one commit and passed for the wrong
-    // reason: it submitted the pre-race value, which is unchanged, so the line wrote
-    // nothing, never took the lock, and never raced. The genuine stale-version conflict
-    // on a correction needs no race and is pinned sequentially above.
+    it('answers RESOURCE_BUSY when a correction loses the race and the winner agrees', async () => {
+      // **The zero-row supersede**, which nothing else here reaches: the loser had a
+      // predecessor to close, the winner closed it first, and the loser's `UPDATE`
+      // matches nothing. Its insert then meets the index like any other lost race.
+      //
+      // This case was deleted for one commit on the argument that it was unreachable.
+      // It was not: it raced, it lost, and what had changed was its *answer* — 409
+      // became 503 when an unchanged line stopped taking part in the version check. The
+      // deletion is why the branch below had no coverage at all.
+      const eventId = await createEvent(await recentSunday());
+
+      await submit(manuelAccount, eventId, [
+        { person_id: mark.id, present: true, version: null },
+      ]).expect(201);
+
+      const stored = (await liveRows(eventId))[0];
+      const successorId = randomUUID();
+
+      const holder = new Client({ connectionString: process.env.TEST_DATABASE_URL });
+      await holder.connect();
+
+      try {
+        await holder.query('BEGIN');
+        await holder.query(
+          'UPDATE dcc_attendance SET superseded_at = clock_timestamp(), superseded_by = $2 WHERE id = $1',
+          [stored.id, successorId],
+        );
+        await holder.query(
+          `INSERT INTO dcc_attendance
+             (id, dcc_event_id, person_id, present, responsible_leader_id, recorded_by, version)
+           VALUES ($1, $2, $3, false, $4, $5, 2)`,
+          [successorId, eventId, mark.id, manuel.id, admin.id],
+        );
+
+        // Disagrees with the value standing *before* the race, so it is a correction and
+        // takes the predecessor's row lock. It agrees with what the winner writes, so
+        // once the winner commits there is nothing to choose between.
+        const attempt = submit(manuelAccount, eventId, [
+          { person_id: mark.id, present: false, version: 1 },
+        ]);
+        const inFlight = track(attempt);
+
+        const waiters = await countWhileInFlight(
+          async () => {
+            const { rows } = await holder.query<{ count: string }>(
+              `SELECT count(*) AS count FROM pg_locks
+                WHERE NOT granted AND locktype IN ('transactionid', 'tuple')`,
+            );
+
+            return Number(rows[0].count);
+          },
+          inFlight,
+          'the correction to block on the predecessor row',
+        );
+
+        expect(waiters).toBeGreaterThan(0);
+        await holder.query('COMMIT');
+
+        const response = await attempt;
+
+        expect(response.status).toBe(503);
+        expect(response.body.error.code).toBe('RESOURCE_BUSY');
+
+        const rows = await liveRows(eventId);
+        expect(rows).toHaveLength(1);
+        expect(rows[0].id).toBe(successorId);
+      } finally {
+        await holder.query('ROLLBACK').catch(() => undefined);
+        await holder.end();
+      }
+    });
+
+    it('answers a conflict when the value has been flipped back under the loser', async () => {
+      // **The case the deletion claimed could not exist.** The argument was that
+      // `present` is a boolean, so a loser that disagreed with the pre-race value must
+      // agree with what the winner wrote. That bounds the number of *values* and not
+      // the number of *commits*: an even number of flips returns the stored value to
+      // the one the loser disagrees with, and `conflictAfterLostRace` re-reads on the
+      // pool, holding no lock, at an unbounded later moment.
+      //
+      // Two writes by one account are enough, and both are made inside the holder's
+      // transaction so the interleaving is forced rather than hoped for.
+      const eventId = await createEvent(await recentSunday());
+
+      await submit(manuelAccount, eventId, [
+        { person_id: mark.id, present: true, version: null },
+      ]).expect(201);
+
+      const first = (await liveRows(eventId))[0];
+      const second = randomUUID();
+      const third = randomUUID();
+
+      const holder = new Client({ connectionString: process.env.TEST_DATABASE_URL });
+      await holder.connect();
+
+      try {
+        await holder.query('BEGIN');
+
+        // true -> false
+        await holder.query(
+          'UPDATE dcc_attendance SET superseded_at = clock_timestamp(), superseded_by = $2 WHERE id = $1',
+          [first.id, second],
+        );
+        await holder.query(
+          `INSERT INTO dcc_attendance
+             (id, dcc_event_id, person_id, present, responsible_leader_id, recorded_by, version)
+           VALUES ($1, $2, $3, false, $4, $5, 2)`,
+          [second, eventId, mark.id, manuel.id, admin.id],
+        );
+
+        // and back, false -> true
+        await holder.query(
+          'UPDATE dcc_attendance SET superseded_at = clock_timestamp(), superseded_by = $2 WHERE id = $1',
+          [second, third],
+        );
+        await holder.query(
+          `INSERT INTO dcc_attendance
+             (id, dcc_event_id, person_id, present, responsible_leader_id, recorded_by, version)
+           VALUES ($1, $2, $3, true, $4, $5, 3)`,
+          [third, eventId, mark.id, manuel.id, admin.id],
+        );
+
+        const attempt = submit(manuelAccount, eventId, [
+          { person_id: mark.id, present: false, version: 1 },
+        ]);
+        const inFlight = track(attempt);
+
+        const waiters = await countWhileInFlight(
+          async () => {
+            const { rows } = await holder.query<{ count: string }>(
+              `SELECT count(*) AS count FROM pg_locks
+                WHERE NOT granted AND locktype IN ('transactionid', 'tuple')`,
+            );
+
+            return Number(rows[0].count);
+          },
+          inFlight,
+          'the correction to block on the predecessor row',
+        );
+
+        expect(waiters).toBeGreaterThan(0);
+        await holder.query('COMMIT');
+
+        const response = await attempt;
+
+        // Stored is `true` at version 3; the loser submitted `false` at version 1. Two
+        // genuinely different values, which is a conflict on the ordinary terms.
+        expect(response.status).toBe(409);
+        expect(response.body.error.code).toBe('VERSION_CONFLICT');
+        expect(response.body.error.details.submitted_version).toBe(1);
+        expect(response.body.error.details.current_version).toBe(3);
+        expect(response.body.error.details.submitted.present).toBe(false);
+        expect(response.body.error.details.current.present).toBe(true);
+      } finally {
+        await holder.query('ROLLBACK').catch(() => undefined);
+        await holder.end();
+      }
+    });
   });
 
   // ---------------------------------------------------------------------------

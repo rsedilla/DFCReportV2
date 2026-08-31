@@ -415,6 +415,7 @@ resolves exactly as well as it did in the single file and no better.
 - 2026-08-31 — [The fourth cursor, and the two that share a key](docs/decisions/0174-the-fourth-cursor-and-the-two-that-share-a-key.md)
 - 2026-08-31 — [Eleven on the DCC recording review, and the one that was a disclosure](docs/decisions/0175-eleven-on-the-dcc-recording-review-and-the-one-that-was-a-disclosure.md)
 - 2026-08-31 — [Eight on the fix batch, and the outcome that was a 500](docs/decisions/0176-eight-on-the-fix-batch-and-the-outcome-that-was-a-500.md)
+- 2026-08-31 — [Six on the third pass, and a fix that was never applied](docs/decisions/0177-six-on-the-third-pass-and-a-fix-that-was-never-applied.md)
 
 ### Open — awaiting a ruling
 
