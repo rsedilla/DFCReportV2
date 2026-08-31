@@ -1,6 +1,6 @@
 import { Inject, Injectable, Optional } from '@nestjs/common';
 
-import { InvariantViolationError } from '../common/errors/api-error';
+import { ApiError, InvariantViolationError, ResourceBusyError } from '../common/errors/api-error';
 import { manilaDayAfter, startOfManilaDay } from '../common/time/manila';
 import { type Db } from '../database/database.module';
 import { lockPersonsWithin } from '../database/person-lock';
@@ -400,8 +400,19 @@ export class NetworksService {
    * requires the system not to do.
    *
    * In that case no date clears the bound and the correction can only take effect
-   * now, which always does: every bound is read from a row already written, so it
-   * lies in the past. So the refusal says that instead of naming a date.
+   * now, which succeeds in every case but one: every bound is read from a row already
+   * written, so each lies in the past — unless one carries the very instant this
+   * correction is taking, which is the branch below and the reason it exists. So the
+   * refusal says that instead of naming a date.
+   *
+   * *This said "which always does" until 2026-08-31 — in the docblock of the very
+   * method whose undated branch refutes it. Section 4 carried the same sentence and was
+   * amended; this is the file a Stage 4 author copying a floor actually reads.*
+   *
+   * **`ApiError` rather than `InvariantViolationError`**, because the undated branch
+   * answers `RESOURCE_BUSY`: section 22 places a refusal by whether the same body could
+   * succeed on a later attempt, and only the dated branches decide anything about the
+   * body they were given.
    */
   private floorBreach(
     change: { personId: string; backdated: boolean },
@@ -414,7 +425,7 @@ export class NetworksService {
      * stranded one.
      */
     kind: FloorKind,
-  ): InvariantViolationError {
+  ): ApiError {
     const earliest = manilaDayAfter(bound);
     const submittable = startOfManilaDay(earliest).getTime() <= Date.now();
 
@@ -423,26 +434,24 @@ export class NetworksService {
       // instant this correction is taking — a Person encoded and corrected within
       // the same millisecond. There is no date to offer and none was asked for.
       //
-      // **This is a 409 and should very likely be a 503, and that is deliberately not
-      // changed here.** Section 22 stores a 4xx against the idempotency key and
-      // replays it for the whole retention, so a 409 pins a transient failure to the
-      // key for a day while this message tells the caller to retry — the status and
-      // the advice on opposite sides of that split. `reassignmentTooEarly` answers
-      // `RESOURCE_BUSY` for the same case on the sibling path, since `216be37`.
+      // **`RESOURCE_BUSY`, settled 2026-08-31, and this branch is the case the ruling
+      // was written on.** Section 22 places a refusal by asking whether this same
+      // body, resubmitted unchanged, could succeed. Here it could: the identical
+      // undated correction clears the floor a millisecond later, because every bound
+      // is read from a row already written. So the refusal reached no decision about
+      // the request, and a 409 would have pinned a transient failure to the
+      // idempotency key for the whole retention while this message told the caller to
+      // retry — the status and the advice on opposite sides of section 22's
+      // store/release split.
       //
-      // It is left alone because changing it is a ruling rather than a fix, and needs
-      // two amendments neither of which is derivable. Section 4 says an undated
-      // correction "always succeeds" and has no floor to clear, which **this branch of
-      // this method** contradicts — the contradiction is long-standing rather than
-      // introduced by any recent change, and issue #16 records it as pre-existing on
-      // `main`. And section 22 defines `RESOURCE_BUSY` as a wait that timed out or a
-      // deadlock victim, which this is neither: the lock was acquired cleanly and the
-      // collision is with a committed row.
-      //
-      // Recorded as open in `CLAUDE.md` rather than settled in a fix batch.
-      return new InvariantViolationError(
-        'This change cannot take effect at this instant, because a record for this person was written at it. Retry in a moment.',
+      // Two amendments came with it rather than being assumed: section 22's
+      // `RESOURCE_BUSY` now names a stale premise as a third condition, and section 4's
+      // "an undated correction always succeeds" is qualified by exactly this case.
+      // `reassignmentTooEarly` and `closureTooEarly` answer the same way, which they
+      // did before the ruling and now do for a stated reason.
+      return new ResourceBusyError(
         { person_id: change.personId },
+        'This change cannot take effect at this instant, because a record for this person was written at it. Retry in a moment.',
       );
     }
 

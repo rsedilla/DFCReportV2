@@ -1,3 +1,41 @@
+import { ValidationFailedError } from './errors/api-error';
+
+/**
+ * The refusal for a `cursor` a collection endpoint cannot resolve (SKILL.md section 22,
+ * *Pagination*; the ruling of 2026-08-31).
+ *
+ * **Shared rather than repeated, so the three decoders answer identically** —
+ * `people.controller.ts`, `roster-cursor.ts` and `leadership-request-cursor.ts`. They
+ * reached one answer by copying rather than by deciding: `GET /api/v1/people` chose to
+ * treat an unreadable cursor as absent and never pinned it, the Cell roster was changed
+ * to match it on a review pass, and the leadership queue then matched both. So one
+ * decision looked like three endpoints agreeing, and would not have survived a fourth.
+ * Stage 4 adds one.
+ *
+ * *This docblock said "the two decoders" when it was written, in the change whose ruling
+ * opens by correcting that exact count in `CLAUDE.md`. Counted rather than assumed now:
+ * three files import the refusal below, in two modules rather than three — `people` and
+ * `cells` — and seven files across `src` and `test` import something from here, most of
+ * them the length bound. "Importers" is the wrong unit, which is why the sentence names
+ * what is imported.*
+ *
+ * `VALIDATION_FAILED` because section 22 defines it as malformed or missing input,
+ * which a value the server cannot read is exactly. `field: 'cursor'` because the
+ * envelope carries a hint for binding a message to what it concerns — and section 23
+ * governs what a client does with it: no screen has a form field named `cursor`, so
+ * this is a client-to-client message and carries no `field-invalid` colour.
+ *
+ * It is a `GET`, so it carries no `Idempotency-Key` and section 22's store/release rule
+ * does not reach it.
+ */
+export function unresolvableCursor(): ValidationFailedError {
+  return new ValidationFailedError(
+    'That pagination cursor could not be read. Request the collection again without ' +
+      'one to start from the first page.',
+    { field: 'cursor' },
+  );
+}
+
 /**
  * The longest opaque pagination cursor any collection endpoint may emit (SKILL.md
  * section 22, *Pagination*).

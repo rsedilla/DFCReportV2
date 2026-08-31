@@ -11,6 +11,7 @@ import { Capability } from '../auth/authorization/capabilities';
 import {
   InvariantViolationError,
   NotFoundError,
+  ResourceBusyError,
   ScopeDeniedError,
   ValidationFailedError,
 } from '../common/errors/api-error';
@@ -567,46 +568,48 @@ export class CellsLeadershipRequestService {
       // and not the second (migration 0009), so only one of the two would be safe to
       // argue rather than check.
       //
-      // **The remedy is a fresh attempt under a new `Idempotency-Key`, and the message
-      // says so.** A stale-premise refusal is a 4xx, so section 22 stores it against the
-      // key that was used; retrying under that key replays it for the whole retention.
-      // What follows is that the next attempt needs a *new* key, not that no advice can
-      // be given {M} section 22 fixes when a key must be new ("the moment the body
-      // changes") and nowhere forbids a fresh key for a fresh attempt, and it says in
-      // terms that a client "mints a new key" on any refusal leaving something to
-      // correct.
+      // **The remedy is a bare retry, and the message says so.** This whole paragraph
+      // used to argue the opposite — that the refusal is a 4xx, so the key it used
+      // would replay it, so the next attempt needs a *new* key — and the ruling of
+      // 2026-08-31 removed the premise rather than the conclusion: it is a 503 now, a
+      // 5xx releases the key, and the same key is the one to reuse. The argument was
+      // sound about a stored refusal and this is no longer one.
       //
-      // *A previous batch removed the advice outright, reading "only a bare retry of an
-      // unchanged body reuses one" as a prohibition on minting a new key. That is
-      // stronger than section 22 supports, and it left three refusals stating a fact
-      // with no next step.* The same wording is owed at the two handover refusals in
-      // `assertHandoverApprovableWithin`, which is why each carries it rather than
-      // relying on this paragraph three hundred lines away.
-      //
-      // The three disjuncts below are unreachable today: `requested_by` is frozen, and
-      // `cell_id`'s nullness is tied to `kind` by a check constraint while `kind` is
-      // frozen. They are checked because the *argument* is what goes stale, and a
+      // The three disjuncts below are unreachable today, and not all for the same
+      // reason. `requested_by` is frozen by `cell_leadership_request_is_final`, and
+      // `cell_id`'s *nullness* is tied to `kind` by a check constraint while `kind` is
+      // frozen — both enforced in the database. `cell_id`'s **value** on a PENDING
+      // handover is frozen by nothing: it is unreached because no code writes it, which
+      // is a weaker guarantee, and whether it should be frozen is on CLAUDE.md's open
+      // list. They are checked because the *argument* is what goes stale, and a
       // revision path for a pending request would make the third live.
       //
-      // **`INVARIANT_VIOLATION` rather than `RESOURCE_BUSY`.** Section 22 defines that
-      // code as a wait that timed out or a deadlock victim, and this is neither: every
-      // lock was taken cleanly and what differs is a value read before one of them.
-      // A previous batch answered `RESOURCE_BUSY` here on section 22's store/release
-      // reasoning, which is a good argument and is the argument CLAUDE.md's open list
-      // says needs a *ruling* rather than a fix -- it carries the identical question
-      // for `NetworksService.floorBreach`, which still answers a 409. Settling it in
-      // one module, in the opposite direction from the other, with section 22 unamended,
-      // is what that open item exists to prevent.
+      // **`RESOURCE_BUSY`, settled 2026-08-31.** Section 22 places a refusal by asking
+      // whether this same body, resubmitted unchanged, could succeed. Here it could:
+      // the body is a request identifier, and a second attempt rebuilds its lock list
+      // from a fresh pre-read of the row as it now stands. So this reached no decision
+      // about the request, and a 409 would have been stored against the key and
+      // replayed for the retention — the client's own retry answered with the refusal
+      // for a day.
+      //
+      // *The paragraph here previously argued the opposite, on section 22's then
+      // definition of `RESOURCE_BUSY` as an elapsed wait or a deadlock victim, and it
+      // was right that settling it in one module was not a fix batch's to do. Section
+      // 22 now names a stale premise as a third condition, and `floorBreach` moved with
+      // this.*
+      //
+      // **The advice moves with the status.** A 5xx releases the key, so the retry
+      // reuses it; telling a client to mint a new one would send it to change a body it
+      // has no reason to change.
       if (
         !sameId(request.requested_by, pre.requested_by) ||
         (request.cell_id === null) !== (pre.cell_id === null) ||
         (request.cell_id !== null && pre.cell_id !== null && !sameId(request.cell_id, pre.cell_id))
       ) {
-        throw new InvariantViolationError(
-          'This request changed while it was being approved, so the locks it took no ' +
-            'longer cover what it would write. Submit it again under a new ' +
-            'Idempotency-Key.',
+        throw new ResourceBusyError(
           { request_id: request.id },
+          'This request changed while it was being approved, so the locks it took no ' +
+            'longer cover what it would write. Retry in a moment.',
         );
       }
 
@@ -978,23 +981,32 @@ export class CellsLeadershipRequestService {
       // the only state that reaches this: `outgoingLeaderId` was read non-null four
       // lines above, so there is somebody -- they are simply somebody the lock list,
       // built before the transaction, does not cover.*
-      throw new InvariantViolationError(
-        'That Cell acquired its leadership assignment while this approval was starting, ' +
-          'so the approval holds no lock on the leader it would hand over from. Submit ' +
-          'it again under a new Idempotency-Key (SKILL.md section 11).',
+      //
+      // `RESOURCE_BUSY` on section 22's placement question: the body is unchanged by
+      // this refusal and a second attempt builds its lock list from what the Cell holds
+      // then, so the same submission can succeed. A 5xx releases the key, so the retry
+      // reuses it.
+      throw new ResourceBusyError(
         { cell_id: cell.cell_id },
+        'That Cell acquired its leadership assignment while this approval was starting, ' +
+          'so the approval holds no lock on the leader it would hand over from. Retry ' +
+          'in a moment (SKILL.md section 11).',
       );
     }
 
     if (!sameId(outgoingLeaderId, context.outgoingBeforeLock)) {
-      // `INVARIANT_VIOLATION` for the reason the pre-read check gives: section 22
-      // reserves `RESOURCE_BUSY` for an elapsed wait or a deadlock victim, and every
-      // lock here was taken cleanly.
-      throw new InvariantViolationError(
-        'This Cell changed hands while the approval was being made, so the leader it ' +
-          'locked is no longer the one it would hand over from. Submit it again under a ' +
-          'new Idempotency-Key.',
+      // `RESOURCE_BUSY` for the reason the pre-read check gives: section 22 places a
+      // refusal by whether this same body could succeed on a later attempt, and this
+      // one could — the Cell has a leader, the lock list simply does not cover them,
+      // and a second attempt builds it from the leader now in place.
+      //
+      // **Note what this is not.** A handover refused because the incoming leader
+      // *already leads the Cell*, immediately below, is a decision about this request
+      // and stays a 409: no retry of it can ever succeed.
+      throw new ResourceBusyError(
         { cell_id: cell.cell_id },
+        'This Cell changed hands while the approval was being made, so the leader it ' +
+          'locked is no longer the one it would hand over from. Retry in a moment.',
       );
     }
 
@@ -1101,8 +1113,12 @@ export class CellsLeadershipRequestService {
     await this.audit.writeWithin(trx, {
       actorId: actor.accountId,
       action: 'cell_leadership.opened',
-      targetType: 'person',
-      targetId: request.prospective_leader_id,
+      // The Cell, on section 21's rule for all three leadership actions, and for the
+      // reason given at the sibling site in `cells.service.ts`: section 7 resolves a
+      // leadership through the Cell, so the entry resolves by the rule written for
+      // what it is about. The incoming leader is in `after`.
+      targetType: 'cell',
+      targetId: created.id,
       after: {
         cell_id: created.cellId,
         cell_uuid: created.id,

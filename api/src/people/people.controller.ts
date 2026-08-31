@@ -5,6 +5,7 @@ import { RequiresCapability } from '../auth/authorization/authorization.decorato
 import { Capability } from '../auth/authorization/capabilities';
 import { type Actor } from '../auth/authorization/authorization.service';
 import { InvariantViolationError, NotFoundError } from '../common/errors/api-error';
+import { unresolvableCursor } from '../common/cursor';
 import { HierarchyService } from '../hierarchy/hierarchy.service';
 import {
   CurrentIdempotency,
@@ -407,12 +408,24 @@ export class PeopleController {
  * (section 22). Base64 of the keyset, so its shape can change without a client
  * having learned to read it.
  *
- * A cursor that does not decode is treated as absent rather than as an error. It
- * cannot be forged into anything dangerous — the worst a tampered value does is
- * start the page somewhere else in a directory section 8 already makes readable
- * church-wide — and refusing it would strand a client with no way back.
+ * **A cursor this cannot resolve is refused**, on the ruling of 2026-08-31 now written
+ * into section 22, through the shared refusal in `common/cursor.ts` so that this route,
+ * the Cell roster and the leadership-request queue answer identically. It was treated as
+ * absent until then — the decision was made *here*, and never pinned here; the roster
+ * was changed to match this file on a review pass and the queue then matched both, so
+ * one choice read as three endpoints agreeing.
+ *
+ * The stranding argument that stood here does not survive: the recovery is a request
+ * the client can already make — drop the cursor and start over — which is exactly what
+ * the old behaviour did for it, silently, while it appended a page it already held. A
+ * forged value is still harmless for the reason given before, that the worst it does is
+ * start the page elsewhere in a directory section 8 makes readable church-wide; being
+ * harmless is not a reason to accept one the server cannot read.
  */
 function decodeCursor(value: string | undefined): SearchCursor | null {
+  // An **absent** cursor is absent. The empty string is already refused by the DTO in
+  // front of this; it is treated as absent here so the function is total for a caller
+  // that has none.
   if (value === undefined || value === '') {
     return null;
   }
@@ -430,10 +443,11 @@ function decodeCursor(value: string | undefined): SearchCursor | null {
       return parsed as SearchCursor;
     }
   } catch {
-    // Falls through to null.
+    // Falls through to the refusal below: a value that is not base64url JSON and one
+    // that is JSON of the wrong shape are equally unresolvable.
   }
 
-  return null;
+  throw unresolvableCursor();
 }
 
 function encodeCursor(cursor: SearchCursor | null): string | null {

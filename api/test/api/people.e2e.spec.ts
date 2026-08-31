@@ -964,6 +964,31 @@ describe('people (SKILL.md sections 3, 7 and 8)', () => {
       const secondIds = (second.body.data as { id: string }[]).map((row) => row.id);
       expect(firstIds.filter((id) => secondIds.includes(id))).toEqual([]);
     });
+
+    it('refuses a cursor it cannot resolve, and says which field', async () => {
+      // **Section 22, since the ruling of 2026-08-31.** This route is where the old
+      // "treat it as absent" behaviour was actually decided, and it is the one that
+      // never pinned it: the Cell roster and the leadership queue each carried a case
+      // asserting they matched *this* endpoint, and this endpoint had nothing. So the
+      // behaviour two other files cited as settled precedent could have been changed
+      // here with the whole suite green.
+      //
+      // Both shapes, because a decoder catching only the `JSON.parse` throw would still
+      // return null for the second.
+      for (const cursor of [
+        'not-a-real-cursor',
+        Buffer.from(JSON.stringify({ notAKey: 'x' }), 'utf8').toString('base64url'),
+      ]) {
+        const response = await request(app.getHttpServer())
+          .get('/api/v1/people')
+          .query({ q: 'Testfixture', cursor })
+          .set('Authorization', `Bearer ${adminAccount.accessToken}`);
+
+        expect(response.status).toBe(422);
+        expect(response.body.error.code).toBe('VALIDATION_FAILED');
+        expect(response.body.error.details.field).toBe('cursor');
+      }
+    });
   });
 
   describe('editing basic details (SKILL.md section 7)', () => {

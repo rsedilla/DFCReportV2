@@ -666,6 +666,12 @@ describe('Cell leadership requests (section 10)', () => {
       // `new Date().toString()` — V8's own rendering — passes `Date.parse` and reaches
       // the `::timestamptz` cast as `time zone "gmt+0800" not recognized`, a 500 on a
       // client-supplied value. The guard now matches the format this code emits.
+      //
+      // **This asserted a `200` and an unfiltered page until 2026-08-31**, because an
+      // unresolvable cursor was treated as absent. It is now a refusal, and the
+      // discrimination the case exists for is unchanged: without the format guard this
+      // value reaches PostgreSQL and answers `INTERNAL_ERROR`, which is neither 200 nor
+      // 422.
       await submit(markAccount, newCell(juan.id)).expect(201);
 
       const forged = Buffer.from(
@@ -673,20 +679,31 @@ describe('Cell leadership requests (section 10)', () => {
         'utf8',
       ).toString('base64url');
 
-      const response = await queue(admin, `?cursor=${encodeURIComponent(forged)}`).expect(200);
+      const response = await queue(admin, `?cursor=${encodeURIComponent(forged)}`).expect(422);
 
-      expect(response.body.data).toHaveLength(1);
+      expect(response.body.error.code).toBe('VALIDATION_FAILED');
+      expect(response.body.error.details.field).toBe('cursor');
     });
 
-    it('treats an unreadable cursor as absent', async () => {
-      // Matching `GET /api/v1/people` and the Cell roster, which is the only behaviour
-      // this repository has chosen. Section 22 does not settle it; CLAUDE.md carries
-      // that as open.
+    it('refuses a cursor it cannot resolve, and says which field', async () => {
+      // Section 22, since the ruling of 2026-08-31. This case asserted "treats an
+      // unreadable cursor as absent" and justified it as "the only behaviour this
+      // repository has chosen" — true, and it was one choice this route had copied
+      // rather than three routes agreeing.
+      //
+      // Both shapes, because a decoder catching only the `JSON.parse` throw would still
+      // return null for the second.
       await submit(markAccount, newCell(juan.id)).expect(201);
 
-      const response = await queue(admin, '?cursor=not-a-real-cursor').expect(200);
+      for (const cursor of [
+        'not-a-real-cursor',
+        Buffer.from(JSON.stringify({ notAKey: 'x' }), 'utf8').toString('base64url'),
+      ]) {
+        const response = await queue(admin, `?cursor=${encodeURIComponent(cursor)}`).expect(422);
 
-      expect(response.body.data).toHaveLength(1);
+        expect(response.body.error.code).toBe('VALIDATION_FAILED');
+        expect(response.body.error.details.field).toBe('cursor');
+      }
     });
 
     it('is refused to a leader', async () => {

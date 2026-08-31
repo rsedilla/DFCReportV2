@@ -201,7 +201,27 @@ describe('cell configuration (section 10)', () => {
       );
 
       const rows = await categoryRows(markCell.id);
-      expect(rows[1].started_at.getTime()).toBeLessThanOrEqual(Date.now());
+      // **Bounded from both sides, with the same 1000ms the two assertions above take.**
+      // `started_at` is `clock_timestamp()` — the *database's* clock — and `Date.now()`
+      // is this process's, so the two ends of this comparison came from different
+      // clocks, which `test/setup/fixtures.ts` names as a hazard. With no slack at all a
+      // forward difference of a single millisecond fails a correct run, and it did: this
+      // case failed once in a full-suite run here and passed on the next.
+      //
+      // **1000ms is copied from its neighbours, not derived.** Nothing bounds
+      // host-to-database skew: section 24 requires synchronised clocks on "every host
+      // running the API" and says nothing about the database host, and the open item
+      // about skew is a different one — it concerns two API instances, of which there is
+      // one. So this is a tolerance wide enough to absorb the difference rather than a
+      // limit anything guarantees. (`cells.closure.service.ts` states the same fact, as
+      // "the host-to-server skew section 24 bounds nowhere".) It costs the assertion nothing, because what the case discriminates
+      // against is the schedule rule's instant, and the first of next month is weeks
+      // away in both directions.
+      //
+      // The lower bound is the half that was missing: with only an upper one, a row
+      // stamped in the *past* passed, and the rule is that the change takes effect now.
+      expect(rows[1].started_at.getTime()).toBeGreaterThanOrEqual(before - 1000);
+      expect(rows[1].started_at.getTime()).toBeLessThanOrEqual(Date.now() + 1000);
     });
 
     it('records the actor on the row it opens', async () => {

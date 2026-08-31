@@ -34,8 +34,14 @@ export const ApiErrorCode = {
   /** No such record, or its existence must not be disclosed. */
   NOT_FOUND: 'NOT_FOUND',
   /**
-   * Another operation holds the record this write must serialize against, and the
-   * wait timed out (section 5, Database enforcement). Transient: retry shortly.
+   * The write could not be serialized against another operation and reached no
+   * decision. Transient: retry shortly, **with the same key**.
+   *
+   * Three conditions (section 22): the wait timed out (section 5, Database
+   * enforcement), the database chose this transaction as a deadlock victim, or a
+   * premise read before a lock no longer held under it — the third added by the
+   * ruling of 2026-08-31, which places a refusal by asking whether this same body,
+   * resubmitted unchanged, could succeed.
    *
    * **A 5xx deliberately, and that is not cosmetic.** Section 22 stores a 4xx
    * against the idempotency key and releases the key on a 5xx, because the first
@@ -151,13 +157,30 @@ export class NotFoundError extends ApiError {
   }
 }
 
+/**
+ * A write that could not be serialized against another operation and reached no
+ * decision (SKILL.md section 22).
+ *
+ * Three conditions, and the third is why the message is overridable. A wait that
+ * elapsed and a deadlock victim are the same event to a caller and say nothing worth
+ * saying beyond "retry". A **stale premise** — a value read before a lock that differs
+ * underneath it — is placed here by section 22's question, *could this same body,
+ * resubmitted unchanged, succeed?*, and the answer being yes is the whole of what
+ * decides it. But a caller who is told only "another change is in progress" cannot see
+ * which premise moved, and these refusals happen at the end of a long operation.
+ *
+ * **A 503 rather than a 409, and the advice follows the status.** Section 22 stores a
+ * 4xx against the idempotency key and replays it for the retention, while a 5xx
+ * releases it. So a message here says to retry, and says nothing about minting a new
+ * key: the same key is the right one, and telling a client otherwise would send it to
+ * mint a key it does not need for a body it has not changed.
+ */
 export class ResourceBusyError extends ApiError {
-  constructor(details: Record<string, unknown> = {}) {
-    super(
-      ApiErrorCode.RESOURCE_BUSY,
-      'Another change to this record is in progress. Retry in a moment.',
-      details,
-    );
+  constructor(
+    details: Record<string, unknown> = {},
+    message = 'Another change to this record is in progress. Retry in a moment.',
+  ) {
+    super(ApiErrorCode.RESOURCE_BUSY, message, details);
   }
 }
 

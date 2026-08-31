@@ -73,6 +73,16 @@ describe('the roster cursor', () => {
   it.each([
     ['undefined', undefined],
     ['empty', ''],
+  ])('treats %s as absent', (_label, value) => {
+    // **Absent is still absent**, and only these two are. Neither reaches this decoder
+    // through the API: `@IsOptional()` skips an absent parameter and `@Length(1, …)`
+    // refuses `?cursor=` with 422. They are here because this function is called with
+    // whatever a caller has, and its own contract should not depend on a decorator
+    // upstream.
+    expect(decodeRosterCursor(value)).toBeNull();
+  });
+
+  it.each([
     ['not base64url at all', 'not-a-real-cursor'],
     ['base64url of something that is not JSON', Buffer.from('nope').toString('base64url')],
     ['JSON that is not an object', Buffer.from('"nope"').toString('base64url')],
@@ -85,15 +95,31 @@ describe('the roster cursor', () => {
       'an object whose key is the wrong type',
       Buffer.from(JSON.stringify({ ...key, memberId: 7 })).toString('base64url'),
     ],
-  ])('treats %s as absent', (_label, value) => {
-    // Absent rather than refused, matching `GET /api/v1/people` — the only other
-    // paginated collection and the only behaviour this repository has chosen. Section
-    // 22 does not settle it; `CLAUDE.md` carries that as open.
+  ])('refuses %s', (_label, value) => {
+    // **Refused rather than treated as absent**, on the ruling of 2026-08-31 now written
+    // into section 22. These cases asserted the opposite and justified it as matching
+    // "the only other paginated collection" — which was already two others by the time
+    // it was written, both of which had copied the same answer from `/people`, which
+    // never pinned it.
     //
-    // The first two cases never reach this decoder through the API: `@IsOptional()`
-    // skips an absent parameter, and `@Length(1, …)` refuses `?cursor=` with 422, as
-    // `/people` does. They are here because this function is called with whatever a
-    // caller has, and its own contract should not depend on a decorator upstream.
-    expect(decodeRosterCursor(value)).toBeNull();
+    // **This file is where five of the six are reachable at all**, which is why they are
+    // enumerated here rather than end to end: a client only ever produces a cursor this
+    // code emitted or a string that is not base64url, which is the first case alone —
+    // and only by its *length*, since `Buffer.from(value, 'base64url')` never throws and
+    // every character of it is in the alphabet. The decoder has two rejection paths, not
+    // three: the first two cases throw out of `JSON.parse`, the last four parse and are
+    // rejected on shape, and `decodeRosterCursor` answers both identically. The shape
+    // path is the one that decides whether a partial cursor silently pages from
+    // `undefined`, and now the one that decides whether it is refused.
+    expect(() => decodeRosterCursor(value)).toThrow(/pagination cursor could not be read/);
+  });
+
+  it('names the field, so a client can bind the message', () => {
+    // Section 22's envelope carries `details.field`. Asserted once rather than on every
+    // case above: what varies there is which shape is unresolvable, and the answer is
+    // deliberately one answer.
+    expect(() => decodeRosterCursor('not-a-real-cursor')).toThrow(
+      expect.objectContaining({ details: { field: 'cursor' } }) as Error,
+    );
   });
 });

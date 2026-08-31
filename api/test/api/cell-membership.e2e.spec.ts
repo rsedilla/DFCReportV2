@@ -801,30 +801,45 @@ describe('cell membership (section 10)', () => {
       expect(fourth.body.next_cursor).toBeNull();
     });
 
-    it('treats an unreadable cursor as absent rather than refusing it', async () => {
-      // Matches `GET /api/v1/people`, which is the only other paginated collection and
-      // the only behaviour this repository has chosen. **Section 22 does not settle
-      // what a collection endpoint does with a forged, stale or unparseable cursor**,
-      // and that is recorded as open in `CLAUDE.md` rather than decided here — two
-      // endpoints on one API answering differently is the thing worth avoiding until
-      // it is.
+    it('refuses a cursor it cannot resolve, and says which field', async () => {
+      // **Section 22, since the ruling of 2026-08-31.** This case asserted the opposite
+      // until then, on the ground that it "matches `GET /api/v1/people`, which is the
+      // only other paginated collection" — which was already false when it was written:
+      // `GET /api/v1/cells/leadership-requests` is a third, and it had copied the same
+      // answer. One decision, copied twice, reading as three endpoints agreeing.
       //
-      // It discloses nothing either way: the worst a tampered value does is start the
-      // page elsewhere in a roster this reader may already see in full.
+      // What refusing prevents is silent. A client sends a cursor because it holds a
+      // page; served page one under a `200` it appends rows it already has, and cannot
+      // tell that from a roster that grew.
+      //
+      // **Two shapes, one answer**, because to a client they are one condition — the
+      // server could not read the cursor. `not-a-real-cursor` is not base64url JSON;
+      // the second is well-formed base64url JSON of the wrong shape, and it is the one
+      // that discriminates, since a decoder that only caught the `JSON.parse` throw
+      // would still return null for it.
       await addMember(admin, markCell.id, juan.id).expect(201);
 
-      const response = await request(app.getHttpServer())
-        .get(`/api/v1/cells/${markCell.id}/members?cursor=not-a-real-cursor`)
-        .set('Authorization', `Bearer ${admin.accessToken}`)
-        .expect(200);
+      for (const cursor of [
+        'not-a-real-cursor',
+        Buffer.from(JSON.stringify({ notAKey: 'x' }), 'utf8').toString('base64url'),
+      ]) {
+        const response = await request(app.getHttpServer())
+          .get(`/api/v1/cells/${markCell.id}/members?cursor=${encodeURIComponent(cursor)}`)
+          .set('Authorization', `Bearer ${admin.accessToken}`)
+          .expect(422);
 
-      expect(response.body.data).toHaveLength(1);
-      expect(response.body.data[0].person_id).toBe(juan.id);
+        expect(response.body.error.code).toBe('VALIDATION_FAILED');
+        // Section 22's envelope carries `details.field` so a client can bind the
+        // message; section 23 decides that no screen has an input called `cursor`, so
+        // this is a client-to-client message and carries no `field-invalid` colour.
+        expect(response.body.error.details.field).toBe('cursor');
+      }
 
       // **An empty `cursor=` is refused rather than treated as absent**, which is where
       // the consistency claim was broader than the code: the decoder returned null for
       // `''` while `/people`'s DTO refused it, so the two agreed on a forged cursor and
-      // disagreed on an empty one. Both bind `@Length(1, …)` now.
+      // disagreed on an empty one. Both bind `@Length(1, …)` now, and since the ruling
+      // above the DTO and the decoder give one answer rather than two.
       await request(app.getHttpServer())
         .get(`/api/v1/cells/${markCell.id}/members?cursor=`)
         .set('Authorization', `Bearer ${admin.accessToken}`)

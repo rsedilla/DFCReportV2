@@ -120,4 +120,4 @@ application answering every date with null is worse than one that will not boot.
 
 Decision 0156, indexed in [CLAUDE.md](../../CLAUDE.md).
 
-Previous: [2026-08-30 — The backdate floor gains two Cell terms, one per mechanism](0155-the-backdate-floor-gains-two-cell-terms-one-per-mechanism.md)
+Previous: [2026-08-30 — The backdate floor gains two Cell terms, one per mechanism](0155-the-backdate-floor-gains-two-cell-terms-one-per-mechanism.md) | Next: [2026-08-31 — A Cell leadership audit entry names the Cell](0157-a-cell-leadership-audit-entry-names-the-cell.md)

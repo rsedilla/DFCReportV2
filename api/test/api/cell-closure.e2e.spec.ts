@@ -1057,6 +1057,11 @@ describe('closing a Cell (section 10)', () => {
       // separate decision. That is the reasoning section 21 rejects for a membership
       // twelve lines away.
       expect(entries[1].target_id).toBe(markCell.id);
+      // **The Cell**, which the ruling of 2026-08-31 makes the rule for all three
+      // leadership actions rather than this one's own habit. `target_id` was asserted
+      // here and `target_type` was not, so this entry agreed with the rule before there
+      // was one and could have drifted off it silently.
+      expect(entries[1].target_type).toBe('cell');
       expect(entries[1].before).toMatchObject({ cell_leader_id: mark.id });
       // No incoming leader, which is what distinguishes a closure from a handover here.
       expect(entries[1].after).toMatchObject({ cell_leader_id: null });

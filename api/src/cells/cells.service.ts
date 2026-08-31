@@ -138,12 +138,27 @@ export class CellsService {
       await this.audit.writeWithin(trx, {
         actorId: actor.accountId,
         action: 'cell_leadership.opened',
-        targetType: 'person',
-        targetId: input.cellLeaderId,
+        // **The Cell, on section 21's rule for all three leadership actions.** Scope
+        // resolves an audit entry through its target (section 7), and section 7 gives
+        // "a Cell, a Cell meeting, a membership or a leadership" one resolution — so a
+        // Cell target is read by the rule written for what this entry is about.
+        //
+        // *This named the person until 2026-08-31, while `ended` and `changed` named
+        // the Cell, and nothing had decided the split. Where exactly the two targets
+        // give different answers is deliberately not claimed here: section 7 resolves a
+        // Cell "as of the period being viewed" and defines that phrase, but not what
+        // period a read of *this log* asks about — one entry is an instant and a
+        // filtered range is a range. That is on CLAUDE.md's open list. Two drafts
+        // asserted a mechanism and a third asserted that section 7 settled nothing here;
+        // all three were refuted, and the rule rests on none of them.*
+        targetType: 'cell',
+        targetId: created.id,
         // Section 21 asks a leadership entry to carry "the outgoing and the incoming
         // leader where each exists". There is no outgoing one at a creation, and the
-        // incoming leader is named rather than left to the entry's `target_id`, so a
-        // handover's entry and this one read the same way.
+        // incoming leader is named in `after` rather than left to the entry's
+        // `target_id`, so a handover's entry and this one read the same way — which
+        // is also what makes the target a free choice rather than the only place the
+        // leader appears.
         after: {
           cell_id: created.cellId,
           cell_uuid: created.id,

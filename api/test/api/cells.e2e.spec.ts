@@ -134,24 +134,41 @@ describe('cells: direct creation during initial encoding (sections 2 and 10)', (
     expect(match.rows[0].same).toBe(true);
   });
 
-  it('writes an audit entry for the Cell and one for the leadership', async () => {
+  it('writes an audit entry for the Cell and one for the leadership, both naming the Cell', async () => {
     // Section 21's convention, and two entries rather than one: a reader searching
     // for who began leading a Cell must find that entry whatever created it.
-    await post(admin, body(mark.id)).expect(201);
+    //
+    // **`cell_leadership.opened` names the Cell**, since the ruling of 2026-08-31, and
+    // this case asserted `person` until then. Section 7 resolves an audit entry's scope
+    // through its target, and gives a leadership one resolution and a Person another —
+    // so a person-targeted entry is read by a different rule from the `ended` and
+    // `changed` entries beside it, about the same thing.
+    //
+    // The leader is still asserted, from `after` rather than from the target, which is
+    // where section 21 requires the incoming leader to be. That is what makes the
+    // target a free choice: moving it costs a person-shaped search a predicate, not the
+    // entry.
+    const response = await post(admin, body(mark.id)).expect(201);
 
     const entries = await db
       .selectFrom('audit_log')
-      .select(['action', 'target_type', 'target_id'])
+      .select(['action', 'target_type', 'target_id', 'after'])
       .where('action', 'in', ['cell.created', 'cell_leadership.opened'])
       .orderBy('action')
       .execute();
 
     expect(entries).toEqual([
-      { action: 'cell.created', target_type: 'cell', target_id: expect.any(String) as unknown },
+      {
+        action: 'cell.created',
+        target_type: 'cell',
+        target_id: response.body.id as string,
+        after: expect.anything() as unknown,
+      },
       {
         action: 'cell_leadership.opened',
-        target_type: 'person',
-        target_id: mark.id,
+        target_type: 'cell',
+        target_id: response.body.id as string,
+        after: expect.objectContaining({ cell_leader_id: mark.id }) as unknown,
       },
     ]);
   });
@@ -178,6 +195,12 @@ describe('cells: direct creation during initial encoding (sections 2 and 10)', (
     // Section 21 lists it as an action in its own right, and this path always
     // produces that state: it writes no account and sends no email, because section
     // 7 makes the account a separately authorized step.
+    //
+    // **This one still names the person, and deliberately.** The 2026-08-31 ruling
+    // moved the three actions section 21 groups as "Cell leadership opened, ended, or
+    // changed" onto the Cell. This is a fourth action and it is about somebody's
+    // *account* — the thing left pending is a provisioning step on a Person (section
+    // 6), so the target is the Person whose account it is.
     await post(admin, body(mark.id)).expect(201);
 
     const entry = await db

@@ -387,6 +387,32 @@ describe('Cell leadership approval (section 10)', () => {
         'cell_leadership_request.approved',
       ]);
     });
+
+    it('targets the Cell on the opening, and carries the leader in `after`', async () => {
+      // **Section 21, since the ruling of 2026-08-31.** Nothing pinned the target of
+      // any leadership entry before it: the case above asserts four actions and no
+      // targets, so `opened` naming the person and `ended` naming the Cell went
+      // unobserved through the whole of Stage 3.
+      //
+      // Section 7 resolves an entry through its target, and lists "a Cell, a Cell
+      // meeting, a membership or a leadership" as resolving one way — so this entry is
+      // read by the rule written for what it is about, as `ended` and `changed` already
+      // were.
+      const requestId = await pendingNewCell(markAccount, juan.id);
+      const response = await approve(admin, requestId).expect(200);
+
+      const entry = await db
+        .selectFrom('audit_log')
+        .select(['target_type', 'target_id', 'after'])
+        .where('action', '=', 'cell_leadership.opened')
+        .executeTakeFirstOrThrow();
+
+      expect(entry.target_type).toBe('cell');
+      expect(entry.target_id).toBe(response.body.cell_uuid as string);
+      // The incoming leader, which section 21 requires and which is what makes the
+      // target a free choice rather than the only place the leader appears.
+      expect(entry.after).toMatchObject({ cell_leader_id: juan.id });
+    });
   });
 
   describe('approving a handover', () => {
@@ -442,7 +468,7 @@ describe('Cell leadership approval (section 10)', () => {
 
       const entry = await db
         .selectFrom('audit_log')
-        .select(['before', 'after'])
+        .select(['target_type', 'target_id', 'before', 'after'])
         .where('action', '=', 'cell_leadership.changed')
         .executeTakeFirstOrThrow();
 
@@ -450,6 +476,13 @@ describe('Cell leadership approval (section 10)', () => {
       // here". One entry rather than an ending beside an opening, because the two
       // writes share an instant and a split log would report two events at one
       // timestamp with nothing pairing them.
+      //
+      // **And it starts from the Cell**, which is what that sentence's own reader-question
+      // names. Asserted here as well as on the opening, so the ruling of 2026-08-31 is
+      // pinned as the agreement of the three rather than one entry at a time: this
+      // entry already named the Cell and nothing said it had to.
+      expect(entry.target_type).toBe('cell');
+      expect(entry.target_id).toBe(markCell.id);
       expect(entry.before).toMatchObject({ cell_leader_id: mark.id });
       expect(entry.after).toMatchObject({ cell_leader_id: juan.id });
     });

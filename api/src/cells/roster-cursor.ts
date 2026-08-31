@@ -1,3 +1,5 @@
+import { unresolvableCursor } from '../common/cursor';
+
 /**
  * The opaque cursor `GET /api/v1/cells/{id}/members` pages by (SKILL.md section 22).
  *
@@ -22,16 +24,23 @@
  * the Member ID this used to emit is neither: section 3 makes it six digits off a
  * sequence and section 8 publishes it church-wide.
  *
- * **An unreadable cursor is treated as absent rather than refused**, which matches
- * `people.controller.ts` and is the only behaviour in the repository. That claim covers
- * the validation in front of the decoder as well as the decoder — the two DTOs share the
- * same bound and both refuse an empty `cursor=` — because a consistency argument that
- * holds only for the last step of three is not one. Section 22 does
- * not settle what a collection endpoint does with a forged, stale or unparseable
- * cursor — that is recorded as open in `CLAUDE.md` rather than decided here. What can
- * be said is that it discloses nothing: the worst a tampered value does is start the
- * page elsewhere in a roster the reader is already authorized to see in full, and
- * refusing it would strand a client with no way back.
+ * **A cursor this cannot resolve is refused** with `VALIDATION_FAILED` naming the
+ * field, on the ruling of 2026-08-31 now written into section 22. It was treated as
+ * absent until then, matching `people.controller.ts` — which had reached that answer
+ * first and not by decision, so the two agreed by accident.
+ *
+ * What refusing prevents is silent. A client sends a cursor because it already holds a
+ * page; handed the first page again under a `200`, it appends rows it already has and
+ * cannot tell that from a roster that grew. It also makes one rule of a path that had
+ * two: the DTO in front of this refuses an empty `cursor=` and an over-long one, so a
+ * value a byte too long was a 422 while a value of the right length carrying nothing
+ * readable was a silent restart.
+ *
+ * Refusing does not strand a client, because the recovery is a request it can already
+ * make — drop the cursor, start over — which is exactly what the old behaviour did for
+ * it, silently. And a forged cursor that happens to parse still discloses nothing: the
+ * worst it does is start the page elsewhere in a roster the reader is authorized to see
+ * in full.
  */
 export interface RosterCursor {
   lastName: string;
@@ -40,6 +49,9 @@ export interface RosterCursor {
 }
 
 export function decodeRosterCursor(value: string | undefined): RosterCursor | null {
+  // An **absent** cursor is absent and starts at the first page. The empty string is
+  // already refused by the DTO in front of this; it is treated as absent here so the
+  // function is total for a caller that has none.
   if (value === undefined || value === '') {
     return null;
   }
@@ -57,10 +69,12 @@ export function decodeRosterCursor(value: string | undefined): RosterCursor | nu
       return parsed as RosterCursor;
     }
   } catch {
-    // Falls through to null: an unreadable cursor is absent, per the docblock above.
+    // Falls through to the refusal below. Both failures are the same answer: a value
+    // that is not base64url JSON and one that is JSON of the wrong shape are equally
+    // unresolvable, and section 22 gives them one code.
   }
 
-  return null;
+  throw unresolvableCursor();
 }
 
 export function encodeRosterCursor(cursor: RosterCursor | null): string | null {
