@@ -7,8 +7,6 @@ import { AuthenticatedOnly } from '../../src/auth/authorization/authorization.de
 import { Client } from 'pg';
 import request from 'supertest';
 
-import { sql } from 'kysely';
-
 import { DATABASE, type Db } from '../../src/database/database.module';
 import { lockPersonsWithin } from '../../src/database/person-lock';
 import { HierarchyService } from '../../src/hierarchy/hierarchy.service';
@@ -17,7 +15,14 @@ import { IdempotencyService } from '../../src/common/idempotency/idempotency.ser
 import { PeopleService } from '../../src/people/people.service';
 import { createTestDb, truncateAll } from '../setup/database';
 import { assignTo, createAccount, createPerson, createTestApp, EPOCH } from '../setup/fixtures';
-import { countWhileInFlight, track } from '../setup/concurrency';
+import {
+  countAdvisoryHolders,
+  countAdvisoryWaiters,
+  countWhileInFlight,
+  holdPersonLock,
+  personLockKey,
+  track,
+} from '../setup/concurrency';
 
 import type { INestApplication } from '@nestjs/common';
 import type { Kysely } from 'kysely';
@@ -117,9 +122,22 @@ describe('the person lock, and the identifier boundary that needs the same fixtu
    * Holds this person's advisory key, runs `attempt`, and asserts it comes to wait
    * on that same key. Releases, then lets `attempt` finish.
    *
-   * The key is recomputed in SQL from the person id rather than passed in, so the
-   * probe agrees with the implementation by construction — if the two ever diverge,
-   * the probe stops finding a waiter and the case fails rather than passing quietly.
+   * The key is computed in SQL from the person id rather than in JavaScript, and the
+   * computation lives once, in `test/setup/concurrency.ts`, rather than being spelled
+   * out here.
+   *
+   * **That is not a construction guarantee, and the sentence this replaces called it
+   * one.** Computing in SQL gives agreement only if the two expressions match, and the
+   * one surviving copy can still drift from `lockPersonsWithin` — a mutation confirms
+   * it. What agreement there is comes from the case below, which checks it.
+   *
+   * *The sentence this replaces claimed the construction guarantee for a copy, and there
+   * were twenty-four copies across seven files. What a copy cannot promise is that the
+   * others agree with it — and a drifted probe reports the same zero as a lock that was
+   * never taken, so the failure names nothing, which is a diagnosis problem rather than
+   * a silent one.* The case below pins the one remaining computation against the key the
+   * implementation is observed to take, which is the part a shared helper cannot promise
+   * on its own.
    */
   async function assertWaitsOnPersonKey(
     personId: string,
@@ -130,9 +148,7 @@ describe('the person lock, and the identifier boundary that needs the same fixtu
 
     try {
       await holder.query('BEGIN');
-      await holder.query('SELECT pg_advisory_xact_lock(hashtextextended($1::uuid::text, 0))', [
-        personId,
-      ]);
+      const key = await holdPersonLock(holder, personId);
 
       // Watched rather than awaited: a refusal after the lock is acquired is fine
       // and is not what this asserts.
@@ -143,20 +159,7 @@ describe('the person lock, and the identifier boundary that needs the same fixtu
       // and the request's pre-lock work — round trip, token, guard reads, subtree
       // walk — can outrun it under load, failing while the system is correct.
       const waiting = await countWhileInFlight(
-        async () => {
-          const found = await holder.query<{ waiting: string }>(
-            `SELECT count(*) AS waiting
-               FROM pg_locks
-              WHERE locktype = 'advisory'
-                AND NOT granted
-                AND objsubid = 1
-                AND classid::bigint = ((hashtextextended($1::uuid::text, 0) >> 32) & 4294967295)
-                AND objid::bigint = (hashtextextended($1::uuid::text, 0) & 4294967295)`,
-            [personId],
-          );
-
-          return Number(found.rows[0].waiting);
-        },
+        () => countAdvisoryWaiters(holder, key),
         inFlight,
         'a waiter on the person key',
       );
@@ -314,9 +317,7 @@ describe('the person lock, and the identifier boundary that needs the same fixtu
 
     try {
       await holder.query('BEGIN');
-      await holder.query('SELECT pg_advisory_xact_lock(hashtextextended($1::uuid::text, 0))', [
-        mark.id,
-      ]);
+      await holdPersonLock(holder, mark.id);
 
       const refused = await request(app.getHttpServer())
         .put(`/api/v1/people/${mark.id}/sex`)
@@ -424,6 +425,92 @@ describe('the person lock, and the identifier boundary that needs the same fixtu
     );
   });
 
+  it('computes the key the implementation actually takes', async () => {
+    // **The pin the shared helper needs and cannot give itself.** Twenty-four copies of
+    // the key expression were replaced by one in `test/setup/concurrency.ts`, which
+    // removes the risk that seven files drift apart and leaves the risk that the one
+    // remaining copy drifts from `lockPersonsWithin`.
+    //
+    // **It is not the only case that would fail if they diverged — it is the only one
+    // that would say so.** Nine of the eleven cases here take a person lock and eight go
+    // red on a divergence; the ninth takes one that nothing observes. What none of the
+    // eight does is name the key, because each fails against its own assertion. This one
+    // compares the two keys, so the fault has a name.
+    //
+    // *Three earlier versions of this comment described *how* the eight fail — silently,
+    // then as a twenty-second hang, then in three seconds — and all three were wrong,
+    // because the eight do not fail alike. The claim is now the one that holds across
+    // them, and the timings are left to whoever reads a failure.*
+    //
+    // **The canonicalization is pinned on both sides, and the first version pinned it on
+    // neither.** `hashtextextended` is case-sensitive while a `uuid` comparison is not,
+    // so `::uuid::text` is what makes one identifier one lock however a client spells it
+    // — the hazard `person-lock.ts` names, and iOS emits uppercase UUIDs by default.
+    // Handing both sides the same lowercase string agrees whether or not either
+    // canonicalizes: measured against this database, `hashtextextended($1::text, 0)` and
+    // `hashtextextended($1, 0)` return the *identical* key to the implementation for a
+    // lowercase id. So dropping the cast from either side went unnoticed, and a mutation
+    // run against the first version confirmed it. The two assertions below hand the two
+    // sides different spellings, one each way.
+    const database = app.get<Db>(DATABASE);
+    const probe = new Client({ connectionString: process.env.DATABASE_URL });
+    await probe.connect();
+
+    // Released by the test rather than by a timer, so nothing here races a clock.
+    let release = (): void => undefined;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+
+    const inTransaction = track(
+      database.transaction().execute(async (trx) => {
+        // Uppercase deliberately: see the canonicalization paragraph above.
+        await lockPersonsWithin(trx, [mark.id.toUpperCase()]);
+        await held;
+      }),
+    );
+
+    try {
+      const key = await personLockKey(probe, mark.id);
+
+      // **The helper canonicalizes.** Two spellings of one identifier must reach one
+      // key; without the `::uuid` cast they do not, and nothing else here would notice.
+      expect(await personLockKey(probe, mark.id.toUpperCase())).toBe(key);
+
+      // Bounded by the attempt, like every other probe here — but unlike the others,
+      // **nothing bounds the attempt itself**: the transaction above waits on `held`
+      // rather than on a lock, so if this poll never finds the key it reaches
+      // `countWhileInFlight`'s backstop rather than settling, and throws there inside
+      // the case timeout.
+      //
+      // *That is a property of this case, not an account of what a divergence does to
+      // it. The canonicalization drift the paragraph above describes is caught by the
+      // assertion two lines up and never reaches this poll at all.*
+      //
+      // **The implementation canonicalizes**, which this pins because the transaction
+      // above was given the *uppercase* spelling while `key` was computed from the
+      // lowercase one. Drop the cast inside `lockPersonsWithin` and it locks the hash of
+      // an uppercase string, which is not this key, and no holder is ever found.
+      const holders = await countWhileInFlight(
+        () => countAdvisoryHolders(probe, key),
+        inTransaction,
+        "the implementation to hold the helper's key",
+      );
+
+      expect(holders).toBeGreaterThan(0);
+    } finally {
+      // **Released in `finally`, and the first version of this case released it after
+      // the assertion.** That leaks on any failure: the transaction never resolves, its
+      // backend sits `idle in transaction` holding the advisory lock, and jest hangs on
+      // an open handle rather than reporting the failure. Found by running the mutation
+      // below — which is the point of running one, since a case that hangs instead of
+      // failing tells you nothing about what it was checking.
+      release();
+      await inTransaction.done;
+      await probe.end();
+    }
+  });
+
   it('takes several keys in ascending key order, whatever order it was given them', async () => {
     // The ordering rule of section 5, which nothing pinned: it is what stops two
     // callers acquiring the same pair in opposite orders and deadlocking, with
@@ -436,17 +523,22 @@ describe('the person lock, and the identifier boundary that needs the same fixtu
     // one.
     const database = app.get<Db>(DATABASE);
 
-    const ordered = await sql<{ id: string; key: string }>`
-      SELECT id, hashtextextended(id::uuid::text, 0) AS key
-        FROM unnest(ARRAY[${sql.join([mark.id, grace.id])}]::text[]) AS id
-       ORDER BY key
-    `.execute(db);
-
-    const lower = ordered.rows[0];
-    const higher = ordered.rows[1];
-
     const holder = new Client({ connectionString: process.env.DATABASE_URL });
     await holder.connect();
+
+    const keyed = await Promise.all(
+      [mark, grace].map(async (person) => ({
+        id: person.id,
+        key: await personLockKey(holder, person.id),
+      })),
+    );
+
+    // Sorted here rather than by `ORDER BY key` in SQL, because the keys are what is
+    // being compared and `personLockKey` returns them one at a time. `BigInt` rather
+    // than a numeric sort: the key is a signed 64-bit value and `Number` loses
+    // precision above 2^53, which would order two keys wrongly and pick the wrong one
+    // to hold — silently, since the case would then assert against the other lock.
+    const [lower, higher] = [...keyed].sort((a, b) => (BigInt(a.key) < BigInt(b.key) ? -1 : 1));
 
     try {
       await holder.query('BEGIN');
@@ -459,20 +551,7 @@ describe('the person lock, and the identifier boundary that needs the same fixtu
 
       // Same bound as the helper above, and for the same reason.
       const held = await countWhileInFlight(
-        async () => {
-          const found = await holder.query<{ held: string }>(
-            `SELECT count(*) AS held
-               FROM pg_locks
-              WHERE locktype = 'advisory'
-                AND granted
-                AND objsubid = 1
-                AND classid::bigint = (($1::bigint >> 32) & 4294967295)
-                AND objid::bigint = ($1::bigint & 4294967295)`,
-            [lower.key],
-          );
-
-          return Number(found.rows[0].held);
-        },
+        () => countAdvisoryHolders(holder, lower.key),
         inFlight,
         'the lower key to be held',
       );

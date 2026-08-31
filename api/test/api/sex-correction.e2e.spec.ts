@@ -5,6 +5,7 @@ import { Client } from 'pg';
 import request from 'supertest';
 
 import { manilaDayOf } from '../../src/common/time/manila';
+import { holdPersonLock } from '../setup/concurrency';
 import { createTestDb, truncateAll } from '../setup/database';
 import {
   assignTo,
@@ -1293,9 +1294,7 @@ describe('sex correction (SKILL.md sections 4, 5, 7, 21, 22)', () => {
 
       try {
         await holder.query('BEGIN');
-        await holder.query('SELECT pg_advisory_xact_lock(hashtextextended($1::uuid::text, 0))', [
-          mark.id,
-        ]);
+        await holdPersonLock(holder, mark.id);
 
         const response = await correct(mark.id, {
           sex: 'FEMALE',
@@ -1349,9 +1348,7 @@ describe('sex correction (SKILL.md sections 4, 5, 7, 21, 22)', () => {
 
       try {
         await holder.query('BEGIN');
-        await holder.query('SELECT pg_advisory_xact_lock(hashtextextended($1::uuid::text, 0))', [
-          mark.id,
-        ]);
+        await holdPersonLock(holder, mark.id);
         const { rows } = await holder.query<{ pid: number }>('SELECT pg_backend_pid() AS pid');
 
         // Dispatched, not held: a supertest object is lazy, and an unawaited one is

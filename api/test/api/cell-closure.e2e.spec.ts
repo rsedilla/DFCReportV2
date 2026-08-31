@@ -4,6 +4,7 @@ import { Client } from 'pg';
 import { sql } from 'kysely';
 import request from 'supertest';
 
+import { holdPersonLock } from '../setup/concurrency';
 import { createTestDb, truncateAll } from '../setup/database';
 import {
   assignTo,
@@ -1140,9 +1141,7 @@ describe('closing a Cell (section 10)', () => {
         );
 
         await holder.query('BEGIN');
-        await holder.query('SELECT pg_advisory_xact_lock(hashtextextended($1::uuid::text, 0))', [
-          juan.id,
-        ]);
+        await holdPersonLock(holder, juan.id);
 
         const closing = close(admin, markCell.id, {
           reason: 'MEMBERS_DISPERSED',

@@ -110,3 +110,187 @@ export async function countWhileInFlight(
     await new Promise((resolve) => setTimeout(resolve, 50));
   }
 }
+
+/**
+ * The advisory lock key, and the probes that observe it.
+ *
+ * **Why these are here rather than in each case.** `lockPersonsWithin` computes a
+ * person's key as `hashtextextended(id::uuid::text, 0)`, and seven test files were
+ * spelling that expression out again — twenty-four times. Three of those spellings were
+ * the identical `pg_locks` waiter query, in two files, accounting for six of the
+ * twenty-four; a fourth waiter query, in `cell-membership.e2e.spec.ts`, was materially
+ * different and is where the database filter below comes from.
+ * `person-lock.e2e.spec.ts` justified the arrangement by saying the key "is recomputed
+ * in SQL from the person id rather than passed in, so the probe agrees with the
+ * implementation by construction". That was never a construction guarantee, of
+ * twenty-four copies or of one: computing in SQL gives agreement only where the two
+ * expressions match, and nothing checked that they did. What the copies added on top was
+ * twenty-four chances for it to stop being true instead of one.
+ *
+ * **What a drifted copy costs is diagnosis, and this is deliberately stated as one
+ * property rather than as a story about how each case fails.** Three attempts at that
+ * story were written here and all three were wrong — first that drift is silent, then
+ * that it surfaces as a twenty-second hang, then that everything fails in three
+ * seconds. The cases differ, and enumerating them from a docblock is how each of those
+ * got written.
+ *
+ * The property that does hold: **a failure never names the key.** A probe pointed at a
+ * key nobody takes reports exactly what a lock that was never taken reports, so whoever
+ * meets the failure starts by suspecting the code under test.
+ *
+ * *What the failure names instead varies, and is not enumerated here — that enumeration
+ * is the thing three earlier versions of this paragraph each got wrong.* One case does
+ * print the key: `cell-membership.e2e.spec.ts`'s `waitForBlockedOn` throws "nothing ever
+ * blocked on advisory key N; the case proves nothing", which is what the rest should
+ * read like, and is why that file's probe is the one this helper was built from.
+ *
+ * **`closure-locking.spec.ts` is where a drift is not caught at all**, and it is the
+ * whole file rather than a case or two. It never invokes `lockPersonsWithin`: every
+ * person lock in it is taken through `holdPersonLock`, directly or through its own
+ * `advisoryLock`, and nothing in it observes a key — its only poll is `waitForBlocked`
+ * on `pg_stat_activity` by pid. So a divergence moves every side of every contention
+ * together and all five cases stay green. Worth knowing before adding a sixth there.
+ *
+ * **What replaces it is a check rather than a construction.** The key is still computed
+ * in SQL by the database rather than in JavaScript, once, by `personLockKey` below — but
+ * that is hygiene, not a guarantee, for the reason the paragraph above gives. The
+ * guarantee comes from `person-lock.e2e.spec.ts`, which observes the implementation
+ * holding a key and compares it to this one, in both spellings.
+ */
+
+/**
+ * Anything that can run a parameterized statement: `pg.Client` satisfies it.
+ *
+ * `pg.Pool` satisfies it structurally and must not be passed. `holdPersonLock` depends
+ * on consecutive statements reaching one backend — the transaction the lock lives in,
+ * and `pg_backend_pid()` in its own check — and a pool may hand each statement a
+ * different one. The other three issue a single statement and would in fact be served
+ * correctly; the rule is one rule because a caller should not have to know which.
+ * Nothing enforces it, because a pool breaks `BEGIN` first and every call site passes a
+ * `Client`.
+ */
+interface Queryable {
+  query<R extends Record<string, unknown>>(
+    text: string,
+    values?: unknown[],
+  ): Promise<{ rows: R[] }>;
+}
+
+/**
+ * The key `lockPersonsWithin` takes for one person, computed by the database.
+ *
+ * `::uuid::text` normalizes the spelling before hashing, exactly as the implementation
+ * does and for the reason it gives: `hashtextextended` is case-sensitive while a `uuid`
+ * comparison is not, so an identifier in upper case would hash to a different key and
+ * serialize against nothing. A probe that skipped the cast would look for a lock nobody
+ * takes.
+ */
+export async function personLockKey(client: Queryable, personId: string): Promise<string> {
+  const { rows } = await client.query<{ key: string }>(
+    'SELECT hashtextextended($1::uuid::text, 0) AS key',
+    [personId],
+  );
+
+  return rows[0].key;
+}
+
+/**
+ * Take that lock inside the caller's open transaction, and return the key it took.
+ *
+ * The caller must already have issued `BEGIN`; this is `pg_advisory_xact_lock`, so the
+ * lock is released by their `COMMIT` or `ROLLBACK` and cannot be leaked by a failing
+ * path.
+ *
+ * **That precondition is checked rather than documented.** Without a transaction the
+ * acquisition runs in an implicit single-statement one and the lock is released before
+ * the next statement returns — so the caller holds nothing, the request they are racing
+ * never blocks, and the case fails against an assertion about contention rather than
+ * saying `BEGIN` was missing. `test/setup/env.ts` names that shape as the failure this
+ * repository keeps recording: a documented contract that nothing enforces. One statement
+ * makes it structural, and it names the actual mistake at the call site that made it.
+ */
+export async function holdPersonLock(client: Queryable, personId: string): Promise<string> {
+  const key = await personLockKey(client, personId);
+  await client.query('SELECT pg_advisory_xact_lock($1::bigint)', [key]);
+
+  const { rows } = await client.query<{ held: string }>(
+    `SELECT count(*) AS held
+       FROM pg_locks
+      WHERE locktype = 'advisory'
+        AND granted
+        AND objsubid = 1
+        AND pid = pg_backend_pid()
+        AND ((classid::bigint << 32) | objid::bigint) = $1::bigint`,
+    [key],
+  );
+
+  if (Number(rows[0].held) === 0) {
+    throw new Error(
+      `holdPersonLock acquired the key for ${personId} and this backend no longer holds ` +
+        'it, which means there was no open transaction to hold it in. Issue BEGIN before ' +
+        'calling this.',
+    );
+  }
+
+  return key;
+}
+
+/**
+ * How many backends are **waiting** on an advisory key, in this database.
+ *
+ * **The database predicate is not decoration.** An advisory lock belongs to one
+ * database, and `pg_locks` reports every database in the cluster — so without it a lock
+ * held on the same key in `dfc_dev`, by a development server or by a second test run,
+ * counts as a waiter here. That direction is the dangerous one: these probes assert a
+ * waiter *appears*, so a false positive passes a case that should have failed. Two of
+ * the three files that probed `pg_locks` for a key omitted it; `cell-membership.e2e.spec.ts`
+ * had it and said why. (Three, not seven: the other four files only *took* the lock and
+ * never observed one, and `invariants.spec.ts` polls `pg_locks` by pid, which is
+ * cluster-unique and needs no such filter — as does the check inside `holdPersonLock`
+ * above, for the same reason.)
+ *
+ * **Verified rather than assumed, and not pinned by a case.** Against this project's
+ * PostgreSQL, an advisory lock's `pg_locks` row reports `datname` and `objsubid = 1`, so
+ * both predicates select something. Nothing here can *fail* on the database filter,
+ * because reaching it needs a second database holding the same key and CI runs one —
+ * so this is a reasoned narrowing backed by a measured premise, not a regression test,
+ * and it is written down that way rather than left to look like the latter.
+ *
+ * `objsubid = 1` selects the 8-byte key form, which is the one `pg_advisory_xact_lock`
+ * takes here; the two-integer form reports 2.
+ *
+ * The key is split across `classid` and `objid` as an unsigned high and low word, which
+ * is why it is reassembled rather than compared whole. `classid::bigint << 32` overflows
+ * a signed 64-bit value for any key with its top bit set — PostgreSQL's `int8shl` does
+ * not check for that and wraps, which produces the correct two's-complement result, so
+ * the reassembly is right for a negative key rather than accidentally right for half of
+ * them.
+ */
+export async function countAdvisoryWaiters(client: Queryable, key: string): Promise<number> {
+  return countAdvisoryLocks(client, key, false);
+}
+
+/** How many backends **hold** it. The discriminating observation where a probe must see a lock taken rather than waited for. */
+export async function countAdvisoryHolders(client: Queryable, key: string): Promise<number> {
+  return countAdvisoryLocks(client, key, true);
+}
+
+async function countAdvisoryLocks(
+  client: Queryable,
+  key: string,
+  granted: boolean,
+): Promise<number> {
+  const { rows } = await client.query<{ count: string }>(
+    `SELECT count(*) AS count
+       FROM pg_locks l
+       JOIN pg_database d ON d.oid = l.database
+      WHERE l.locktype = 'advisory'
+        AND l.granted = $2::boolean
+        AND l.objsubid = 1
+        AND d.datname = current_database()
+        AND ((l.classid::bigint << 32) | l.objid::bigint) = $1::bigint`,
+    [key, granted],
+  );
+
+  return Number(rows[0].count);
+}

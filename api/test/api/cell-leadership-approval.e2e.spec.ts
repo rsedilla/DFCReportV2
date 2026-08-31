@@ -5,6 +5,7 @@ import { sql } from 'kysely';
 
 import request from 'supertest';
 
+import { holdPersonLock } from '../setup/concurrency';
 import { createTestDb, truncateAll } from '../setup/database';
 import {
   assignTo,
@@ -286,10 +287,9 @@ describe('Cell leadership approval (section 10)', () => {
 
       try {
         await blocker.query('BEGIN');
-        // The same key `lockPersonsWithin` computes: the canonical spelling, hashed.
-        await blocker.query('SELECT pg_advisory_xact_lock(hashtextextended($1::uuid::text, 0))', [
-          juan.id,
-        ]);
+        // The same key `lockPersonsWithin` computes, from the one place that computes it
+        // (`test/setup/concurrency.ts`): the canonical spelling, hashed.
+        await holdPersonLock(blocker, juan.id);
 
         const pid = Number(
           (await blocker.query('SELECT pg_backend_pid() AS pid')).rows[0].pid as string,
@@ -866,9 +866,7 @@ describe('Cell leadership approval (section 10)', () => {
         // of the two stops the approval before it reaches the Cell whichever order the
         // keys happen to fall in.
         await holder.query('BEGIN');
-        await holder.query('SELECT pg_advisory_xact_lock(hashtextextended($1::uuid::text, 0))', [
-          mark.id,
-        ]);
+        await holdPersonLock(holder, mark.id);
 
         const approving = approve(admin, requestId).then((response) => response);
 
