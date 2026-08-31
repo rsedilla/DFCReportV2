@@ -105,9 +105,11 @@ describe('the roster cursor', () => {
     // **This file is where five of the six are reachable at all**, which is why they are
     // enumerated here rather than end to end: a client only ever produces a cursor this
     // code emitted or a string that is not base64url, which is the first case alone.
-    // Everything after it is well-formed base64url of something the decoder rejects on
-    // shape — the branch that decides whether a partial cursor silently pages from
-    // `undefined`, and now the branch that decides whether it is refused.
+    // The other five are well-formed base64url: the second throws out of `JSON.parse`
+    // and the last four are parsed and rejected on shape, which `decodeRosterCursor`
+    // distinguishes and answers identically. The shape branch is the one that decides
+    // whether a partial cursor silently pages from `undefined`, and now the one that
+    // decides whether it is refused.
     expect(() => decodeRosterCursor(value)).toThrow(/pagination cursor could not be read/);
   });
 

@@ -6,7 +6,7 @@ import { join } from 'node:path';
  * carrying it (the ruling of 2026-08-31, written into section 22).
  *
  * **Why a scan over the source rather than a case per refusal.** The rule is decided per
- * call site, and of the four sites the 2026-08-31 ruling moved, three cannot be reached
+ * call site, and of the four refusals the 2026-08-31 ruling moved, three cannot be reached
  * by any request this API accepts — and no single argument covers them, which is worth
  * stating because one of the reasons is weaker than the rest:
  *

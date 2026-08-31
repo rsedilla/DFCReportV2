@@ -405,9 +405,9 @@ export class NetworksService {
    * correction is taking, which is the branch below and the reason it exists. So the
    * refusal says that instead of naming a date.
    *
-   * *This said "which always does" until 2026-08-31, twenty lines above the branch
-   * that refutes it. Section 4 carried the same sentence and was amended; this is the
-   * file a Stage 4 author copying a floor actually reads.*
+   * *This said "which always does" until 2026-08-31 — in the docblock of the very
+   * method whose undated branch refutes it. Section 4 carried the same sentence and was
+   * amended; this is the file a Stage 4 author copying a floor actually reads.*
    *
    * **`ApiError` rather than `InvariantViolationError`**, because the undated branch
    * answers `RESOURCE_BUSY`: section 22 places a refusal by whether the same body could

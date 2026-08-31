@@ -31,8 +31,14 @@ end for the client, and which one it is depends on whether the body has to chang
 
 ## What this changes, site by site
 
-Four refusals move from `INVARIANT_VIOLATION` to `RESOURCE_BUSY`, and each also loses
-the advice to mint a new key, which a 503 makes wrong:
+**The unit is a refusal — one `throw` — and not a method.** Stated because this branch
+counted both ways before settling: `assertHandoverApprovableWithin` throws two of them,
+so the same set is six methods or seven refusals, and a reader resolving one document's
+number through another's got a different answer. There are **seven** refusals of this
+kind. Six answer `RESOURCE_BUSY`; one does not.
+
+Four of the seven move from `INVARIANT_VIOLATION` to `RESOURCE_BUSY`, and each also
+loses the advice to mint a new key, which a 503 makes wrong:
 
 - `NetworksService.floorBreach`, the `!backdated` branch. Its own comment already said
   "this is a 409 and should very likely be a 503", and declined to change it in a fix
@@ -76,7 +82,7 @@ decisions are not the Cell's current members. Resubmitting that body unchanged i
 refused again for ever: the fix is to re-read the roster and send a *different* member
 list, so the client mints a new key regardless and the stored 409 costs nothing. Section
 10 requires a decision about every member, and a decision made about a different list is
-not one — this is a decision about this body, and it is the only one of the six that is.
+not one — this is a decision about this body, and it is the only one of the seven that is.
 
 CLAUDE.md's open item counted this one apart from the others, wondering whether it was
 the `VERSION_CONFLICT` Section 22 describes. It is not: Section 14 requires a
@@ -148,7 +154,7 @@ what `RESOURCE_BUSY` already means, and Section 22 warns that a code is a perman
 obligation on three client codebases that cannot be force-updated.
 
 **Deciding per site by reachability.** That is the status quo, and it is what produced
-five sites disagreeing. Reachability is invisible at a call site: the next endpoint
+seven refusals in two camps. Reachability is invisible at a call site: the next endpoint
 copies whichever neighbour it read, which is how these two groups diverged, and is
 Section 25 rule 19 in the form this repository keeps meeting it.
 

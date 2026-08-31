@@ -484,6 +484,40 @@ describe('reassigning a pastoral leader: the record (sections 5, 21, 22)', () =>
       expect(after.recorded_at).not.toBe(after.effective_at);
       expect(entry.reason).toBe('Correcting a transfer recorded late.');
     });
+
+    it('answers RESOURCE_BUSY where an undated reassignment cannot clear the floor', async () => {
+      // **The branch section 5 gained a paragraph for on 2026-08-31, and it had no test.**
+      // Its section 4 twin did — `sex-correction.e2e.spec.ts` — and this one was written
+      // into the specification with nothing able to fail on it, which is the shape
+      // decision 0142 is named after. Found by `architecture-guardian`, on the batch
+      // whose whole subject was truth-of-claim.
+      //
+      // This floor refuses at `effectiveAt <= floor`, so an undated reassignment whose
+      // instant ties with a record already written for that person is refused — by a
+      // collision rather than by a decision. Section 22 places it by asking whether the
+      // same body, resubmitted unchanged, could succeed: it plainly could, a millisecond
+      // later, so it is `RESOURCE_BUSY` and the key it used is released for the retry.
+      //
+      // **Reached by a fixture rather than by racing a clock**, exactly as the section 4
+      // case is: a same-millisecond tie is not something a test can stage reliably, and a
+      // probe that tried would be flaky by construction. Moving the open assignment's
+      // `started_at` ahead of the clock reaches the identical comparison deterministically.
+      await db
+        .updateTable('pastoral_assignments')
+        .set({ started_at: new Date(Date.now() + 60_000) })
+        .where('person_id', '=', mark.id)
+        .where('ended_at', 'is', null)
+        .execute();
+
+      const response = await reassign(mark.id, { pastoral_leader_id: rico.id });
+
+      expect(response.status).toBe(503);
+      expect(response.body.error.code).toBe('RESOURCE_BUSY');
+
+      // **No date is named, and none should be**: none was asked for, and the earliest
+      // legal one would be tomorrow, which an effective date may never be.
+      expect(response.body.error.details).not.toHaveProperty('earliest_effective_date');
+    });
   });
 
   describe('what it refuses to record', () => {

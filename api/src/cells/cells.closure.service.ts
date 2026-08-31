@@ -916,17 +916,31 @@ export class CellsClosureService {
       //
       // *A first version of this comment claimed it was reached "where a row carries
       // the very instant this closure is taking", which the strict `<` above excludes
-      // — a row at exactly the floor is legal.* The branch was copied from
-      // `PeopleReassignmentService`, where the identical shape **is** reachable
-      // because section 5 lets Admin backdate a pastoral row and a concurrent
-      // reassignment can therefore leave a row ahead of the clock. Cell leadership and
-      // membership rows cannot be backdated, so the reason does not carry (section 25,
-      // rule 19) — which is the fault this branch's own slice was written to observe.
+      // — a row at exactly the floor is legal.*
+      //
+      // **The branch was copied from `PeopleReassignmentService`, where the identical
+      // shape *is* reachable, and what separates them is the operator** (settled by
+      // decision 0158; section 25, rule 19). Here the comparison refuses at `<`, so a
+      // tie is legal and a floor read from already-written rows can never refuse an
+      // undated closure. There, and in `NetworksService`, it refuses at `<=`, so two
+      // operations on one person landing in the same millisecond tie and the tie is a
+      // breach.
+      //
+      // *The reason recorded here until 2026-08-31 was that section 5 lets Admin
+      // backdate a pastoral row, "and a concurrent reassignment can therefore leave a
+      // row ahead of the clock" — backdating writes a row *behind* it, so that does not
+      // follow. Its supporting clause was false too: section 10 permits a backdated
+      // closure under `records.backdate_effective_date`, which writes `ended_at` on
+      // leadership and membership rows in the past. Only the conclusion survived, and
+      // it survives on the operator above. A refuted derivation presented as a rule-19
+      // re-derivation is worse than none, because the next author copying a floor
+      // copies the method along with it.*
       //
       // It stays because the floor is read from rows rather than guaranteed by a
       // constraint, and answering a transient-looking condition is better than a 500.
-      // `RESOURCE_BUSY` rather than a 409: contention reaches no decision, and section
-      // 22 stores a 4xx against the idempotency key while releasing a 5xx.
+      // `RESOURCE_BUSY` rather than a 409, on section 22's placement question: the same
+      // body resubmitted could succeed, so this reaches no decision, and section 22
+      // stores a 4xx against the idempotency key while releasing a 5xx.
       return new ResourceBusyError({ cell_id: cellId });
     }
 
