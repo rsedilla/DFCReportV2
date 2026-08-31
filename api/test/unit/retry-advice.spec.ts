@@ -7,8 +7,8 @@ import { join } from 'node:path';
  *
  * **Why a scan over the source rather than a case per refusal.** The rule is decided per
  * call site, and of the four sites the 2026-08-31 ruling moved, three cannot be reached
- * by any request this API accepts — for three different reasons, which is worth stating
- * because one of them is weaker than the others:
+ * by any request this API accepts — and no single argument covers them, which is worth
+ * stating because one of the reasons is weaker than the rest:
  *
  * - the pre-read comparison in `approve` guards three values. `requested_by` is frozen
  *   by `cell_leadership_request_is_final`, and `cell_id`'s *nullness* is tied to a

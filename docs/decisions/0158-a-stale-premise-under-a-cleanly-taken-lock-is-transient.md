@@ -44,9 +44,13 @@ the advice to mint a new key, which a 503 makes wrong:
 - `assertHandoverApprovableWithin`, where the outgoing leader differs from the one the
   lock list covers.
 
-**None of the four is reachable through a request this API accepts, and they are
-unreachable for three different reasons, not one.** Stating them apart matters, because
-one of the three is weaker than the others and could stop holding.
+**Three of the four cannot be reached through a request this API accepts, and no single
+argument covers them.** Stating the reasons apart matters, because one of them is weaker
+than the rest and could stop holding.
+
+The fourth — `NetworksService.floorBreach`'s undated branch — **is** reachable, and its
+reachability is the premise this whole ruling rests on: it is the one site with an
+end-to-end case behind it, and Section 4 is amended for it.
 
 `requested_by` and the *nullness* of `cell_id` are frozen by the finality trigger and by
 a check constraint tying that nullness to a frozen `kind` — enforcement, in the database.
@@ -129,10 +133,10 @@ before a lock that no longer holds under it. The three share one property and it
 property the code branches on — no decision was reached, and the same request may
 succeed on its next attempt.
 
-**Section 4** says an undated correction "always succeeds", and is corrected: it clears
-the floor except where a record for the same person carries the very instant the
-correction is taking, and that case answers `RESOURCE_BUSY`. **Section 10 says the same
-words about a closure and is left alone**, for the reason the re-derivation above gives —
+**Section 4** said an undated correction always succeeds, and is corrected: it now says
+it succeeds in every case but one, that one being a record for the same person carrying
+the very instant the correction is taking, and it answers `RESOURCE_BUSY`. **Section 10
+uses the phrase "always succeeds" about a closure and is left alone**, for the reason the re-derivation above gives —
 its bound is inclusive, so no collision can refuse an undated closure. A draft of this
 ruling amended it too, which was the false rule that draft produced.
 

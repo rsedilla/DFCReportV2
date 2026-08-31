@@ -14,9 +14,10 @@ import { ValidationFailedError } from './errors/api-error';
  *
  * *This docblock said "the two decoders" when it was written, in the change whose ruling
  * opens by correcting that exact count in `CLAUDE.md`. Counted rather than assumed now:
- * three modules import the refusal below, and five import something from this file —
- * the two DTOs take the length bound, which is why "importers" is the wrong unit and
- * the sentence names what is imported.*
+ * three files import the refusal below, in two modules rather than three — `people` and
+ * `cells` — and seven files across `src` and `test` import something from here, most of
+ * them the length bound. "Importers" is the wrong unit, which is why the sentence names
+ * what is imported.*
  *
  * `VALIDATION_FAILED` because section 22 defines it as malformed or missing input,
  * which a value the server cannot read is exactly. `field: 'cursor'` because the

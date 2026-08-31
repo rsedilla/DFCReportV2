@@ -27,16 +27,19 @@ an audit entry **through its target**, and it gives a leadership one resolution 
 Person another. A reader searching one person's leadership history also finds the opening
 and not the ending, which is a search rather than a permission.
 
-**Exactly where the two rules give different answers is not stated here, because it
-cannot be yet.** Section 7 resolves a Cell through "the Cell's leader as of the period
-being viewed", and an audit entry is an instant rather than a period; the two readings of
-that phrase put the divergence in different places. It is recorded as open in `CLAUDE.md`.
+**Exactly where the two rules give different answers is not stated here, because one
+question behind it is still open.** Section 7 resolves a Cell through "the Cell's leader
+as of the period being viewed" and does define that phrase — "the period a read is asking
+about", under *An effective date does not move the scope decision*. What it does not say
+is what period a read of this log asks about: a single entry is an instant, a filtered
+range is a range, and the answers put the divergence in different places. Recorded as open
+in `CLAUDE.md`.
 
-*Two drafts of this ruling asserted a mechanism anyway, and each was refuted. The first
-said a reader whose scope covered the person and not the Cell saw an appointment with no
-ending; the second said the targets part company after a later handover. Both rest on one
-reading of that phrase without saying which, and the ruling needs neither — which is the
-point of writing it down rather than a third time.*
+*Three drafts of this ruling got this wrong in three ways, which is why it is written down
+rather than attempted a fourth time. The first said a reader whose scope covered the person
+and not the Cell saw an appointment with no ending. The second said the targets part
+company after a later handover. The third said Section 7 fixed neither reading of the
+phrase, when Section 7 defines it and the open question is one layer in from there.*
 
 ## Why the Cell
 
@@ -74,7 +77,8 @@ the entry through its target, so a reader whose scope does not reach the Cell lo
 entry outright. The point is that the same holds in the other direction — a
 person-targeted entry is lost to a reader whose scope reaches the Cell and not the
 person — and the tie is broken by which target Section 7 already names for a leadership,
-and by the closed-Cell fallback, which only the Cell has.
+and by three entries about one thing being read by one rule. *This clause named the
+closed-Cell fallback as well, which the withdrawal above refutes.*
 
 **Section 16 was the argument for the person, and it is about a different table.** New
 Cell Leaders counts by when a leadership assignment starts, which it reads from

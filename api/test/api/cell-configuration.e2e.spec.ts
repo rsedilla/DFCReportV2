@@ -208,10 +208,13 @@ describe('cell configuration (section 10)', () => {
       // forward difference of a single millisecond fails a correct run, and it did: this
       // case failed once in a full-suite run here and passed on the next.
       //
-      // **1000ms is copied from its neighbours, not derived.** Nothing in this
-      // repository bounds host-to-database skew — that is on CLAUDE.md's open list — so
-      // this is a tolerance wide enough to absorb it rather than a limit anything
-      // guarantees. It costs the assertion nothing, because what the case discriminates
+      // **1000ms is copied from its neighbours, not derived.** Nothing bounds
+      // host-to-database skew: section 24 requires synchronised clocks on "every host
+      // running the API" and says nothing about the database host, and the open item
+      // about skew is a different one — it concerns two API instances, of which there is
+      // one. So this is a tolerance wide enough to absorb the difference rather than a
+      // limit anything guarantees. (`cells.closure.service.ts` states the same fact, as
+      // "the host-to-server skew section 24 bounds nowhere".) It costs the assertion nothing, because what the case discriminates
       // against is the schedule rule's instant, and the first of next month is weeks
       // away in both directions.
       //
