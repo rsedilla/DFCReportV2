@@ -405,6 +405,7 @@ resolves exactly as well as it did in the single file and no better.
 - 2026-08-31 — [A Cell submission versions the meeting; a DCC submission versions the person](docs/decisions/0164-a-cell-submission-versions-the-meeting-a-dcc-submission-versions-the-person.md)
 - 2026-08-31 — [Four Stop Conditions the Stage 4 rulings raised](docs/decisions/0165-four-stop-conditions-the-stage-four-rulings-raised.md)
 - 2026-08-31 — [Three more the second review of the Stage 4 rulings raised](docs/decisions/0166-three-more-the-second-review-of-the-stage-four-rulings-raised.md)
+- 2026-08-31 — [Four more from the third review, including a key that was wrong](docs/decisions/0167-four-more-from-the-third-review-including-a-key-that-was-wrong.md)
 
 ### Open — awaiting a ruling
 

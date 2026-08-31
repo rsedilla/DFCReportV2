@@ -4,9 +4,17 @@ Section 22 sketches `POST /api/v1/cells/{id}/meetings/{meeting_id}/submit`, whic
 as though a Cell meeting has an identifier before anybody has reported it. Nothing else
 in the specification says one exists.
 
-**`{meeting_id}` is the Monday of the week the meeting belongs to, as a `YYYY-MM-DD`
-Asia/Manila date. A `cell_meetings` row is written by the first submission, and there is
-no row before it.** `(cell_id, week_starting)` is unique.
+**A `cell_meetings` row is written by the first submission, and there is no row before
+it.** That half stands.
+
+***The week is not the identity, and this ruling's title is wrong.*** It chose
+`(cell_id, week_starting)`, and a week straddling a month boundary can hold two scheduled
+meetings under two schedules, reporting in two months — so one of them would be
+unrecordable. Settled in
+[decision 0167](0167-four-more-from-the-third-review-including-a-key-that-was-wrong.md):
+the identity is `(cell_id, scheduled_date)` and `{meeting_id}` is the scheduled date. The
+argument below for *a date the client can derive* rather than a minted UUID carries over
+unchanged; the argument for *which* date did not survive.
 
 ## Why no row before it is reported
 

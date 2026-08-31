@@ -22,8 +22,14 @@ carries — and the reason is exactly what does not carry: the fallback's own ju
 is that a closed Cell's history stays **visible** to whoever led it.
 
 **Section 7 is amended rather than the settlement reversed.** For recording or correcting
-attendance for a period the Cell was open, while that month's submission window is still
-open, a write resolves through the Cell's last leader. Nothing else does.
+a Cell meeting whose month's submission window is still open, a write resolves through the
+Cell rather than through nobody. Nothing else does.
+
+*Through the Cell's **last** leader, this ruling said, and
+[decision 0167](0167-four-more-from-the-third-review-including-a-key-that-was-wrong.md)
+narrows it to the meeting's own frozen responsible leader: a Cell handed from A to B before
+it closed has weeks belonging to each, and the last-leader rule would deny A the write
+while Section 19 showed A the task.*
 
 **Both halves of that are load-bearing.**
 
@@ -51,8 +57,12 @@ about buckets and never about coverage, and so introduced through the remedy the
 closed-Cell settlement three paragraphs earlier was chosen to avoid.
 
 **Such an event carries `backfilled_at` and is excluded from every coverage denominator.**
-It stays in N, in classification and in monthly attendance, because those are facts about
-who attended rather than judgements about anybody's reporting.
+*This ruling kept it in N, "because those are facts about who attended rather than
+judgements about anybody's reporting" — and for a closed-month back-fill that reason is
+false, since nobody was permitted to record anything about it. Superseded by
+[decision 0167](0167-four-more-from-the-third-review-including-a-key-that-was-wrong.md):
+while it holds no attendance it counts toward nothing, and it re-enters every view the
+moment Admin records against it.*
 
 The mechanism is not new: Section 9 already excludes a Network root from coverage
 denominators, and for the same reason — the denominator counts the leaders who had the
@@ -68,11 +78,22 @@ counts like any other.
 over `[started_at, ended_at)` and Section 10 ends it *on* the closure date — so a meeting
 dated that day falls outside every row and 0163's own rule refuses it.
 
-A Cell closing after its last meeting is the ordinary case, not a corner.
-
-**For this lookup alone, the closure instant is read as the end of that day.** The
+**For a meeting's own lookups, the closure instant is read as the end of that day.** The
 half-open interval is untouched everywhere else; what changes is which leader a meeting on
 the boundary resolves to, and it resolves to the one who was leading when the Cell met.
+
+*Two corrections from the third review.* This said "for this **lookup** alone", meaning the
+leader — and Section 10 ends a **membership** on the closure date too, so extending one and
+not the other would give that meeting a responsible leader and an empty roster, which is
+worse than refusing it and falsifies 0165's own claim that the leader and the people are
+read at one instant. Both halves or neither.
+
+And it justified itself with "a Cell closing after its last meeting is the ordinary case,
+not a corner" — which is the one case that never reaches the boundary, since such a meeting
+sits comfortably inside the leadership row. An undated closure takes the current instant,
+so a leader closing the Cell the evening it met has no problem either. What reaches it is a
+closure carrying an effective date equal to a day the Cell met, which under Section 10 is
+Admin backdating. The rule is right and the case for it was not.
 
 Resolving at the closure *instant* instead was weighed and refused. A meeting carries a
 `scheduled_time`, so it is expressible — and it would make the answer depend on whether
@@ -87,4 +108,4 @@ to date it later.
 
 Decision 0166, indexed in [CLAUDE.md](../../CLAUDE.md).
 
-Previous: [2026-08-31 — Four Stop Conditions the Stage 4 rulings raised](0165-four-stop-conditions-the-stage-four-rulings-raised.md)
+Previous: [2026-08-31 — Four Stop Conditions the Stage 4 rulings raised](0165-four-stop-conditions-the-stage-four-rulings-raised.md) | Next: [2026-08-31 — Four more from the third review, including a key that was wrong](0167-four-more-from-the-third-review-including-a-key-that-was-wrong.md)
