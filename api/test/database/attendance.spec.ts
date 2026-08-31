@@ -423,6 +423,91 @@ describe('the attendance tables (SKILL.md sections 9, 12, 13 and 14)', () => {
       ).rejects.toThrow(/dcc_attendance_one_live/);
     });
 
+    it('refuses a live period that ends before it begins', async () => {
+      // Migration 0012. Migration 0011 created both attendance tables without the
+      // `period_ordered` check every other effective-dated table in this schema has,
+      // and the correction path was found stamping `superseded_at` from the host clock
+      // while `recorded_at` fell to the column default — the database's. One row's
+      // period, two clocks, and an inversion whenever the elapsed time was shorter
+      // than the difference.
+      //
+      // The service was fixed in the same change; this is the half that cannot be got
+      // wrong again (CLAUDE.md, Definition of Done).
+      const event = await db
+        .insertInto('dcc_events')
+        .values({ event_date: '2026-08-30' })
+        .returning('id')
+        .executeTakeFirstOrThrow();
+
+      const account = await anAccount();
+      const successor = randomUUID();
+
+      await expect(
+        db
+          .insertInto('dcc_attendance')
+          .values({
+            dcc_event_id: event.id,
+            person_id: leader.id,
+            present: true,
+            recorded_by: account,
+            recorded_at: new Date('2026-08-31T10:00:00+08:00'),
+            superseded_at: new Date('2026-08-31T09:59:59+08:00'),
+            superseded_by: successor,
+          } as never)
+          .execute(),
+      ).rejects.toThrow(/dcc_attendance_period_ordered/);
+    });
+
+    it('permits a zero-length live period, which is a row entered in error', async () => {
+      // `>=` rather than `>`, which is the convention migration 0001 sets and gives its
+      // reason for: section 5 corrects a row entered in error by closing it at zero
+      // length, and a strict comparison would allow only closing it a moment later —
+      // recording a non-zero period during which a fact that was never true was in
+      // force. Section 14's correction path is the same shape.
+      const event = await db
+        .insertInto('dcc_events')
+        .values({ event_date: '2026-08-30' })
+        .returning('id')
+        .executeTakeFirstOrThrow();
+
+      const at = new Date('2026-08-31T10:00:00+08:00');
+      const account = await anAccount();
+      const successor = randomUUID();
+
+      // Written the way a correction is written: the predecessor closed, its
+      // replacement inserted, both in one transaction. `superseded_by` is deferred
+      // exactly so this order is possible — the row it points at does not exist yet
+      // when the predecessor is written.
+      await expect(
+        db.transaction().execute(async (trx) => {
+          await trx
+            .insertInto('dcc_attendance')
+            .values({
+              dcc_event_id: event.id,
+              person_id: leader.id,
+              present: true,
+              recorded_by: account,
+              recorded_at: at,
+              superseded_at: at,
+              superseded_by: successor,
+            })
+            .execute();
+
+          await trx
+            .insertInto('dcc_attendance')
+            .values({
+              id: successor,
+              dcc_event_id: event.id,
+              person_id: leader.id,
+              present: false,
+              recorded_by: account,
+              version: 2,
+            })
+            .execute();
+        }),
+      ).resolves.toBeUndefined();
+    });
+
     it('permits a null responsible leader, which is a Network root', async () => {
       // Section 9: "nullable only for a Network root", who has no pastoral leader
       // and whose attendance Admin records. Nothing in the column can tell a root

@@ -70,4 +70,4 @@ rewritten around it.
 
 Decision 0174, indexed in [CLAUDE.md](../../CLAUDE.md).
 
-Previous: [2026-08-31 — Seven settlements from building DCC recording](0173-seven-settlements-from-building-dcc-recording.md)
+Previous: [2026-08-31 — Seven settlements from building DCC recording](0173-seven-settlements-from-building-dcc-recording.md) | Next: [2026-08-31 — Eleven on the DCC recording review, and the one that was a disclosure](0175-eleven-on-the-dcc-recording-review-and-the-one-that-was-a-disclosure.md)

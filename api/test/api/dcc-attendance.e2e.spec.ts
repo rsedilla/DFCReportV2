@@ -563,8 +563,13 @@ describe('DCC recording (sections 9 and 14)', () => {
     it('records the person whose leader was assigned on the event day itself', async () => {
       // Section 9's VIP workflow: the Person is created "including the pastoral
       // leader they are being placed under" and their attendance is recorded in one
-      // sitting, at the service. Resolving the leader at the **start** of the event's
-      // day would refuse this, which is why the instant is clamped to now (0171).
+      // sitting, at the service.
+      //
+      // **What makes this pass is that the instant is taken at the end of the event's
+      // day**, not that it is clamped to now — an earlier comment here credited the
+      // clamp, which is the opposite direction and would refuse this fixture if the
+      // event were today. The clamp's own branch is unreachable from this file and is
+      // pinned in `test/unit/recording-instant.spec.ts`.
       const sunday = await recentSunday();
       const eventId = await createEvent(sunday);
 
@@ -698,6 +703,29 @@ describe('DCC recording (sections 9 and 14)', () => {
       // moves a version every other client then has to resolve against.
       expect(all).toHaveLength(1);
       expect(all[0].version).toBe(1);
+    });
+
+    it('does not conflict on a stale version where the value already agrees', async () => {
+      // A covering upline holds a stale roster and submits what is already stored. The
+      // line writes nothing, so there is nothing to overwrite — and a conflict here
+      // would carry two identical values, which section 22 says cannot satisfy section
+      // 14: "both values… so that a person can choose between them".
+      const eventId = await createEvent(await recentSunday());
+
+      await submit(manuelAccount, eventId, [
+        { person_id: mark.id, present: true, version: null },
+      ]).expect(201);
+
+      const response = await submit(manuelAccount, eventId, [
+        { person_id: mark.id, present: true, version: null },
+      ]).expect(201);
+
+      expect(response.body.unchanged).toBe(1);
+      expect(response.body.corrected).toBe(0);
+
+      const rows = await liveRows(eventId);
+      expect(rows).toHaveLength(1);
+      expect(rows[0].version).toBe(1);
     });
 
     it('conflicts on a stale version, carrying both values, both actors and both timestamps', async () => {
@@ -854,6 +882,103 @@ describe('DCC recording (sections 9 and 14)', () => {
       expect(entries[0].target_id).toBe(mark.id);
       expect(entries[0].reason).toBe('Miscounted.');
       expect(entries[0].before).toEqual({ present: true, version: 1 });
+
+      // Manuel is Mark's own leader, so this correction is not on behalf.
+      expect((entries[0].after as { on_behalf: boolean }).on_behalf).toBe(false);
+    });
+
+    it('marks a correction made on somebody else’s behalf', async () => {
+      // Section 21 lists both actions, and an upline correcting a downline's record
+      // performs one of them — a correction — for somebody else. Carried on that entry
+      // rather than written as a second: a reader filtering
+      // `dcc_attendance.submitted_on_behalf` for what an upline did to other people's
+      // records would otherwise miss every correction.
+      const eventId = await createEvent(await recentSunday());
+
+      await submit(manuelAccount, eventId, [
+        { person_id: timothy.id, present: true, version: null },
+      ]).expect(201);
+      await submit(manuelAccount, eventId, [
+        { person_id: timothy.id, present: false, version: 1 },
+      ]).expect(201);
+
+      const entries = await db
+        .selectFrom('audit_log')
+        .selectAll()
+        .where('action', '=', 'dcc_attendance.corrected')
+        .execute();
+
+      expect(entries).toHaveLength(1);
+      expect((entries[0].after as { on_behalf: boolean }).on_behalf).toBe(true);
+      expect((entries[0].after as { responsible_leader_id: string }).responsible_leader_id).toBe(
+        mark.id,
+      );
+    });
+
+    it('answers one refusal for somebody out of scope, whatever is stored', async () => {
+      // **Section 8 withholds "DCC attendance, DCC history, or DCC classification" for
+      // a person outside the viewer's pastoral scope**, and section 8 publishes every
+      // Person's identifier church-wide — so there is a space to sweep.
+      //
+      // An earlier version chose the refusal's capability from the line's outcome,
+      // which is derived from the stored `present` value. Two requests then read the
+      // record out of the refusal: `dcc.correct_subtree` back meant a record exists and
+      // disagrees, `dcc.take_attendance` meant there is none. This asserts the refusal
+      // is the same either way.
+      const eventId = await createEvent(await recentSunday());
+
+      const stranger = await createPerson(db, { firstName: 'Salome', network: 'WOMENS' });
+      await assignTo(db, stranger.id, null);
+
+      // Admin records the stranger, so a record exists and says `true`.
+      await submit(admin, eventId, [
+        { person_id: stranger.id, present: true, version: null },
+      ]).expect(201);
+
+      // Manuel has no scope over her. The two probes differ only in the value they
+      // send, which is what would make one a correction and the other unchanged.
+      const disagreeing = await submit(manuelAccount, eventId, [
+        { person_id: stranger.id, present: false, version: null },
+      ]).expect(403);
+      const agreeing = await submit(manuelAccount, eventId, [
+        { person_id: stranger.id, present: true, version: null },
+      ]).expect(403);
+
+      expect(disagreeing.body.error.code).toBe('SCOPE_DENIED');
+      expect(agreeing.body.error.code).toBe('SCOPE_DENIED');
+      expect(disagreeing.body.error.details.capability).toBe('dcc.take_attendance');
+      expect(agreeing.body.error.details.capability).toBe(
+        disagreeing.body.error.details.capability,
+      );
+      expect(agreeing.body.error.message).toBe(disagreeing.body.error.message);
+    });
+
+    it('discloses no lifecycle or pastoral state for somebody out of scope', async () => {
+      // The same oracle one step over. `assertRecordable` names archival, the surviving
+      // record of a merge, and whether the person had a pastoral leader on the date —
+      // none of which is among the five fields section 8 publishes church-wide. It runs
+      // after the scope check, so an out-of-scope actor never reaches it.
+      const eventId = await createEvent(await recentSunday());
+
+      const archivedStranger = await createPerson(db, {
+        firstName: 'Soledad',
+        network: 'WOMENS',
+        archived: true,
+      });
+      await assignTo(db, archivedStranger.id, null);
+
+      const unplaced = await createPerson(db, { firstName: 'Serafina', network: 'WOMENS' });
+
+      for (const personId of [archivedStranger.id, unplaced.id]) {
+        const response = await submit(manuelAccount, eventId, [
+          { person_id: personId, present: true, version: null },
+        ]).expect(403);
+
+        // A scope refusal, not "this person is archived" and not "this person has no
+        // pastoral leader" — either of which would answer 409 and disclose the state.
+        expect(response.body.error.code).toBe('SCOPE_DENIED');
+        expect(JSON.stringify(response.body)).not.toMatch(/archiv|merged|pastoral leader/i);
+      }
     });
 
     it('refuses on behalf without dcc.submit_on_behalf, though the person is in scope', async () => {
@@ -1143,7 +1268,14 @@ describe('DCC recording (sections 9 and 14)', () => {
       expect(all).toHaveLength(1);
     });
 
-    it('records its completion inside the transaction that writes', async () => {
+    it('stores the response it returned, and replays that', async () => {
+      // **Named for what it checks.** It said "records its completion inside the
+      // transaction that writes" and could not fail on that: delete `completeWithin`
+      // from the handler and the interceptor writes the identical row, because its own
+      // completion matches while the claim is `IN_FLIGHT`. The transactional property
+      // is pinned generically by `idempotency.e2e.spec.ts`'s `rolls-back` probe, which
+      // exists to break exactly that rule. What is asserted here is section 22's other
+      // obligation: what is recorded is what is returned.
       const eventId = await createEvent(await recentSunday());
       const key = randomUUID();
 

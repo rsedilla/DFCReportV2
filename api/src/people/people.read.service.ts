@@ -27,6 +27,14 @@ import {
  */
 export interface PersonForDecision {
   id: string;
+  /**
+   * The Member ID (section 3), which section 8 publishes church-wide.
+   *
+   * Here because two collections break a name tie with it and one of them assembles
+   * its list in application code — so it needs the field beside the name rather than
+   * from a second read on a second connection.
+   */
+  memberId: string;
   /** Composed here, because `people` owns name shape (section 3). */
   fullName: string;
   /**
@@ -111,6 +119,7 @@ export class PeopleReadService {
       )
       .select([
         'persons.id as id',
+        'persons.member_id as member_id',
         'persons.first_name as first_name',
         'persons.middle_name as middle_name',
         'persons.last_name as last_name',
@@ -126,6 +135,7 @@ export class PeopleReadService {
 
     return {
       id: person.id,
+      memberId: person.member_id,
       fullName: composeName(person),
       firstName: person.first_name,
       lastName: person.last_name,
@@ -164,6 +174,7 @@ export class PeopleReadService {
       )
       .select([
         'persons.id as id',
+        'persons.member_id as member_id',
         'persons.first_name as first_name',
         'persons.middle_name as middle_name',
         'persons.last_name as last_name',
@@ -178,6 +189,7 @@ export class PeopleReadService {
         row.id,
         {
           id: row.id,
+          memberId: row.member_id,
           fullName: composeName(row),
           firstName: row.first_name,
           lastName: row.last_name,

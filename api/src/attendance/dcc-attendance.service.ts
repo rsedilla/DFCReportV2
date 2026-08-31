@@ -1,4 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
+import { sql } from 'kysely';
 import { randomUUID } from 'node:crypto';
 
 import { AuditService } from '../audit/audit.service';
@@ -22,11 +23,12 @@ import { sameId } from '../common/identifiers';
 import { isUniqueViolation } from '../common/errors/postgres-errors';
 import { IdempotencyService } from '../common/idempotency/idempotency.service';
 import { decodeRosterCursor, encodeRosterCursor, type RosterCursor } from '../common/roster-cursor';
-import { endOfManilaDay, startOfManilaDay } from '../common/time/manila';
+import { startOfManilaDay } from '../common/time/manila';
 import { DATABASE, type Db } from '../database/database.module';
 import { HierarchyService } from '../hierarchy/hierarchy.service';
 import { PeopleReadService } from '../people/people.read.service';
 
+import { recordingInstant } from './recording-instant';
 import { databaseNow, reportingMonthOf, windowClosesAt } from './submission-window';
 
 import type { CurrentClaim } from '../common/idempotency/current-idempotency.decorator';
@@ -213,6 +215,14 @@ export class DccAttendanceService {
     actor: Actor,
     claim: CurrentClaim,
   ): Promise<Record<string, unknown>> {
+    // **On the pool, before the transaction opens** (section 24), which is what every
+    // other write service in this repository does and says why: `authorityFor` reads
+    // `account_roles` and `capability_grants` on `this.db`, and a transaction holding
+    // a connection while asking the pool for another is the liveness hazard section 24
+    // names. The `coversWith` calls below take the transaction, which is the whole
+    // reason `authorityFor` and `coversWith` are separate methods.
+    const authority = await this.authorization.authorityFor(actor.accountId);
+
     return this.db.transaction().execute(async (trx) => {
       const event = await this.eventForRecording(trx, eventId);
 
@@ -222,7 +232,6 @@ export class DccAttendanceService {
 
       assertNamesEachPersonOnce(records);
 
-      const authority = await this.authorization.authorityFor(actor.accountId);
       const personIds = records.map((record) => record.person_id);
 
       const checklist = await this.checklist(trx, event, actor, authority);
@@ -238,10 +247,25 @@ export class DccAttendanceService {
 
       for (const record of records) {
         const personId = record.person_id;
+        const identity = identities.get(personId);
+
+        // **Existence first, then scope, and only then anything read from the record
+        // or the person's lifecycle.** Section 8 publishes minimal identity
+        // church-wide, so "no such person" discloses nothing (section 22: "People are
+        // not such a case"). Everything below this line does: whether somebody is
+        // archived, whether their record was merged into another, whether they had a
+        // pastoral leader on the date, and whether a DCC record exists at all are each
+        // withheld outside the viewer's scope by section 8.
+        if (identity === undefined) {
+          throw new NotFoundError('No such person.', { person_id: personId });
+        }
+
+        await this.assertInScope(trx, actor, authority, personId);
+
         const stored = live.get(personId) ?? null;
         const outcome = outcomeFor(stored, record.present);
 
-        this.assertRecordable(personId, identities.get(personId), assignments.get(personId));
+        this.assertRecordable(personId, identity, assignments.get(personId));
 
         if (outcome === 'CREATE' && record.correction_reason !== undefined) {
           throw new InvariantViolationError(
@@ -265,7 +289,20 @@ export class DccAttendanceService {
       // Section 14's version check, made over the whole submission before any of it
       // is applied. The first mismatch **in the order the client sent** is the one
       // named, because that is the line the client can find in its own request.
-      for (const { record } of planned) {
+      //
+      // **An unchanged line takes no part in it**, and section 22 is what settles that
+      // rather than a preference. A covering upline holding a stale version for a
+      // person their downline already recorded the same way would otherwise receive a
+      // `VERSION_CONFLICT` whose two sides carry the identical value — and section 22
+      // says a conflict must carry "both values… so that a person can choose between
+      // them". Two identical values is not a choice, and section 14 resolves a
+      // conflict by a person. The version guards against overwriting a change nobody
+      // saw; a line that writes nothing overwrites nothing.
+      for (const { record, outcome } of planned) {
+        if (outcome === 'UNCHANGED') {
+          continue;
+        }
+
         const stored = live.get(record.person_id) ?? null;
         const current = stored === null ? null : stored.version;
 
@@ -317,14 +354,11 @@ export class DccAttendanceService {
 
     const eventDate = String(row.event_date);
     const now = await databaseNow(executor);
-    const dayEnd = endOfManilaDay(eventDate);
 
-    // Section 9: the direct pastoral leader in force at the latest instant of the
-    // event's Manila day that has already passed. Clamped to now rather than fixed
-    // at the day's end, so a record written during the service resolves against an
-    // instant that has happened; taken from the day's end rather than its start, so
-    // the VIP added at the service has the leader they were just placed under.
-    const at = now.getTime() < dayEnd.getTime() ? now : dayEnd;
+    // `recording-instant.ts` carries the rule and its reasoning. It is a pure function
+    // in its own file so that both of its branches have a test that can fail on them,
+    // which they did not while the arithmetic lived here.
+    const at = recordingInstant(eventDate, now);
 
     return {
       id: row.id,
@@ -381,11 +415,26 @@ export class DccAttendanceService {
    *
    * **A descent rather than the recursive query the rest of `hierarchy` uses**,
    * because the stopping condition reads `accounts`, which `auth` owns and
-   * `hierarchy` may not join to (section 2). The cost is one round trip per level of
-   * account-less chain, normally one. The cycle safety a recursive query would take
-   * from `CYCLE` is the visited set below, which is not optional: section 5 requires
-   * every walk to detect a cycle rather than trust the data, and an undetected one
-   * here is a request that never returns.
+   * `hierarchy` may not join to (section 2).
+   *
+   * **The cost is one round trip per account-less person in the covered branch**, not
+   * per level: the loop awaits `directChildrenAsOf` once for each leader in the
+   * frontier, sequentially. An earlier version of this sentence said "per level of
+   * account-less chain, normally one", which discounts the width — and section 9 says
+   * in the same breath that a checklist is unbounded and that the covering arrangement
+   * can persist, so the width is exactly the thing not to discount. It is acceptable
+   * because the frontier is only the people below this actor who hold no account, and
+   * section 9 treats that set as temporary; it is not acceptable to describe it as
+   * cheaper than it is.
+   *
+   * The visited set below is not optional: section 5 requires every walk to detect a
+   * cycle rather than trust the data, and an undetected one here is a request that
+   * never returns. **It is a termination guard rather than cycle detection proper**,
+   * and the difference is reachable: `pastoral_assignments_one_active` is partial on
+   * open rows, so two rows overlapping at a *historical* instant are not refused by
+   * the schema, and a person reached twice through such a diamond is reported here as
+   * a cycle. That needs corrupt history to reach, and the honest description is what
+   * the guard does rather than what `CYCLE` would do.
    */
   private async checklist(
     executor: Db,
@@ -407,9 +456,13 @@ export class DccAttendanceService {
       for (const childId of children) {
         const key = canonical(childId);
         if (visited.has(key)) {
+          // Reached twice. A cycle is what this normally means and what section 5
+          // forbids; a historical diamond would reach it too, and the message says
+          // "cannot be resolved" rather than naming the shape, because this cannot
+          // tell them apart.
           throw new InvariantViolationError(
-            'The pastoral tree contains a cycle and cannot be resolved. This is a data defect: ' +
-              'report it rather than retrying.',
+            'The pastoral tree reaches this person twice and cannot be resolved. This is a data ' +
+              'defect: report it rather than retrying.',
             { person_id: childId },
           );
         }
@@ -460,14 +513,18 @@ export class DccAttendanceService {
 
     const assignments = await this.hierarchy.assignmentsAsOf(executor, recordable, event.at);
     const live = await this.liveRecords(executor, event.id, recordable);
-    const names = await this.people.namesOf(recordable);
 
     const lines: RosterLine[] = recordable.map((personId) => {
       const identity = identities.get(personId);
 
       return {
         personId,
-        memberId: names.get(personId)?.memberId ?? '',
+        // From `forDecisionsWithin`, which honours the executor. `namesOf` reads the
+        // pool whatever it is handed, and section 25 names that shape: passing an
+        // executor down a call chain makes a read honour a caller's transaction "but
+        // only for the reads that actually take it". Safe here today only because this
+        // caller is outside a transaction, which is not a property to build on.
+        memberId: identity?.memberId ?? '',
         fullName: identity?.fullName ?? '',
         lastName: identity?.lastName ?? '',
         firstName: identity?.firstName ?? '',
@@ -488,15 +545,18 @@ export class DccAttendanceService {
   // Per-person refusals
   // ---------------------------------------------------------------------------
 
+  /**
+   * The refusals that describe the Person rather than the actor.
+   *
+   * **Every one of them is a disclosure**, so this runs after `assertInScope` and
+   * never before it: section 8 withholds a person's lifecycle state, their merge, and
+   * their pastoral position from a viewer outside their scope.
+   */
   private assertRecordable(
     personId: string,
-    identity: { isArchived: boolean; mergedIntoId: string | null } | undefined,
+    identity: { isArchived: boolean; mergedIntoId: string | null },
     assignment: { leaderId: string | null } | undefined,
   ): void {
-    if (identity === undefined) {
-      throw new NotFoundError('No such person.', { person_id: personId });
-    }
-
     if (identity.isArchived) {
       throw new InvariantViolationError('An archived Person takes no attendance record.', {
         person_id: personId,
@@ -534,6 +594,49 @@ export class DccAttendanceService {
    * submitter — which is what "on behalf of a downline leader within their pastoral
    * subtree" means once the submitter is a function (section 14; decision 0172).
    */
+  /**
+   * The scope check that runs **before anything about the record is read**.
+   *
+   * `dcc.take_attendance` is the capability that lets an actor reach this person at
+   * all, and it is checked against the person alone — never against what is stored.
+   *
+   * **That ordering is the whole point, and getting it wrong was a disclosure.** An
+   * earlier version chose the capability from the line's outcome, which is derived
+   * from the stored `present` value, and then named that capability in the refusal.
+   * Every leader holding `dcc.take_attendance` reaches this route — the guard's target
+   * is the actor — and section 8 publishes every Person's identifier church-wide, so
+   * two requests against anybody in the church read the stored record out of the
+   * refusal: `dcc.correct_subtree` back meant a record exists and disagrees,
+   * `dcc.take_attendance` meant there is none. Section 8 withholds "DCC attendance,
+   * DCC history, or DCC classification" for a person outside the viewer's pastoral
+   * scope, and there was a space to sweep.
+   *
+   * With this check first, an out-of-scope actor receives one refusal naming one
+   * capability whatever is stored. The correction capability is checked below, only
+   * once the actor is already in scope — for whom a record's existence is not withheld.
+   */
+  private async assertInScope(
+    executor: Db,
+    actor: Actor,
+    authority: ActorAuthority,
+    personId: string,
+  ): Promise<void> {
+    const covered = await this.authorization.coversWith(
+      executor,
+      actor,
+      authority,
+      Capability.DccTakeAttendance,
+      { kind: 'person', personId },
+    );
+
+    if (!covered) {
+      throw new ScopeDeniedError('This person is outside your scope.', {
+        capability: Capability.DccTakeAttendance,
+        person_id: personId,
+      });
+    }
+  }
+
   private async assertMayRecord(
     executor: Db,
     params: {
@@ -547,19 +650,24 @@ export class DccAttendanceService {
     const { actor, authority, personId } = params;
     const target = { kind: 'person', personId } as const;
 
-    // An unchanged line writes nothing, so it is governed by the capability that
-    // would have written it in the first place rather than by the correction one: a
-    // leader resubmitting an identical checklist is submitting, not correcting.
-    const recording =
-      params.outcome === 'CORRECT' ? Capability.DccCorrectSubtree : Capability.DccTakeAttendance;
-
-    if (!(await this.authorization.coversWith(executor, actor, authority, recording, target))) {
-      throw new ScopeDeniedError(
-        params.outcome === 'CORRECT'
-          ? 'Correcting this person’s DCC record is outside your scope.'
-          : 'Recording this person’s DCC attendance is outside your scope.',
-        { capability: recording, person_id: personId },
-      );
+    // `dcc.take_attendance` was checked by `assertInScope` before anything about the
+    // record was read. What is left is the amendment capability, and it is reached
+    // only by an actor already in scope — an unchanged line writes nothing, so it is
+    // not an amendment: a leader resubmitting an identical checklist is submitting.
+    if (
+      params.outcome === 'CORRECT' &&
+      !(await this.authorization.coversWith(
+        executor,
+        actor,
+        authority,
+        Capability.DccCorrectSubtree,
+        target,
+      ))
+    ) {
+      throw new ScopeDeniedError('Correcting this person’s DCC record is outside your scope.', {
+        capability: Capability.DccCorrectSubtree,
+        person_id: personId,
+      });
     }
 
     if (params.onChecklist) {
@@ -625,7 +733,25 @@ export class DccAttendanceService {
         // successor does not exist yet.
         await trx
           .updateTable('dcc_attendance')
-          .set({ superseded_at: new Date(), superseded_by: successorId })
+          // `clock_timestamp()`, never a host `Date`. The successor's `recorded_at`
+          // falls to the column default, which is the database's clock — so a host
+          // stamp here would take the two ends of one row's live period from two
+          // clocks, the rule `test/setup/fixtures.ts` states and this branch corrected
+          // the stated reason for in the same commit that broke it here.
+          //
+          // `clock_timestamp()` rather than `now()` for the second reason that file
+          // gives: `now()` is the transaction's start, and this statement waits on the
+          // predecessor's row lock, so a contended correction would stamp an instant
+          // measurably before the write happened.
+          //
+          // **The enforcement is `dcc_attendance_period_ordered`, not this line.**
+          // Reverting it to a host `Date` inverts the period only when the host clock
+          // happens to be behind, which on this machine is a fraction of a millisecond
+          // and on a CI runner is unbounded — so no test can reliably fail on the
+          // choice made here. Migration 0012 refuses the inverted row whoever writes
+          // it, and `test/database/attendance.spec.ts` pins that. This line is the
+          // convention; the constraint is what holds.
+          .set({ superseded_at: sql<Date>`clock_timestamp()`, superseded_by: successorId })
           .where('id', '=', stored.id)
           .where('superseded_at', 'is', null)
           .execute();
@@ -716,6 +842,14 @@ export class DccAttendanceService {
       responsibleLeaderId: string | null;
     },
   ): Promise<void> {
+    // On behalf, in section 14's sense: the record belongs to somebody else's
+    // obligation. Measured against the **responsible leader** rather than against
+    // the checklist, because the checklist already includes the people a covering
+    // upline submits for — and section 9 says a covering submission is on behalf.
+    const onBehalf =
+      params.responsibleLeaderId !== null &&
+      !sameId(params.responsibleLeaderId, params.actor.personId);
+
     if (params.stored !== null) {
       await this.audit.writeWithin(trx, {
         actorId: params.actor.accountId,
@@ -727,20 +861,23 @@ export class DccAttendanceService {
           present: params.present,
           version: params.stored.version + 1,
           event_date: params.event.eventDate,
+          // **Carried on the correction rather than written as a second entry.**
+          // Section 21 asks for one entry per action performed, and an upline
+          // correcting a downline's record performs one action: a correction. Whether
+          // it was somebody else's record to correct is an attribute of it.
+          //
+          // It has to be here rather than nowhere: a reader filtering
+          // `dcc_attendance.submitted_on_behalf` for what an upline did to other
+          // people's records would otherwise miss every correction, which is the
+          // question that list exists to answer.
+          on_behalf: onBehalf,
+          responsible_leader_id: params.responsibleLeaderId,
         },
         reason: params.reason,
       });
 
       return;
     }
-
-    // On behalf, in section 14's sense: the record belongs to somebody else's
-    // obligation. Measured against the **responsible leader** rather than against
-    // the checklist, because the checklist already includes the people a covering
-    // upline submits for — and section 9 says a covering submission is on behalf.
-    const onBehalf =
-      params.responsibleLeaderId !== null &&
-      !sameId(params.responsibleLeaderId, params.actor.personId);
 
     if (!onBehalf) {
       return;
@@ -883,9 +1020,18 @@ export class DccAttendanceService {
     executor: Db,
     accountId: string,
   ): Promise<{ id: string; name: string }> {
-    const account = await this.accounts.findById(accountId);
+    // On the caller's executor, which for the in-transaction conflict is the
+    // transaction. `findById` reads the pool, and section 14 makes a conflict an
+    // ordinary outcome rather than a rare one — so reaching the pool here would ask
+    // for a second connection while holding one, on a path taken every time two
+    // leaders disagree.
+    const account = await executor
+      .selectFrom('accounts')
+      .select('person_id')
+      .where('id', '=', accountId)
+      .executeTakeFirst();
 
-    if (account === null) {
+    if (account === undefined) {
       // Unreachable while `recorded_by` carries a foreign key, and answered rather
       // than thrown: a conflict a person cannot read is worse than one naming an
       // account it cannot resolve.

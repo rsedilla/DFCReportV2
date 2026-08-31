@@ -68,13 +68,22 @@ export class DccAttendanceRecordDto {
   /**
    * The version the client read, or null where it read no record.
    *
-   * **Null is a value here rather than an omission**, and the distinction is the
-   * one this repository has already shipped a defect from. Null asserts "there was
-   * nothing recorded when I looked", which is a claim the server checks: a first
-   * record created by somebody else in the meantime conflicts on it (section 22,
-   * *Write conflicts*, the second of the two cases carrying a null
-   * `submitted_version`). `@IsOptional()` would treat an omitted field the same
-   * way, so it is written as a nullable required field instead.
+   * Null asserts "there was nothing recorded when I looked", which is a claim the
+   * server checks: a first record created by somebody else in the meantime conflicts
+   * on it (section 22, *Write conflicts*, the second of the two cases carrying a null
+   * `submitted_version`).
+   *
+   * **An omitted field means the same thing, and that is deliberate here.** An earlier
+   * version of this paragraph claimed the opposite — that `@IsOptional()` would
+   * conflate the two and was therefore avoided — while `@IsOptional()` sat on the line
+   * below it. The claim was wrong twice over: it described the decorator that is
+   * applied, and the conflation it warned against is correct for this field. Omission
+   * and null both say the client read no record, so they are one claim; the defect
+   * this repository shipped from `@IsOptional()` was on `birth_date`, where omission
+   * meant "take the default" and null meant "no birthday", which are two.
+   *
+   * It also fails safe: an omitted version against a record that exists is a stale
+   * claim and conflicts.
    */
   @IsOptional()
   @IsInt()
