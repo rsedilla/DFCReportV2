@@ -7,6 +7,12 @@ that opened them; four needed a decision, and are here. The corrections are reco
 
 ## A missed Sunday is back-filled, and the horizon is visible
 
+***Half of this is withdrawn.*** The back-fill grew a coverage exclusion, an N exclusion and a
+re-entry rule that does not work, and
+[decision 0168](0168-the-closed-month-back-fill-is-withdrawn.md) removes it for closed months:
+a gap is filled while the month is open and never after. The horizon on the dashboard
+stands, and is what makes the removal safe — it was always the load-bearing half.
+
 **The calendar command fills a past Sunday it finds missing. Back-filling into a closed
 month requires `records.backdate_effective_date`, a reason and an audit entry. And the
 Admin dashboard carries the date the calendar reaches.**
@@ -119,8 +125,9 @@ attention anyway, and the narrow form can widen later without breaking a client.
 ## One thing this deliberately leaves as it is
 
 **Two concurrent first submissions of one Cell meeting.** Under 0162 neither holds a
-version, so the loser meets the `(cell_id, week_starting)` uniqueness rather than a
-version check. It answers `VERSION_CONFLICT` with a null `submitted_version` and the
+version, so the loser meets the meeting's uniqueness rather than a version check. *That key
+was `(cell_id, week_starting)` when this was written and is `(cell_id, scheduled_date)`
+since [decision 0167](0167-four-more-from-the-third-review-including-a-key-that-was-wrong.md).* It answers `VERSION_CONFLICT` with a null `submitted_version` and the
 stored row as `current`, which satisfies Section 14 — the person sees what was recorded,
 by whom and when, against their own figures — and needs no new code. It is written down
 because a uniqueness violation left to surface on its own would be an `INTERNAL_ERROR` on

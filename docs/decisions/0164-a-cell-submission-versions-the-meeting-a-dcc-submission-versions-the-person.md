@@ -21,7 +21,10 @@ several of the people in it may not differ at all.
 **One reading of that example is outside this mechanism, and 0162 is why.** If the phone
 drafted before *either* submission landed, there is no meeting row and no version to send,
 so the race is two first submissions rather than a stale one — and it is decided by the
-`(cell_id, week_starting)` uniqueness rather than by a version. That case is settled in
+meeting's uniqueness rather than by a version. *That key was `(cell_id, week_starting)` when
+this was written and is `(cell_id, scheduled_date)` since
+[decision 0167](0167-four-more-from-the-third-review-including-a-key-that-was-wrong.md); the
+argument is unaffected.* That case is settled in
 [decision 0165](0165-four-stop-conditions-the-stage-four-rulings-raised.md), which makes
 the loser's answer a `VERSION_CONFLICT` carrying a null submitted version, so Section 14's
 requirement that a person sees both figures holds either way. The example is about a

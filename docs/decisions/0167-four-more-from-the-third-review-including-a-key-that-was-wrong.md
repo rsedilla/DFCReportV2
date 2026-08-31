@@ -35,6 +35,11 @@ the month boundary is that a month then has exactly one schedule.
 
 ## A back-filled Sunday holding no attendance is excluded from N as well as coverage
 
+***Withdrawn with the mechanism it governed.*** The re-entry rule this section added is the
+one [decision 0168](0168-the-closed-month-back-fill-is-withdrawn.md) found unworkable —
+DCC's N is church-wide, so one Admin correction moves it for everybody — and the back-fill
+goes with it.
+
 0166 excluded such an event from coverage and kept it in N, on the ground that N is "a fact
 about who attended and not a judgement about anybody's reporting". For a back-fill into a
 **closed** month that reason is false in the case it was written about: no leader could
@@ -67,9 +72,14 @@ write through B and denies A. The dashboard item's stated purpose — the only t
 the permission reachable — is defeated for the one person the record belongs to, and B is
 left filing an account of a meeting they did not attend.
 
-**So the fallback resolves through the meeting's own `responsible_leader_id`**, or, for a
-meeting not yet recorded, whoever led the Cell on its scheduled date. Each leader files
-their own meetings.
+**So the fallback resolves through whoever led the Cell on the meeting's date.** Each leader
+files their own meetings.
+
+*This ruling said "the meeting's own `responsible_leader_id`, or, for a meeting not yet
+recorded, whoever led the Cell on its **scheduled** date" — and Section 13 freezes on the
+**actual** date, so a meeting rescheduled across a handover changed hands as it was filed.
+[Decision 0168](0168-the-closed-month-back-fill-is-withdrawn.md) authorizes on the date the
+submission declares, which is the freeze instant, and carries the roster read with it.*
 
 This is the one target in Section 7's list that resolves per record rather than per Cell,
 and that is stated rather than left to be noticed. It resolves that way because the record
@@ -81,8 +91,11 @@ Section 9 said the command "back-fills a Sunday it finds missing in the past" an
 calendar no start date. As written the first run finds every Sunday since the epoch
 missing, and refuses each closed month one at a time.
 
-**`dcc_calendar_start` holds the first Sunday the calendar covers.** It is set once, when
-the calendar is first generated, and never moved. The command reaches back to it and no
+**`dcc_calendar_start` holds the first Sunday the calendar covers.** *Set once when the
+calendar is first generated, this ruling said — by the command, which would have made it a
+second system-action writer of `settings.updated_by` where Section 7 permits one.
+[Decision 0168](0168-the-closed-month-back-fill-is-withdrawn.md) seeds it with the other
+defaults instead, and the command only reads it.* The command reaches back to it and no
 further, which makes "missing" mean something exact.
 
 A settings key rather than a derived floor: deriving it from the earliest attendance or
@@ -98,4 +111,4 @@ as well as in Section 9.
 
 Decision 0167, indexed in [CLAUDE.md](../../CLAUDE.md).
 
-Previous: [2026-08-31 — Three more the second review of the Stage 4 rulings raised](0166-three-more-the-second-review-of-the-stage-four-rulings-raised.md)
+Previous: [2026-08-31 — Three more the second review of the Stage 4 rulings raised](0166-three-more-the-second-review-of-the-stage-four-rulings-raised.md) | Next: [2026-08-31 — The closed-month back-fill is withdrawn](0168-the-closed-month-back-fill-is-withdrawn.md)

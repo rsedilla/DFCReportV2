@@ -4,7 +4,10 @@ The second `architecture-guardian` pass over 0161 to 0165 found thirteen more, a
 of them were consequences of the settlements rather than defects in how they were
 written. Two undermined the settlement that produced them.
 
-## A write against a closed Cell resolves through its last leader, bounded by the window
+## A write against a closed Cell resolves through the Cell, bounded by the window
+
+*Through its **last leader**, this ruling said, and 0167 narrows that to whoever led on the
+meeting's date. The heading is corrected because a reader takes the heading.*
 
 0165 let a closed Cell take an attendance record for a week it was open, and said "Scope
 allows it without amendment: Section 7 resolves a Cell meeting through the Cell's leader
@@ -46,6 +49,11 @@ set by the calendar, closing on the 7th whatever anybody does. A leader finishin
 record of the Cell they led last week is not recovering authority.
 
 ## A back-filled Sunday in a closed month is excluded from coverage
+
+***Withdrawn with the mechanism it governed.***
+[Decision 0168](0168-the-closed-month-back-fill-is-withdrawn.md) removes the closed-month
+back-fill, so there is no such event to exclude. The reasoning below is why it could not be
+made to work, and is kept for that.
 
 0165's back-fill created an event no leader could ever have submitted against — the window
 had already shut — and DCC coverage counts how many responsible leaders have a record for
