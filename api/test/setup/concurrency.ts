@@ -116,17 +116,34 @@ export async function countWhileInFlight(
  *
  * **Why these are here rather than in each case.** `lockPersonsWithin` computes a
  * person's key as `hashtextextended(id::uuid::text, 0)`, and seven test files were
- * spelling that expression out again — twenty-four times, four of them the identical
- * waiter query. `person-lock.e2e.spec.ts` justified the arrangement by saying the key
- * "is recomputed in SQL from the person id rather than passed in, so the probe agrees
- * with the implementation by construction", which was true of any one copy and is
- * exactly what twenty-four copies cannot promise.
+ * spelling that expression out again — twenty-four times. Three of those spellings were
+ * the identical `pg_locks` waiter query, in two files, accounting for six of the
+ * twenty-four; a fourth waiter query, in `cell-membership.e2e.spec.ts`, was materially
+ * different and is where the database filter below comes from.
+ * `person-lock.e2e.spec.ts` justified the arrangement by saying the key "is recomputed
+ * in SQL from the person id rather than passed in, so the probe agrees with the
+ * implementation by construction", which was true of any one copy and is exactly what
+ * twenty-four copies cannot promise.
  *
- * **A drifted copy does not fail.** It computes a different key, finds nothing waiting
- * on it, and the case passes — because every one of these probes asserts that a waiter
- * *appears*, so a probe looking in the wrong place reports the same zero as a system
- * that never blocked. The failure mode of the duplication is a green suite, which is
- * why it is worth removing before Stage 4 adds an eighth file.
+ * **What a drifted copy costs is a red suite for the wrong reason, not a green one.**
+ * That is worth stating precisely, because the intuitive claim — a probe looking in the
+ * wrong place finds nothing and the case passes — is false of almost all of these, and
+ * was the justification this file was first written with. Every probe here ends
+ * `expect(...).toBeGreaterThan(0)`, so nothing-found is a failure. Both drift directions
+ * are red: a drifted *lock* means the request never blocks, the attempt settles, and the
+ * poll returns zero; a drifted *probe* means the request is still blocked, the attempt
+ * never settles, and `countWhileInFlight` runs to its backstop and throws "a hang rather
+ * than contention".
+ *
+ * The cost is diagnosis. A probe pointed at nothing is indistinguishable from a lock
+ * that was never taken, and it presents as a twenty-second hang rather than as an
+ * assertion about a key — which is a bad half hour for whoever meets it, and the reason
+ * to remove the duplication before Stage 4 adds an eighth file.
+ *
+ * **Two sites are the exception, and there the intuition holds.**
+ * `closure-locking.spec.ts` asserts twice that a move into a destination Cell does *not*
+ * block. A drifted key there finds nothing, which is what those cases expect, so they
+ * stay green over a probe that is checking nothing at all.
  *
  * The construction guarantee is not lost, it moves: the key is still computed in SQL by
  * the database rather than in JavaScript, once, by `personLockKey` below, and
@@ -163,12 +180,41 @@ export async function personLockKey(client: Queryable, personId: string): Promis
 /**
  * Take that lock inside the caller's open transaction, and return the key it took.
  *
- * The caller has already issued `BEGIN`; this is `pg_advisory_xact_lock`, so the lock
- * is released by their `COMMIT` or `ROLLBACK` and cannot be leaked by a failing path.
+ * The caller must already have issued `BEGIN`; this is `pg_advisory_xact_lock`, so the
+ * lock is released by their `COMMIT` or `ROLLBACK` and cannot be leaked by a failing
+ * path.
+ *
+ * **That precondition is checked rather than documented.** Without a transaction the
+ * acquisition runs in an implicit single-statement one and the lock is released before
+ * the next statement returns — so the caller holds nothing, the request they are racing
+ * never blocks, and the case fails twenty seconds later with a message about contention
+ * rather than about the missing `BEGIN`. `test/setup/env.ts` names that shape as the
+ * failure this repository keeps recording: a documented contract that nothing enforces.
+ * One statement makes it structural, and it names the actual mistake at the call site
+ * that made it.
  */
 export async function holdPersonLock(client: Queryable, personId: string): Promise<string> {
   const key = await personLockKey(client, personId);
   await client.query('SELECT pg_advisory_xact_lock($1::bigint)', [key]);
+
+  const { rows } = await client.query<{ held: string }>(
+    `SELECT count(*) AS held
+       FROM pg_locks
+      WHERE locktype = 'advisory'
+        AND granted
+        AND objsubid = 1
+        AND pid = pg_backend_pid()
+        AND ((classid::bigint << 32) | objid::bigint) = $1::bigint`,
+    [key],
+  );
+
+  if (Number(rows[0].held) === 0) {
+    throw new Error(
+      `holdPersonLock acquired the key for ${personId} and this backend no longer holds ` +
+        'it, which means there was no open transaction to hold it in. Issue BEGIN before ' +
+        'calling this.',
+    );
+  }
 
   return key;
 }
@@ -180,8 +226,11 @@ export async function holdPersonLock(client: Queryable, personId: string): Promi
  * database, and `pg_locks` reports every database in the cluster — so without it a lock
  * held on the same key in `dfc_dev`, by a development server or by a second test run,
  * counts as a waiter here. That direction is the dangerous one: these probes assert a
- * waiter *appears*, so a false positive passes a case that should have failed. Six of
- * the seven files omitted it; `cell-membership.e2e.spec.ts` had it and said why.
+ * waiter *appears*, so a false positive passes a case that should have failed. Two of
+ * the three files that probed `pg_locks` for a key omitted it; `cell-membership.e2e.spec.ts`
+ * had it and said why. (Three, not seven: the other four files only *took* the lock and
+ * never observed one, and `invariants.spec.ts` polls `pg_locks` by pid, which is
+ * cluster-unique and needs no such filter.)
  *
  * **Verified rather than assumed, and not pinned by a case.** Against this project's
  * PostgreSQL, an advisory lock's `pg_locks` row reports `datname` and `objsubid = 1`, so

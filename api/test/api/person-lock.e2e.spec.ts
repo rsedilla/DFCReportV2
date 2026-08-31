@@ -424,15 +424,29 @@ describe('the person lock, and the identifier boundary that needs the same fixtu
     // **The pin the shared helper needs and cannot give itself.** Twenty-four copies of
     // the key expression were replaced by one in `test/setup/concurrency.ts`, which
     // removes the risk that seven files drift apart and leaves the risk that the one
-    // remaining copy drifts from `lockPersonsWithin`. That failure is silent in exactly
-    // the way the copies were: every probe in the suite asserts a waiter or a holder
-    // *appears*, so a helper computing the wrong key finds nothing and reports the same
-    // zero as a system that never locked.
+    // remaining copy drifts from `lockPersonsWithin`.
     //
-    // So this case observes the implementation taking a lock and asserts the helper's
-    // key is the one held. It is the only case in the suite that would fail if
-    // `personLockKey` and `lockPersonsWithin` stopped agreeing; every other one would
-    // pass.
+    // **It is not the only case that would fail if they diverged — it is the only one
+    // that would say so.** Eight of the eleven cases in this file take a person lock and
+    // all eight go red on a divergence, but they go red as a twenty-second backstop
+    // "hang rather than contention", which reads identically to a lock that was never
+    // taken. This one observes the implementation holding a key and compares it, so the
+    // message names the fault.
+    //
+    // *A first version of this comment said drift was silent and that this was the only
+    // case that would fail. Neither is true: these probes assert a count is positive, so
+    // nothing-found is already a failure.*
+    //
+    // **The canonicalization is pinned on both sides, and the first version pinned it on
+    // neither.** `hashtextextended` is case-sensitive while a `uuid` comparison is not,
+    // so `::uuid::text` is what makes one identifier one lock however a client spells it
+    // — the hazard `person-lock.ts` names, and iOS emits uppercase UUIDs by default.
+    // Handing both sides the same lowercase string agrees whether or not either
+    // canonicalizes: measured against this database, `hashtextextended($1::text, 0)` and
+    // `hashtextextended($1, 0)` return the *identical* key to the implementation for a
+    // lowercase id. So dropping the cast from either side went unnoticed, and a mutation
+    // run against the first version confirmed it. The two assertions below hand the two
+    // sides different spellings, one each way.
     const database = app.get<Db>(DATABASE);
     const probe = new Client({ connectionString: process.env.DATABASE_URL });
     await probe.connect();
@@ -445,7 +459,8 @@ describe('the person lock, and the identifier boundary that needs the same fixtu
 
     const inTransaction = track(
       database.transaction().execute(async (trx) => {
-        await lockPersonsWithin(trx, [mark.id]);
+        // Uppercase deliberately: see the canonicalization paragraph above.
+        await lockPersonsWithin(trx, [mark.id.toUpperCase()]);
         await held;
       }),
     );
@@ -453,8 +468,17 @@ describe('the person lock, and the identifier boundary that needs the same fixtu
     try {
       const key = await personLockKey(probe, mark.id);
 
+      // **The helper canonicalizes.** Two spellings of one identifier must reach one
+      // key; without the `::uuid` cast they do not, and nothing else here would notice.
+      expect(await personLockKey(probe, mark.id.toUpperCase())).toBe(key);
+
       // Bounded by the attempt, like every other probe here: zero means the transaction
       // finished without the helper's key ever being held, which is the finding.
+      //
+      // **The implementation canonicalizes**, which this pins because the transaction
+      // above was given the *uppercase* spelling while `key` was computed from the
+      // lowercase one. Drop the cast inside `lockPersonsWithin` and it locks the hash of
+      // an uppercase string, which is not this key, and no holder is ever found.
       const holders = await countWhileInFlight(
         () => countAdvisoryHolders(probe, key),
         inTransaction,
