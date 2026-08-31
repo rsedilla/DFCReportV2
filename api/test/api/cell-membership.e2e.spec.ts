@@ -6,6 +6,7 @@ import request from 'supertest';
 
 import { CellsMembershipService } from '../../src/cells/cells.membership.service';
 import { CURSOR_MAX_LENGTH } from '../../src/common/cursor';
+import { countAdvisoryWaiters, holdPersonLock } from '../setup/concurrency';
 import { createTestDb, truncateAll } from '../setup/database';
 import {
   assignTo,
@@ -552,12 +553,7 @@ describe('cell membership (section 10)', () => {
 
     try {
       await blocker.query('BEGIN');
-      const { rows } = await blocker.query<{ key: string }>(
-        'SELECT hashtextextended($1::uuid::text, 0) AS key',
-        [juan.id],
-      );
-      const lockKey = rows[0].key;
-      await blocker.query('SELECT pg_advisory_xact_lock($1::bigint)', [lockKey]);
+      const lockKey = await holdPersonLock(blocker, juan.id);
 
       // **Dispatched, and the wait asserted.** A supertest object is lazy: an earlier
       // version held it unawaited and it was never sent, so nothing ever blocked and
@@ -888,12 +884,7 @@ describe('cell membership (section 10)', () => {
 
     try {
       await blocker.query('BEGIN');
-      const { rows } = await blocker.query<{ key: string }>(
-        'SELECT hashtextextended($1::uuid::text, 0) AS key',
-        [juan.id],
-      );
-      const lockKey = rows[0].key;
-      await blocker.query('SELECT pg_advisory_xact_lock($1::bigint)', [lockKey]);
+      const lockKey = await holdPersonLock(blocker, juan.id);
 
       const pending = addMember(leader, markCell.id, juan.id).then((r) => r);
       await waitForBlockedOn(lockKey);
@@ -982,6 +973,11 @@ describe('cell membership (section 10)', () => {
 /**
  * Waits until somebody is genuinely blocked on this person's advisory lock.
  *
+ * **The predicate moved to `test/setup/concurrency.ts` and the reasoning stayed here**,
+ * because it is this case's history rather than the helper's. What moved is the
+ * `pg_locks` query and the database filter the paragraphs below argue for; six other
+ * files had the same probe without that filter, and now share this one.
+ *
  * **Keyed on the lock, and the first version was keyed on nothing.** It polled
  * `pg_stat_activity` for any active backend with `wait_event_type = 'Lock'`, and
  * justified that by `--runInBand` — which bounds the jest suite and not the
@@ -1002,27 +998,17 @@ describe('cell membership (section 10)', () => {
  * it, in this database, names exactly the wait being waited for.
  */
 async function waitForBlockedOn(lockKey: string): Promise<void> {
-  const probe = createTestDb();
+  const probe = await openClient();
 
   try {
     for (let attempt = 0; attempt < 100; attempt += 1) {
-      const waiting = await sql<{ count: string }>`
-        SELECT count(*) AS count
-          FROM pg_locks l
-          JOIN pg_database d ON d.oid = l.database
-         WHERE l.locktype = 'advisory'
-           AND NOT l.granted
-           AND d.datname = current_database()
-           AND ((l.classid::bigint << 32) | l.objid::bigint) = ${lockKey}::bigint
-      `.execute(probe);
-
-      if (Number(waiting.rows[0].count) > 0) return;
+      if ((await countAdvisoryWaiters(probe, lockKey)) > 0) return;
       await new Promise((resolve) => setTimeout(resolve, 20));
     }
 
     throw new Error(`nothing ever blocked on advisory key ${lockKey}; the case proves nothing`);
   } finally {
-    await probe.destroy();
+    await probe.end();
   }
 }
 

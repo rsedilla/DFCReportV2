@@ -16,7 +16,12 @@ import {
   EPOCH,
   nameSeniorPastors,
 } from '../setup/fixtures';
-import { countWhileInFlight, track } from '../setup/concurrency';
+import {
+  countAdvisoryWaiters,
+  countWhileInFlight,
+  holdPersonLock,
+  track,
+} from '../setup/concurrency';
 
 import type { INestApplication } from '@nestjs/common';
 import type { Kysely } from 'kysely';
@@ -129,9 +134,7 @@ describe('reassigning a pastoral leader: the record (sections 5, 21, 22)', () =>
 
       try {
         await holder.query('BEGIN');
-        await holder.query('SELECT pg_advisory_xact_lock(hashtextextended($1::uuid::text, 0))', [
-          mark.id,
-        ]);
+        await holdPersonLock(holder, mark.id);
         const { rows } = await holder.query<{ pid: number }>('SELECT pg_backend_pid() AS pid');
 
         // Handlers attached now: if the poll below throws, an unhandled rejection is
@@ -753,9 +756,7 @@ describe('reassigning a pastoral leader: the record (sections 5, 21, 22)', () =>
 
       try {
         await holder.query('BEGIN');
-        await holder.query('SELECT pg_advisory_xact_lock(hashtextextended($1::uuid::text, 0))', [
-          mark.id,
-        ]);
+        const key = await holdPersonLock(holder, mark.id);
 
         const pending = reassign(mark.id, { pastoral_leader_id: raymond.id }, raymondAccount);
         const inFlight = track(pending);
@@ -771,20 +772,7 @@ describe('reassigning a pastoral leader: the record (sections 5, 21, 22)', () =>
         // PostgreSQL, and recorded in `test/setup/concurrency.ts`. There is nothing
         // to stay inside of, and the bound is the attempt instead.
         const waiting = await countWhileInFlight(
-          async () => {
-            const found = await holder.query<{ waiting: string }>(
-              `SELECT count(*) AS waiting
-               FROM pg_locks
-              WHERE locktype = 'advisory'
-                AND NOT granted
-                AND objsubid = 1
-                AND classid::bigint = ((hashtextextended($1::uuid::text, 0) >> 32) & 4294967295)
-                AND objid::bigint = (hashtextextended($1::uuid::text, 0) & 4294967295)`,
-              [mark.id],
-            );
-
-            return Number(found.rows[0].waiting);
-          },
+          () => countAdvisoryWaiters(holder, key),
           inFlight,
           "a waiter on Mark's key",
         );
@@ -864,9 +852,7 @@ describe('reassigning a pastoral leader: the record (sections 5, 21, 22)', () =>
 
       try {
         await holder.query('BEGIN');
-        await holder.query('SELECT pg_advisory_xact_lock(hashtextextended($1::uuid::text, 0))', [
-          rico.id,
-        ]);
+        const key = await holdPersonLock(holder, rico.id);
 
         // **`track` is what dispatches it**, by attaching a `.then`. A supertest
         // `Test` is lazy — with no continuation the request is not sent until it is
@@ -888,20 +874,7 @@ describe('reassigning a pastoral leader: the record (sections 5, 21, 22)', () =>
         // PostgreSQL, and recorded in `test/setup/concurrency.ts`. There is nothing
         // to stay inside of, and the bound is the attempt instead.
         const waiting = await countWhileInFlight(
-          async () => {
-            const found = await holder.query<{ waiting: string }>(
-              `SELECT count(*) AS waiting
-               FROM pg_locks
-              WHERE locktype = 'advisory'
-                AND NOT granted
-                AND objsubid = 1
-                AND classid::bigint = ((hashtextextended($1::uuid::text, 0) >> 32) & 4294967295)
-                AND objid::bigint = (hashtextextended($1::uuid::text, 0) & 4294967295)`,
-              [rico.id],
-            );
-
-            return Number(found.rows[0].waiting);
-          },
+          () => countAdvisoryWaiters(holder, key),
           inFlight,
           "a waiter on Rico's key",
         );

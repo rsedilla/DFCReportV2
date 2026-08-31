@@ -2,6 +2,7 @@ import { sql } from 'kysely';
 import { Client } from 'pg';
 
 import { CellLock } from '../../src/database/cell-lock';
+import { holdPersonLock } from '../setup/concurrency';
 import { createTestDb, truncateAll } from '../setup/database';
 import { assignTo, createCell, createPerson } from '../setup/fixtures';
 
@@ -392,9 +393,7 @@ describe('how a Cell closure takes its locks', () => {
         }
 
         // An ordinary move of Juan into Ben's Cell, in the order that writer uses.
-        await adder.query('SELECT pg_advisory_xact_lock(hashtextextended($1::uuid::text, 0))', [
-          juan.id,
-        ]);
+        await holdPersonLock(adder, juan.id);
         await adder.query(
           'UPDATE cell_memberships SET ended_at = $1 WHERE person_id = $2 AND ended_at IS NULL',
           [at, juan.id],
@@ -410,11 +409,7 @@ describe('how a Cell closure takes its locks', () => {
         const adderOut = settled(adder.query('COMMIT'));
         await waitForBlocked(db, pidAdder, "the closer's Cell rows");
 
-        const closerOut = settled(
-          closer.query('SELECT pg_advisory_xact_lock(hashtextextended($1::uuid::text, 0))', [
-            juan.id,
-          ]),
-        );
+        const closerOut = settled(holdPersonLock(closer, juan.id));
 
         const codes = [await adderOut, await closerOut].map(
           (error) => (error as { code?: string } | null)?.code,
@@ -457,9 +452,7 @@ describe('how a Cell closure takes its locks', () => {
         // Somebody adds a different person to Ben's Cell -- the closer's destination
         // -- while the closer holds it shared.
         await adder.query("SET LOCAL lock_timeout = '2s'");
-        await adder.query('SELECT pg_advisory_xact_lock(hashtextextended($1::uuid::text, 0))', [
-          root.id,
-        ]);
+        await holdPersonLock(adder, root.id);
         await adder.query(
           'INSERT INTO cell_memberships (person_id, cell_id, started_at) VALUES ($1, $2, $3)',
           [root.id, benCell.id, at],
@@ -498,9 +491,7 @@ describe('how a Cell closure takes its locks', () => {
         await closeAndDisperse(closer, markCell, null, juan, at);
 
         await adder.query("SET LOCAL lock_timeout = '10s'");
-        await adder.query('SELECT pg_advisory_xact_lock(hashtextextended($1::uuid::text, 0))', [
-          root.id,
-        ]);
+        await holdPersonLock(adder, root.id);
         await adder.query(
           'INSERT INTO cell_memberships (person_id, cell_id, started_at) VALUES ($1, $2, $3)',
           [root.id, markCell.id, at],
@@ -541,10 +532,15 @@ async function settledOrBlocked(
   ]);
 }
 
+/**
+ * Takes the person lock the way `lockPersonsWithin` does.
+ *
+ * Delegates to `test/setup/concurrency.ts` rather than spelling the key out, which is
+ * what it used to do — along with four inline copies in this file that did not go
+ * through it.
+ */
 async function advisoryLock(client: Client, person: TestPerson): Promise<void> {
-  await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1::uuid::text, 0))', [
-    person.id,
-  ]);
+  await holdPersonLock(client, person.id);
 }
 
 async function openClient(): Promise<Client> {
