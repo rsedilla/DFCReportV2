@@ -26,18 +26,30 @@
 -- Definition of Done applied rather than quoted: an invariant expressible as a
 -- database constraint exists as one. An earlier ruling declined on the ground that a
 -- between-row check "would be a trigger" -- which is not a reason in this schema,
--- since it already carries constraint triggers for the same-Network edge and for the
--- no-delete rule on all five attendance tables.
+-- since it already carries constraint triggers for the same-Network edge and for
+-- refusing attendance against a NOT_HELD meeting (migration 0011). The no-delete rule
+-- uses plain `BEFORE DELETE` triggers rather than constraint triggers, which an earlier
+-- version of this sentence enumerated with them; five tables is right and the kind was
+-- not.
 --
 -- **Deferred**, so the order of the `UPDATE` and the `INSERT` inside one correction
 -- does not matter: the successor does not exist when the predecessor is closed, which
 -- is the same reason `superseded_by` is a deferred foreign key (migration 0011). Both
 -- are checked at COMMIT, which is where they are read.
 --
--- **On the row carrying `superseded_by`, and only there.** Nothing updates a
--- `recorded_at` after it is written, so one trigger covers both orderings: written
--- predecessor-first it fires on the `UPDATE` that sets the pointer, and the deferral
--- carries it past the successor's insert.
+-- **On the row carrying `superseded_by`, and only there.** That covers both orderings
+-- of a correction: written predecessor-first it fires on the `UPDATE` that sets the
+-- pointer, and the deferral carries it past the successor's insert; written
+-- successor-first it fires on the `INSERT` that carries one.
+--
+-- **What it does not cover is a later `UPDATE` of the successor's own `recorded_at`**,
+-- which would leave the chain overlapping with nothing refusing it -- the trigger is on
+-- the other row and does not re-fire. An earlier version of this comment said "nothing
+-- updates a `recorded_at` after it is written", which is a fact about this
+-- application's callers stated as a property of the schema. No column of either table
+-- is immutable at the schema level, so this is the residual the whole append-only
+-- design already carries, alongside the `TRUNCATE` question `CLAUDE.md` records against
+-- the least-privilege role that does not exist yet.
 --
 -- `CLAUDE.md`, Migration policy: additive, reversible, and validated against existing
 -- data before enforcing -- `ADD CONSTRAINT` is not used here, so the validation is the
@@ -49,6 +61,18 @@
 -- Validated before enforcing. A trigger, unlike a CHECK, is not applied retroactively
 -- by PostgreSQL -- so a deployment holding an overlapping chain would install this and
 -- keep it, silently, which is the failure mode this whole migration is about.
+--
+-- **The scan carries the trigger's own exemption, and the first version did not.** A
+-- self-referenced row joins to itself, and `recorded_at <> superseded_at` on any close
+-- that is not zero-length -- which is every real one -- so the scan counted as
+-- offending exactly the shape section 13 requires and the trigger blesses. The
+-- migration was then not reversible: `down` succeeded and `up` refused over data the
+-- schema declares legal, and its message directed a history rewrite of correct rows.
+-- Harmless while both tables are empty and live from the first RESCHEDULED-to-NOT_HELD
+-- transition, which is the one path the exemption exists for.
+--
+-- A validation that measures a stricter rule than the one being installed is not a
+-- validation of it.
 DO $$
 DECLARE
   offending bigint;
@@ -56,7 +80,8 @@ BEGIN
   SELECT count(*) INTO offending
     FROM dcc_attendance predecessor
     JOIN dcc_attendance successor ON successor.id = predecessor.superseded_by
-   WHERE successor.recorded_at IS DISTINCT FROM predecessor.superseded_at;
+   WHERE predecessor.id IS DISTINCT FROM successor.id
+     AND successor.recorded_at IS DISTINCT FROM predecessor.superseded_at;
 
   IF offending > 0 THEN
     RAISE EXCEPTION
@@ -67,7 +92,8 @@ BEGIN
   SELECT count(*) INTO offending
     FROM cell_attendance predecessor
     JOIN cell_attendance successor ON successor.id = predecessor.superseded_by
-   WHERE successor.recorded_at IS DISTINCT FROM predecessor.superseded_at;
+   WHERE predecessor.id IS DISTINCT FROM successor.id
+     AND successor.recorded_at IS DISTINCT FROM predecessor.superseded_at;
 
   IF offending > 0 THEN
     RAISE EXCEPTION

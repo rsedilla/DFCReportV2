@@ -1971,7 +1971,7 @@ dcc_attendance
 - version
 ```
 
-At most one non-superseded row may exist per `(dcc_event_id, person_id)`, enforced by a partial unique index where `superseded_at` is null. `superseded_by` holds the id of the replacing row, not an actor.
+At most one non-superseded row may exist per `(dcc_event_id, person_id)`, enforced by a partial unique index where `superseded_at` is null. `superseded_by` holds the id of the replacing row, not an actor. **Except where a record is closed with nothing replacing it**, which Section 13's `RESCHEDULED`-to-`NOT_HELD` path requires and which the pair of columns cannot yet express: such a row names itself, and what shape that operation should take is an open question rather than a settled convention.
 
 A correction never overwrites. The prior row is marked superseded and a new row written, so the record carries its own history (Section 1, Principle 12; Section 14).
 
@@ -3130,6 +3130,8 @@ At most one non-superseded row may exist per `(cell_meeting_id, person_id)`. Enf
 
 `superseded_by` holds the id of the row that replaced this one, not an actor. The actor is `recorded_by` on the successor.
 
+**A record closed with nothing replacing it is the one case where it holds neither**, and this section is where that case arises: a `RESCHEDULED` meeting later declared `NOT_HELD` keeps both records, and a `NOT_HELD` meeting carries no attendance — so its attendance rows are closed and nothing succeeds them. The columns are declared as a pair, so such a row names itself. That is a workaround rather than a design, and what shape the operation should take is open.
+
 A correction never overwrites in place. The prior row is marked superseded and a new row written; `version` detects a concurrent write (Section 14) and is not a history mechanism. An `UPDATE` plus an audit row does not satisfy Principle 12 — the record must carry its own history, and a shape offering only one mutable row per person per meeting cannot.
 
 For a rescheduled meeting, preserve:
@@ -4056,6 +4058,7 @@ Answering `NOT_FOUND` to everyone was weighed and rejected on what it costs the 
 
 - The line still **disagrees** with what is stored: `VERSION_CONFLICT`, on the ordinary terms. A correction race reaches this whenever an even number of further writes returns the value to the one the loser disagrees with, so it is not confined to a first submission.
 - The line now **agrees**: `RESOURCE_BUSY`. It is unchanged against the committed state, so it takes no part in the version check and there is nothing to choose between — and the identical body resubmitted succeeds, writing nothing, which is what that code means and what the third condition in the table above names. Answering a conflict here would present two identical values.
+
 Those are the two. A uniqueness violation on any *other* index is not a lost race at all and keeps failing loudly — the handler narrows on the index by name, because letting one surface on its own would answer `INTERNAL_ERROR` on an ordinary race, which is what naming these cases is for. That is a guard on the way in rather than a third outcome, and it is said separately because this section states counts in order that they can be checked.
 
 *This said "one case" and named only the Cell meeting until 2026-08-31, when building the DCC submission found the second. The count is stated rather than hedged because a claim about how many cases exist is checkable and "among others" is not.*

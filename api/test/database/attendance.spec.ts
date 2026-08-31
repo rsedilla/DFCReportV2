@@ -220,6 +220,52 @@ describe('the attendance tables (SKILL.md sections 9, 12, 13 and 14)', () => {
       return row.id;
     }
 
+    it('refuses a successor that does not begin where its predecessor ended', async () => {
+      // **The mirror of the `dcc_attendance` case, and it is not redundant.**
+      // `assert_attendance_chain_contiguous` branches on `TG_TABLE_NAME` to choose which
+      // table to look the successor up in, and a mis-branch here fails *silently*: the
+      // query would find no row, `successor_recorded_at` would be null, and the function
+      // returns without raising. Migration 0011's precedent — the `NOT_HELD` trigger
+      // that referenced a field of the wrong record — failed loudly on every insert. This
+      // one would not, so the Cell branch needs a case that can go red.
+      const meetingId = await heldMeeting();
+      const account = await anAccount();
+      const successorId = randomUUID();
+      const closedAt = new Date('2026-08-31T10:00:00+08:00');
+
+      await expect(
+        db.transaction().execute(async (trx) => {
+          await trx
+            .insertInto('cell_attendance')
+            .values({
+              cell_meeting_id: meetingId,
+              person_id: leader.id,
+              present: true,
+              recorded_by: account,
+              recorded_at: new Date('2026-08-31T09:00:00+08:00'),
+              superseded_at: closedAt,
+              superseded_by: successorId,
+            })
+            .execute();
+
+          await trx
+            .insertInto('cell_attendance')
+            .values({
+              id: successorId,
+              cell_meeting_id: meetingId,
+              person_id: leader.id,
+              present: false,
+              recorded_by: account,
+              version: 2,
+              // One millisecond early, which is the magnitude the driver-truncation
+              // defect produced on the DCC side.
+              recorded_at: new Date(closedAt.getTime() - 1),
+            })
+            .execute();
+        }),
+      ).rejects.toThrow(/chain_contiguous|successor must begin where it ended/);
+    });
+
     it('refuses two live rows for one person at one meeting', async () => {
       // Section 13 states the consequence rather than the mechanism: "two live rows
       // for one person at one meeting inflate their monthly bucket and break the

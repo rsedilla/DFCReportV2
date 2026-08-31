@@ -12,9 +12,11 @@ is the one worth a ruling.
 
 Decisions 0176 and 0177 both declined to enforce chain contiguity in the database, on
 the ground that "a between-row check would be a trigger". That is not a reason in this
-schema: it already carries constraint triggers for the same-Network edge, for the
-no-delete rule on all five attendance tables, and for refusing attendance against a
-`NOT_HELD` meeting.
+schema: it already carries constraint triggers for the same-Network edge and for
+refusing attendance against a `NOT_HELD` meeting. *An earlier version of this sentence
+enumerated the no-delete rule with them — that is five plain `BEFORE DELETE` triggers,
+not constraint triggers. The count was right and the kind was not, and the argument
+survives without it.*
 
 **The invariant shipped broken twice in two commits, and nothing could fail on it
 either time.** First the successor's `recorded_at` fell to the column default —
@@ -35,15 +37,26 @@ before the triggers are created, because PostgreSQL does not apply a trigger
 retroactively the way `ADD CONSTRAINT` validates a `CHECK`, so a deployment holding an
 overlapping chain would install this and keep it silently.
 
-**It refused five fixtures on the day it was added**, three of them written by the
-commit that removed the overlap from the service. Each set `superseded_at =
-clock_timestamp()` and left the successor's `recorded_at` to the column default — the
-exact shape the service comment six lines away calls out. That is the third time on
-this branch a host-or-transaction instant has been written where a database instant
-was meant, and the first time something other than a reviewer caught it.
+**It refused five test cases on the day it was added** — three in
+`test/database/attendance.spec.ts` and two in `test/api/dcc-attendance.e2e.spec.ts` —
+across six fixture write sites. Two of those cases, and three of those write sites,
+were written by the commit that removed the overlap from the service.
 
-## A record closed with no replacement has no shape, and the trigger exempts the
-workaround
+*Stated in one unit, because the first version of this paragraph mixed them: it said
+"five fixtures, three of them", which is true of neither count.* Cases refused: five, of
+which two came from that commit. Write sites corrected: six, of which three did.
+
+Four of the six left the successor's `recorded_at` to the column default after closing
+at `clock_timestamp()` — the exact shape the service comment six lines away calls out.
+The fifth, the zero-length case, set both ends from a host `Date` literal and was
+refused for the default alone. The sixth is the self-reference below, which is not a
+defect.
+
+That is the third time on this branch a host-or-transaction instant has been written
+where a database instant was meant, and the first time something other than a reviewer
+caught it.
+
+## A record closed with no replacement has no shape
 
 One of the five was not a defect. `test/database/attendance.spec.ts` supersedes a Cell
 attendance row onto **itself**, because Section 13 requires a `RESCHEDULED` meeting to
