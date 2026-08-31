@@ -122,45 +122,31 @@ export async function countWhileInFlight(
  * different and is where the database filter below comes from.
  * `person-lock.e2e.spec.ts` justified the arrangement by saying the key "is recomputed
  * in SQL from the person id rather than passed in, so the probe agrees with the
- * implementation by construction", which was true of any one copy and is exactly what
- * twenty-four copies cannot promise.
+ * implementation by construction". That was never a construction guarantee, of
+ * twenty-four copies or of one: computing in SQL gives agreement only where the two
+ * expressions match, and nothing checked that they did. What the copies added on top was
+ * twenty-four chances for it to stop being true instead of one.
  *
- * **What a drifted copy costs is a red suite for the wrong reason, not a green one.**
- * That is worth stating precisely, because the intuitive claim — a probe looking in the
- * wrong place finds nothing and the case passes — is false of almost all of these, and
- * was the justification this file was first written with. Almost every probe here ends
- * `expect(...).toBeGreaterThan(0)`, so nothing-found is a failure.
+ * **What a drifted copy costs is diagnosis, and this is deliberately stated as one
+ * property rather than as a story about how each case fails.** Three attempts at that
+ * story were written here and all three were wrong — first that drift is silent, then
+ * that it surfaces as a twenty-second hang, then that everything fails in three
+ * seconds. The cases differ, and enumerating them from a docblock is how each of those
+ * got written.
  *
- * **Both drift directions fail fast, in about three seconds.** A drifted *lock* means
- * the request never blocks and the poll returns zero. A drifted *probe* means the
- * request does block — and `lockPersonsWithin` sets `lock_timeout` to three seconds
- * before it takes anything (SKILL.md section 5), so the request aborts, answers
- * `RESOURCE_BUSY`, and settles; the poll then returns zero too.
+ * The property that does hold: **a probe pointed at a key nobody takes reports exactly
+ * what a lock that was never taken reports.** So when a case does go red, its message
+ * names the assertion and not the key, and whoever meets it starts by suspecting the
+ * code under test. One probe is the exception and it is the file this helper was built
+ * from — `cell-membership.e2e.spec.ts`'s `waitForBlockedOn` throws "nothing ever blocked
+ * on advisory key N; the case proves nothing", which is what the rest should read like.
  *
- * *A second version of this paragraph said a drifted probe never settles and surfaces as
- * a twenty-second backstop. That ignores the bound section 5 requires, which
- * `person-lock.e2e.spec.ts` demonstrates end to end in a green case. The backstop is
- * unreachable on every path here but one, and that one is the pinning case's own
- * transaction, which waits on a promise rather than on a lock.*
- *
- * The cost is diagnosis rather than time. `expect(received).toBeGreaterThan(expected)`
- * with a received of 0 names no key, and reads identically whether the probe was
- * pointed at nothing or the lock was never taken — which is the reason to remove the
- * duplication before Stage 4 adds an eighth file.
- *
- * *"Almost every" above has one exception in the other direction, and it is the file
- * that had the best probe:* `cell-membership.e2e.spec.ts`'s `waitForBlockedOn` ends in a
- * throw rather than an expectation, and its message carries the key — "nothing ever
- * blocked on advisory key N; the case proves nothing". That is what the rest of them
- * should read like on a drift, and it is why that file's probe is the one this helper
- * was built from.
- *
- * **`closure-locking.spec.ts` is the exception, and it is the whole file rather than a
- * case or two.** It never invokes `lockPersonsWithin`: it stages both sides of every
- * contention itself, through `holdPersonLock`, and imports `CellLock` only for the
- * row-lock strengths. A divergence between the helper and the implementation therefore
- * moves both sides equally and all five cases stay green over a probe checking nothing.
- * Worth knowing before adding a sixth there.
+ * **`closure-locking.spec.ts` is where a drift is not caught at all**, and it is the
+ * whole file rather than a case or two. It never invokes `lockPersonsWithin`: every
+ * person lock in it is taken through `holdPersonLock`, directly or through its own
+ * `advisoryLock`, and nothing in it observes a key — its only poll is `waitForBlocked`
+ * on `pg_stat_activity` by pid. So a divergence moves every side of every contention
+ * together and all five cases stay green. Worth knowing before adding a sixth there.
  *
  * The construction guarantee is not lost, it moves: the key is still computed in SQL by
  * the database rather than in JavaScript, once, by `personLockKey` below, and
@@ -212,11 +198,10 @@ export async function personLockKey(client: Queryable, personId: string): Promis
  * **That precondition is checked rather than documented.** Without a transaction the
  * acquisition runs in an implicit single-statement one and the lock is released before
  * the next statement returns — so the caller holds nothing, the request they are racing
- * never blocks, and the case fails twenty seconds later with a message about contention
- * rather than about the missing `BEGIN`. `test/setup/env.ts` names that shape as the
- * failure this repository keeps recording: a documented contract that nothing enforces.
- * One statement makes it structural, and it names the actual mistake at the call site
- * that made it.
+ * never blocks, and the case fails against an assertion about contention rather than
+ * saying `BEGIN` was missing. `test/setup/env.ts` names that shape as the failure this
+ * repository keeps recording: a documented contract that nothing enforces. One statement
+ * makes it structural, and it names the actual mistake at the call site that made it.
  */
 export async function holdPersonLock(client: Queryable, personId: string): Promise<string> {
   const key = await personLockKey(client, personId);
@@ -256,7 +241,7 @@ export async function holdPersonLock(client: Queryable, personId: string): Promi
  * had it and said why. (Three, not seven: the other four files only *took* the lock and
  * never observed one, and `invariants.spec.ts` polls `pg_locks` by pid, which is
  * cluster-unique and needs no such filter — as does the check inside `holdPersonLock`
- * below, for the same reason.)
+ * above, for the same reason.)
  *
  * **Verified rather than assumed, and not pinned by a case.** Against this project's
  * PostgreSQL, an advisory lock's `pg_locks` row reports `datname` and `objsubid = 1`, so

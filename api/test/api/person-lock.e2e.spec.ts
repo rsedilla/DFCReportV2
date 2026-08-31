@@ -122,9 +122,14 @@ describe('the person lock, and the identifier boundary that needs the same fixtu
    * Holds this person's advisory key, runs `attempt`, and asserts it comes to wait
    * on that same key. Releases, then lets `attempt` finish.
    *
-   * The key is still computed in SQL from the person id rather than in JavaScript, so
-   * the probe agrees with the implementation by construction — but the computation now
-   * lives once, in `test/setup/concurrency.ts`, rather than being spelled out here.
+   * The key is computed in SQL from the person id rather than in JavaScript, and the
+   * computation lives once, in `test/setup/concurrency.ts`, rather than being spelled
+   * out here.
+   *
+   * **That is not a construction guarantee, and the sentence this replaces called it
+   * one.** Computing in SQL gives agreement only if the two expressions match, and the
+   * one surviving copy can still drift from `lockPersonsWithin` — a mutation confirms
+   * it. What agreement there is comes from the case below, which checks it.
    *
    * *The sentence this replaces claimed the construction guarantee for a copy, and there
    * were twenty-four copies across seven files. What a copy cannot promise is that the
@@ -427,21 +432,15 @@ describe('the person lock, and the identifier boundary that needs the same fixtu
     // remaining copy drifts from `lockPersonsWithin`.
     //
     // **It is not the only case that would fail if they diverged — it is the only one
-    // that would say so.** Eight of the eleven cases in this file take a person lock and
-    // all eight go red on a divergence. They go red in about three seconds, as
-    // `expect(received).toBeGreaterThan(expected)` with a received of 0 — a message that
-    // names no key and reads identically to a lock that was never taken. This one
-    // observes the implementation holding a key and compares it, so the fault has a
-    // name.
+    // that would say so.** Nine of the eleven cases here take a person lock and eight go
+    // red on a divergence; the ninth takes one that nothing observes. What none of the
+    // eight does is name the key, because each fails against its own assertion. This one
+    // compares the two keys, so the fault has a name.
     //
-    // *Two earlier versions of this comment got the mechanism wrong in opposite
-    // directions. The first said drift was silent; these probes assert a count is
-    // positive, so nothing-found is already a failure. The second said the eight fail as
-    // a twenty-second backstop; `lockPersonsWithin` bounds its wait at three seconds
-    // (SKILL.md section 5), so a blocked request aborts and settles and the poll returns
-    // zero. The backstop is unreachable on those paths — and reachable on this one, whose
-    // transaction waits on a promise rather than on a lock, which is the reverse of what
-    // was written.*
+    // *Three earlier versions of this comment described *how* the eight fail — silently,
+    // then as a twenty-second hang, then in three seconds — and all three were wrong,
+    // because the eight do not fail alike. The claim is now the one that holds across
+    // them, and the timings are left to whoever reads a failure.*
     //
     // **The canonicalization is pinned on both sides, and the first version pinned it on
     // neither.** `hashtextextended` is case-sensitive while a `uuid` comparison is not,
@@ -478,11 +477,11 @@ describe('the person lock, and the identifier boundary that needs the same fixtu
       // key; without the `::uuid` cast they do not, and nothing else here would notice.
       expect(await personLockKey(probe, mark.id.toUpperCase())).toBe(key);
 
-      // Bounded by the attempt, like every other probe here. **This case is the one
-      // place the backstop is live**, because the transaction above waits on `held`
-      // rather than on a lock, so nothing bounds it: on a divergence the poll runs its
-      // full twenty seconds and throws "a hang rather than contention", inside the
-      // thirty-second case timeout.
+      // Bounded by the attempt, like every other probe here — but unlike the others,
+      // **nothing bounds the attempt itself**: the transaction above waits on `held`
+      // rather than on a lock, so on a divergence this is the one case that reaches
+      // `countWhileInFlight`'s backstop rather than settling. It throws there, inside
+      // the case timeout, which is why the divergence is reported rather than killed.
       //
       // **The implementation canonicalizes**, which this pins because the transaction
       // above was given the *uppercase* spelling while `key` was computed from the
