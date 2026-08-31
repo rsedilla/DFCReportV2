@@ -44,7 +44,7 @@ names a unit that answers two ways at once.
 where a throw and a branch happen to coincide. Section 25 rule 19, in a paragraph written
 to stop a count from being read two ways.*
 
-Counted as branches there are **seven**. Six answer `RESOURCE_BUSY`; one does not.
+Counted as branches, the refusals of this kind number **seven**. Six answer `RESOURCE_BUSY`; one does not. (Seven of *these*, not seven error-producing branches in those six methods — `floorBreach` alone carries two more that this ruling does not reach.)
 
 Four of the seven move from `INVARIANT_VIOLATION` to `RESOURCE_BUSY`, and each also
 loses the advice to mint a new key, which a 503 makes wrong:
