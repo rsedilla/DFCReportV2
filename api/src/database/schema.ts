@@ -195,6 +195,13 @@ export type AuditAction =
   // `cell_leadership.account_pending` below carries the same noun and is outside the
   // rule: section 21 lists it separately, and what is pending is a provisioning step on
   // a Person (section 6), so it names that Person.
+  // Section 21 lists "DCC event removed from the calendar, with reason" and names
+  // no counterpart for creating one, because its list opens with "including".
+  // Generating the calendar is an act somebody scheduled that changes what every
+  // month's N is measured against, so it is audited on the same footing as removing
+  // a Sunday — one entry per event, targeting the event's own date, which is what
+  // section 9 makes the identity of an event.
+  | 'dcc_event.created'
   | 'cell_leadership.opened'
   // Section 21 lists this as an action in its own right: "Cell leadership assignment
   // left with account provisioning pending". It names a state rather than an actor,
