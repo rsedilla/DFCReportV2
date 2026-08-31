@@ -417,6 +417,7 @@ resolves exactly as well as it did in the single file and no better.
 - 2026-08-31 — [Eight on the fix batch, and the outcome that was a 500](docs/decisions/0176-eight-on-the-fix-batch-and-the-outcome-that-was-a-500.md)
 - 2026-08-31 — [Six on the third pass, and a fix that was never applied](docs/decisions/0177-six-on-the-third-pass-and-a-fix-that-was-never-applied.md)
 - 2026-08-31 — [The fourth pass found nothing behavioural, and one thing with teeth](docs/decisions/0178-the-fourth-pass-found-nothing-behavioural-and-one-thing-with-teeth.md)
+- 2026-08-31 — [A symmetry that was not there, and the index a claim needed](docs/decisions/0179-a-symmetry-that-was-not-there-and-the-index-a-claim-needed.md)
 
 ### Open — awaiting a ruling
 

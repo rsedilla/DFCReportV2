@@ -6,10 +6,22 @@
 --
 -- Migration 0012 ordered the two ends of **one** row's live period. This orders the
 -- join between two: where a row names a `superseded_by`, that successor's
--- `recorded_at` is this row's `superseded_at`. Together they make an attendance
--- chain a partition of time rather than a set of overlapping intervals, which is what
--- section 9's "a correction never overwrites -- the prior row is marked superseded and
--- a new row written" means when read as history rather than as a live-row rule.
+-- `recorded_at` is this row's `superseded_at`. That is what section 9's "a correction
+-- never overwrites -- the prior row is marked superseded and a new row written" means
+-- when read as history rather than as a live-row rule.
+--
+-- **Contiguity alone does not make a chain a partition of time, and an earlier
+-- version of this sentence said it did.** Two predecessors superseded onto one
+-- successor, each ending where it begins, satisfies the trigger and still overlaps:
+-- the structure would be a DAG rather than a chain. The partial unique index below is
+-- what forbids that, so the claim is carried by something rather than asserted beside
+-- it.
+--
+-- One residual is disclosed rather than enforced: nothing requires a successor to
+-- concern the same event and person as the row it replaces. It is unreachable -- the
+-- service mints a fresh successor per correction and writes both from one line -- and
+-- it is named so the next reader knows this file constrains the shape of a chain and
+-- not its subject.
 --
 -- **This exists because the invariant shipped broken twice in two commits, and
 -- nothing could fail on it either time.** First the successor's `recorded_at` fell to
@@ -80,8 +92,7 @@ BEGIN
   SELECT count(*) INTO offending
     FROM dcc_attendance predecessor
     JOIN dcc_attendance successor ON successor.id = predecessor.superseded_by
-   WHERE predecessor.id IS DISTINCT FROM successor.id
-     AND successor.recorded_at IS DISTINCT FROM predecessor.superseded_at;
+   WHERE successor.recorded_at IS DISTINCT FROM predecessor.superseded_at;
 
   IF offending > 0 THEN
     RAISE EXCEPTION
@@ -128,7 +139,15 @@ BEGIN
   --
   -- Exempted here rather than silently failing, because refusing it would make that
   -- path unwritable while nothing had decided it should be.
-  IF NEW.superseded_by = NEW.id THEN
+  --
+  -- **On `cell_attendance` only, and the first version of this exemption was on
+  -- both.** Section 9 says `NOT_HELD` "has no DCC equivalent", so no DCC operation
+  -- closes a record with nothing replacing it -- and section 9 leans on that: its
+  -- argument that a version sent for a person with no record is unreachable rests on
+  -- a live row existing once one ever has. Exempting DCC would have made that false
+  -- and left the section resting on nobody writing the row. The exemption follows the
+  -- requirement, and the requirement is a Cell one.
+  IF TG_TABLE_NAME = 'cell_attendance' AND NEW.superseded_by = NEW.id THEN
     RETURN NULL;
   END IF;
 
@@ -163,6 +182,22 @@ BEGIN
 END;
 $$;
 
+-- One successor replaces one row. Without this, contiguity holds pairwise while two
+-- predecessors point at the same successor and overlap each other -- which is the
+-- difference between a chain and a DAG, and the reason the header above could not
+-- honestly claim a partition of time until this existed.
+--
+-- Partial, because `superseded_by` is null on every live row and those are the
+-- majority. `CREATE UNIQUE INDEX` validates against existing data as it builds, so
+-- the scan above needs no third query.
+CREATE UNIQUE INDEX dcc_attendance_one_successor
+  ON dcc_attendance (superseded_by)
+  WHERE superseded_by IS NOT NULL;
+
+CREATE UNIQUE INDEX cell_attendance_one_successor
+  ON cell_attendance (superseded_by)
+  WHERE superseded_by IS NOT NULL;
+
 CREATE CONSTRAINT TRIGGER dcc_attendance_chain_contiguous
   AFTER INSERT OR UPDATE ON dcc_attendance
   DEFERRABLE INITIALLY DEFERRED
@@ -174,6 +209,9 @@ CREATE CONSTRAINT TRIGGER cell_attendance_chain_contiguous
   FOR EACH ROW EXECUTE FUNCTION assert_attendance_chain_contiguous();
 
 -- migrate:down
+
+DROP INDEX cell_attendance_one_successor;
+DROP INDEX dcc_attendance_one_successor;
 
 DROP TRIGGER cell_attendance_chain_contiguous ON cell_attendance;
 DROP TRIGGER dcc_attendance_chain_contiguous ON dcc_attendance;

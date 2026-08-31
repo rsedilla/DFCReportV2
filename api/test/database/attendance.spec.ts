@@ -577,6 +577,90 @@ describe('the attendance tables (SKILL.md sections 9, 12, 13 and 14)', () => {
       ).rejects.toThrow(/chain_contiguous|successor must begin where it ended/);
     });
 
+    it('refuses a DCC row closed with nothing replacing it', async () => {
+      // Section 9: `NOT_HELD` "has no DCC equivalent", so no DCC operation closes a
+      // record with nothing in its place — and section 9 leans on that, arguing a
+      // version sent for a person with no record is unreachable because a live row
+      // exists once one ever has.
+      //
+      // Migration 0013's self-reference exemption was written on both tables and is now
+      // on `cell_attendance` alone. Exempting DCC made section 9's premise false and
+      // left it resting on nobody writing the row.
+      const event = await db
+        .insertInto('dcc_events')
+        .values({ event_date: '2026-08-30' })
+        .returning('id')
+        .executeTakeFirstOrThrow();
+
+      const row = await db
+        .insertInto('dcc_attendance')
+        .values({
+          dcc_event_id: event.id,
+          person_id: leader.id,
+          present: true,
+          recorded_by: await anAccount(),
+        })
+        .returning('id')
+        .executeTakeFirstOrThrow();
+
+      await expect(
+        db
+          .updateTable('dcc_attendance')
+          .set({ superseded_at: sql<Date>`clock_timestamp()`, superseded_by: row.id })
+          .where('id', '=', row.id)
+          .execute(),
+      ).rejects.toThrow(/chain_contiguous|successor must begin where it ended/);
+    });
+
+    it('refuses two rows superseded onto one successor', async () => {
+      // Contiguity holds pairwise while two predecessors point at one successor, each
+      // ending where it begins — and their own periods then overlap. That is a DAG
+      // rather than a chain, and it is why the migration could not honestly claim a
+      // chain is a partition of time until `dcc_attendance_one_successor` existed.
+      const event = await db
+        .insertInto('dcc_events')
+        .values({ event_date: '2026-08-30' })
+        .returning('id')
+        .executeTakeFirstOrThrow();
+
+      const other = await createPerson(db, { firstName: 'Otilia', network: 'WOMENS' });
+      const account = await anAccount();
+      const successorId = randomUUID();
+      const closedAt = new Date('2026-08-31T10:00:00+08:00');
+
+      await expect(
+        db.transaction().execute(async (trx) => {
+          await trx
+            .insertInto('dcc_attendance')
+            .values({
+              id: successorId,
+              dcc_event_id: event.id,
+              person_id: leader.id,
+              present: false,
+              recorded_by: account,
+              version: 2,
+              recorded_at: closedAt,
+            })
+            .execute();
+
+          for (const personId of [other.id, leader.id]) {
+            await trx
+              .insertInto('dcc_attendance')
+              .values({
+                dcc_event_id: event.id,
+                person_id: personId,
+                present: true,
+                recorded_by: account,
+                recorded_at: new Date('2026-08-31T09:00:00+08:00'),
+                superseded_at: closedAt,
+                superseded_by: successorId,
+              })
+              .execute();
+          }
+        }),
+      ).rejects.toThrow(/one_successor/);
+    });
+
     it('permits a zero-length live period, which is a row entered in error', async () => {
       // `>=` rather than `>`, which is the schema-wide convention. **The case it admits
       // is not reachable through the application**, and this pins the constraint's

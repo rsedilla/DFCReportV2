@@ -1971,7 +1971,7 @@ dcc_attendance
 - version
 ```
 
-At most one non-superseded row may exist per `(dcc_event_id, person_id)`, enforced by a partial unique index where `superseded_at` is null. `superseded_by` holds the id of the replacing row, not an actor. **Except where a record is closed with nothing replacing it**, which Section 13's `RESCHEDULED`-to-`NOT_HELD` path requires and which the pair of columns cannot yet express: such a row names itself, and what shape that operation should take is an open question rather than a settled convention.
+At most one non-superseded row may exist per `(dcc_event_id, person_id)`, enforced by a partial unique index where `superseded_at` is null. `superseded_by` holds the id of the replacing row, not an actor. **No DCC operation closes a record with nothing replacing it**, and this is stated because Section 13 has one and the symmetry is misleading: that path is a `RESCHEDULED` meeting declared `NOT_HELD`, and `NOT_HELD` has no DCC equivalent (above). A removed Sunday keeps its event row and supersedes no attendance. So a live row exists for a person once one ever has — which is what makes the refusal below unreachable — and `dcc_attendance_chain_contiguous` enforces that rather than assuming it.
 
 A correction never overwrites. The prior row is marked superseded and a new row written, so the record carries its own history (Section 1, Principle 12; Section 14).
 

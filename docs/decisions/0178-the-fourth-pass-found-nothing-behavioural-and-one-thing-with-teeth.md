@@ -44,7 +44,9 @@ were written by the commit that removed the overlap from the service.
 
 *Stated in one unit, because the first version of this paragraph mixed them: it said
 "five fixtures, three of them", which is true of neither count.* Cases refused: five, of
-which two came from that commit. Write sites corrected: six, of which three did.
+which two came from that commit. Write sites **refused**: six, of which three came from
+it — and five were corrected, the sixth being the self-reference below, which was
+exempted rather than changed.
 
 Four of the six left the successor's `recorded_at` to the column default after closing
 at `clock_timestamp()` — the exact shape the service comment six lines away calls out.
@@ -112,4 +114,4 @@ pass was asked to say plainly whether it found anything behavioural.
 
 Decision 0178, indexed in [CLAUDE.md](../../CLAUDE.md).
 
-Previous: [2026-08-31 — Six on the third pass, and a fix that was never applied](0177-six-on-the-third-pass-and-a-fix-that-was-never-applied.md)
+Previous: [2026-08-31 — Six on the third pass, and a fix that was never applied](0177-six-on-the-third-pass-and-a-fix-that-was-never-applied.md) | Next: [2026-08-31 — A symmetry that was not there, and the index a claim needed](0179-a-symmetry-that-was-not-there-and-the-index-a-claim-needed.md)
