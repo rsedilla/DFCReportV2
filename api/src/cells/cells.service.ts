@@ -146,9 +146,10 @@ export class CellsService {
         // *This named the person until 2026-08-31, while `ended` and `changed` named
         // the Cell, and nothing had decided the split. Where exactly the two targets
         // give different answers is deliberately not claimed here: section 7 resolves a
-        // Cell "as of the period being viewed" and an audit entry is an instant, which
-        // is on CLAUDE.md's open list. Two drafts asserted a mechanism and both were
-        // refuted; the rule does not rest on one.*
+        // Cell "as of the period being viewed" and defines that phrase, but not what
+        // period a read of *this log* asks about — one entry is an instant and a
+        // filtered range is a range. That is on CLAUDE.md's open list. Three drafts
+        // asserted an answer and each was refuted; the rule rests on none of them.*
         targetType: 'cell',
         targetId: created.id,
         // Section 21 asks a leadership entry to carry "the outgoing and the incoming

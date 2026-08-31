@@ -102,10 +102,11 @@ describe('the roster cursor', () => {
     // it was written, both of which had copied the same answer from `/people`, which
     // never pinned it.
     //
-    // **This file is where the middle four are reachable at all**, which is why they are
+    // **This file is where five of the six are reachable at all**, which is why they are
     // enumerated here rather than end to end: a client only ever produces a cursor this
-    // code emitted or a string that is not base64url. Well-formed JSON of the wrong
-    // shape is the branch that decides whether a partial cursor silently pages from
+    // code emitted or a string that is not base64url, which is the first case alone.
+    // Everything after it is well-formed base64url of something the decoder rejects on
+    // shape — the branch that decides whether a partial cursor silently pages from
     // `undefined`, and now the branch that decides whether it is refused.
     expect(() => decodeRosterCursor(value)).toThrow(/pagination cursor could not be read/);
   });

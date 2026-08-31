@@ -400,8 +400,14 @@ export class NetworksService {
    * requires the system not to do.
    *
    * In that case no date clears the bound and the correction can only take effect
-   * now, which always does: every bound is read from a row already written, so it
-   * lies in the past. So the refusal says that instead of naming a date.
+   * now, which succeeds in every case but one: every bound is read from a row already
+   * written, so each lies in the past — unless one carries the very instant this
+   * correction is taking, which is the branch below and the reason it exists. So the
+   * refusal says that instead of naming a date.
+   *
+   * *This said "which always does" until 2026-08-31, twenty lines above the branch
+   * that refutes it. Section 4 carried the same sentence and was amended; this is the
+   * file a Stage 4 author copying a floor actually reads.*
    *
    * **`ApiError` rather than `InvariantViolationError`**, because the undated branch
    * answers `RESOURCE_BUSY`: section 22 places a refusal by whether the same body could

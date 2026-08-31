@@ -56,6 +56,12 @@ correction cannot be backdated and will take effect now if submitted without an
 effective date, which always succeeds: every bound is read from a row already
 written, so it lies in the past.
 
+*Superseded in one respect on 2026-08-31 by [decision 0158](0158-a-stale-premise-under-a-cleanly-taken-lock-is-transient.md).
+"Always succeeds" is now "succeeds in every case but one": the floor refuses a date at or
+before the bound, so an undated correction whose instant ties with a record already
+written for that person is refused — and that branch answers `RESOURCE_BUSY` rather than
+`INVARIANT_VIOLATION`. Nothing else here changes.*
+
 **A Network root is not moved between Networks by a data correction.** Derived rather
 than invented: section 5 gives each Network exactly one root and says changing who
 holds a root position is a Network-level decision, so moving one here would leave one

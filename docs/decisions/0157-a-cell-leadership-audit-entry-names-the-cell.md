@@ -38,8 +38,9 @@ in `CLAUDE.md`.
 *Three drafts of this ruling got this wrong in three ways, which is why it is written down
 rather than attempted a fourth time. The first said a reader whose scope covered the person
 and not the Cell saw an appointment with no ending. The second said the targets part
-company after a later handover. The third said Section 7 fixed neither reading of the
-phrase, when Section 7 defines it and the open question is one layer in from there.*
+company after a later handover. The third called the phrase's meaning for an audit
+entry undecided and did not engage the passage where Section 7 defines it; the open
+question is one layer in from there.*
 
 ## Why the Cell
 

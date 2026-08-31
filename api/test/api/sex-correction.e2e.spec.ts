@@ -558,7 +558,8 @@ describe('sex correction (SKILL.md sections 4, 5, 7, 21, 22)', () => {
     });
 
     it('answers RESOURCE_BUSY where an undated correction cannot clear the floor', async () => {
-      // **The branch section 4 calls "always succeeds", and it does not always.** An
+      // **The branch behind section 4's "succeeds in every case but one", and this is
+      // the one case.** An
       // undated correction takes the instant it is recorded and clears every bound,
       // because each is read from a row already written — unless a record for this
       // person carries an instant at or after that one. Two operations landing in the
