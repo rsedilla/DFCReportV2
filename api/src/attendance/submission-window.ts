@@ -9,9 +9,10 @@ import type { Transaction } from 'kysely';
 /**
  * The monthly submission window (SKILL.md sections 9, 13 and 20).
  *
- * "Attendance for a calendar month may be recorded or corrected until the 7th of
- * the following month, at 23:59 Asia/Manila. After that the month is closed." One
- * rule, three sites, and it governs both attendance domains identically.
+ * "Attendance for a calendar month may be recorded or corrected until the **end of
+ * the 7th** of the following month, Asia/Manila. The first instant the month is shut
+ * is 00:00 on the 8th." One rule, three sites in the specification, and it governs
+ * both attendance domains identically.
  *
  * **Every instant here comes from the database, never from this process**, which is
  * the commitment decision 0160 made when it recorded that the deployment runs one
@@ -39,16 +40,15 @@ export function reportingMonthOf(day: string): string {
 /**
  * The instant a reporting month's window shuts.
  *
- * **The end of the 7th, not 23:59:00 on it.** The specification says "until the 7th
- * of the following month, at 23:59", and read to the letter that leaves the last
- * sixty seconds of the 7th closed — a dead minute nobody states, nobody intends,
- * and no leader could discover except by being refused inside it. The reading
- * implemented is "through the end of the 7th", which is what "until the 7th, at
- * 23:59" says in ordinary use.
+ * **The end of the 7th** (sections 9, 13 and 20, and the ruling of 2026-08-31). The
+ * first instant a month is shut is 00:00 on the 8th, Asia/Manila.
  *
- * Written down because it is a boundary an implementer has to pick and the
- * specification does not pick it. If the literal reading is wanted, this is the one
- * line to change.
+ * Section 13 said "at 23:59" until that ruling, which read to the letter left the
+ * last sixty seconds of the 7th closed — a gap nobody wrote and no leader could
+ * discover, since being refused at 23:59:30 contradicts every published statement
+ * of the deadline. The specification now says "the end of the 7th" at all three
+ * sites, so this is no longer an implementer's choice and the flag that stood here
+ * naming this line as the one to change is gone with it.
  */
 export function windowClosesAt(reportingMonth: string): Date {
   const match = /^(\d{4})-(\d{2})-01$/.exec(reportingMonth);

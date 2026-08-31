@@ -1558,6 +1558,7 @@ Scope resolves against a target. Where the target is a Person, it resolves throu
   - **The date is not chosen by the actor.** A closed Cell's meetings cannot be rescheduled (Section 13), so the authorizing date is the scheduled one, derived from the Cell's own schedule. Without that, an actor could declare an actual date inside their own past tenure and recover authority through a request field — which is the shape the rule below refuses
   - The bound is what makes this consistent with the rule below rather than an exception to it. That rule refuses authority resolved *as of an effective date the actor chooses*, because an actor could then reach back far enough to recover it. This bound is not chosen by the actor: it is one fixed, short, forward-moving window per month, set by the calendar, and it closes on the 7th whatever anybody does. A leader recording the meetings of the Cell they led last week is not recovering authority; they are finishing the record the Cell existed to produce
 - a **DCC event** is church-wide and resolves through nothing; the endpoints on it are scoped by the people they return, so a roster or a submission covers only the requester's own authorized people (Section 9)
+  - **The guard is therefore given the actor as the target**, and the restriction to those people is a check in the owning module. "Church-wide" invites the Whole Church target and that reading is wrong: it would deny every Leader holding `dcc.take_attendance` at own/subtree, which is every leader who records DCC. The actor target passes because `OWN_SUBTREE` includes the actor, and it leaves the decision that matters on the people rather than on the event. This is the shape `GET /api/v1/people/duplicate-candidates` already uses for a church-wide read whose scoping is done by what it returns
 - an **Account** resolves through its Person
 - a **report scope selector** is itself the target: a request for a scope the actor does not hold is `SCOPE_DENIED`, never silently narrowed to what they do hold
 - an **audit entry** resolves through its target
@@ -1914,7 +1915,7 @@ A leader who has not yet submitted their people's attendance for an event that d
 
 ### DCC submission window
 
-DCC attendance for a calendar month may be recorded or corrected until the 7th of the following month, at 23:59 Asia/Manila — the same close as Cell attendance (Section 13). After that the month is closed, and only Admin may amend it, using `records.backdate_effective_date` (Section 7), with a reason, audit logged, and invalidating that month's stored figures (Section 20).
+DCC attendance for a calendar month may be recorded or corrected until the end of the 7th of the following month, Asia/Manila — the same close as Cell attendance (Section 13), where the boundary is stated and given its reason. After that the month is closed, and only Admin may amend it, using `records.backdate_effective_date` (Section 7), with a reason, audit logged, and invalidating that month's stored figures (Section 20).
 
 DCC coverage is shaped differently from Cell coverage. A Cell has one leader and its coverage counts recorded meetings out of scheduled meetings. A DCC event is church-wide, and many leaders each record their own people, so DCC coverage counts **how many responsible leaders have a record for the event**, not how many events exist. It measures whether the record exists, never who entered it — a submission made on behalf, or by an upline standing in for a leader who holds no account (below), completes that leader's coverage.
 
@@ -2013,9 +2014,25 @@ Every person has exactly one direct pastoral leader, so every person is covered 
 
 **Fixed as of the event date.** A later reassignment never moves historical records. If a person moves from one leader to another in November, October's DCC records remain with whoever was responsible in October, and re-running October's report returns the same figures (Section 3).
 
+**The date is a day and an assignment starts at an instant, so the instant is named.** The responsible leader is the direct pastoral leader in force at the **latest instant of the event's Manila day that has already passed** — the earlier of the end of that day and the moment the record is written. It is always inside the event's own day, which is what "as of the event date" means at day granularity.
+
+Both simpler readings break a path this section requires. Resolving at the **start** of the day refuses the VIP workflow below, which creates the Person with their pastoral leader and records their attendance in one sitting at the service: that assignment begins on the Sunday, so at 00:00 the person has no open row and the rule below refuses the record. Resolving at the **end** of the day unconditionally resolves a record written during the service against an instant that has not happened, which is precisely when leaders record.
+
+**Nothing recomputes it.** The value is written once and frozen, which is the paragraph above stated as a mechanism rather than as an outcome. A correction carries its predecessor's responsible leader rather than resolving it again — Section 14 lists the responsible leader among what a correction preserves, and the append-only shape writes a new row whose obvious implementation would otherwise resolve every column afresh.
+
+**An event whose Manila day has not begun takes no attendance record.** The calendar runs thirteen months ahead (below), so most rows are for services that have not happened, and the submission window does not refuse them: a future month's window is open, because it does not shut until the 7th of the month after. A record against a future Sunday advances a person's classification in months nobody has reported, and it would stand for two months before any window closed over it. It is also what makes the instant above exist at every moment a record can be written.
+
 **An upline leader may record on behalf** of a downline leader within their pastoral subtree (Section 14). The responsible leader remains the direct pastoral leader; the actor is recorded separately. Coverage measures whether the record exists, not who entered it, so a submission made on behalf completes that leader's coverage for the event.
 
 **Where the responsible leader holds no account**, the submission falls to the nearest upline leader who does.
+
+**Stated as one function over the chain, because the two clauses above are one rule.** A person's **submitter** is the nearest person holding an account, starting at their direct pastoral leader and walking up — the direct leader first, then that leader's leader, and so on. A leader's checklist is every person whose submitter they are.
+
+The walk does not stop after one level. Where a leader without an account has a downline leader who also has none, it passes through both and the deeper leader's children land on the same checklist. That follows from "nearest account-holding upline" being a property of the whole chain, and is written out because a reader building the first clause plus one level of the second gets a checklist that silently omits people.
+
+The walk is resolved at the same instant as the responsible leader, above — every step of it, not only the first. A reassignment high in a branch would otherwise move a historical checklist while the records beneath it stayed frozen.
+
+Holding an account means a row exists, not that it can be signed into. Section 6 permits an account left pending, and this section already requires the covering arrangement to persist with one — so a leader whose account was minted and never activated is their own submitter and can file nothing. That is a provisioning state with a remedy in Section 6, and not something a checklist routes around quietly.
 
 An account is provisioned when a person becomes a Cell Leader (Section 6), so a leader who disciples people but has not yet opened a Cell cannot sign in. They remain the responsible leader — the definition follows position in the pastoral tree and never depends on whether someone can log in — and their upline records for them under the on-behalf rule above.
 
@@ -2028,6 +2045,10 @@ The arrangement is intended to be temporary. When that leader takes a Cell, thei
 Provisioning is not automatic. Section 6 requires an actor holding both `cell.manage_leadership` and `accounts.manage` against that person, and where only the first is held the account step is left pending. A pending account can persist, so the covering arrangement must be able to persist with it rather than assuming it resolves on its own.
 
 A Network root leader has no pastoral leader and therefore no responsible leader (Section 5, Network roots). Admin records their attendance, and roots are excluded from coverage denominators.
+
+**They reach them through scope rather than through the role.** A root has no direct leader, so the walk above has nowhere to start and a root appears on nobody's checklist. The two Network roots therefore appear on the checklist of any actor whose `dcc.take_attendance` grant is Whole Church, and their records carry no responsible leader.
+
+Resting it on the grant rather than on the `ADMIN` role is deliberate and is the narrow reading. The role catalog above gives `dcc.take_attendance` at Whole Church to Senior Pastor as well as Admin, and a Senior Pastor **is** a root — so a role check would leave neither Senior Pastor able to record their own attendance or the other's, the two people in the church whose attendance nobody else can record either. "Admin records their attendance" says why roots are special and who fills the gap; it is not a role requirement, and it settles nothing about the word elsewhere.
 
 ### DCC classification
 
@@ -2919,7 +2940,9 @@ Facilitating is never leadership. It does not touch `cell_leaderships`, never ma
 
 ### Submission window
 
-Attendance for a calendar month may be recorded or corrected until the 7th of the following month, at 23:59 Asia/Manila (Section 20). After that the month is closed.
+Attendance for a calendar month may be recorded or corrected until the **end of the 7th** of the following month, Asia/Manila (Section 20). The first instant the month is shut is 00:00 on the 8th. After that the month is closed.
+
+**The whole of the 7th, and earlier drafts of this sentence said "at 23:59".** Read to the letter that shut the window at 23:59:00 and left the last sixty seconds of the 7th closed — a gap nobody wrote, and one no leader could discover: refused at 23:59:30 they are told the month closed, and every published rule says it closes at 23:59 on the 7th, which has not passed. `23:59` is how a person writes the end of a day on a clock with no seconds hand, and the cost of reading it that way is sixty seconds of grace a month on a boundary chosen for pastoral rather than technical reasons.
 
 Once closed, unreported meetings remain permanently unreported and outside the denominator, and coverage for that month is frozen. Only Admin may amend a closed month, using `records.backdate_effective_date` (Section 7), with a reason, audit logged (Section 21), and invalidating that month's stored figures (Section 20).
 
@@ -3176,6 +3199,8 @@ Every attendance and meeting record carries a version. A client submits the vers
 
 - **A Cell submission carries the meeting's version.** One submission is one leader's account of one meeting, so the meeting is the unit: the client sends `cell_meetings.version` and the server compares it. That is what the example below is about — nine against eight is a disagreement about the whole roster rather than about any one person, and several of the people in it may not differ at all. It is also what the conflict payload needs, since Section 22 fixes that body as one `submitted` and one `current` pair.
 - **A DCC submission compares per `(dcc_event_id, person_id)`.** A DCC event is church-wide and many leaders record against it, so two leaders recording different people must never conflict — and any unit wider than the person would make them. There is no per-leader row to version, and inventing one would make the submitting leader structural in a domain where coverage "measures whether the record exists, never who entered it" (Section 9).
+
+  **A person with no record for the event yet carries a null version**, because there is nothing to have read. Two writers can still reach that person's first record at once — their own submitter and an upline recording on behalf — and the loser meets the partial unique index over `(dcc_event_id, person_id)` rather than a stale version. It is a conflict on the same terms as any other and is one of the two cases Section 22 lists as carrying a null `submitted_version`.
 - **`cell_attendance.version` guards a correction to one person's record**, which is the second operation this section names. That write names one person, so it compares one person's version. A submission bumps the meeting's version; a correction bumps that person's.
 
 **A DCC submission carries many people, so it can conflict on several at once. It applies none of them and names the first.** The response carries that one person's two values, two actors and two timestamps, which is the shape Section 22 fixes and the whole of what a human needs to decide. The client resolves that person, resubmits under a new key, and meets the next if there is one.
@@ -3571,7 +3596,7 @@ Keep them separate in UI and data logic.
 
 ### Closed periods are stable
 
-A month closes on the 7th of the following month, 23:59 Asia/Manila (Sections 9 and 13). After close, no leader may add or correct a record, and only Admin may amend, with a reason and an audit entry.
+A month closes at the end of the 7th of the following month, Asia/Manila (Sections 9 and 13). After close, no leader may add or correct a record, and only Admin may amend, with a reason and an audit entry.
 
 A closed month's figures are therefore stable, and its reports **are** computed once and stored rather than recalculated on every request. Only the open month requires live computation. At the scale this church actually runs (Section 2), this is a requirement rather than an optimisation.
 
@@ -3998,7 +4023,12 @@ Answering `NOT_FOUND` to everyone was weighed and rejected on what it costs the 
 
 `VERSION_CONFLICT` carries what Section 14 requires a person to see. The client renders a resolution dialog directly from it:
 
-**One case carries a null `submitted_version`, and it is the only one.** A Cell meeting has no row until it is reported (Section 13), so two first submissions of one meeting race with neither holding a version: the loser meets the uniqueness of `(cell_id, scheduled_date)` rather than a stale version. It answers `VERSION_CONFLICT` with `submitted_version: null` and the stored row as `current`, which is what Section 14 asks for — the person sees what was recorded, by whom and when, against their own figures — and it is named here because a uniqueness violation left to surface on its own is an `INTERNAL_ERROR` on an ordinary race.
+**Two cases carry a null `submitted_version`, and they are the only two.** Both are a record that does not exist yet being created twice at once, so neither writer holds a version to be stale, and in both the loser meets a unique index rather than a version comparison. Each answers `VERSION_CONFLICT` with `submitted_version: null` and the stored row as `current`, which is what Section 14 asks for — the person sees what was recorded, by whom and when, against their own figures. They are named because a uniqueness violation left to surface on its own is an `INTERNAL_ERROR` on an ordinary race.
+
+- **A Cell meeting**, which has no row until it is reported (Section 13). Two first submissions of one meeting race, and the loser meets the uniqueness of `(cell_id, scheduled_date)`.
+- **A person's first DCC record for an event.** `dcc_attendance` likewise has no row until somebody is recorded, and the loser meets the partial unique index over `(dcc_event_id, person_id)` (Section 9). Two writers reach it by an ordinary route: the person's own submitter files their record, and an upline holding `dcc.submit_on_behalf` files it on behalf at the same moment (Sections 9 and 14).
+
+*This said "one case" and named only the Cell meeting until 2026-08-31, when building the DCC submission found the second. The count is stated rather than hedged because a claim about how many cases exist is checkable and "among others" is not.*
 
 The code still means what the table says. The record did not change since it was read; it came into existence while this client was drafting, which is the same problem from the other side and demands the same resolution.
 

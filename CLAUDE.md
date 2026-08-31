@@ -408,6 +408,9 @@ resolves exactly as well as it did in the single file and no better.
 - 2026-08-31 — [Four more from the third review, including a key that was wrong](docs/decisions/0167-four-more-from-the-third-review-including-a-key-that-was-wrong.md)
 - 2026-08-31 — [The closed-month back-fill is withdrawn](docs/decisions/0168-the-closed-month-back-fill-is-withdrawn.md)
 - 2026-08-31 — [Four that the closed-Cell path produced](docs/decisions/0169-four-that-the-closed-cell-path-produced.md)
+- 2026-08-31 — [The submission window runs through the whole of the 7th](docs/decisions/0170-the-submission-window-runs-through-the-whole-of-the-7th.md)
+- 2026-08-31 — [Four rulings the DCC recording path needed, settled before the code](docs/decisions/0171-four-rulings-the-dcc-recording-path-needed.md)
+- 2026-08-31 — [Who submits a person's DCC attendance, and where a root's is recorded](docs/decisions/0172-who-submits-a-persons-dcc-attendance.md)
 
 ### Open — awaiting a ruling
 

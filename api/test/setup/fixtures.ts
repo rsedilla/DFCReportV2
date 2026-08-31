@@ -44,17 +44,29 @@ export const EPOCH = new Date('2020-01-01T00:00:00+08:00');
 /**
  * **Never take the two ends of an effective-dated period from different clocks.**
  *
- * PostgreSQL's `clock_timestamp()` and Node's `Date.now()` do not agree, and on this
- * project's Windows development machines the database runs measurably *ahead* — 6-8ms,
- * drifting within a session, because PostgreSQL reads
- * `GetSystemTimePreciseAsFileTime` while V8 interpolates from the coarse system tick.
- * It is not skew between two hosts, so "the database is local" is the wrong intuition
- * and the wrong reassurance.
+ * PostgreSQL's `clock_timestamp()` and Node's `Date.now()` are not one clock, and a
+ * period taking one end from each can end before it begins.
  *
- * A fixture that stamps `started_at` from the database and `ended_at` from the host
- * therefore writes a period that ends before it begins whenever the real elapsed time
- * is under the current offset, which a local transaction usually is. Every
- * `..._period_ordered` check in migration 0009 and 0001 refuses that, intermittently.
+ * **The two agree far better than an earlier version of this comment claimed, and the
+ * rule survives that.** This said the database ran 6-8ms ahead on this project's Windows
+ * machines, and attributed it to PostgreSQL reading `GetSystemTimePreciseAsFileTime`
+ * while V8 interpolates from the coarse system tick. Measured against `dfc_ci` over 200
+ * samples, `clock_timestamp()` lands a median of 0ms and at most 1ms from a host stamp
+ * read *after* the query returns, and inside the bracket either side of it on most
+ * samples. The offset that was being read as skew was the query round trip.
+ *
+ * What makes mixing unsafe is therefore not an offset to be budgeted for but that the
+ * two ends are separated by an unbounded interval: the round trip itself, whatever the
+ * host clock does between two reads, and — in CI, where the database is a service
+ * container — real skew nobody here has measured. A period whose real elapsed time is
+ * shorter than that interval inverts, which a local transaction usually is.
+ *
+ * The mechanism is corrected rather than the rule relaxed. A rule that holds for a
+ * stated reason that is false is a rule the next reader will re-derive and discard.
+ *
+ * A fixture that stamps `started_at` from the database and `ended_at` from the host is
+ * exactly that shape, and every `..._period_ordered` check in migrations 0001 and 0009
+ * refuses the result — on some runs only, which is what makes it expensive to find.
  *
  * This has been shipped three times on one branch, twice by the fix for the previous
  * instance. The rule is per *period*, not per call site: take both ends from
