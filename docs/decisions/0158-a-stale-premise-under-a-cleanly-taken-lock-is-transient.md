@@ -1,7 +1,7 @@
 # 2026-08-31 — A stale premise under a cleanly taken lock is transient
 
-Settled before any Stage 4 code. Five sites already answered this question and did not
-agree, and Stage 4 adds every write endpoint in the attendance domain — each of which
+Settled before any Stage 4 code. Seven refusals already answered this question and did
+not agree, and Stage 4 adds every write endpoint in the attendance domain — each of which
 reads something, takes a lock, and decides.
 
 **A refusal is placed by one question: could this same body, resubmitted unchanged,
@@ -29,13 +29,22 @@ it."
 So the choice is not between two shades of meaning. One of the two answers is a dead
 end for the client, and which one it is depends on whether the body has to change.
 
-## What this changes, site by site
+## What this changes, branch by branch
 
-**The unit is a refusal — one `throw` — and not a method.** Stated because this branch
-counted both ways before settling: `assertHandoverApprovableWithin` throws two of them,
-so the same set is six methods or seven refusals, and a reader resolving one document's
-number through another's got a different answer. There are **seven** refusals of this
-kind. Six answer `RESOURCE_BUSY`; one does not.
+**The unit is an error-producing branch, not a method and not a `throw`.** Stated
+because this branch counted three ways before settling. A method is too coarse:
+`assertHandoverApprovableWithin` carries two of these and answers both the same way, but
+`floorBreach` carries one of them beside two ordinary `INVARIANT_VIOLATION` branches, so
+a method-count hides the split this ruling is about. A `throw` is too coarse for the same
+reason and worse — three of the seven are `return`s of an `ApiError` that one caller
+throws, and `floorBreach`'s single `throw` delivers two different codes, so "one `throw`"
+names a unit that answers two ways at once.
+
+*That was the definition offered here first, generalised from `assertHandoverApprovableWithin`,
+where a throw and a branch happen to coincide. Section 25 rule 19, in a paragraph written
+to stop a count from being read two ways.*
+
+Counted as branches there are **seven**. Six answer `RESOURCE_BUSY`; one does not.
 
 Four of the seven move from `INVARIANT_VIOLATION` to `RESOURCE_BUSY`, and each also
 loses the advice to mint a new key, which a 503 makes wrong:
