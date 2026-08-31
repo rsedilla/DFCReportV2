@@ -66,10 +66,15 @@ an unbounded later moment — so an even number of further writes returns the st
 value to the one the loser disagrees with, and the conflict is ordinary. Two writes by
 one account are enough.
 
-**A lost race therefore has three outcomes and they are decided by what the loser
-finds, not by what the winner wrote.** Section 22 now states them over the race itself
-rather than inside the list of two null-version cases, because the rule governs a
-correction race too, and a correction carries a version.
+**A lost race therefore has two outcomes and they are decided by what the loser finds,
+not by what the winner wrote.** Section 22 now states them over the race itself rather
+than inside the list of two null-version cases, because the rule governs a correction
+race too, and a correction carries a version.
+
+*This said "three" when it was written, counting the handler's narrowing on the index
+name as an outcome of the race. It is a guard against an error that is not a lost race
+at all. Corrected by the fourth pass, and noted here rather than silently, because §22
+states counts precisely so they can be checked.*
 
 ## 4. The test deleted on that argument had not been passing for the wrong reason
 
@@ -116,4 +121,4 @@ reproduced at 26 violations in 30 runs.
 
 Decision 0177, indexed in [CLAUDE.md](../../CLAUDE.md).
 
-Previous: [2026-08-31 — Eight on the fix batch, and the outcome that was a 500](0176-eight-on-the-fix-batch-and-the-outcome-that-was-a-500.md)
+Previous: [2026-08-31 — Eight on the fix batch, and the outcome that was a 500](0176-eight-on-the-fix-batch-and-the-outcome-that-was-a-500.md) | Next: [2026-08-31 — The fourth pass found nothing behavioural, and one thing with teeth](0178-the-fourth-pass-found-nothing-behavioural-and-one-thing-with-teeth.md)

@@ -651,9 +651,15 @@ describe('DCC recording (sections 9 and 14)', () => {
       // the assertion reads `883 >= 883`. That is exactly how the first attempt at this
       // rule shipped — the successor really began 142µs before its predecessor ended,
       // and this case passed. The comparison has to happen where the microseconds are.
-      const chain = await sql<{ overlaps: boolean; gap: string }>`
+      // **Compared as booleans, not as rendered text.** An earlier version asserted the
+      // gap rendered as `'00:00:00'`, which is the zero interval under
+      // `IntervalStyle = postgres` and `0` under `sql_standard` — so the case turned on
+      // a session setting the pool does not pin (it pins `DateStyle` alone, decision
+      // 0156). This is the third rendering-dependent comparison on this project; a
+      // boolean has no rendering.
+      const chain = await sql<{ overlaps: boolean; contiguous: boolean }>`
         SELECT successor.recorded_at < predecessor.superseded_at AS overlaps,
-               (successor.recorded_at - predecessor.superseded_at)::text AS gap
+               successor.recorded_at = predecessor.superseded_at AS contiguous
           FROM dcc_attendance predecessor
           JOIN dcc_attendance successor ON successor.id = predecessor.superseded_by
          WHERE predecessor.dcc_event_id = ${eventId}
@@ -664,7 +670,7 @@ describe('DCC recording (sections 9 and 14)', () => {
 
       // Exactly contiguous rather than merely non-overlapping: the successor begins at
       // the instant the predecessor ended, because it is read from that row in SQL.
-      expect(chain.rows[0].gap).toBe('00:00:00');
+      expect(chain.rows[0].contiguous).toBe(true);
     });
 
     it('keeps the responsible leader when a reassignment is backdated behind the event', async () => {
@@ -1388,10 +1394,17 @@ describe('DCC recording (sections 9 and 14)', () => {
           [stored.id, successorId],
         );
         await holder.query(
+          // `recorded_at` from the predecessor's `superseded_at`, which is what the
+          // service does and what `dcc_attendance_chain_contiguous` now requires. Left
+          // to the column default it is `now()` — the transaction's start — so the
+          // successor would begin before its predecessor ended, which is the defect
+          // migration 0013 exists for, written into a fixture.
           `INSERT INTO dcc_attendance
-             (id, dcc_event_id, person_id, present, responsible_leader_id, recorded_by, version)
-           VALUES ($1, $2, $3, false, $4, $5, 2)`,
-          [successorId, eventId, mark.id, manuel.id, admin.id],
+             (id, dcc_event_id, person_id, present, responsible_leader_id, recorded_by,
+              version, recorded_at)
+           VALUES ($1, $2, $3, false, $4, $5, 2,
+                   (SELECT superseded_at FROM dcc_attendance WHERE id = $6))`,
+          [successorId, eventId, mark.id, manuel.id, admin.id, stored.id],
         );
 
         // Disagrees with the value standing *before* the race, so it is a correction and
@@ -1464,10 +1477,13 @@ describe('DCC recording (sections 9 and 14)', () => {
           [first.id, second],
         );
         await holder.query(
+          // Contiguous with the row it replaces (migration 0013), as above.
           `INSERT INTO dcc_attendance
-             (id, dcc_event_id, person_id, present, responsible_leader_id, recorded_by, version)
-           VALUES ($1, $2, $3, false, $4, $5, 2)`,
-          [second, eventId, mark.id, manuel.id, admin.id],
+             (id, dcc_event_id, person_id, present, responsible_leader_id, recorded_by,
+              version, recorded_at)
+           VALUES ($1, $2, $3, false, $4, $5, 2,
+                   (SELECT superseded_at FROM dcc_attendance WHERE id = $6))`,
+          [second, eventId, mark.id, manuel.id, admin.id, first.id],
         );
 
         // and back, false -> true
@@ -1477,9 +1493,11 @@ describe('DCC recording (sections 9 and 14)', () => {
         );
         await holder.query(
           `INSERT INTO dcc_attendance
-             (id, dcc_event_id, person_id, present, responsible_leader_id, recorded_by, version)
-           VALUES ($1, $2, $3, true, $4, $5, 3)`,
-          [third, eventId, mark.id, manuel.id, admin.id],
+             (id, dcc_event_id, person_id, present, responsible_leader_id, recorded_by,
+              version, recorded_at)
+           VALUES ($1, $2, $3, true, $4, $5, 3,
+                   (SELECT superseded_at FROM dcc_attendance WHERE id = $6))`,
+          [third, eventId, mark.id, manuel.id, admin.id, second],
         );
 
         const attempt = submit(manuelAccount, eventId, [

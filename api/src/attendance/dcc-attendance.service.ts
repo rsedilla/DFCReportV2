@@ -759,7 +759,13 @@ export class DccAttendanceService {
 
       const stored = params.live.get(personId) ?? null;
       const successorId = randomUUID();
-      let closedThisRow = false;
+      // The predecessor this line closed, or null where it created a record. Carried
+      // as the id rather than as a boolean beside `stored`, so the successor's
+      // `recorded_at` below reads a value the type guarantees is there: a boolean
+      // cannot narrow `stored`, and the optional chaining that stood in its place
+      // hedged against a null the branch makes impossible — while a null would have
+      // bound into the subquery and written NULL into a NOT NULL column.
+      let closedPredecessorId: string | null = null;
 
       if (stored !== null) {
         // Supersede first, on a predicate that also serializes. Two concurrent
@@ -782,22 +788,19 @@ export class DccAttendanceService {
           // the predecessor's row lock, so a contended correction would stamp an instant
           // measurably before the close happened.
           //
-          // And **returned**, because the successor must not begin before this row
-          // ended. Left to the column default its `recorded_at` is `now()` — the
-          // instant the transaction *began* — so every correction stamped its successor
-          // as starting before its predecessor ended, by however long the transaction
-          // had already run: the checklist descent, a scope check per line, and the wait
-          // on this very row's lock. Two rows of one chain were then both live across
-          // that interval. Migration 0012 states the model that breaks — "the two ends
-          // of one period: the row is the live record from the first until the second" —
-          // and constrains only *within* a row, so nothing refused it.
+          // **Not returned**, which an earlier version of this comment instructed and
+          // an earlier version of this statement did. The successor's `recorded_at`
+          // reads this value in SQL instead — see the insert below for why carrying it
+          // back through this process does not work.
           //
-          // The constraint is still what holds the within-row half: reverting this to a
-          // host `Date` inverts a period only when the host clock happens to be behind,
-          // which here is a fraction of a millisecond and on a CI runner is unbounded,
-          // so no test can reliably fail on the choice. `dcc_attendance_period_ordered`
-          // refuses the inverted row whoever writes it. Between rows there is no
-          // constraint and this `RETURNING` is the whole of the enforcement.
+          // What holds the two invariants: `dcc_attendance_period_ordered` (migration
+          // 0012) orders the two ends of *this* row's period, and
+          // `dcc_attendance_chain_contiguous` (migration 0013) orders this row against
+          // its successor. Neither is a comment. Reverting this line to a host `Date`
+          // inverts a period only when the host clock happens to be behind — a fraction
+          // of a millisecond here, unbounded on a CI runner — so no test can reliably
+          // fail on the choice, and the constraint is what refuses the row whoever
+          // writes it.
           .set({ superseded_at: sql<Date>`clock_timestamp()`, superseded_by: successorId })
           .where('id', '=', stored.id)
           .where('superseded_at', 'is', null)
@@ -805,7 +808,7 @@ export class DccAttendanceService {
 
         // Whether the row was ours to close. The **instant** is deliberately not
         // carried back: see the successor's `recorded_at` below.
-        closedThisRow = Number(closed.numUpdatedRows) === 1;
+        closedPredecessorId = Number(closed.numUpdatedRows) === 1 ? stored.id : null;
 
         // **No check on the row count here, and that is deliberate.** A supersede that
         // matches nothing means somebody closed this row between the version check and
@@ -862,11 +865,11 @@ export class DccAttendanceService {
           // That is the identical mechanism this branch documented two files over and
           // migration 0012 caught in two fixtures — committed here in the same change.
           // The instant now stays in the database from end to end.
-          ...(closedThisRow
-            ? {
-                recorded_at: sql<Date>`(SELECT superseded_at FROM dcc_attendance WHERE id = ${stored?.id})`,
-              }
-            : {}),
+          ...(closedPredecessorId === null
+            ? {}
+            : {
+                recorded_at: sql<Date>`(SELECT superseded_at FROM dcc_attendance WHERE id = ${closedPredecessorId})`,
+              }),
           // Frozen on the first row and carried by every successor. Section 9 fixes
           // it as of the event and section 14 lists it among what a correction
           // preserves — re-resolving it would move a recorded attendance between

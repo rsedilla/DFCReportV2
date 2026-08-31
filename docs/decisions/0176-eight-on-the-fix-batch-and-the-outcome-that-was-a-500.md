@@ -35,7 +35,7 @@ consolidation that had not happened. Decision 0177 records it, along with the pa
 found it — the third false "this was done" claim on this project, and the second found
 by a reviewer counting call sites.*
 
-## 2. A lost race has three outcomes, not two, and the third was a 500
+## 2. A lost race has a second outcome, and it was a 500
 
 Factoring the rule surfaced a case neither loop had:
 

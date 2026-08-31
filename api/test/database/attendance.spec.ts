@@ -296,7 +296,17 @@ describe('the attendance tables (SKILL.md sections 9, 12, 13 and 14)', () => {
 
         await trx
           .insertInto('cell_attendance')
-          .values({ ...base, id: replacementId, present: false, version: 2 })
+          .values({
+            ...base,
+            id: replacementId,
+            present: false,
+            version: 2,
+            // Contiguous with the row it replaces (migration 0013). The service reads
+            // this from the predecessor in SQL; a fixture that left the column default
+            // would take the transaction's start and place the successor before its
+            // predecessor ended, which is the defect that migration exists for.
+            recorded_at: sql<Date>`(SELECT superseded_at FROM cell_attendance WHERE id = ${first.id})`,
+          })
           .execute();
       });
 
@@ -387,7 +397,14 @@ describe('the attendance tables (SKILL.md sections 9, 12, 13 and 14)', () => {
         db.transaction().execute(async (trx) => {
           await trx
             .updateTable('cell_attendance')
-            // One clock, for the reason above.
+            // **Closed with nothing in its place, which the row names itself to say.**
+            // Section 13 requires this path — a RESCHEDULED meeting later declared
+            // NOT_HELD keeps both records, and a NOT_HELD meeting carries no live
+            // attendance — so the attendance is closed and nothing replaces it. But
+            // `cell_attendance_supersession_is_whole` requires a `superseded_by`
+            // wherever `superseded_at` is set, so a self-reference is the only shape
+            // available. Migration 0013 exempts it for that reason, and `CLAUDE.md`
+            // records the question it leaves open.
             .set({ superseded_at: sql<Date>`clock_timestamp()`, superseded_by: attendance.id })
             .where('id', '=', attendance.id)
             .execute();
@@ -465,6 +482,55 @@ describe('the attendance tables (SKILL.md sections 9, 12, 13 and 14)', () => {
       ).rejects.toThrow(/dcc_attendance_period_ordered/);
     });
 
+    it('refuses a successor that does not begin where its predecessor ended', async () => {
+      // Migration 0013. The invariant shipped broken twice in two commits before this
+      // existed — first the successor's `recorded_at` defaulting to the transaction's
+      // start, then the closing instant truncated from microseconds to milliseconds on
+      // its way back through the driver — and nothing could fail on it either time.
+      const event = await db
+        .insertInto('dcc_events')
+        .values({ event_date: '2026-08-30' })
+        .returning('id')
+        .executeTakeFirstOrThrow();
+
+      const account = await anAccount();
+      const successorId = randomUUID();
+      const closedAt = new Date('2026-08-31T10:00:00+08:00');
+
+      await expect(
+        db.transaction().execute(async (trx) => {
+          await trx
+            .insertInto('dcc_attendance')
+            .values({
+              dcc_event_id: event.id,
+              person_id: leader.id,
+              present: true,
+              recorded_by: account,
+              recorded_at: new Date('2026-08-31T09:00:00+08:00'),
+              superseded_at: closedAt,
+              superseded_by: successorId,
+            })
+            .execute();
+
+          await trx
+            .insertInto('dcc_attendance')
+            .values({
+              id: successorId,
+              dcc_event_id: event.id,
+              person_id: leader.id,
+              present: false,
+              recorded_by: account,
+              version: 2,
+              // One millisecond early — the magnitude the truncation defect produced,
+              // and the one a comparison between two driver-rendered values could not
+              // see.
+              recorded_at: new Date(closedAt.getTime() - 1),
+            })
+            .execute();
+        }),
+      ).rejects.toThrow(/chain_contiguous|successor must begin where it ended/);
+    });
+
     it('permits a zero-length live period, which is a row entered in error', async () => {
       // `>=` rather than `>`, which is the schema-wide convention. **The case it admits
       // is not reachable through the application**, and this pins the constraint's
@@ -510,6 +576,9 @@ describe('the attendance tables (SKILL.md sections 9, 12, 13 and 14)', () => {
               present: false,
               recorded_by: account,
               version: 2,
+              // The predecessor's zero-length period ends at `at`, so its successor
+              // begins there too (migration 0013).
+              recorded_at: at,
             })
             .execute();
         }),
