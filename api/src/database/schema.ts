@@ -443,7 +443,14 @@ export interface IdempotencyKeysTable {
  * The key set is fixed by SKILL.md section 7, not open. A check constraint holds
  * the same two names in the database.
  */
-export type SettingKey = 'cell_attention_months' | 'initial_encoding_open';
+export type SettingKey =
+  | 'cell_attention_months'
+  | 'initial_encoding_open'
+  /**
+   * The first Sunday the DCC calendar covers (section 9). Seeded null and set
+   * once by the generation command's first run; an Admin may move it afterwards.
+   */
+  | 'dcc_calendar_start';
 
 export interface SettingsTable {
   key: SettingKey;
@@ -451,6 +458,117 @@ export interface SettingsTable {
   /** Null only for the system action that seeds the defaults (section 7). */
   updated_by: string | null;
   updated_at: ServerTimestamp;
+}
+
+/**
+ * Attendance (SKILL.md sections 9, 12, 13 and 14), migration 0011.
+ *
+ * **Every date-only column is `string`, and that is the section 22 rule rather than
+ * a convenience.** A meeting date, an event date and a reporting month are Manila
+ * calendar days; the driver is configured to hand back OID 1082 as the server's raw
+ * `YYYY-MM-DD` text rather than as an instant, precisely so a day never becomes a
+ * timestamp on the way through. `birth_date` above is the same type for the same
+ * reason.
+ */
+export type CellMeetingStatus = 'HELD' | 'RESCHEDULED' | 'NOT_HELD';
+
+/**
+ * Section 13 fixes this list and says why: reasons editable at runtime make
+ * reporting incomparable across periods. Adding one is an amendment to the
+ * specification, a migration, and a change here.
+ */
+export type CellMeetingNotHeldReason =
+  | 'LEADER_UNAVAILABLE'
+  | 'WEATHER_OR_CALAMITY'
+  | 'HOLIDAY_OR_CHURCH_EVENT'
+  | 'NO_MEMBERS_AVAILABLE'
+  | 'OTHER';
+
+/** A Manila calendar day, as the server renders it. Never an instant (section 22). */
+type DateOnly = ColumnType<string, string, string>;
+
+export interface DccEventsTable {
+  id: Generated<string>;
+  event_date: DateOnly;
+  removed_at: Date | null;
+  removed_by: string | null;
+  removal_reason: string | null;
+  created_at: ServerTimestamp;
+}
+
+export interface DccAttendanceTable {
+  id: Generated<string>;
+  dcc_event_id: string;
+  person_id: string;
+  present: boolean;
+  /**
+   * The person's direct pastoral leader as of the event date, fixed (section 9).
+   * Null only for a Network root, who has none; the service refuses a Person with
+   * no open assignment rather than writing null for them, because the two states
+   * are different and only the first is a root.
+   */
+  responsible_leader_id: string | null;
+  recorded_by: string;
+  recorded_at: ServerTimestamp;
+  superseded_at: Date | null;
+  /** The row that replaced this one, not an actor (section 9). */
+  superseded_by: string | null;
+  correction_reason: string | null;
+  version: Generated<number>;
+}
+
+export interface CellMeetingsTable {
+  id: Generated<string>;
+  cell_id: string;
+  /** The identity, with `cell_id` (ruling of 2026-08-31). */
+  scheduled_date: DateOnly;
+  scheduled_time: string;
+  /** Derived from `scheduled_date` and checked by the database, not trusted. */
+  week_starting: DateOnly;
+  reporting_month: DateOnly;
+  status: CellMeetingStatus;
+  actual_date: DateOnly | null;
+  actual_time: string | null;
+  not_held_reason: CellMeetingNotHeldReason | null;
+  not_held_note: string | null;
+  /** Null means the responsible leader ran it, which is the ordinary case. */
+  facilitated_by: string | null;
+  /** Frozen at first write and never re-resolved (rulings of 2026-08-31). */
+  responsible_leader_id: string;
+  submitted_by: string | null;
+  submitted_at: Date | null;
+  /** The unit a Cell submission compares (section 14). */
+  version: Generated<number>;
+  created_at: ServerTimestamp;
+}
+
+export interface CellAttendanceTable {
+  id: Generated<string>;
+  cell_meeting_id: string;
+  person_id: string;
+  present: boolean;
+  recorded_by: string;
+  recorded_at: ServerTimestamp;
+  superseded_at: Date | null;
+  superseded_by: string | null;
+  correction_reason: string | null;
+  /** Guards a correction to one person's record, not a submission (section 14). */
+  version: Generated<number>;
+}
+
+export interface CellMeetingChangesTable {
+  id: Generated<string>;
+  cell_meeting_id: string;
+  from_status: CellMeetingStatus;
+  to_status: CellMeetingStatus;
+  from_date: DateOnly | null;
+  from_time: string | null;
+  to_date: DateOnly | null;
+  to_time: string | null;
+  reason: CellMeetingNotHeldReason | null;
+  note: string | null;
+  actor_id: string;
+  occurred_at: ServerTimestamp;
 }
 
 export interface Database {
@@ -469,6 +587,11 @@ export interface Database {
   cell_leaderships: CellLeadershipsTable;
   cell_memberships: CellMembershipsTable;
   cell_leadership_requests: CellLeadershipRequestsTable;
+  dcc_events: DccEventsTable;
+  dcc_attendance: DccAttendanceTable;
+  cell_meetings: CellMeetingsTable;
+  cell_attendance: CellAttendanceTable;
+  cell_meeting_changes: CellMeetingChangesTable;
   audit_log: AuditLogTable;
   idempotency_keys: IdempotencyKeysTable;
   settings: SettingsTable;

@@ -267,6 +267,11 @@ describe('settings (SKILL.md section 7)', () => {
     expect(rows).toEqual([
       // Three months, one church-wide value, never per leader (section 15).
       { key: 'cell_attention_months', value: 3, updated_by: null },
+      // The calendar's first Sunday, seeded null: the generation command's first
+      // run sets it, and only that run (section 9, ruling of 2026-08-31). Null
+      // here is the value, not an absence -- the row exists so the command has one
+      // to update rather than needing an insert path the other two keys do not.
+      { key: 'dcc_calendar_start', value: null, updated_by: null },
       // The phase is open, and is closed once by an audited Admin action
       // (section 2).
       { key: 'initial_encoding_open', value: true, updated_by: null },
@@ -295,7 +300,7 @@ describe('settings (SKILL.md section 7)', () => {
     ).rejects.toThrow(/change the value instead/);
 
     const rows = await db.selectFrom('settings').select('key').execute();
-    expect(rows).toHaveLength(2);
+    expect(rows).toHaveLength(3);
   });
 });
 

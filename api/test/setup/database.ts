@@ -46,6 +46,11 @@ export async function truncateAll(db: Kysely<Database>): Promise<void> {
     TRUNCATE TABLE
       idempotency_keys,
       audit_log,
+      cell_meeting_changes,
+      cell_attendance,
+      cell_meetings,
+      dcc_attendance,
+      dcc_events,
       cell_leadership_requests,
       cell_memberships,
       cell_leaderships,
@@ -69,7 +74,8 @@ export async function truncateAll(db: Kysely<Database>): Promise<void> {
   await sql`
     INSERT INTO settings (key, value, updated_by) VALUES
       ('cell_attention_months', '3'::jsonb, NULL),
-      ('initial_encoding_open', 'true'::jsonb, NULL)
+      ('initial_encoding_open', 'true'::jsonb, NULL),
+      ('dcc_calendar_start', 'null'::jsonb, NULL)
     ON CONFLICT (key) DO UPDATE
        SET value = excluded.value,
            updated_by = NULL,
