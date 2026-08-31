@@ -128,11 +128,11 @@ describe('the person lock, and the identifier boundary that needs the same fixtu
    *
    * *The sentence this replaces claimed the construction guarantee for a copy, and there
    * were twenty-four copies across seven files. What a copy cannot promise is that the
-   * others agree with it, and the failure is silent: a drifted probe looks for a key
-   * nobody takes, finds nothing waiting, and reports the same zero as a system that
-   * never blocked — while every assertion here is that a waiter appears.* The case
-   * below pins the one remaining computation against the key the implementation is
-   * observed to take, which is the part a shared helper cannot promise on its own.
+   * others agree with it — and a drifted probe reports the same zero as a lock that was
+   * never taken, so the failure names nothing, which is a diagnosis problem rather than
+   * a silent one.* The case below pins the one remaining computation against the key the
+   * implementation is observed to take, which is the part a shared helper cannot promise
+   * on its own.
    */
   async function assertWaitsOnPersonKey(
     personId: string,
@@ -428,14 +428,20 @@ describe('the person lock, and the identifier boundary that needs the same fixtu
     //
     // **It is not the only case that would fail if they diverged — it is the only one
     // that would say so.** Eight of the eleven cases in this file take a person lock and
-    // all eight go red on a divergence, but they go red as a twenty-second backstop
-    // "hang rather than contention", which reads identically to a lock that was never
-    // taken. This one observes the implementation holding a key and compares it, so the
-    // message names the fault.
+    // all eight go red on a divergence. They go red in about three seconds, as
+    // `expect(received).toBeGreaterThan(expected)` with a received of 0 — a message that
+    // names no key and reads identically to a lock that was never taken. This one
+    // observes the implementation holding a key and compares it, so the fault has a
+    // name.
     //
-    // *A first version of this comment said drift was silent and that this was the only
-    // case that would fail. Neither is true: these probes assert a count is positive, so
-    // nothing-found is already a failure.*
+    // *Two earlier versions of this comment got the mechanism wrong in opposite
+    // directions. The first said drift was silent; these probes assert a count is
+    // positive, so nothing-found is already a failure. The second said the eight fail as
+    // a twenty-second backstop; `lockPersonsWithin` bounds its wait at three seconds
+    // (SKILL.md section 5), so a blocked request aborts and settles and the poll returns
+    // zero. The backstop is unreachable on those paths — and reachable on this one, whose
+    // transaction waits on a promise rather than on a lock, which is the reverse of what
+    // was written.*
     //
     // **The canonicalization is pinned on both sides, and the first version pinned it on
     // neither.** `hashtextextended` is case-sensitive while a `uuid` comparison is not,
@@ -472,8 +478,11 @@ describe('the person lock, and the identifier boundary that needs the same fixtu
       // key; without the `::uuid` cast they do not, and nothing else here would notice.
       expect(await personLockKey(probe, mark.id.toUpperCase())).toBe(key);
 
-      // Bounded by the attempt, like every other probe here: zero means the transaction
-      // finished without the helper's key ever being held, which is the finding.
+      // Bounded by the attempt, like every other probe here. **This case is the one
+      // place the backstop is live**, because the transaction above waits on `held`
+      // rather than on a lock, so nothing bounds it: on a divergence the poll runs its
+      // full twenty seconds and throws "a hang rather than contention", inside the
+      // thirty-second case timeout.
       //
       // **The implementation canonicalizes**, which this pins because the transaction
       // above was given the *uppercase* spelling while `key` was computed from the

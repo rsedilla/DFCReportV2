@@ -128,22 +128,39 @@ export async function countWhileInFlight(
  * **What a drifted copy costs is a red suite for the wrong reason, not a green one.**
  * That is worth stating precisely, because the intuitive claim — a probe looking in the
  * wrong place finds nothing and the case passes — is false of almost all of these, and
- * was the justification this file was first written with. Every probe here ends
- * `expect(...).toBeGreaterThan(0)`, so nothing-found is a failure. Both drift directions
- * are red: a drifted *lock* means the request never blocks, the attempt settles, and the
- * poll returns zero; a drifted *probe* means the request is still blocked, the attempt
- * never settles, and `countWhileInFlight` runs to its backstop and throws "a hang rather
- * than contention".
+ * was the justification this file was first written with. Almost every probe here ends
+ * `expect(...).toBeGreaterThan(0)`, so nothing-found is a failure.
  *
- * The cost is diagnosis. A probe pointed at nothing is indistinguishable from a lock
- * that was never taken, and it presents as a twenty-second hang rather than as an
- * assertion about a key — which is a bad half hour for whoever meets it, and the reason
- * to remove the duplication before Stage 4 adds an eighth file.
+ * **Both drift directions fail fast, in about three seconds.** A drifted *lock* means
+ * the request never blocks and the poll returns zero. A drifted *probe* means the
+ * request does block — and `lockPersonsWithin` sets `lock_timeout` to three seconds
+ * before it takes anything (SKILL.md section 5), so the request aborts, answers
+ * `RESOURCE_BUSY`, and settles; the poll then returns zero too.
  *
- * **Two sites are the exception, and there the intuition holds.**
- * `closure-locking.spec.ts` asserts twice that a move into a destination Cell does *not*
- * block. A drifted key there finds nothing, which is what those cases expect, so they
- * stay green over a probe that is checking nothing at all.
+ * *A second version of this paragraph said a drifted probe never settles and surfaces as
+ * a twenty-second backstop. That ignores the bound section 5 requires, which
+ * `person-lock.e2e.spec.ts` demonstrates end to end in a green case. The backstop is
+ * unreachable on every path here but one, and that one is the pinning case's own
+ * transaction, which waits on a promise rather than on a lock.*
+ *
+ * The cost is diagnosis rather than time. `expect(received).toBeGreaterThan(expected)`
+ * with a received of 0 names no key, and reads identically whether the probe was
+ * pointed at nothing or the lock was never taken — which is the reason to remove the
+ * duplication before Stage 4 adds an eighth file.
+ *
+ * *"Almost every" above has one exception in the other direction, and it is the file
+ * that had the best probe:* `cell-membership.e2e.spec.ts`'s `waitForBlockedOn` ends in a
+ * throw rather than an expectation, and its message carries the key — "nothing ever
+ * blocked on advisory key N; the case proves nothing". That is what the rest of them
+ * should read like on a drift, and it is why that file's probe is the one this helper
+ * was built from.
+ *
+ * **`closure-locking.spec.ts` is the exception, and it is the whole file rather than a
+ * case or two.** It never invokes `lockPersonsWithin`: it stages both sides of every
+ * contention itself, through `holdPersonLock`, and imports `CellLock` only for the
+ * row-lock strengths. A divergence between the helper and the implementation therefore
+ * moves both sides equally and all five cases stay green over a probe checking nothing.
+ * Worth knowing before adding a sixth there.
  *
  * The construction guarantee is not lost, it moves: the key is still computed in SQL by
  * the database rather than in JavaScript, once, by `personLockKey` below, and
@@ -151,7 +168,15 @@ export async function countWhileInFlight(
  * is observed to take.
  */
 
-/** Anything that can run a parameterized statement: `pg.Client` satisfies it. */
+/**
+ * Anything that can run a parameterized statement: `pg.Client` satisfies it.
+ *
+ * `pg.Pool` satisfies it structurally and must not be passed. Every function here
+ * depends on consecutive statements reaching one backend — the transaction the lock
+ * lives in, and `pg_backend_pid()` in the check below — and a pool may hand each
+ * statement a different one. Nothing enforces that, because a pool breaks `BEGIN`
+ * first and every call site passes a `Client`.
+ */
 interface Queryable {
   query<R extends Record<string, unknown>>(
     text: string,
@@ -230,7 +255,8 @@ export async function holdPersonLock(client: Queryable, personId: string): Promi
  * the three files that probed `pg_locks` for a key omitted it; `cell-membership.e2e.spec.ts`
  * had it and said why. (Three, not seven: the other four files only *took* the lock and
  * never observed one, and `invariants.spec.ts` polls `pg_locks` by pid, which is
- * cluster-unique and needs no such filter.)
+ * cluster-unique and needs no such filter — as does the check inside `holdPersonLock`
+ * below, for the same reason.)
  *
  * **Verified rather than assumed, and not pinned by a case.** Against this project's
  * PostgreSQL, an advisory lock's `pg_locks` row reports `datname` and `objsubid = 1`, so

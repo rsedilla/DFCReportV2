@@ -975,8 +975,9 @@ describe('cell membership (section 10)', () => {
  *
  * **The predicate moved to `test/setup/concurrency.ts` and the reasoning stayed here**,
  * because it is this case's history rather than the helper's. What moved is the
- * `pg_locks` query and the database filter the paragraphs below argue for; six other
- * files had the same probe without that filter, and now share this one.
+ * `pg_locks` query and the database filter the paragraphs below argue for. Two other
+ * files probed `pg_locks` for a key without that filter and now share this one — two,
+ * not six: the remaining four only *took* the lock and never observed one.
  *
  * **Keyed on the lock, and the first version was keyed on nothing.** It polled
  * `pg_stat_activity` for any active backend with `wait_event_type = 'Lock'`, and
