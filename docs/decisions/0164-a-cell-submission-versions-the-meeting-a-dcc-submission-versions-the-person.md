@@ -18,6 +18,16 @@ the phone reconnects, its submission is based on a version that no longer exists
 against eight is a disagreement about the whole roster, not about any one person — and
 several of the people in it may not differ at all.
 
+**One reading of that example is outside this mechanism, and 0162 is why.** If the phone
+drafted before *either* submission landed, there is no meeting row and no version to send,
+so the race is two first submissions rather than a stale one — and it is decided by the
+`(cell_id, week_starting)` uniqueness rather than by a version. That case is settled in
+[decision 0165](0165-four-stop-conditions-the-stage-four-rulings-raised.md), which makes
+the loser's answer a `VERSION_CONFLICT` carrying a null submitted version, so Section 14's
+requirement that a person sees both figures holds either way. The example is about a
+version conflict once a version exists, which is the ordinary case and the one this
+ruling places.
+
 **It is what the conflict payload needs.** Section 22 fixes the `VERSION_CONFLICT` body
 as one `submitted` and one `current`, each with an actor and a timestamp, and requires
 that "a conflict response that omits any of them cannot satisfy Section 14, because the
@@ -40,6 +50,14 @@ church and `dcc_attendance` is per person; the version Section 9 places is on th
 it"** — a submission made on behalf completes that leader's coverage. A unit keyed on the
 submitting leader would cut against that, and inventing a per-leader submission row to
 version is structure Section 9 does not describe.
+
+**A DCC submission is nonetheless a batch, and this ruling owed an answer for a collision
+across it.** Section 9's checklist covers a leader's own direct children *and* those of
+every downline leader without an account, so an on-behalf collision conflicts on every one
+of them at once — and the objection raised against per-person versioning for Cells, that a
+list of conflicts has no single pair to render, applies here unchanged. 0165 settles it:
+the submission applies none of them and names the first, which is one pair and is the
+shape Section 22 fixes.
 
 ## The asymmetry is the domains, not an inconsistency
 
@@ -75,4 +93,4 @@ coverage must not depend on who entered the record.
 
 Decision 0164, indexed in [CLAUDE.md](../../CLAUDE.md).
 
-Previous: [2026-08-31 — A Cell meeting's responsible leader is frozen as of the meeting](0163-a-cell-meetings-responsible-leader-is-frozen-as-of-the-meeting.md)
+Previous: [2026-08-31 — A Cell meeting's responsible leader is frozen as of the meeting](0163-a-cell-meetings-responsible-leader-is-frozen-as-of-the-meeting.md) | Next: [2026-08-31 — Four Stop Conditions the Stage 4 rulings raised](0165-four-stop-conditions-the-stage-four-rulings-raised.md)

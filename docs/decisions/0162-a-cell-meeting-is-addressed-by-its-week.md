@@ -10,7 +10,8 @@ no row before it.** `(cell_id, week_starting)` is unique.
 
 ## Why no row before it is reported
 
-Three rules already say so, and only the route's shape suggested otherwise.
+One rule decides it and two others agree with it, which is less than "three rules
+already say so" — the claim this section opened with.
 
 **Section 13 has exactly three statuses and all three are things a leader reports.** It
 says an unreported meeting "is therefore not a status at all. It is an outstanding task".
@@ -19,15 +20,23 @@ rule 8 forbids adding one. That is not a technicality: the ambiguity between "di
 happen" and "not yet told us" is what the three statuses exist to remove, and a nullable
 status reintroduces it inside the table.
 
-**Section 12 counts N from rows.** "N = count of HELD + RESCHEDULED meetings", with
+**Section 12 counts N from rows** — "N = count of HELD + RESCHEDULED meetings", with
 unreported meetings excluded because "an unreported meeting is an absence of data, not a
-fact about attendance". Absence of data is absence of a row.
+fact about attendance". *That is consistent with this ruling and does not decide it: a row
+carrying a fourth state would be excluded from N in exactly the same way. "Absence of data
+is absence of a row" is the conclusion, and the first version of this section offered it
+as a premise.*
 
-**Coverage is already two different things counted two different ways.** Section 12 asks
-for "4 of 5 meetings recorded": the 5 is derived from the Cell's schedule against the
-calendar, which Section 13 calls "a calendar concept … not a meeting status", and the 4
-is a count of rows. Generating rows would make both sides the same count and the line
-would always read 5 of 5.
+**What does support it independently is Section 13's own arithmetic**, written before this
+ruling: `Total Meetings = Held + Rescheduled + Not Held` and
+`Coverage = Total Meetings / Scheduled`. The numerator is a count of rows bearing one of
+the three statuses and the denominator is derived from the schedule — two figures reached
+two ways, which is only true if a row means a report.
+
+**And the coverage line says the same thing in words.** Section 12 asks for "4 of 5
+meetings recorded", where the 5 is derived from the Cell's schedule against the calendar —
+which Section 13 calls "a calendar concept … not a meeting status". Generating rows would
+make both sides the same count and the line would always read 5 of 5.
 
 ## Why the week rather than a UUID
 

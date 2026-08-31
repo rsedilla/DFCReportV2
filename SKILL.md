@@ -1947,15 +1947,24 @@ Do not create events lazily on first use. If an event exists only once somebody 
 
 Because every Sunday has an event by default, an absent event always means a recorded, audited decision, and coverage is measurable against a denominator that exists before anyone submits anything.
 
-**An Admin command advances the horizon, and the deployment schedules it.** `npm run generate:dcc` tops the calendar up to twelve months, creating only the Sundays that have no row. It is idempotent: running it twice, or daily, changes nothing the second time, which a unique constraint on `event_date` makes a property of the table rather than of the command. It is audit logged (Section 21), naming the range covered and the number of events created.
+**A command advances the horizon, and the deployment schedules it.** `npm run generate:dcc` creates the Sundays that have no row. It is idempotent: running it twice, or daily, changes nothing the second time, which a unique constraint on `event_date` makes a property of the table rather than of the command.
 
-Three things it must not do, each of which would move a figure somebody has already read:
+**It generates thirteen months ahead, against a floor of twelve.** The rule above is "at least twelve months", so a top-up *to* twelve satisfies it at the instant it runs and at no instant afterwards. The target is a month clear of the floor, and the command is scheduled monthly, so an ordinary run never approaches it.
 
-- **It never revives a removed Sunday.** A removed event is retained as a row with `removed_at` set, so a removed Sunday is not a missing one.
-- **It never creates an event in the past.** The horizon runs forward from the day it is run. A past Sunday with no event is a fact about the calendar, and adding one afterwards changes a closed month's denominator.
+**It back-fills a Sunday it finds missing in the past, and that is what keeps the guarantee above true.** Every Sunday carries an event unless an Admin has deliberately removed it — a removed Sunday keeps its row, so it is never missing — and the only way for a past Sunday to have no row is a lapse. Refusing to fill it would leave that month's N permanently wrong, with no route in this specification able to correct it, which turns a late schedule into unrecoverable data.
+
+**Back-filling into a closed month is backdating, and carries what backdating carries.** It changes a month's N, and every bucket derived from it, for a period already reported — so it requires `records.backdate_effective_date` (Section 7), a reason, an audit entry, and it is surfaced in Network Summary as a correction, on the same terms as amending attendance in a closed month. An ordinary run fills only open months and needs none of that; a run that finds a closed month short refuses that part and reports it.
+
+Two things it never does:
+
+- **It never revives a removed Sunday**, because a removed event keeps its row and is therefore not missing.
 - **It never removes anything.** Removing a Sunday is the deliberate, reasoned Admin action above, and is not something a top-up decides.
 
-A command rather than a background job, because Section 2 does not require queues or workers for the initial release and Section 13 declines to introduce one — so a scheduler here would be the first, for the one task in the system that tolerates being late. It tolerates it because the horizon is twelve months and the need is one Sunday a week: a run a month overdue still leaves eleven months of calendar, and nothing reads past the current month and its submission window. The obligation sits with the deployment, alongside the backup schedule Section 24 places there for the same reason.
+**The horizon is surfaced, because a schedule that stops is otherwise invisible.** The Admin dashboard carries the date the calendar reaches (Section 19), so a lapse is seen rather than inferred from a wrong figure months later. That is the part the command needs and does not get for free: an argument that placed this obligation with the deployment "alongside the backup schedule" does not carry, because a backup job reports its own failure and a command nobody runs reports nothing (Section 25, rule 19).
+
+A command rather than a background job, because Section 2 does not require queues or workers for the initial release and Section 13 declines to introduce one — so a scheduler here would be the first. What makes that acceptable is the horizon plus the dashboard, not the tolerance: with the date visible, a lapse is a task somebody sees, and thirteen months is long enough that seeing it in a week is soon enough.
+
+**The command runs as a system action** and writes its audit entry with a null `actor_id`, which Section 21 permits for one. It has no interactive actor: it is invoked by a schedule, and requiring `ADMIN` — as the tree import does, where a person adjudicates duplicates — would mean either a stored credential or a person running it weekly. **Back-filling a closed month is the exception**: that requires `records.backdate_effective_date`, so it is run by a person and the entry names them. The entry's target is the event, one per event created, because Section 21 requires a target and one entry per action performed; a run that creates none writes none.
 
 ### Attendance is face to face
 
@@ -2795,32 +2804,52 @@ If the leader was present and the meeting was available, the meeting is `HELD` w
 
 ### Who conducted the meeting
 
-Record `facilitated_by` on the meeting. It is nullable and defaults to the Cell's current leader.
+Record `facilitated_by` on the meeting. It is nullable and defaults to the meeting's responsible leader — whoever led the Cell on its date, by the rule below, and not whoever holds the Cell when the record is entered. A meeting submitted after a handover would otherwise default its facilitator to somebody who was not in the room.
 
 Where a leader cannot conduct their own meeting and another person runs it — a disciple, or an upline leader — record that person as the facilitator. Three roles are distinct, and all three may differ on a single meeting:
 
-- **responsible leader** — whoever led the Cell in the meeting's week (Section 11); reporting rolls up to them
+- **responsible leader** — whoever led the Cell on the meeting's date (Section 11); reporting rolls up to them
 - **facilitator** — who conducted this meeting
 - **submitter** — who entered the record (Section 14)
 
 **"Whoever led it then", not "whoever leads it now", and the record is frozen.**
-`cell_meetings.responsible_leader_id` is resolved from `cell_leaderships` as of the
-meeting's week and written once. A later handover never moves it, which is word for word
-the rule Section 9 states for DCC — a reassignment does not move historical records — and
-is required by three things besides: a stored column can hold only one answer and
-rewriting it on every handover is what Section 1 principle 12 forbids; Section 20 requires
-a closed month's figures not to move; and Section 16 counts New Cell Leaders from when a
-leadership assignment starts, so an incoming leader must not acquire months they did not
-lead.
+`cell_meetings.responsible_leader_id` is resolved from `cell_leaderships` and written
+once; a later handover never moves it, which is the rule Section 9 states for DCC — a
+reassignment does not move historical records.
 
-This is a different question from **scope**, which does resolve through the Cell's leader
-now (Section 7). Who may act on a record and who a record belongs to are two questions,
-and Section 7's own rule that a read asks about a period while a write is acted on now is
-where they part.
+**The instant is the meeting's `actual_date` where it has one, and its `scheduled_date`
+otherwise.** A week is not an instant, and a handover or a closure may land on any day
+inside one, so resolving at the week's start would attribute a Saturday meeting to a
+leader who handed the Cell over on the Wednesday — the outcome this rule exists to
+prevent. The actual date is also where the meeting's **roster** comes from, so the leader
+and the people are read at one instant rather than two. A `NOT_HELD` meeting has no
+actual date and uses the scheduled one.
 
-A meeting cannot be recorded for a week the Cell had no leader in. That is unreachable
-through any operation Sections 10 and 11 define, and it is refused rather than defaulted,
-because a meeting with no responsible leader is a record nothing rolls up.
+For a `RESCHEDULED` meeting that consequently means the leader may be read from a
+different calendar week than the one the meeting reports in. That is already true of its
+roster, and it is the right way round: the meeting's reporting period is a fact about
+which week it belongs to, and its responsible leader is a fact about who was leading when
+it happened.
+
+Two things require the freeze, and a third that looks like one does not. Section 1
+principle 12 forbids rewriting the column on every handover, and a stored column can
+carry only one answer. Section 20 requires a closed month's figures not to move, and
+Section 14 makes the responsible leader a reporting dimension. *Section 16 does not: New
+Cell Leaders counts a person's first qualifying leadership from `cell_leaderships`, so it
+would not move by one however this column were resolved. An earlier version of this
+paragraph claimed it would.*
+
+**Scope is a separate question and resolves separately.** Section 7 resolves a Cell
+meeting through the Cell's leader **as of the period being viewed** for a read, falling
+back to its last leader where the Cell is closed, and through the current leader for a
+write. Neither is this rule: who may act on a record and who a record belongs to are
+different questions, and the freeze answers only the second. *An earlier version of this
+paragraph said scope resolves "through the Cell's leader now", which is Section 7's
+answer for a write and the opposite of its answer for a read.*
+
+A meeting cannot be recorded for a date the Cell had no leader on. That is refused rather
+than defaulted, because a meeting with no responsible leader is a record nothing rolls
+up.
 
 Facilitating is never leadership. It does not touch `cell_leaderships`, never makes the facilitator a current Cell Leader, never counts toward New Cell Leaders (Section 16), and never moves Cell members into the facilitator's counts. A genuine handover of a Cell is a separate, deliberate change to `cell_leaderships`, made through the request-and-approve workflow of Section 10 and never as a side effect of who conducted a meeting. There is no threshold at which repeated facilitation becomes leadership.
 
@@ -2878,6 +2907,20 @@ row exists, which is what a client listing weeks awaiting a record needs, and a 
 therefore names the same meeting. It discloses nothing: the Cell in the path is still
 addressed by its UUID, and a week is a date.
 
+**A closed Cell still takes a record for a week it was open, until the window shuts.**
+Section 10 says a Cell closed part-way through a month "simply has fewer recorded
+meetings that month" — fewer, not none — and a leader has until the 7th of the following
+month whether or not the Cell survived. So a Cell closed on 20 March accepts submissions
+for the weeks before its closure until 7 April, from the leader who led it, whose scope
+Section 7 preserves through the last-leader fallback.
+
+Weeks *after* the closure are refused: the Cell did not exist to meet.
+
+Without this the refusal would manufacture evidence. A Cell that met three times and then
+closed would report `0 of 4 meetings recorded` — which Section 7 names as "the evidence
+that its leader reported nothing", arguing there about a backdated closure, which erases
+it. Refusing here would manufacture that same evidence against a leader who did meet.
+
 **DCC is deliberately the other way, and the reason is not symmetry.** A DCC event must
 exist before anyone submits because its *absence* carries a meaning somebody decided
 (Section 9), and its coverage is measured against a denominator that has to exist first. A
@@ -2897,7 +2940,7 @@ cell_meetings
 - actual_time             nullable
 - not_held_reason         nullable, required where status is NOT_HELD
 - not_held_note           nullable, required where the reason is OTHER
-- facilitated_by          nullable, defaults to the Cell's current leader
+- facilitated_by          nullable, defaults to the meeting's responsible leader
 - responsible_leader_id
 - submitted_by            nullable
 - submitted_at            nullable
@@ -3034,6 +3077,10 @@ Every attendance and meeting record carries a version. A client submits the vers
 - **A Cell submission carries the meeting's version.** One submission is one leader's account of one meeting, so the meeting is the unit: the client sends `cell_meetings.version` and the server compares it. That is what the example below is about — nine against eight is a disagreement about the whole roster rather than about any one person, and several of the people in it may not differ at all. It is also what the conflict payload needs, since Section 22 fixes that body as one `submitted` and one `current` pair.
 - **A DCC submission compares per `(dcc_event_id, person_id)`.** A DCC event is church-wide and many leaders record against it, so two leaders recording different people must never conflict — and any unit wider than the person would make them. There is no per-leader row to version, and inventing one would make the submitting leader structural in a domain where coverage "measures whether the record exists, never who entered it" (Section 9).
 - **`cell_attendance.version` guards a correction to one person's record**, which is the second operation this section names. That write names one person, so it compares one person's version. A submission bumps the meeting's version; a correction bumps that person's.
+
+**A DCC submission carries many people, so it can conflict on several at once. It applies none of them and names the first.** The response carries that one person's two values, two actors and two timestamps, which is the shape Section 22 fixes and the whole of what a human needs to decide. The client resolves that person, resubmits under a new key, and meets the next if there is one.
+
+All or nothing, rather than applying the people who did not conflict: a partial result is a third outcome, and a leader reading the response could not tell what had been recorded without fetching the roster again. Section 14's rule is that a conflict is resolved by a person and never by the system, and applying half of a submission is the system deciding about the half it applied.
 
 The asymmetry is the domains rather than an inconsistency, and it is the one Section 12 already records for monthly-attendance buckets, one layer down: a Cell meeting belongs to one leader and therefore has a unit, while a DCC event belongs to the church, so the finest thing belonging to one leader is the person.
 
@@ -3366,6 +3413,7 @@ Admin focuses on platform operations:
 - Pending Cell leadership requests, of either kind (Section 10). Both belong on the queue for the same reason: a request nobody can see is a request nobody acts on, and a pending one changes nothing until it is decided. A new Cell additionally holds up an account (Section 6), which a handover does only where the incoming leader does not already lead one
 - People management
 - Networks / pastoral assignments
+- **The date the DCC calendar reaches** (Section 9). One line, factual: a schedule that stops advancing the horizon is otherwise invisible until a month's figures are already wrong, and this is what makes the command's failure something somebody sees
 - DCC Attendance administration
 - Cell Attendance administration
 - Accounts
@@ -3651,7 +3699,9 @@ That is not tidiness: it is what the boundary in Section 7 keys on when deciding
 
 **The bare forms are in the set because a path parameter binds under one.** A route declaring `{id}` hands the boundary the key `id`, so a convention admitting only the suffixed forms would exclude every path parameter in the API — which is the case the boundary exists for. The plural is admitted with it, at both positions, so that `ids` and `acknowledged_duplicate_ids` are one rule rather than two.
 
-**`camelCase` is not used at this boundary**, and the convention is stated rather than assumed because the boundary cannot enforce what it is not told. A field named `meetingId` carries an identifier and is not canonicalized, which is a defect that shows up as an authorization comparison quietly answering on a spelling. The example routes above use `{meeting_id}` for this reason.
+**`camelCase` is not used at this boundary**, and the convention is stated rather than assumed because the boundary cannot enforce what it is not told. A field named `meetingId` carries an identifier and is not canonicalized, which is a defect that shows up as an authorization comparison quietly answering on a spelling.
+
+**`{meeting_id}` is named that way by this rule and is not an example of it working.** A Cell meeting is addressed by the Monday of its week (Section 13), and Section 7 canonicalizes a value only where the field's name says it is an identifier **and** the value is UUID-shaped — so a date passes through untouched. The name is still right, because the day this route ever takes a UUID the rule must already reach it; what it is not is a demonstration. `{id}` on the Cell in the same path is the demonstration, and it is a UUID.
 
 A pastoral leader is `pastoral_leader_id` wherever a request names one — Section 11 makes Cell leadership a first-class concept, so a bare `leader_id` does not say which kind of leader is meant. A **Cell's** leader is `cell_leader_id`, and the filter sketched under Filtering and sorting below carries that name rather than the bare one.
 
@@ -4003,7 +4053,7 @@ These are not deferred. They are cheap to design in and expensive to retrofit, a
 
 - **Client-generated idempotency keys on every write.** A leader recording attendance on an unreliable connection will retry, and a retry must never create a second record.
 - **Version checks on every update**, so concurrent writes conflict rather than overwrite (Section 14).
-- **Stable UUIDs**, generatable by the client, so a record drafted offline keeps its identity when it syncs.
+- **Stable identifiers, generatable by the client**, so a record drafted offline keeps its identity when it syncs. A UUID is the general answer and is what a Person, a Cell and a request use. Where the record's identity is already a fact the client holds, that fact is the identifier instead: a Cell meeting is addressed by the Monday of its week (Section 13), which is derivable offline, stable, and — unlike a minted UUID — the same value on two devices drafting the same meeting, so it collides where a UUID would silently duplicate. What this rule forbids is an identity the **server** assigns, which is the next line.
 - **Server-side validation on every sync path.** A client is never trusted to have validated anything.
 
 ### Deferred until required

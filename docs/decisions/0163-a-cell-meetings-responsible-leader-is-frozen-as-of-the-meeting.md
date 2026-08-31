@@ -27,9 +27,12 @@ re-attributed October's meetings would change October's per-leader totals after 
 closed, which Section 3 makes a reproducibility guarantee: re-running a past period
 returns what it returned.
 
-**Section 16 counts New Cell Leaders by when a leadership assignment starts.** An
-incoming leader whose past meetings moved with them would appear to have led in months
-before their assignment began, which is the figure Section 16 exists to state precisely.
+~~**Section 16 counts New Cell Leaders by when a leadership assignment starts.**~~
+*Withdrawn. The premise is true and the inference is not: Section 16 counts a person's
+first qualifying leadership from `cell_leaderships`, and no Section 16 metric reads
+`cell_meetings` — so that figure would not move by one however this column were resolved.
+Section 21 already says as much about the audit log one domain over. What stands in its
+place is Section 14, which makes the responsible leader a reporting dimension.*
 
 **And Section 9 already decided the same question**, for the same reason, in the
 neighbouring domain. Reading Section 13's "current" as current-at-the-time makes the two
@@ -47,12 +50,16 @@ rather than reversing anything.
 
 ## What was rejected
 
-**Resolving at read time through the Cell's leader now.** The literal reading. It is what
-Section 7 does for *scope* — authority over a Cell resolves through its current leader —
-and the distinction matters: Section 7's own subsection says that "the period being
-viewed" governs a read while a write "is acted on now", and who a record *belongs to* is
-not who may act on it. Scope moving with a handover is correct and intended; attribution
-moving with it is not.
+**Resolving at read time through the Cell's leader now.** The literal reading, and it is
+not what Section 7 does for scope either. Section 7 resolves a Cell meeting through the
+Cell's leader "as of the period being viewed", falling back to its last leader where the
+Cell is closed — so *now* is its answer for a write and not for a read.
+
+*A first version of this section said scope "does resolve through the Cell's leader now",
+citing the subsection that refutes it. Read correctly, scope and attribution converge on
+the meeting's own period for a read and diverge only for a write, which is a narrower and
+truer statement than the one it replaced.* What remains is that they are different
+questions: who may act on a record is not who the record belongs to.
 
 **Stamping whoever holds the Cell at the moment of submission.** Simplest, and it
 differs from the ruling only for a meeting recorded after a handover — which is a live
@@ -60,14 +67,29 @@ case inside the submission window, since a leader has until the 7th of the follo
 month. It would attribute a meeting to somebody who did not lead the Cell that week,
 which is the thing the freeze exists to prevent.
 
+## The instant
+
+**Not "the week", which this ruling first said.** A week is a period and a handover or a
+closure lands on a day, so resolving at the week's start attributes a Saturday meeting to
+a leader who left on the Wednesday — the outcome the freeze exists to prevent. Settled in
+[decision 0165](0165-four-stop-conditions-the-stage-four-rulings-raised.md): the instant
+is the meeting's `actual_date` where it has one and its `scheduled_date` otherwise, which
+matches Section 9's "as of the event date" and is the same instant the meeting's roster is
+read at.
+
 ## What it costs
 
-Resolving the leader as of a past week is a query against `cell_leaderships` rather than
-a read of the Cell's current row, and a Cell with no leadership row covering that week
-cannot have a meeting recorded against it. That case is not reachable through any
-operation Sections 10 and 11 define — an `ACTIVE` Cell has exactly one leader and a
-`CLOSED` Cell is refused — and it is refused rather than defaulted, because a meeting
-with no responsible leader is a record nothing rolls up.
+Resolving the leader as of a past date is a query against `cell_leaderships` rather than a
+read of the Cell's current row, and a meeting cannot be recorded for a date the Cell had
+no leader on.
+
+*A first version of this section said that case was unreachable "because an `ACTIVE` Cell
+has exactly one leader and a `CLOSED` Cell is refused". The second half is not a rule
+Sections 10 or 11 state — what Section 11 says is that a closed Cell has no **open**
+leadership row, and an as-of read finds the closed row covering an earlier date perfectly
+well. Read as written it would have refused every meeting of a Cell closed mid-month,
+which Section 10 contradicts in terms.* Whether a closed Cell accepts a record at all is
+settled in 0165, and it does, for the weeks it was open, until the window shuts.
 
 ---
 

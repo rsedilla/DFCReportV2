@@ -18,13 +18,21 @@ scheduled mail job, no queue, and no background worker". A scheduler added here 
 the first background job in the system, introduced for the one task that tolerates being
 late.
 
-It tolerates it because the horizon is twelve months and the need is one Sunday a week.
-A generation that runs late by a month leaves eleven months of calendar, and nothing
-reads past the current month plus the submission window.
+**What makes that acceptable is not the tolerance, and the first version of this ruling
+said it was.** It argued that a late run "still leaves eleven months of calendar, and
+nothing reads past the current month plus the submission window" — which Section 18
+refutes, since a Senior Pastor may view January through December of the current year, and
+each of those months takes its N from `dcc_events`.
 
-**Where it sits is where the backup schedule sits.** Section 24 already puts a daily
-obligation on the deployment rather than inside the application, and this is the same
-kind of thing: a periodic task the platform runs, whose failure is visible.
+It also placed the obligation with the deployment "alongside the backup schedule", on the
+ground that both are periodic tasks whose failure is visible. That is Section 25 rule 19
+failing on its own citation: a backup job's failure is visible **because the job reports
+it**, and a command nobody runs reports nothing. The reason did not carry and the shape
+was taken anyway.
+
+**What makes it acceptable is that the horizon is surfaced and the lapse is
+repairable** — the Admin dashboard carries the date the calendar reaches, and the command
+back-fills a Sunday it finds missing. Both are settled in [decision 0165](0165-four-stop-conditions-the-stage-four-rulings-raised.md) and written into Section 9.
 
 ## What was rejected
 
@@ -45,16 +53,22 @@ neither silent nor immediate.
 
 ## What the command owes
 
-- **Idempotent.** It computes the Sundays in Asia/Manila between today and twelve months
-  out and inserts those with no row. A unique constraint on `event_date` makes that a
+- **Idempotent.** It computes the Sundays in Asia/Manila out to **thirteen** months and
+  inserts those with no row. Thirteen against Section 9's floor of twelve, because a
+  top-up *to* the floor satisfies "at least twelve" at the instant it runs and at no
+  instant after it. A unique constraint on `event_date` makes that a
   property of the table rather than of the command.
 - **It never revives a removed Sunday.** Section 9 keeps a removed event as a row with
   `removed_at` set, precisely so a month showing four events where the calendar holds
   five is explained by a record. The command inserts missing rows, and a removed Sunday
   is not missing.
-- **It never creates an event in the past.** The horizon runs forward from today. A
-  Sunday that has already passed with no event is a fact about the calendar, and
-  inserting one after the fact would change a closed month's denominator.
+- ~~**It never creates an event in the past.**~~ *Withdrawn by [decision 0165](0165-four-stop-conditions-the-stage-four-rulings-raised.md).*
+  It was this ruling's own invention rather than Section 9's, and it left a lapse with no
+  remedy at all: no route creates a DCC event, so a month whose Sundays were missed would
+  carry a wrong N for ever. Section 9's guarantee is that every Sunday carries an event
+  unless one was deliberately removed, and back-filling restores that rather than
+  breaking it. Back-filling a **closed** month is backdating and carries what backdating
+  carries.
 - **Audited**, with one entry naming the range and the count, because Section 21 audits
   the removal of an event and the creation of the calendar is the same kind of act.
 
