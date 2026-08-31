@@ -80,4 +80,4 @@ deployment owns, and it is unaffected by the instance count.
 
 Decision 0160, indexed in [CLAUDE.md](../../CLAUDE.md).
 
-Previous: [2026-08-31 — A cursor that cannot be resolved is refused](0159-a-cursor-that-cannot-be-resolved-is-refused.md)
+Previous: [2026-08-31 — A cursor that cannot be resolved is refused](0159-a-cursor-that-cannot-be-resolved-is-refused.md) | Next: [2026-08-31 — The DCC calendar is advanced by a scheduled command](0161-the-dcc-calendar-is-advanced-by-a-scheduled-command.md)

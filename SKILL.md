@@ -907,7 +907,7 @@ Moving a leader without their disciples is not a reassignment of that leader. It
 
 A reassignment takes effect at the time it is recorded. Backdating `started_at` to an earlier date silently rewrites which leader a person belonged to during a past period, changing totals for periods that have already been reported — directly violating the reproducibility guarantee in Section 3.
 
-Backdating is therefore a separate capability, `records.backdate_effective_date` (Section 7), held by Admin only. It requires an explicit reason, is audit logged with both the recorded date and the effective date (Section 21), and must surface in Network Summary as a correction (Section 16).
+Backdating is therefore a separate capability, `records.backdate_effective_date` (Section 7), held by Admin only. It requires an explicit reason, is audit logged with both the recorded date and the effective date (Section 21), and must invalidate that period's stored figures so they are recomputed rather than served (Section 20).
 
 **A backdated reassignment carries two bounds of its own**, computed by the same code as Section 4's floor and deliberately not identical to it. It shares Section 4's first term exactly. Its second term differs in both directions — it reaches only the rows on which this person is the subordinate, and unlike Section 4's it does not require the row to carry a leader. And Section 4's separate bound on the Network row does not apply at all, because a reassignment does not write one.
 
@@ -1311,7 +1311,9 @@ The two are not equivalent in general: a foreign key makes a non-empty `accounts
 
 It takes a lock before it looks, so that two runs cannot both find an empty table.
 
-**Its writes are recorded as a system action.** Four columns carry null for it and no other reason: `audit_log.actor_id` (Section 21), `account_roles.granted_by` (Section 7), and `person_lifecycle.actor_id` and `network_assignments.actor_id` (Sections 3 and 4, which gained the allowance for this and mark it on their shapes). This is the only thing in the system permitted to write any of them null.
+**Its writes are recorded as a system action.** Four columns carry null for it and no other reason: `audit_log.actor_id` (Section 21), `account_roles.granted_by` (Section 7), and `person_lifecycle.actor_id` and `network_assignments.actor_id` (Sections 3 and 4, which gained the allowance for this and mark it on their shapes). It is the only thing permitted to write the last three null, and — since 2026-08-31 — one of two permitted to write `audit_log.actor_id` null.
+
+The second is the DCC calendar command (Section 9), which is invoked by a schedule and has no interactive actor at all. It touches none of the other three. The exclusivity is stated narrowly rather than dropped, because the point of the sentence is that a null actor is never a convenience: each case is one this specification names, and adding a third is an amendment here.
 
 The first two were already provided for, each justified by this moment. The second two were not, and a first version of this section claimed there were "two allowances" while the code wrote four — which is the kind of claim that stands until somebody counts.
 
@@ -1462,6 +1464,7 @@ The capabilities are exactly:
 Each capability guards one endpoint family, and the boundaries are not left to inference:
 
 - `dcc.*` guards everything under `/api/v1/dcc` — rosters, submissions, corrections, and DCC figures reached directly
+- **A meeting's roster is guarded by the capability that records it**, `cell.take_attendance` for a submission and `cell.correct_subtree` for a correction, resolved against the meeting. `GET /api/v1/cells/{id}/meetings/{meeting_id}/roster` answers who there is to record, which is what taking attendance needs, and it is the exact counterpart of `GET /api/v1/dcc/events/{id}/roster` one domain over. It is deliberately **not** `cell.manage_membership`: that capability governs changing who belongs to a Cell, it is a management capability so `read_only` is invalid on it, and requiring it to record a meeting would mean nobody could take attendance without also being able to move the roster. This says nothing about `GET /api/v1/cells/{id}/members`, which manages membership and stays where it is
 - `cell.*` guards everything under `/api/v1/cells`, including meeting records, membership, leadership, and outstanding-record lists
 - `cell.manage_leadership` governs writing `cell_leaderships`. Every such write happens inside an approval, a closure, or the direct creation of the initial-encoding phase (Sections 10 and 2), so it is exercised alongside the capability authorizing that operation rather than on its own. It is named separately because Section 6 requires one actor to hold it **and** `accounts.manage` against the same target where the write would mint a Cell Leader, and provides for an actor holding only the first, who records the assignment and leaves the account step pending. What it does not confer is the decision that a person should lead: outside initial encoding that is made by request and approval, for a new Cell and for a handover alike
 - `cell.manage_configuration` governs a Cell's category and its schedule (Section 10). One capability rather than two: both are effective-dated edits to how a Cell is configured, both are audited the same way, and an administrator granting one and withholding the other would be expressing a distinction no rule makes. It confers no power to create or close a Cell, each of which has its own capability, nor to change who leads one
@@ -1550,6 +1553,10 @@ The four scope values are a closed enumeration. A guard cannot fail closed again
 Scope resolves against a target. Where the target is a Person, it resolves through their pastoral position. Where it is not:
 
 - a **Cell**, a Cell meeting, a membership or a leadership resolves through the Cell's leader **as of the period being viewed**, falling back to its last leader where the Cell is closed. A closed Cell keeps its history and its roster visible to the leader who led it (Sections 10 and 15), which resolving through a current leader it no longer has would prevent
+  - **A closed Cell has one exception, and it is not the fallback above.** The rule below is that a write is acted on now and resolves through the Cell's current leader — and a closed Cell has none, so every write against one resolves through nobody. The exception is **recording or correcting a Cell meeting whose month's submission window is still open** (Section 13), together with the meeting-scoped roster read that write requires: those resolve through whoever led the Cell **on the meeting's date**. Nothing else does — not a membership, not a leadership, not a configuration change — and once the window shuts, that too resolves through nobody and only Admin can amend
+  - **Per record rather than per Cell**, which no other target in this list is, because the meeting carries the answer and the Cell no longer does. A Cell handed from A to B and then closed has meetings belonging to each, and resolving through the last leader would show A the task (Section 19) while denying A the write
+  - **The date is not chosen by the actor.** A closed Cell's meetings cannot be rescheduled (Section 13), so the authorizing date is the scheduled one, derived from the Cell's own schedule. Without that, an actor could declare an actual date inside their own past tenure and recover authority through a request field — which is the shape the rule below refuses
+  - The bound is what makes this consistent with the rule below rather than an exception to it. That rule refuses authority resolved *as of an effective date the actor chooses*, because an actor could then reach back far enough to recover it. This bound is not chosen by the actor: it is one fixed, short, forward-moving window per month, set by the calendar, and it closes on the 7th whatever anybody does. A leader recording the meetings of the Cell they led last week is not recovering authority; they are finishing the record the Cell existed to produce
 - a **DCC event** is church-wide and resolves through nothing; the endpoints on it are scoped by the people they return, so a roster or a submission covers only the requester's own authorized people (Section 9)
 - an **Account** resolves through its Person
 - a **report scope selector** is itself the target: a request for a scope the actor does not hold is `SCOPE_DENIED`, never silently narrowed to what they do hold
@@ -1564,7 +1571,7 @@ Senior Pastors (Bishop Oriel Ballano, Pastora Geraldine Ballano) receive Whole C
 
 `settings.manage` governs the church-wide operational settings held by the system. It is Admin-only, at Whole Church scope, and every change is audit logged with its previous and new values (Section 21).
 
-The settings it governs today are the Cell attention threshold (Section 15) and the initial-encoding phase flag (Section 2). Both alter behaviour for the entire church from a single control, which is why neither is per leader and why both carry an audit trail: a threshold change silently re-populates every leader's attention list, and closing the encoding phase permanently removes Admin's direct-create path for Cells.
+The settings it governs today are the Cell attention threshold (Section 15), the initial-encoding phase flag (Section 2), and the first Sunday the DCC calendar covers (Section 9). Each alters behaviour for the entire church from a single control, which is why none is per leader and why all carry an audit trail: a threshold change silently re-populates every leader's attention list, closing the encoding phase permanently removes Admin's direct-create path for Cells, and moving the calendar's first Sunday changes which months the generation command will fill.
 
 A setting is not a place to record domain rules. Anything that changes what a figure means, rather than a single operational parameter, belongs in this specification and not behind a control.
 
@@ -1576,11 +1583,13 @@ settings
 - updated_at
 ```
 
-The key set is fixed by this specification, not open. Today it holds the Cell attention threshold (Section 15) and the initial-encoding phase flag (Section 2).
+The key set is fixed by this specification, not open. Today it holds the Cell attention threshold (Section 15), the initial-encoding phase flag (Section 2), and the first Sunday the DCC calendar covers (Section 9).
 
 `records.backdate_effective_date` governs setting an effective date in the past on any effective-dated relationship: pastoral assignment (Section 5), Network (Section 4), Cell membership (Section 10), Cell leadership (Section 11), and a Cell's category and schedule (Section 10). It also governs amending attendance after a month has closed (Sections 9 and 13), and **closing a Cell with an effective date earlier than the current day** (Section 10) — neither of which is an effective-dated relationship, so this is a list of what the capability reaches, not a rule from which the next item can be derived.
 
-A Cell closure was added on 2026-08-29, and its reason is not the one the relationship rows carry. Backdating a closure **erases the scheduled-meeting count a coverage line is read against**: Section 12 gives a Cell closed part-way through a month fewer scheduled meetings, so a closure dated to the first of the month leaves that month with almost none — and `0 of 4 meetings recorded` becomes `0 of 0`, which is the evidence that its leader reported nothing. Not the denominator, which Section 12 defines as the meetings actually recorded and which is already zero for the leader this describes; the coverage line is the only artifact left when it is. That is the failure Section 13 is built to prevent, reached through a date field rather than through a status. Backdating a closure therefore sits with the operations that move totals for periods already reported, and not with the ordinary act of recording when something happened. It is Admin-only and always requires a reason. It is never granted to ordinary leaders, because backdating changes totals for periods that have already been reported (Section 3).
+*A third was added on 2026-08-31 for creating a DCC event in a closed month, and removed the same day with the mechanism that needed it. Section 9's calendar command does not reach a closed month at all.*
+
+A Cell closure was added on 2026-08-29, and its reason is not the one the relationship rows carry. Backdating a closure **erases the scheduled-meeting count a coverage line is read against**: Section 12 gives a Cell closed part-way through a month fewer scheduled meetings, so a closure dated to the first of the month leaves that month with almost none — and `0 of 4 meetings recorded` becomes `0 of 0` — the coverage line being the evidence that its leader reported nothing, and the backdated closure being what erases it. Not the denominator, which Section 12 defines as the meetings actually recorded and which is already zero for the leader this describes; the coverage line is the only artifact left when it is. That is the failure Section 13 is built to prevent, reached through a date field rather than through a status. Backdating a closure therefore sits with the operations that move totals for periods already reported, and not with the ordinary act of recording when something happened. It is Admin-only and always requires a reason. It is never granted to ordinary leaders, because backdating changes totals for periods that have already been reported (Section 3).
 
 Being an Associate Pastor, or being part of a Senior Pastor's direct 12, does not by itself grant Whole Church or Network-level reporting scope. Pastoral hierarchy position and system authorization are separate concepts (Section 1, Principle 3). Any leader other than a Senior Pastor who needs reporting visibility beyond their own pastoral subtree must receive that scope through an explicit, Admin-issued grant.
 
@@ -1671,7 +1680,7 @@ Where the configuration is what is wrong rather than the row, this means a real 
 
 **A succession is an amendment to Section 4 and a configuration change together.** Section 4 names the two Senior Pastors, so who holds the role is recorded in this specification and approved as any other change to it is. Revoking the role row frees the seat; the configuration follows the section. Neither alone moves a seat.
 
-`granted_by` is null only for a role granted by a **system action**, which is the first Admin account and nothing else: there is no account above it to have granted it. This mirrors the same allowance for `audit_log.actor_id` (Section 21). Every other role grant has an actor.
+`granted_by` is null only for a role granted by a **system action**, which is the first Admin account and nothing else: there is no account above it to have granted it. Section 21 makes the same allowance for `audit_log.actor_id`, which since 2026-08-31 has two permitted writers rather than one — the first Admin account and the DCC calendar command (Sections 6 and 9). `granted_by` still has one, and the two allowances are no longer parallel. Every other role grant has an actor.
 
 ```text
 capability_grants
@@ -1887,7 +1896,7 @@ DCC uses Blackboard-style checklist attendance.
 
 DCC attendance follows the official church Sunday calendar. There is exactly one applicable DCC event per Sunday, church-wide — Men's Network and Women's Network attend the same DCC event. Special events, conferences, revival meetings, leadership meetings, or other gatherings do not automatically create additional DCC attendance events for this reporting domain.
 
-Therefore a calendar month has 4 or 5 applicable DCC events, determined by the actual number of Sundays in that month — never an unexplained arbitrary limit.
+Therefore a calendar month has 4 or 5 applicable DCC events — never an unexplained arbitrary limit. The figure follows the actual Sundays rather than a fixed number, and what decides it is the calendar rather than the almanac: an applicable event is a row the calendar holds, so a Sunday whose event was removed does not count, and neither does one the calendar has not reached. N is defined on that basis below.
 
 ### DCC has no meeting status
 
@@ -1899,11 +1908,13 @@ Where the church holds no service on a given Sunday — a calamity closing the b
 
 Removing a Sunday from the DCC calendar is a deliberate Admin action, never inferred from an absence of attendance records. It requires a reason, is audit logged (Section 21), and must be visible on any report covering that month, so that a month showing four events where the calendar shows five is explained rather than merely odd.
 
+**It reaches an open month only.** Removing a Sunday moves that month's N and every monthly-attendance bucket derived from it, so doing it after the window has shut changes a period already reported — which Section 20 says a closed month's figures do not do. The calendar of a closed month is fixed exactly as its attendance is, and for the same reason. This is the mirror of the rule below that the generation command never fills a closed month; the calendar is settled in both directions when the window shuts.
+
 A leader who has not yet submitted their people's attendance for an event that did take place is a reporting gap, not a cancelled service. Those are tracked as coverage.
 
 ### DCC submission window
 
-DCC attendance for a calendar month may be recorded or corrected until the 7th of the following month, at 23:59 Asia/Manila — the same close as Cell attendance (Section 13). After that the month is closed, and only Admin may amend it, using `records.backdate_effective_date` (Section 7), with a reason, audit logged, and surfaced in Network Summary as a correction.
+DCC attendance for a calendar month may be recorded or corrected until the 7th of the following month, at 23:59 Asia/Manila — the same close as Cell attendance (Section 13). After that the month is closed, and only Admin may amend it, using `records.backdate_effective_date` (Section 7), with a reason, audit logged, and invalidating that month's stored figures (Section 20).
 
 DCC coverage is shaped differently from Cell coverage. A Cell has one leader and its coverage counts recorded meetings out of scheduled meetings. A DCC event is church-wide, and many leaders each record their own people, so DCC coverage counts **how many responsible leaders have a record for the event**, not how many events exist. It measures whether the record exists, never who entered it — a submission made on behalf, or by an upline standing in for a leader who holds no account (below), completes that leader's coverage.
 
@@ -1912,11 +1923,13 @@ Report that figure at every scope, as a single line, on the same terms as Cell c
 ```text
 dcc_events
 - id
-- event_date          a Sunday, Asia/Manila
+- event_date          a Sunday, Asia/Manila; unique
 - removed_at          nullable
 - removed_by          nullable
 - removal_reason      nullable, required where removed_at is set
 ```
+
+`event_date` is unique, which is what makes the generation command idempotent as a property of the table rather than of the command.
 
 A removed event is retained rather than deleted, so a month showing four events where the calendar holds five is explained by a record rather than by an absence.
 
@@ -1945,7 +1958,40 @@ DCC events are generated automatically, one per Sunday, on a rolling horizon of 
 
 Do not create events lazily on first use. If an event exists only once somebody has recorded attendance against it, then a Sunday nobody submitted for has no event at all — and a missing event becomes indistinguishable from a cancelled service. That is precisely the ambiguity the Cell meeting statuses exist to remove (Section 13), and it must not be reintroduced here.
 
-Because every Sunday has an event by default, an absent event always means a recorded, audited decision, and coverage is measurable against a denominator that exists before anyone submits anything.
+**A Sunday carries no applicable event only where a decision says so.** A removal is never an absence — a removed event keeps its row, carrying who removed it and why — so "no applicable event" always means a row that records a decision, and there is no state in which a month is quietly short by a Sunday nobody accounted for.
+
+A missing **row** is a different thing and is never a decision: it is a Sunday before the calendar's first (`dcc_calendar_start`, below), one past the date it has been generated to, or a gap left by a lapse — which the command below fills while the month is open. The Admin dashboard publishes the horizon date (Section 19) so the two can be told apart without guessing, and a report covering a month with a gap is wrong until the gap is filled, which is why filling it is a remedy rather than an alteration.
+
+Coverage is measurable against a denominator that exists before anyone submits anything.
+
+**A command advances the horizon, and the deployment schedules it.** `npm run generate:dcc` creates the Sundays that have no row. It is idempotent: running it twice, or daily, changes nothing the second time, which a unique constraint on `event_date` makes a property of the table rather than of the command.
+
+**It generates thirteen months ahead, against a floor of twelve.** The rule above is "at least twelve months", so a top-up *to* twelve satisfies it at the instant it runs and at no instant afterwards. The target is a month clear of the floor, and the command is scheduled monthly, so an ordinary run never approaches it.
+
+**It fills a Sunday it finds missing, forward from `dcc_calendar_start` and no earlier, and it never reaches a month that has closed.** Within an open month a gap is filled like any other missing Sunday: the window is open, leaders can still submit, and the event counts in N and in coverage exactly as one generated on time.
+
+**A closed month is left alone, and the command reports it rather than repairing it.** Adding a Sunday to a month whose window has shut creates an event no leader was ever able to submit against — so every leader reads as having failed to record for it, and its arrival moves N from four to five and puts `Completed` out of reach of everyone who attended every service that month. Both are the failure Section 13 exists to prevent, reached through a remedy rather than through a status, and no rule about which figures such an event joins avoids them: the harm is that nobody had the opportunity, and that does not stop being true.
+
+So a run that finds a closed month short **says so and changes nothing**. What to do about it is a decision somebody takes with the facts in front of them, not something a scheduled command does on its own.
+
+**What makes that acceptable is the horizon date on the Admin dashboard** (Section 19). Reaching a closed month at all requires the schedule to have failed for more than a month *and* nobody to have looked at that date. The dashboard is what keeps this remedy from being needed, which is a better place to spend the mechanism than a repair with no good answer.
+
+Two things it never does:
+
+- **It never revives a removed Sunday**, because a removed event keeps its row and is therefore not missing.
+- **It never removes anything.** Removing a Sunday is the deliberate, reasoned Admin action above, and is not something a top-up decides.
+
+**The horizon is surfaced, because a schedule that stops is otherwise invisible.** The command prints the date the calendar reaches on every run, including a run that creates nothing, so the schedule's own output carries it from the first day the command exists. The Admin dashboard carries the same date (Section 19) once there is a dashboard to carry it. Both, because they fail differently: the printed line is seen only by whoever reads the schedule's output, and the dashboard is seen by somebody whether or not the run happened at all. That is the part the command needs and does not get for free: an argument that placed this obligation with the deployment "alongside the backup schedule" does not carry, because a backup job reports its own failure and a command nobody runs reports nothing (Section 25, rule 19).
+
+A command rather than a background job, because Section 2 does not require queues or workers for the initial release and Section 13 declines to introduce one — so a scheduler here would be the first. What makes that acceptable is the horizon plus the dashboard, not the tolerance: with the date visible, a lapse is a task somebody sees, and thirteen months is long enough that seeing it in a week is soon enough.
+
+**The calendar has a first Sunday, held in `settings` as `dcc_calendar_start`.** It records when this church's calendar began, which is what lets a report over an earlier range say "before we started" rather than "no service".
+
+**It is seeded null and set once, by the command's first run, to the Sunday on or before that day.** The command refuses to move it afterwards. A literal in the migration was refused because it would differ per deployment and nothing here has a pattern for that; deriving it from the earliest record was refused because it would move as records are added.
+
+That one write is the calendar's own creation rather than a settings change, which is why it does not make the command a second writer of `settings.updated_by` null in the sense Section 7 guards: the key is null exactly once, and after that only an Admin moves it, under `settings.manage`, audited with its previous and new values like any other.
+
+**The command runs as a system action** and writes its audit entry with a null `actor_id`, which Section 21 permits for one. It has no interactive actor: it is invoked by a schedule, and requiring `ADMIN` — as the tree import does, where a person adjudicates duplicates — would mean either a stored credential or a person running it weekly. It writes nothing a capability governs — it creates Sundays in open months, which is what the calendar is for — so there is no actor to check and no argument for one. The entry's target is the event, one per event created, because Section 21 requires a target and one entry per action performed; a run that creates none writes none.
 
 ### Attendance is face to face
 
@@ -2046,7 +2092,7 @@ Each person must appear in exactly one classification bucket for the report snap
 
 Classify each unique person by how many DCC services they attended that month.
 
-Let **N** be the number of applicable DCC events in the month — the Sundays that carry a DCC event, per the DCC calendar above. N is normally 4 or 5, and is fewer where a Sunday carries no service.
+Let **N** be the number of applicable DCC events in the month — the Sundays that carry a DCC event, per the DCC calendar above. N is normally 4 or 5, and is fewer where a Sunday carries no service. It is a count of rows the calendar holds, so it is exactly the calendar's own answer and never a count of Sundays; that is the whole of the rule, and the calendar is the only thing that decides it.
 
 Buckets are derived from N:
 
@@ -2669,7 +2715,7 @@ Classification carries no denominator, so it aggregates at any scope: a person's
 
 Population: the same unique people who attended this Cell at least once in the month. Both views therefore cover the same people and reconcile to the same total (Section 20).
 
-Each Cell has one logical scheduled meeting per calendar week, per its configured schedule (Section 10, Schedule changes). A Cell running for a whole month therefore has 4 or 5 **scheduled** meetings. A Cell created or closed part-way through a month has fewer, and that is not an anomaly.
+Each Cell has one logical scheduled meeting per week of its configured schedule (Section 10, Schedule changes), and a Cell running for a whole month therefore has 4 or 5 **scheduled** meetings. *Per week of its schedule, not per calendar week: a schedule change takes effect on the first of a month while a week begins on a Monday, so a week straddling that boundary can hold two scheduled meetings under two schedules, reporting in two months. That is why a meeting is identified by its scheduled date rather than by its week (Section 13).* A Cell created or closed part-way through a month has fewer, and that is not an anomaly.
 
 Scheduled meetings are not the denominator. The denominator is the meetings that actually took place and were recorded:
 
@@ -2785,13 +2831,89 @@ If the leader was present and the meeting was available, the meeting is `HELD` w
 
 ### Who conducted the meeting
 
-Record `facilitated_by` on the meeting. It is nullable and defaults to the Cell's current leader.
+Record `facilitated_by` on the meeting. It is nullable and defaults to the meeting's responsible leader — whoever led the Cell on its date, by the rule below, and not whoever holds the Cell when the record is entered. A meeting submitted after a handover would otherwise default its facilitator to somebody who was not in the room.
 
 Where a leader cannot conduct their own meeting and another person runs it — a disciple, or an upline leader — record that person as the facilitator. Three roles are distinct, and all three may differ on a single meeting:
 
-- **responsible leader** — the Cell's current leader (Section 11); reporting rolls up to them
+- **responsible leader** — whoever led the Cell on the meeting's date (Section 11); reporting rolls up to them
 - **facilitator** — who conducted this meeting
 - **submitter** — who entered the record (Section 14)
+
+**"Whoever led it then", not "whoever leads it now", and the record is frozen.**
+`cell_meetings.responsible_leader_id` is resolved from `cell_leaderships` when the row is
+first written, and **nothing moves it afterwards** — not a handover, and not a later edit to
+the meeting itself. That second half matters because this section permits a meeting to be
+rescheduled twice and permits a `RESCHEDULED` meeting to become `NOT_HELD`, which has no
+actual date and falls back to the scheduled one: each of those moves the instant the rule
+below names, after the row exists.
+
+Re-resolving on each edit would move a recorded meeting between leaders' totals inside a
+period that may have closed, which Section 20 forbids and Section 3 makes a reproducibility
+guarantee. The cost is accepted and is small: a meeting rescheduled across a leadership change
+keeps the leader it was first recorded under, and `cell_meeting_changes` carries every move,
+so the history is legible rather than merely consistent. This is the rule Section 9 states for
+DCC — a reassignment does not move historical records — with the edits this domain has
+and that one does not.
+
+**The instant is the meeting's `actual_date` where it has one, and its `scheduled_date`
+otherwise.** A week is not an instant, and a handover or a closure may land on any day
+inside one, so resolving at the week's start would attribute a Saturday meeting to a
+leader who handed the Cell over on the Wednesday — the outcome this rule exists to
+prevent. The actual date is also where the meeting's **roster** comes from, so the leader
+and the people are read at one instant rather than two. A `NOT_HELD` meeting has no
+actual date and uses the scheduled one.
+
+For a `RESCHEDULED` meeting that consequently means the leader may be read from a
+different calendar week than the one the meeting reports in. That is already true of its
+roster, and it is the right way round: the meeting's reporting period is a fact about
+which week it belongs to, and its responsible leader is a fact about who was leading when
+it happened.
+
+Two things require the freeze, and a third that looks like one does not. Section 1
+principle 12 forbids rewriting the column on every handover, and a stored column can
+carry only one answer. Section 20 requires a closed month's figures not to move, and
+Section 14 makes the responsible leader a reporting dimension. *Section 16 does not: New
+Cell Leaders counts a person's first qualifying leadership from `cell_leaderships`, so it
+would not move by one however this column were resolved. An earlier version of this
+paragraph claimed it would.*
+
+**Scope is a separate question, and on one path it uses this same instant.** Section 7
+resolves a Cell meeting through the Cell's leader **as of the period being viewed** for a
+read, and through the current leader for a write — except for a write against a **closed**
+Cell, which resolves through whoever led it on the meeting's date, this rule's instant,
+while the month's window is open.
+
+That exception exists because a closed Cell has no current leader and the record would
+otherwise be unfilable. It does not merge the two questions: who may act on a record and
+who a record belongs to stay different, and they coincide here because the only person who
+can sensibly file a meeting is the one who was leading when it happened.
+
+*Two earlier versions of this paragraph were wrong in opposite directions. The first said
+scope resolves "through the Cell's leader now", which is Section 7's answer for a write
+offered as its answer for a read. The second said neither of Section 7's answers is this
+rule, which stopped being true when Section 7 gained the closed-Cell exception that uses
+it.*
+
+A meeting cannot be recorded for a date the Cell had no leader on. That is refused rather
+than defaulted, because a meeting with no responsible leader is a record nothing rolls
+up.
+
+**A meeting dated the day the Cell closed reads the Cell as it stood that day.** A
+leadership row and a membership row are both in force over `[started_at, ended_at)`, and a
+closure ends both *on* the closure date — so a meeting on that date would otherwise fall
+outside every leadership row and find an empty roster. For a meeting's own lookups, and
+only those, the closure instant is read as the end of that day: the leader is the one who
+was leading when the Cell met, and the roster is the people who were members then.
+
+Both halves or neither. Extending the leader lookup alone gives that meeting a responsible
+leader and nobody to record present, which is worse than refusing it — and it would
+falsify the rule above that the leader and the people are read at one instant.
+
+**The case this reaches is a closure carrying an effective date equal to a day the Cell
+met**, which under Section 10 means Admin backdating one. A closure dated *after* the last
+meeting never touches the boundary, and an undated closure takes the current instant, so a
+leader closing the Cell the evening it met has no problem either. The rule is stated
+because the boundary is silent when it is crossed, not because it is crossed often.
 
 Facilitating is never leadership. It does not touch `cell_leaderships`, never makes the facilitator a current Cell Leader, never counts toward New Cell Leaders (Section 16), and never moves Cell members into the facilitator's counts. A genuine handover of a Cell is a separate, deliberate change to `cell_leaderships`, made through the request-and-approve workflow of Section 10 and never as a side effect of who conducted a meeting. There is no threshold at which repeated facilitation becomes leadership.
 
@@ -2799,7 +2921,7 @@ Facilitating is never leadership. It does not touch `cell_leaderships`, never ma
 
 Attendance for a calendar month may be recorded or corrected until the 7th of the following month, at 23:59 Asia/Manila (Section 20). After that the month is closed.
 
-Once closed, unreported meetings remain permanently unreported and outside the denominator, and coverage for that month is frozen. Only Admin may amend a closed month, using `records.backdate_effective_date` (Section 7), with a reason, audit logged (Section 21), and surfaced in Network Summary as a correction (Section 16).
+Once closed, unreported meetings remain permanently unreported and outside the denominator, and coverage for that month is frozen. Only Admin may amend a closed month, using `records.backdate_effective_date` (Section 7), with a reason, audit logged (Section 21), and invalidating that month's stored figures (Section 20).
 
 Before close, outstanding records are surfaced in two distinct ways, and they must not be confused.
 
@@ -2830,10 +2952,85 @@ The system does send transactional email — password reset and account activati
 
 The design is deliberate. Accountability in this church runs through pastoral relationship, not through the application: the two Senior Pastors and their direct leaders see where their Networks stand, and follow up with the people they oversee personally. A leader behind on records hears from their own leader, not from an automated message. The application's job is to make the gap visible to the person who will make the call.
 
+**A meeting is identified by its Cell and its scheduled date, and has no row until it is
+reported.** `(cell_id, scheduled_date)` is unique. A reschedule moves `actual_date` and
+leaves `scheduled_date` alone, so the identity survives it — which is what "one logical
+meeting, not two separate meetings" means.
+
+*The date rather than the week, and the week was tried first.* "One logical meeting per
+Cell per calendar week" is true of every week a schedule change does not straddle, and a
+change takes effect on the first of a month (Section 10) while a week begins on a Monday
+(Section 20) — so roughly six month boundaries in seven fall inside a week. The week of
+Monday 30 March 2026 runs to Sunday 5 April; a Cell meeting on Mondays that moves to
+Saturdays from 1 April has a scheduled meeting on 30 March, reporting in March, and
+another on 4 April, reporting in April. Keyed on the week, one of the two is unrecordable
+and one of the two months can never reach its coverage denominator — which is the failure
+Section 10 refuses mid-month changes to avoid, reached through the boundary that was
+supposed to be safe.
+
+A row is written by the first submission. There is none before it, and that is what keeps
+the three statuses exactly three — a row generated ahead would need a fourth state for
+"not yet reported", and the ambiguity between *did not happen* and *not yet told us* is
+what the three exist to remove. It is also what makes the coverage line mean something:
+the recorded count is a count of rows, while the scheduled count is derived from the
+Cell's schedule against the calendar, so `4 of 5 meetings recorded` compares two figures
+arrived at two ways.
+
+The API addresses a meeting by that date — `POST /api/v1/cells/{id}/meetings/{meeting_id}/submit`
+takes a `YYYY-MM-DD` Manila date as `{meeting_id}` (Section 22). It is derivable from the
+Cell's schedule before the row exists, which is what a client listing meetings awaiting a
+record needs, and a retry therefore names the same meeting. It discloses nothing: the Cell
+in the path is still addressed by its UUID, and a date is a date.
+
+**A closed Cell still takes a record for a meeting it held, until that month's window shuts.**
+Section 10 says a Cell closed part-way through a month "simply has fewer recorded
+meetings that month" — fewer, not none — and a leader has until the 7th of the following
+month whether or not the Cell survived. So a Cell closed on 20 March accepts submissions
+for its March meetings until 7 April, from the leader each meeting names.
+
+**The bound is the meeting's own month, not the closure.** A meeting of February in a Cell
+closed on 20 March cannot be recorded after 7 March, because February's window shut then —
+the closure changes nothing about that. Section 7, Section 15 and Section 19 all state the
+same bound, and it is the window rather than the closure everywhere.
+
+A meeting **dated after** the closure is refused: the Cell did not exist to meet. Stated
+on the meeting's date rather than on its week, because a Cell closing on Wednesday 18 March
+whose meetings fall on Saturdays has 21 March inside the closure's own week and after the
+Cell ceased to exist — a week-granular rule would permit it, and Section 12 derives no
+scheduled meeting there at all.
+
+**And a closed Cell's meetings cannot be rescheduled.** A reschedule moves a meeting to another
+date, and a closed Cell has no other dates to move into — every one of them is after the
+closure and refused by the rule above. So on a closed Cell `actual_date` equals
+`scheduled_date`, and a meeting that genuinely moved before the Cell closed is recorded on the
+date it happened, by an Admin amendment.
+
+That also keeps the authorizing date out of the actor's hands, which Section 7 requires of
+this path: with no reschedule the date comes from the Cell's own schedule, and nobody can
+declare an instant that puts a meeting inside their own past tenure.
+
+**That refusal binds new submissions and is not a constraint on the table.** Section 10
+lets Admin backdate a closure, which can move the closure date behind meetings already
+recorded — and Section 10 guarantees those "remain exactly as recorded". A `CHECK` or a
+trigger would refuse the backdating instead, or refuse the rows that already exist, so
+this is enforced in the domain layer on the way in, and said here because the Definition
+of Done otherwise expects an invariant to exist as a constraint.
+
+Without this the refusal would manufacture evidence. A Cell that met three times and then
+closed would report `0 of 4 meetings recorded` — which Section 7 names as "the evidence
+that its leader reported nothing", arguing there about a backdated closure, which erases
+it. Refusing here would manufacture that same evidence against a leader who did meet.
+
+**DCC is deliberately the other way, and the reason is not symmetry.** A DCC event must
+exist before anyone submits because its *absence* carries a meaning somebody decided
+(Section 9), and its coverage is measured against a denominator that has to exist first. A
+Cell meeting's denominator comes from the Cell's schedule, which is already stored and
+already effective-dated, so nothing needs a row to count against.
+
 ```text
 cell_meetings
 - id
-- cell_id
+- cell_id                 unique with scheduled_date
 - week_starting           the Monday of the week this meeting belongs to (Section 20)
 - reporting_month         the month this meeting reports in, fixed at creation
 - scheduled_date
@@ -2843,7 +3040,7 @@ cell_meetings
 - actual_time             nullable
 - not_held_reason         nullable, required where status is NOT_HELD
 - not_held_note           nullable, required where the reason is OTHER
-- facilitated_by          nullable, defaults to the Cell's current leader
+- facilitated_by          nullable, defaults to the meeting's responsible leader
 - responsible_leader_id
 - submitted_by            nullable
 - submitted_at            nullable
@@ -2975,6 +3172,18 @@ Because the same record can be reached from several surfaces at once (Section 2)
 
 Every attendance and meeting record carries a version. A client submits the version it read. If the stored version has since moved, the server rejects the write with a conflict and does not apply it.
 
+**What a version covers depends on what one submission is, and the two domains differ.**
+
+- **A Cell submission carries the meeting's version.** One submission is one leader's account of one meeting, so the meeting is the unit: the client sends `cell_meetings.version` and the server compares it. That is what the example below is about — nine against eight is a disagreement about the whole roster rather than about any one person, and several of the people in it may not differ at all. It is also what the conflict payload needs, since Section 22 fixes that body as one `submitted` and one `current` pair.
+- **A DCC submission compares per `(dcc_event_id, person_id)`.** A DCC event is church-wide and many leaders record against it, so two leaders recording different people must never conflict — and any unit wider than the person would make them. There is no per-leader row to version, and inventing one would make the submitting leader structural in a domain where coverage "measures whether the record exists, never who entered it" (Section 9).
+- **`cell_attendance.version` guards a correction to one person's record**, which is the second operation this section names. That write names one person, so it compares one person's version. A submission bumps the meeting's version; a correction bumps that person's.
+
+**A DCC submission carries many people, so it can conflict on several at once. It applies none of them and names the first.** The response carries that one person's two values, two actors and two timestamps, which is the shape Section 22 fixes and the whole of what a human needs to decide. The client resolves that person, resubmits under a new key, and meets the next if there is one.
+
+All or nothing, rather than applying the people who did not conflict: a partial result is a third outcome, and a leader reading the response could not tell what had been recorded without fetching the roster again. Section 14's rule is that a conflict is resolved by a person and never by the system, and applying half of a submission is the system deciding about the half it applied.
+
+The asymmetry is the domains rather than an inconsistency, and it is the one Section 12 already records for monthly-attendance buckets, one layer down: a Cell meeting belongs to one leader and therefore has a unit, while a DCC event belongs to the church, so the finest thing belonging to one leader is the person.
+
 A conflict is resolved by a person, never by the system. Present both values, with who recorded each and when, and let an authorized user decide. This is the same principle Person Merge applies to conflicting relationships (Section 3): where two legitimately different facts are in play, the system must not silently pick one.
 
 For example: a leader records nine present on a phone, loses signal, and an upline leader records eight on behalf from a laptop in the meantime. When the phone reconnects, its submission is based on a version that no longer exists. Last write wins would discard the second record without trace, in breach of the rule above. The correct behaviour is to reject, surface both figures, and ask.
@@ -3002,7 +3211,7 @@ Purpose:
 Surface Cells that have gone quiet, as a working list for the leader who oversees them:
 
 - Cells with no meeting held for a set number of months, three by default. The threshold is a single church-wide Admin setting, changed under `settings.manage` (Section 7) and audit logged, never per leader: an attention list that differs by viewer makes two people discussing the same Cell talk past each other, one seeing it flagged and the other not.
-- Cells with meetings still awaiting a record (Section 13)
+- Cells with meetings still awaiting a record (Section 13), **including a closed Cell, for meetings whose month is still open**. Every other count of Cells means active Cells (Section 10); this one does not, because Section 13 gives the leader until the 7th whether or not the Cell survived, and a meeting nobody can see is a meeting nobody records. Bounded by the window rather than by how recently the Cell closed, so the list never shows a meeting only Admin could act on. **Each meeting appears for the leader it names**, matching the dashboard (Section 19) and Section 7's answer for who may file it — a Cell handed over before it closed has meetings belonging to each leader, and showing them all to the last one would name somebody who cannot write them
 - People with no active Cell membership within the viewer's scope (Section 10)
 
 Each entry offers the actions that resolve it — recording the missing meeting, confirming the Cell is still running, or closing it with a reason. The list detects; a person decides. Nothing on it changes any record on its own.
@@ -3258,7 +3467,7 @@ Scope must appear on the tile. The same tile reads 12 for a Cell leader and 11,4
 
 A dashboard of counts tells a leader nothing to act on. Dashboard is the first item in the sidebar and the screen every user lands on, so outstanding work belongs above the numbers:
 
-- meetings awaiting a record, for the user's own Cells (Section 13)
+- meetings awaiting a record, for the user's own Cells (Section 13) — **and for a closed Cell, each meeting shown to the leader it names, while its month's window is open**. This is the only surface naming those meetings and the only thing that makes the permission to record them reachable, and it shows each one to the same person Section 7 authorizes to file it
 - Cells needing attention within their scope (Section 15)
 - people with no active Cell membership within their scope (Section 10)
 - the outcome of a Cell leadership request the user submitted, of either kind (Section 10)
@@ -3304,6 +3513,7 @@ Admin focuses on platform operations:
 - Pending Cell leadership requests, of either kind (Section 10). Both belong on the queue for the same reason: a request nobody can see is a request nobody acts on, and a pending one changes nothing until it is decided. A new Cell additionally holds up an account (Section 6), which a handover does only where the incoming leader does not already lead one
 - People management
 - Networks / pastoral assignments
+- **The date the DCC calendar reaches** (Section 9). One line, factual: a schedule that stops advancing the horizon is otherwise invisible until a month's figures are already wrong, and this is what makes the command's failure something somebody sees
 - DCC Attendance administration
 - Cell Attendance administration
 - Accounts
@@ -3337,7 +3547,7 @@ Asia/Manila observes no daylight saving time, so the offset is a constant +08:00
 
 **A calendar week begins on Monday**, following ISO 8601, consistently with the date format used throughout. Sunday belongs to the week that began on the preceding Monday.
 
-This is not a formatting preference. Section 13 makes the weekly meeting the unit of a Cell's identity — one logical meeting per Cell per calendar week, whatever date it lands on — so the week boundary decides which meetings fall in which week, and a rescheduled meeting's week is the week it was scheduled in. A Sunday-start convention is common locally and will be somebody's default, which is why the rule is fixed here rather than left to the calendar library.
+This is not a formatting preference. A Cell meeting belongs to the week its schedule placed it in, and `cell_meetings.week_starting` records which — so the week boundary decides which meetings fall in which week, and a rescheduled meeting's week is the week it was scheduled in, not the week it moved to. *An earlier version said Section 13 makes the week "the unit of a Cell's identity". It does not: the identity is the Cell and the scheduled date, because a week straddling a month boundary can hold two scheduled meetings. The week is what a meeting reports in, which is what this rule decides.* A Sunday-start convention is common locally and will be somebody's default, which is why the rule is fixed here rather than left to the calendar library.
 
 ### Unique people
 
@@ -3387,7 +3597,11 @@ report_snapshots
 - computed_at
 ```
 
-`source_version` is a value that changes whenever any record the figure derives from changes. A monotonic counter incremented by every write to attendance, membership, assignment, lifecycle, or merge — scoped no more narrowly than the widest of those a report reads — is sufficient and is cheaper to reason about than tracking which rows a given figure touched. A snapshot whose `source_version` no longer matches is recomputed rather than served. A hand-maintained list of triggers is a list somebody eventually forgets to extend, and a stale stored figure fails silently — it returns a number that looks right.
+`source_version` is a value that changes whenever any record the figure derives from changes. A monotonic counter incremented by every write to attendance, membership, assignment, lifecycle, merge, **or the DCC calendar** — scoped no more narrowly than the widest of those a report reads — is sufficient and is cheaper to reason about than tracking which rows a given figure touched.
+
+A snapshot whose `source_version` no longer matches is recomputed rather than served. A hand-maintained list of triggers is a list somebody eventually forgets to extend, and a stale stored figure fails silently — it returns a number that looks right.
+
+The calendar is on that list because N comes from it (Section 9), so a Sunday added or removed within an open month moves every monthly-attendance bucket in that month without touching a single attendance row. It was added on 2026-08-31, and it is an instance of the warning immediately above: the list did not name it, and the figure it would have served looked right.
 
 Stored figures are a cache, never a source. They are always derivable from the underlying records (Section 18), and a stored figure that cannot be reproduced from source data is a defect.
 
@@ -3555,7 +3769,8 @@ GET  /api/v1/cells/{id}/members
 POST /api/v1/cells/{id}/members            add, or move from another Cell
 DELETE /api/v1/cells/{id}/members/{person_id}  ends the membership
 GET  /api/v1/cells/{id}/meetings
-POST /api/v1/cells/{id}/meetings/{meeting_id}/submit
+GET  /api/v1/cells/{id}/meetings/{meeting_id}/roster   who to record, for this meeting
+POST /api/v1/cells/{id}/meetings/{meeting_id}/submit   {meeting_id} is the scheduled date
 
 GET  /api/v1/reports/dcc/monthly
 GET  /api/v1/reports/dcc/yearly
@@ -3589,7 +3804,9 @@ That is not tidiness: it is what the boundary in Section 7 keys on when deciding
 
 **The bare forms are in the set because a path parameter binds under one.** A route declaring `{id}` hands the boundary the key `id`, so a convention admitting only the suffixed forms would exclude every path parameter in the API — which is the case the boundary exists for. The plural is admitted with it, at both positions, so that `ids` and `acknowledged_duplicate_ids` are one rule rather than two.
 
-**`camelCase` is not used at this boundary**, and the convention is stated rather than assumed because the boundary cannot enforce what it is not told. A field named `meetingId` carries an identifier and is not canonicalized, which is a defect that shows up as an authorization comparison quietly answering on a spelling. The example routes above use `{meeting_id}` for this reason.
+**`camelCase` is not used at this boundary**, and the convention is stated rather than assumed because the boundary cannot enforce what it is not told. A field named `meetingId` carries an identifier and is not canonicalized, which is a defect that shows up as an authorization comparison quietly answering on a spelling.
+
+**`{meeting_id}` is named that way by this rule and is not an example of it working.** A Cell meeting is addressed by its scheduled date (Section 13), and Section 7 canonicalizes a value only where the field's name says it is an identifier **and** the value is UUID-shaped — so a date passes through untouched. The name is still right, because the day this route ever takes a UUID the rule must already reach it; what it is not is a demonstration. `{id}` on the Cell in the same path is the demonstration, and it is a UUID.
 
 A pastoral leader is `pastoral_leader_id` wherever a request names one — Section 11 makes Cell leadership a first-class concept, so a bare `leader_id` does not say which kind of leader is meant. A **Cell's** leader is `cell_leader_id`, and the filter sketched under Filtering and sorting below carries that name rather than the bare one.
 
@@ -3781,6 +3998,10 @@ Answering `NOT_FOUND` to everyone was weighed and rejected on what it costs the 
 
 `VERSION_CONFLICT` carries what Section 14 requires a person to see. The client renders a resolution dialog directly from it:
 
+**One case carries a null `submitted_version`, and it is the only one.** A Cell meeting has no row until it is reported (Section 13), so two first submissions of one meeting race with neither holding a version: the loser meets the uniqueness of `(cell_id, scheduled_date)` rather than a stale version. It answers `VERSION_CONFLICT` with `submitted_version: null` and the stored row as `current`, which is what Section 14 asks for — the person sees what was recorded, by whom and when, against their own figures — and it is named here because a uniqueness violation left to surface on its own is an `INTERNAL_ERROR` on an ordinary race.
+
+The code still means what the table says. The record did not change since it was read; it came into existence while this client was drafting, which is the same problem from the other side and demands the same resolution.
+
 ```json
 {
   "error": {
@@ -3941,7 +4162,7 @@ These are not deferred. They are cheap to design in and expensive to retrofit, a
 
 - **Client-generated idempotency keys on every write.** A leader recording attendance on an unreliable connection will retry, and a retry must never create a second record.
 - **Version checks on every update**, so concurrent writes conflict rather than overwrite (Section 14).
-- **Stable UUIDs**, generatable by the client, so a record drafted offline keeps its identity when it syncs.
+- **Stable identifiers, generatable by the client**, so a record drafted offline keeps its identity when it syncs. A UUID is the general answer and is the shape a Person, a Cell and a request are addressed by — though today the server mints those, and no endpoint yet accepts a client-supplied `id`; this rule is about not foreclosing it. Where the record's identity is already a fact the client holds, that fact is the identifier instead: a Cell meeting is addressed by its scheduled date (Section 13), which is derivable offline from the Cell's schedule, stable, and — unlike a minted UUID — the same value on two devices drafting the same meeting, so it collides where a UUID would silently duplicate. What this rule forbids is an identity only the **server** can supply, which is what *Deferred until required* states at the end of this section.
 - **Server-side validation on every sync path.** A client is never trusted to have validated anything.
 
 ### Deferred until required

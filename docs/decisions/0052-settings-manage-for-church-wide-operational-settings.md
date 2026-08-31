@@ -1,6 +1,6 @@
 # 2026-08-20 — `settings.manage` for church-wide operational settings
 
-Admin-only, Whole Church, audit logged with previous and new values. It governs the Cell attention threshold (§15) and the initial-encoding phase flag (§2) — both alter behaviour for the whole church from one control. A setting is explicitly not a place to record domain rules: anything that changes what a figure means belongs in the specification, not behind a control. Written to `SKILL.md` §7, §15, §2, §21.
+Admin-only, Whole Church, audit logged with previous and new values. It governs the Cell attention threshold (§15), the initial-encoding phase flag (§2) and — since 2026-08-31 — the first Sunday the DCC calendar covers (§9) — both alter behaviour for the whole church from one control. A setting is explicitly not a place to record domain rules: anything that changes what a figure means belongs in the specification, not behind a control. Written to `SKILL.md` §7, §15, §2, §21.
 
 ---
 

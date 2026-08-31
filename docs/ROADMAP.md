@@ -140,7 +140,7 @@ the three questions it could not answer were answered.
 
 ## Stage 4 — Attendance
 
-- DCC calendar generated twelve months ahead (§9)
+- DCC calendar generated ahead of a twelve-month floor, by a scheduled command (§9)
 - DCC recording, responsible leader, roll-up to the nearest account-holding upline
 - Cell meetings: the meeting statuses, their reasons, and `facilitated_by` (§13)
 - The monthly submission window and its close (§13)
@@ -158,6 +158,17 @@ the three questions it could not answer were answered.
 - Coverage, as a single line rather than a bucket
 - Network Summary: Overview, Development, Generations, Tree, Participation (§16)
 - Role-specific dashboards, with scope and period on every tile (§19)
+- **In-app notifications about outstanding records** (§13, and the `notifications` table
+  §26 assigns to `reporting`). They arrive here rather than in Stage 4 with the
+  submission window they concern, because §13 sends them to the direct pastoral children
+  of the two Senior Pastors and to Admin, carrying church-wide figures **including
+  names** — content the recipient may only see under an explicit Whole Church grant of
+  `reports.view_subtree`, read-only, which is a reporting surface. §13 also requires the
+  content to narrow when that grant is withdrawn, so it is rendered at read time against
+  the reader's scope rather than stored. Stage 4 builds what a notification would be
+  *about*; nothing is lost by their arriving with the dashboard that shows them, and §13
+  is explicit that a leader's own outstanding work is a dashboard list rather than a
+  notification
 - Materialized closed months (§20)
 
 **Done when:** the reconciliation tests pass and run in CI — classification at every scope, and monthly-attendance buckets at Cell scope, each summing to the same unique-people total (`SKILL.md` §20).
