@@ -61,7 +61,10 @@ That is the identical parity defect this branch had just corrected one section o
 allowance was left claiming they mirror each other.
 
 **The key is seeded with the attention threshold and the encoding flag**, and the command
-only reads it. That is what lets the command stay a system action with nothing to
+only reads it. *Seeded with **what**, this ruling did not say, and both derivations had already
+been refused. [Decision 0169](0169-four-that-the-closed-cell-path-produced.md) seeds it null and
+has the command's first run set it to the Sunday on or before that day — one write, on a key
+that is null exactly once.* That is what lets the command stay a system action with nothing to
 authorize, and it leaves Section 7's allowance with one writer. An Admin may change it
 afterwards under `settings.manage`, audited with previous and new values like any other.
 
@@ -83,7 +86,12 @@ submission above is refused instead, which is right: a meeting moved into B's te
 B's.
 
 **And the exception carries the reads that write needs**: the meeting, and the Cell's
-roster as of that date. Recording a meeting means marking every member present or not
+roster as of that date. *Under which capability, this ruling did not say, and the only roster
+route is guarded by `cell.manage_membership` — a management capability that would have opened
+the membership writes on a closed Cell.
+[Decision 0169](0169-four-that-the-closed-cell-path-produced.md) gives a meeting its own roster
+route under the capability that records it. It also closes the instant this ruling left the
+actor to choose: a closed Cell's meetings cannot be rescheduled.* Recording a meeting means marking every member present or not
 (Section 13), and every read of a closed Cell's membership otherwise resolves through its
 last leader — so A would have been authorized to write a roster A could not read. A
 permission that cannot be exercised is not one.
@@ -96,4 +104,4 @@ appearing for the last leader.
 
 Decision 0168, indexed in [CLAUDE.md](../../CLAUDE.md).
 
-Previous: [2026-08-31 — Four more from the third review, including a key that was wrong](0167-four-more-from-the-third-review-including-a-key-that-was-wrong.md)
+Previous: [2026-08-31 — Four more from the third review, including a key that was wrong](0167-four-more-from-the-third-review-including-a-key-that-was-wrong.md) | Next: [2026-08-31 — Four that the closed-Cell path produced](0169-four-that-the-closed-cell-path-produced.md)

@@ -1,4 +1,4 @@
-# 2026-08-31 — A Cell meeting is addressed by its week
+# 2026-08-31 — A Cell meeting has no row until it is reported
 
 Section 22 sketches `POST /api/v1/cells/{id}/meetings/{meeting_id}/submit`, which reads
 as though a Cell meeting has an identifier before anybody has reported it. Nothing else
@@ -7,7 +7,8 @@ in the specification says one exists.
 **A `cell_meetings` row is written by the first submission, and there is no row before
 it.** That half stands.
 
-***The week is not the identity, and this ruling's title is wrong.*** It chose
+***The week is not the identity, and this ruling was retitled for it.*** It was "A Cell meeting
+is addressed by its week". It chose
 `(cell_id, week_starting)`, and a week straddling a month boundary can hold two scheduled
 meetings under two schedules, reporting in two months — so one of them would be
 unrecordable. Settled in

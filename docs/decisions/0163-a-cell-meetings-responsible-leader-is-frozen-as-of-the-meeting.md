@@ -95,4 +95,4 @@ settled in 0165, and it does, for the weeks it was open, until the window shuts.
 
 Decision 0163, indexed in [CLAUDE.md](../../CLAUDE.md).
 
-Previous: [2026-08-31 — A Cell meeting is addressed by its week](0162-a-cell-meeting-is-addressed-by-its-week.md) | Next: [2026-08-31 — A Cell submission versions the meeting; a DCC submission versions the person](0164-a-cell-submission-versions-the-meeting-a-dcc-submission-versions-the-person.md)
+Previous: [2026-08-31 — A Cell meeting has no row until it is reported](0162-a-cell-meeting-has-no-row-until-it-is-reported.md) | Next: [2026-08-31 — A Cell submission versions the meeting; a DCC submission versions the person](0164-a-cell-submission-versions-the-meeting-a-dcc-submission-versions-the-person.md)

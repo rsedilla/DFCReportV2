@@ -140,7 +140,7 @@ the three questions it could not answer were answered.
 
 ## Stage 4 — Attendance
 
-- DCC calendar generated twelve months ahead (§9)
+- DCC calendar generated ahead of a twelve-month floor, by a scheduled command (§9)
 - DCC recording, responsible leader, roll-up to the nearest account-holding upline
 - Cell meetings: the meeting statuses, their reasons, and `facilitated_by` (§13)
 - The monthly submission window and its close (§13)

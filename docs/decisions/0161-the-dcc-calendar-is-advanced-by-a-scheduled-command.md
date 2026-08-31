@@ -14,11 +14,15 @@ event created.
 action", and both were wrong: it is invoked by a schedule and has no interactive actor,
 so it is a **system** action with a null `actor_id`, which Section 6 now names as the
 second such thing. Requiring `ADMIN` would mean a stored credential or a person running
-it weekly. The one exception is a back-fill into a closed month, which is a person's act
-under `records.backdate_effective_date`. It also said "up to twelve months" against
+it weekly. It also said "up to twelve months" against
 Section 9's floor of twelve, which is satisfied only at the instant it runs, and "one
 entry naming the range and the count", which has no target and folds many creations into
 one entry against Section 21.*
+
+*A closed-month back-fill was added by 0165 and named here as this command's one exception; it
+was withdrawn entirely by
+[decision 0168](0168-the-closed-month-back-fill-is-withdrawn.md). The command reaches only open
+months and has no capability to check, so it is a system action without qualification.*
 
 ## Why a command rather than something automatic
 
@@ -40,9 +44,12 @@ failing on its own citation: a backup job's failure is visible **because the job
 it**, and a command nobody runs reports nothing. The reason did not carry and the shape
 was taken anyway.
 
-**What makes it acceptable is that the horizon is surfaced and the lapse is
-repairable** — the Admin dashboard carries the date the calendar reaches, and the command
-back-fills a Sunday it finds missing. Both are settled in [decision 0165](0165-four-stop-conditions-the-stage-four-rulings-raised.md) and written into Section 9.
+**What makes it acceptable is that the horizon is surfaced** — the command prints the date
+the calendar reaches on every run, and the Admin dashboard carries it once there is one.
+[Decision 0165](0165-four-stop-conditions-the-stage-four-rulings-raised.md) paired that with a
+back-fill of missed Sundays; [decision 0168](0168-the-closed-month-back-fill-is-withdrawn.md)
+withdrew the closed-month half, because an event no leader could submit against cannot be made
+to count for anything. Surfacing was always the load-bearing half.
 
 ## What was rejected
 
@@ -72,13 +79,14 @@ neither silent nor immediate.
   `removed_at` set, precisely so a month showing four events where the calendar holds
   five is explained by a record. The command inserts missing rows, and a removed Sunday
   is not missing.
-- ~~**It never creates an event in the past.**~~ *Withdrawn by [decision 0165](0165-four-stop-conditions-the-stage-four-rulings-raised.md).*
-  It was this ruling's own invention rather than Section 9's, and it left a lapse with no
-  remedy at all: no route creates a DCC event, so a month whose Sundays were missed would
-  carry a wrong N for ever. Section 9's guarantee is that every Sunday carries an event
-  unless one was deliberately removed, and back-filling restores that rather than
-  breaking it. Back-filling a **closed** month is backdating and carries what backdating
-  carries.
+- **It never creates an event in a month that has closed.** *This began as "never creates an
+  event in the past", was withdrawn by
+  [decision 0165](0165-four-stop-conditions-the-stage-four-rulings-raised.md) as too wide, and
+  came back in this narrower form with
+  [decision 0168](0168-the-closed-month-back-fill-is-withdrawn.md).* A gap inside an open month
+  is filled like any other missing Sunday. A gap in a closed month is reported and left, because
+  an event nobody was ever able to submit against reads as every leader having failed to record
+  for it, and no rule about which figures it joins avoids that.
 - **Audited**, one entry per event created, because Section 21 requires a target and one
   entry per action performed. A run that creates nothing writes nothing.
 
@@ -86,4 +94,4 @@ neither silent nor immediate.
 
 Decision 0161, indexed in [CLAUDE.md](../../CLAUDE.md).
 
-Previous: [2026-08-31 — One API instance, and the skew bound waits for the second](0160-one-api-instance-and-the-skew-bound-waits-for-the-second.md) | Next: [2026-08-31 — A Cell meeting is addressed by its week](0162-a-cell-meeting-is-addressed-by-its-week.md)
+Previous: [2026-08-31 — One API instance, and the skew bound waits for the second](0160-one-api-instance-and-the-skew-bound-waits-for-the-second.md) | Next: [2026-08-31 — A Cell meeting has no row until it is reported](0162-a-cell-meeting-has-no-row-until-it-is-reported.md)
