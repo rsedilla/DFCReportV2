@@ -642,6 +642,18 @@ describe('DCC recording (sections 9 and 14)', () => {
       // Section 14 lists the responsible leader among what a correction preserves,
       // so it is carried rather than resolved again.
       expect(live?.responsible_leader_id).toBe(manuel.id);
+
+      // **The chain does not overlap itself.** The successor begins exactly where its
+      // predecessor ended. Left to the column default its `recorded_at` would be
+      // `now()` — the instant the transaction *began* — while the close happens at
+      // `clock_timestamp()` during it, so both rows would be live across the interval
+      // the transaction had already spent: the checklist descent, a scope check per
+      // line, and the wait on the predecessor's own row lock. Migration 0012 constrains
+      // only within a row and cannot see this.
+      expect(superseded?.superseded_at).toBeInstanceOf(Date);
+      expect((live?.recorded_at as Date).getTime()).toBeGreaterThanOrEqual(
+        (superseded?.superseded_at as Date).getTime(),
+      );
     });
 
     it('keeps the responsible leader when a reassignment is backdated behind the event', async () => {
@@ -1024,6 +1036,105 @@ describe('DCC recording (sections 9 and 14)', () => {
       expect(response.body.error.details.capability).toBe('dcc.submit_on_behalf');
     });
 
+    it('names the frozen responsible leader on a correction, not the current one', async () => {
+      // **The case the first on-behalf test cannot make.** That one moves no
+      // assignment, so the frozen and the re-resolved leader are the same value and it
+      // passes against an entry built from either.
+      //
+      // Section 9 freezes the responsible leader and section 14 lists it among what a
+      // correction preserves, so the entry must name what the row names. Built from a
+      // re-resolved assignment it named the current leader and got `on_behalf`
+      // backwards in both directions.
+      const sunday = await recentSunday();
+      const eventId = await createEvent(sunday);
+
+      await submit(manuelAccount, eventId, [
+        { person_id: quentin.id, present: true, version: null },
+      ]).expect(201);
+
+      // Backdated behind the event, which section 5 permits an Admin to do. Quentin's
+      // record stays Paul's; the assignment in force at the event instant is now
+      // Manuel's.
+      const backdatedTo = startOfManilaDay(shift(sunday, -2));
+      await db
+        .updateTable('pastoral_assignments')
+        .set({ ended_at: backdatedTo })
+        .where('person_id', '=', quentin.id)
+        .where('ended_at', 'is', null)
+        .execute();
+      await assignTo(db, quentin.id, manuel.id, backdatedTo);
+
+      await submit(manuelAccount, eventId, [
+        { person_id: quentin.id, present: false, version: 1 },
+      ]).expect(201);
+
+      const entries = await db
+        .selectFrom('audit_log')
+        .selectAll()
+        .where('action', '=', 'dcc_attendance.corrected')
+        .execute();
+
+      expect(entries).toHaveLength(1);
+
+      const after = entries[0].after as { responsible_leader_id: string; on_behalf: boolean };
+
+      // Paul, whom the row names — not Manuel, whom the assignment now resolves to.
+      expect(after.responsible_leader_id).toBe(paul.id);
+
+      // And Manuel is therefore correcting somebody else's record, which is what the
+      // re-resolved value would have denied.
+      expect(after.on_behalf).toBe(true);
+
+      const live = await liveRows(eventId);
+      expect(live[0].responsible_leader_id).toBe(paul.id);
+    });
+
+    it('answers the same refusal for an off-checklist person whatever is stored', async () => {
+      // **The residual oracle inside `assertMayRecord`.** `dcc.submit_on_behalf`
+      // depends on nothing stored; the `dcc.correct_subtree` branch is reached exactly
+      // when a record exists *and disagrees with the value sent*. Checked in that order,
+      // two probes read the stored value out of the refusal for anyone the actor may
+      // reach — the oracle `assertInScope` closes one level up, left behind inside this
+      // method by the batch that closed it.
+      const eventId = await createEvent(await recentSunday());
+
+      // Timothy is in Manuel's subtree — so `dcc.take_attendance` covers him — but he
+      // is Mark's to record, and Manuel holds neither of the other two capabilities.
+      await submit(admin, eventId, [
+        { person_id: timothy.id, present: true, version: null },
+      ]).expect(201);
+
+      await db
+        .updateTable('account_roles')
+        .set({ revoked_at: sql<Date>`now()` })
+        .where('account_id', '=', manuelAccount.id)
+        .execute();
+
+      await db
+        .insertInto('capability_grants')
+        .values({
+          account_id: manuelAccount.id,
+          capability: 'dcc.take_attendance',
+          scope_type: 'OWN_SUBTREE',
+          read_only: false,
+          reason: 'Invented for this case (CLAUDE.md, Secrets).',
+          granted_by: admin.id,
+        })
+        .execute();
+
+      const disagreeing = await submit(manuelAccount, eventId, [
+        { person_id: timothy.id, present: false, version: 1 },
+      ]).expect(403);
+      const agreeing = await submit(manuelAccount, eventId, [
+        { person_id: timothy.id, present: true, version: 1 },
+      ]).expect(403);
+
+      // One capability, one message, whatever is stored.
+      expect(disagreeing.body.error.details.capability).toBe('dcc.submit_on_behalf');
+      expect(agreeing.body.error.details.capability).toBe('dcc.submit_on_behalf');
+      expect(agreeing.body.error.message).toBe(disagreeing.body.error.message);
+    });
+
     it('refuses somebody outside the actor’s subtree', async () => {
       const stranger = await createPerson(db, { firstName: 'Salome', network: 'WOMENS' });
       await assignTo(db, stranger.id, null);
@@ -1156,45 +1267,35 @@ describe('DCC recording (sections 9 and 14)', () => {
       }
     });
 
-    it('answers a conflict when a correction loses the race under the row lock', async () => {
-      // The other half, and the interleaving is the classic lost update. Both writers
-      // read version 1 and both pass the version check; the loser's supersede then
-      // matches no row, because the winner has already closed it.
+    it('answers RESOURCE_BUSY when the winner recorded what the loser was carrying', async () => {
+      // The third outcome, and the one that was a 500 until it was found. The loser
+      // loses the race on `dcc_attendance_one_live`, and by the time it re-reads, the
+      // committed state already says what it was going to write — so the line is
+      // unchanged, takes no part in the version check, and there is no conflict to
+      // present.
       //
-      // It answers `VERSION_CONFLICT` rather than `RESOURCE_BUSY`: the identical body
-      // resubmitted cannot succeed, since its version is now stale, which is the
-      // question decision 0158 places a refusal by.
+      // Decision 0158's question settles it: could this same body, resubmitted
+      // unchanged, succeed? It could — the retry finds the line unchanged and answers
+      // 201 — so nothing was decided about the body, which is what `RESOURCE_BUSY`
+      // means, and a 5xx releases the key the retry needs.
       const eventId = await createEvent(await recentSunday());
-
-      await submit(manuelAccount, eventId, [
-        { person_id: mark.id, present: true, version: null },
-      ]).expect(201);
-
-      const stored = (await liveRows(eventId))[0];
-      const successorId = randomUUID();
 
       const holder = new Client({ connectionString: process.env.TEST_DATABASE_URL });
       await holder.connect();
 
       try {
-        // A correction written by hand, in the order the deferred `superseded_by`
-        // foreign key permits: close the predecessor, then write its replacement.
         await holder.query('BEGIN');
         await holder.query(
-          'UPDATE dcc_attendance SET superseded_at = now(), superseded_by = $2 WHERE id = $1',
-          [stored.id, successorId],
-        );
-        await holder.query(
           `INSERT INTO dcc_attendance
-             (id, dcc_event_id, person_id, present, responsible_leader_id, recorded_by, version)
-           VALUES ($1, $2, $3, false, $4, $5, 2)`,
-          [successorId, eventId, mark.id, manuel.id, admin.id],
+             (dcc_event_id, person_id, present, responsible_leader_id, recorded_by, version)
+           VALUES ($1, $2, true, $3, $4, 1)`,
+          [eventId, mark.id, manuel.id, admin.id],
         );
 
-        // Dispatched while the holder is uncommitted, so it reads version 1 and its
-        // version check passes -- then blocks on the row the holder has locked.
+        // The same value the holder is writing, so once the holder commits there is
+        // nothing to disagree about.
         const attempt = submit(manuelAccount, eventId, [
-          { person_id: mark.id, present: false, version: 1 },
+          { person_id: mark.id, present: true, version: null },
         ]);
         const inFlight = track(attempt);
 
@@ -1208,29 +1309,41 @@ describe('DCC recording (sections 9 and 14)', () => {
             return Number(rows[0].count);
           },
           inFlight,
-          'the correction to block on the stored row',
+          'the submission to block on dcc_attendance_one_live',
         );
 
         expect(waiters).toBeGreaterThan(0);
-
         await holder.query('COMMIT');
 
         const response = await attempt;
 
-        expect(response.status).toBe(409);
-        expect(response.body.error.code).toBe('VERSION_CONFLICT');
-        expect(response.body.error.details.submitted_version).toBe(1);
-        expect(response.body.error.details.current_version).toBe(2);
+        expect(response.status).toBe(503);
+        expect(response.body.error.code).toBe('RESOURCE_BUSY');
 
-        // The loser wrote nothing, and the winner's row is the only live one.
-        const rows = await liveRows(eventId);
-        expect(rows).toHaveLength(1);
-        expect(rows[0].id).toBe(successorId);
+        // And the retry it advises does succeed, writing nothing.
+        const retry = await submit(manuelAccount, eventId, [
+          { person_id: mark.id, present: true, version: 1 },
+        ]).expect(201);
+
+        expect(retry.body.unchanged).toBe(1);
+        expect(await liveRows(eventId)).toHaveLength(1);
       } finally {
         await holder.query('ROLLBACK').catch(() => undefined);
         await holder.end();
       }
     });
+
+    // **There is no fourth case, and the one that was written here was unreachable.**
+    // A correction race between two writers cannot produce a `VERSION_CONFLICT`,
+    // because `present` is a boolean and there are only two values to hold. To block on
+    // the predecessor's row lock at all, the loser must disagree with the value that
+    // stood *before* the race — and with two values that means it agrees with the value
+    // the winner wrote, so by the time it re-reads there is nothing to choose between.
+    //
+    // A test asserting a 409 there stood for one commit and passed for the wrong
+    // reason: it submitted the pre-race value, which is unchanged, so the line wrote
+    // nothing, never took the lock, and never raced. The genuine stale-version conflict
+    // on a correction needs no race and is pinned sequentially above.
   });
 
   // ---------------------------------------------------------------------------

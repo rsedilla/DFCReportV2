@@ -20,7 +20,7 @@ import {
 } from '../common/errors/api-error';
 import { VersionConflictError } from '../common/errors/version-conflict';
 import { sameId } from '../common/identifiers';
-import { isUniqueViolation } from '../common/errors/postgres-errors';
+import { isUniqueViolation, violatedConstraint } from '../common/errors/postgres-errors';
 import { IdempotencyService } from '../common/idempotency/idempotency.service';
 import { decodeRosterCursor, encodeRosterCursor, type RosterCursor } from '../common/roster-cursor';
 import { startOfManilaDay } from '../common/time/manila';
@@ -196,16 +196,46 @@ export class DccAttendanceService {
       // whoever won. Re-reading it here rather than inside the aborted transaction is
       // not a choice: a failed statement aborts the transaction, and every query after
       // it is refused.
-      if (!isUniqueViolation(error)) {
+      // **Named, not merely typed.** Only `dcc_attendance_one_live` means a lost race;
+      // a violation of any other index on this path is a defect and must keep failing
+      // loudly rather than being reported as contention.
+      //
+      // **No test fails on the narrowing**, and that is said rather than left to be
+      // discovered: nothing this path writes can violate another unique index today —
+      // `audit_log` keys on a generated UUID and the idempotency completion is an
+      // UPDATE — so the second clause is unreachable. It is kept, unlike the row-count
+      // check deleted below, because the two differ in kind: that one duplicated an
+      // enforcement one statement away, while this one *narrows* a handler, and
+      // removing it would turn a future defect into a 503 telling the client to retry
+      // something that cannot succeed.
+      if (!isUniqueViolation(error) || violatedConstraint(error) !== ONE_LIVE_INDEX) {
         throw error;
       }
 
       const conflict = await this.conflictAfterLostRace(eventId, records, actor);
 
-      // No conflict to report means the violation came from somewhere this does not
-      // understand, and hiding it behind a 409 would report contention where there is
-      // a defect.
-      throw conflict ?? error;
+      if (conflict !== null) {
+        throw conflict;
+      }
+
+      // **The race was lost and nothing now disagrees**, which happens when the winner
+      // recorded the value this submission was carrying: the line is unchanged against
+      // the committed state, so it takes no part in the version check and there is no
+      // conflict to present.
+      //
+      // Decision 0158 places the refusal by one question — could this same body,
+      // resubmitted unchanged, succeed? Here it plainly could: the retry finds the line
+      // unchanged, writes nothing, and answers 201. So this reached no decision about
+      // the body, which is what `RESOURCE_BUSY` means, and section 22's third condition
+      // names it exactly — "a premise read before a lock no longer held under it".
+      //
+      // A 5xx also releases the idempotency key, which is what the retry needs.
+      throw new ApiError(
+        ApiErrorCode.RESOURCE_BUSY,
+        'Another submission recorded this event while yours was being applied. Retry shortly, ' +
+          'with the same key.',
+        { event_id: eventId },
+      );
     }
   }
 
@@ -652,8 +682,41 @@ export class DccAttendanceService {
 
     // `dcc.take_attendance` was checked by `assertInScope` before anything about the
     // record was read. What is left is the amendment capability, and it is reached
-    // only by an actor already in scope — an unchanged line writes nothing, so it is
-    // not an amendment: a leader resubmitting an identical checklist is submitting.
+    // only by an actor already in scope.
+    //
+    // **On behalf first, and the amendment capability last.** `dcc.submit_on_behalf`
+    // depends on nothing stored — only on whether this actor is the person's submitter
+    // — while the `dcc.correct_subtree` branch is reached exactly when a record exists
+    // *and disagrees with the value sent*. Checked the other way round, two probes read
+    // the stored value out of the refusal for anyone the actor may reach: this is the
+    // oracle `assertInScope` closes one level up, left behind inside this method by the
+    // batch that closed it.
+    //
+    // Under role defaults the residual is inside the actor's own pastoral scope, which
+    // section 8 does not withhold. It becomes a section 8 disclosure under a grant
+    // section 7 explicitly permits — `dcc.take_attendance` at Whole Church issued to a
+    // Leader whose `dcc.view_subtree` stays at own/subtree — and the ordering costs
+    // nothing, so it is not left resting on which grants happen to be issued.
+    if (!params.onChecklist) {
+      const mayActForAnother = await this.authorization.coversWith(
+        executor,
+        actor,
+        authority,
+        Capability.DccSubmitOnBehalf,
+        target,
+      );
+
+      if (!mayActForAnother) {
+        throw new ScopeDeniedError(
+          'This person is recorded by another leader, and submitting on their behalf is outside ' +
+            'your scope.',
+          { capability: Capability.DccSubmitOnBehalf, person_id: personId },
+        );
+      }
+    }
+
+    // An unchanged line writes nothing, so it is not an amendment: a leader
+    // resubmitting an identical checklist is submitting.
     if (
       params.outcome === 'CORRECT' &&
       !(await this.authorization.coversWith(
@@ -668,26 +731,6 @@ export class DccAttendanceService {
         capability: Capability.DccCorrectSubtree,
         person_id: personId,
       });
-    }
-
-    if (params.onChecklist) {
-      return;
-    }
-
-    if (
-      !(await this.authorization.coversWith(
-        executor,
-        actor,
-        authority,
-        Capability.DccSubmitOnBehalf,
-        target,
-      ))
-    ) {
-      throw new ScopeDeniedError(
-        'This person is recorded by another leader, and submitting on their behalf is outside ' +
-          'your scope.',
-        { capability: Capability.DccSubmitOnBehalf, person_id: personId },
-      );
     }
   }
 
@@ -723,6 +766,7 @@ export class DccAttendanceService {
 
       const stored = params.live.get(personId) ?? null;
       const successorId = randomUUID();
+      let closedAt: Date | null = null;
 
       if (stored !== null) {
         // Supersede first, on a predicate that also serializes. Two concurrent
@@ -731,30 +775,43 @@ export class DccAttendanceService {
         // section 14 requires, caught without a lock of its own — and it is the one
         // ordering the deferred `superseded_by` foreign key permits, since the
         // successor does not exist yet.
-        await trx
+        const closed = await trx
           .updateTable('dcc_attendance')
-          // `clock_timestamp()`, never a host `Date`. The successor's `recorded_at`
-          // falls to the column default, which is the database's clock — so a host
-          // stamp here would take the two ends of one row's live period from two
-          // clocks, the rule `test/setup/fixtures.ts` states and this branch corrected
-          // the stated reason for in the same commit that broke it here.
+          // **`clock_timestamp()` in the database, and the same instant is handed to
+          // the successor.** Three things have to agree here and two of them did not.
           //
-          // `clock_timestamp()` rather than `now()` for the second reason that file
-          // gives: `now()` is the transaction's start, and this statement waits on the
-          // predecessor's row lock, so a contended correction would stamp an instant
-          // measurably before the write happened.
+          // Not a host `Date`: `recorded_at` comes from the database, so a host stamp
+          // takes the two ends of one row's period from two clocks — the rule
+          // `test/setup/fixtures.ts` states, whose stated reason this branch corrected
+          // two commits before breaking the rule here.
           //
-          // **The enforcement is `dcc_attendance_period_ordered`, not this line.**
-          // Reverting it to a host `Date` inverts the period only when the host clock
-          // happens to be behind, which on this machine is a fraction of a millisecond
-          // and on a CI runner is unbounded — so no test can reliably fail on the
-          // choice made here. Migration 0012 refuses the inverted row whoever writes
-          // it, and `test/database/attendance.spec.ts` pins that. This line is the
-          // convention; the constraint is what holds.
+          // Not `now()`: that is the transaction's start, and this statement waits on
+          // the predecessor's row lock, so a contended correction would stamp an instant
+          // measurably before the close happened.
+          //
+          // And **returned**, because the successor must not begin before this row
+          // ended. Left to the column default its `recorded_at` is `now()` — the
+          // instant the transaction *began* — so every correction stamped its successor
+          // as starting before its predecessor ended, by however long the transaction
+          // had already run: the checklist descent, a scope check per line, and the wait
+          // on this very row's lock. Two rows of one chain were then both live across
+          // that interval. Migration 0012 states the model that breaks — "the two ends
+          // of one period: the row is the live record from the first until the second" —
+          // and constrains only *within* a row, so nothing refused it.
+          //
+          // The constraint is still what holds the within-row half: reverting this to a
+          // host `Date` inverts a period only when the host clock happens to be behind,
+          // which here is a fraction of a millisecond and on a CI runner is unbounded,
+          // so no test can reliably fail on the choice. `dcc_attendance_period_ordered`
+          // refuses the inverted row whoever writes it. Between rows there is no
+          // constraint and this `RETURNING` is the whole of the enforcement.
           .set({ superseded_at: sql<Date>`clock_timestamp()`, superseded_by: successorId })
+          .returning('superseded_at')
           .where('id', '=', stored.id)
           .where('superseded_at', 'is', null)
-          .execute();
+          .executeTakeFirst();
+
+        closedAt = closed?.superseded_at ?? null;
 
         // **No check on the row count here, and that is deliberate.** A supersede that
         // matches nothing means somebody closed this row between the version check and
@@ -778,6 +835,16 @@ export class DccAttendanceService {
         // and not because anything depends on it.
       }
 
+      // **Resolved once and used by both the row and its audit entry.** Deriving it
+      // twice is what let them disagree: the row took the frozen value and the entry
+      // re-resolved the assignment, so a correction after any move within the event's
+      // own day — or after an Admin backdated one (section 5) — wrote an entry naming a
+      // leader the row does not name, and got `on_behalf` backwards in both directions.
+      const responsibleLeaderId =
+        stored === null
+          ? (params.assignments.get(personId)?.leaderId ?? null)
+          : stored.responsibleLeaderId;
+
       await trx
         .insertInto('dcc_attendance')
         .values({
@@ -785,14 +852,14 @@ export class DccAttendanceService {
           dcc_event_id: params.event.id,
           person_id: personId,
           present: record.present,
+          // The predecessor's closing instant, so the chain is contiguous rather than
+          // overlapping. A create has no predecessor and takes the column default.
+          ...(closedAt === null ? {} : { recorded_at: closedAt }),
           // Frozen on the first row and carried by every successor. Section 9 fixes
           // it as of the event and section 14 lists it among what a correction
           // preserves — re-resolving it would move a recorded attendance between
           // leaders' totals inside a period that may have closed.
-          responsible_leader_id:
-            stored === null
-              ? (params.assignments.get(personId)?.leaderId ?? null)
-              : stored.responsibleLeaderId,
+          responsible_leader_id: responsibleLeaderId,
           recorded_by: params.actor.accountId,
           correction_reason: record.correction_reason ?? null,
           version: stored === null ? 1 : stored.version + 1,
@@ -812,7 +879,7 @@ export class DccAttendanceService {
         stored,
         present: record.present,
         reason: record.correction_reason ?? null,
-        responsibleLeaderId: params.assignments.get(personId)?.leaderId ?? null,
+        responsibleLeaderId,
       });
     }
 
@@ -1004,16 +1071,19 @@ export class DccAttendanceService {
     const live = await this.liveRecords(this.db, eventId, personIds);
     const identities = await this.people.forDecisionsWithin(this.db, personIds);
 
-    for (const record of records) {
-      const stored = live.get(record.person_id) ?? null;
-      const current = stored === null ? null : stored.version;
+    const stale = firstStaleLine(records, live);
 
-      if (record.version !== current) {
-        return this.conflictFor(this.db, actor, record, stored, identities.get(record.person_id));
-      }
+    if (stale === null) {
+      return null;
     }
 
-    return null;
+    return this.conflictFor(
+      this.db,
+      actor,
+      stale.record,
+      stale.stored,
+      identities.get(stale.record.person_id),
+    );
   }
 
   private async actorNameFor(
@@ -1066,6 +1136,12 @@ export class DccAttendanceService {
 /** Section 22: `limit` defaults to 50. The DTO bounds it at 200. */
 const DEFAULT_PAGE = 50;
 
+/**
+ * Section 9's partial unique index over the live row, named because a lost race on it
+ * is a conflict and a violation of anything else is a defect (migration 0011).
+ */
+const ONE_LIVE_INDEX = 'dcc_attendance_one_live';
+
 function keyOf(line: RosterLine): RosterCursor {
   return { lastName: line.lastName, firstName: line.firstName, memberId: line.memberId };
 }
@@ -1100,6 +1176,44 @@ function renderLine(line: RosterLine): Record<string, unknown> {
             recorded_at: line.record.recordedAt.toISOString(),
           },
   };
+}
+
+/**
+ * Section 14's version check, as one function because it is one rule.
+ *
+ * The first line whose submitted version disagrees with what is stored, **in the
+ * order the client sent** — that is the line it can find in its own request.
+ *
+ * **A line that writes nothing takes no part in it** (section 9). A covering leader
+ * on a stale roster, submitting a value that already agrees, would otherwise be
+ * refused a `VERSION_CONFLICT` whose two sides carry the identical value, which
+ * section 22 says cannot satisfy section 14 — and, because this reports the *first*
+ * disagreement, such a line would also mask the honest conflict about whoever actually
+ * lost a race further down the list.
+ *
+ * **One function because there are two callers and they were allowed to disagree.**
+ * The in-transaction check and the re-read after a lost race are the same rule at two
+ * moments, and the batch that added the unchanged-line exemption changed only one of
+ * them: every conflict reported after a race reinstated the response the exemption
+ * exists to prevent, on the path nobody had a case for.
+ */
+function firstStaleLine(
+  records: readonly SubmittedRecord[],
+  live: Map<string, LiveRecord>,
+): { record: SubmittedRecord; stored: LiveRecord | null } | null {
+  for (const record of records) {
+    const stored = live.get(record.person_id) ?? null;
+
+    if (outcomeFor(stored, record.present) === 'UNCHANGED') {
+      continue;
+    }
+
+    if (record.version !== (stored === null ? null : stored.version)) {
+      return { record, stored };
+    }
+  }
+
+  return null;
 }
 
 function canonical(id: string): string {

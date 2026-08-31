@@ -284,7 +284,13 @@ describe('the attendance tables (SKILL.md sections 9, 12, 13 and 14)', () => {
       await db.transaction().execute(async (trx) => {
         await trx
           .updateTable('cell_attendance')
-          .set({ superseded_at: new Date(), superseded_by: replacementId })
+          // `clock_timestamp()`, not a host `Date`. `recorded_at` fell to the column
+          // default — the database's `now()`, the transaction's start — so a host stamp
+          // here takes the two ends of one row's live period from two clocks, and
+          // `dcc_attendance_period_ordered`'s Cell counterpart refuses the inversion.
+          // The constraint caught this fixture the day it was added, which is the whole
+          // argument for having it (migration 0012).
+          .set({ superseded_at: sql<Date>`clock_timestamp()`, superseded_by: replacementId })
           .where('id', '=', first.id)
           .execute();
 
@@ -381,7 +387,8 @@ describe('the attendance tables (SKILL.md sections 9, 12, 13 and 14)', () => {
         db.transaction().execute(async (trx) => {
           await trx
             .updateTable('cell_attendance')
-            .set({ superseded_at: new Date(), superseded_by: attendance.id })
+            // One clock, for the reason above.
+            .set({ superseded_at: sql<Date>`clock_timestamp()`, superseded_by: attendance.id })
             .where('id', '=', attendance.id)
             .execute();
 
@@ -459,11 +466,12 @@ describe('the attendance tables (SKILL.md sections 9, 12, 13 and 14)', () => {
     });
 
     it('permits a zero-length live period, which is a row entered in error', async () => {
-      // `>=` rather than `>`, which is the convention migration 0001 sets and gives its
-      // reason for: section 5 corrects a row entered in error by closing it at zero
-      // length, and a strict comparison would allow only closing it a moment later —
-      // recording a non-zero period during which a fact that was never true was in
-      // force. Section 14's correction path is the same shape.
+      // `>=` rather than `>`, which is the schema-wide convention. **The case it admits
+      // is not reachable through the application**, and this pins the constraint's
+      // boundary rather than a path: a correction supersedes at `clock_timestamp()`
+      // against a `recorded_at` already written, and one submission may not name a
+      // person twice, so nothing produces a zero-length period. Migration 0012 states
+      // why the operator is still the looser one.
       const event = await db
         .insertInto('dcc_events')
         .values({ event_date: '2026-08-30' })
@@ -474,10 +482,10 @@ describe('the attendance tables (SKILL.md sections 9, 12, 13 and 14)', () => {
       const account = await anAccount();
       const successor = randomUUID();
 
-      // Written the way a correction is written: the predecessor closed, its
-      // replacement inserted, both in one transaction. `superseded_by` is deferred
-      // exactly so this order is possible — the row it points at does not exist yet
-      // when the predecessor is written.
+      // In the order a correction is written — the predecessor closed, its replacement
+      // inserted, both in one transaction, which `superseded_by` is deferred to permit.
+      // The instants are set by hand, which the service never does: this is the
+      // constraint's boundary, not a reproduction of a path.
       await expect(
         db.transaction().execute(async (trx) => {
           await trx

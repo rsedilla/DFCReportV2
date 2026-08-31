@@ -114,4 +114,4 @@ than as cycle detection equivalent to `CYCLE`, which is what it is.
 
 Decision 0175, indexed in [CLAUDE.md](../../CLAUDE.md).
 
-Previous: [2026-08-31 — The fourth cursor, and the two that share a key](0174-the-fourth-cursor-and-the-two-that-share-a-key.md)
+Previous: [2026-08-31 — The fourth cursor, and the two that share a key](0174-the-fourth-cursor-and-the-two-that-share-a-key.md) | Next: [2026-08-31 — Eight on the fix batch, and the outcome that was a 500](0176-eight-on-the-fix-batch-and-the-outcome-that-was-a-500.md)

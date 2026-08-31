@@ -68,7 +68,11 @@ describe('the DCC recording instant (section 9)', () => {
     // Whatever the write instant, the answer lands inside the event's own Manila day.
     // That is the property section 9's "as of the event date" means at day
     // granularity, and it is the one thing both branches have to share.
-    for (const now of [dayStart, dayStart + 1, nextDayStart - 1, nextDayStart, Date.now()]) {
+    // Fixed inputs only. An earlier version iterated `Date.now()` here, in a file
+    // whose docblock says nothing reads a clock — harmless, since it lands in the
+    // `dayEnd` branch and the assertion holds for every input, but it made the one
+    // claim the file makes about itself false.
+    for (const now of [dayStart, dayStart + 1, nextDayStart - 1, nextDayStart]) {
       const at = recordingInstant(sunday, new Date(now)).getTime();
 
       expect(at).toBeGreaterThanOrEqual(dayStart);

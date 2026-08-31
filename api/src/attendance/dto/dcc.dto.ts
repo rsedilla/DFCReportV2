@@ -82,8 +82,12 @@ export class DccAttendanceRecordDto {
    * this repository shipped from `@IsOptional()` was on `birth_date`, where omission
    * meant "take the default" and null meant "no birthday", which are two.
    *
-   * It also fails safe: an omitted version against a record that exists is a stale
-   * claim and conflicts.
+   * An omitted version against a record that exists **and disagrees** is a stale claim
+   * and conflicts. Where it agrees, the line is unchanged and takes no part in the
+   * version check at all (section 9), so it succeeds and writes nothing — which is the
+   * intended outcome rather than a hole, and is why this paragraph no longer says the
+   * field "fails safe" flatly. It said so for one commit, added beside the rule that
+   * had just made it false.
    */
   @IsOptional()
   @IsInt()

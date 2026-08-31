@@ -41,6 +41,29 @@ export function isUniqueViolation(error: unknown): boolean {
 }
 
 /**
+ * The name of the constraint a violation names, or null.
+ *
+ * **Which index it was decides what the failure means**, and a caller that only asks
+ * "was it a unique violation" answers for indexes it knows nothing about. The DCC
+ * submission turns a violation of `dcc_attendance_one_live` into section 22's
+ * `VERSION_CONFLICT`; a violation of anything else on that path is a defect and must
+ * keep failing loudly. Without the name those two are one branch, and the wrong half
+ * wins.
+ *
+ * PostgreSQL puts it on the error as `constraint`, which node-pg passes through
+ * verbatim.
+ */
+export function violatedConstraint(error: unknown): string | null {
+  if (typeof error !== 'object' || error === null || !('constraint' in error)) {
+    return null;
+  }
+
+  const name = (error as { constraint?: unknown }).constraint;
+
+  return typeof name === 'string' ? name : null;
+}
+
+/**
  * Whether a thrown value is PostgreSQL reporting a wait this transaction lost.
  *
  * **Named for what it matches, and it was `isLockTimeout` until it stopped matching

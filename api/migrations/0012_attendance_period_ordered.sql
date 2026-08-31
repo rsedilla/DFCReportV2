@@ -26,14 +26,34 @@
 -- deployment holding an inverted row is told rather than half-migrated. Both tables
 -- are empty in every environment this has been applied to -- Stage 4 is the first to
 -- write either -- so the scan is over nothing, and that is stated rather than assumed.
+--
+-- **Snapshot before, reconcile after: the argument, rather than silence.** The policy
+-- names attendance among the tables that clause covers, and this migration touches two
+-- of them. It adds a `CHECK` and nothing else: no column, no row rewritten, no row
+-- removed, so there is no state a snapshot would preserve and none the migration could
+-- move. The reconciliation it asks be re-run is `SKILL.md` section 20's, which does not
+-- exist -- reporting is Stage 5 -- so the clause has nothing to re-run either.
+--
+-- Both halves are recorded because the policy admits no exception and a migration that
+-- simply said nothing would look like one that had not read it. Whether the clause
+-- binds a constraint-only migration at all is a question for whoever writes the
+-- section 20 test; until then this is the argument, made where the next reader will
+-- look for it.
 -- ---------------------------------------------------------------------------
 
--- `>=` rather than `>`, which is the convention migration 0001 sets and gives its
--- reason for: section 5 corrects a row entered in error by closing it at zero length,
--- and a strict comparison would allow only closing it a moment later -- recording a
--- non-zero period during which a fact that was never true was in force. Section 14's
--- correction path is the same shape, so a record entered in error and superseded in
--- the same instant is legitimate here too.
+-- `>=` rather than `>`, and the reason is **not** the one migration 0001 gives for the
+-- same operator. That reason is section 5's: a row entered in error is closed at zero
+-- length, and a strict comparison would allow only closing it a moment later. Sections
+-- 9 and 14 define no such operation for attendance -- a correction supersedes and
+-- inserts, the submission path refuses two lines for one person, and the closing
+-- instant is `clock_timestamp()` against a `recorded_at` already written, so a
+-- zero-length period is not reachable by any route that exists.
+--
+-- So the case `>=` admits is unreachable, and the operator is chosen on the narrower
+-- ground that it is the looser of the two and refuses nothing legitimate. Writing the
+-- section 5 argument here would be decision 0100's pattern exactly -- reusing a shape
+-- without re-deriving why it has that shape -- and an earlier version of this comment
+-- did.
 --
 -- It still refuses the defect this exists for: an inversion is `superseded_at <
 -- recorded_at`, which `>=` rejects.
