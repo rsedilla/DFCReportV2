@@ -399,6 +399,10 @@ resolves exactly as well as it did in the single file and no better.
 - 2026-08-31 — [A stale premise under a cleanly taken lock is transient](docs/decisions/0158-a-stale-premise-under-a-cleanly-taken-lock-is-transient.md)
 - 2026-08-31 — [A cursor that cannot be resolved is refused](docs/decisions/0159-a-cursor-that-cannot-be-resolved-is-refused.md)
 - 2026-08-31 — [One API instance, and the skew bound waits for the second](docs/decisions/0160-one-api-instance-and-the-skew-bound-waits-for-the-second.md)
+- 2026-08-31 — [The DCC calendar is advanced by an Admin command](docs/decisions/0161-the-dcc-calendar-is-advanced-by-an-admin-command.md)
+- 2026-08-31 — [A Cell meeting is addressed by its week](docs/decisions/0162-a-cell-meeting-is-addressed-by-its-week.md)
+- 2026-08-31 — [A Cell meeting's responsible leader is frozen as of the meeting](docs/decisions/0163-a-cell-meetings-responsible-leader-is-frozen-as-of-the-meeting.md)
+- 2026-08-31 — [A Cell submission versions the meeting; a DCC submission versions the person](docs/decisions/0164-a-cell-submission-versions-the-meeting-a-dcc-submission-versions-the-person.md)
 
 ### Open — awaiting a ruling
 

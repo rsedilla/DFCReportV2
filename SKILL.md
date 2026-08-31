@@ -1947,6 +1947,16 @@ Do not create events lazily on first use. If an event exists only once somebody 
 
 Because every Sunday has an event by default, an absent event always means a recorded, audited decision, and coverage is measurable against a denominator that exists before anyone submits anything.
 
+**An Admin command advances the horizon, and the deployment schedules it.** `npm run generate:dcc` tops the calendar up to twelve months, creating only the Sundays that have no row. It is idempotent: running it twice, or daily, changes nothing the second time, which a unique constraint on `event_date` makes a property of the table rather than of the command. It is audit logged (Section 21), naming the range covered and the number of events created.
+
+Three things it must not do, each of which would move a figure somebody has already read:
+
+- **It never revives a removed Sunday.** A removed event is retained as a row with `removed_at` set, so a removed Sunday is not a missing one.
+- **It never creates an event in the past.** The horizon runs forward from the day it is run. A past Sunday with no event is a fact about the calendar, and adding one afterwards changes a closed month's denominator.
+- **It never removes anything.** Removing a Sunday is the deliberate, reasoned Admin action above, and is not something a top-up decides.
+
+A command rather than a background job, because Section 2 does not require queues or workers for the initial release and Section 13 declines to introduce one — so a scheduler here would be the first, for the one task in the system that tolerates being late. It tolerates it because the horizon is twelve months and the need is one Sunday a week: a run a month overdue still leaves eleven months of calendar, and nothing reads past the current month and its submission window. The obligation sits with the deployment, alongside the backup schedule Section 24 places there for the same reason.
+
 ### Attendance is face to face
 
 Only physical attendance at the DCC service is recorded. Online or streamed participation creates no attendance record and affects no classification, monthly attendance bucket, total, or Participation report (Section 16).
@@ -2789,9 +2799,28 @@ Record `facilitated_by` on the meeting. It is nullable and defaults to the Cell'
 
 Where a leader cannot conduct their own meeting and another person runs it — a disciple, or an upline leader — record that person as the facilitator. Three roles are distinct, and all three may differ on a single meeting:
 
-- **responsible leader** — the Cell's current leader (Section 11); reporting rolls up to them
+- **responsible leader** — whoever led the Cell in the meeting's week (Section 11); reporting rolls up to them
 - **facilitator** — who conducted this meeting
 - **submitter** — who entered the record (Section 14)
+
+**"Whoever led it then", not "whoever leads it now", and the record is frozen.**
+`cell_meetings.responsible_leader_id` is resolved from `cell_leaderships` as of the
+meeting's week and written once. A later handover never moves it, which is word for word
+the rule Section 9 states for DCC — a reassignment does not move historical records — and
+is required by three things besides: a stored column can hold only one answer and
+rewriting it on every handover is what Section 1 principle 12 forbids; Section 20 requires
+a closed month's figures not to move; and Section 16 counts New Cell Leaders from when a
+leadership assignment starts, so an incoming leader must not acquire months they did not
+lead.
+
+This is a different question from **scope**, which does resolve through the Cell's leader
+now (Section 7). Who may act on a record and who a record belongs to are two questions,
+and Section 7's own rule that a read asks about a period while a write is acted on now is
+where they part.
+
+A meeting cannot be recorded for a week the Cell had no leader in. That is unreachable
+through any operation Sections 10 and 11 define, and it is refused rather than defaulted,
+because a meeting with no responsible leader is a record nothing rolls up.
 
 Facilitating is never leadership. It does not touch `cell_leaderships`, never makes the facilitator a current Cell Leader, never counts toward New Cell Leaders (Section 16), and never moves Cell members into the facilitator's counts. A genuine handover of a Cell is a separate, deliberate change to `cell_leaderships`, made through the request-and-approve workflow of Section 10 and never as a side effect of who conducted a meeting. There is no threshold at which repeated facilitation becomes leadership.
 
@@ -2829,6 +2858,31 @@ Notifications are in-app only. No email, no SMS, no push.
 The system does send transactional email — password reset and account activation — and that provider stays (Sections 2 and 6). What this rule settles is that pastoral reminders add no channel beyond the application itself: no scheduled mail job, no queue, and no background worker, and no church data leaving the system inside a message.
 
 The design is deliberate. Accountability in this church runs through pastoral relationship, not through the application: the two Senior Pastors and their direct leaders see where their Networks stand, and follow up with the people they oversee personally. A leader behind on records hears from their own leader, not from an automated message. The application's job is to make the gap visible to the person who will make the call.
+
+**A meeting is identified by its Cell and its week, and has no row until it is reported.**
+`(cell_id, week_starting)` is unique, and `week_starting` is the Monday of the week
+(Section 20). That is the identity this section already describes: one logical meeting per
+Cell per calendar week, which a reschedule moves but does not duplicate.
+
+A row is written by the first submission. There is none before it, and that is what keeps
+the three statuses exactly three — a row generated ahead would need a fourth state for
+"not yet reported", and the ambiguity between *did not happen* and *not yet told us* is
+what the three exist to remove. It is also what makes the coverage line mean something:
+the recorded count is a count of rows, while the scheduled count is derived from the
+Cell's schedule against the calendar, so `4 of 5 meetings recorded` compares two figures
+arrived at two ways.
+
+The API addresses a meeting by that week — `POST /api/v1/cells/{id}/meetings/{meeting_id}/submit`
+takes a `YYYY-MM-DD` Manila Monday as `{meeting_id}` (Section 22). It is stable before the
+row exists, which is what a client listing weeks awaiting a record needs, and a retry
+therefore names the same meeting. It discloses nothing: the Cell in the path is still
+addressed by its UUID, and a week is a date.
+
+**DCC is deliberately the other way, and the reason is not symmetry.** A DCC event must
+exist before anyone submits because its *absence* carries a meaning somebody decided
+(Section 9), and its coverage is measured against a denominator that has to exist first. A
+Cell meeting's denominator comes from the Cell's schedule, which is already stored and
+already effective-dated, so nothing needs a row to count against.
 
 ```text
 cell_meetings
@@ -2974,6 +3028,14 @@ Never silently overwrite submitted attendance.
 Because the same record can be reached from several surfaces at once (Section 2), the rule above needs a mechanism rather than only an instruction.
 
 Every attendance and meeting record carries a version. A client submits the version it read. If the stored version has since moved, the server rejects the write with a conflict and does not apply it.
+
+**What a version covers depends on what one submission is, and the two domains differ.**
+
+- **A Cell submission carries the meeting's version.** One submission is one leader's account of one meeting, so the meeting is the unit: the client sends `cell_meetings.version` and the server compares it. That is what the example below is about — nine against eight is a disagreement about the whole roster rather than about any one person, and several of the people in it may not differ at all. It is also what the conflict payload needs, since Section 22 fixes that body as one `submitted` and one `current` pair.
+- **A DCC submission compares per `(dcc_event_id, person_id)`.** A DCC event is church-wide and many leaders record against it, so two leaders recording different people must never conflict — and any unit wider than the person would make them. There is no per-leader row to version, and inventing one would make the submitting leader structural in a domain where coverage "measures whether the record exists, never who entered it" (Section 9).
+- **`cell_attendance.version` guards a correction to one person's record**, which is the second operation this section names. That write names one person, so it compares one person's version. A submission bumps the meeting's version; a correction bumps that person's.
+
+The asymmetry is the domains rather than an inconsistency, and it is the one Section 12 already records for monthly-attendance buckets, one layer down: a Cell meeting belongs to one leader and therefore has a unit, while a DCC event belongs to the church, so the finest thing belonging to one leader is the person.
 
 A conflict is resolved by a person, never by the system. Present both values, with who recorded each and when, and let an authorized user decide. This is the same principle Person Merge applies to conflicting relationships (Section 3): where two legitimately different facts are in play, the system must not silently pick one.
 
@@ -3555,7 +3617,7 @@ GET  /api/v1/cells/{id}/members
 POST /api/v1/cells/{id}/members            add, or move from another Cell
 DELETE /api/v1/cells/{id}/members/{person_id}  ends the membership
 GET  /api/v1/cells/{id}/meetings
-POST /api/v1/cells/{id}/meetings/{meeting_id}/submit
+POST /api/v1/cells/{id}/meetings/{meeting_id}/submit   {meeting_id} is the week’s Monday
 
 GET  /api/v1/reports/dcc/monthly
 GET  /api/v1/reports/dcc/yearly
