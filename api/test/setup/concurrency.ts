@@ -134,12 +134,15 @@ export async function countWhileInFlight(
  * seconds. The cases differ, and enumerating them from a docblock is how each of those
  * got written.
  *
- * The property that does hold: **a probe pointed at a key nobody takes reports exactly
- * what a lock that was never taken reports.** So when a case does go red, its message
- * names the assertion and not the key, and whoever meets it starts by suspecting the
- * code under test. One probe is the exception and it is the file this helper was built
- * from — `cell-membership.e2e.spec.ts`'s `waitForBlockedOn` throws "nothing ever blocked
- * on advisory key N; the case proves nothing", which is what the rest should read like.
+ * The property that does hold: **a failure never names the key.** A probe pointed at a
+ * key nobody takes reports exactly what a lock that was never taken reports, so whoever
+ * meets the failure starts by suspecting the code under test.
+ *
+ * *What the failure names instead varies, and is not enumerated here — that enumeration
+ * is the thing three earlier versions of this paragraph each got wrong.* One case does
+ * print the key: `cell-membership.e2e.spec.ts`'s `waitForBlockedOn` throws "nothing ever
+ * blocked on advisory key N; the case proves nothing", which is what the rest should
+ * read like, and is why that file's probe is the one this helper was built from.
  *
  * **`closure-locking.spec.ts` is where a drift is not caught at all**, and it is the
  * whole file rather than a case or two. It never invokes `lockPersonsWithin`: every
@@ -148,20 +151,23 @@ export async function countWhileInFlight(
  * on `pg_stat_activity` by pid. So a divergence moves every side of every contention
  * together and all five cases stay green. Worth knowing before adding a sixth there.
  *
- * The construction guarantee is not lost, it moves: the key is still computed in SQL by
- * the database rather than in JavaScript, once, by `personLockKey` below, and
- * `person-lock.e2e.spec.ts` pins that one computation against the key the implementation
- * is observed to take.
+ * **What replaces it is a check rather than a construction.** The key is still computed
+ * in SQL by the database rather than in JavaScript, once, by `personLockKey` below — but
+ * that is hygiene, not a guarantee, for the reason the paragraph above gives. The
+ * guarantee comes from `person-lock.e2e.spec.ts`, which observes the implementation
+ * holding a key and compares it to this one, in both spellings.
  */
 
 /**
  * Anything that can run a parameterized statement: `pg.Client` satisfies it.
  *
- * `pg.Pool` satisfies it structurally and must not be passed. Every function here
- * depends on consecutive statements reaching one backend — the transaction the lock
- * lives in, and `pg_backend_pid()` in the check below — and a pool may hand each
- * statement a different one. Nothing enforces that, because a pool breaks `BEGIN`
- * first and every call site passes a `Client`.
+ * `pg.Pool` satisfies it structurally and must not be passed. `holdPersonLock` depends
+ * on consecutive statements reaching one backend — the transaction the lock lives in,
+ * and `pg_backend_pid()` in its own check — and a pool may hand each statement a
+ * different one. The other three issue a single statement and would in fact be served
+ * correctly; the rule is one rule because a caller should not have to know which.
+ * Nothing enforces it, because a pool breaks `BEGIN` first and every call site passes a
+ * `Client`.
  */
 interface Queryable {
   query<R extends Record<string, unknown>>(

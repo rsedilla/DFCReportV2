@@ -479,9 +479,13 @@ describe('the person lock, and the identifier boundary that needs the same fixtu
 
       // Bounded by the attempt, like every other probe here — but unlike the others,
       // **nothing bounds the attempt itself**: the transaction above waits on `held`
-      // rather than on a lock, so on a divergence this is the one case that reaches
-      // `countWhileInFlight`'s backstop rather than settling. It throws there, inside
-      // the case timeout, which is why the divergence is reported rather than killed.
+      // rather than on a lock, so if this poll never finds the key it reaches
+      // `countWhileInFlight`'s backstop rather than settling, and throws there inside
+      // the case timeout.
+      //
+      // *That is a property of this case, not an account of what a divergence does to
+      // it. The canonicalization drift the paragraph above describes is caught by the
+      // assertion two lines up and never reaches this poll at all.*
       //
       // **The implementation canonicalizes**, which this pins because the transaction
       // above was given the *uppercase* spelling while `key` was computed from the
