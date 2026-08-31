@@ -1,14 +1,24 @@
-# 2026-08-31 — The DCC calendar is advanced by an Admin command
+# 2026-08-31 — The DCC calendar is advanced by a scheduled command
 
 Section 9 requires one DCC event per Sunday on "a rolling horizon of at least twelve
 months ahead", and forbids creating one lazily on first use. The ruling of 2026-08-20
 settled *that* and left *what advances it* unsaid, which is the half an implementer
 needs.
 
-**`npm run generate:dcc` tops the calendar up to twelve months, idempotently, and the
-deployment schedules it.** It is an Admin action, audited, and it creates only the
-Sundays that are missing — so running it twice, or daily, changes nothing the second
-time.
+**`npm run generate:dcc` generates thirteen months ahead, idempotently, and the
+deployment schedules it.** It creates only the Sundays that are missing — so running it
+twice, or daily, changes nothing the second time — and it writes one audit entry per
+event created.
+
+*This ruling was titled "advanced by an **Admin** command" and said "It is an Admin
+action", and both were wrong: it is invoked by a schedule and has no interactive actor,
+so it is a **system** action with a null `actor_id`, which Section 6 now names as the
+second such thing. Requiring `ADMIN` would mean a stored credential or a person running
+it weekly. The one exception is a back-fill into a closed month, which is a person's act
+under `records.backdate_effective_date`. It also said "up to twelve months" against
+Section 9's floor of twelve, which is satisfied only at the instant it runs, and "one
+entry naming the range and the count", which has no target and folds many creations into
+one entry against Section 21.*
 
 ## Why a command rather than something automatic
 
@@ -69,8 +79,8 @@ neither silent nor immediate.
   unless one was deliberately removed, and back-filling restores that rather than
   breaking it. Back-filling a **closed** month is backdating and carries what backdating
   carries.
-- **Audited**, with one entry naming the range and the count, because Section 21 audits
-  the removal of an event and the creation of the calendar is the same kind of act.
+- **Audited**, one entry per event created, because Section 21 requires a target and one
+  entry per action performed. A run that creates nothing writes nothing.
 
 ---
 

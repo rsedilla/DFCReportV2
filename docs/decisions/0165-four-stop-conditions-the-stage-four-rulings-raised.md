@@ -28,6 +28,13 @@ back-fill into a **closed** month changes a period already reported, which is ex
 touches only open months and needs none of it; a run finding a closed month short refuses
 that part and says so.
 
+*This section reasoned about N and about buckets and never about **coverage**, and a
+back-filled event in a closed month is one no leader could have submitted against — so
+counting it would report every leader in the church as having failed. That is the harm the
+closed-Cell settlement below was chosen to avoid, reintroduced by this remedy. Settled in
+[decision 0166](0166-three-more-the-second-review-of-the-stage-four-rulings-raised.md):
+such an event carries `backfilled_at` and is excluded from coverage denominators.*
+
 **The horizon on the dashboard is the other half, and 0161 needed it without knowing.**
 That ruling argued the obligation sits with the deployment "alongside the backup schedule
 … a periodic task the platform runs, whose failure is visible". A backup job's failure is
@@ -70,10 +77,11 @@ closed reports `0 of 4 meetings recorded` — which Section 7 names as "the evid
 its leader reported nothing", arguing there about a backdated closure, which erases it.
 Refusing here would manufacture that same evidence against a leader who did meet.
 
-Scope allows it without amendment: Section 7 resolves a Cell meeting through the Cell's
-leader as of the period being viewed, falling back to its last leader where the Cell is
-closed — and says that fallback exists precisely so a closed Cell's history stays with the
-person who led it.
+*Scope did **not** allow it without amendment, which this ruling claimed. That fallback
+hangs off "as of the period being viewed", and Section 7 says a write is acted on now and
+resolves through the current leader — which a closed Cell has none of. Settled in
+[decision 0166](0166-three-more-the-second-review-of-the-stage-four-rulings-raised.md):
+Section 7 is amended, narrowly, for attendance and while the window is open.*
 
 Weeks after the closure are a different thing. The Cell did not exist to meet, so there is
 nothing to report, and a row would create a scheduled meeting that never was.
@@ -122,4 +130,4 @@ an ordinary race.
 
 Decision 0165, indexed in [CLAUDE.md](../../CLAUDE.md).
 
-Previous: [2026-08-31 — A Cell submission versions the meeting; a DCC submission versions the person](0164-a-cell-submission-versions-the-meeting-a-dcc-submission-versions-the-person.md)
+Previous: [2026-08-31 — A Cell submission versions the meeting; a DCC submission versions the person](0164-a-cell-submission-versions-the-meeting-a-dcc-submission-versions-the-person.md) | Next: [2026-08-31 — Three more the second review of the Stage 4 rulings raised](0166-three-more-the-second-review-of-the-stage-four-rulings-raised.md)

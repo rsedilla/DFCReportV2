@@ -89,4 +89,4 @@ collision.
 
 Decision 0162, indexed in [CLAUDE.md](../../CLAUDE.md).
 
-Previous: [2026-08-31 — The DCC calendar is advanced by an Admin command](0161-the-dcc-calendar-is-advanced-by-an-admin-command.md) | Next: [2026-08-31 — A Cell meeting's responsible leader is frozen as of the meeting](0163-a-cell-meetings-responsible-leader-is-frozen-as-of-the-meeting.md)
+Previous: [2026-08-31 — The DCC calendar is advanced by a scheduled command](0161-the-dcc-calendar-is-advanced-by-a-scheduled-command.md) | Next: [2026-08-31 — A Cell meeting's responsible leader is frozen as of the meeting](0163-a-cell-meetings-responsible-leader-is-frozen-as-of-the-meeting.md)
