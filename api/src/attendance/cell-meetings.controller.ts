@@ -85,8 +85,9 @@ export class CellMeetingsController {
    */
   @Get(':id/meetings/:meetingId/roster')
   @RequiresCapability(Capability.CellTakeAttendance, {
-    kind: 'cell',
+    kind: 'cell_meeting',
     from: 'params.id',
+    onFrom: 'params.meetingId',
   })
   async roster(
     @Param('id', new UuidParamPipe('id')) cellId: string,
@@ -107,8 +108,9 @@ export class CellMeetingsController {
    */
   @Post(':id/meetings/:meetingId/submit')
   @RequiresCapability(Capability.CellTakeAttendance, {
-    kind: 'cell',
+    kind: 'cell_meeting',
     from: 'params.id',
+    onFrom: 'params.meetingId',
   })
   async submit(
     @Param('id', new UuidParamPipe('id')) cellId: string,

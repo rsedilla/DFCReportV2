@@ -9,7 +9,7 @@ import {
 } from '../common/errors/api-error';
 import { DATABASE, type Db } from '../database/database.module';
 
-import { isMonthOpen, reportingMonthOf } from './submission-window';
+import { isMonthOpen, reportingMonthOf } from '../common/time/submission-window';
 
 import { AuditService } from '../audit/audit.service';
 import { type Actor } from '../auth/authorization/authorization.service';

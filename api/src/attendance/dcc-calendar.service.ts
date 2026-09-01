@@ -6,7 +6,7 @@ import { manilaDayOf, startOfManilaDay } from '../common/time/manila';
 import { DATABASE, type Db } from '../database/database.module';
 import type { Json } from '../database/schema';
 
-import { databaseNow, isMonthOpen, reportingMonthOf } from './submission-window';
+import { databaseNow, isMonthOpen, reportingMonthOf } from '../common/time/submission-window';
 
 /**
  * How far ahead a run generates, and the floor it is kept clear of.

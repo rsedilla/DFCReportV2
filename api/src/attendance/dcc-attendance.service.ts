@@ -29,7 +29,7 @@ import { HierarchyService } from '../hierarchy/hierarchy.service';
 import { PeopleReadService } from '../people/people.read.service';
 
 import { recordingInstant } from './recording-instant';
-import { databaseNow, reportingMonthOf, windowClosesAt } from './submission-window';
+import { databaseNow, reportingMonthOf, windowClosesAt } from '../common/time/submission-window';
 
 import type { CurrentClaim } from '../common/idempotency/current-idempotency.decorator';
 import type { Database } from '../database/schema';
