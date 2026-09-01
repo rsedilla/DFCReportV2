@@ -105,7 +105,7 @@ describe('recording a Cell meeting (sections 12, 13 and 14)', () => {
         person_id: person.id,
         cell_id: markCell.id,
         started_at: CREATED,
-      } as never)
+      })
       .execute();
 
     return person;
@@ -298,7 +298,7 @@ describe('recording a Cell meeting (sections 12, 13 and 14)', () => {
           person_id: successor.id,
           cell_id: markCell.id,
           started_at: handover,
-        } as never)
+        })
         .execute();
     });
 
