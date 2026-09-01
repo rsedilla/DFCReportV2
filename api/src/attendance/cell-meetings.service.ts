@@ -1,12 +1,27 @@
 import { Injectable, Inject } from '@nestjs/common';
 import { sql } from 'kysely';
 
-import { NotFoundError } from '../common/errors/api-error';
+import {
+  ApiError,
+  ApiErrorCode,
+  InvariantViolationError,
+  NotFoundError,
+} from '../common/errors/api-error';
 import { DATABASE, type Db } from '../database/database.module';
 
-import { reportingMonthOf } from './submission-window';
+import { isMonthOpen, reportingMonthOf } from './submission-window';
 
+import { AuditService } from '../audit/audit.service';
+import { type Actor } from '../auth/authorization/authorization.service';
 import { CellsReadService } from '../cells/cells.read.service';
+import { IdempotencyService } from '../common/idempotency/idempotency.service';
+
+import type { SubmitCellMeetingDto } from './dto/cell-meeting-submit.dto';
+import type { CurrentClaim } from '../common/idempotency/current-idempotency.decorator';
+import type { Database } from '../database/schema';
+import type { Transaction } from 'kysely';
+
+type SubmitCellMeeting = SubmitCellMeetingDto;
 
 /**
  * A Cell's meetings for one reporting month (SKILL.md sections 12, 13 and 20).
@@ -46,6 +61,8 @@ export class CellMeetingsService {
   constructor(
     @Inject(DATABASE) private readonly db: Db,
     private readonly cells: CellsReadService,
+    private readonly audit: AuditService,
+    private readonly idempotency: IdempotencyService,
   ) {}
 
   /**
@@ -99,6 +116,292 @@ export class CellMeetingsService {
   }
 
   /**
+   * Who there is to record for one meeting (SKILL.md sections 12, 13 and 22).
+   *
+   * `meetingId` is the meeting's **scheduled date**, which section 13 makes its
+   * identity: "A reschedule moves `actual_date` and leaves `scheduled_date` alone, so
+   * the identity survives it." The date is derivable from the Cell's schedule before
+   * any row exists, which is what a client listing meetings awaiting a record needs,
+   * and it means a retry names the same meeting.
+   *
+   * **The roster comes from the date the meeting took place**, which section 12 states
+   * and section 13 repeats: `actual_date` where the meeting was rescheduled, and the
+   * scheduled date otherwise. Membership can change between the two, and the roster
+   * should be the people who could actually have been there. The meeting still reports
+   * in its original month; only the roster follows the actual date.
+   *
+   * The responsible leader is read at that **same** instant, which section 13 requires
+   * in terms: "the leader and the people are read at one instant rather than two".
+   *
+   * **A meeting the schedule does not derive is not a meeting.** Section 13 identifies
+   * a meeting by `(cell_id, scheduled_date)` and derives the scheduled set from the
+   * Cell's own schedule, so a date the Cell was not scheduled to meet on names nothing
+   * — and answering a roster for it would invent a meeting the coverage denominator
+   * does not count.
+   *
+   * **A meeting the Cell had no leader on is refused rather than defaulted**, which
+   * section 13 states: "a meeting with no responsible leader is a record nothing rolls
+   * up".
+   *
+   * *One gap is inherited rather than introduced, and it is section 7's.* A read
+   * against a **closed** Cell resolves scope through its last leader, which section 7
+   * gives as the general rule for a read — but section 7 also carves out a per-record
+   * exception for a meeting whose window is still open, resolving through whoever led
+   * on the meeting's date, so that a Cell handed from A to B and then closed does not
+   * show A the task while denying A the write. The guard's port is undated today and
+   * `cell-scope.port.ts` says so in terms. It binds the recording path rather than this
+   * read, and it is settled with the closed-Cell slice.
+   */
+  async rosterFor(cellId: string, meetingId: string): Promise<Record<string, unknown>> {
+    const cell = await this.cells.cellById(this.db, cellId);
+    if (cell === null) {
+      throw new NotFoundError('No such Cell.', { cell_id: cellId });
+    }
+
+    const scheduled = await this.scheduledDatesIn(cellId, reportingMonthOf(meetingId));
+    const entry = scheduled.find((candidate) => candidate.scheduledDate === meetingId);
+    if (entry === undefined) {
+      throw new NotFoundError('This Cell was not scheduled to meet on that date.', {
+        cell_id: cellId,
+        meeting_id: meetingId,
+      });
+    }
+
+    const recorded =
+      (await this.recordedIn(cellId, reportingMonthOf(meetingId))).get(meetingId) ?? null;
+
+    // Section 12: the roster follows the actual date where the meeting moved.
+    const rosterDate =
+      recorded !== null && typeof recorded.actual_date === 'string'
+        ? recorded.actual_date
+        : meetingId;
+
+    const responsibleLeaderId =
+      recorded === null
+        ? await this.cells.leaderOnDateWithin(this.db, cellId, rosterDate)
+        : (recorded.responsible_leader_id as string);
+
+    if (responsibleLeaderId === null) {
+      throw new InvariantViolationError(
+        'This Cell had no leader on that date, so a meeting cannot be recorded for it ' +
+          '(SKILL.md section 13).',
+        { cell_id: cellId, meeting_id: meetingId },
+      );
+    }
+
+    const members = await this.cells.membersAsOfWithin(this.db, cellId, rosterDate);
+
+    return {
+      cell_id: cell.cellId,
+      meeting_id: meetingId,
+      scheduled_date: entry.scheduledDate,
+      scheduled_time: entry.scheduledTime,
+      week_starting: entry.weekStarting,
+      reporting_month: reportingMonthOf(meetingId),
+      // The date the roster was read at, stated rather than left to be inferred: it is
+      // the actual date for a rescheduled meeting and the scheduled one otherwise, and
+      // a client showing "who was there" needs to know which.
+      roster_date: rosterDate,
+      responsible_leader_id: responsibleLeaderId,
+      meeting: recorded,
+      members: members.map((member) => ({
+        person_id: member.personId,
+        member_id: member.memberId,
+        first_name: member.firstName,
+        last_name: member.lastName,
+      })),
+    };
+  }
+
+  /**
+   * Record a meeting for the first time (SKILL.md sections 12, 13, 14 and 22).
+   *
+   * **What one submission is, and therefore what a version means.** Section 14: "A Cell
+   * submission carries the meeting's version. One submission is one leader's account of
+   * one meeting, so the meeting is the unit." That is the opposite of the DCC half one
+   * domain over, which compares per `(dcc_event_id, person_id)` because a DCC event is
+   * church-wide and two leaders recording different people must never conflict. The
+   * shape of `DccAttendanceService` is therefore **not** the shape to copy here, and
+   * this is written from section 14 rather than from it (decision 0100).
+   *
+   * A first submission carries no version, because there is nothing to have read. Two
+   * clients can believe that at once — a leader on a phone and an upline recording on
+   * behalf — and the loser meets the unique index over `(cell_id, scheduled_date)`
+   * rather than a stale version, which is the same shape section 14 describes for a
+   * person's first DCC record.
+   *
+   * **The responsible leader is frozen here and nothing moves it afterwards** (section
+   * 13). It is resolved from `cell_leaderships` at the meeting's own date, so a meeting
+   * submitted after a handover belongs to whoever led the Cell when it happened, and a
+   * later edit does not re-resolve it — which would move a recorded meeting between
+   * leaders' totals inside a period that may have closed.
+   *
+   * `facilitated_by` defaults to that leader rather than to the submitter, for the same
+   * reason: "A meeting submitted after a handover would otherwise default its
+   * facilitator to somebody who was not in the room."
+   */
+  async submit(
+    cellId: string,
+    meetingId: string,
+    body: SubmitCellMeeting,
+    actor: Actor,
+    claim: CurrentClaim,
+  ): Promise<Record<string, unknown>> {
+    const reportingMonth = reportingMonthOf(meetingId);
+
+    return this.db.transaction().execute(async (trx) => {
+      const cell = await this.cells.cellById(trx, cellId);
+      if (cell === null) {
+        throw new NotFoundError('No such Cell.', { cell_id: cellId });
+      }
+
+      // The meeting must be one the Cell's schedule derives. Checked before anything
+      // about the body, because a date naming no meeting is not a bad submission — it
+      // is a request about something that does not exist.
+      const scheduled = await this.scheduledDatesIn(cellId, reportingMonth, trx);
+      const entry = scheduled.find((candidate) => candidate.scheduledDate === meetingId);
+      if (entry === undefined) {
+        throw new NotFoundError('This Cell was not scheduled to meet on that date.', {
+          cell_id: cellId,
+          meeting_id: meetingId,
+        });
+      }
+
+      // **The window, on the database's clock** (sections 13 and 20). Only Admin may
+      // amend a closed month, under `records.backdate_effective_date`, and that flag is
+      // the closed-month amendment of decision 0182 — which arrives with the slice that
+      // covers both domains, so a closed month refuses here for everybody today.
+      if (!(await isMonthOpen(trx, reportingMonth))) {
+        throw new ApiError(
+          ApiErrorCode.PERIOD_CLOSED,
+          'This month is closed. Only an Admin may amend it, with a reason (SKILL.md ' +
+            'sections 13 and 20).',
+          { cell_id: cellId, meeting_id: meetingId, reporting_month: reportingMonth },
+        );
+      }
+
+      const existing = await trx
+        .selectFrom('cell_meetings')
+        .select(['id', 'version'])
+        .where('cell_id', '=', cellId)
+        .where('scheduled_date', '=', meetingId)
+        .executeTakeFirst();
+
+      // A second submission is a correction, which changes an existing record and is
+      // the operation section 13's change history covers. Refused here rather than
+      // silently overwriting, which section 14 forbids in terms.
+      if (existing !== undefined) {
+        throw new InvariantViolationError(
+          'This meeting already has a record. Correcting one is a separate operation ' +
+            '(SKILL.md sections 13 and 14).',
+          { cell_id: cellId, meeting_id: meetingId, current_version: existing.version },
+        );
+      }
+
+      const responsibleLeaderId = await this.cells.leaderOnDateWithin(trx, cellId, meetingId);
+      if (responsibleLeaderId === null) {
+        throw new InvariantViolationError(
+          'This Cell had no leader on that date, so a meeting cannot be recorded for it ' +
+            '(SKILL.md section 13).',
+          { cell_id: cellId, meeting_id: meetingId },
+        );
+      }
+
+      const members = await this.cells.membersAsOfWithin(trx, cellId, meetingId);
+      const attendance = assertAttendanceMatchesRoster(body, members, {
+        cellId,
+        meetingId,
+      });
+
+      const meeting = await trx
+        .insertInto('cell_meetings')
+        .values({
+          cell_id: cellId,
+          scheduled_date: meetingId,
+          scheduled_time: entry.scheduledTime,
+          week_starting: entry.weekStarting,
+          reporting_month: reportingMonth,
+          status: body.status,
+          not_held_reason: body.status === 'NOT_HELD' ? body.not_held_reason : null,
+          not_held_note: body.status === 'NOT_HELD' ? (body.not_held_note ?? null) : null,
+          // Section 13: nullable, and defaults to the meeting's responsible leader.
+          facilitated_by: body.facilitated_by ?? responsibleLeaderId,
+          responsible_leader_id: responsibleLeaderId,
+          submitted_by: actor.accountId,
+          submitted_at: sql`clock_timestamp()`,
+        } as never)
+        .returning(['id', 'version'])
+        .executeTakeFirstOrThrow();
+
+      if (attendance.length > 0) {
+        await trx
+          .insertInto('cell_attendance')
+          .values(
+            attendance.map((line) => ({
+              cell_meeting_id: meeting.id,
+              person_id: line.person_id,
+              present: line.present,
+              recorded_by: actor.accountId,
+            })),
+          )
+          .execute();
+      }
+
+      // **An ordinary submission writes no audit entry, and one made on behalf does.**
+      // Section 21 lists "Attendance submission on behalf" and "Attendance corrections"
+      // and lists no ordinary first submission -- the reasoning `dcc_attendance`'s pair
+      // records one domain over: a leader's submission for their own meeting *is* the
+      // record, and `cell_meetings` and `cell_attendance` are append-only and carry
+      // their actor. An entry would restate a row that already says who wrote it.
+      //
+      // *A first version wrote one unconditionally, under an invented action name.
+      // `tsc` refused the name, which is the only reason the rule was re-read.*
+      //
+      // On behalf is decided by the **Person**, not the account: section 14 separates
+      // conducting from reporting and makes the submitter the person who entered the
+      // record, and the responsible leader is a Person. It targets the Cell, on the
+      // reasoning that settled the leadership trio (section 21, 2026-08-31): section 7
+      // resolves an entry's scope through its target, and a Cell meeting resolves
+      // through the Cell.
+      if (actor.personId !== responsibleLeaderId) {
+        await this.audit.writeWithin(trx, {
+          actorId: actor.accountId,
+          action: 'cell_attendance.submitted_on_behalf',
+          targetType: 'cell',
+          targetId: cellId,
+          after: {
+            meeting_id: meetingId,
+            status: body.status,
+            responsible_leader_id: responsibleLeaderId,
+            recorded: attendance.length,
+            present: attendance.filter((line) => line.present).length,
+          },
+        });
+      }
+
+      const response = {
+        cell_id: cell.cellId,
+        meeting_id: meetingId,
+        status: body.status,
+        reporting_month: reportingMonth,
+        responsible_leader_id: responsibleLeaderId,
+        facilitated_by: body.facilitated_by ?? responsibleLeaderId,
+        version: meeting.version,
+        recorded: attendance.length,
+        present: attendance.filter((line) => line.present).length,
+      };
+
+      // Last statement in the transaction, and inside it (CLAUDE.md, *Write endpoints*).
+      // It takes the key's row lock, so a concurrent retry waits on that lock rather
+      // than being answered `REQUEST_IN_FLIGHT`; and a lost claim throws here, uncaught,
+      // which rolls the write back. What is recorded is what is returned.
+      await this.idempotency.completeWithin(trx, { ...claim, status: 201, body: response });
+
+      return response;
+    });
+  }
+
+  /**
    * The dates this Cell was scheduled to meet in a month, with the time in force.
    *
    * **Every boundary here is a Manila calendar date, and the arithmetic is the
@@ -129,6 +432,7 @@ export class CellMeetingsService {
   private async scheduledDatesIn(
     cellId: string,
     reportingMonth: string,
+    executor: Db | Transaction<Database> = this.db,
   ): Promise<{ scheduledDate: string; scheduledTime: string; weekStarting: string }[]> {
     const result = await sql<{
       scheduled_date: string;
@@ -153,7 +457,7 @@ export class CellMeetingsService {
               OR (schedule.ended_at AT TIME ZONE 'Asia/Manila')::date >= day)
        WHERE EXTRACT(ISODOW FROM day) = schedule.day_of_week
        ORDER BY day
-    `.execute(this.db);
+    `.execute(executor);
 
     return result.rows.map((row) => ({
       scheduledDate: row.scheduled_date,
@@ -236,4 +540,84 @@ export class CellMeetingsService {
       ]),
     );
   }
+}
+
+/**
+ * The attendance a submission must carry, checked against the roster it names.
+ *
+ * **A `HELD` meeting carries a line for every member, present or not** (SKILL.md
+ * section 13). "If the leader was present and the meeting was available, the meeting is
+ * `HELD` with zero attendance. It counts in the denominator, and every member is
+ * recorded as not having attended."
+ *
+ * Absent rows and rows marked absent are different facts, and section 20's
+ * reconciliation needs the second: classification buckets and monthly-attendance
+ * buckets must each sum to the same unique-people total, and a roster with holes in it
+ * cannot do that. Accepting a partial list would make the denominator depend on how
+ * much of the roster a client happened to send -- a defect invisible until a month is
+ * reported and impossible to correct once it closes.
+ *
+ * **A `NOT_HELD` meeting carries none** -- "No attendance is recorded", because the
+ * meeting did not take place and there is nobody to have been absent from it. The
+ * schema refuses it too (`assert_no_attendance_when_not_held`, migration 0011); this
+ * refusal exists so the caller is told which rule they broke rather than meeting a
+ * trigger message.
+ *
+ * **A person named twice is refused rather than de-duplicated**, on section 9's
+ * reasoning for the same shape one domain over: two lines for one person are two claims
+ * about one record, and taking the last silently discards a claim somebody made.
+ *
+ * **A person not on the roster is refused**, because section 12 records attendance for
+ * members only and has no visitor state: "A person coming to a Cell for the first time
+ * is added as a member by the leader, and then recorded present."
+ */
+function assertAttendanceMatchesRoster(
+  body: SubmitCellMeeting,
+  members: { personId: string }[],
+  context: { cellId: string; meetingId: string },
+): { person_id: string; present: boolean }[] {
+  const lines = body.attendance ?? [];
+
+  if (body.status === 'NOT_HELD') {
+    if (lines.length > 0) {
+      throw new InvariantViolationError(
+        'A meeting that did not take place carries no attendance (SKILL.md section 13).',
+        context,
+      );
+    }
+
+    return [];
+  }
+
+  const roster = new Set(members.map((member) => member.personId));
+  const named = new Set<string>();
+
+  for (const line of lines) {
+    if (named.has(line.person_id)) {
+      throw new InvariantViolationError('A person is named once (SKILL.md sections 9 and 12).', {
+        ...context,
+        person_id: line.person_id,
+      });
+    }
+    named.add(line.person_id);
+
+    if (!roster.has(line.person_id)) {
+      throw new InvariantViolationError(
+        "Cell attendance is recorded only for the Cell's own members on the meeting date " +
+          '(SKILL.md section 12).',
+        { ...context, person_id: line.person_id },
+      );
+    }
+  }
+
+  const missing = members.filter((member) => !named.has(member.personId));
+  if (missing.length > 0) {
+    throw new InvariantViolationError(
+      'Every member on the meeting date must be recorded, present or not (SKILL.md ' +
+        'sections 13 and 20).',
+      { ...context, missing_person_ids: missing.map((member) => member.personId) },
+    );
+  }
+
+  return lines.map((line) => ({ person_id: line.person_id, present: line.present }));
 }
