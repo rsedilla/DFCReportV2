@@ -13,9 +13,12 @@
 -- **Contiguity alone does not make a chain a partition of time, and an earlier
 -- version of this sentence said it did.** Two predecessors superseded onto one
 -- successor, each ending where it begins, satisfies the trigger and still overlaps:
--- the structure would be a DAG rather than a chain. The partial unique index below is
--- what forbids that, so the claim is carried by something rather than asserted beside
--- it.
+-- the structure would be a DAG rather than a chain. The two partial unique indexes
+-- below are what forbid that, so the claim is carried by something rather than
+-- asserted beside it. Their predicates differ, and the difference is section 13's:
+-- the Cell index excludes a row naming itself, because that is how this schema says
+-- "closed with nothing in its place", and the DCC index does not, because that shape
+-- is refused outright there.
 --
 -- One residual is disclosed rather than enforced: nothing requires a successor to
 -- concern the same event and person as the row it replaces. It is unreachable -- the
@@ -65,7 +68,10 @@
 --
 -- `CLAUDE.md`, Migration policy: additive, reversible, and validated against existing
 -- data before enforcing -- `ADD CONSTRAINT` is not used here, so the validation is the
--- explicit scan below, which aborts the migration if any chain already violates it.
+-- explicit scan below, which aborts the migration if existing data already violates
+-- either rule this file installs: chain contiguity on both tables, and section 9's
+-- refusal of a self-referenced `dcc_attendance` row. The two indexes validate
+-- themselves as `CREATE UNIQUE INDEX` builds them.
 -- Snapshot-and-reconcile is discharged as migration 0012 discharges it: nothing is
 -- rewritten, and section 20's reconciliation test does not exist yet.
 -- ---------------------------------------------------------------------------
@@ -74,17 +80,23 @@
 -- by PostgreSQL -- so a deployment holding an overlapping chain would install this and
 -- keep it, silently, which is the failure mode this whole migration is about.
 --
--- **The scan carries the trigger's own exemption, and the first version did not.** A
--- self-referenced row joins to itself, and `recorded_at <> superseded_at` on any close
--- that is not zero-length -- which is every real one -- so the scan counted as
--- offending exactly the shape section 13 requires and the trigger blesses. The
+-- **The Cell scan carries the trigger's Cell exemption, and the first version did
+-- not.** A self-referenced row joins to itself, and `recorded_at <> superseded_at` on
+-- any close that is not zero-length -- which is every real one -- so the scan counted
+-- as offending exactly the shape section 13 requires and the trigger blesses. The
 -- migration was then not reversible: `down` succeeded and `up` refused over data the
 -- schema declares legal, and its message directed a history rewrite of correct rows.
 -- Harmless while both tables are empty and live from the first RESCHEDULED-to-NOT_HELD
 -- transition, which is the one path the exemption exists for.
 --
--- A validation that measures a stricter rule than the one being installed is not a
--- validation of it.
+-- **The DCC scan deliberately does not carry it**, and this paragraph was a blanket
+-- claim about both queries until it did not describe one of them. The exemption is
+-- Cell-only, so on `dcc_attendance` a self-reference is an offending row rather than a
+-- blessed one -- and it is checked on its own below, because the contiguity comparison
+-- passes it whenever its two ends are the same instant.
+--
+-- A validation that measures a rule other than the one being installed is not a
+-- validation of it, in either direction.
 DO $$
 DECLARE
   offending bigint;
@@ -92,12 +104,27 @@ BEGIN
   SELECT count(*) INTO offending
     FROM dcc_attendance predecessor
     JOIN dcc_attendance successor ON successor.id = predecessor.superseded_by
-   WHERE successor.recorded_at IS DISTINCT FROM predecessor.superseded_at;
+   WHERE predecessor.id IS DISTINCT FROM successor.id
+     AND successor.recorded_at IS DISTINCT FROM predecessor.superseded_at;
 
   IF offending > 0 THEN
     RAISE EXCEPTION
       'refusing to enforce chain contiguity: % dcc_attendance chain(s) already overlap or gap. '
       'Correct the data first (CLAUDE.md, Migration policy).', offending;
+  END IF;
+
+  -- Section 9's rule, validated separately from contiguity because it is a separate
+  -- rule: no DCC operation closes a record with nothing replacing it. A row already
+  -- holding that shape cannot be corrected by moving an instant, so the message does
+  -- not ask for one.
+  SELECT count(*) INTO offending
+    FROM dcc_attendance WHERE superseded_by = id;
+
+  IF offending > 0 THEN
+    RAISE EXCEPTION
+      'refusing to enforce section 9: % dcc_attendance row(s) name themselves as their own '
+      'successor, which no DCC operation produces. Resolve what those rows mean first '
+      '(CLAUDE.md, Migration policy).', offending;
   END IF;
 
   SELECT count(*) INTO offending
@@ -151,6 +178,29 @@ BEGIN
     RETURN NULL;
   END IF;
 
+  -- **And on `dcc_attendance` a row naming itself is refused because it is one, at any
+  -- length.** Narrowing the exemption to `cell_attendance` was believed to refuse the
+  -- DCC shape, and it refused most of it: a self-referenced row is compared against its
+  -- own `recorded_at` below, which differs from its own `superseded_at` on any close of
+  -- non-zero length. A close where the two are the same instant compared equal and
+  -- passed -- and every other constraint passes it too. `period_ordered` is `>=`
+  -- deliberately (migration 0012), `supersession_is_whole` has both columns set,
+  -- `dcc_attendance_one_live` excludes a superseded row, and `dcc_attendance_one_successor`
+  -- sees a single row.
+  --
+  -- So section 9's "no DCC operation closes a record with nothing replacing it" was
+  -- still resting on nobody writing the row, one instant over. That is the claim the
+  -- pass before this one rewrote the section to stop resting on, and the refusal it
+  -- rested on instead was a side effect of a comparison rather than a rule about the
+  -- shape. Stated as the rule it is, so that the section's premise -- a live row exists
+  -- for a person once one ever has -- is enforced rather than very nearly enforced.
+  IF TG_TABLE_NAME = 'dcc_attendance' AND NEW.superseded_by = NEW.id THEN
+    RAISE EXCEPTION
+      'no DCC operation closes a record with nothing replacing it (SKILL.md section 9): '
+      'row % names itself as its own successor', NEW.id
+      USING ERRCODE = 'check_violation';
+  END IF;
+
   -- Branched in control flow rather than in an expression over `NEW`, for the reason
   -- `assert_no_attendance_when_not_held` records at length: PL/pgSQL resolves every
   -- field reference in a SQL expression whatever branch it would take, and the first
@@ -190,13 +240,41 @@ $$;
 -- Partial, because `superseded_by` is null on every live row and those are the
 -- majority. `CREATE UNIQUE INDEX` validates against existing data as it builds, so
 -- the scan above needs no third query.
+--
+-- **`<> id` on the Cell index, and its first version had `IS NOT NULL` alone --
+-- which reinstated, one constraint over, the refusal the exemption above exists to
+-- prevent.** Take a record corrected once: the predecessor names the successor, and
+-- the successor is live. The meeting is then declared NOT_HELD, so section 13 requires
+-- the successor to be closed with nothing in its place, which it says by naming
+-- itself. Two rows then carry the same `superseded_by` -- the predecessor's pointer and
+-- the successor's self-reference -- and an index over that column with no exemption
+-- refuses the second write. A unique index cannot be deferred, so the trigger passing
+-- it changes nothing.
+--
+-- The path was therefore writable only for a record that had never been corrected,
+-- which is not a distinction section 13 draws, and the case that covered the shape
+-- happened to use an uncorrected record and stayed green. The predicate now excludes a
+-- row naming itself, so the index says what it was always meant to say: of the rows
+-- naming a *different* row as their successor, at most one names any given row.
+--
+-- That is the DAG prohibition, and it is true under every answer the open question in
+-- `CLAUDE.md` might take. If a null `superseded_by` is permitted for a close with no
+-- replacement, `IS NOT NULL` already excludes those rows and this clause is vacuous;
+-- if the self-reference stays the documented idiom, the clause is exactly right; if the
+-- operation gets a column of its own, it is vacuous again. The index does not have to
+-- wait for that ruling, and it must not anticipate it.
 CREATE UNIQUE INDEX dcc_attendance_one_successor
   ON dcc_attendance (superseded_by)
   WHERE superseded_by IS NOT NULL;
 
+-- No `<> id` on the DCC twin, and the asymmetry is the one above: a `dcc_attendance`
+-- row naming itself is refused outright by the trigger, so there is no shape here to
+-- exempt. Writing the clause on both would be decision 0100's pattern -- reusing a
+-- shape without re-deriving why it has that shape -- and it is the pattern that put the
+-- exemption on both tables in the first place.
 CREATE UNIQUE INDEX cell_attendance_one_successor
   ON cell_attendance (superseded_by)
-  WHERE superseded_by IS NOT NULL;
+  WHERE superseded_by IS NOT NULL AND superseded_by <> id;
 
 CREATE CONSTRAINT TRIGGER dcc_attendance_chain_contiguous
   AFTER INSERT OR UPDATE ON dcc_attendance

@@ -48,6 +48,13 @@ Two answers were available: weaken the sentence, or make it true.
 over `superseded_by`, which `CREATE UNIQUE INDEX` validates against existing data as it
 builds. A case pins each, and dropping them turns it red.
 
+*Neither half of that last sentence was true when it was written. Only the DCC index had
+a case; the Cell one had none, so dropping it left the suite green — and the Cell index
+as written was itself the defect decision 0180 records, refusing section 13's
+close-with-no-replacement path on any record already corrected once. The claim that a
+case pinned it is what would have caught the defect, and it was made instead of the case.
+Both now exist, and both go red when their index is dropped.*
+
 That is the better answer here for the reason this whole migration exists: the claim
 was load-bearing, and the alternative was a third sentence disclosing a third residual
 in a file whose subject is a residual that shipped twice.
@@ -97,4 +104,4 @@ able to check it.
 
 Decision 0179, indexed in [CLAUDE.md](../../CLAUDE.md).
 
-Previous: [2026-08-31 — The fourth pass found nothing behavioural, and one thing with teeth](0178-the-fourth-pass-found-nothing-behavioural-and-one-thing-with-teeth.md)
+Previous: [2026-08-31 — The fourth pass found nothing behavioural, and one thing with teeth](0178-the-fourth-pass-found-nothing-behavioural-and-one-thing-with-teeth.md) | Next: [2026-09-01 — A migration is frozen by merging, not by its number, and two on the seventh pass](0180-a-migration-is-frozen-by-merging-not-by-its-number.md)

@@ -292,9 +292,9 @@ function assertUnchanged(migration: Migration, row: AppliedRow): void {
   if (row.checksum !== migration.checksum) {
     throw new Error(
       `${migration.name} has changed since it was applied. Migration history is ` +
-        `immutable: write a new migration rather than editing this one. ` +
-        `While this schema is not yet deployed anywhere, correcting 0001 in place is ` +
-        `permitted (CLAUDE.md, 2026-08-21) -- drop and rebuild this database instead.`,
+        `immutable once merged: write a new migration rather than editing a merged one. ` +
+        `A migration not yet merged to main may be corrected in place ` +
+        `(CLAUDE.md, 2026-08-21 and 2026-09-01) -- drop and rebuild this database instead.`,
     );
   }
 }

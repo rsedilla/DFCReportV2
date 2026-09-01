@@ -463,6 +463,155 @@ describe('the attendance tables (SKILL.md sections 9, 12, 13 and 14)', () => {
         }),
       ).resolves.toBeUndefined();
     });
+
+    it('permits closing a corrected record with nothing replacing it', async () => {
+      // **The case above with one correction in front of it, and the pair is the
+      // point.** That case self-closes a record nothing had ever superseded, so
+      // `superseded_by` held one value across the table and `cell_attendance_one_successor`
+      // saw nothing. Section 13 does not restrict its NOT_HELD path to uncorrected
+      // records: a leader who fixes an attendance line on Tuesday and reports on
+      // Thursday that the rescheduled meeting never happened reaches exactly this
+      // shape, and it must be writable.
+      //
+      // Corrected once, the predecessor names the successor; closed with nothing in
+      // its place, the successor names itself. Both rows then carry the same
+      // `superseded_by`, and an index over that column with no exemption refuses the
+      // second write — reinstating, one constraint over, the refusal the trigger's
+      // exemption exists to prevent. That is why the index's predicate excludes a row
+      // naming itself, and this case is what goes red when it stops doing so.
+      //
+      // All four instants are constants of this test rather than database clocks: the
+      // two ends of one row's live period must come from one clock, and a `timestamptz`
+      // read back through node-postgres loses its microseconds, which is what defeated
+      // an earlier fix here and the case written to catch it.
+      const CORRECTED_AT = new Date('2026-09-06T09:00:00+08:00');
+      const CLOSED_AT = new Date('2026-09-06T11:00:00+08:00');
+      const account = await anAccount();
+      const row = await db
+        .insertInto('cell_meetings')
+        .values(
+          meeting({
+            status: 'RESCHEDULED',
+            actual_date: '2026-09-06',
+            actual_time: '19:00',
+          }) as never,
+        )
+        .returning('id')
+        .executeTakeFirstOrThrow();
+
+      const successorId = randomUUID();
+      const predecessor = await db
+        .insertInto('cell_attendance')
+        .values({
+          cell_meeting_id: row.id,
+          person_id: leader.id,
+          present: true,
+          recorded_by: account,
+          recorded_at: new Date('2026-09-06T08:00:00+08:00'),
+        } as never)
+        .returning('id')
+        .executeTakeFirstOrThrow();
+
+      // The correction, on its own, as a leader would make it.
+      await db.transaction().execute(async (trx) => {
+        await trx
+          .updateTable('cell_attendance')
+          .set({ superseded_at: CORRECTED_AT, superseded_by: successorId })
+          .where('id', '=', predecessor.id)
+          .execute();
+
+        await trx
+          .insertInto('cell_attendance')
+          .values({
+            id: successorId,
+            cell_meeting_id: row.id,
+            person_id: leader.id,
+            present: false,
+            recorded_by: account,
+            version: 2,
+            recorded_at: CORRECTED_AT,
+            correction_reason: 'Recorded against the wrong person.',
+          })
+          .execute();
+      });
+
+      // And the meeting then does not happen at all.
+      await expect(
+        db.transaction().execute(async (trx) => {
+          await trx
+            .updateTable('cell_attendance')
+            .set({ superseded_at: CLOSED_AT, superseded_by: successorId })
+            .where('id', '=', successorId)
+            .execute();
+
+          await trx
+            .updateTable('cell_meetings')
+            // The actual date goes with the reschedule that set it: section 13 says a
+            // NOT_HELD meeting has no actual date and uses the scheduled one, and
+            // `cell_meetings_actual_date_iff_rescheduled` refuses the pair. Written out
+            // rather than left to the service, because this case is about what the
+            // schema permits and the transition is part of the shape.
+            .set({
+              status: 'NOT_HELD',
+              not_held_reason: 'LEADER_UNAVAILABLE',
+              actual_date: null,
+              actual_time: null,
+            })
+            .where('id', '=', row.id)
+            .execute();
+        }),
+      ).resolves.toBeUndefined();
+    });
+
+    it('refuses two rows superseded onto one successor', async () => {
+      // The Cell twin of the `dcc_attendance` case below, and it exists because the
+      // exemption above is Cell-only: the predicate that lets a row name itself must
+      // not also let two real predecessors name one successor. Without this, the
+      // exemption and the index were pinned on different tables and nothing held the
+      // Cell side of either.
+      const CLOSED_AT = new Date('2026-09-06T09:00:00+08:00');
+      const account = await anAccount();
+      const row = await db
+        .insertInto('cell_meetings')
+        .values(meeting() as never)
+        .returning('id')
+        .executeTakeFirstOrThrow();
+
+      const other = await createPerson(db, { firstName: 'Otilia', network: 'WOMENS' });
+      const successorId = randomUUID();
+
+      await expect(
+        db.transaction().execute(async (trx) => {
+          await trx
+            .insertInto('cell_attendance')
+            .values({
+              id: successorId,
+              cell_meeting_id: row.id,
+              person_id: leader.id,
+              present: false,
+              recorded_by: account,
+              version: 2,
+              recorded_at: CLOSED_AT,
+            })
+            .execute();
+
+          for (const personId of [other.id, leader.id]) {
+            await trx
+              .insertInto('cell_attendance')
+              .values({
+                cell_meeting_id: row.id,
+                person_id: personId,
+                present: true,
+                recorded_by: account,
+                recorded_at: new Date('2026-09-06T08:00:00+08:00'),
+                superseded_at: CLOSED_AT,
+                superseded_by: successorId,
+              })
+              .execute();
+          }
+        }),
+      ).rejects.toThrow(/one_successor/);
+    });
   });
 
   describe('dcc_attendance (sections 9 and 14)', () => {
@@ -609,7 +758,49 @@ describe('the attendance tables (SKILL.md sections 9, 12, 13 and 14)', () => {
           .set({ superseded_at: sql<Date>`clock_timestamp()`, superseded_by: row.id })
           .where('id', '=', row.id)
           .execute(),
-      ).rejects.toThrow(/chain_contiguous|successor must begin where it ended/);
+      ).rejects.toThrow(/chain_contiguous|closes a record with nothing replacing it/);
+    });
+
+    it('refuses one closed with nothing replacing it at zero length', async () => {
+      // **The case above closes at `clock_timestamp()` against a `recorded_at` already
+      // written, so it pinned the non-zero-length variety and nothing else.** A row whose
+      // two ends are the same instant passed every constraint: `period_ordered` is `>=`
+      // deliberately, `supersession_is_whole` has both columns set, `one_live` excludes a
+      // superseded row, `one_successor` sees a single row, and the contiguity trigger
+      // compared the row's own `recorded_at` against its own `superseded_at` and found
+      // them equal. The refusal was a side effect of the comparison rather than a rule
+      // about the shape.
+      //
+      // So section 9's "no DCC operation closes a record with nothing replacing it" still
+      // rested on nobody writing the row, one instant over — which is the claim the
+      // previous pass rewrote the section to stop resting on. The trigger now refuses a
+      // `dcc_attendance` self-reference because it is one, at any length.
+      const event = await db
+        .insertInto('dcc_events')
+        .values({ event_date: '2026-08-30' })
+        .returning('id')
+        .executeTakeFirstOrThrow();
+
+      // One instant for both ends of one row's period, which is the rule for every
+      // effective-dated pair in these fixtures.
+      const at = new Date('2026-08-31T10:00:00+08:00');
+      const rowId = randomUUID();
+
+      await expect(
+        db
+          .insertInto('dcc_attendance')
+          .values({
+            id: rowId,
+            dcc_event_id: event.id,
+            person_id: leader.id,
+            present: true,
+            recorded_by: await anAccount(),
+            recorded_at: at,
+            superseded_at: at,
+            superseded_by: rowId,
+          } as never)
+          .execute(),
+      ).rejects.toThrow(/chain_contiguous|closes a record with nothing replacing it/);
     });
 
     it('refuses two rows superseded onto one successor', async () => {
