@@ -89,11 +89,20 @@
 -- Harmless while both tables are empty and live from the first RESCHEDULED-to-NOT_HELD
 -- transition, which is the one path the exemption exists for.
 --
--- **The DCC scan deliberately does not carry it**, and this paragraph was a blanket
--- claim about both queries until it did not describe one of them. The exemption is
--- Cell-only, so on `dcc_attendance` a self-reference is an offending row rather than a
--- blessed one -- and it is checked on its own below, because the contiguity comparison
--- passes it whenever its two ends are the same instant.
+-- **The DCC contiguity query excludes self-references too, and for the opposite
+-- reason.** On this table a self-reference is not blessed -- it is refused outright by
+-- the trigger -- so it is excluded here only to route it to the scan below, which
+-- refuses it in section 9's terms. Left in the contiguity query it would be reported as
+-- a chain that "overlaps or gaps", and the remedy that message gives is to move an
+-- instant, which is not a remedy for a row that should not exist at all. Excluding it
+-- costs nothing: the query would miss it at zero length regardless, which is the whole
+-- reason section 9 needs a scan of its own.
+--
+-- *An earlier version of this paragraph said the DCC scan "deliberately does not carry"
+-- the exemption, describing the change as the reverse of what the diff makes -- the
+-- clause is added here, not removed. It was written from the rule the two tables now
+-- differ on rather than from the query five lines below it, which is the same substitution
+-- the paragraph above records.*
 --
 -- A validation that measures a rule other than the one being installed is not a
 -- validation of it, in either direction.
@@ -183,10 +192,16 @@ BEGIN
   -- DCC shape, and it refused most of it: a self-referenced row is compared against its
   -- own `recorded_at` below, which differs from its own `superseded_at` on any close of
   -- non-zero length. A close where the two are the same instant compared equal and
-  -- passed -- and every other constraint passes it too. `period_ordered` is `>=`
-  -- deliberately (migration 0012), `supersession_is_whole` has both columns set,
-  -- `dcc_attendance_one_live` excludes a superseded row, and `dcc_attendance_one_successor`
-  -- sees a single row.
+  -- passed: `period_ordered` is `>=` deliberately (migration 0012),
+  -- `supersession_is_whole` has both columns set, and `dcc_attendance_one_live` excludes
+  -- a superseded row.
+  --
+  -- **On a first record only, and the qualifier is the Cell defect's own.** Where the
+  -- record had already been corrected, the predecessor and the self-closing successor
+  -- carry the same `superseded_by`, and `dcc_attendance_one_successor` refused it. So
+  -- what got through was a person's first row at an event, closed at zero length. An
+  -- earlier version of this comment said "every other constraint passes it too", which
+  -- is the unqualified claim this file exists to stop making.
   --
   -- So section 9's "no DCC operation closes a record with nothing replacing it" was
   -- still resting on nobody writing the row, one instant over. That is the claim the
@@ -241,7 +256,25 @@ $$;
 -- majority. `CREATE UNIQUE INDEX` validates against existing data as it builds, so
 -- the scan above needs no third query.
 --
--- **`<> id` on the Cell index, and its first version had `IS NOT NULL` alone --
+-- **The two predicates differ, and each paragraph below stands above the index it
+-- describes.** The first version of this pair had them transposed -- the Cell argument
+-- above the DCC statement and the DCC argument above the Cell statement -- so each
+-- paragraph contradicted the line beneath it. That is the defect this file exists to
+-- repair, reproduced in the act of repairing it: a claim about an index with nothing
+-- beneath it carrying the claim. Read each block against the statement it precedes
+-- rather than against the order they were thought in.
+
+-- **No `<> id` here, and the asymmetry is section 9's.** A `dcc_attendance` row naming
+-- itself is refused outright by the trigger above, so there is no shape on this table to
+-- exempt and the bare predicate is the stronger of the two. Writing the clause on both
+-- would be decision 0100's pattern -- reusing a shape without re-deriving why it has
+-- that shape -- and that is the pattern that put the self-reference exemption on both
+-- tables in the first place.
+CREATE UNIQUE INDEX dcc_attendance_one_successor
+  ON dcc_attendance (superseded_by)
+  WHERE superseded_by IS NOT NULL;
+
+-- **`<> id` here, and the first version of this index had `IS NOT NULL` alone --
 -- which reinstated, one constraint over, the refusal the exemption above exists to
 -- prevent.** Take a record corrected once: the predecessor names the successor, and
 -- the successor is live. The meeting is then declared NOT_HELD, so section 13 requires
@@ -263,15 +296,6 @@ $$;
 -- if the self-reference stays the documented idiom, the clause is exactly right; if the
 -- operation gets a column of its own, it is vacuous again. The index does not have to
 -- wait for that ruling, and it must not anticipate it.
-CREATE UNIQUE INDEX dcc_attendance_one_successor
-  ON dcc_attendance (superseded_by)
-  WHERE superseded_by IS NOT NULL;
-
--- No `<> id` on the DCC twin, and the asymmetry is the one above: a `dcc_attendance`
--- row naming itself is refused outright by the trigger, so there is no shape here to
--- exempt. Writing the clause on both would be decision 0100's pattern -- reusing a
--- shape without re-deriving why it has that shape -- and it is the pattern that put the
--- exemption on both tables in the first place.
 CREATE UNIQUE INDEX cell_attendance_one_successor
   ON cell_attendance (superseded_by)
   WHERE superseded_by IS NOT NULL AND superseded_by <> id;

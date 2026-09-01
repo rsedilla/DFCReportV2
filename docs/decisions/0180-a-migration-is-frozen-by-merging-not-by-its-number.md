@@ -25,17 +25,26 @@ for the filename as the rule while citing merging as the fact, and **not one of 
 refused an in-place edit to an unmerged migration**, because none was ever asked to.
 
 So this widens the exception to what those four were already deciding: **a migration not
-yet merged to `main` may be corrected in place; a merged one is frozen.** It is a
-clarification rather than a loosening, and the evidence is that it changes the answer in
-none of the four cases that have arisen.
+yet merged to `main` may be corrected in place; a merged one is frozen.**
+
+**It is a loosening, and saying otherwise would be arguing past the cases it changes.**
+An earlier version of this paragraph called it "a clarification rather than a loosening",
+on the evidence that it changes the answer in none of the four cases that have arisen —
+which is evidence selected to exclude the cases where it differs, because all four concern
+merged migrations and those are exactly the ones both rules answer identically. The cases
+it changes are `0011`, `0012` and `0013`. Under 2026-08-21 the three edits made to `0013`
+on this branch were forbidden; under this ruling they are permitted, which is why this
+ruling exists and is stated in the opening paragraph. What the four citations establish is
+narrower and still worth having: the line being drawn here is the one those rulings were
+already reasoning from, so no earlier decision has to be reread or reversed.
 
 **Merging rather than deployment, and the difference matters now.** 2026-08-21 said
 "until first deployment", which was the same line while nothing had been merged and
-nothing deployed. They have since come apart: nine migrations are merged and nothing is
-deployed, so a deployment-shaped rule would still permit editing `0009` today. Merging is
-also the observable event — after it the file is what every other branch builds from and
-what a reviewer has already read. Before it, a migration exists only on the branch
-writing it.
+nothing deployed. They have since come apart: **ten** migrations are merged, `0001`
+through `0010`, and nothing is deployed — so a deployment-shaped rule would still permit
+editing `0010` today. Merging is also the observable event: after it the file is what
+every other branch builds from and what a reviewer has already read. Before it, a
+migration exists only on the branch writing it.
 
 The cost is unchanged and is the mechanism: a developer who applied the file locally sees
 `migrate:up` refuse the changed checksum and rebuilds. `scripts/migrate.ts` said so in
@@ -91,11 +100,19 @@ all of it.
 
 A self-referenced row is compared against **its own** `recorded_at`, which differs from
 its own `superseded_at` on any close of non-zero length. A close where the two are the
-same instant compares equal and raises nothing — and every other constraint passes it:
-`period_ordered` is `>=` deliberately, `supersession_is_whole` has both columns set,
-`dcc_attendance_one_live` excludes a superseded row, and `dcc_attendance_one_successor`
-sees a single row. The row exists, is not live, and never was, which is exactly the
-premise section 9 leans on.
+same instant compares equal and raises nothing — `period_ordered` is `>=` deliberately,
+`supersession_is_whole` has both columns set, and `dcc_attendance_one_live` excludes a
+superseded row. The row exists, is not live, and never was, which is exactly the premise
+section 9 leans on.
+
+**What was reachable was narrower than that, and by the same qualifier as the Cell
+defect.** For a record already corrected once, the predecessor names the successor and the
+self-closing successor names itself, so both carry the same `superseded_by` and
+`dcc_attendance_one_successor` — bare `IS NOT NULL` — already refused it. The gap was a
+**first** record for a person at an event, closed at zero length. Narrow, and still a case
+where section 9's premise held because nothing had written the row. *An earlier version of
+this paragraph said the shape "passed every constraint in the schema", which is the
+unqualified form of exactly the claim this entry records the Cell index shipping on.*
 
 The refusal was a side effect of a comparison rather than a rule about a shape. It is now
 stated as the rule it is: a `dcc_attendance` row naming itself is refused because it is
@@ -110,17 +127,35 @@ change.
 ## The validation scan, and the two counts
 
 The migration's scan is what makes it reversible, because PostgreSQL does not apply a
-trigger retroactively. Two corrections. The DCC half no longer carries the self-reference
-exemption — that exemption is Cell-only, so on `dcc_attendance` a self-reference is an
-offending row, and it is scanned for separately because the contiguity comparison passes
-it at zero length. And the paragraph above the block claimed the exemption for both
-queries when the previous commit had already removed it from one; it is now scoped, which
-is the same defect the fifth pass found in the same paragraph, in the other direction.
+trigger retroactively. Section 9's refusal is scanned for separately, because the
+contiguity comparison passes a self-reference whenever its two ends are the same instant.
+The DCC contiguity query now excludes self-references as the Cell one does, for the
+opposite reason — not because the shape is blessed here, but so that it is reported by
+the section 9 scan in section 9's terms rather than as a chain that "overlaps or gaps",
+whose stated remedy is to move an instant and is no remedy for a row that should not
+exist.
+
+*An earlier version of this paragraph, and of the comment above the block, said the DCC
+half "no longer carries" the exemption — the reverse of what the diff does, which is to
+add it. Both were written from the rule the two tables differ on rather than from the
+query beneath them. The fifth pass found a defect in this same paragraph, and the seventh
+found it stale; this is the third.*
+
+**Neither of those two scan changes has anything that can fail on it**, and the mutation
+list below should not be read as covering them. Pinning a validation scan means seeding
+data that violates the rule and re-running the migration, and the trigger now refuses that
+data on the way in — so the shape cannot be created through the suite to be scanned for.
+The pre-existing contiguity scans are unpinned for the same reason, so this is not a
+regression. It is disclosed because a rule added in a commit whose subject is rules
+enforced by side effect should say which of its own rules nothing enforces.
 
 Two prose findings, one on decision 0179 and one on the commit message carrying it. The
 message said **three** new database cases where two were added — the Cell-branch mirror
-case belongs to the commit before it, and the `it(` count goes 22, 23, 25 across the last
-three commits. And 0179 said "A case pins each" of the two indexes when only the DCC one
+case belongs to the commit before it, and the `it(` count in `attendance.spec.ts` goes 22
+at `635c098`, 23 at `ca5e762`, 25 at `9a0048c`. *Written here first as "22, 23, 25 across
+the last three commits", which was true in the message it was lifted from and false the
+moment it moved into a file with a further commit after it. The commits are named
+instead.* And 0179 said "A case pins each" of the two indexes when only the DCC one
 had a case; the Cell one now has its own, and it goes red when the index is dropped. That
 second one is the load-bearing half: an unpinned index is what let the defect above ship.
 

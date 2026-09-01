@@ -764,17 +764,23 @@ describe('the attendance tables (SKILL.md sections 9, 12, 13 and 14)', () => {
     it('refuses one closed with nothing replacing it at zero length', async () => {
       // **The case above closes at `clock_timestamp()` against a `recorded_at` already
       // written, so it pinned the non-zero-length variety and nothing else.** A row whose
-      // two ends are the same instant passed every constraint: `period_ordered` is `>=`
-      // deliberately, `supersession_is_whole` has both columns set, `one_live` excludes a
-      // superseded row, `one_successor` sees a single row, and the contiguity trigger
-      // compared the row's own `recorded_at` against its own `superseded_at` and found
-      // them equal. The refusal was a side effect of the comparison rather than a rule
-      // about the shape.
+      // two ends are the same instant passed: `period_ordered` is `>=` deliberately,
+      // `supersession_is_whole` has both columns set, `one_live` excludes a superseded
+      // row, and the contiguity trigger compared the row's own `recorded_at` against its
+      // own `superseded_at` and found them equal. The refusal was a side effect of the
+      // comparison rather than a rule about the shape.
       //
       // So section 9's "no DCC operation closes a record with nothing replacing it" still
       // rested on nobody writing the row, one instant over — which is the claim the
       // previous pass rewrote the section to stop resting on. The trigger now refuses a
       // `dcc_attendance` self-reference because it is one, at any length.
+      //
+      // **This is a first record, and that is load-bearing rather than incidental.** For
+      // a record already corrected once, `dcc_attendance_one_successor` refused this
+      // shape before the trigger was changed, because the predecessor and the
+      // self-closing successor carry the same `superseded_by`. The case below covers
+      // that half, so the pair does not repeat the mistake the Cell case made — one
+      // uncorrected fixture standing for a rule that says nothing about corrections.
       const event = await db
         .insertInto('dcc_events')
         .values({ event_date: '2026-08-30' })
@@ -801,6 +807,75 @@ describe('the attendance tables (SKILL.md sections 9, 12, 13 and 14)', () => {
           } as never)
           .execute(),
       ).rejects.toThrow(/chain_contiguous|closes a record with nothing replacing it/);
+    });
+
+    it('refuses one closed with nothing replacing it after a correction', async () => {
+      // The other half of the case above. Section 9 permits no DCC close with nothing in
+      // its place whether or not the record was corrected first, and the Cell defect this
+      // batch repairs was precisely a rule pinned by an uncorrected fixture alone.
+      //
+      // **Two constraints refuse this, so the assertion names which one, and that is
+      // what makes the case able to fail.** `dcc_attendance_one_successor` refuses it
+      // immediately on the statement — the predecessor and the self-closing successor
+      // carry the same `superseded_by` — while the trigger would refuse it at COMMIT for
+      // naming itself. Asserting the disjunction would pin neither: dropping either
+      // constraint would leave the other answering and the case green. Pinned on the
+      // index, it goes red when the index is dropped, and the zero-length case above
+      // goes red when the trigger's refusal is removed. One case each, rather than two
+      // cases covering the union of both.
+      //
+      // The index is bare `IS NOT NULL` on this table specifically because there is no
+      // DCC shape to exempt, so the two agree here and deliberately do not on
+      // `cell_attendance`.
+      const event = await db
+        .insertInto('dcc_events')
+        .values({ event_date: '2026-08-30' })
+        .returning('id')
+        .executeTakeFirstOrThrow();
+
+      const CORRECTED_AT = new Date('2026-08-31T09:00:00+08:00');
+      const account = await anAccount();
+      const successorId = randomUUID();
+      const predecessor = await db
+        .insertInto('dcc_attendance')
+        .values({
+          dcc_event_id: event.id,
+          person_id: leader.id,
+          present: true,
+          recorded_by: account,
+          recorded_at: new Date('2026-08-31T08:00:00+08:00'),
+        })
+        .returning('id')
+        .executeTakeFirstOrThrow();
+
+      await db.transaction().execute(async (trx) => {
+        await trx
+          .updateTable('dcc_attendance')
+          .set({ superseded_at: CORRECTED_AT, superseded_by: successorId })
+          .where('id', '=', predecessor.id)
+          .execute();
+
+        await trx
+          .insertInto('dcc_attendance')
+          .values({
+            id: successorId,
+            dcc_event_id: event.id,
+            person_id: leader.id,
+            present: false,
+            recorded_by: account,
+            version: 2,
+            recorded_at: CORRECTED_AT,
+          })
+          .execute();
+      });
+
+      await expect(
+        db
+          .updateTable('dcc_attendance')
+          .set({ superseded_at: new Date('2026-08-31T11:00:00+08:00'), superseded_by: successorId })
+          .where('id', '=', successorId)
+          .execute(),
+      ).rejects.toThrow(/dcc_attendance_one_successor/);
     });
 
     it('refuses two rows superseded onto one successor', async () => {
