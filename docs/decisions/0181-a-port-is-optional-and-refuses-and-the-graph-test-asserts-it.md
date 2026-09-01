@@ -1,11 +1,25 @@
 # 2026-09-01 — A port is optional and refuses, and the graph test asserts it is bound
 
 `CLAUDE.md` has carried this since 2026-08-30, and it says to settle it **before a
-second port is declared, because the answer should be the same for both**. The Cell
-meetings slice is what makes that due: `AttendanceModule` today imports no
-`CellsModule` and its docblock says it "touches no table it does not own", while
-§13 needs the Cell's schedule, its leadership as of a date, its membership as of a
-date, and its closure state — four questions `cells` owns.
+second port is declared, because the answer should be the same for both**. That
+trigger has not fired. It is settled anyway, because a second port is not what makes
+it due — **two ports already exist and nothing asserts either is bound.**
+
+*The first version of this ruling said the Cell meetings slice forces it: that
+`AttendanceModule` imports no `CellsModule`, so §13's four questions about a Cell —
+the schedule, the leadership and membership as of a date, and the closure state —
+would have to arrive through a new port. That is false, and the check that refutes it
+is one command. A port is what §2 reserves for a dependency that **would be a cycle**;
+`networks → cells` is one, because `cells` imports `NetworksModule`. Nothing imports
+`AttendanceModule` except `AppModule`, `CellsModule` imports no attendance, and
+`CellsModule` already exports `CellsReadService` for exactly this. So the Cell meetings
+slice imports `CellsModule` and calls that service, which is §2's ordinary rule for
+cross-module access, and it declares no port at all.*
+
+*The absence of the import was read as evidence that a port was needed, when it only
+meant nothing had needed the module yet. That is a claim about structure written from
+the two ports already in view rather than from the module graph — the defect this log
+keeps recording, in the ruling meant to spare the next reader from re-deriving anything.*
 
 ## The question, as `cell-relationships.port.ts` states it
 
@@ -120,14 +134,22 @@ Point 3 is new. Points 1, 2, 4, 5 and 6 describe what the two existing ports do,
 down so the third does not re-derive them — decision 0100's rule, that reusing a shape
 requires re-deriving why it has that shape, discharged once here instead of at each port.
 
-## What this obliges the Cell meetings slice to do
+## What is owed now, with no new port in sight
 
-Declare its port into `cells` under these six points, and extend the graph test to
-assert that **all three** existing tokens resolve alongside the new one —
-`CELL_SCOPE_PORT`, `CELL_RELATIONSHIPS_PORT` and `EMAIL_PORT`. None is asserted today
-(`grep` finds no `_PORT` in `module-graph.spec.ts`), and the assertion is worth having
-for the adapter port too: mandatory injection catches it only when something constructs
-the consumer, which in a partial test graph may be nothing.
+**The graph test asserts that all three existing tokens resolve** —
+`CELL_SCOPE_PORT`, `CELL_RELATIONSHIPS_PORT` and `EMAIL_PORT`. None is asserted today:
+`grep` finds no `_PORT` in `module-graph.spec.ts`. That is the live half of this ruling
+and the reason it is worth making before a fourth port exists, since two optional
+injections are currently held up by nothing that fails.
+
+The assertion is worth having for the adapter port too. Mandatory injection catches an
+unbound token only when something constructs the consumer, which in a partial test graph
+may be nothing — the same "no such graph exists yet" that made the mandatory case look
+safe above.
+
+It lands with the first slice that touches the application's wiring, which is the Cell
+meetings listing. **That slice declares no port**, and this ruling does not ask it to:
+it imports `CellsModule` and calls `CellsReadService`, on §2's ordinary terms.
 
 ---
 

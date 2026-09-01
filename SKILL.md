@@ -144,7 +144,9 @@ Principle 13 requires a modular monolith. These are the modules, and the list is
 
 The exemption is deliberately narrow and the asymmetry is the point. A write is what an invariant guards, so the five pastoral-assignment rules have one home only while `hierarchy` is the sole writer of `pastoral_assignments`. A join reads rows the owning module would have returned anyway and changes nothing.
 
-**Where the dependency would be a cycle, it is inverted through a port, and such a port is optional and refuses** (ruling of 2026-09-01). The consuming module declares the interface it needs, the owning module implements it, and a binding module joins the two — which is what keeps this section's dependency direction acyclic where two modules each need something the other owns.
+**Where the dependency would be a cycle, and only there, it is inverted through a port — and such a port is optional and refuses** (ruling of 2026-09-01). The consuming module declares the interface it needs, the owning module implements it, and a binding module joins the two — which is what keeps this section's dependency direction acyclic where two modules each need something the other owns.
+
+**A dependency that is not a cycle takes the ordinary route above: import the owning module and call its service interface.** Stated because the distinction is easy to lose — a module that does not yet import another looks like one that cannot, and a port declared where a plain import would do adds an indirection, a binding module and a fail-closed branch for nothing. Check the direction before reaching for a port.
 
 An **inversion** port is injected optionally, and the operation **refuses** when it is unbound rather than skipping the check: a fail-open reading turns a wiring fault into a silent hole in whatever rule the port was answering. The process still starts, so an unbound inversion port costs one operation rather than the whole application, which is the reading Section 7 already gives for an *absent* configuration value as against a malformed one.
 
