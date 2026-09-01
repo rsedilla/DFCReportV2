@@ -72,6 +72,42 @@ export class CellsReadService implements CellScopePort, CellRelationshipsPort {
     return this.leaderForScopeWithin(this.db, cellId);
   }
 
+  /**
+   * A Cell's identity and lifecycle, or null where no such Cell exists.
+   *
+   * **For a caller in another module** (SKILL.md section 2): `cells` owns the table,
+   * so `attendance` asks this rather than selecting from `cells` itself. It returns
+   * the handle a person recognises alongside the UUID, because a response naming a
+   * Cell names it as `CELL-000000` (section 10) while every path and foreign key uses
+   * the UUID.
+   *
+   * `state` and `closed_at` come with it because section 13's rules about recording
+   * against a closed Cell are stated in terms of both: a closed Cell still takes a
+   * record for a meeting it held until that month's window shuts, and a meeting dated
+   * after the closure is refused. The caller that needs those is the one that records;
+   * the listing uses the identity alone, and taking one query rather than two is why
+   * they are returned together.
+   *
+   * No scope check. Section 7 resolves `cell.take_attendance` and the other
+   * Cell-targeted capabilities against the Cell in the guard, so a caller reaching a
+   * service method has already been placed; a second check here would be the guard's
+   * decision made twice, in the layer decision 0062 assigns the rest of the work to.
+   */
+  async cellById(
+    executor: Db | Transaction<Database>,
+    cellId: string,
+  ): Promise<{ id: string; cellId: string; state: string; closedAt: Date | null } | null> {
+    const row = await executor
+      .selectFrom('cells')
+      .select(['id', 'cell_id', 'state', 'closed_at'])
+      .where('id', '=', cellId)
+      .executeTakeFirst();
+
+    return row
+      ? { id: row.id, cellId: row.cell_id, state: row.state, closedAt: row.closed_at }
+      : null;
+  }
+
   async leaderForScopeWithin(
     executor: Db | Transaction<Database>,
     cellId: string,

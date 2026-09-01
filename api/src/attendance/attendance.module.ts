@@ -3,9 +3,12 @@ import { Module } from '@nestjs/common';
 import { AuditModule } from '../audit/audit.module';
 import { AuthModule } from '../auth/auth.module';
 import { AuthorizationModule } from '../auth/authorization/authorization.module';
+import { CellsModule } from '../cells/cells.module';
 import { HierarchyModule } from '../hierarchy/hierarchy.module';
 import { PeopleModule } from '../people/people.module';
 
+import { CellMeetingsController } from './cell-meetings.controller';
+import { CellMeetingsService } from './cell-meetings.service';
 import { DccAttendanceService } from './dcc-attendance.service';
 import { DccCalendarService } from './dcc-calendar.service';
 import { DccController } from './dcc.controller';
@@ -35,9 +38,16 @@ import { DccController } from './dcc.controller';
  * rather than on authorization, and a reader is entitled to know it was deliberate.
  */
 @Module({
-  imports: [HierarchyModule, PeopleModule, AuthModule, AuthorizationModule, AuditModule],
-  controllers: [DccController],
-  providers: [DccCalendarService, DccAttendanceService],
+  imports: [
+    HierarchyModule,
+    PeopleModule,
+    AuthModule,
+    AuthorizationModule,
+    AuditModule,
+    CellsModule,
+  ],
+  controllers: [DccController, CellMeetingsController],
+  providers: [DccCalendarService, DccAttendanceService, CellMeetingsService],
   exports: [DccCalendarService],
 })
 export class AttendanceModule {}
