@@ -144,6 +144,14 @@ Principle 13 requires a modular monolith. These are the modules, and the list is
 
 The exemption is deliberately narrow and the asymmetry is the point. A write is what an invariant guards, so the five pastoral-assignment rules have one home only while `hierarchy` is the sole writer of `pastoral_assignments`. A join reads rows the owning module would have returned anyway and changes nothing.
 
+**Where the dependency would be a cycle, it is inverted through a port, and such a port is optional and refuses** (ruling of 2026-09-01). The consuming module declares the interface it needs, the owning module implements it, and a binding module joins the two — which is what keeps this section's dependency direction acyclic where two modules each need something the other owns.
+
+An **inversion** port is injected optionally, and the operation **refuses** when it is unbound rather than skipping the check: a fail-open reading turns a wiring fault into a silent hole in whatever rule the port was answering. The process still starts, so an unbound inversion port costs one operation rather than the whole application, which is the reading Section 7 already gives for an *absent* configuration value as against a malformed one.
+
+An **adapter** port — one that exists to swap an implementation, where the owning module ships a default binding — stays mandatory. The difference is what an absent binding means: for an adapter it means the owning module was not imported at all, which is a build fault with no operation to degrade, since every caller needs it.
+
+Because an optional injection cannot fail at startup, the application's module-graph test asserts that every port token resolves, and each inversion port has one case exercising its unbound refusal — that branch is unreachable through a normally built application, so nothing else can reach it. Both are required of a port rather than left to whoever writes the next one.
+
 **This was stated as “reads or writes” and the code never matched it.** `people.module.ts` narrowed the rule in a comment when the module was split, on the reasoning that a rule stated more strongly than the code keeps stops being checkable — which is right about the danger and wrong about the remedy. Narrowing a rule in one module's comment leaves every other module to find that comment or not, and a reviewer to discover that the specification and the code disagree. The rule is narrowed here instead, where it is the rule.
 
 This is what makes "enforced in the domain layer" a statement rather than a hope. The five pastoral-assignment invariants (Section 5) have exactly one place to live because `hierarchy` is the only writer of `pastoral_assignments`. Where four modules write a table, an invariant needs checking in four places, and the fourth is the one somebody forgets — which is also why those invariants carry database constraints as a backstop.
@@ -1939,6 +1947,8 @@ A version sent for a person with no record is **not** a `VERSION_CONFLICT`: ther
 
 DCC attendance for a calendar month may be recorded or corrected until the end of the 7th of the following month, Asia/Manila — the same close as Cell attendance (Section 13), where the boundary is stated and given its reason. After that the month is closed, and only Admin may amend it, using `records.backdate_effective_date` (Section 7), with a reason, audit logged, and invalidating that month's stored figures (Section 20).
 
+**The amendment is a flag on `POST /api/v1/dcc/events/{id}/submit`**, on the terms Section 13 states for the Cell route: the capability is required in addition to `dcc.take_attendance` rather than in place of it, a reason is required, an audit entry names it, and absent the flag a closed month refuses for an Admin too. One shape across both domains, because an amendment is a submission with a different precondition and nothing else.
+
 DCC coverage is shaped differently from Cell coverage. A Cell has one leader and its coverage counts recorded meetings out of scheduled meetings. A DCC event is church-wide, and many leaders each record their own people, so DCC coverage counts **how many responsible leaders have a record for the event**, not how many events exist. It measures whether the record exists, never who entered it — a submission made on behalf, or by an upline standing in for a leader who holds no account (below), completes that leader's coverage.
 
 Report that figure at every scope, as a single line, on the same terms as Cell coverage: factual, no ranking of leaders by it, and no derived score (Section 13).
@@ -2970,6 +2980,12 @@ Attendance for a calendar month may be recorded or corrected until the **end of 
 
 Once closed, unreported meetings remain permanently unreported and outside the denominator, and coverage for that month is frozen. Only Admin may amend a closed month, using `records.backdate_effective_date` (Section 7), with a reason, audit logged (Section 21), and invalidating that month's stored figures (Section 20).
 
+**The amendment is a flag on the submission route, not a route of its own** (ruling of 2026-09-01). `POST /api/v1/cells/{id}/meetings/{meeting_id}/submit` takes an optional amendment object carrying the reason; absent, the route behaves exactly as it does for an open month. Everything an amendment does is what a submission does — the roster, the per-line rules, the version check, the all-or-nothing rule, the idempotency obligations of Section 22 — and only *when* it is allowed and *who* may do it differ. A second route would have to stay behaviourally identical to this one forever.
+
+The flag skips the window check and nothing else. `records.backdate_effective_date` is required **in addition to** `cell.take_attendance` resolved against the Cell, so an amendment widens *when* and never *what* or *whose*. Absent the flag a closed month refuses for an Admin too, so a retry that happens to arrive after the 7th never rewrites a closed period by accident.
+
+What "invalidating that month's stored figures" obliges this route to do is **nothing**: Section 20 asks that each stored figure be keyed to a version of the source records it derives from rather than that each write path enumerate what it dirties. The obligation is the snapshot's, and it is stated where the snapshots are.
+
 Before close, outstanding records are surfaced in two distinct ways, and they must not be confused.
 
 **Every leader sees their own outstanding work**, always, on their dashboard: meetings awaiting a record appear as tasks with the action attached (Section 19). This is not a notification and is not limited to anyone; it is simply the leader's own list.
@@ -3132,7 +3148,11 @@ At most one non-superseded row may exist per `(cell_meeting_id, person_id)`. Enf
 
 `superseded_by` holds the id of the row that replaced this one, not an actor. The actor is `recorded_by` on the successor.
 
-**A record closed with nothing replacing it is the one case where it holds neither**, and this section is where that case arises: a `RESCHEDULED` meeting later declared `NOT_HELD` keeps both records, and a `NOT_HELD` meeting carries no attendance — so its attendance rows are closed and nothing succeeds them. The columns are declared as a pair, so such a row names itself. That is a workaround rather than a design, and what shape the operation should take is open.
+**A record closed with nothing replacing it names itself**, and this section is where that case arises: a `RESCHEDULED` meeting later declared `NOT_HELD` keeps both records, and a `NOT_HELD` meeting carries no attendance — so its attendance rows are closed and nothing succeeds them. `superseded_at` is set and `superseded_by` is the row's own id.
+
+That is the idiom rather than a workaround, and it is the only shape permitted here (ruling of 2026-09-01). A null `superseded_by` would mean relaxing `cell_attendance_supersession_is_whole` from an equivalence to a one-way implication, and that equivalence is what three other things lean on — the deferred foreign key's guarantee that a successor exists, the contiguity trigger's right to assume a row it can look up, and Section 9's argument that a live row exists for a person once one ever has. It would also leave a nullable column with two null cases, *not superseded* and *superseded by nothing*, told apart only by a second column, which is a shape no constraint can stop a query getting wrong.
+
+Both constraints that meet it carry the exemption by name, and on this table only: the contiguity trigger returns early for a self-reference, and `cell_attendance_one_successor` excludes it with `superseded_by <> id`. Without that second clause the index refuses this path for any record already corrected once — the predecessor's pointer and the successor's self-reference are then the same value — which is a distinction this section does not draw. `dcc_attendance` refuses the shape outright, because Section 9 has no operation that produces it.
 
 A correction never overwrites in place. The prior row is marked superseded and a new row written; `version` detects a concurrent write (Section 14) and is not a history mechanism. An `UPDATE` plus an audit row does not satisfy Principle 12 — the record must carry its own history, and a shape offering only one mutable row per person per meeting cannot.
 
@@ -3636,6 +3656,8 @@ Stored figures are invalidated and recomputed whenever the records they derive f
 
 Prefer not to enumerate these in code at all. Key each stored figure to a version of the source records it derives from, and treat any change to those records as invalidating.
 
+**That sentence is an obligation on the snapshot, not on the write paths above, and the ruling of 2026-09-01 settled it that way.** The closed-month amendment therefore invalidates nothing itself and needs no code for the clause Sections 9 and 13 state — the amendment was built in Stage 4, before `report_snapshots` existed, and satisfies that clause permanently rather than vacuously because there is nothing for a write path to do. What this requires instead is that a snapshot built here derives its key from its source records. A snapshot that enumerated its invalidators would have to be found and edited every time a new write path touched attendance, which is the failure the sentence above exists to prevent.
+
 ```text
 report_snapshots
 - id
@@ -3805,7 +3827,7 @@ GET  /api/v1/leaders/{id}/descendants
 GET  /api/v1/leaders/{id}/summary
 
 GET  /api/v1/dcc/events/{id}/roster
-POST /api/v1/dcc/events/{id}/submit
+POST /api/v1/dcc/events/{id}/submit       an Admin amendment is a flag on this, not a route
 
 POST /api/v1/cells                       direct creation, initial encoding only
 
@@ -3823,7 +3845,8 @@ POST /api/v1/cells/{id}/members            add, or move from another Cell
 DELETE /api/v1/cells/{id}/members/{person_id}  ends the membership
 GET  /api/v1/cells/{id}/meetings
 GET  /api/v1/cells/{id}/meetings/{meeting_id}/roster   who to record, for this meeting
-POST /api/v1/cells/{id}/meetings/{meeting_id}/submit   {meeting_id} is the scheduled date
+POST /api/v1/cells/{id}/meetings/{meeting_id}/submit   {meeting_id} is the scheduled date;
+                                                       an Admin amendment is a flag on this
 
 GET  /api/v1/reports/dcc/monthly
 GET  /api/v1/reports/dcc/yearly
