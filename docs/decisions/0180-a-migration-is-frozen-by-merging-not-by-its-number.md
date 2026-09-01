@@ -210,4 +210,4 @@ exemption widened back to both tables, and each index in turn not created.
 
 Decision 0180, indexed in [CLAUDE.md](../../CLAUDE.md).
 
-Previous: [2026-08-31 — A symmetry that was not there, and the index a claim needed](0179-a-symmetry-that-was-not-there-and-the-index-a-claim-needed.md)
+Previous: [2026-08-31 — A symmetry that was not there, and the index a claim needed](0179-a-symmetry-that-was-not-there-and-the-index-a-claim-needed.md) | Next: [2026-09-01 — A port is optional and refuses, and the graph test asserts it is bound](0181-a-port-is-optional-and-refuses-and-the-graph-test-asserts-it.md)
