@@ -176,9 +176,20 @@ export class CellsReadService implements CellScopePort, CellRelationshipsPort {
       .where(
         sql<boolean>`(ended_at IS NULL OR (ended_at AT TIME ZONE 'Asia/Manila')::date >= ${on}::date)`,
       )
-      // The three keys `leaderForScopeWithin` documents and settles on. A day-granular
-      // comparison can match two rows where a handover happened that day, and the
-      // later-starting one is the leader the meeting belongs to.
+      // The three keys `leaderForScopeWithin` documents and settles on.
+      //
+      // **On a handover day this ordering decides something nobody decided**, and it is
+      // recorded as open in `CLAUDE.md` rather than defended here. A date comparison
+      // matches both the outgoing and the incoming row, and `started_at DESC` then
+      // takes the incoming one — wrong whenever the handover was recorded after the
+      // meeting took place. An earlier version of this comment stated that choice as
+      // the rule ("the later-starting one is the leader the meeting belongs to"): a
+      // tie-break inherited for a different purpose, presented as a domain answer.
+      //
+      // It is not only a scope question. `CellMeetingsService.submit` calls this to
+      // decide the `responsible_leader_id` it then **freezes**, and section 13 makes
+      // that the leader a meeting rolls up to for sections 12 and 20 — so the tie-break
+      // silently decides reporting attribution, permanently.
       .orderBy('started_at', 'desc')
       .orderBy('ended_at', (ob) => ob.desc().nullsFirst())
       .orderBy('id', 'desc')

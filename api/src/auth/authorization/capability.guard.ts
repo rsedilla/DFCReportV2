@@ -13,6 +13,7 @@ import {
   ValidationFailedError,
 } from '../../common/errors/api-error';
 import { isUuid, NIL_UUID } from '../../common/identifiers';
+import { isCalendarDate } from '../../common/time/manila';
 
 import {
   AUTHENTICATED_ONLY_METADATA,
@@ -183,8 +184,16 @@ export class CapabilityGuard implements CanActivate {
       // the port and be compared as a `date` in SQL, answering with a database error
       // rather than a refusal — and it decides *authority*, so a value the guard
       // cannot read is one it must not guess at.
+      //
+      // **`isCalendarDate` rather than a shape regex, and the first version was the
+      // regex.** `2026-09-31`, `2026-02-30`, `2026-13-05` and `2026-09-99` all satisfy
+      // `\d{4}-\d{2}-\d{2}`, and PostgreSQL answers each with `22008`, which no filter
+      // here recognises — so the paragraph above described the defect it was written
+      // beside. Because this runs *before* `authorize`, any authenticated caller
+      // reached it, and the 500 arrived only for a closed Cell in an open month, which
+      // made it an oracle for that state.
       const on = readPath(request, spec.onFrom);
-      if (typeof on !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(on)) {
+      if (typeof on !== 'string' || !isCalendarDate(on)) {
         throw new ValidationFailedError(
           `${spec.onFrom} must be a YYYY-MM-DD date identifying the meeting.`,
           { field: spec.onFrom },

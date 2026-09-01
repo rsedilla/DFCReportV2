@@ -143,14 +143,19 @@ export class CellMeetingsService {
    * section 13 states: "a meeting with no responsible leader is a record nothing rolls
    * up".
    *
-   * *One gap is inherited rather than introduced, and it is section 7's.* A read
-   * against a **closed** Cell resolves scope through its last leader, which section 7
-   * gives as the general rule for a read — but section 7 also carves out a per-record
-   * exception for a meeting whose window is still open, resolving through whoever led
-   * on the meeting's date, so that a Cell handed from A to B and then closed does not
-   * show A the task while denying A the write. The guard's port is undated today and
-   * `cell-scope.port.ts` says so in terms. It binds the recording path rather than this
-   * read, and it is settled with the closed-Cell slice.
+   * **Scope is resolved per record by the guard, not here.** Section 7 places a Cell
+   * meeting through whoever led the Cell on the meeting's date once the Cell is closed
+   * and the month's window is open, and `CELL_SCOPE_PORT.leaderForMeetingScope` does
+   * that. *An earlier version of this paragraph described that as an unclosed gap "settled
+   * with the closed-Cell slice" — this is that slice, and the paragraph outlived the
+   * gap by one commit.*
+   *
+   * What is **not** settled, and is open in `CLAUDE.md`: on an ACTIVE Cell the guard
+   * resolves through the current leader, which section 13 states as the rule for a
+   * *write* while giving a read "the leader as of the period being viewed". This route
+   * is a read, so a leader who handed on an active Cell is refused the roster of a
+   * meeting section 13 appears to place in their scope. Section 7 bundles this read
+   * with the write it serves and section 13 splits them; nothing says which wins.
    */
   async rosterFor(cellId: string, meetingId: string): Promise<Record<string, unknown>> {
     const cell = await this.cells.cellById(this.db, cellId);

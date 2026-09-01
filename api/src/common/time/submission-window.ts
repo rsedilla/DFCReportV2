@@ -1,6 +1,6 @@
 import { sql } from 'kysely';
 
-import { manilaDayOf, startOfManilaDay } from './manila';
+import { isCalendarDate, manilaDayOf, startOfManilaDay } from './manila';
 
 import type { Db } from '../../database/database.module';
 import type { Database } from '../../database/schema';
@@ -27,14 +27,23 @@ import type { Transaction } from 'kysely';
  * the wrong one.
  */
 
-/** The first day of the Manila calendar month a date-only day falls in. */
+/**
+ * The first day of the Manila calendar month a date-only day falls in.
+ *
+ * **`isCalendarDate` rather than a shape check**, so a day that does not exist is
+ * refused here rather than turned into a plausible month. The shape check this
+ * replaced accepted `2026-13-05` and answered `2026-13-01`, which `windowClosesAt`
+ * then rolled through `Date.UTC` into a real instant — so an impossible month
+ * reported an open window instead of refusing, and every caller downstream believed
+ * it. Refusing at the first function that reads the value keeps the error where a
+ * reader can attribute it.
+ */
 export function reportingMonthOf(day: string): string {
-  const match = /^(\d{4})-(\d{2})-\d{2}$/.exec(day);
-  if (match === null) {
+  if (!isCalendarDate(day)) {
     throw new Error(`"${day}" is not a YYYY-MM-DD date.`);
   }
 
-  return `${match[1]}-${match[2]}-01`;
+  return `${day.slice(0, 7)}-01`;
 }
 
 /**

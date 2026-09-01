@@ -173,16 +173,24 @@ describe('a closed Cell meeting resolves per record (section 7)', () => {
   });
 
   it('lets the leader of the day record their own meeting, on a closed Cell', async () => {
-    // The write, which is what section 7's exception exists for: "a closed Cell has no
-    // current leader and the record would otherwise be unfilable."
+    // **The write, which is what section 7's exception exists for**: "a closed Cell has
+    // no current leader and the record would otherwise be unfilable."
+    //
+    // It asserts a 201 rather than a refusal, and the first version did not — it sent
+    // an invalid `not_held_reason` and asserted 422, on the reasoning that a 422 rather
+    // than a 403 showed the guard had let it through. It does not: the guard's own date
+    // refusal is `VALIDATION_FAILED`, which is also 422, so the status could not
+    // distinguish the layer it claimed to. Worse, it left the write half of section 7's
+    // exception never once demonstrated to work — the thing the whole branch is for.
     const response = await submit(marksMeeting, markAccount, {
       status: 'NOT_HELD',
-      not_held_reason: 'MEMBERS_DISPERSED_OR_OTHER',
+      not_held_reason: 'NO_MEMBERS_AVAILABLE',
     });
 
-    // The reason is not in section 13's fixed list, so this is a 422 from the DTO
-    // rather than a 403 from the guard — which is the point: the guard let it through.
-    expect(response.status).toBe(422);
+    expect(response.status).toBe(201);
+    expect(response.body.status).toBe('NOT_HELD');
+    // Frozen to the leader of the day, not to the Cell's last leader (section 13).
+    expect(response.body.responsible_leader_id).toBe(mark.id);
   });
 
   it('refuses the leader of the day once that month has shut', async () => {
@@ -257,6 +265,30 @@ describe('a closed Cell meeting resolves per record (section 7)', () => {
 
     expect(response.status).toBe(403);
   });
+
+  it.each(['2026-09-31', '2026-02-30', '2026-13-05', '2026-09-99'])(
+    'refuses %s, which has the shape of a date and is not one',
+    async (impossible) => {
+      // **A shape check is not a date check, and the difference was a 500.** Each of
+      // these satisfies `\d{4}-\d{2}-\d{2}`, which is what the guard checked first;
+      // PostgreSQL answers each with `22008 date/time field value out of range`, which
+      // no error filter here recognises. So the value passed the guard, reached
+      // `::date` in `leaderOnDateWithin`, and answered `INTERNAL_ERROR`.
+      //
+      // Two things made it worse than an ordinary 500. It happened in `resolveTarget`,
+      // **before** `authorize`, so an authenticated caller holding no capability at all
+      // reached it. And it only happened for a closed Cell in an open month — an ACTIVE
+      // Cell returns before the cast — so the status was an oracle for that state.
+      //
+      // The case below passes `not-a-date`, which the shape check already refused, so
+      // it could never have found this. These are the values that separate the two
+      // checks.
+      const response = await roster(impossible, markAccount);
+
+      expect(response.status).toBe(422);
+      expect(response.body.error.code).toBe('VALIDATION_FAILED');
+    },
+  );
 
   it('refuses a meeting date that is not a date', async () => {
     // The guard resolves against this parameter, so section 7 requires the route to

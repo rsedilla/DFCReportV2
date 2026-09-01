@@ -93,6 +93,49 @@ export function manilaDayOf(instant: Date): string {
  * the day, which Asia/Manila has not had since 1978 and which this does not
  * assume.
  */
+/**
+ * Whether a string is a `YYYY-MM-DD` date that **exists** (SKILL.md section 20).
+ *
+ * **A shape check is not a date check, and the difference is a 500.** `2026-09-31`,
+ * `2026-02-30` and `2026-13-05` all satisfy `\d{4}-\d{2}-\d{2}` and none of them is a
+ * day. PostgreSQL refuses each with `22008 date/time field value out of range`, which
+ * no error filter here recognises — so a value that passes a shape check and reaches a
+ * `::date` cast answers `INTERNAL_ERROR` rather than a refusal, on a documented path
+ * parameter.
+ *
+ * That is not hypothetical: the capability guard's first version of the Cell-meeting
+ * target validated the shape, said in its own comment that a malformed value "would
+ * reach the port and be compared as a `date` in SQL, answering with a database error
+ * rather than a refusal", and then admitted four such values. Because the guard runs
+ * before `authorize`, any authenticated caller reached it — and the 500 arrived only
+ * for a closed Cell in an open month, which made it an oracle for that state.
+ *
+ * **Round-tripped rather than range-checked**, so leap years need no special case:
+ * `Date.UTC` normalises an impossible day into the following month, and a component
+ * that comes back changed is one that did not exist. Month `13` rolls the year, day
+ * `00` rolls the month, and both are caught by the same comparison.
+ *
+ * It says nothing about zones — a calendar date is the same date everywhere, and the
+ * zone matters only once it becomes an instant, which is `startOfManilaDay`'s job.
+ */
+export function isCalendarDate(value: string): boolean {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (match === null) {
+    return false;
+  }
+
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const probe = new Date(Date.UTC(year, month - 1, day));
+
+  return (
+    probe.getUTCFullYear() === year &&
+    probe.getUTCMonth() === month - 1 &&
+    probe.getUTCDate() === day
+  );
+}
+
 export function startOfManilaDay(day: string): Date {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(day);
   if (match === null) {
