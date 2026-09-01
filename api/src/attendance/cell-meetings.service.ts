@@ -1,7 +1,7 @@
 import { Injectable, Inject } from '@nestjs/common';
 import { sql } from 'kysely';
 
-import { NotFoundError } from '../common/errors/api-error';
+import { InvariantViolationError, NotFoundError } from '../common/errors/api-error';
 import { DATABASE, type Db } from '../database/database.module';
 
 import { reportingMonthOf } from './submission-window';
@@ -95,6 +95,104 @@ export class CellMeetingsService {
       scheduled_count: meetings.length,
       recorded_count: meetings.filter((entry) => entry.meeting !== null).length,
       meetings,
+    };
+  }
+
+  /**
+   * Who there is to record for one meeting (SKILL.md sections 12, 13 and 22).
+   *
+   * `meetingId` is the meeting's **scheduled date**, which section 13 makes its
+   * identity: "A reschedule moves `actual_date` and leaves `scheduled_date` alone, so
+   * the identity survives it." The date is derivable from the Cell's schedule before
+   * any row exists, which is what a client listing meetings awaiting a record needs,
+   * and it means a retry names the same meeting.
+   *
+   * **The roster comes from the date the meeting took place**, which section 12 states
+   * and section 13 repeats: `actual_date` where the meeting was rescheduled, and the
+   * scheduled date otherwise. Membership can change between the two, and the roster
+   * should be the people who could actually have been there. The meeting still reports
+   * in its original month; only the roster follows the actual date.
+   *
+   * The responsible leader is read at that **same** instant, which section 13 requires
+   * in terms: "the leader and the people are read at one instant rather than two".
+   *
+   * **A meeting the schedule does not derive is not a meeting.** Section 13 identifies
+   * a meeting by `(cell_id, scheduled_date)` and derives the scheduled set from the
+   * Cell's own schedule, so a date the Cell was not scheduled to meet on names nothing
+   * — and answering a roster for it would invent a meeting the coverage denominator
+   * does not count.
+   *
+   * **A meeting the Cell had no leader on is refused rather than defaulted**, which
+   * section 13 states: "a meeting with no responsible leader is a record nothing rolls
+   * up".
+   *
+   * *One gap is inherited rather than introduced, and it is section 7's.* A read
+   * against a **closed** Cell resolves scope through its last leader, which section 7
+   * gives as the general rule for a read — but section 7 also carves out a per-record
+   * exception for a meeting whose window is still open, resolving through whoever led
+   * on the meeting's date, so that a Cell handed from A to B and then closed does not
+   * show A the task while denying A the write. The guard's port is undated today and
+   * `cell-scope.port.ts` says so in terms. It binds the recording path rather than this
+   * read, and it is settled with the closed-Cell slice.
+   */
+  async rosterFor(cellId: string, meetingId: string): Promise<Record<string, unknown>> {
+    const cell = await this.cells.cellById(this.db, cellId);
+    if (cell === null) {
+      throw new NotFoundError('No such Cell.', { cell_id: cellId });
+    }
+
+    const scheduled = await this.scheduledDatesIn(cellId, reportingMonthOf(meetingId));
+    const entry = scheduled.find((candidate) => candidate.scheduledDate === meetingId);
+    if (entry === undefined) {
+      throw new NotFoundError('This Cell was not scheduled to meet on that date.', {
+        cell_id: cellId,
+        meeting_id: meetingId,
+      });
+    }
+
+    const recorded =
+      (await this.recordedIn(cellId, reportingMonthOf(meetingId))).get(meetingId) ?? null;
+
+    // Section 12: the roster follows the actual date where the meeting moved.
+    const rosterDate =
+      recorded !== null && typeof recorded.actual_date === 'string'
+        ? recorded.actual_date
+        : meetingId;
+
+    const responsibleLeaderId =
+      recorded === null
+        ? await this.cells.leaderOnDateWithin(this.db, cellId, rosterDate)
+        : (recorded.responsible_leader_id as string);
+
+    if (responsibleLeaderId === null) {
+      throw new InvariantViolationError(
+        'This Cell had no leader on that date, so a meeting cannot be recorded for it ' +
+          '(SKILL.md section 13).',
+        { cell_id: cellId, meeting_id: meetingId },
+      );
+    }
+
+    const members = await this.cells.membersAsOfWithin(this.db, cellId, rosterDate);
+
+    return {
+      cell_id: cell.cellId,
+      meeting_id: meetingId,
+      scheduled_date: entry.scheduledDate,
+      scheduled_time: entry.scheduledTime,
+      week_starting: entry.weekStarting,
+      reporting_month: reportingMonthOf(meetingId),
+      // The date the roster was read at, stated rather than left to be inferred: it is
+      // the actual date for a rescheduled meeting and the scheduled one otherwise, and
+      // a client showing "who was there" needs to know which.
+      roster_date: rosterDate,
+      responsible_leader_id: responsibleLeaderId,
+      meeting: recorded,
+      members: members.map((member) => ({
+        person_id: member.personId,
+        member_id: member.memberId,
+        first_name: member.firstName,
+        last_name: member.lastName,
+      })),
     };
   }
 

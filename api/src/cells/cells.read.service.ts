@@ -73,6 +73,111 @@ export class CellsReadService implements CellScopePort, CellRelationshipsPort {
   }
 
   /**
+   * The people who were members of this Cell on a given Manila **date**.
+   *
+   * Section 12: "The roster for a meeting is exactly the people holding an active
+   * membership of that Cell on the meeting date." Distinct from `membersOfWithin`
+   * above, which answers who is a member *now* and is what a closure has to be decided
+   * against; this answers who was one then, and a meeting recorded a week late must
+   * get the same answer as one recorded on the night.
+   *
+   * **Compared as dates rather than as instants, and that is section 13's rule rather
+   * than a convenience.** A membership row is in force over `[started_at, ended_at)`
+   * and a closure ends every one of them *on* the closure date — so a meeting on that
+   * date would fall outside every row and find an empty roster. Section 13: "For a
+   * meeting's own lookups, and only those, the closure instant is read as the end of
+   * that day", and it requires the leader lookup and this one to move together --
+   * "both halves or neither", because extending one alone gives a meeting a
+   * responsible leader and nobody to record present.
+   *
+   * The same comparison decides an ordinary membership that ends on the meeting day,
+   * and it counts the person. That is the reading section 12 invites -- "the people
+   * who could actually have been there" -- and it is the direction section 13 takes at
+   * every other boundary: a person who was in the room is recordable. What it is not
+   * is a rule anything states for an *ordinary* ending, so it travels with the
+   * creation-day question `CLAUDE.md` records rather than being asserted here.
+   */
+  /**
+   * Who led this Cell on a Manila **date**, or null where nobody did.
+   *
+   * The leadership half of the pair section 13 requires to move together with
+   * `membersAsOfWithin`: "the leader is the one who was leading when the Cell met, and
+   * the roster is the people who were members then... Both halves or neither."
+   * Extending one alone gives a meeting a responsible leader and nobody to record
+   * present, which is worse than refusing it.
+   *
+   * Distinct from `leaderAsOfWithin`, which takes an instant and is what a write inside
+   * a transaction asks. This takes a date, because a meeting is dated rather than
+   * timed for the purpose of these lookups, and because a closure ends the leadership
+   * row *on* the closure date — so an instant comparison finds nobody for a meeting the
+   * Cell held that day.
+   *
+   * Null is a real answer and section 13 makes it a refusal rather than a default: "a
+   * meeting with no responsible leader is a record nothing rolls up." Refusing is this
+   * method's caller's job; a read service answers questions.
+   */
+  async leaderOnDateWithin(
+    executor: Db | Transaction<Database>,
+    cellId: string,
+    on: string,
+  ): Promise<string | null> {
+    const row = await executor
+      .selectFrom('cell_leaderships')
+      .select('person_id')
+      .where('cell_id', '=', cellId)
+      .where(sql<boolean>`(started_at AT TIME ZONE 'Asia/Manila')::date <= ${on}::date`)
+      .where(
+        sql<boolean>`(ended_at IS NULL OR (ended_at AT TIME ZONE 'Asia/Manila')::date >= ${on}::date)`,
+      )
+      // The three keys `leaderForScopeWithin` documents and settles on. A day-granular
+      // comparison can match two rows where a handover happened that day, and the
+      // later-starting one is the leader the meeting belongs to.
+      .orderBy('started_at', 'desc')
+      .orderBy('ended_at', (ob) => ob.desc().nullsFirst())
+      .orderBy('id', 'desc')
+      .limit(1)
+      .executeTakeFirst();
+
+    return row?.person_id ?? null;
+  }
+
+  async membersAsOfWithin(
+    executor: Db | Transaction<Database>,
+    cellId: string,
+    on: string,
+  ): Promise<{ personId: string; memberId: string; firstName: string; lastName: string }[]> {
+    const rows = await executor
+      .selectFrom('cell_memberships')
+      .innerJoin('persons', 'persons.id', 'cell_memberships.person_id')
+      .select([
+        'cell_memberships.person_id as person_id',
+        'persons.member_id as member_id',
+        'persons.first_name as first_name',
+        'persons.last_name as last_name',
+      ])
+      .where('cell_memberships.cell_id', '=', cellId)
+      .where(
+        sql<boolean>`(cell_memberships.started_at AT TIME ZONE 'Asia/Manila')::date <= ${on}::date`,
+      )
+      .where(
+        sql<boolean>`(cell_memberships.ended_at IS NULL
+                      OR (cell_memberships.ended_at AT TIME ZONE 'Asia/Manila')::date >= ${on}::date)`,
+      )
+      // Section 22's roster order, the same key `GET /cells/{id}/members` pages by.
+      .orderBy('persons.last_name')
+      .orderBy('persons.first_name')
+      .orderBy('persons.member_id')
+      .execute();
+
+    return rows.map((row) => ({
+      personId: row.person_id,
+      memberId: row.member_id,
+      firstName: row.first_name,
+      lastName: row.last_name,
+    }));
+  }
+
+  /**
    * A Cell's identity and lifecycle, or null where no such Cell exists.
    *
    * **For a caller in another module** (SKILL.md section 2): `cells` owns the table,

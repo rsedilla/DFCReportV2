@@ -59,4 +59,32 @@ export class CellMeetingsController {
   ): Promise<Record<string, unknown>> {
     return this.meetings.meetingsIn(cellId, query.month);
   }
+
+  /**
+   * Who there is to record for this meeting (sections 12 and 13).
+   *
+   * `{meeting_id}` is a `YYYY-MM-DD` Manila date, not a UUID — section 13 identifies a
+   * meeting by its Cell and its scheduled date, and section 22 names the parameter
+   * `meeting_id` under the identifier convention while noting that the convention's
+   * canonicalization does not reach it: section 7 canonicalizes only a UUID-shaped
+   * value, so a date passes through untouched. The name is right for the day this
+   * route ever takes a UUID; what it is not is a demonstration of the rule working.
+   *
+   * **No `UuidParamPipe` on it, for that reason.** The guard resolves against the Cell
+   * rather than the meeting, so this parameter is one "the guard does not resolve
+   * against" — section 7 asks that such a parameter be validated by the route, and the
+   * validation a date needs is a date's, which the service applies when it derives the
+   * month.
+   */
+  @Get(':id/meetings/:meetingId/roster')
+  @RequiresCapability(Capability.CellTakeAttendance, {
+    kind: 'cell',
+    from: 'params.id',
+  })
+  async roster(
+    @Param('id', new UuidParamPipe('id')) cellId: string,
+    @Param('meetingId') meetingId: string,
+  ): Promise<Record<string, unknown>> {
+    return this.meetings.rosterFor(cellId, meetingId);
+  }
 }
