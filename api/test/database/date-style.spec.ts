@@ -48,7 +48,12 @@ import type { Database } from '../../src/database/schema';
  * Fixture data is invented (CLAUDE.md, Secrets).
  */
 describe('DateStyle is pinned by the connection, not inherited (SKILL.md section 24)', () => {
-  const url = process.env.TEST_DATABASE_URL ?? process.env.DATABASE_URL ?? '';
+  // `DATABASE_URL` alone, because `test/setup/env.ts` has already resolved the two:
+  // it copies `TEST_DATABASE_URL` into this one for the whole run where it is set, and
+  // falls back to it where it is not, which is what CI does. The `??` chain this
+  // replaced happened to be correct and was still the shape that failed four cases in
+  // `dcc-attendance.e2e.spec.ts` when written without the fallback.
+  const url = process.env.DATABASE_URL ?? '';
   const database = new URL(url).pathname.replace(/^\//, '');
 
   let admin: Client;

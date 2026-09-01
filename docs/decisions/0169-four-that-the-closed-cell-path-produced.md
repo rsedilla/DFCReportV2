@@ -105,4 +105,4 @@ symmetric case on Section 20, and no rule distinguished the two.
 
 Decision 0169, indexed in [CLAUDE.md](../../CLAUDE.md).
 
-Previous: [2026-08-31 — The closed-month back-fill is withdrawn](0168-the-closed-month-back-fill-is-withdrawn.md)
+Previous: [2026-08-31 — The closed-month back-fill is withdrawn](0168-the-closed-month-back-fill-is-withdrawn.md) | Next: [2026-08-31 — The submission window runs through the whole of the 7th](0170-the-submission-window-runs-through-the-whole-of-the-7th.md)

@@ -39,12 +39,18 @@ import type { CellRequestKind } from '../database/schema';
  * than an empty page. It is refused by the same code as the other two, because to a
  * client they are one condition — the server could not read the cursor.
  *
- * **This is the third keyset cursor in the repository**, after `people.controller.ts`
- * and `roster-cursor.ts`. They share the bound in `common/cursor.ts` and now the
- * refusal; whether the encode/decode pair should be generic there is on `CLAUDE.md`'s
- * open list, which is where an earlier version of this sentence said it was before it
- * was — the claim was made and never carried out, and a reader grepping for it found
- * nothing.
+ * **This is one of four keyset cursors, and one of the two that keep their own
+ * encode/decode pair.** The other two — `GET /api/v1/cells/{id}/members` and
+ * `GET /api/v1/dcc/events/{id}/roster` — page by the identical key and share
+ * `common/roster-cursor.ts` since decision 0174. This one and `people.controller.ts`
+ * do not: an instant and a UUID, against two names and a UUID, and this one needs the
+ * format predicate below that neither of the others does. All four share the bound in
+ * `common/cursor.ts` and the refusal.
+ *
+ * *Whether they should all be generic was on `CLAUDE.md`'s open list and is settled
+ * there — settled in the direction of sharing where the key is identical and not
+ * otherwise. An earlier version of this sentence said the question was recorded as open
+ * before it was, which is a claim a reader grepping for it found nothing behind.*
  */
 export interface LeadershipRequestCursor {
   requestedAt: string;

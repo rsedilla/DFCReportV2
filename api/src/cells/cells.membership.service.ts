@@ -20,7 +20,7 @@ import { NetworksService } from '../networks/networks.service';
 import { PeopleReadService } from '../people/people.read.service';
 
 import { CellsReadService } from './cells.read.service';
-import { decodeRosterCursor, encodeRosterCursor } from './roster-cursor';
+import { decodeRosterCursor, encodeRosterCursor } from '../common/roster-cursor';
 
 import type { CurrentClaim } from '../common/idempotency/current-idempotency.decorator';
 import type { Database } from '../database/schema';

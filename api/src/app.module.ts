@@ -18,6 +18,7 @@ import { HierarchyModule } from './hierarchy/hierarchy.module';
 import { NetworksModule } from './networks/networks.module';
 import { CELL_SCOPE_PORT } from './auth/authorization/cell-scope.port';
 import { CellRelationshipsBindingModule } from './cells/cell-relationships.binding.module';
+import { AttendanceModule } from './attendance/attendance.module';
 import { CellsModule } from './cells/cells.module';
 import { CellsReadService } from './cells/cells.read.service';
 import { PeopleModule } from './people/people.module';
@@ -58,6 +59,7 @@ import { PeopleModule } from './people/people.module';
     NetworksModule,
     PeopleModule,
     CellsModule,
+    AttendanceModule,
     CellRelationshipsBindingModule,
   ],
   controllers: [HealthController],

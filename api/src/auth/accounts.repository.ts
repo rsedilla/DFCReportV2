@@ -38,6 +38,37 @@ export class AccountsRepository {
     return row ?? null;
   }
 
+  /**
+   * Which of these people hold an account, whatever state it is in.
+   *
+   * **Holding an account, not being able to sign in.** Section 9 routes a DCC
+   * submission to "the nearest upline leader who does" hold one, and is explicit
+   * that a pending account can persist and that the covering arrangement must
+   * persist with it. So the question this answers is whether a row exists, and a
+   * `PENDING` account stops the upward walk exactly as an `ACTIVE` one does.
+   *
+   * That is uncomfortable and is deliberate: a leader whose account was minted and
+   * never activated becomes their own submitter and can file nothing. The remedy is
+   * provisioning (section 6), not a walk that quietly steps over a state somebody is
+   * supposed to fix — and a walk that skipped pending accounts would hide it.
+   *
+   * Here rather than in `attendance` because `auth` owns `accounts` (section 2), and
+   * the query is rooted in this table rather than in the caller's.
+   */
+  async personsHoldingAccounts(executor: Db, personIds: readonly string[]): Promise<Set<string>> {
+    if (personIds.length === 0) {
+      return new Set();
+    }
+
+    const rows = await executor
+      .selectFrom('accounts')
+      .select('person_id')
+      .where('person_id', 'in', [...personIds])
+      .execute();
+
+    return new Set(rows.map((row) => row.person_id));
+  }
+
   async recordLogin(id: string): Promise<void> {
     await this.db
       .updateTable('accounts')
