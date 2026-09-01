@@ -1227,7 +1227,7 @@ describe('DCC recording (sections 9 and 14)', () => {
       // interleaving is forced by the lock, so the case is the same on every run.
       const eventId = await createEvent(await recentSunday());
 
-      const holder = new Client({ connectionString: process.env.TEST_DATABASE_URL });
+      const holder = new Client({ connectionString: process.env.DATABASE_URL });
       await holder.connect();
 
       try {
@@ -1297,7 +1297,7 @@ describe('DCC recording (sections 9 and 14)', () => {
       // means, and a 5xx releases the key the retry needs.
       const eventId = await createEvent(await recentSunday());
 
-      const holder = new Client({ connectionString: process.env.TEST_DATABASE_URL });
+      const holder = new Client({ connectionString: process.env.DATABASE_URL });
       await holder.connect();
 
       try {
@@ -1384,7 +1384,7 @@ describe('DCC recording (sections 9 and 14)', () => {
       const stored = (await liveRows(eventId))[0];
       const successorId = randomUUID();
 
-      const holder = new Client({ connectionString: process.env.TEST_DATABASE_URL });
+      const holder = new Client({ connectionString: process.env.DATABASE_URL });
       await holder.connect();
 
       try {
@@ -1465,7 +1465,7 @@ describe('DCC recording (sections 9 and 14)', () => {
       const second = randomUUID();
       const third = randomUUID();
 
-      const holder = new Client({ connectionString: process.env.TEST_DATABASE_URL });
+      const holder = new Client({ connectionString: process.env.DATABASE_URL });
       await holder.connect();
 
       try {
