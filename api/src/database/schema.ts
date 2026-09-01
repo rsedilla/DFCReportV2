@@ -214,6 +214,19 @@ export type AuditAction =
   // would be readable by nobody's scope.
   | 'dcc_attendance.submitted_on_behalf'
   | 'dcc_attendance.corrected'
+  // The Cell counterpart of the pair above, on the same reading of section 21: it
+  // lists "Attendance submission on behalf" without naming a domain, and lists no
+  // ordinary first submission — which is the record itself. `cell_attendance` rather
+  // than `cell_meeting`, so the two domains carry one noun for one concept, and
+  // because what section 21 is auditing is somebody recording attendance for people
+  // who are not their own.
+  //
+  // **It targets the Cell**, unlike its DCC twin, which targets the Person. Section 7
+  // resolves an entry's scope through its target and resolves a Cell meeting through
+  // the Cell's leader; the DCC twin names a Person because a DCC event "is church-wide
+  // and resolves through nothing". Same rule, different targets, because the two
+  // domains hang their attendance off different things.
+  | 'cell_attendance.submitted_on_behalf'
   | 'cell_leadership.opened'
   // Section 21 lists this as an action in its own right: "Cell leadership assignment
   // left with account provisioning pending". It names a state rather than an actor,

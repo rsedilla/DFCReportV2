@@ -86,7 +86,7 @@ describe('a Cell meeting roster (sections 12 and 13)', () => {
         cell_id: markCell.id,
         started_at: from,
         ended_at: to,
-      } as never)
+      })
       .execute();
 
     return person;
