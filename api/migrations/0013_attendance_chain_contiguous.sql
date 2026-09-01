@@ -196,12 +196,23 @@ BEGIN
   -- `supersession_is_whole` has both columns set, and `dcc_attendance_one_live` excludes
   -- a superseded row.
   --
-  -- **On a first record only, and the qualifier is the Cell defect's own.** Where the
-  -- record had already been corrected, the predecessor and the self-closing successor
-  -- carry the same `superseded_by`, and `dcc_attendance_one_successor` refused it. So
-  -- what got through was a person's first row at an event, closed at zero length. An
-  -- earlier version of this comment said "every other constraint passes it too", which
-  -- is the unqualified claim this file exists to stop making.
+  -- **What the side effect reached, stated once and exactly here.** The shape got
+  -- through if and only if **no other row named it** -- because that is the only
+  -- condition under which `dcc_attendance_one_successor` sees no duplicate. Everything
+  -- else passes it unconditionally.
+  --
+  -- Two earlier versions of this comment got that wrong in opposite directions. The
+  -- first said "every other constraint passes it too", which ignores the index. The
+  -- second said the gap was "a first record", which is right for closing a **live** row
+  -- -- after one correction the live tip is always named by its predecessor -- and wrong
+  -- for a row **inserted already closed**, which nothing names. Insert one of those for
+  -- a person whose record has been corrected twice and the pre-fix schema took it:
+  -- `one_live` excludes it, the index sees three distinct successors, and the trigger
+  -- compared the row against itself. Reproduced against the database before this comment
+  -- was written the third time.
+  --
+  -- The lesson is the file's own: a claim about which constraint catches what is worth
+  -- exactly as much as the run that checked it.
   --
   -- So section 9's "no DCC operation closes a record with nothing replacing it" was
   -- still resting on nobody writing the row, one instant over. That is the claim the

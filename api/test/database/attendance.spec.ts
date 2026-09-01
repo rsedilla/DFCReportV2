@@ -775,12 +775,16 @@ describe('the attendance tables (SKILL.md sections 9, 12, 13 and 14)', () => {
       // previous pass rewrote the section to stop resting on. The trigger now refuses a
       // `dcc_attendance` self-reference because it is one, at any length.
       //
-      // **This is a first record, and that is load-bearing rather than incidental.** For
-      // a record already corrected once, `dcc_attendance_one_successor` refused this
-      // shape before the trigger was changed, because the predecessor and the
-      // self-closing successor carry the same `superseded_by`. The case below covers
-      // that half, so the pair does not repeat the mistake the Cell case made — one
-      // uncorrected fixture standing for a rule that says nothing about corrections.
+      // **Nothing else names this row, and that is what the pre-fix schema turned on.**
+      // `dcc_attendance_one_successor` refuses a self-close only when some other row
+      // already names the same successor; where nothing does, it saw no duplicate and
+      // the trigger compared the row against itself. The case below covers a self-close
+      // the index *does* catch, so the pair does not repeat the mistake the Cell case
+      // made — one fixture standing for a rule that says nothing about its shape.
+      //
+      // Migration 0013 states which condition that is, and states it once. It is not
+      // "an uncorrected record": a row inserted already closed is named by nothing
+      // however many corrections precede it.
       const event = await db
         .insertInto('dcc_events')
         .values({ event_date: '2026-08-30' })

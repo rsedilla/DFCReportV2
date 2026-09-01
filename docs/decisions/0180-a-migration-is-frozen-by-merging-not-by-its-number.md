@@ -32,9 +32,13 @@ An earlier version of this paragraph called it "a clarification rather than a lo
 on the evidence that it changes the answer in none of the four cases that have arisen —
 which is evidence selected to exclude the cases where it differs, because all four concern
 merged migrations and those are exactly the ones both rules answer identically. The cases
-it changes are `0011`, `0012` and `0013`. Under 2026-08-21 the three edits made to `0013`
-on this branch were forbidden; under this ruling they are permitted, which is why this
-ruling exists and is stated in the opening paragraph. What the four citations establish is
+it changes are `0011`, `0012` and `0013`. Under 2026-08-21 every in-place edit made to
+`0013` on this branch was forbidden — `ca5e762`, `9a0048c`, `5c19420`, and each commit
+answering a pass after them; under this ruling they are permitted, which is why this
+ruling exists and is stated in the opening paragraph. *Written first as "the three edits",
+in the commit that made it four, four paragraphs above a passage correcting a different
+count for the identical reason — a figure that counts commits, written inside one.* What
+the four citations establish is
 narrower and still worth having: the line being drawn here is the one those rulings were
 already reasoning from, so no earlier decision has to be reread or reversed.
 
@@ -105,14 +109,27 @@ same instant compares equal and raises nothing — `period_ordered` is `>=` deli
 superseded row. The row exists, is not live, and never was, which is exactly the premise
 section 9 leans on.
 
-**What was reachable was narrower than that, and by the same qualifier as the Cell
-defect.** For a record already corrected once, the predecessor names the successor and the
-self-closing successor names itself, so both carry the same `superseded_by` and
-`dcc_attendance_one_successor` — bare `IS NOT NULL` — already refused it. The gap was a
-**first** record for a person at an event, closed at zero length. Narrow, and still a case
-where section 9's premise held because nothing had written the row. *An earlier version of
-this paragraph said the shape "passed every constraint in the schema", which is the
-unqualified form of exactly the claim this entry records the Cell index shipping on.*
+**What was reachable is exactly one condition: no other row named it.** That is what
+`dcc_attendance_one_successor` — bare `IS NOT NULL` on this table — decides, and nothing
+else in the schema restricts the shape at all.
+
+*Two earlier versions of this paragraph got that wrong in opposite directions, and the
+second was written to correct the first.* The first said the shape "passed every
+constraint in the schema", which is the unqualified form of exactly the claim this entry
+records the Cell index shipping on. The second said the gap was "a **first** record",
+which is true for closing a **live** row — after one correction the live tip is always
+named by its predecessor — and false for a row **inserted already closed**, which nothing
+names. A twice-corrected record admits one: `one_live` excludes it, the index sees three
+distinct successors, and the trigger compared it against itself. Reproduced against the
+database, under a schema rebuilt with the pre-fix trigger, before this paragraph was
+written a third time — which is the difference between the third version and the first
+two.
+
+Found by the ninth `architecture-guardian` pass, reviewing the commit that introduced the
+second version while correcting the first. Three formulations of one sentence, in three
+consecutive commits, each written in the batch that fixed the previous one's — which is
+the shape decision 0179 predicted would keep recurring and the reason the claim now lives
+in one place instead of five.
 
 The refusal was a side effect of a comparison rather than a rule about a shape. It is now
 stated as the rule it is: a `dcc_attendance` row naming itself is refused because it is
