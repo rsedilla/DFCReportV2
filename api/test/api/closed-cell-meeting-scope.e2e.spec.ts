@@ -266,9 +266,9 @@ describe('a closed Cell meeting resolves per record (section 7)', () => {
     expect(response.status).toBe(403);
   });
 
-  it.each(['2026-09-31', '2026-02-30', '2026-13-05', '2026-09-99'])(
-    'refuses %s, which has the shape of a date and is not one',
-    async (impossible) => {
+  it.each(['-09-31', '-02-30', '-13-05', '-09-99'])(
+    'refuses a %s that has the shape of a date and is not one',
+    async (suffix) => {
       // **A shape check is not a date check, and the difference was a 500.** Each of
       // these satisfies `\d{4}-\d{2}-\d{2}`, which is what the guard checked first;
       // PostgreSQL answers each with `22008 date/time field value out of range`, which
@@ -283,6 +283,16 @@ describe('a closed Cell meeting resolves per record (section 7)', () => {
       // The case below passes `not-a-date`, which the shape check already refused, so
       // it could never have found this. These are the values that separate the two
       // checks.
+      //
+      // **The year comes from the meeting's own month, not from a literal, and the
+      // first version hard-coded all four.** The old check only reached the SQL cast
+      // for a closed Cell in an **open** month — so `2026-02-30`, written in September
+      // 2026, was already a 403 rather than the 500 the comment described, and the
+      // other three would have stopped demonstrating it within months. They would still
+      // pass, and would silently stop testing what they name. The fixture sixty lines
+      // above solves this deliberately and says so; these cases now do the same.
+      const impossible = marksMeeting.slice(0, 4) + suffix;
+
       const response = await roster(impossible, markAccount);
 
       expect(response.status).toBe(422);

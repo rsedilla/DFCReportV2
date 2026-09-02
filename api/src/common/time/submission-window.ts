@@ -1,5 +1,7 @@
 import { sql } from 'kysely';
 
+import { ValidationFailedError } from '../errors/api-error';
+
 import { isCalendarDate, manilaDayOf, startOfManilaDay } from './manila';
 
 import type { Db } from '../../database/database.module';
@@ -40,7 +42,17 @@ import type { Transaction } from 'kysely';
  */
 export function reportingMonthOf(day: string): string {
   if (!isCalendarDate(day)) {
-    throw new Error(`"${day}" is not a YYYY-MM-DD date.`);
+    // **`ValidationFailedError`, not `Error`, and the first version threw the latter.**
+    // Every value reaching here comes from a client or from the database, and the
+    // exception filter renders an unrecognised `Error` as `INTERNAL_ERROR` — so a
+    // refusal thrown as a plain error turns a client's bad date into a 500. It did:
+    // the listing route validated only the shape, so `2026-02-30` reached this and
+    // answered 500 where it had previously answered 200.
+    //
+    // The edge is where such a value should be refused, and both DTOs and the guard now
+    // do it. This is the backstop for the next caller that forgets, and a backstop that
+    // answers 500 is not one.
+    throw new ValidationFailedError(`"${day}" is not a date that exists.`, { field: 'date' });
   }
 
   return `${day.slice(0, 7)}-01`;

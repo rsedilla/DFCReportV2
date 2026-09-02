@@ -80,20 +80,6 @@ export function manilaDayOf(instant: Date): string {
 }
 
 /**
- * The instant at which an Asia/Manila calendar day begins.
- *
- * A date-only field that has to become an instant takes 00:00:00 of that day in
- * this zone (SKILL.md section 20). An effective date is the case that arises
- * first: section 4 requires a Network change and the reassignment it forces to
- * share one exact instant, and a day cannot be that on its own.
- *
- * Two passes, because the offset is a function of the instant and the instant is
- * what is being solved for. The first pass reads the offset near the answer and
- * the second confirms it; they differ only where a zone transition falls inside
- * the day, which Asia/Manila has not had since 1978 and which this does not
- * assume.
- */
-/**
  * Whether a string is a `YYYY-MM-DD` date that **exists** (SKILL.md section 20).
  *
  * **A shape check is not a date check, and the difference is a 500.** `2026-09-31`,
@@ -114,6 +100,15 @@ export function manilaDayOf(instant: Date): string {
  * `Date.UTC` normalises an impossible day into the following month, and a component
  * that comes back changed is one that did not exist. Month `13` rolls the year, day
  * `00` rolls the month, and both are caught by the same comparison.
+ *
+ * **It is not exactly `::date`, and the one divergence is years 1 to 99.** PostgreSQL
+ * accepts `0026-01-01`; this refuses it, because `Date.UTC(26, ...)` applies the legacy
+ * two-digit-year mapping and returns 1926 — so the component "comes back changed" for a
+ * reason that is a coercion rather than an impossible date, which is the one case where
+ * the sentence above describes the mechanism and not the meaning. The direction is
+ * fail-safe, a refusal rather than a cast error, and no record in this system carries a
+ * first-century date. Stated because the equivalence with `::date` is what the guard's
+ * refusal rests on, and it is very nearly exact rather than exact.
  *
  * It says nothing about zones — a calendar date is the same date everywhere, and the
  * zone matters only once it becomes an instant, which is `startOfManilaDay`'s job.
@@ -136,6 +131,20 @@ export function isCalendarDate(value: string): boolean {
   );
 }
 
+/**
+ * The instant at which an Asia/Manila calendar day begins.
+ *
+ * A date-only field that has to become an instant takes 00:00:00 of that day in
+ * this zone (SKILL.md section 20). An effective date is the case that arises
+ * first: section 4 requires a Network change and the reassignment it forces to
+ * share one exact instant, and a day cannot be that on its own.
+ *
+ * Two passes, because the offset is a function of the instant and the instant is
+ * what is being solved for. The first pass reads the offset near the answer and
+ * the second confirms it; they differ only where a zone transition falls inside
+ * the day, which Asia/Manila has not had since 1978 and which this does not
+ * assume.
+ */
 export function startOfManilaDay(day: string): Date {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(day);
   if (match === null) {
