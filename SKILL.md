@@ -2978,6 +2978,37 @@ A meeting cannot be recorded for a date the Cell had no leader on. That is refus
 than defaulted, because a meeting with no responsible leader is a record nothing rolls
 up.
 
+**A handover landing on the meeting's own day gives the meeting to the leader who was
+in place when the day began.** The lookup compares Manila dates, which the closure rule
+below requires, and on a handover day both the outgoing and the incoming leadership row
+cover that date — so the comparison alone cannot say which of two people the meeting
+belongs to. The earlier-starting row wins.
+
+**The reason is not that a handover is usually recorded after the meeting**, which is
+true on some days and false on others. It is that the other answer is not a fact about
+the meeting at all. A meeting filed *before* the handover was approved finds one row and
+answers with the outgoing leader; the same meeting filed an hour later finds two. Under
+the incoming reading those are different answers to the same question, so the leader a
+meeting rolls up to would depend on when somebody got round to entering it — which
+Section 3's reproducibility guarantee and this section's own freeze both forbid. Under
+this rule the two agree, and the meeting's attribution is a function of the meeting.
+
+It is also the reading this section already takes at the boundary below, where a closure
+ends a leadership row *on* its date and that instant is read as the end of the day: the
+outgoing arrangement governs the whole of its last day. A handover is that boundary with
+a successor rather than with nobody, and this section gives no reason for the two to
+differ.
+
+**It decides reporting attribution and not only a scope answer**, which is why it is
+stated here rather than left to a sort order. `responsible_leader_id` is frozen from this
+lookup at the first submission and nothing moves it afterwards, and Sections 12 and 20
+count a meeting under the leader it names.
+
+**Both rows still exist and neither is rewritten.** This is a rule about which of two
+legitimate rows a *meeting* reads, not about the leadership history, and it applies to a
+meeting's own lookups exactly as the closure extension below does.
+
+
 **A meeting dated the day the Cell closed reads the Cell as it stood that day.** A
 leadership row and a membership row are both in force over `[started_at, ended_at)`, and a
 closure ends both *on* the closure date — so a meeting on that date would otherwise fall

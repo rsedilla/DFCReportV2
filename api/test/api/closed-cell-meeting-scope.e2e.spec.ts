@@ -96,14 +96,14 @@ describe('a closed Cell meeting resolves per record (section 7)', () => {
     // after Nestor's. Every instant is derived from the two dates, so the whole fixture
     // moves with the calendar.
     //
-    // **The handover is a day clear of the meeting deliberately, and that is a
-    // disclosure rather than convenience.** The leadership lookup compares Manila
-    // dates, which section 13 requires at the closure boundary — so on a day when a
-    // handover *also* happens, both the outgoing and incoming rows cover the date and
-    // the comparison cannot tell which of them was leading when the meeting took place.
-    // Section 13 settles week-versus-day and says nothing about same-day, and inventing
-    // an answer here would be a rule nobody decided. It is recorded as open in
-    // `CLAUDE.md`; this fixture stays on the case section 7 actually describes.
+    // **The handover is a day clear of the meeting deliberately.** The leadership lookup
+    // compares Manila dates, which section 13 requires at the closure boundary — so on a
+    // day when a handover *also* happens, both the outgoing and the incoming row cover
+    // the date. Section 13 now settles that case as well as week-versus-day: the
+    // earlier-starting row wins, and `cell-meeting-submit.e2e.spec.ts` is where it is
+    // pinned (decision 0187). This fixture stays a day clear so it measures section 7's
+    // per-record resolution and nothing else — a fixture exercising two rules at once
+    // tells you which one broke only by luck.
     const handover = new Date(`${marksMeeting}T23:00:00+08:00`);
     handover.setUTCDate(handover.getUTCDate() + 1);
     const closure = new Date(`${nestorsMeeting}T23:00:00+08:00`);

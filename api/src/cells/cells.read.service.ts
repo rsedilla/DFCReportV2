@@ -162,6 +162,12 @@ export class CellsReadService implements CellScopePort, CellRelationshipsPort {
    * Null is a real answer and section 13 makes it a refusal rather than a default: "a
    * meeting with no responsible leader is a record nothing rolls up." Refusing is this
    * method's caller's job; a read service answers questions.
+   *
+   * **Where two leadership rows both cover the date, this answers with the earlier-
+   * starting one** — the leadership in force when the day began (section 13, decision
+   * 0187). That is a handover landing on a meeting's own day, which the date comparison
+   * cannot otherwise decide, and which fixes both the meeting's scope and the
+   * `responsible_leader_id` its first submission freezes.
    */
   async leaderOnDateWithin(
     executor: Db | Transaction<Database>,
@@ -176,21 +182,39 @@ export class CellsReadService implements CellScopePort, CellRelationshipsPort {
       .where(
         sql<boolean>`(ended_at IS NULL OR (ended_at AT TIME ZONE 'Asia/Manila')::date >= ${on}::date)`,
       )
-      // The three keys `leaderForScopeWithin` documents and settles on.
+      // **`started_at` ASC, and this is the one key that differs from
+      // `leaderForScopeWithin` above** (decision 0187). That method asks who leads the
+      // Cell *now*, so the latest-starting row is the answer. This one asks who was
+      // leading when the Cell met, and on a handover day the date comparison matches
+      // both the outgoing and the incoming row — so the direction decides which of two
+      // people a meeting belongs to.
       //
-      // **On a handover day this ordering decides something nobody decided**, and it is
-      // recorded as open in `CLAUDE.md` rather than defended here. A date comparison
-      // matches both the outgoing and the incoming row, and `started_at DESC` then
-      // takes the incoming one — wrong whenever the handover was recorded after the
-      // meeting took place. An earlier version of this comment stated that choice as
-      // the rule ("the later-starting one is the leader the meeting belongs to"): a
-      // tie-break inherited for a different purpose, presented as a domain answer.
+      // **The outgoing one, because it is the only answer that does not depend on when
+      // the record was entered.** Under DESC, a meeting filed before the handover was
+      // approved found one row and answered with the outgoing leader, and the same
+      // meeting filed an hour later found two and answered with the incoming one — so
+      // the attribution was a function of the submission's timing rather than of the
+      // meeting. Section 3 makes a past period reproducible and section 13 freezes this
+      // value permanently; an answer that moves with the clerk satisfies neither.
       //
-      // It is not only a scope question. `CellMeetingsService.submit` calls this to
-      // decide the `responsible_leader_id` it then **freezes**, and section 13 makes
-      // that the leader a meeting rolls up to for sections 12 and 20 — so the tie-break
-      // silently decides reporting attribution, permanently.
-      .orderBy('started_at', 'desc')
+      // It is also section 13's own reading of the other boundary, generalised: a
+      // closure ends a leadership row *on* the closure date and section 13 reads that
+      // instant as the end of the day, which is the outgoing arrangement governing the
+      // whole of its final day. A handover is that boundary with a successor.
+      //
+      // *It was `desc` here until this ruling, inherited from the method above, where
+      // it is correct for a different question. An earlier version of this comment
+      // stated the inherited choice as the rule: "the later-starting one is the leader
+      // the meeting belongs to".*
+      //
+      // The other two keys are unchanged and carry the meanings `leaderForScopeWithin`
+      // gives them: `ended_at DESC NULLS FIRST` decides the pair a section 5 correction
+      // leaves — one row closed at its own start, the right one opened at the same
+      // instant — and takes the one still in force, which is right under either
+      // direction of the first key. `id DESC` decides only where both timestamps match
+      // exactly, which is two rows nothing can tell apart, and its direction is
+      // arbitrary; it is left as it is so the two methods' last key is the same.
+      .orderBy('started_at', 'asc')
       .orderBy('ended_at', (ob) => ob.desc().nullsFirst())
       .orderBy('id', 'desc')
       .limit(1)
