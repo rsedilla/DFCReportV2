@@ -21,8 +21,21 @@ reports a month, because by then the wrong attribution is inside closed data tha
 ## The ruling
 
 **Where two leadership rows both cover a meeting's date, the meeting resolves through the
-earlier-starting one** — the leadership in force when the day began. That fixes both the
-meeting's scope and the `responsible_leader_id` its first submission freezes.
+earlier-starting one.** That fixes both the meeting's scope and the
+`responsible_leader_id` its first submission freezes.
+
+**Stated as "the earliest-starting covering row" and not as "the leadership in force when
+the day began", which the first version of this ruling used as a gloss.** The two differ
+in exactly one place. A row is in force over `[started_at, ended_at)`, so a handover
+taking effect at precisely 00:00 leaves the outgoing row covering none of the day while
+its `ended_at` still falls *on* that date — and the rule gives that meeting to the
+outgoing leader, where the gloss would give it to the incoming one. Nothing writes such a
+boundary today: a handover takes the instant it is approved, and the only midnight
+boundary this system produces is a backdated closure, which opens no successor. Section 7
+lists Cell leadership under `records.backdate_effective_date`, so a backdated handover is
+a path this specification anticipates, and whoever builds it decides that case. Named by
+`architecture-guardian`, which found the gloss and the query disagreeing about a row class
+neither of us had considered.
 
 `leaderOnDateWithin` orders by `started_at` **ascending**. Its two other keys are
 unchanged and keep the meanings `leaderForScopeWithin` gives them. `leaderForScopeWithin`
@@ -69,10 +82,15 @@ leader it names. An answer that moves with the clerk satisfies none of them. Und
 outgoing reading the two orderings agree, which is what makes it a rule rather than a
 preference.
 
-It is also Section 13's own reading of the neighbouring boundary. A closure ends a
-leadership row *on* the closure date, and Section 13 reads that instant as the end of the
-day — the outgoing arrangement governing the whole of its last day. A handover is that
-boundary with a successor instead of with nobody.
+**The closure boundary is not a second argument, and the first version of this ruling
+offered it as one.** A closure ends a leadership row with no successor, so there the
+outgoing arrangement governs the day because nothing else could — which decides nothing
+about a boundary that *has* two candidates. Worse, Section 13 states that rule as "the
+leader is the one who was leading when the Cell met", which is the sentence a reader would
+reach for to refute this ruling; citing it as support meant citing the strongest objection
+as the case for. `architecture-guardian` found it, along with three further sentences of
+Section 13 that stated the rule this one overrides. All four now name the same-day case
+where they stand, and this ruling rests on the stability argument alone.
 
 ## What it costs
 
@@ -90,6 +108,24 @@ covers it — the union of both sides. A roster is a set and can hold both; a re
 leader is one column and cannot. That is why the leader question needed a rule and the
 roster question did not, and it is worth saying because "the leader and the people are
 read at one instant" invites the assumption that the roster already implies an answer.
+
+## What it narrows in Section 13
+
+Four sentences of Section 13 were written for a handover days away from the meeting, where
+"who was leading when it happened" is unambiguous, and each stated the rule this one
+overrides: `facilitated_by`'s default, the freeze's own summary, Section 7's coincidence
+argument, and the closure extension. Each now names the same-day case where it stands,
+rather than being left for a future reader to reconcile — which is how `desc` would come
+back.
+
+One more needed reconciling rather than narrowing. Section 13's week-versus-day argument
+refuses attributing "a Saturday meeting to a leader who handed the Cell over on the
+Wednesday", and this ruling accepts that outcome at one day's width. The difference is
+what the record can answer: a week is up to seven days wide and the stored dates decide
+which side of a Wednesday handover a Saturday meeting falls on, so resolving at the week's
+start discards an answer the data holds. Within one day the data holds no answer at all —
+nothing records what time the Cell met. The week rule recovers a fact; this one picks a
+convention where there is none to recover.
 
 ## What this binds
 

@@ -20,12 +20,24 @@ because slice 2c adds two more routes to that one method.
 
 **The capability decides, and the HTTP method does not.**
 
-- A route carrying a **recording** capability — `cell.take_attendance` or
-  `cell.correct_subtree` — resolves as a write: through the Cell's current leader, and
+- **Exactly three capabilities resolve as of the period being viewed**:
+  `cell.view_subtree`, `reports.view_subtree` and `audit.view`.
+- **Every other capability resolves as a write** — through the Cell's current leader, and
   through the leader of the meeting's date only under Section 7's closed-Cell exception.
   Whether the route reads or writes does not enter into it.
-- A route carrying a **viewing** capability — `cell.view_subtree`,
-  `reports.view_subtree`, `audit.view` — resolves as of the period being viewed.
+
+**A closed list of three with everything else defaulting, rather than two lists.** The
+first version of this ruling wrote two — recording capabilities against viewing ones —
+and classified neither the five management capabilities nor anything added later. That is
+not academic: `GET /api/v1/cells/{id}/members` is a read guarded by
+`cell.manage_membership`, which is exactly the shape this ruling exists to decide, and the
+two-list version decided it in neither direction. Found by `architecture-guardian` and
+raised as a Stop Condition against the ruling's own first form.
+
+The default is chosen because it is what every Cell-targeted route already does, so
+classifying nothing reclassifies nothing. It is **not** chosen for being narrower, and
+saying so matters: on an `ACTIVE` Cell that has changed hands the two resolutions name
+different people rather than one containing the other.
 
 So `GET .../meetings/{meeting_id}/roster` and the `POST` beside it give one answer, which
 on an `ACTIVE` Cell is the current leader for both. Behaviour is unchanged; what changes
@@ -48,9 +60,9 @@ ask two questions and answer them differently.
 
 **The method is the wrong discriminator.** A `GET` that prepares a write is a write's
 pre-flight, which is what Section 7's own phrase — "the meeting-scoped roster read that
-write requires" — already says. Section 5's `GET /people/duplicate-candidates` is the
-same shape one domain over: a read whose scoping is decided by what the write it precedes
-is allowed to do.
+write requires" — already says. Section 3's `GET /api/v1/people/duplicate-candidates` is
+the same shape one domain over: a read whose scoping is decided by what the write it
+precedes is allowed to do.
 
 **Nothing becomes unrecordable, and that is what makes the strict reading safe.** On an
 `ACTIVE` Cell handed from A to B, a meeting held under A resolves through B for the
@@ -84,6 +96,31 @@ first dated read", and the roster item claimed to be that first dated read. Unde
 ruling it is not a read in Section 7's sense: `leaderForMeetingScope` is a dated
 resolution serving a **recording** capability. The first dated *read* is still Stage 5's
 reporting, and the audit-log item still waits for it.
+
+## What can fail on it
+
+**The guard cannot enforce this rule, because it branches on the target's `kind` and never
+reads the capability.** `{ kind: 'cell' }` takes `leaderForScope` and
+`{ kind: 'cell_meeting' }` takes `leaderForMeetingScope`, whichever capability sits beside
+them — so a route declaring a viewing capability against a Cell-resolved target would
+silently get a resolution this ruling forbids.
+
+Nor can the guard be made to enforce it, yet: **neither resolution it has is the viewing
+one.** `leaderForScope` is the undated current-or-last leader and says so in its own
+docblock, and `leaderForMeetingScope` is the dated resolution serving a recording
+capability. "As of the period being viewed" is not implemented anywhere.
+
+So `test/unit/capability-scope-resolution.spec.ts` asserts the rule that can fail today:
+no route declares one of the three viewing capabilities against a Cell-resolved target,
+and every `cell_meeting` target carries a recording capability. It walks the compiled
+module graph rather than the source, and it carries a vacuity case — every assertion in it
+is over a filtered list, and a scan finding nothing would satisfy them all.
+
+**When Stage 5 adds the first Cell-scoped reporting read, that file goes red**, which is
+the moment the dated read resolution is owed. A red test naming the route is a better way
+to learn that than a report quietly answering through the wrong leader. Added after
+`architecture-guardian` pointed out that the ruling had nothing that could fail on it,
+which is decision 0142's finding reached again.
 
 ## What this binds
 

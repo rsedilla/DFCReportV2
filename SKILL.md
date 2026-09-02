@@ -1564,12 +1564,14 @@ Scope resolves against a target. Where the target is a Person, it resolves throu
 
 - a **Cell**, a Cell meeting, a membership or a leadership resolves through the Cell's leader **as of the period being viewed**, falling back to its last leader where the Cell is closed. A closed Cell keeps its history and its roster visible to the leader who led it (Sections 10 and 15), which resolving through a current leader it no longer has would prevent
   - **A closed Cell has one exception, and it is not the fallback above.** The rule below is that a write is acted on now and resolves through the Cell's current leader — and a closed Cell has none, so every write against one resolves through nobody. The exception is **recording or correcting a Cell meeting whose month's submission window is still open** (Section 13), together with the meeting-scoped roster read that write requires: those resolve through whoever led the Cell **on the meeting's date**. Nothing else does — not a membership, not a leadership, not a configuration change — and once the window shuts, that too resolves through nobody and only Admin can amend
-  - **The capability decides which of the two rules applies, and not the HTTP method** (ruling of 2026-09-02). A route carrying a **recording** capability — `cell.take_attendance` or `cell.correct_subtree` — resolves as a write, whether it reads or writes. A route carrying a **viewing** capability — `cell.view_subtree`, `reports.view_subtree`, `audit.view` — resolves as of the period being viewed. So `GET /api/v1/cells/{id}/meetings/{meeting_id}/roster` and the `POST` beside it give the same answer, and on an `ACTIVE` Cell that answer is the current leader for both
-  - That follows from this list rather than being added to it. The roster read is guarded by the capability that records, deliberately and for the reason given above; having tied its *capability* to the write it serves, resolving its *scope* by the other rule would make one route ask two questions and answer them differently. The method is the wrong discriminator in any case: a `GET` that prepares a write is a write's pre-flight, which is what "the meeting-scoped roster read that write requires" already says
-  - **Nothing becomes unrecordable, which is what makes the strict reading safe.** On an `ACTIVE` Cell handed from A to B, a meeting held under A resolves through B for the roster and for the submission alike — B files it, and Section 13 freezes its responsible leader to A, so the record exists and rolls up to the right person. What A is refused is a *view* of a past period, and that is what a viewing capability is for; it is not what the capability that records is for
   - **Per record rather than per Cell**, which no other target in this list is, because the meeting carries the answer and the Cell no longer does. A Cell handed from A to B and then closed has meetings belonging to each, and resolving through the last leader would show A the task (Section 19) while denying A the write
   - **The date is not chosen by the actor.** A closed Cell's meetings cannot be rescheduled (Section 13), so the authorizing date is the scheduled one, derived from the Cell's own schedule. Without that, an actor could declare an actual date inside their own past tenure and recover authority through a request field — which is the shape the rule below refuses
   - The bound is what makes this consistent with the rule below rather than an exception to it. That rule refuses authority resolved *as of an effective date the actor chooses*, because an actor could then reach back far enough to recover it. This bound is not chosen by the actor: it is one fixed, short, forward-moving window per month, set by the calendar, and it closes on the 7th whatever anybody does. A leader recording the meetings of the Cell they led last week is not recovering authority; they are finishing the record the Cell existed to produce
+  - **The capability decides which of the two rules applies, and not the HTTP method** (ruling of 2026-09-02). **Exactly three capabilities resolve as of the period being viewed** — `cell.view_subtree`, `reports.view_subtree` and `audit.view`, the *viewing* capabilities. **Every other capability resolves as a write**, through the Cell's current leader, whether the route it guards reads or writes. So `GET /api/v1/cells/{id}/meetings/{meeting_id}/roster` and the `POST` beside it give the same answer, and on an `ACTIVE` Cell that answer is the current leader for both
+  - **Stated as a closed list of three with everything else defaulting**, on the same terms as the capability list and the scope values above, and for the same reason a guard needs: a rule phrased as two open lists cannot decide a capability that appears in neither. It decided none of the five management capabilities when it was first written, and one of those guards a read that already exists — `GET /api/v1/cells/{id}/members`, under `cell.manage_membership`. Under this rule that read resolves through the Cell's current leader, which is what it already did
+  - **The default is chosen because it is what every Cell-targeted route already does**, so classifying nothing reclassifies nothing — and not because it is the narrower of the two. It is not: on an `ACTIVE` Cell that has changed hands the two resolutions name different people rather than one being a subset of the other, and on a plain Cell target both fall back to the last leader. What the closed list of three buys is that a capability added later cannot fall between the rules, which is the failure this bullet was written to fix
+  - The roster read is guarded by the capability that records, deliberately and for the reason given above. Having tied its *capability* to the write it serves, resolving its *scope* by the other rule would make one route ask two questions and answer them differently. The method is the wrong discriminator in any case: a `GET` that prepares a write is that write's pre-flight, which is what "the meeting-scoped roster read that write requires" already says. That is the argument for this rule rather than a derivation of it — the general discriminator is added here, and was not previously implied by anything in this list
+  - **Nothing becomes unrecordable, which is what makes the strict reading safe.** On an `ACTIVE` Cell handed from A to B, a meeting held under A resolves through B for the roster and for the submission alike — B files it, and Section 13 freezes its responsible leader to A, so the record exists and rolls up to the right person. What A is refused is a *view* of a past period, and that is what a viewing capability is for; it is not what the capability that records is for
 - a **DCC event** is church-wide and resolves through nothing; the endpoints on it are scoped by the people they return, so a roster or a submission covers only the requester's own authorized people (Section 9)
   - **The guard is therefore given the actor as the target**, and the restriction to those people is a check in the owning module. "Church-wide" invites the Whole Church target and that reading is wrong: it would deny every Leader holding `dcc.take_attendance` at own/subtree, which is every leader who records DCC. The actor target passes because `OWN_SUBTREE` includes the actor, and it leaves the decision that matters on the people rather than on the event. This is the shape `GET /api/v1/people/duplicate-candidates` already uses for a church-wide read whose scoping is done by what it returns
 - an **Account** resolves through its Person
@@ -1615,7 +1617,9 @@ All permission and scope grants — creation, modification, and revocation — m
 
 #### An effective date does not move the scope decision
 
-**"The period being viewed" is the period a read is asking about. A write is acted on now, whatever date it takes effect at.** Authority resolves through the Cell's *current* leader; the relationship being recorded resolves as of its own effective date, because that is the period it describes. Two questions, two answers, and any write carrying an effective date other than now asks both.
+**"The period being viewed" is the period a request under a viewing capability is asking about. Everything else is acted on now, whatever date it takes effect at.** Authority resolves through the Cell's *current* leader; the relationship being recorded resolves as of its own effective date, because that is the period it describes. Two questions, two answers, and any write carrying an effective date other than now asks both.
+
+*This sentence said "a read" and "a write" until 2026-09-02, and for one commit it said that eleven lines below the bullet declaring the method to be the wrong discriminator — so Section 7 defined the phrase by the split it had just stopped using, and the contradiction that ruling closed between Sections 7 and 13 was reproduced inside Section 7. The rule is unchanged; what moved is which word carries it.*
 
 The direction is forced rather than chosen. A leader whose Cell was handed away yesterday holds no authority over it today, and resolving authority as of a past effective date would let them recover it by dating the action far enough back — privilege reclaimed through a date field, which is the shape Section 5 invariant 4 refuses through the org chart. A forward-dated write is the same rule from the other side: a schedule change takes effect at the start of the next month (Section 10) and is authorized by who holds the Cell when it is made, not by whoever may hold it then. Nothing is lost either way, because the leader who did hold the Cell, or who will, is not thereby entitled to act on it now.
 
@@ -2895,7 +2899,7 @@ If the leader was present and the meeting was available, the meeting is `HELD` w
 
 ### Who conducted the meeting
 
-Record `facilitated_by` on the meeting. It is nullable and defaults to the meeting's responsible leader — whoever led the Cell on its date, by the rule below, and not whoever holds the Cell when the record is entered. A meeting submitted after a handover would otherwise default its facilitator to somebody who was not in the room.
+Record `facilitated_by` on the meeting. It is nullable and defaults to the meeting's responsible leader — whoever led the Cell on its date, by the rule below, and not whoever holds the Cell when the record is entered. A meeting submitted after a handover would otherwise default its facilitator to somebody who was not in the room. A handover on the meeting's **own** day is the one case where the default can still name somebody who was not there, and the rule below states that cost rather than avoiding it; this field is how a leader says who actually ran the meeting.
 
 Where a leader cannot conduct their own meeting and another person runs it — a disciple, or an upline leader — record that person as the facilitator. Three roles are distinct, and all three may differ on a single meeting:
 
@@ -2931,7 +2935,9 @@ For a `RESCHEDULED` meeting that consequently means the leader may be read from 
 different calendar week than the one the meeting reports in. That is already true of its
 roster, and it is the right way round: the meeting's reporting period is a fact about
 which week it belongs to, and its responsible leader is a fact about who was leading when
-it happened.
+it happened — narrowed by the same-day rule below, which decides the one case where two
+leadership rows cover the meeting's date and "when it happened" is not a fact the record
+holds.
 
 Two things require the freeze, and a third that looks like one does not. Section 1
 principle 12 forbids rewriting the column on every handover, and a stored column can
@@ -2951,7 +2957,9 @@ open.
 That exception exists because a closed Cell has no current leader and the record would
 otherwise be unfilable. It does not merge the two questions: who may act on a record and
 who a record belongs to stay different, and they coincide here because the only person who
-can sensibly file a meeting is the one who was leading when it happened.
+can sensibly file a meeting is the one who was leading when it happened — which on a
+handover day means whoever the same-day rule below names, since scope and attribution read
+one lookup and coincide there too.
 
 **The capability decides that, not the HTTP method, and this sentence said "for a read"
 and "for a write" until the ruling of 2026-09-02.** Read that way it contradicted Section
@@ -2978,35 +2986,60 @@ A meeting cannot be recorded for a date the Cell had no leader on. That is refus
 than defaulted, because a meeting with no responsible leader is a record nothing rolls
 up.
 
-**A handover landing on the meeting's own day gives the meeting to the leader who was
-in place when the day began.** The lookup compares Manila dates, which the closure rule
-below requires, and on a handover day both the outgoing and the incoming leadership row
-cover that date — so the comparison alone cannot say which of two people the meeting
-belongs to. The earlier-starting row wins.
+**Where two leadership rows both cover the meeting's date, the meeting resolves through
+the earlier-starting one.** The lookup compares Manila dates, which the closure rule
+below requires, and a handover landing on the meeting's own day therefore matches both
+the outgoing and the incoming row — so the comparison alone cannot say which of two
+people the meeting belongs to.
 
 **The reason is not that a handover is usually recorded after the meeting**, which is
 true on some days and false on others. It is that the other answer is not a fact about
-the meeting at all. A meeting filed *before* the handover was approved finds one row and
+the meeting at all. A meeting filed *before* the handover was recorded finds one row and
 answers with the outgoing leader; the same meeting filed an hour later finds two. Under
 the incoming reading those are different answers to the same question, so the leader a
 meeting rolls up to would depend on when somebody got round to entering it — which
 Section 3's reproducibility guarantee and this section's own freeze both forbid. Under
 this rule the two agree, and the meeting's attribution is a function of the meeting.
 
-It is also the reading this section already takes at the boundary below, where a closure
-ends a leadership row *on* its date and that instant is read as the end of the day: the
-outgoing arrangement governs the whole of its last day. A handover is that boundary with
-a successor rather than with nobody, and this section gives no reason for the two to
-differ.
+**That stability argument is the whole of it, and the closure rule below is not a second
+one.** A closure ends a leadership row with no successor, so there the outgoing
+arrangement governs the day because nothing else could — which decides nothing about a
+boundary that *has* two candidates. A first version of this passage cited it as support,
+and so cited as authority the one sentence a reader would reach for to refute this rule.
 
 **It decides reporting attribution and not only a scope answer**, which is why it is
 stated here rather than left to a sort order. `responsible_leader_id` is frozen from this
 lookup at the first submission and nothing moves it afterwards, and Sections 12 and 20
 count a meeting under the leader it names.
 
+**This narrows four sentences of this section rather than sitting beside them**, and each
+says so where it stands: `facilitated_by`'s default, the freeze's "who was leading when
+it happened", Section 7's coincidence argument, and the closure extension below. Every
+one of them was written for a handover days away from the meeting, where "who was leading
+when it happened" is unambiguous, and none of them was written against this case.
+
+**It also accepts, at one day's width, the outcome the week-versus-day argument above
+refuses.** That argument is not thereby wrong, and the difference is what the record can
+answer. A week is up to seven days wide and the stored dates decide which side of a
+Wednesday handover a Saturday meeting falls on, so resolving at the week's start discards
+an answer the data holds. Within a single day the data holds no answer at all — a
+leadership row carries an instant, a meeting carries a date, and nothing records what time
+the Cell met. The week rule recovers a fact; this rule picks a convention where there is
+no fact to recover, and picks the one that does not move.
+
 **Both rows still exist and neither is rewritten.** This is a rule about which of two
-legitimate rows a *meeting* reads, not about the leadership history, and it applies to a
-meeting's own lookups exactly as the closure extension below does.
+legitimate rows a *meeting* reads, not about the leadership history.
+
+**"Earliest-starting covering row" rather than "in force when the day began", and the two
+differ in exactly one place.** A row is in force over `[started_at, ended_at)`, so a
+handover taking effect at exactly 00:00 leaves the outgoing row covering none of the day
+while its `ended_at` still falls *on* that date — and the rule as stated gives that
+meeting to the outgoing leader, where the gloss would give it to the incoming one. Nothing
+writes such a boundary today: a handover takes the instant it is approved, and the only
+midnight boundary this system produces is a backdated closure, which opens no successor.
+Section 7 lists Cell leadership under `records.backdate_effective_date`, so a backdated
+handover is a path this specification anticipates; whoever builds it decides that case,
+and it is named here so they find it stated rather than discover it in a sort order.
 
 
 **A meeting dated the day the Cell closed reads the Cell as it stood that day.** A
@@ -3015,6 +3048,11 @@ closure ends both *on* the closure date — so a meeting on that date would othe
 outside every leadership row and find an empty roster. For a meeting's own lookups, and
 only those, the closure instant is read as the end of that day: the leader is the one who
 was leading when the Cell met, and the roster is the people who were members then.
+
+A closure has no successor, so exactly one leadership row covers the closure date and "the
+one who was leading when the Cell met" names it without ambiguity. **That is why this
+paragraph decides nothing about a handover on a meeting's own day**, where two rows cover
+the date and the rule above chooses between them.
 
 Both halves or neither. Extending the leader lookup alone gives that meeting a responsible
 leader and nobody to record present, which is worse than refusing it — and it would

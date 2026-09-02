@@ -65,12 +65,20 @@ export interface CellScopePort {
    * active Cell resolves through whoever holds it now and its former leader cannot file
    * their own last meeting — nor read its roster.
    *
-   * **The capability decides that, not the HTTP method.** A route carrying a recording
-   * capability — `cell.take_attendance` or `cell.correct_subtree` — resolves as a write
-   * whether it reads or writes, and a route carrying a viewing capability resolves as
-   * of the period being viewed. Section 7 ties the roster read's *capability* to the
-   * write it serves, in terms and with a reason; resolving its *scope* by the other
-   * rule would make one route ask two questions and answer them differently.
+   * **The capability decides that, not the HTTP method.** Section 7 names exactly three
+   * capabilities that resolve as of the period being viewed — `cell.view_subtree`,
+   * `reports.view_subtree`, `audit.view` — and every other capability resolves as a
+   * write, whether the route it guards reads or writes. Section 7 ties the roster read's
+   * *capability* to the write it serves, in terms and with a reason; resolving its
+   * *scope* by the other rule would make one route ask two questions and answer them
+   * differently.
+   *
+   * **Nothing here enforces that, and it cannot**: the guard branches on the target's
+   * `kind` and never reads the capability, and neither resolution in this interface is
+   * the viewing one. `test/unit/capability-scope-resolution.spec.ts` carries the rule
+   * that can fail today — no route declares a viewing capability against a Cell-resolved
+   * target — and goes red on the first Stage 5 reporting read, which is when the dated
+   * read resolution is owed.
    *
    * Nothing becomes unrecordable under the strict reading: on an active Cell handed
    * from A to B, B files the meeting and section 13 freezes its responsible leader to

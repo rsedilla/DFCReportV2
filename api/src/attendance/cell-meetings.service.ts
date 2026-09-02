@@ -153,8 +153,9 @@ export class CellMeetingsService {
    * **On an ACTIVE Cell that resolves through the current leader, and that is the rule
    * rather than an artifact of one method serving two routes** (decision 0186). The
    * capability decides which of section 7's two resolutions applies, not the HTTP
-   * method: this route carries `cell.take_attendance`, which is a recording capability,
-   * so it resolves as the submission it prepares. A leader who handed on an active Cell
+   * method: section 7 names three capabilities that resolve as of the period being
+   * viewed and this is not one of them, so the route resolves as the submission it
+   * prepares. A leader who handed on an active Cell
    * is therefore refused this roster, and loses no record by it — the current leader
    * files the meeting and section 13 freezes its responsible leader to whoever led the
    * Cell on the day. What they are refused is a view of a past period, which belongs to

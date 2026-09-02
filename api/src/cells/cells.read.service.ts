@@ -163,11 +163,19 @@ export class CellsReadService implements CellScopePort, CellRelationshipsPort {
    * meeting with no responsible leader is a record nothing rolls up." Refusing is this
    * method's caller's job; a read service answers questions.
    *
-   * **Where two leadership rows both cover the date, this answers with the earlier-
-   * starting one** — the leadership in force when the day began (section 13, decision
-   * 0187). That is a handover landing on a meeting's own day, which the date comparison
-   * cannot otherwise decide, and which fixes both the meeting's scope and the
-   * `responsible_leader_id` its first submission freezes.
+   * **Where two leadership rows both cover the date, this answers with the earliest-
+   * starting one** (section 13, decision 0187). That is a handover landing on a meeting's
+   * own day, which the date comparison cannot otherwise decide, and which fixes both the
+   * meeting's scope and the `responsible_leader_id` its first submission freezes.
+   *
+   * *"Earliest-starting covering row", not "in force when the day began", and the ruling's
+   * first version used the second as a gloss. A row is in force over `[started_at,
+   * ended_at)`, so a handover at exactly 00:00 leaves the outgoing row covering none of
+   * the day while its `ended_at` still falls on that date — and this gives that meeting to
+   * the outgoing leader where the gloss would not. Unreachable: a handover takes the
+   * instant it is approved, and the only midnight boundary anything writes is a backdated
+   * closure, which opens no successor. Section 13 names it for whoever builds a backdated
+   * handover.*
    */
   async leaderOnDateWithin(
     executor: Db | Transaction<Database>,
@@ -197,10 +205,12 @@ export class CellsReadService implements CellScopePort, CellRelationshipsPort {
       // meeting. Section 3 makes a past period reproducible and section 13 freezes this
       // value permanently; an answer that moves with the clerk satisfies neither.
       //
-      // It is also section 13's own reading of the other boundary, generalised: a
-      // closure ends a leadership row *on* the closure date and section 13 reads that
-      // instant as the end of the day, which is the outgoing arrangement governing the
-      // whole of its final day. A handover is that boundary with a successor.
+      // **The closure boundary is not a second argument, though the ruling's first
+      // version offered it as one.** A closure ends a leadership row with no successor,
+      // so the outgoing arrangement governs that day because nothing else could — which
+      // decides nothing about a boundary that has two candidates. Section 13 states that
+      // rule as "the leader is the one who was leading when the Cell met", which is the
+      // sentence a reader would reach for to refute this one.
       //
       // *It was `desc` here until this ruling, inherited from the method above, where
       // it is correct for a different question. An earlier version of this comment
