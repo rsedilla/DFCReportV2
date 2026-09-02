@@ -948,6 +948,37 @@ describe('closing a Cell (section 10)', () => {
       });
     });
 
+    it.each(['2026-02-30', '2026-09-31', '2026-13-05', '2026-04-00'])(
+      'refuses %s, which is well-shaped and is not a day',
+      async (impossible) => {
+        // **The defect this pins wrote a closure on a day nobody named** (ruling of
+        // 2026-09-02). This field carried a shape check alone, so `2026-02-30` passed
+        // it and reached `startOfManilaDay`, where `Date.UTC(2026, 1, 30)` rolls into
+        // **2026-03-02** -- and the Cell was closed effective on that invented day,
+        // into an effective-dated history table, with the response and the
+        // `effective_date.backdated` audit entry both reporting it back as though it
+        // had been asked for. Nothing errored anywhere on the path.
+        //
+        // It was reachable in the ordinary way: 2026-03-02 is in the past, so the
+        // forward-dated refusal below did not catch it, and the floor is cleared by
+        // anything after the Cell's own rows.
+        const response = await close(admin, markCell.id, {
+          reason: 'CREATED_IN_ERROR',
+          note: 'correcting the recorded date',
+          members: [],
+          effective_date: impossible,
+        }).expect(422);
+
+        expect(response.body.error.code).toBe('VALIDATION_FAILED');
+        expect(response.body.error.details.fields).toContainEqual(
+          expect.objectContaining({ field: 'effective_date' }),
+        );
+
+        // And the Cell is untouched, which is the half a status code does not say.
+        expect((await cellRow(markCell.id)).state).toBe('ACTIVE');
+      },
+    );
+
     it('refuses a forward-dated closure', async () => {
       const response = await close(admin, markCell.id, {
         reason: 'CREATED_IN_ERROR',

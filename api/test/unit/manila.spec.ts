@@ -33,6 +33,36 @@ describe('Asia/Manila dates and instants (section 20)', () => {
       expect(() => startOfManilaDay('2026-08-23T00:00:00Z')).toThrow(/YYYY-MM-DD/);
       expect(() => startOfManilaDay('23-08-2026')).toThrow(/YYYY-MM-DD/);
     });
+
+    it.each(['2026-02-30', '2026-09-31', '2026-13-05'])(
+      'refuses %s rather than normalising it into a day nobody named',
+      (impossible) => {
+        // **The mechanism of the defect the ruling of 2026-09-02 closed.** `Date.UTC`
+        // rolls an impossible day into the following month, so this returned an instant
+        // for 2026-03-02 when handed 2026-02-30 -- and a Cell closure was written
+        // effective on that day, with the response and the audit entry rendering it
+        // back through `manilaDayOf` as though it had been asked for.
+        //
+        // Asserted as a refusal and as `VALIDATION_FAILED`, because the second half is
+        // the reason the throw is not a plain `Error`: this is a backstop, and a
+        // backstop that answers `INTERNAL_ERROR` is not one.
+        expect(() => startOfManilaDay(impossible)).toThrow(/YYYY-MM-DD date that exists/);
+        try {
+          startOfManilaDay(impossible);
+          throw new Error('expected a refusal');
+        } catch (error) {
+          expect((error as { code?: string }).code).toBe('VALIDATION_FAILED');
+        }
+      },
+    );
+
+    it('still resolves the last day of a short month, which the refusal must not take', () => {
+      // The refusal is over days that do not exist, and the failure mode of a
+      // round-trip check written carelessly is that it also refuses the ones that do.
+      expect(startOfManilaDay('2026-02-28').toISOString()).toBe('2026-02-27T16:00:00.000Z');
+      expect(startOfManilaDay('2026-04-30').toISOString()).toBe('2026-04-29T16:00:00.000Z');
+      expect(startOfManilaDay('2026-12-31').toISOString()).toBe('2026-12-30T16:00:00.000Z');
+    });
   });
 
   describe('manilaDayOf', () => {

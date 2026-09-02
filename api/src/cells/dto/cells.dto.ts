@@ -16,6 +16,7 @@ import {
 import { Max, Min, ValidateIf } from 'class-validator';
 
 import { CURSOR_MAX_LENGTH } from '../../common/cursor';
+import { IsManilaCalendarDate } from '../../common/time/is-manila-calendar-date';
 
 import type {
   CellCategory,
@@ -404,9 +405,19 @@ export class CloseCellDto {
    * is hours behind an undated closure. Section 10 makes the test the *day*, and the
    * harm it guards is a closure reaching back to the first of the month.
    */
+  //
+  // **`IsManilaCalendarDate` rather than a shape check, and the shape check was a live
+  // defect.** `2026-02-30` matches `YYYY-MM-DD` and is not a day; it reached
+  // `startOfManilaDay`, which normalised it through `Date.UTC` to **2026-03-02**, and
+  // the closure was written effective on a day nobody named — into an effective-dated
+  // history table, with the response and the audit entry both reporting the invented
+  // date back as though it had been asked for. No error anywhere on the path, because
+  // every step after the shape check was handed a value that had already become
+  // plausible. Section 22 now fixes the refusal as well as the format (ruling of
+  // 2026-09-02).
   @IsOptional()
-  @Matches(/^\d{4}-\d{2}-\d{2}$/, {
-    message: 'effective_date must be an Asia/Manila calendar day, YYYY-MM-DD',
+  @IsManilaCalendarDate({
+    message: 'effective_date must be an Asia/Manila calendar day that exists, YYYY-MM-DD',
   })
   effective_date?: string;
 

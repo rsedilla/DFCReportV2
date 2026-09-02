@@ -3878,6 +3878,20 @@ putting it under `/auth` would mean the prefix no longer describes one thing.
 
 Timestamps are ISO 8601 with an offset. Date-only fields — an attendance date, an effective date, a Cell meeting date — are plain `YYYY-MM-DD` and are always Asia/Manila dates (Section 20). Never send a date-only field as a timestamp; the conversion is where months silently shift.
 
+**A date-only value that is well-shaped and is not a day is refused with `VALIDATION_FAILED`, at the edge.** `2026-02-30`, `2026-09-31` and `2026-13-05` all match `YYYY-MM-DD` and none of them is a date. The format rule above does not decide them, and until the ruling of 2026-09-02 nothing did.
+
+**One predicate makes that refusal, everywhere a date-only value enters the API** — the DTO for a body or a query field, and the capability guard for a path parameter it authorizes against. One rather than several, because the alternative is what this system actually had: three conventions for a single rule, and a new field acquiring whichever one its author's nearest neighbour happened to carry.
+
+The three ways it failed are different from each other, and the rule closes all three at once.
+
+- **A refusal that never happened.** A Cell closure's effective date carried a shape check alone, so `2026-02-30` passed it, was normalised into **2026-03-02** by the conversion below, and was written to an effective-dated history table — with the response and the audit entry both reporting the invented day back as though it had been asked for. Nothing on the path errored, because every step after the shape check was handed a value that had already become plausible.
+- **A refusal that happened too late.** The same value as a `{meeting_id}` reached a `::date` cast in SQL and answered `INTERNAL_ERROR` on a documented path parameter — a refusal the client cannot act on, arriving from the wrong layer.
+- **A plausible answer for the wrong period.** The same value as a `month` was truncated to a reporting month and returned a listing, before it was a 500 and before it was a refusal.
+
+**The conversion to an instant refuses as well, and that is a backstop rather than the rule.** Turning `YYYY-MM-DD` into a Manila instant (Section 20) is the step where an impossible day becomes a plausible one, so it refuses rather than normalising. But a refusal there is a refusal *after* the request has been accepted and a transaction may have opened, which is why the rule lives at the edge and this is only what catches the next caller who forgets.
+
+This says nothing about a date's **range**. A day in 1900 or in 2200 is a day; whether a particular field should accept one is that field's own rule — Section 3 for a birthday, Section 5's floor for an effective date — and not this one.
+
 #### Field naming
 
 One concept carries one field name across every endpoint. **Names are `snake_case`**, and an identifier's name is either a bare `id` or `ids`, or ends in `_id` or `_ids`.

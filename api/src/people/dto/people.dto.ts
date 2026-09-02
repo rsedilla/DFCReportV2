@@ -2,20 +2,19 @@ import { Type } from 'class-transformer';
 import {
   ArrayMaxSize,
   IsArray,
-  IsDateString,
   IsIn,
   IsInt,
   IsOptional,
   IsString,
   IsUUID,
   Length,
-  Matches,
   Max,
   Min,
   ValidateIf,
 } from 'class-validator';
 
 import { CURSOR_MAX_LENGTH, NAME_FIELD_MAX_LENGTH } from '../../common/cursor';
+import { IsManilaCalendarDate } from '../../common/time/is-manila-calendar-date';
 
 import type { CivilStatus, Sex } from '../../database/schema';
 
@@ -27,19 +26,27 @@ import type { CivilStatus, Sex } from '../../database/schema';
 const SEXES: Sex[] = ['MALE', 'FEMALE'];
 
 /**
- * A date-only field is `YYYY-MM-DD` and nothing else (SKILL.md section 22:
- * "Never send a date-only field as a timestamp; the conversion is where months
- * silently shift").
+ * Every date-only field here carries `@IsManilaCalendarDate()`, which is section 22's
+ * single predicate for the whole API (ruling of 2026-09-02).
  *
- * `@IsDateString({ strict: true })` alone is not enough — it accepts a full ISO
- * timestamp. One arriving here would be stored, compared as a raw string against
- * stored `YYYY-MM-DD` values, and match nothing: every Tier 1 birthday rule and
- * the whole transposition rule would go quiet, and creation would proceed without
- * the acknowledgement section 3 requires, with nothing reporting a problem. The
- * shape check is what refuses it; `IsDateString` still does the work of refusing
- * a date that does not exist.
+ * It replaces the `@Matches(DATE_ONLY)` plus `@IsDateString({ strict: true })` pair
+ * this file used to document, and does both halves of what that pair did. The shape
+ * half matters here for a reason particular to this module: a full ISO timestamp is
+ * what `@IsDateString` alone admits, and one arriving here would be stored, compared
+ * as a raw string against stored `YYYY-MM-DD` values, and match nothing — so every
+ * Tier 1 birthday rule and the whole transposition rule would go quiet, and creation
+ * would proceed without the acknowledgement section 3 requires, with nothing reporting
+ * a problem.
+ *
+ * That argument is why this file had the stricter of the three conventions the ruling
+ * found. What it did not have was the *same* convention as its neighbours, and the
+ * loosest of the three wrote a Cell closure effective on a day nobody named.
+ *
+ * **Nothing this file accepts or refuses changes**, and that was verified rather than
+ * assumed: the pair and `isCalendarDate` agree on every well-shaped value tried, years
+ * 1 to 99 included. This is a consolidation, and the mutation that restores the pair
+ * survives every case here — by construction, because the two are equivalent.
  */
-const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
 const CIVIL_STATUSES: CivilStatus[] = ['SINGLE', 'MARRIED', 'WIDOWED'];
 
 /**
@@ -71,8 +78,7 @@ export class CreatePersonDto {
    * false Tier 1 matches that then block real people from being recorded.
    */
   @IsOptional()
-  @Matches(DATE_ONLY, { message: 'must be a plain YYYY-MM-DD date, not a timestamp' })
-  @IsDateString({ strict: true })
+  @IsManilaCalendarDate()
   birth_date?: string;
 
   @IsIn(SEXES)
@@ -151,8 +157,7 @@ export class EditPersonDto {
    * difference here a decision rather than an oversight.
    */
   @ValidateIf((body: EditPersonDto) => body.birth_date !== undefined)
-  @Matches(DATE_ONLY, { message: 'must be a plain YYYY-MM-DD date, not a timestamp' })
-  @IsDateString({ strict: true })
+  @IsManilaCalendarDate()
   birth_date?: string;
 
   @IsOptional()
@@ -207,8 +212,7 @@ export class CorrectSexDto {
    * floor in section 4. Absent, the correction takes effect when it is recorded.
    */
   @IsOptional()
-  @Matches(DATE_ONLY, { message: 'must be a plain YYYY-MM-DD date, not a timestamp' })
-  @IsDateString({ strict: true })
+  @IsManilaCalendarDate()
   effective_date?: string;
 }
 
@@ -250,8 +254,7 @@ export class ReassignPastoralLeaderDto {
    * and is bounded by the two rules in section 5.
    */
   @IsOptional()
-  @Matches(DATE_ONLY, { message: 'must be a plain YYYY-MM-DD date, not a timestamp' })
-  @IsDateString({ strict: true })
+  @IsManilaCalendarDate()
   effective_date?: string;
 }
 
@@ -274,8 +277,7 @@ export class DuplicateCandidatesDto {
   last_name!: string;
 
   @IsOptional()
-  @Matches(DATE_ONLY, { message: 'must be a plain YYYY-MM-DD date, not a timestamp' })
-  @IsDateString({ strict: true })
+  @IsManilaCalendarDate()
   birth_date?: string;
 
   @IsOptional()
