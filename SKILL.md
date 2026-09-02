@@ -1564,6 +1564,9 @@ Scope resolves against a target. Where the target is a Person, it resolves throu
 
 - a **Cell**, a Cell meeting, a membership or a leadership resolves through the Cell's leader **as of the period being viewed**, falling back to its last leader where the Cell is closed. A closed Cell keeps its history and its roster visible to the leader who led it (Sections 10 and 15), which resolving through a current leader it no longer has would prevent
   - **A closed Cell has one exception, and it is not the fallback above.** The rule below is that a write is acted on now and resolves through the Cell's current leader — and a closed Cell has none, so every write against one resolves through nobody. The exception is **recording or correcting a Cell meeting whose month's submission window is still open** (Section 13), together with the meeting-scoped roster read that write requires: those resolve through whoever led the Cell **on the meeting's date**. Nothing else does — not a membership, not a leadership, not a configuration change — and once the window shuts, that too resolves through nobody and only Admin can amend
+  - **The capability decides which of the two rules applies, and not the HTTP method** (ruling of 2026-09-02). A route carrying a **recording** capability — `cell.take_attendance` or `cell.correct_subtree` — resolves as a write, whether it reads or writes. A route carrying a **viewing** capability — `cell.view_subtree`, `reports.view_subtree`, `audit.view` — resolves as of the period being viewed. So `GET /api/v1/cells/{id}/meetings/{meeting_id}/roster` and the `POST` beside it give the same answer, and on an `ACTIVE` Cell that answer is the current leader for both
+  - That follows from this list rather than being added to it. The roster read is guarded by the capability that records, deliberately and for the reason given above; having tied its *capability* to the write it serves, resolving its *scope* by the other rule would make one route ask two questions and answer them differently. The method is the wrong discriminator in any case: a `GET` that prepares a write is a write's pre-flight, which is what "the meeting-scoped roster read that write requires" already says
+  - **Nothing becomes unrecordable, which is what makes the strict reading safe.** On an `ACTIVE` Cell handed from A to B, a meeting held under A resolves through B for the roster and for the submission alike — B files it, and Section 13 freezes its responsible leader to A, so the record exists and rolls up to the right person. What A is refused is a *view* of a past period, and that is what a viewing capability is for; it is not what the capability that records is for
   - **Per record rather than per Cell**, which no other target in this list is, because the meeting carries the answer and the Cell no longer does. A Cell handed from A to B and then closed has meetings belonging to each, and resolving through the last leader would show A the task (Section 19) while denying A the write
   - **The date is not chosen by the actor.** A closed Cell's meetings cannot be rescheduled (Section 13), so the authorizing date is the scheduled one, derived from the Cell's own schedule. Without that, an actor could declare an actual date inside their own past tenure and recover authority through a request field — which is the shape the rule below refuses
   - The bound is what makes this consistent with the rule below rather than an exception to it. That rule refuses authority resolved *as of an effective date the actor chooses*, because an actor could then reach back far enough to recover it. This bound is not chosen by the actor: it is one fixed, short, forward-moving window per month, set by the calendar, and it closes on the 7th whatever anybody does. A leader recording the meetings of the Cell they led last week is not recovering authority; they are finishing the record the Cell existed to produce
@@ -2939,21 +2942,37 @@ would not move by one however this column were resolved. An earlier version of t
 paragraph claimed it would.*
 
 **Scope is a separate question, and on one path it uses this same instant.** Section 7
-resolves a Cell meeting through the Cell's leader **as of the period being viewed** for a
-read, and through the current leader for a write — except for a write against a **closed**
-Cell, which resolves through whoever led it on the meeting's date, this rule's instant,
-while the month's window is open.
+resolves a Cell meeting through the Cell's leader **as of the period being viewed** under
+a **viewing** capability, and through the current leader under a **recording** one —
+except for a recording capability against a **closed** Cell, which resolves through
+whoever led it on the meeting's date, this rule's instant, while the month's window is
+open.
 
 That exception exists because a closed Cell has no current leader and the record would
 otherwise be unfilable. It does not merge the two questions: who may act on a record and
 who a record belongs to stay different, and they coincide here because the only person who
 can sensibly file a meeting is the one who was leading when it happened.
 
-*Two earlier versions of this paragraph were wrong in opposite directions. The first said
+**The capability decides that, not the HTTP method, and this sentence said "for a read"
+and "for a write" until the ruling of 2026-09-02.** Read that way it contradicted Section
+7 on an `ACTIVE` Cell: `GET /api/v1/cells/{id}/meetings/{meeting_id}/roster` is a read,
+and Section 7 bundles it with the write it serves. It is guarded by `cell.take_attendance`
+because it answers what taking attendance needs to know before it starts — a write's
+pre-flight wearing a `GET` — and one resolution serves both.
+
+So a leader who handed on an `ACTIVE` Cell is refused the roster of a meeting they led,
+and **nothing is lost by that**: the current leader files it, and the freeze above gives
+it to whoever led the Cell on the day, so the record is both filable and correctly
+attributed. What that leader is refused is a view of a past period, which is what a
+viewing capability is for and not what the capability that records is for.
+
+*Three earlier versions of this paragraph were wrong in three directions. The first said
 scope resolves "through the Cell's leader now", which is Section 7's answer for a write
 offered as its answer for a read. The second said neither of Section 7's answers is this
 rule, which stopped being true when Section 7 gained the closed-Cell exception that uses
-it.*
+it. The third split it by method, which made this section and Section 7 disagree about an
+`ACTIVE` Cell — and the code settled that disagreement in a port docblock, which is not
+where a rule lives.*
 
 A meeting cannot be recorded for a date the Cell had no leader on. That is refused rather
 than defaulted, because a meeting with no responsible leader is a record nothing rolls

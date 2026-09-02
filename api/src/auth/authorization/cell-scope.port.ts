@@ -59,25 +59,35 @@ export interface CellScopePort {
    * and then closed has meetings belonging to each, and resolving through the last
    * leader would show A the task (section 19) while denying A the write."
    *
-   * **On an ACTIVE Cell this answers exactly what `leaderForScope` answers — and
-   * whether that is right for a *read* is open, recorded in `CLAUDE.md`.** Section 7's
+   * **On an ACTIVE Cell this answers exactly what `leaderForScope` answers, and one
+   * method serves the GET and the POST deliberately** (decision 0186). Section 7's
    * exception is written for a Cell with no current leader to resolve through, so an
-   * active Cell resolves through whoever holds it now and its former leader cannot
-   * file their own last meeting.
+   * active Cell resolves through whoever holds it now and its former leader cannot file
+   * their own last meeting — nor read its roster.
    *
-   * That is section 7's answer for a **write**. Section 13 states a split the same
-   * paragraph does not: a Cell meeting resolves "through the Cell's leader as of the
-   * period being viewed for a read, and through the current leader for a write". This
-   * one method serves a GET and a POST, so it gives both the write answer — and on an
-   * active Cell that changed hands, the leader of the day is refused the *read* that
-   * section 13 appears to grant them.
+   * **The capability decides that, not the HTTP method.** A route carrying a recording
+   * capability — `cell.take_attendance` or `cell.correct_subtree` — resolves as a write
+   * whether it reads or writes, and a route carrying a viewing capability resolves as
+   * of the period being viewed. Section 7 ties the roster read's *capability* to the
+   * write it serves, in terms and with a reason; resolving its *scope* by the other
+   * rule would make one route ask two questions and answer them differently.
    *
-   * Section 7 bundles "the meeting-scoped roster read that write requires" with the
-   * write; section 13 splits them. For a closed Cell the two coincide. For an active
-   * one they disagree, and nothing says which wins.
+   * Nothing becomes unrecordable under the strict reading: on an active Cell handed
+   * from A to B, B files the meeting and section 13 freezes its responsible leader to
+   * A. What A is refused is a view of a past period, which is what a viewing capability
+   * is for — and there is no such route yet, which is a gap in the surface that Stage
+   * 5 closes rather than a gap in this rule.
    *
-   * *An earlier version of this paragraph called the asymmetry "section 7's and
-   * deliberate", which asserted a settlement the specification does not make.*
+   * **A dated resolution serving a viewing capability is a different method from this
+   * one**, and this is not it. Section 7's "as of the period being viewed" is the wider
+   * rule, and Stage 5's first Cell-scoped reporting read is what needs it.
+   *
+   * *Two earlier versions of this paragraph were wrong in opposite directions. The
+   * first called the asymmetry "section 7's and deliberate", asserting a settlement the
+   * specification did not make. The second recorded it as an open contradiction, which
+   * it was for four days, and named this method as the system's first dated read — it
+   * is a dated resolution serving a write, and the audit-log question that waits on the
+   * first dated read still waits.*
    *
    * **The date is not chosen by the actor**, which is what keeps this consistent with
    * the rule it is an exception to. Section 7: "A closed Cell's meetings cannot be
