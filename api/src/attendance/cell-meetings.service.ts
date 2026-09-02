@@ -34,6 +34,25 @@ import type { Transaction } from 'kysely';
 type SubmitCellMeeting = SubmitCellMeetingDto;
 
 /**
+ * Thrown inside the correction's transaction to roll it back, and never seen by a client.
+ *
+ * **A marker rather than the answer**, because the answer needs the *committed* state and
+ * this transaction's own uncommitted writes are visible to it (SKILL.md section 22:
+ * "The loser re-reads the committed state"). So the throw rolls back, and `submit`'s
+ * caller re-reads on the pool and decides between `VERSION_CONFLICT` and `RESOURCE_BUSY`.
+ *
+ * Not an `ApiError`: nothing should render it. If one ever escapes, the exception filter
+ * answers `INTERNAL_ERROR`, which is the honest outcome for a marker that lost its
+ * handler.
+ */
+class LostCorrectionRace extends Error {
+  constructor() {
+    super('A concurrent correction won the race; re-read the committed state.');
+    this.name = 'LostCorrectionRace';
+  }
+}
+
+/**
  * What both of this route's operations answer with.
  *
  * Declared as a shape rather than `Record<string, unknown>` because it is handed to
@@ -293,6 +312,28 @@ export class CellMeetingsService {
    * facilitator to somebody who was not in the room."
    */
   async submit(
+    cellId: string,
+    meetingId: string,
+    body: SubmitCellMeeting,
+    actor: Actor,
+    claim: CurrentClaim,
+  ): Promise<Record<string, unknown>> {
+    try {
+      return await this.submitWithin(cellId, meetingId, body, actor, claim);
+    } catch (error) {
+      // **The lost correction race, answered after the rollback** (section 22, *Write
+      // conflicts*). The transaction is gone, so what is read here is the committed
+      // state — which is the property section 22's rule turns on, and which a re-read
+      // inside the doomed transaction did not have.
+      if (!(error instanceof LostCorrectionRace)) {
+        throw error;
+      }
+
+      throw await this.lostRaceAnswer(cellId, meetingId, body, actor);
+    }
+  }
+
+  private async submitWithin(
     cellId: string,
     meetingId: string,
     body: SubmitCellMeeting,
@@ -618,44 +659,22 @@ export class CellMeetingsService {
     // that corrected nothing, made by actors who could not have corrected anything.
     // Section 7 admits neither reading: either it is an amendment and the capability is
     // required, or it is not and no correction is recorded.*
-    // **A submission carrying no version, against a record that exists, is section 22's
-    // first null-`submitted_version` case** — and it is a conflict whatever the values
-    // say. The client asserted there is no record; there is one. Section 22: "The record
-    // did not change since it was read; it came into existence while this client was
-    // drafting, which is the same problem from the other side and demands the same
-    // resolution."
+    // **A submission that changes nothing succeeds, writing nothing, and takes no part
+    // in the version check at all** (section 22, *Write conflicts*): a line that agrees
+    // with the committed state "takes no part in the version check … and the identical
+    // body resubmitted succeeds, writing nothing". It is not an amendment, so it needs
+    // no correction capability, writes no rows, writes no audit entry and does not move
+    // the meeting's version.
     //
-    // **Not `RESOURCE_BUSY`, which a first version of this answered when the values
-    // happened to agree.** That code means the identical body resubmitted succeeds, and
-    // this one would meet the identical refusal forever — there is no version in it to
-    // become current. It is raised before the correction capability because this actor is
-    // not correcting: they hold `cell.take_attendance`, the guard checked it, and the
-    // conflict body is how section 22 says they learn a record exists.
-    if (body.version === undefined) {
-      throw await this.conflictFor(trx, {
-        actor,
-        submittedVersion: null,
-        existing,
-        submittedPresent: attendance.filter((line) => line.present).length,
-        storedPresent: live.filter((row) => row.present).length,
-      });
-    }
-
+    // *Two earlier versions got the stale-version case here wrong in opposite
+    // directions. The first bumped the version and wrote a `cell_attendance.corrected`
+    // entry without requiring the capability — a log of corrections that corrected
+    // nothing. The second answered `RESOURCE_BUSY`, which decision 0158's question
+    // refutes: could this same body, resubmitted unchanged, succeed? It could not, because
+    // no version ever returns to the one it carries, so a conforming client retried
+    // forever. Section 22's answer was the simplest of the three and was there all
+    // along.*
     if (changed.length === 0) {
-      // **A stale version with nothing to change is `RESOURCE_BUSY`, not a conflict**
-      // (section 22, *Write conflicts*): this account agrees with what is stored, so
-      // there is nothing to choose between, and "answering a conflict here would present
-      // two identical values". The identical body resubmitted succeeds — the version it
-      // carries is stale against a record whose values it already matches, so the retry
-      // finds nothing to write and returns.
-      if (body.version !== existing.version) {
-        throw new ResourceBusyError({
-          cell_id: cellId,
-          meeting_id: meetingId,
-          current_version: existing.version,
-        });
-      }
-
       return this.responseFor(params, {
         version: existing.version,
         recorded: attendance.length,
@@ -664,16 +683,26 @@ export class CellMeetingsService {
       });
     }
 
-    // **The capability is checked before the conflict is raised, and the order is the
-    // whole point.** A `VERSION_CONFLICT` carries the stored present count and the
-    // submitter's name (section 22), which `GET .../roster` does not disclose — so
-    // raising it first lets an actor who may not correct this record read it out of the
-    // refusal. `DccAttendanceService` documents that hazard and closes it the same way:
-    // "the ordering costs nothing, so it is not left resting on which grants happen to
-    // be issued."
+    // **The capability is checked before anything about the stored record is disclosed,
+    // and that now includes the null-version case.** A `VERSION_CONFLICT` carries the
+    // stored present count and the submitter's name (section 22), which
+    // `GET .../roster` does not — so an actor holding `cell.take_attendance` and not
+    // `cell.correct_subtree` could read the record out of a refusal.
+    //
+    // *The previous batch moved the numeric-version door behind this check and left the
+    // null-version one in front of it, then claimed in its own message to have closed
+    // the disclosure. Omitting `version` walked straight through. Whatever is right for
+    // a client that read no record, it cannot be that one payload is withheld at one
+    // door and handed over at the other.*
     await this.assertMayCorrect(trx, params);
 
-    if (body.version !== existing.version) {
+    // **No version, against a record that exists**, is section 22's first
+    // null-`submitted_version` case: the client asserted there is no record and there is
+    // one. "The record did not change since it was read; it came into existence while
+    // this client was drafting, which is the same problem from the other side and demands
+    // the same resolution." Reached only where something actually differs, because an
+    // agreeing submission returned above.
+    if (body.version === undefined || body.version !== existing.version) {
       throw await this.conflictFor(trx, {
         actor,
         submittedVersion: body.version ?? null,
@@ -708,7 +737,7 @@ export class CellMeetingsService {
           .executeTakeFirst();
 
         if (closed.numUpdatedRows === 0n) {
-          throw await this.lostRaceFor(trx, params, attendance);
+          throw new LostCorrectionRace();
         }
       }
 
@@ -748,16 +777,22 @@ export class CellMeetingsService {
       .executeTakeFirst();
 
     if (bumped === undefined) {
-      throw await this.lostRaceFor(trx, params, attendance);
+      throw new LostCorrectionRace();
     }
 
     // Section 21 lists "Attendance corrections", and unlike a first submission this is
     // written whoever the actor is: the record changed, and `cell_meetings` carries one
     // mutable version while `cell_attendance` carries only the successor's own actor.
     //
-    // **`on_behalf` is carried on the entry**, which section 21 requires in terms: "a
-    // reader filtering `...submitted_on_behalf` for what an upline did to other people's
-    // records would otherwise miss every correction". Decided on the Person, as the
+    // **`on_behalf` is carried on the entry**, which section 21 requires in terms: "A
+    // correction made for somebody else is one entry that says so… whether it was
+    // somebody else's record to correct is an attribute of it, carried on the entry with
+    // the responsible leader", and writing only the correction "loses every amendment an
+    // upline made to a downline's records from the list that exists to find them".
+    //
+    // *An earlier version of this comment quoted section 21 as naming
+    // `...submitted_on_behalf`. That string appears nowhere in the specification; the
+    // requirement is real and the citation was invented.* Decided on the Person, as the
     // first-submission entry decides it, because section 14 makes the submitter a Person
     // and the responsible leader a Person while `actor_id` is an account.
     await this.audit.writeWithin(trx, {
@@ -811,62 +846,74 @@ export class CellMeetingsService {
   /**
    * The answer to a correction that lost a race (SKILL.md section 22, *Write conflicts*).
    *
-   * Section 22 gives every lost race two outcomes, decided by re-reading the committed
-   * state rather than by what the winner wrote: the submission still **disagrees** with
-   * what is stored and answers `VERSION_CONFLICT`, or it now **agrees** and answers
-   * `RESOURCE_BUSY`, because the identical body resubmitted would succeed.
+   * Section 22 gives every lost race two outcomes, decided by re-reading the **committed**
+   * state rather than by what the winner wrote: the submission still **disagrees** and
+   * answers `VERSION_CONFLICT`, or it now **agrees** and answers `RESOURCE_BUSY`, because
+   * the identical body resubmitted would succeed.
    *
-   * **Re-read inside the same transaction, which is sound here and is not in every
-   * case.** Nothing has violated a constraint at this point — an `UPDATE` matched no
-   * rows — so the transaction is alive, and under READ COMMITTED each new statement sees
-   * what has committed since it began. `DccAttendanceService` re-reads on the pool
-   * instead because it reaches this path from a constraint violation, which poisons the
-   * transaction it was raised in.
+   * **On the pool, after the transaction has rolled back, and the first version of this
+   * read inside it.** READ COMMITTED shows a transaction its own uncommitted writes — and
+   * by the time a later line loses the race this one has already inserted successors for
+   * the earlier ones. Those rows are about to disappear, so comparing against them made
+   * every line "agree" and answered `RESOURCE_BUSY` for a submission that genuinely
+   * disagreed with what was committed. Reproduced on two connections.
+   *
+   * The docblock that shipped that argued the transaction was *alive*, which is true and
+   * is the wrong property: what a re-read of committed state needs is **visibility**.
+   * `DccAttendanceService.conflictAfterLostRace` re-reads on the pool for this reason
+   * rather than incidentally.
    */
-  private async lostRaceFor(
-    trx: Transaction<Database>,
-    params: {
-      cellId: string;
-      meetingId: string;
-      existing: {
-        id: string;
-        version: number;
-        submitted_by: string | null;
-        submitted_at: Date | null;
-      };
-      actor: Actor;
-    },
-    attendance: { person_id: string; present: boolean }[],
+  private async lostRaceAnswer(
+    cellId: string,
+    meetingId: string,
+    body: SubmitCellMeeting,
+    actor: Actor,
   ): Promise<ApiError> {
-    const meeting = await trx
+    const meeting = await this.db
       .selectFrom('cell_meetings')
-      .select('version')
-      .where('id', '=', params.existing.id)
+      .select(['id', 'version'])
+      .where('cell_id', '=', cellId)
+      .where('scheduled_date', '=', meetingId)
       .executeTakeFirstOrThrow();
 
-    const live = await trx
+    const live = await this.db
       .selectFrom('cell_attendance')
       .select(['person_id', 'present'])
-      .where('cell_meeting_id', '=', params.existing.id)
+      .where('cell_meeting_id', '=', meeting.id)
       .where('superseded_at', 'is', null)
       .execute();
 
+    const submitted = body.attendance ?? [];
     const committed = new Map(live.map((row) => [row.person_id, row.present]));
-    const disagrees = attendance.some((line) => committed.get(line.person_id) !== line.present);
+    const disagrees = submitted.some((line) => committed.get(line.person_id) !== line.present);
 
     if (!disagrees) {
+      // **The winner recorded what this submission was carrying**, so it is unchanged
+      // against the committed state, takes no part in the version check, and the
+      // identical body resubmitted succeeds writing nothing — which is what
+      // `RESOURCE_BUSY` means (section 22) and what the retry actually does, because the
+      // no-op path above returns before the version is compared.
       return new ResourceBusyError({
-        cell_id: params.cellId,
-        meeting_id: params.meetingId,
+        cell_id: cellId,
+        meeting_id: meetingId,
         current_version: meeting.version,
       });
     }
 
-    return this.conflictFor(trx, {
-      actor: params.actor,
-      submittedVersion: params.existing.version,
-      existing: { ...params.existing, version: meeting.version },
-      submittedPresent: attendance.filter((line) => line.present).length,
+    // Both actors and both timestamps, which section 22 requires and a placeholder
+    // cannot satisfy: "A conflict response that omits any of them cannot satisfy
+    // Section 14, because the person resolving it cannot tell which record to keep."
+    const stored = await this.db
+      .selectFrom('cell_meetings')
+      .select(['submitted_by', 'submitted_at'])
+      .where('id', '=', meeting.id)
+      .executeTakeFirstOrThrow();
+
+    return this.conflictFor(this.db, {
+      actor,
+      submittedVersion: body.version ?? null,
+      existing: { version: meeting.version, ...stored },
+      submittedPresent: submitted.filter((line) => line.present).length,
       storedPresent: live.filter((row) => row.present).length,
     });
   }
@@ -938,7 +985,7 @@ export class CellMeetingsService {
    * may not differ at all.
    */
   private async conflictFor(
-    executor: Transaction<Database>,
+    executor: Db | Transaction<Database>,
     params: {
       actor: Actor;
       submittedVersion: number | null;
@@ -968,7 +1015,7 @@ export class CellMeetingsService {
 
   /** A Person's name for a conflict body, on the caller's executor. */
   private async personNameFor(
-    executor: Transaction<Database>,
+    executor: Db | Transaction<Database>,
     personId: string | null,
   ): Promise<{ id: string; name: string }> {
     if (personId === null) {
@@ -999,7 +1046,7 @@ export class CellMeetingsService {
    * time two leaders disagree (section 24).
    */
   private async accountNameFor(
-    executor: Transaction<Database>,
+    executor: Db | Transaction<Database>,
     accountId: string | null,
   ): Promise<{ id: string; name: string }> {
     if (accountId === null) {

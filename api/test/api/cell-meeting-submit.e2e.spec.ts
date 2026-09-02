@@ -1,8 +1,10 @@
 import { randomUUID } from 'node:crypto';
 
+import { Client } from 'pg';
 import { sql } from 'kysely';
 import request from 'supertest';
 
+import { countWhileInFlight, track } from '../setup/concurrency';
 import { createTestDb, truncateAll } from '../setup/database';
 import {
   assignTo,
@@ -238,28 +240,53 @@ describe('recording a Cell meeting (sections 12, 13 and 14)', () => {
     expect(response.status).toBe(409);
   });
 
-  it('refuses a second submission that carries no version', async () => {
+  it('answers a second submission carrying no version by what it says, not by its absence', async () => {
     // **This case used to refuse a second submission outright**, because the route made
     // only first submissions and section 14 forbids silently overwriting one. It now
-    // makes both, and `version` is what tells them apart — so what is refused here is
-    // narrower and is the same rule: a client that sends no version is asserting there is
-    // no record, and there is one.
+    // makes both, and section 22's two rules compose to decide this one:
     //
-    // It answers a conflict rather than a plain refusal, which is section 22's first
-    // null-`submitted_version` case: "a Cell meeting, which has no row until it is
-    // reported. Two first submissions of one meeting race, and the loser meets the
-    // uniqueness of `(cell_id, scheduled_date)`." The body still carries both sides,
-    // because that is what section 14 requires a person to choose between.
+    //   - a submission that **agrees** with the committed state "takes no part in the
+    //     version check … and the identical body resubmitted succeeds, writing nothing";
+    //   - a submission that **disagrees** and carries no version is the first
+    //     null-`submitted_version` case — "it came into existence while this client was
+    //     drafting, which is the same problem from the other side".
+    //
+    // So the absence of a version does not decide it on its own, and an earlier version
+    // of this case asserted that it did.
     const one = await member('Aurelio');
-    const body = { status: 'HELD', attendance: [{ person_id: one.id, present: true }] };
+    const two = await member('Bartolome');
+    const body = {
+      status: 'HELD',
+      attendance: [
+        { person_id: one.id, present: true },
+        { person_id: two.id, present: false },
+      ],
+    };
 
     expect((await submit(body)).status).toBe(201);
 
-    const second = await submit(body);
-    expect(second.status).toBe(409);
-    expect(second.body.error.code).toBe('VERSION_CONFLICT');
-    expect(second.body.error.details.submitted_version).toBeNull();
-    expect(second.body.error.details.current_version).toBe(1);
+    // The identical body again: nothing differs, so nothing is written and nothing moves.
+    const agreeing = await submit(body);
+    expect(agreeing.status).toBe(201);
+    expect(agreeing.body.corrected).toBe(0);
+    expect(agreeing.body.version).toBe(1);
+
+    // A differing body with no version: the client believed there was no record, and the
+    // one there is says something else.
+    const disagreeing = await submit({
+      status: 'HELD',
+      attendance: [
+        { person_id: one.id, present: false },
+        { person_id: two.id, present: false },
+      ],
+    });
+
+    expect(disagreeing.status).toBe(409);
+    expect(disagreeing.body.error.code).toBe('VERSION_CONFLICT');
+    expect(disagreeing.body.error.details.submitted_version).toBeNull();
+    expect(disagreeing.body.error.details.current_version).toBe(1);
+    expect(disagreeing.body.error.details.submitted.present).toBe(0);
+    expect(disagreeing.body.error.details.current.present).toBe(1);
   });
 
   it('names the Cell leader when an upline submits on behalf', async () => {
@@ -996,6 +1023,100 @@ describe('recording a Cell meeting (sections 12, 13 and 14)', () => {
 
       expect(entries).toHaveLength(2);
       expect(entries[1].after).toMatchObject({ on_behalf: false });
+    });
+
+    it('answers a lost correction race from the committed state, not its own writes', async () => {
+      // **The branch the previous fix batch added and left with no case, and it was
+      // wrong.** Section 22: "The loser **re-reads the committed state** and answers on
+      // what it finds — which is not the same question as what the winner wrote." That
+      // re-read ran on the transaction, which under READ COMMITTED shows a transaction
+      // its own uncommitted writes — so by the time a later line lost the race, the
+      // successors already inserted for the earlier lines made every line "agree", and a
+      // submission that genuinely disagreed was answered `RESOURCE_BUSY`.
+      //
+      // **Two API requests fired together do not reach this branch**, and the first
+      // version of this case did exactly that and was vacuous: they serialise, the loser
+      // re-reads a moved version and takes the ordinary version check. Deleting the whole
+      // lost-race handler left it green. What is needed is a winner that commits *after*
+      // the loser has passed the version check and started writing — so the winner is a
+      // second connection holding a row lock, released once the request is provably
+      // blocked on it.
+      const one = await member('Aurelio');
+      const two = await member('Bartolome');
+      const { version } = await recorded([
+        { person_id: one.id, present: true },
+        { person_id: two.id, present: true },
+      ]);
+
+      const rows = await liveRows();
+      const second = rows.find((row) => row.person_id === two.id);
+      const meeting = await db.selectFrom('cell_meetings').select('id').executeTakeFirstOrThrow();
+
+      const winner = new Client({ connectionString: process.env.DATABASE_URL });
+      await winner.connect();
+
+      let response;
+
+      try {
+        // The winner supersedes Bartolome's row and bumps the meeting, holding both row
+        // locks open. Nothing is committed yet, so the request below still reads version
+        // 1 and the pre-winner roster.
+        await winner.query('BEGIN');
+        await winner.query(
+          `UPDATE cell_attendance SET superseded_at = clock_timestamp(), superseded_by = id
+             WHERE id = $1`,
+          [second?.id],
+        );
+        await winner.query('UPDATE cell_meetings SET version = version + 1 WHERE id = $1', [
+          meeting.id,
+        ]);
+
+        // Aurelio first so the request supersedes a row it *can* take, then blocks on
+        // Bartolome's — which is the interleaving the branch exists for.
+        const attempt = submit({
+          status: 'HELD',
+          version,
+          attendance: [
+            { person_id: one.id, present: false },
+            { person_id: two.id, present: false },
+          ],
+        });
+        const inFlight = track(attempt);
+
+        // Blocked on the winner's row lock, observed rather than slept for.
+        const waiting = await countWhileInFlight(
+          async () => {
+            const blocked = await sql<{ count: string }>`
+              SELECT count(*) AS count FROM pg_stat_activity
+               WHERE wait_event_type = 'Lock' AND datname = current_database()
+            `.execute(db);
+
+            return Number(blocked.rows[0].count);
+          },
+          inFlight,
+          'the correction to block on the winner’s row lock',
+        );
+        expect(waiting).toBeGreaterThan(0);
+
+        await winner.query('COMMIT');
+        response = await attempt;
+      } finally {
+        await winner.end();
+      }
+
+      // The loser re-qualified, found the row already superseded, rolled back, and
+      // answered from the **committed** state — where Aurelio still disagrees with the
+      // body it sent.
+      expect(response.status).toBe(409);
+      expect(response.body.error.code).toBe('VERSION_CONFLICT');
+      expect(response.body.error.details.submitted_version).toBe(version);
+      expect(response.body.error.details.current_version).toBe(version + 1);
+
+      // And it rolled back whole: the winner's supersession stands and the loser's does
+      // not, so exactly one live row per person remains.
+      const live = await liveRows();
+      expect(live.filter((row) => row.person_id === one.id)).toHaveLength(1);
+      expect(live.find((row) => row.person_id === one.id)?.present).toBe(true);
     });
 
     it('refuses a version for a meeting that has no record', async () => {
