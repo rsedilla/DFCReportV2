@@ -26,6 +26,7 @@
 import { createHash } from 'node:crypto';
 
 import { type Candidate, findCandidates, normalizeName } from '../../people/duplicate-matching';
+import { isCalendarDate } from '../../common/time/manila';
 
 /**
  * The columns, in order. Section 2's ruling fixes `row_id` and `leader_row_id`;
@@ -288,23 +289,20 @@ export function parseCsv(text: string): CsvRecord[] {
 
 const ISO_DATE = /^(\d{4})-(\d{2})-(\d{2})$/;
 
-/**
- * A real calendar date, not merely a well-shaped one. `2000-02-30` matches the
- * shape and is not a day; PostgreSQL refuses it, and the operator would otherwise
- * learn that at the commit rather than here.
+/*
+ * `isCalendarDate` was a third private copy of this predicate and is now imported
+ * from `common/time/manila.ts`. Its docblock made the same argument the other two
+ * make — "`2000-02-30` matches the shape and is not a day; PostgreSQL refuses it, and
+ * the operator would otherwise learn that at the commit rather than here" — which is
+ * how the rule came to be written down three times and re-derived a fourth.
+ *
+ * **One behaviour changes with the merge, in the safe direction.** This copy parsed
+ * `new Date('0026-01-01T00:00:00Z')`, which the ISO string form reads as year 26, so
+ * it accepted years 1 to 99. The shared one uses `Date.UTC(26, ...)`, where the legacy
+ * two-digit mapping gives 1926, and refuses them. A birth date in year 26 is a defect
+ * in the export either way, and refusing it here is what the surrounding validation is
+ * for.
  */
-function isCalendarDate(value: string): boolean {
-  const match = ISO_DATE.exec(value);
-  if (!match) return false;
-  const [, y, m, d] = match;
-  const date = new Date(`${y}-${m}-${d}T00:00:00Z`);
-  return (
-    !Number.isNaN(date.getTime()) &&
-    date.getUTCFullYear() === Number(y) &&
-    date.getUTCMonth() + 1 === Number(m) &&
-    date.getUTCDate() === Number(d)
-  );
-}
 
 /**
  * What a wrong date most likely is, so the operator fixes the export rather than

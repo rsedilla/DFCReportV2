@@ -80,6 +80,58 @@ export function manilaDayOf(instant: Date): string {
 }
 
 /**
+ * Whether a string is a `YYYY-MM-DD` date that **exists** (SKILL.md section 20).
+ *
+ * **A shape check is not a date check, and the difference is a 500.** `2026-09-31`,
+ * `2026-02-30` and `2026-13-05` all satisfy `\d{4}-\d{2}-\d{2}` and none of them is a
+ * day. PostgreSQL refuses each with `22008 date/time field value out of range`, which
+ * no error filter here recognises — so a value that passes a shape check and reaches a
+ * `::date` cast answers `INTERNAL_ERROR` rather than a refusal, on a documented path
+ * parameter.
+ *
+ * That is not hypothetical: the capability guard's first version of the Cell-meeting
+ * target validated the shape, said in its own comment that a malformed value "would
+ * reach the port and be compared as a `date` in SQL, answering with a database error
+ * rather than a refusal", and then admitted four such values. Because the guard runs
+ * before `authorize`, any authenticated caller reached it — and the 500 arrived only
+ * for a closed Cell in an open month, which made it an oracle for that state.
+ *
+ * **Round-tripped rather than range-checked**, so leap years need no special case:
+ * `Date.UTC` normalises an impossible day into the following month, and a component
+ * that comes back changed is one that did not exist. Month `13` rolls the year, day
+ * `00` rolls the month, and both are caught by the same comparison.
+ *
+ * **It is not exactly `::date`, and the one divergence is years 1 to 99.** PostgreSQL
+ * accepts `0026-01-01`; this refuses it, because `Date.UTC(26, ...)` applies the legacy
+ * two-digit-year mapping and returns 1926 — so the component "comes back changed" for a
+ * reason that is a coercion rather than an impossible date, which is the one case where
+ * the sentence above describes the mechanism and not the meaning. The direction is
+ * fail-safe, a refusal rather than a cast error, and no record in this system carries a
+ * first-century date. Stated because the equivalence with `::date` is what the guard's
+ * refusal rests on, and it is very nearly exact rather than exact.
+ *
+ * It says nothing about zones — a calendar date is the same date everywhere, and the
+ * zone matters only once it becomes an instant, which is `startOfManilaDay`'s job.
+ */
+export function isCalendarDate(value: string): boolean {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (match === null) {
+    return false;
+  }
+
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const probe = new Date(Date.UTC(year, month - 1, day));
+
+  return (
+    probe.getUTCFullYear() === year &&
+    probe.getUTCMonth() === month - 1 &&
+    probe.getUTCDate() === day
+  );
+}
+
+/**
  * The instant at which an Asia/Manila calendar day begins.
  *
  * A date-only field that has to become an instant takes 00:00:00 of that day in

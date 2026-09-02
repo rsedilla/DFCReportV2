@@ -1,9 +1,11 @@
 import { sql } from 'kysely';
 
-import { manilaDayOf, startOfManilaDay } from '../common/time/manila';
+import { ValidationFailedError } from '../errors/api-error';
 
-import type { Db } from '../database/database.module';
-import type { Database } from '../database/schema';
+import { isCalendarDate, manilaDayOf, startOfManilaDay } from './manila';
+
+import type { Db } from '../../database/database.module';
+import type { Database } from '../../database/schema';
 import type { Transaction } from 'kysely';
 
 /**
@@ -27,14 +29,33 @@ import type { Transaction } from 'kysely';
  * the wrong one.
  */
 
-/** The first day of the Manila calendar month a date-only day falls in. */
+/**
+ * The first day of the Manila calendar month a date-only day falls in.
+ *
+ * **`isCalendarDate` rather than a shape check**, so a day that does not exist is
+ * refused here rather than turned into a plausible month. The shape check this
+ * replaced accepted `2026-13-05` and answered `2026-13-01`, which `windowClosesAt`
+ * then rolled through `Date.UTC` into a real instant — so an impossible month
+ * reported an open window instead of refusing, and every caller downstream believed
+ * it. Refusing at the first function that reads the value keeps the error where a
+ * reader can attribute it.
+ */
 export function reportingMonthOf(day: string): string {
-  const match = /^(\d{4})-(\d{2})-\d{2}$/.exec(day);
-  if (match === null) {
-    throw new Error(`"${day}" is not a YYYY-MM-DD date.`);
+  if (!isCalendarDate(day)) {
+    // **`ValidationFailedError`, not `Error`, and the first version threw the latter.**
+    // Every value reaching here comes from a client or from the database, and the
+    // exception filter renders an unrecognised `Error` as `INTERNAL_ERROR` — so a
+    // refusal thrown as a plain error turns a client's bad date into a 500. It did:
+    // the listing route validated only the shape, so `2026-02-30` reached this and
+    // answered 500 where it had previously answered 200.
+    //
+    // The edge is where such a value should be refused, and both DTOs and the guard now
+    // do it. This is the backstop for the next caller that forgets, and a backstop that
+    // answers 500 is not one.
+    throw new ValidationFailedError(`"${day}" is not a date that exists.`, { field: 'date' });
   }
 
-  return `${match[1]}-${match[2]}-01`;
+  return `${day.slice(0, 7)}-01`;
 }
 
 /**

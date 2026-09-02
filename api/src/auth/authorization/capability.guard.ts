@@ -13,6 +13,7 @@ import {
   ValidationFailedError,
 } from '../../common/errors/api-error';
 import { isUuid, NIL_UUID } from '../../common/identifiers';
+import { isCalendarDate } from '../../common/time/manila';
 
 import {
   AUTHENTICATED_ONLY_METADATA,
@@ -164,6 +165,48 @@ export class CapabilityGuard implements CanActivate {
       // the identical message and details. The nil UUID is a Person nothing can be,
       // so an unknown Cell and an out-of-scope Cell now answer identically too.
       return { kind: 'person', personId: leaderId ?? NIL_UUID };
+    }
+
+    if (spec.kind === 'cell_meeting') {
+      // Section 7 places a Cell meeting **per record**: through the Cell's current
+      // leader while the Cell is ACTIVE, and through whoever led it on the meeting's
+      // date once the Cell is closed and the month's window is still open. The port
+      // decides which, because `cells` owns both `cell_leaderships` and `cells.state`.
+      if (!this.cellScope) {
+        throw new CapabilityDeniedError(
+          'This deployment cannot resolve a Cell scope, so the endpoint is closed.',
+          { target: 'cell_meeting' },
+        );
+      }
+
+      // **The date is validated here rather than trusted**, which section 7 requires
+      // of a path parameter the guard resolves against. A malformed one would reach
+      // the port and be compared as a `date` in SQL, answering with a database error
+      // rather than a refusal — and it decides *authority*, so a value the guard
+      // cannot read is one it must not guess at.
+      //
+      // **`isCalendarDate` rather than a shape regex, and the first version was the
+      // regex.** `2026-09-31`, `2026-02-30`, `2026-13-05` and `2026-09-99` all satisfy
+      // `\d{4}-\d{2}-\d{2}`, and PostgreSQL answers each with `22008`, which no filter
+      // here recognises — so the paragraph above described the defect it was written
+      // beside. Because this runs *before* `authorize`, any authenticated caller
+      // reached it, and the 500 arrived only for a closed Cell in an open month, which
+      // made it an oracle for that state.
+      const on = readPath(request, spec.onFrom);
+      if (typeof on !== 'string' || !isCalendarDate(on)) {
+        throw new ValidationFailedError(
+          `${spec.onFrom} must be a YYYY-MM-DD date identifying the meeting.`,
+          { field: spec.onFrom },
+        );
+      }
+
+      const meetingLeaderId = await this.cellScope.leaderForMeetingScope(value, on);
+
+      // Null resolves to the nil UUID for the reason the Cell branch above gives at
+      // length: an absence is made to look like a denial, so that a closed month, a
+      // Cell that never had a leader on that date, and a Cell out of the actor's scope
+      // are indistinguishable to a caller who is not covered anyway.
+      return { kind: 'person', personId: meetingLeaderId ?? NIL_UUID };
     }
 
     return spec.kind === 'person'

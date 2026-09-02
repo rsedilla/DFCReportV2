@@ -27,9 +27,17 @@ import { CellMeetingsQueryDto } from './dto/cell-meetings.dto';
  * `CellsController` declares `:id`, `:id/members` and `:id/closure`, none of which
  * matches `:id/meetings`.
  *
- * **`cell.take_attendance`, resolved against the Cell.** Section 7 guards a
- * meeting's roster with the capability that records it, "deliberately **not**
- * `cell.manage_membership`", because requiring the management capability to reach an
+ * **`cell.take_attendance` throughout — resolved against the Cell for the month
+ * listing, and against the *meeting* for the two routes that name one.** Section 7
+ * places a Cell meeting per record rather than per Cell, so the roster and the
+ * submission carry `{ kind: 'cell_meeting' }` and the listing, which names no meeting,
+ * carries `{ kind: 'cell' }`. *An earlier version of this sentence said "resolved
+ * against the Cell" of all three, which was true when it was written and stale for two
+ * of them one commit later.*
+ *
+ * Section 7 guards a meeting's roster with the capability that records it,
+ * "deliberately **not** `cell.manage_membership`", because requiring the management
+ * capability to reach an
  * attendance surface would mean nobody could take attendance without also being able
  * to move the roster. The same argument covers this route: a list of which meetings
  * are recorded and which are awaiting a record is what taking attendance needs to
@@ -77,16 +85,19 @@ export class CellMeetingsController {
    * value, so a date passes through untouched. The name is right for the day this
    * route ever takes a UUID; what it is not is a demonstration of the rule working.
    *
-   * **No `UuidParamPipe` on it, for that reason.** The guard resolves against the Cell
-   * rather than the meeting, so this parameter is one "the guard does not resolve
-   * against" — section 7 asks that such a parameter be validated by the route, and the
-   * validation a date needs is a date's, which the service applies when it derives the
-   * month.
+   * **No `UuidParamPipe` on it, because it is not a UUID — and the guard *does* now
+   * resolve against it.** An earlier version of this paragraph said the opposite: that
+   * the guard resolved against the Cell alone, so this was a parameter "the guard does
+   * not resolve against" and the route owed its validation. That stopped being true
+   * when the meeting target became dated, and section 7's requirement then binds
+   * harder rather than less — a value the guard reads to decide *authority* is
+   * validated by the guard, before the port sees it, which `isCalendarDate` does.
    */
   @Get(':id/meetings/:meetingId/roster')
   @RequiresCapability(Capability.CellTakeAttendance, {
-    kind: 'cell',
+    kind: 'cell_meeting',
     from: 'params.id',
+    onFrom: 'params.meetingId',
   })
   async roster(
     @Param('id', new UuidParamPipe('id')) cellId: string,
@@ -107,8 +118,9 @@ export class CellMeetingsController {
    */
   @Post(':id/meetings/:meetingId/submit')
   @RequiresCapability(Capability.CellTakeAttendance, {
-    kind: 'cell',
+    kind: 'cell_meeting',
     from: 'params.id',
+    onFrom: 'params.meetingId',
   })
   async submit(
     @Param('id', new UuidParamPipe('id')) cellId: string,

@@ -4,7 +4,7 @@ import { createTestDb, truncateAll } from '../setup/database';
 import { createTestApp } from '../setup/fixtures';
 import { DccCalendarService } from '../../src/attendance/dcc-calendar.service';
 import { manilaDayOf } from '../../src/common/time/manila';
-import { reportingMonthOf, windowClosesAt } from '../../src/attendance/submission-window';
+import { reportingMonthOf, windowClosesAt } from '../../src/common/time/submission-window';
 
 import type { INestApplication } from '@nestjs/common';
 import type { Database } from '../../src/database/schema';

@@ -1,4 +1,5 @@
 import type { CivilStatus, Sex } from '../database/schema';
+import { isCalendarDate } from '../common/time/manila';
 
 /**
  * The `people` module's shapes and pure functions (SKILL.md section 2).
@@ -247,18 +248,14 @@ export function transpositionsOf(date: string): string[] {
   return swaps.size === 0 ? ['0001-01-01'] : [...swaps];
 }
 
-/** Whether a string is a real `YYYY-MM-DD` day, not merely shaped like one. */
-export function isCalendarDate(value: string): boolean {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
-    return false;
-  }
-
-  const [year, month, day] = value.split('-').map(Number);
-  const asDate = new Date(Date.UTC(year, month - 1, day));
-
-  return (
-    asDate.getUTCFullYear() === year &&
-    asDate.getUTCMonth() === month - 1 &&
-    asDate.getUTCDate() === day
-  );
-}
+/**
+ * Whether a string is a real `YYYY-MM-DD` day, not merely shaped like one.
+ *
+ * **Re-exported from `common/time/manila.ts`, which is the one implementation.** This
+ * file held an identical copy, `tree-csv.ts` held a third that differed, and the
+ * capability guard wrote a fourth before anyone noticed the other three — so the rule
+ * that a well-shaped impossible date must be refused was known, written down twice, and
+ * re-derived anyway. Section 20 owns calendar arithmetic, so that is where it lives;
+ * this export stays so the callers and the unit cases here keep their name for it.
+ */
+export { isCalendarDate } from '../common/time/manila';

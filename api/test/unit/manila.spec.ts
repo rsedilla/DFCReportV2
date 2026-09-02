@@ -1,4 +1,5 @@
 import {
+  isCalendarDate,
   manilaDayAfter,
   manilaDayOf,
   startOfManilaDay,
@@ -165,5 +166,66 @@ describe('Asia/Manila dates and instants (section 20)', () => {
     for (const day of ['2026-01-01', '2026-02-28', '2024-02-29', '2026-08-23', '2026-12-31']) {
       expect(manilaDayOf(startOfManilaDay(day))).toBe(day);
     }
+  });
+
+  describe('isCalendarDate', () => {
+    /**
+     * **A pure function belongs here rather than behind a guard**, and this one arrived
+     * with four examples in an end-to-end spec and none here. That is what this file's
+     * header warns against: the properties below are what the docblock claims, and an
+     * example routed through HTTP can only show that one of them happened to hold.
+     */
+    it.each(['2026-01-01', '2026-12-31', '2024-02-29', '2000-02-29', '2026-09-12'])(
+      'accepts %s',
+      (day) => {
+        expect(isCalendarDate(day)).toBe(true);
+      },
+    );
+
+    it.each([
+      // The four the capability guard admitted before this existed.
+      '2026-09-31',
+      '2026-02-30',
+      '2026-13-05',
+      '2026-09-99',
+      // Century leap years: 2100 is not one, which a naive `year % 4` accepts.
+      '2100-02-29',
+      '1900-02-29',
+      // The two rollovers the docblock claims one comparison catches.
+      '2026-00-10',
+      '2026-10-00',
+      // Not the shape at all.
+      'September',
+      '2026-9-12',
+      '2026-09-12T00:00:00Z',
+      '',
+    ])('refuses %s', (value) => {
+      expect(isCalendarDate(value)).toBe(false);
+    });
+
+    it('refuses years 1 to 99, which PostgreSQL accepts, and does so in the safe direction', () => {
+      // The one place this is **not** equivalent to `::date`, recorded in the docblock
+      // and pinned here so a future reader meets the divergence rather than discovers
+      // it. `Date.UTC(26, ...)` maps to 1926, so the year comes back changed for a
+      // reason that is a coercion rather than an impossible date.
+      expect(isCalendarDate('0026-01-01')).toBe(false);
+      expect(isCalendarDate('0001-01-01')).toBe(false);
+      // And 0000 is refused by both, so the boundary needs no special case.
+      expect(isCalendarDate('0000-01-01')).toBe(false);
+    });
+
+    it('agrees with itself across every day of a leap year', () => {
+      // A property rather than examples: every day the calendar actually has is
+      // accepted, and every day-of-month beyond a month's length is refused.
+      const lengths = [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+
+      for (let month = 1; month <= 12; month++) {
+        const mm = String(month).padStart(2, '0');
+        for (let day = 1; day <= 31; day++) {
+          const dd = String(day).padStart(2, '0');
+          expect(isCalendarDate(`2024-${mm}-${dd}`)).toBe(day <= lengths[month - 1]);
+        }
+      }
+    });
   });
 });

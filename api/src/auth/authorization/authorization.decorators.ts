@@ -21,6 +21,21 @@ export type TargetSpec =
    * module may not read it (section 2).
    */
   | { kind: 'cell'; from: string }
+  /**
+   * A Cell **meeting**, which section 7 places per record rather than per Cell.
+   *
+   * `from` is the Cell's identifier and `onFrom` is the meeting's scheduled date — its
+   * identity (section 13), and a `YYYY-MM-DD` Manila date rather than a UUID. Section
+   * 7 resolves this through the Cell's current leader while the Cell is ACTIVE, and
+   * through whoever led it on that date once the Cell is closed and while the month's
+   * window is open.
+   *
+   * **The date comes from the path, which is what keeps it out of the actor's hands.**
+   * Section 7: "an actor could declare an actual date inside their own past tenure and
+   * recover authority through a request field" — so `onFrom` names a path parameter and
+   * a spec pointing it at the body would be the defect that sentence describes.
+   */
+  | { kind: 'cell_meeting'; from: string; onFrom: string }
   | { kind: 'church' }
   | { kind: 'actor' };
 

@@ -292,6 +292,42 @@ describe('a Cell meetings listing (sections 12 and 13)', () => {
     expect(response.status).toBe(403);
   });
 
+  it.each(['-02-30', '-13-05', '-09-31'])(
+    'refuses a %s month that has the shape of a date and is not one',
+    async (suffix) => {
+      // **This route carries no `{meeting_id}`, so the guard's calendar check never
+      // runs for it** — and its DTO validated only the shape. `reportingMonthOf` was
+      // then changed to refuse an impossible date, which turned `2026-02-30` from a
+      // 200 answering February's listing into a 500: the refusal was a plain `Error`,
+      // which the exception filter renders as `INTERNAL_ERROR`.
+      //
+      // That was introduced by the commit that fixed the identical defect on the two
+      // routes which *do* name a meeting. The same defect, one route sideways, shipped
+      // inside its own fix — and the case that should have caught it passed
+      // `'September'`, which the shape check already refused.
+      const response = await list(markCell.id, `2026${suffix}`, markAccount);
+
+      expect(response.status).toBe(422);
+      expect(response.body.error.code).toBe('VALIDATION_FAILED');
+
+      // **Which layer answered, asserted rather than assumed.** There are two: the DTO
+      // refuses at the edge, and `reportingMonthOf` is a backstop. Either alone answers
+      // 422, so a case checking only the status is pinned by the conjunction and no
+      // single mutation reddens it — weakening the DTO to `strict: false` lets
+      // `2026-02-30` through and the backstop still answers 422.
+      //
+      // A DTO refusal carries `details.fields`, an **array** built by the global
+      // validation pipe (`bootstrap.ts`); an `ApiError` thrown in code carries a
+      // top-level `details.field`. The first version of this assertion read
+      // `details.field ?? 'month'` and so passed unconditionally on the DTO path,
+      // where that property does not exist — a check that could not fail, written into
+      // the case whose purpose was to make a layer distinguishable.
+      expect(response.body.error.details.fields).toEqual(
+        expect.arrayContaining([expect.objectContaining({ field: 'month' })]),
+      );
+    },
+  );
+
   it('refuses a month that is not a date', async () => {
     const response = await list(markCell.id, 'September', markAccount);
 

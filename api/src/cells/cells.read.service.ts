@@ -3,6 +3,7 @@ import { sql } from 'kysely';
 
 import { type CellScopePort } from '../auth/authorization/cell-scope.port';
 import { DATABASE, type Db } from '../database/database.module';
+import { isMonthOpen, reportingMonthOf } from '../common/time/submission-window';
 import { type CellRelationshipsPort, type NamedCell } from '../networks/cell-relationships.port';
 
 import { CURSOR_INSTANT_FORMAT } from './leadership-request-cursor';
@@ -73,6 +74,52 @@ export class CellsReadService implements CellScopePort, CellRelationshipsPort {
   }
 
   /**
+   * `CellScopePort`. How a Cell **meeting** is placed in the tree, given its own date
+   * (SKILL.md section 7, the closed-Cell exception).
+   *
+   * Three cases, and only the third differs from `leaderForScope`:
+   *
+   * - **An ACTIVE Cell** resolves through its current leader, which is section 7's
+   *   rule for a write and is unchanged by this method existing. A Cell that has
+   *   changed hands therefore refuses its former leader, who files nothing; an upline
+   *   or the successor does, and the meeting still *belongs* to the former leader
+   *   because section 13 freezes `responsible_leader_id` separately. Scope and
+   *   ownership are different questions and section 7 says so in terms.
+   * - **A CLOSED Cell whose month has shut** resolves through nobody. Section 7: "once
+   *   the window shuts, that too resolves through nobody and only Admin can amend."
+   * - **A CLOSED Cell whose month is still open** resolves through whoever led it on
+   *   the meeting's date — the exception, and the only dated resolution in the system.
+   *
+   * **The window is read from the database's clock**, never this process's, which is
+   * the commitment decision 0160 made and which `submission-window.ts` keeps for every
+   * other boundary comparison. A guard deciding a month boundary from a host clock is
+   * the defect that ruling exists to prevent, and it would be invisible on one host.
+   *
+   * *The window helper moved to `common/time/` for this.* It was in `attendance`, which
+   * `cells` cannot import: `attendance` imports `CellsModule`, so the dependency the
+   * other way is a cycle (section 2). The move is not a workaround for that — section
+   * 20 is the authority for every period boundary in the system and the helper is
+   * calendar arithmetic over its rule, so `common/time/` beside `manila.ts` is where it
+   * belonged once a second module needed it.
+   */
+  async leaderForMeetingScope(cellId: string, on: string): Promise<string | null> {
+    const cell = await this.cellById(this.db, cellId);
+    if (cell === null) {
+      return null;
+    }
+
+    if (cell.state !== 'CLOSED') {
+      return this.leaderForScopeWithin(this.db, cellId);
+    }
+
+    if (!(await isMonthOpen(this.db, reportingMonthOf(on)))) {
+      return null;
+    }
+
+    return this.leaderOnDateWithin(this.db, cellId, on);
+  }
+
+  /**
    * The people who were members of this Cell on a given Manila **date**.
    *
    * Section 12: "The roster for a meeting is exactly the people holding an active
@@ -129,9 +176,20 @@ export class CellsReadService implements CellScopePort, CellRelationshipsPort {
       .where(
         sql<boolean>`(ended_at IS NULL OR (ended_at AT TIME ZONE 'Asia/Manila')::date >= ${on}::date)`,
       )
-      // The three keys `leaderForScopeWithin` documents and settles on. A day-granular
-      // comparison can match two rows where a handover happened that day, and the
-      // later-starting one is the leader the meeting belongs to.
+      // The three keys `leaderForScopeWithin` documents and settles on.
+      //
+      // **On a handover day this ordering decides something nobody decided**, and it is
+      // recorded as open in `CLAUDE.md` rather than defended here. A date comparison
+      // matches both the outgoing and the incoming row, and `started_at DESC` then
+      // takes the incoming one — wrong whenever the handover was recorded after the
+      // meeting took place. An earlier version of this comment stated that choice as
+      // the rule ("the later-starting one is the leader the meeting belongs to"): a
+      // tie-break inherited for a different purpose, presented as a domain answer.
+      //
+      // It is not only a scope question. `CellMeetingsService.submit` calls this to
+      // decide the `responsible_leader_id` it then **freezes**, and section 13 makes
+      // that the leader a meeting rolls up to for sections 12 and 20 — so the tie-break
+      // silently decides reporting attribution, permanently.
       .orderBy('started_at', 'desc')
       .orderBy('ended_at', (ob) => ob.desc().nullsFirst())
       .orderBy('id', 'desc')

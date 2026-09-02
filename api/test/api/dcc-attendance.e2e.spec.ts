@@ -4,7 +4,7 @@ import { sql } from 'kysely';
 import { Client } from 'pg';
 import request from 'supertest';
 
-import { databaseNow } from '../../src/attendance/submission-window';
+import { databaseNow } from '../../src/common/time/submission-window';
 import { manilaDayOf, startOfManilaDay } from '../../src/common/time/manila';
 import { countWhileInFlight, track } from '../setup/concurrency';
 import { createTestDb, truncateAll } from '../setup/database';
