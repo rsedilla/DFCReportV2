@@ -12,7 +12,10 @@ import {
   MaxLength,
   Min,
   ValidateNested,
+  Matches,
 } from 'class-validator';
+
+import { IsManilaCalendarDate } from '../../common/time/is-manila-calendar-date';
 
 /** One person's presence at the meeting (SKILL.md section 12). */
 export class CellAttendanceLineDto {
@@ -30,19 +33,67 @@ export class CellAttendanceLineDto {
 /**
  * `POST /api/v1/cells/{id}/meetings/{meeting_id}/submit` (SKILL.md sections 12, 13, 14).
  *
- * **Two statuses here, not three.** `HELD` and `NOT_HELD` are what a *first* submission
- * can say. `RESCHEDULED` moves an existing meeting and belongs with the change history
- * of section 13, which is a separate operation on a record that already exists — so it
- * arrives with `cell_meeting_changes` rather than here, and this DTO refuses it rather
- * than accepting a status the route cannot yet honour.
+ * **One route for the first submission and for a correction**, which is what section 22
+ * documents — its route list carries this one write and notes that an Admin amendment is
+ * a flag on it. Section 13 gives the argument, about the amendment and applying equally
+ * here: everything a correction does is what a submission does, and "a second route would
+ * have to stay behaviourally identical to this one forever". `DccAttendanceService` takes
+ * the same shape one domain over, for the same reason.
+ *
+ * The two are told apart by `version`, and the capability differs between them: section 7
+ * guards a first submission with `cell.take_attendance` and a correction with
+ * `cell.correct_subtree`. A route declares one capability, so the second is checked in
+ * the service — again as DCC does.
+ *
+ * **All three statuses, and the first submission's restriction moved to the service.**
+ * `RESCHEDULED` is legal on a correction and not on a first submission (section 13,
+ * decision 0188), and a DTO cannot tell which it is looking at: whether a record exists is
+ * a fact about the database. It was refused here while the route made only first
+ * submissions; it is now refused in the service, where the answer is known, and the
+ * refusal is an `INVARIANT_VIOLATION` rather than a validation error because the request
+ * is well formed and breaks a domain rule.
  */
 export class SubmitCellMeetingDto {
-  @IsIn(['HELD', 'NOT_HELD'], {
-    message:
-      'status must be HELD or NOT_HELD. A reschedule changes an existing meeting ' +
-      '(SKILL.md section 13).',
+  @IsIn(['HELD', 'RESCHEDULED', 'NOT_HELD'])
+  status!: 'HELD' | 'RESCHEDULED' | 'NOT_HELD';
+
+  /**
+   * The date the meeting actually took place, where it moved (section 13).
+   *
+   * Required for `RESCHEDULED` and forbidden otherwise, which the schema also enforces
+   * (`cell_meetings_actual_date_iff_rescheduled`, migration 0011). A `HELD` meeting took
+   * place on its scheduled date and a `NOT_HELD` one did not take place at all, so an
+   * actual date on either is a second answer to a question the status already settles.
+   *
+   * It never moves the meeting's identity or its reporting month: "a January 31 Cell
+   * meeting rescheduled to February 2 remains part of January's Cell meeting report".
+   */
+  @IsOptional()
+  @IsManilaCalendarDate({
+    message: 'actual_date must be an Asia/Manila calendar day that exists, YYYY-MM-DD',
   })
-  status!: 'HELD' | 'NOT_HELD';
+  actual_date?: string;
+
+  /** The time it actually took place. Follows `actual_date`: both or neither. */
+  @IsOptional()
+  @Matches(/^([01]\d|2[0-3]):[0-5]\d$/, {
+    message: 'actual_time must be HH:MM on a 24-hour clock',
+  })
+  actual_time?: string;
+
+  /**
+   * Why an already-recorded meeting is being changed (section 14).
+   *
+   * Optional, matching `cell_attendance.correction_reason`, and meaningless on a first
+   * submission — where it is refused, so it cannot be read as a reason for the original.
+   * Section 14 asks for a reason "as appropriate" rather than always: a submission is a
+   * whole roster, and requiring one per changed line would put a dialog in front of a
+   * leader who noticed one mistake in twenty names.
+   */
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  correction_reason?: string;
 
   /**
    * The `cell_meetings.version` the client read, or absent for a first submission.
@@ -52,6 +103,12 @@ export class SubmitCellMeetingDto {
    * client believes no record exists — and two clients can believe that at once, which
    * the unique index over `(cell_id, scheduled_date)` decides rather than a version
    * comparison, because there is no version to compare.
+   *
+   * **Present means the client read a record and is correcting it.** That is what tells
+   * this route which of its two operations it is performing, and therefore which
+   * capability section 7 requires. A version sent for a meeting with no record is
+   * refused — section 22 is explicit that a refusal with no second value to show is not
+   * a `VERSION_CONFLICT`, whatever went stale.
    */
   @IsOptional()
   @IsInt()

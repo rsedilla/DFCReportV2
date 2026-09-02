@@ -1,18 +1,26 @@
 import { Injectable, Inject } from '@nestjs/common';
 import { sql } from 'kysely';
+import { randomUUID } from 'node:crypto';
 
 import {
   ApiError,
   ApiErrorCode,
   InvariantViolationError,
   NotFoundError,
+  ScopeDeniedError,
 } from '../common/errors/api-error';
+import { VersionConflictError } from '../common/errors/version-conflict';
 import { DATABASE, type Db } from '../database/database.module';
 
 import { isMonthOpen, reportingMonthOf } from '../common/time/submission-window';
 
 import { AuditService } from '../audit/audit.service';
-import { type Actor } from '../auth/authorization/authorization.service';
+import {
+  AuthorizationService,
+  type Actor,
+  type ActorAuthority,
+} from '../auth/authorization/authorization.service';
+import { Capability } from '../auth/authorization/capabilities';
 import { CellsReadService } from '../cells/cells.read.service';
 import { IdempotencyService } from '../common/idempotency/idempotency.service';
 
@@ -22,6 +30,33 @@ import type { Database } from '../database/schema';
 import type { Transaction } from 'kysely';
 
 type SubmitCellMeeting = SubmitCellMeetingDto;
+
+/**
+ * What both of this route's operations answer with.
+ *
+ * Declared as a shape rather than `Record<string, unknown>` because it is handed to
+ * `completeWithin`, whose `body` is `Json | null` — and an *unknown* value is not JSON
+ * whatever it happens to hold. Naming the shape is also what makes a replay's promise
+ * checkable: section 22 replays what was stored, so what is recorded must be what is
+ * returned (CLAUDE.md, *Write endpoints*).
+ *
+ * **A type alias rather than an interface, and that is not style.** TypeScript gives an
+ * implicit index signature to the first and not to the second, so an interface here is
+ * not assignable to `Json` and the completion would not compile.
+ */
+type CellMeetingSubmissionResponse = {
+  cell_id: string;
+  meeting_id: string;
+  status: string;
+  reporting_month: string;
+  responsible_leader_id: string;
+  facilitated_by: string;
+  version: number;
+  recorded: number;
+  present: number;
+  /** Absent on a first submission, which corrects nothing. */
+  corrected?: number;
+};
 
 /**
  * A Cell's meetings for one reporting month (SKILL.md sections 12, 13 and 20).
@@ -63,6 +98,7 @@ export class CellMeetingsService {
     private readonly cells: CellsReadService,
     private readonly audit: AuditService,
     private readonly idempotency: IdempotencyService,
+    private readonly authorization: AuthorizationService,
   ) {}
 
   /**
@@ -262,6 +298,16 @@ export class CellMeetingsService {
   ): Promise<Record<string, unknown>> {
     const reportingMonth = reportingMonthOf(meetingId);
 
+    // **On the pool, before the transaction opens** (section 24), which is what every
+    // other write service here does: `authorityFor` reads `account_roles` and
+    // `capability_grants`, and a transaction holding a connection while asking the pool
+    // for another is the liveness hazard section 24 names. The `coversWith` call it
+    // feeds takes the transaction, which is why the two are separate methods.
+    //
+    // Read on every submission rather than only on a correction, because deferring it
+    // would move the pool read inside the transaction on exactly the path that needs it.
+    const authority = await this.authorization.authorityFor(actor.accountId);
+
     return this.db.transaction().execute(async (trx) => {
       const cell = await this.cells.cellById(trx, cellId);
       if (cell === null) {
@@ -295,19 +341,74 @@ export class CellMeetingsService {
 
       const existing = await trx
         .selectFrom('cell_meetings')
-        .select(['id', 'version'])
+        .select([
+          'id',
+          'version',
+          'status',
+          'responsible_leader_id',
+          'facilitated_by',
+          'submitted_by',
+          'submitted_at',
+        ])
         .where('cell_id', '=', cellId)
         .where('scheduled_date', '=', meetingId)
         .executeTakeFirst();
 
-      // A second submission is a correction, which changes an existing record and is
-      // the operation section 13's change history covers. Refused here rather than
-      // silently overwriting, which section 14 forbids in terms.
+      // **A second submission is a correction, and it is the same route** (sections 13,
+      // 14 and 22). Section 22's route list carries one meeting write; section 13 argues
+      // about the Admin amendment that "a second route would have to stay behaviourally
+      // identical to this one forever", and the argument covers this as squarely. The
+      // two are told apart by `version`, and section 7's capability split is honoured in
+      // `correctWithin` rather than on the decorator, because a route declares one
+      // capability. `DccAttendanceService` takes the same shape for the same reason.
       if (existing !== undefined) {
+        const response = await this.correctWithin(trx, {
+          cellId,
+          cellHandle: cell.cellId,
+          meetingId,
+          reportingMonth,
+          existing,
+          body,
+          actor,
+          authority,
+        });
+
+        // The same last statement the first-submission path ends with, and the same
+        // reasons (CLAUDE.md, *Write endpoints*). 201 on both outcomes, matching
+        // `POST /dcc/events/{id}/submit`, which likewise creates or corrects and
+        // declares no `@HttpCode`: Nest fixes a route's status statically, so an
+        // outcome-dependent one would need the response object, and section 22 fixes no
+        // status per outcome.
+        await this.idempotency.completeWithin(trx, { ...claim, status: 201, body: response });
+
+        return response;
+      }
+
+      // A version sent for a meeting with no record. Section 22 is explicit that a
+      // refusal with no second value to show is not a `VERSION_CONFLICT`, whatever went
+      // stale — there is nothing to put in `current`. Unlike the DCC counterpart this
+      // *is* reachable from a state a client could have read, because nothing yet
+      // deletes a `cell_meetings` row but nothing has ever written one for this meeting:
+      // the client read a roster whose `meeting` was null and sent a version anyway.
+      if (body.version !== undefined) {
         throw new InvariantViolationError(
-          'This meeting already has a record. Correcting one is a separate operation ' +
-            '(SKILL.md sections 13 and 14).',
-          { cell_id: cellId, meeting_id: meetingId, current_version: existing.version },
+          'You sent a version for a meeting that has no record yet. Re-read the roster.',
+          { cell_id: cellId, meeting_id: meetingId, submitted_version: body.version },
+        );
+      }
+
+      // **A first submission cannot say `RESCHEDULED`** (section 13, decision 0188). A
+      // reschedule changes a record that exists — it is what `cell_meeting_changes`
+      // records, and a change row needs a `from_status` and a `from_date`. Section 7
+      // also depends on it: `actual_date` is chosen by an actor, and the frozen
+      // responsible leader is actor-independent only because the instant it is frozen
+      // from is the scheduled date. Refused here rather than in the DTO, which cannot
+      // know whether a record exists.
+      if (body.status === 'RESCHEDULED') {
+        throw new InvariantViolationError(
+          'A meeting is recorded before it is rescheduled: report what happened, then move ' +
+            'it (SKILL.md section 13).',
+          { cell_id: cellId, meeting_id: meetingId },
         );
       }
 
@@ -412,6 +513,326 @@ export class CellMeetingsService {
 
       return response;
     });
+  }
+
+  /**
+   * Correct a meeting that already has a record (SKILL.md sections 13, 14 and 22).
+   *
+   * **The version unit is the meeting, which is the whole of what makes this unlike
+   * DCC** (section 14). "One submission is one leader's account of one meeting, so the
+   * meeting is the unit": the client sends `cell_meetings.version`, one comparison
+   * decides the whole roster, and nine against eight is a disagreement about the account
+   * rather than about any one person. `DccAttendanceService` compares per
+   * `(event, person)` because a DCC event is church-wide and two leaders recording
+   * different people must never conflict — a Cell meeting belongs to one leader, so it
+   * has a unit and does not need that. This is written from section 14 rather than from
+   * that service (decision 0100).
+   *
+   * **What a correction preserves is section 14's list**, and two entries on it are why
+   * this method writes less than it might. `responsible_leader_id` is frozen and never
+   * re-resolved (section 13). `submitted_by` and `submitted_at` are **not** overwritten:
+   * section 14 names "actual submitter/actor" among what a correction preserves, so the
+   * meeting keeps the person who first reported it, and who corrected it lives in the
+   * audit entry and in each successor row's `recorded_by`.
+   *
+   * **Only the lines that changed are superseded.** A leader resubmitting a roster with
+   * one name flipped writes one pair of rows, not twenty — and an unchanged line is not
+   * an amendment, which is what keeps `cell.correct_subtree` off a resubmission that
+   * changes nothing. Section 9 states that rule for DCC and the reasoning is the domain's
+   * rather than that domain's.
+   */
+  private async correctWithin(
+    trx: Transaction<Database>,
+    params: {
+      cellId: string;
+      cellHandle: string;
+      meetingId: string;
+      reportingMonth: string;
+      existing: {
+        id: string;
+        version: number;
+        status: string;
+        responsible_leader_id: string;
+        facilitated_by: string | null;
+        submitted_by: string | null;
+        submitted_at: Date | null;
+      };
+      body: SubmitCellMeeting;
+      actor: Actor;
+      authority: ActorAuthority;
+    },
+  ): Promise<CellMeetingSubmissionResponse> {
+    const { cellId, meetingId, existing, body, actor } = params;
+
+    // **The roster is read at the meeting's own instant, exactly as the first
+    // submission reads it** (sections 12 and 13). A correction is an account of the same
+    // meeting, so it answers about the same people; reading `now` would let a membership
+    // change since the meeting silently add or drop a line.
+    const members = await this.cells.membersAsOfWithin(trx, cellId, meetingId);
+    const attendance = assertAttendanceMatchesRoster(body, members, { cellId, meetingId });
+
+    const live = await trx
+      .selectFrom('cell_attendance')
+      .select(['id', 'person_id', 'present', 'version', 'recorded_by', 'recorded_at'])
+      .where('cell_meeting_id', '=', existing.id)
+      .where('superseded_at', 'is', null)
+      .execute();
+
+    const stored = new Map(live.map((row) => [row.person_id, row]));
+
+    // **The version check comes before the capability check, and before any write.**
+    // A stale client is told its record moved rather than that it lacks a capability,
+    // which is section 14's outcome: the person resolving a conflict needs both values.
+    if (body.version !== existing.version) {
+      throw await this.conflictFor(trx, {
+        actor,
+        submittedVersion: body.version ?? null,
+        existing,
+        submittedPresent: attendance.filter((line) => line.present).length,
+        storedPresent: live.filter((row) => row.present).length,
+      });
+    }
+
+    // **A status change is not this operation**, and the refusal is temporary: the
+    // reschedule and the `RESCHEDULED -> NOT_HELD` transition arrive in this slice with
+    // `cell_meeting_changes`, which is what section 13 requires a status move to write.
+    // Refused rather than silently applied, because applying it here would move a
+    // meeting between statuses with no change row to explain it.
+    if (body.status !== existing.status) {
+      throw new InvariantViolationError(
+        'Changing a meeting\u2019s status is a separate operation from correcting its ' +
+          'attendance (SKILL.md section 13).',
+        {
+          cell_id: cellId,
+          meeting_id: meetingId,
+          current_status: existing.status,
+          submitted_status: body.status,
+        },
+      );
+    }
+
+    const changed = attendance.filter((line) => {
+      const row = stored.get(line.person_id);
+
+      return row === undefined || row.present !== line.present;
+    });
+
+    // **An unchanged submission is not an amendment**, so it needs no correction
+    // capability and writes nothing but its own idempotency completion. Section 9 makes
+    // the same call one domain over: "the version guards against overwriting a change
+    // nobody saw, and there is nothing here to overwrite."
+    if (changed.length > 0) {
+      await this.assertMayCorrect(trx, params);
+    }
+
+    for (const line of changed) {
+      const predecessor = stored.get(line.person_id);
+      const successorId = randomUUID();
+
+      if (predecessor !== undefined) {
+        // Closed first, and the successor's `recorded_at` is read back **in SQL** from
+        // the row just closed. Carrying the instant through this process truncates
+        // `timestamptz` microseconds to milliseconds, so the successor would begin up to
+        // a millisecond before its predecessor ended — the overlap migration 0013
+        // refuses, and the defect decision 0177 records shipping twice because both
+        // sides of the comparison came back through the same driver.
+        await trx
+          .updateTable('cell_attendance')
+          .set({ superseded_at: sql<Date>`clock_timestamp()`, superseded_by: successorId })
+          .where('id', '=', predecessor.id)
+          .where('superseded_at', 'is', null)
+          .execute();
+      }
+
+      await trx
+        .insertInto('cell_attendance')
+        .values({
+          id: successorId,
+          cell_meeting_id: existing.id,
+          person_id: line.person_id,
+          present: line.present,
+          recorded_by: actor.accountId,
+          correction_reason: body.correction_reason ?? null,
+          version: predecessor === undefined ? 1 : predecessor.version + 1,
+          ...(predecessor === undefined
+            ? {}
+            : {
+                recorded_at: sql<Date>`(SELECT superseded_at FROM cell_attendance WHERE id = ${predecessor.id})`,
+              }),
+        })
+        .execute();
+    }
+
+    // The meeting's own version moves once per submission, whatever the roster did —
+    // it is the unit (section 14), so a client that read version N and corrected it
+    // holds a stale read afterwards even where its own lines were the unchanged ones.
+    const bumped = await trx
+      .updateTable('cell_meetings')
+      .set({ version: existing.version + 1 })
+      .where('id', '=', existing.id)
+      .where('version', '=', existing.version)
+      .returning('version')
+      .executeTakeFirstOrThrow();
+
+    // Section 21 lists "Attendance corrections" among what is audited, and unlike a
+    // first submission this is written whoever the actor is: the record changed, and
+    // the row that changed carries only its own successor's actor.
+    await this.audit.writeWithin(trx, {
+      actorId: actor.accountId,
+      action: 'cell_attendance.corrected',
+      targetType: 'cell',
+      targetId: cellId,
+      before: { meeting_id: meetingId, version: existing.version },
+      after: {
+        meeting_id: meetingId,
+        version: bumped.version,
+        status: existing.status,
+        responsible_leader_id: existing.responsible_leader_id,
+        corrected: changed.length,
+        present: attendance.filter((line) => line.present).length,
+        reason: body.correction_reason ?? null,
+      },
+    });
+
+    return {
+      cell_id: params.cellHandle,
+      meeting_id: meetingId,
+      status: existing.status,
+      reporting_month: params.reportingMonth,
+      responsible_leader_id: existing.responsible_leader_id,
+      facilitated_by: existing.facilitated_by ?? existing.responsible_leader_id,
+      version: bumped.version,
+      recorded: attendance.length,
+      present: attendance.filter((line) => line.present).length,
+      corrected: changed.length,
+    };
+  }
+
+  /**
+   * `cell.correct_subtree`, which section 7 requires of an amendment and which the
+   * decorator cannot declare (SKILL.md section 7).
+   *
+   * `cell.take_attendance` was checked by the guard before anything about the record was
+   * read, so this is reached only by an actor already in scope of the meeting. The target
+   * is the meeting's **frozen responsible leader**, which is what section 7 resolves a
+   * Cell meeting through (decision 0188) — the same Person the guard used, read from the
+   * row rather than re-resolved so the two checks cannot disagree.
+   */
+  private async assertMayCorrect(
+    trx: Transaction<Database>,
+    params: {
+      cellId: string;
+      meetingId: string;
+      existing: { responsible_leader_id: string };
+      actor: Actor;
+      authority: ActorAuthority;
+    },
+  ): Promise<void> {
+    const covered = await this.authorization.coversWith(
+      trx,
+      params.actor,
+      params.authority,
+      Capability.CellCorrectSubtree,
+      { kind: 'person', personId: params.existing.responsible_leader_id },
+    );
+
+    if (!covered) {
+      throw new ScopeDeniedError(
+        'Correcting a meeting that has already been reported is outside your scope.',
+        {
+          capability: Capability.CellCorrectSubtree,
+          cell_id: params.cellId,
+          meeting_id: params.meetingId,
+        },
+      );
+    }
+  }
+
+  /**
+   * The conflict a stale version answers with (SKILL.md sections 14 and 22).
+   *
+   * Section 22 fixes the body: both values, both actors and both timestamps, "so that a
+   * person can choose between them". For a Cell the value is the present count, which is
+   * what section 14's own example is about — nine against eight is a disagreement about
+   * the whole roster rather than about any one person, and several of the people in it
+   * may not differ at all.
+   */
+  private async conflictFor(
+    executor: Transaction<Database>,
+    params: {
+      actor: Actor;
+      submittedVersion: number | null;
+      existing: { version: number; submitted_by: string | null; submitted_at: Date | null };
+      submittedPresent: number;
+      storedPresent: number;
+    },
+  ): Promise<ApiError> {
+    return new VersionConflictError({
+      submittedVersion: params.submittedVersion,
+      currentVersion: params.existing.version,
+      submitted: {
+        values: { present: params.submittedPresent },
+        recordedAt: new Date().toISOString(),
+        actor: await this.personNameFor(executor, params.actor.personId),
+      },
+      current: {
+        values: { present: params.storedPresent },
+        // The meeting's own submission instant, which is when the account now stored
+        // was made. A correction does not move it (section 14 preserves the submitter),
+        // so this names the reading the other client is looking at.
+        recordedAt: (params.existing.submitted_at ?? new Date()).toISOString(),
+        actor: await this.accountNameFor(executor, params.existing.submitted_by),
+      },
+    });
+  }
+
+  /** A Person's name for a conflict body, on the caller's executor. */
+  private async personNameFor(
+    executor: Transaction<Database>,
+    personId: string | null,
+  ): Promise<{ id: string; name: string }> {
+    if (personId === null) {
+      return { id: '', name: 'somebody whose account has since been removed' };
+    }
+
+    const person = await executor
+      .selectFrom('persons')
+      .select(['first_name', 'last_name'])
+      .where('id', '=', personId)
+      .executeTakeFirst();
+
+    return {
+      id: personId,
+      name:
+        person === undefined
+          ? 'somebody no longer recorded'
+          : `${person.first_name} ${person.last_name}`,
+    };
+  }
+
+  /**
+   * The Person behind an account, for a conflict body.
+   *
+   * On the caller's executor rather than the pool, for the reason the DCC counterpart
+   * gives: section 14 makes a conflict an ordinary outcome rather than a rare one, so
+   * reaching the pool here would ask for a second connection while holding one, every
+   * time two leaders disagree (section 24).
+   */
+  private async accountNameFor(
+    executor: Transaction<Database>,
+    accountId: string | null,
+  ): Promise<{ id: string; name: string }> {
+    if (accountId === null) {
+      return { id: '', name: 'an earlier submission' };
+    }
+
+    const account = await executor
+      .selectFrom('accounts')
+      .select('person_id')
+      .where('id', '=', accountId)
+      .executeTakeFirst();
+
+    return this.personNameFor(executor, account?.person_id ?? null);
   }
 
   /**

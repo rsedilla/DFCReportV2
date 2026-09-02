@@ -95,6 +95,14 @@ describe('recording a Cell meeting (sections 12, 13 and 14)', () => {
     return result.rows[0].day;
   }
 
+  /** An Admin, for the cases where the corrector must not be the original submitter. */
+  async function adminAccount(): Promise<TestAccount> {
+    const person = await createPerson(db, { firstName: 'Admina', network: 'MENS' });
+    await assignTo(db, person.id, root.id);
+
+    return createAccount(app, db, { person, roles: ['ADMIN'] });
+  }
+
   /** A member of Mark's Cell from well before any meeting these cases record. */
   async function member(firstName: string): Promise<TestPerson> {
     const person = await createPerson(db, { firstName, network: 'MENS' });
@@ -230,7 +238,18 @@ describe('recording a Cell meeting (sections 12, 13 and 14)', () => {
     expect(response.status).toBe(409);
   });
 
-  it('refuses a second submission, because that is a correction', async () => {
+  it('refuses a second submission that carries no version', async () => {
+    // **This case used to refuse a second submission outright**, because the route made
+    // only first submissions and section 14 forbids silently overwriting one. It now
+    // makes both, and `version` is what tells them apart — so what is refused here is
+    // narrower and is the same rule: a client that sends no version is asserting there is
+    // no record, and there is one.
+    //
+    // It answers a conflict rather than a plain refusal, which is section 22's first
+    // null-`submitted_version` case: "a Cell meeting, which has no row until it is
+    // reported. Two first submissions of one meeting race, and the loser meets the
+    // uniqueness of `(cell_id, scheduled_date)`." The body still carries both sides,
+    // because that is what section 14 requires a person to choose between.
     const one = await member('Aurelio');
     const body = { status: 'HELD', attendance: [{ person_id: one.id, present: true }] };
 
@@ -238,7 +257,9 @@ describe('recording a Cell meeting (sections 12, 13 and 14)', () => {
 
     const second = await submit(body);
     expect(second.status).toBe(409);
-    expect(second.body.error.code).toBe('INVARIANT_VIOLATION');
+    expect(second.body.error.code).toBe('VERSION_CONFLICT');
+    expect(second.body.error.details.submitted_version).toBeNull();
+    expect(second.body.error.details.current_version).toBe(1);
   });
 
   it('names the Cell leader when an upline submits on behalf', async () => {
@@ -455,24 +476,398 @@ describe('recording a Cell meeting (sections 12, 13 and 14)', () => {
     //
     // The DTO refused this before either ruling needed it to. What had no case was the
     // refusal itself, which is now a premise rather than a detail.
+    //
+    // **It moved out of the DTO when the correction path arrived**, and the code moved
+    // with it. `RESCHEDULED` is legal on a *correction*, and whether this is one is a
+    // fact about the database that a DTO cannot see — so the refusal is now the
+    // service's, and a well-formed request breaking a domain rule is an
+    // `INVARIANT_VIOLATION` rather than a validation error.
     const one = await member('Aurelio');
 
     // **No `actual_date` in the body, and the first version of this case sent one.**
-    // The DTO declares no such field, so `forbidNonWhitelisted` would have refused the
-    // request whatever the status said — a case that passes with the status check
-    // deleted, which is the shape this repository keeps catching. Sending the status
-    // alone leaves `@IsIn` as the only thing that can refuse it.
+    // The DTO then declared no such field, so `forbidNonWhitelisted` would have refused
+    // the request whatever the status said — a case that passes with the status check
+    // deleted, which is the shape this repository keeps catching. The DTO now *does*
+    // declare `actual_date`, so that particular vacuity is gone; the status is still
+    // sent alone, because what this case measures is the status rule and not the
+    // schema's pairing of a date with `RESCHEDULED`.
     const response = await submit({
       status: 'RESCHEDULED',
       attendance: [{ person_id: one.id, present: true }],
     });
 
-    expect(response.status).toBe(422);
-    expect(response.body.error.code).toBe('VALIDATION_FAILED');
+    expect(response.status).toBe(409);
+    expect(response.body.error.code).toBe('INVARIANT_VIOLATION');
 
     // And nothing was written, which the status code alone does not say.
     const rows = await db.selectFrom('cell_meetings').select('id').execute();
     expect(rows).toHaveLength(0);
+  });
+
+  describe('correcting a meeting that already has a record (sections 14 and 22)', () => {
+    /** Records the meeting once and returns its version, so each case starts from one. */
+    async function recorded(
+      lines: { person_id: string; present: boolean }[],
+    ): Promise<{ version: number; meetingId: string }> {
+      const first = await submit({ status: 'HELD', attendance: lines });
+      expect(first.status).toBe(201);
+
+      return { version: first.body.version as number, meetingId: first.body.meeting_id as string };
+    }
+
+    const liveRows = () =>
+      db
+        .selectFrom('cell_attendance')
+        .select(['person_id', 'present', 'version', 'id'])
+        .where('superseded_at', 'is', null)
+        .execute();
+
+    it('supersedes only the lines that changed, and bumps the meeting once', async () => {
+      // **The meeting is the version unit** (section 14): one comparison decides the
+      // whole roster. But a correction writes per line, and only where a line moved —
+      // a leader flipping one name in twenty writes one pair of rows, not twenty.
+      const one = await member('Aurelio');
+      const two = await member('Bartolome');
+      const { version } = await recorded([
+        { person_id: one.id, present: true },
+        { person_id: two.id, present: false },
+      ]);
+
+      const before = await liveRows();
+      const unchangedId = before.find((row) => row.person_id === one.id)?.id;
+
+      const response = await submit({
+        status: 'HELD',
+        version,
+        attendance: [
+          { person_id: one.id, present: true },
+          { person_id: two.id, present: true },
+        ],
+      });
+
+      expect(response.status).toBe(201);
+      expect(response.body.corrected).toBe(1);
+      expect(response.body.version).toBe(version + 1);
+
+      const after = await liveRows();
+      expect(after).toHaveLength(2);
+
+      // Bartolome's row was replaced and carries the next version.
+      const corrected = after.find((row) => row.person_id === two.id);
+      expect(corrected).toMatchObject({ present: true, version: 2 });
+
+      // Aurelio's is the row that was already there — the same id, untouched.
+      expect(after.find((row) => row.person_id === one.id)?.id).toBe(unchangedId);
+    });
+
+    it('leaves the superseded row in place, pointing at its successor', async () => {
+      // Section 1 principle 12 and section 14: a correction never overwrites. The record
+      // carries its own history, which is what makes an attendance figure explicable
+      // after the fact.
+      const one = await member('Aurelio');
+      const { version } = await recorded([{ person_id: one.id, present: false }]);
+
+      await submit({
+        status: 'HELD',
+        version,
+        attendance: [{ person_id: one.id, present: true }],
+        correction_reason: 'miscounted on the night',
+      }).expect(201);
+
+      const chain = await db
+        .selectFrom('cell_attendance')
+        .select(['present', 'version', 'superseded_at', 'superseded_by', 'id', 'correction_reason'])
+        .orderBy('version')
+        .execute();
+
+      expect(chain).toHaveLength(2);
+      expect(chain[0]).toMatchObject({ present: false, version: 1 });
+      expect(chain[1]).toMatchObject({ present: true, version: 2 });
+      expect(chain[0].superseded_by).toBe(chain[1].id);
+      expect(chain[0].superseded_at).not.toBeNull();
+
+      // The reason belongs to the correction, not to the original.
+      expect(chain[0].correction_reason).toBeNull();
+      expect(chain[1].correction_reason).toBe('miscounted on the night');
+    });
+
+    it('begins the successor exactly where its predecessor ended', async () => {
+      // **Migration 0013's contiguity rule, and the defect decision 0177 records
+      // shipping twice.** The successor's `recorded_at` is read back in SQL from the row
+      // just closed; carrying the instant through this process truncates `timestamptz`
+      // microseconds to milliseconds and the successor begins early.
+      //
+      // Compared in the **database**, for the same reason: two values that came back
+      // through node-postgres are both truncated to the same millisecond, so a
+      // comparison in JavaScript agrees with itself whatever the code did.
+      const one = await member('Aurelio');
+      const { version } = await recorded([{ person_id: one.id, present: false }]);
+
+      await submit({
+        status: 'HELD',
+        version,
+        attendance: [{ person_id: one.id, present: true }],
+      }).expect(201);
+
+      const contiguous = await sql<{ ok: boolean }>`
+        SELECT bool_and(successor.recorded_at = predecessor.superseded_at) AS ok
+          FROM cell_attendance predecessor
+          JOIN cell_attendance successor ON successor.id = predecessor.superseded_by
+         WHERE predecessor.id <> successor.id
+      `.execute(db);
+
+      expect(contiguous.rows[0].ok).toBe(true);
+    });
+
+    it('refuses a stale version with both values, both actors and both timestamps', async () => {
+      // Section 22 fixes this body and section 14 says why: "Present both values, with
+      // who recorded each and when, and let an authorized user decide." A conflict
+      // response that omits any of them cannot satisfy section 14.
+      const one = await member('Aurelio');
+      const two = await member('Bartolome');
+      const { version } = await recorded([
+        { person_id: one.id, present: true },
+        { person_id: two.id, present: true },
+      ]);
+
+      // Somebody else corrects it first, so the version moves.
+      await submit({
+        status: 'HELD',
+        version,
+        attendance: [
+          { person_id: one.id, present: true },
+          { person_id: two.id, present: false },
+        ],
+      }).expect(201);
+
+      // Now the stale client submits against the version it read.
+      const response = await submit({
+        status: 'HELD',
+        version,
+        attendance: [
+          { person_id: one.id, present: false },
+          { person_id: two.id, present: false },
+        ],
+      });
+
+      expect(response.status).toBe(409);
+      expect(response.body.error.code).toBe('VERSION_CONFLICT');
+
+      const details = response.body.error.details;
+      expect(details.submitted_version).toBe(version);
+      expect(details.current_version).toBe(version + 1);
+
+      // Both values, as present counts — which is what section 14's own example is
+      // about: nine against eight is a disagreement about the roster rather than about
+      // any one person.
+      expect(details.submitted.present).toBe(0);
+      expect(details.current.present).toBe(1);
+
+      // Both actors and both timestamps, which are the halves a status code cannot say.
+      expect(details.submitted.actor.name).toContain('Mark');
+      expect(details.current.actor.name).toContain('Mark');
+      expect(typeof details.submitted.recorded_at).toBe('string');
+      expect(typeof details.current.recorded_at).toBe('string');
+    });
+
+    it('writes nothing when the submission changes nothing, and still bumps the version', async () => {
+      // **An unchanged submission is not an amendment** (section 9's rule, and the
+      // domain's rather than that domain's): the version guards against overwriting a
+      // change nobody saw, and there is nothing here to overwrite. The meeting's version
+      // still moves, because it is the unit and a client that read N holds a stale read
+      // afterwards either way.
+      const one = await member('Aurelio');
+      const { version } = await recorded([{ person_id: one.id, present: true }]);
+      const before = await liveRows();
+
+      const response = await submit({
+        status: 'HELD',
+        version,
+        attendance: [{ person_id: one.id, present: true }],
+      });
+
+      expect(response.status).toBe(201);
+      expect(response.body.corrected).toBe(0);
+      expect(response.body.version).toBe(version + 1);
+
+      // The same row, not a rewritten one.
+      const after = await db.selectFrom('cell_attendance').select(['id']).execute();
+      expect(after).toHaveLength(1);
+      expect(after[0].id).toBe(before[0].id);
+    });
+
+    it('preserves the original submitter, which section 14 lists among what a correction keeps', async () => {
+      const one = await member('Aurelio');
+      const { version } = await recorded([{ person_id: one.id, present: true }]);
+
+      const stored = await db
+        .selectFrom('cell_meetings')
+        .select(['submitted_by', 'submitted_at'])
+        .executeTakeFirstOrThrow();
+
+      const admin = await adminAccount();
+      await submit(
+        { status: 'HELD', version, attendance: [{ person_id: one.id, present: false }] },
+        admin,
+      ).expect(201);
+
+      const afterwards = await db
+        .selectFrom('cell_meetings')
+        .select(['submitted_by', 'submitted_at'])
+        .executeTakeFirstOrThrow();
+
+      // Mark reported it; Admin corrected it. Section 14 preserves "actual
+      // submitter/actor", so the meeting still names Mark and who corrected it lives in
+      // the audit entry and in the successor row's `recorded_by`.
+      expect(afterwards.submitted_by).toBe(stored.submitted_by);
+      expect(afterwards.submitted_at).toStrictEqual(stored.submitted_at);
+
+      const successor = await db
+        .selectFrom('cell_attendance')
+        .select('recorded_by')
+        .where('superseded_at', 'is', null)
+        .executeTakeFirstOrThrow();
+      expect(successor.recorded_by).toBe(admin.id);
+    });
+
+    it('audits a correction whoever makes it, unlike a first submission', async () => {
+      // Section 21 lists "Attendance corrections". A first submission by the meeting's
+      // own leader writes no entry — the record is the entry — so this is the only place
+      // the *fact of the change* is recorded.
+      const one = await member('Aurelio');
+      const { version } = await recorded([{ person_id: one.id, present: true }]);
+
+      await submit({
+        status: 'HELD',
+        version,
+        attendance: [{ person_id: one.id, present: false }],
+      }).expect(201);
+
+      const entries = await db
+        .selectFrom('audit_log')
+        .select(['action', 'target_type', 'target_id', 'after'])
+        .where('action', '=', 'cell_attendance.corrected')
+        .execute();
+
+      expect(entries).toHaveLength(1);
+      expect(entries[0].target_type).toBe('cell');
+      expect(entries[0].target_id).toBe(markCell.id);
+      expect(entries[0].after).toMatchObject({ corrected: 1, version: version + 1 });
+    });
+
+    it('refuses a corrector who holds cell.take_attendance and not cell.correct_subtree', async () => {
+      // **Section 7 splits the two capabilities and this is the only case that can tell
+      // them apart.** `cell.take_attendance` guards the first submission and
+      // `cell.correct_subtree` an amendment of a record that already stands. A route
+      // declares one capability, so the second is checked in the service — the shape
+      // `DccAttendanceService` already uses, for the same reason.
+      //
+      // **Under role defaults nothing distinguishes them**: a `LEADER` holds both at
+      // `OWN_SUBTREE`, so every other case here passes both checks and would pass with
+      // the second deleted. The actor is therefore built with **no role at all** and one
+      // explicit grant, which is the only way to hold one and not the other. Section 7
+      // permits exactly that: "A capability without an explicit scope grant is not
+      // usable", and a grant needs no role behind it.
+      const one = await member('Aurelio');
+      const { version } = await recorded([{ person_id: one.id, present: true }]);
+
+      const admin = await adminAccount();
+      // Root, who is upline of Mark. `OWN_SUBTREE` must reach the meeting's responsible
+      // leader for the guard to pass, and Mark already holds an account —
+      // `accounts_person_id_key` allows one per Person.
+      const halfLeader = await createAccount(app, db, { person: root, roles: [] });
+
+      await db
+        .insertInto('capability_grants')
+        .values({
+          account_id: halfLeader.id,
+          capability: 'cell.take_attendance',
+          scope_type: 'OWN_SUBTREE',
+          read_only: false,
+          reason: 'Invented for this case (CLAUDE.md, Secrets).',
+          granted_by: admin.id,
+        })
+        .execute();
+
+      // It reaches the route — the guard is satisfied — and is refused by the domain
+      // check, which is what makes this a `SCOPE_DENIED` naming the capability rather
+      // than a `CAPABILITY_DENIED` from the guard.
+      const response = await submit(
+        { status: 'HELD', version, attendance: [{ person_id: one.id, present: false }] },
+        halfLeader,
+      );
+
+      expect(response.status).toBe(403);
+      expect(response.body.error.code).toBe('SCOPE_DENIED');
+      expect(response.body.error.details.capability).toBe('cell.correct_subtree');
+
+      // And the record is untouched, which the status code does not say.
+      const live = await liveRows();
+      expect(live).toHaveLength(1);
+      expect(live[0].present).toBe(true);
+    });
+
+    it('lets that same actor make a first submission, which is the other half of the split', async () => {
+      // The complement, and it is what stops the case above passing for the wrong
+      // reason: an actor refused *everything* would redden it too. This one holds
+      // `cell.take_attendance` and records a meeting with it, so the refusal above is
+      // about the correction and not about the actor.
+      const one = await member('Aurelio');
+      const admin = await adminAccount();
+      // Root, who is upline of Mark. `OWN_SUBTREE` must reach the meeting's responsible
+      // leader for the guard to pass, and Mark already holds an account —
+      // `accounts_person_id_key` allows one per Person.
+      const halfLeader = await createAccount(app, db, { person: root, roles: [] });
+
+      await db
+        .insertInto('capability_grants')
+        .values({
+          account_id: halfLeader.id,
+          capability: 'cell.take_attendance',
+          scope_type: 'OWN_SUBTREE',
+          read_only: false,
+          reason: 'Invented for this case (CLAUDE.md, Secrets).',
+          granted_by: admin.id,
+        })
+        .execute();
+
+      await submit(
+        { status: 'HELD', attendance: [{ person_id: one.id, present: true }] },
+        halfLeader,
+      ).expect(201);
+    });
+
+    it('refuses a version for a meeting that has no record', async () => {
+      // Section 22: a refusal with no second value to show is not a VERSION_CONFLICT,
+      // whatever went stale — there is nothing to put in `current`. Reachable here in a
+      // way its DCC counterpart is not: the client read a roster whose `meeting` was
+      // null and sent a version anyway.
+      const one = await member('Aurelio');
+
+      const response = await submit({
+        status: 'HELD',
+        version: 1,
+        attendance: [{ person_id: one.id, present: true }],
+      });
+
+      expect(response.status).toBe(409);
+      expect(response.body.error.code).toBe('INVARIANT_VIOLATION');
+      expect(await db.selectFrom('cell_meetings').select('id').execute()).toHaveLength(0);
+    });
+
+    it('refuses a status change, which is a separate operation', async () => {
+      const one = await member('Aurelio');
+      const { version } = await recorded([{ person_id: one.id, present: true }]);
+
+      const response = await submit({
+        status: 'NOT_HELD',
+        version,
+        not_held_reason: 'WEATHER_OR_CALAMITY',
+      });
+
+      expect(response.status).toBe(409);
+      expect(response.body.error.code).toBe('INVARIANT_VIOLATION');
+    });
   });
 
   it('refuses a date the Cell was not scheduled to meet on', async () => {

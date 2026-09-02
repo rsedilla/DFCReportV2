@@ -227,6 +227,17 @@ export type AuditAction =
   // and resolves through nothing". Same rule, different targets, because the two
   // domains hang their attendance off different things.
   | 'cell_attendance.submitted_on_behalf'
+  // Section 21's "Attendance corrections", the Cell half. **Written whoever the
+  // actor is**, unlike the pair above: a first submission by the meeting's own
+  // leader writes no entry because the record is the entry, and a correction is a
+  // change to a record that already stood — so the audit log is the only place the
+  // *fact of the change* lives, `cell_meetings` carrying one mutable version and
+  // `cell_attendance` carrying only the successor's own actor.
+  //
+  // Targets the Cell, with its `submitted_on_behalf` twin and for that entry's
+  // reason: section 7 resolves an entry through its target, and a Cell meeting
+  // resolves through the Cell.
+  | 'cell_attendance.corrected'
   | 'cell_leadership.opened'
   // Section 21 lists this as an action in its own right: "Cell leadership assignment
   // left with account provisioning pending". It names a state rather than an actor,
