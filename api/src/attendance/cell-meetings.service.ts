@@ -640,6 +640,20 @@ export class CellMeetingsService {
       );
     }
 
+    // **Whether this meeting is the actor's to record at all, decided before anything
+    // about the roster is read** (section 14, decision 0192). It depends on nothing
+    // stored beyond who the meeting resolves through, so it can run first — and it must,
+    // because everything below branches on what is stored.
+    //
+    // *A first version put it after the roster comparison, beside the amendment
+    // capability. That made the **success** answer what the refusal was placed not to:
+    // an actor without `cell.submit_on_behalf` got 201 for a roster that matched and 403
+    // for one that did not, so two probes read the stored roster back on a meeting they
+    // may not record. `DccAttendanceService` runs its equivalent for every line whatever
+    // the outcome, and pins the identical refusal either way; this is that rule, and the
+    // ordering claim in the commit that introduced it was half true.*
+    await this.assertMayActForAnother(trx, params);
+
     // **The roster is read at the meeting's own instant, exactly as the first
     // submission reads it** (sections 12 and 13). A correction is an account of the same
     // meeting, so it answers about the same people; reading `now` would let a membership
@@ -700,8 +714,9 @@ export class CellMeetingsService {
     // **The capability is checked before anything about the stored record is disclosed,
     // and that now includes the null-version case.** What the early return above still
     // answers — matched or did not match — is accepted as a disclosure by decision 0191,
-    // on the ground that recovering N people costs 2^N submissions and that no read route
-    // carries per-person attendance at all.
+    // on the ground that recovering N people costs 2^N submissions and that the actor
+    // holds the capability that records this meeting: `cell.submit_on_behalf` is settled
+    // above, so every actor reaching the early return may file this meeting outright.
     // A `VERSION_CONFLICT` carries the
     // stored present count and the submitter's name (section 22), which
     // `GET .../roster` does not — so an actor holding `cell.take_attendance` and not
@@ -712,12 +727,6 @@ export class CellMeetingsService {
     // the disclosure. Omitting `version` walked straight through. Whatever is right for
     // a client that read no record, it cannot be that one payload is withheld at one
     // door and handed over at the other.*
-    // **On behalf first, then the amendment capability**, which is the ordering
-    // `DccAttendanceService` documents and closes: the on-behalf check depends on nothing
-    // stored beyond who the meeting resolves through, while `cell.correct_subtree` is
-    // reached exactly when the roster differs from what is stored. Checked the other way
-    // round, the refusal itself would say whether the submitted roster matched.
-    await this.assertMayActForAnother(trx, params);
     await this.assertMayCorrect(trx, params);
 
     // **No version, against a record that exists**, is section 22's first

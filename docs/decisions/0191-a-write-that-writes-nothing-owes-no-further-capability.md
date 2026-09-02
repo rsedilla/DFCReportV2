@@ -17,7 +17,18 @@ its refusal would otherwise require.
 
 ## The ruling
 
-**It owes no further capability, and the confirmation is accepted as a disclosure.**
+**It owes no *amendment* capability, and the confirmation is accepted as a disclosure.**
+
+**The amendment capability and nothing else**, which the first version of this ruling did
+not say. Written as "no capability beyond the one that reached it" it was general, and two
+things falsified it: `dcc.submit_on_behalf` is required of an unchanged DCC line today, and
+decision 0192 — made the same day — requires `cell.submit_on_behalf` of a meeting that is
+not the actor's. Read generally, this ruling put that check behind the roster comparison,
+so the **success** answered what the refusal was withheld to protect: 201 for a matching
+roster and 403 for a differing one, on a meeting the actor may not record at all.
+
+Every capability except the amendment one is decided before what is stored is read, and
+must be: whether a record is the actor's to touch is not a question about its contents.
 
 ## Why accepted rather than closed
 
@@ -27,9 +38,10 @@ detail — so recovering N people's attendance costs 2^N submissions rather than
 Cell of twelve that is four thousand requests to learn twelve booleans, each one a
 state-changing call carrying its own idempotency key.
 
-**The actor is not a stranger to the record.** They hold the capability that *records*
-this meeting, resolved against it — they may file it, and one more grant lets them
-overwrite it outright. What they are being kept from is amending somebody else's account
+**The actor is not a stranger to the record.** Every actor who reaches this point holds
+the capability that *records* this meeting and, under decision 0192, the right to record
+it for whoever leads it — they may file it, and one more grant lets them overwrite it
+outright. What they are being kept from is amending somebody else's account
 of it, which is what `cell.correct_subtree` is for.
 
 **The alternative costs an honest leader something real.** Requiring the correction

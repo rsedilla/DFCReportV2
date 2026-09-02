@@ -18,11 +18,18 @@ the Person the meeting resolves through** (Section 7's resolution: the Cell's cu
 leader while it is `ACTIVE`, the record's frozen responsible leader once it is closed and
 the window is open). An actor who *is* that leader needs only `cell.take_attendance`.
 
-It is checked **before** `cell.correct_subtree`, and that ordering is not cosmetic:
-`DccAttendanceService` documents the same one. The on-behalf check depends on nothing
-stored beyond who the meeting resolves through, while the correction capability is reached
-exactly when the submitted roster differs from what is stored — so the reverse order would
-make the refusal itself answer whether the roster matched.
+It is checked **before the roster is compared at all**, which is stronger than "before
+`cell.correct_subtree`" and is what the first version of this ruling said. That version put
+it beside the amendment capability, after the comparison — and decision 0191's early return
+for a submission that changes nothing then answered **201** to an actor lacking this
+capability, while a differing roster answered 403. Two probes read the stored roster back
+on a meeting the actor may not record.
+
+The ordering is not cosmetic and `DccAttendanceService` had it right: it runs its
+equivalent for every line whatever the outcome, and `dcc-attendance.e2e.spec.ts` pins the
+identical refusal either way. The on-behalf check depends on nothing stored beyond who the
+meeting resolves through, so it can run first — and it must, because everything after it
+branches on what is stored.
 
 ## Why the resolution and not the responsible leader
 

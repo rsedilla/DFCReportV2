@@ -59,6 +59,18 @@ there.
 - A per-person route, if one is ever wanted, is a new operation with a ruling of its own,
   and this records what it would have to answer: what its conflict body is, and how two
   units coexist on one record.
+- **It overturns part of decision 0164**, *A Cell submission versions the meeting; a DCC
+  submission versions the person*, whose section "What `cell_attendance.version` is for"
+  states the withdrawn rule verbatim. That ruling stands in every other respect — the two
+  units are still what it settled — and only its account of this column is superseded.
+  Cited here because a reader meeting 0164 first has nothing pointing forward otherwise.
+- **Migration 0011's column comment says the withdrawn rule and is not editable.** It
+  reads "Guards a correction to one person's record… A submission bumps the meeting's
+  version; a correction bumps this one", which is now false in both halves. The file is
+  merged, so it is frozen (2026-09-01), and a migration written only to correct a comment
+  buys less than it costs: the column's meaning now lives in Section 14 and in
+  `cell-meetings.service.ts`, which are what a reader is directed to. Recorded here so the
+  staleness is deliberate rather than missed.
 
 No code changes: the route already implements the surviving operation.
 

@@ -894,17 +894,73 @@ describe('recording a Cell meeting (sections 12, 13 and 14)', () => {
     });
 
     it('asks nothing extra of the leader whose own meeting it is', async () => {
-      // The other side of the same rule, and the one that keeps it from being a tax on
-      // every leader: Mark is the leader this meeting resolves through, so recording it
-      // is not acting for another and `cell.take_attendance` alone reaches it.
-      const one = await member('Aurelio');
-      const mine = await granted([]);
-      void mine;
+      // The other side of the rule, and what keeps it from being a tax on every leader:
+      // an actor who *is* the leader the meeting resolves through is not recording for
+      // another, so `cell.take_attendance` alone reaches it.
+      //
+      // **A fresh Cell and a fresh leader, because the actor has to be the one under
+      // test.** The first version of this case created an account and then submitted as
+      // `markAccount`, a `LEADER` holding every Cell capability — so it stayed green with
+      // the whole check deleted, which is the shape this repository keeps catching.
+      const ben = await createPerson(db, { firstName: 'Ben', network: 'MENS' });
+      await assignTo(db, ben.id, root.id);
+      const bensCell = await createCell(db, { leader: ben, dayOfWeek: 6, createdAt: CREATED });
 
-      await submit({
-        status: 'HELD',
-        attendance: [{ person_id: one.id, present: true }],
-      }).expect(201);
+      const admin = await adminAccount();
+      const bensAccount = await createAccount(app, db, { person: ben, roles: [] });
+
+      await db
+        .insertInto('capability_grants')
+        .values({
+          account_id: bensAccount.id,
+          capability: 'cell.take_attendance',
+          scope_type: 'OWN_SUBTREE',
+          read_only: false,
+          reason: 'Invented for this case (CLAUDE.md, Secrets).',
+          granted_by: admin.id,
+        })
+        .execute();
+
+      await request(app.getHttpServer())
+        .post(`/api/v1/cells/${bensCell.id}/meetings/${meetingDate}/submit`)
+        .set('Authorization', `Bearer ${bensAccount.accessToken}`)
+        .set('Idempotency-Key', randomUUID())
+        .send({ status: 'HELD' })
+        .expect(201);
+    });
+
+    it('answers one refusal whatever the roster says, for an actor who may not record it', async () => {
+      // **The ordering, and the defect it closes.** `cell.submit_on_behalf` decides
+      // whether this meeting is the actor's to record at all, which is not a question
+      // about its contents — so it is settled before the roster is compared.
+      //
+      // Placed after the comparison, the *success* answered what the refusal was withheld
+      // to protect: an agreeing roster returned 201 and a differing one 403, so two
+      // probes read the stored roster back on a meeting the actor may not record.
+      // `dcc-attendance.e2e.spec.ts` pins the identical property one domain over —
+      // "answers the same refusal for an off-checklist person whatever is stored".
+      const one = await member('Aurelio');
+      const { version } = await recorded([{ person_id: one.id, present: true }]);
+
+      const upline = await granted(['cell.take_attendance']);
+
+      const agreeing = await submit(
+        { status: 'HELD', version, attendance: [{ person_id: one.id, present: true }] },
+        upline,
+      );
+      const differing = await submit(
+        { status: 'HELD', version, attendance: [{ person_id: one.id, present: false }] },
+        upline,
+      );
+
+      // The same refusal, naming the same capability — so the pair carries no bit about
+      // what is stored.
+      expect(agreeing.status).toBe(403);
+      expect(differing.status).toBe(403);
+      expect(agreeing.body.error.code).toBe('SCOPE_DENIED');
+      expect(differing.body.error.code).toBe('SCOPE_DENIED');
+      expect(agreeing.body.error.details.capability).toBe('cell.submit_on_behalf');
+      expect(differing.body.error.details.capability).toBe('cell.submit_on_behalf');
     });
 
     it('lets the current leader correct a meeting frozen to their predecessor', async () => {
