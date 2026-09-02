@@ -206,6 +206,55 @@ describe('a closed Cell meeting resolves per record (section 7)', () => {
     expect(response.body.responsible_leader_id).toBe(mark.id);
   });
 
+  it('lets the leader of the day correct their own meeting, on a closed Cell', async () => {
+    // **Section 7's exception is "recording **or correcting**", and only the recording
+    // half had a case.** The correction path resolves through the same port and the same
+    // frozen leader, so nothing here is new machinery — which is exactly why it is worth
+    // a case: a write nothing exercises is a write nobody has seen work.
+    //
+    // The member's row is inserted already closed, at the Cell's own closure instant.
+    // Migration 0009 refuses an *open* membership on a CLOSED Cell and permits a closed
+    // one, and `membersAsOfWithin` compares dates — so this person was a member on the
+    // meeting's date, which is what the roster asks.
+    const attendee = await createPerson(db, { firstName: 'Perlita', network: 'MENS' });
+    await assignTo(db, attendee.id, mark.id);
+
+    const closedAt = await db
+      .selectFrom('cells')
+      .select('closed_at')
+      .where('id', '=', cell.id)
+      .executeTakeFirstOrThrow();
+
+    await db
+      .insertInto('cell_memberships')
+      .values({
+        person_id: attendee.id,
+        cell_id: cell.id,
+        started_at: CREATED,
+        ended_at: closedAt.closed_at,
+      })
+      .execute();
+
+    const first = await submit(marksMeeting, markAccount, {
+      status: 'HELD',
+      attendance: [{ person_id: attendee.id, present: true }],
+    }).expect(201);
+
+    const corrected = await submit(marksMeeting, markAccount, {
+      status: 'HELD',
+      version: first.body.version as number,
+      attendance: [{ person_id: attendee.id, present: false }],
+      correction_reason: 'she left before we started',
+    }).expect(201);
+
+    expect(corrected.body.corrected).toBe(1);
+    expect(corrected.body.version).toBe((first.body.version as number) + 1);
+
+    // And the correction resolved through the frozen leader, not a re-read of a Cell
+    // that no longer has one.
+    expect(corrected.body.responsible_leader_id).toBe(mark.id);
+  });
+
   it('refuses the leader of the day once that month has shut', async () => {
     // **The bound that keeps the exception consistent with the rule it excepts.**
     // Section 7: "once the window shuts, that too resolves through nobody and only
