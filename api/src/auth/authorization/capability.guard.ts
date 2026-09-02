@@ -23,6 +23,7 @@ import {
   type TargetSpec,
 } from './authorization.decorators';
 import { AuthorizationService, type Actor } from './authorization.service';
+import { CELL_MEETING_SCOPE_PORT, type CellMeetingScopePort } from './cell-meeting-scope.port';
 import { CELL_SCOPE_PORT, type CellScopePort } from './cell-scope.port';
 
 import type { AuthenticatedRequest } from './access-token.guard';
@@ -55,6 +56,9 @@ export class CapabilityGuard implements CanActivate {
      * fail-closed direction.
      */
     @Optional() @Inject(CELL_SCOPE_PORT) private readonly cellScope?: CellScopePort,
+    @Optional()
+    @Inject(CELL_MEETING_SCOPE_PORT)
+    private readonly cellMeetingScope?: CellMeetingScopePort,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -169,10 +173,12 @@ export class CapabilityGuard implements CanActivate {
 
     if (spec.kind === 'cell_meeting') {
       // Section 7 places a Cell meeting **per record**: through the Cell's current
-      // leader while the Cell is ACTIVE, and through whoever led it on the meeting's
-      // date once the Cell is closed and the month's window is still open. The port
-      // decides which, because `cells` owns both `cell_leaderships` and `cells.state`.
-      if (!this.cellScope) {
+      // leader while the Cell is ACTIVE, and — once the Cell is closed and the month's
+      // window is still open — through the meeting's own frozen responsible leader
+      // where a record exists, or whoever led the Cell on the scheduled date where none
+      // does (decision 0188). The port decides which, and it is a *different* port from
+      // the Cell one: the record lives in `cell_meetings`, which `attendance` owns.
+      if (!this.cellMeetingScope) {
         throw new CapabilityDeniedError(
           'This deployment cannot resolve a Cell scope, so the endpoint is closed.',
           { target: 'cell_meeting' },
@@ -200,7 +206,7 @@ export class CapabilityGuard implements CanActivate {
         );
       }
 
-      const meetingLeaderId = await this.cellScope.leaderForMeetingScope(value, on);
+      const meetingLeaderId = await this.cellMeetingScope.leaderForMeetingScope(value, on);
 
       // Null resolves to the nil UUID for the reason the Cell branch above gives at
       // length: an absence is made to look like a denial, so that a closed month, a

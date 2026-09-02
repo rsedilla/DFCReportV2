@@ -130,6 +130,19 @@ describe('a closed Cell meeting resolves per record (section 7)', () => {
     await app.close();
   });
 
+  /**
+   * The Monday of a Manila date's ISO week, which `cell_meetings_week_starting_derived`
+   * requires (migration 0011). Computed here rather than hard-coded, because the two
+   * meeting dates move with the calendar so the fixture stays inside the open window.
+   */
+  const mondayOf = (day: string): string => {
+    const at = new Date(`${day}T00:00:00Z`);
+    const isoDay = (at.getUTCDay() + 6) % 7;
+    at.setUTCDate(at.getUTCDate() - isoDay);
+
+    return at.toISOString().slice(0, 10);
+  };
+
   const roster = (meetingId: string, as: TestAccount) =>
     request(app.getHttpServer())
       .get(`/api/v1/cells/${cell.id}/meetings/${meetingId}/roster`)
@@ -217,6 +230,45 @@ describe('a closed Cell meeting resolves per record (section 7)', () => {
     const response = await roster(old.rows[0].day, markAccount);
 
     expect(response.status).toBe(403);
+  });
+
+  it('resolves a rescheduled meeting through its frozen leader, not its scheduled date', async () => {
+    // **Decision 0188, and the case the ruling exists for.** Section 7 fixed the
+    // authorizing date as the *scheduled* one, on section 13's premise that "on a closed
+    // Cell `actual_date` equals `scheduled_date`" — an inference about rescheduling a
+    // Cell that is already closed, and false of a meeting moved while the Cell was
+    // ACTIVE and closed afterwards.
+    //
+    // Mark's Saturday, moved to Nestor's. Section 13 resolves the freeze from the
+    // meeting's own instant, which is the actual date, so the record belongs to Nestor.
+    // Under the withdrawn rule the scheduled date answered Mark — so **Mark could
+    // correct Nestor's record and Nestor could not correct his own**, which is the
+    // inverse of the coincidence section 7's exception is justified by.
+    //
+    // The row is written directly because the reschedule route does not exist yet; this
+    // slice builds it, and this case is what tells it which resolution it inherits.
+    await db
+      .insertInto('cell_meetings')
+      .values({
+        cell_id: cell.id,
+        scheduled_date: marksMeeting,
+        scheduled_time: '19:00',
+        week_starting: mondayOf(marksMeeting),
+        reporting_month: `${marksMeeting.slice(0, 7)}-01`,
+        status: 'RESCHEDULED',
+        actual_date: nestorsMeeting,
+        actual_time: '19:00',
+        // What section 13 would have frozen: the leader at the meeting's own instant.
+        responsible_leader_id: nestor.id,
+      } as never)
+      .execute();
+
+    // Nestor holds the record, so Nestor reaches it.
+    await roster(marksMeeting, nestorAccount).expect(200);
+
+    // And Mark, who led on the scheduled date, does not. That is the assertion the
+    // withdrawn rule reverses: it is 200 for Mark and 403 for Nestor.
+    await roster(marksMeeting, markAccount).expect(403);
   });
 
   it('refuses the previous leader on an ACTIVE Cell that changed hands', async () => {

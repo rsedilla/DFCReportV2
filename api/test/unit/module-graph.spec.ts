@@ -4,8 +4,10 @@ import { AppModule } from '../../src/app.module';
 import { AccessTokenGuard } from '../../src/auth/authorization/access-token.guard';
 import { AuthorizationService } from '../../src/auth/authorization/authorization.service';
 import { CapabilityGuard } from '../../src/auth/authorization/capability.guard';
+import { CELL_MEETING_SCOPE_PORT } from '../../src/auth/authorization/cell-meeting-scope.port';
 import { CELL_SCOPE_PORT } from '../../src/auth/authorization/cell-scope.port';
 import { CredentialsService } from '../../src/auth/credentials.service';
+import { CellMeetingsScopeService } from '../../src/attendance/cell-meetings.scope.service';
 import { CellsReadService } from '../../src/cells/cells.read.service';
 import { NetworksService } from '../../src/networks/networks.service';
 
@@ -104,6 +106,27 @@ describe('the application module graph (section 2)', () => {
     // exercises Cell-scoped authorization end to end.
     expect(moduleRef.get(CELL_SCOPE_PORT, { strict: false })).toBe(
       moduleRef.get(CellsReadService, { strict: false }),
+    );
+
+    // **`CELL_MEETING_SCOPE_PORT`, on the same terms and for a sharper reason**
+    // (decision 0188). This one is bound to a provider in `AttendanceModule`, while the
+    // binding lives in `AppModule` — which is exactly the arrangement that broke
+    // `CELL_RELATIONSHIPS_PORT` once, because Nest resolves a provider's dependencies
+    // in the module that *registers* it. Dropping `CellMeetingsScopeService` from
+    // `AttendanceModule`'s `exports` is the mutation this catches, and the guard's
+    // optional injection means nothing else would: every Cell-meeting route would
+    // answer `CAPABILITY_DENIED` with a message about the deployment, in CI, on an
+    // application that compiles.
+    expect(moduleRef.get(CELL_MEETING_SCOPE_PORT, { strict: false })).toBe(
+      moduleRef.get(CellMeetingsScopeService, { strict: false }),
+    );
+
+    // The two ports are distinct objects as well as distinct tokens. Binding both to
+    // one class would type-check — `CellsReadService` no longer declares
+    // `leaderForMeetingScope`, but a future edit could give it one — and would put the
+    // meeting resolution back in the module that does not own `cell_meetings`.
+    expect(moduleRef.get(CELL_MEETING_SCOPE_PORT, { strict: false })).not.toBe(
+      moduleRef.get(CELL_SCOPE_PORT, { strict: false }),
     );
 
     await moduleRef.close();
