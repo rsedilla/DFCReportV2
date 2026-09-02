@@ -12,10 +12,7 @@ import {
   MaxLength,
   Min,
   ValidateNested,
-  Matches,
 } from 'class-validator';
-
-import { IsManilaCalendarDate } from '../../common/time/is-manila-calendar-date';
 
 /** One person's presence at the meeting (SKILL.md section 12). */
 export class CellAttendanceLineDto {
@@ -45,6 +42,13 @@ export class CellAttendanceLineDto {
  * `cell.correct_subtree`. A route declares one capability, so the second is checked in
  * the service — again as DCC does.
  *
+ * **`actual_date` and `actual_time` are deliberately absent**, and were briefly here.
+ * `forbidNonWhitelisted` refuses an undeclared field, so declaring one the service does
+ * not read turns a refusal into silent acceptance — and section 22's versioning rule
+ * makes that costly in one direction only: a field accepted and ignored cannot later be
+ * given meaning without changing behaviour for clients already sending it. They arrive
+ * with the reschedule that reads them.
+ *
  * **All three statuses, and the first submission's restriction moved to the service.**
  * `RESCHEDULED` is legal on a correction and not on a first submission (section 13,
  * decision 0188), and a DTO cannot tell which it is looking at: whether a record exists is
@@ -56,30 +60,6 @@ export class CellAttendanceLineDto {
 export class SubmitCellMeetingDto {
   @IsIn(['HELD', 'RESCHEDULED', 'NOT_HELD'])
   status!: 'HELD' | 'RESCHEDULED' | 'NOT_HELD';
-
-  /**
-   * The date the meeting actually took place, where it moved (section 13).
-   *
-   * Required for `RESCHEDULED` and forbidden otherwise, which the schema also enforces
-   * (`cell_meetings_actual_date_iff_rescheduled`, migration 0011). A `HELD` meeting took
-   * place on its scheduled date and a `NOT_HELD` one did not take place at all, so an
-   * actual date on either is a second answer to a question the status already settles.
-   *
-   * It never moves the meeting's identity or its reporting month: "a January 31 Cell
-   * meeting rescheduled to February 2 remains part of January's Cell meeting report".
-   */
-  @IsOptional()
-  @IsManilaCalendarDate({
-    message: 'actual_date must be an Asia/Manila calendar day that exists, YYYY-MM-DD',
-  })
-  actual_date?: string;
-
-  /** The time it actually took place. Follows `actual_date`: both or neither. */
-  @IsOptional()
-  @Matches(/^([01]\d|2[0-3]):[0-5]\d$/, {
-    message: 'actual_time must be HH:MM on a 24-hour clock',
-  })
-  actual_time?: string;
 
   /**
    * Why an already-recorded meeting is being changed (section 14).

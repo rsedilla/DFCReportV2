@@ -5,6 +5,9 @@ import { CellsReadService } from '../cells/cells.read.service';
 import { isMonthOpen, reportingMonthOf } from '../common/time/submission-window';
 import { DATABASE, type Db } from '../database/database.module';
 
+import type { Database } from '../database/schema';
+import type { Transaction } from 'kysely';
+
 /**
  * `CELL_MEETING_SCOPE_PORT`. Where a Cell meeting sits in the pastoral tree, for the
  * guard (SKILL.md section 7; decisions 0186, 0187, 0188).
@@ -51,16 +54,42 @@ export class CellMeetingsScopeService implements CellMeetingScopePort {
    * inside one resolves its own leader from the transaction it is already in.
    */
   async leaderForMeetingScope(cellId: string, on: string): Promise<string | null> {
-    const cell = await this.cells.cellById(this.db, cellId);
+    return this.leaderForMeetingScopeWithin(this.db, cellId, on);
+  }
+
+  /**
+   * The same resolution, on a caller's executor.
+   *
+   * **It exists because a domain check must reach the answer the guard reached**, and
+   * the guard's is taken on the pool outside any transaction. `CellMeetingsService`
+   * checks `cell.correct_subtree` against the meeting inside its own transaction, and a
+   * check resolving the meeting a *second* way is a check that can disagree with the
+   * one that admitted the request — which is exactly the defect this method was added to
+   * remove: `assertMayCorrect` resolved against the frozen leader unconditionally, so on
+   * an `ACTIVE` Cell that had changed hands the current leader was refused a correction
+   * section 7 gives them, and the former leader was refused by the guard. Neither could
+   * correct it.
+   *
+   * The pair is `CellsReadService`'s `leaderForScope` / `leaderForScopeWithin` shape,
+   * and for its reason: the port answers on the pool because the guard runs outside a
+   * transaction, and a domain check inside one asks the `Within` form so it reads what
+   * its own transaction can see.
+   */
+  async leaderForMeetingScopeWithin(
+    executor: Db | Transaction<Database>,
+    cellId: string,
+    on: string,
+  ): Promise<string | null> {
+    const cell = await this.cells.cellById(executor, cellId);
     if (cell === null) {
       return null;
     }
 
     if (cell.state !== 'CLOSED') {
-      return this.cells.leaderForScopeWithin(this.db, cellId);
+      return this.cells.leaderForScopeWithin(executor, cellId);
     }
 
-    if (!(await isMonthOpen(this.db, reportingMonthOf(on)))) {
+    if (!(await isMonthOpen(executor, reportingMonthOf(on)))) {
       return null;
     }
 
@@ -73,7 +102,7 @@ export class CellMeetingsScopeService implements CellMeetingScopePort {
     // that exists always answers and the `??` below cannot mask a null column. It is
     // written to guard against the row being absent, which `executeTakeFirst` reports
     // as `undefined`.
-    const recorded = await this.db
+    const recorded = await executor
       .selectFrom('cell_meetings')
       .select('responsible_leader_id')
       .where('cell_id', '=', cellId)
@@ -87,6 +116,6 @@ export class CellMeetingsScopeService implements CellMeetingScopePort {
     // No record yet, so there is nothing frozen to read and the scheduled date is the
     // only thing that can answer. This is the closed-Cell *recording* path — a leader
     // filing a meeting their Cell held before it closed — and it is unchanged by 0188.
-    return this.cells.leaderOnDateWithin(this.db, cellId, on);
+    return this.cells.leaderOnDateWithin(executor, cellId, on);
   }
 }

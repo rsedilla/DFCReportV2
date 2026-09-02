@@ -670,12 +670,17 @@ describe('recording a Cell meeting (sections 12, 13 and 14)', () => {
       expect(typeof details.current.recorded_at).toBe('string');
     });
 
-    it('writes nothing when the submission changes nothing, and still bumps the version', async () => {
+    it('writes nothing at all when the submission changes nothing', async () => {
       // **An unchanged submission is not an amendment** (section 9's rule, and the
       // domain's rather than that domain's): the version guards against overwriting a
-      // change nobody saw, and there is nothing here to overwrite. The meeting's version
-      // still moves, because it is the unit and a client that read N holds a stale read
-      // afterwards either way.
+      // change nobody saw, and there is nothing here to overwrite.
+      //
+      // **So it moves nothing, including the meeting's version.** An earlier version
+      // bumped it and wrote a `cell_attendance.corrected` entry, without requiring
+      // `cell.correct_subtree` — which section 7 admits under neither reading: either it
+      // is an amendment and the capability is required, or it is not and no correction
+      // is recorded. A §21 reader filtering for corrections was finding acts that
+      // corrected nothing, by actors who could not have corrected anything.
       const one = await member('Aurelio');
       const { version } = await recorded([{ person_id: one.id, present: true }]);
       const before = await liveRows();
@@ -688,12 +693,20 @@ describe('recording a Cell meeting (sections 12, 13 and 14)', () => {
 
       expect(response.status).toBe(201);
       expect(response.body.corrected).toBe(0);
-      expect(response.body.version).toBe(version + 1);
+      expect(response.body.version).toBe(version);
 
       // The same row, not a rewritten one.
       const after = await db.selectFrom('cell_attendance').select(['id']).execute();
       expect(after).toHaveLength(1);
       expect(after[0].id).toBe(before[0].id);
+
+      // And no correction was recorded, which is the half the response cannot show.
+      const entries = await db
+        .selectFrom('audit_log')
+        .select('action')
+        .where('action', '=', 'cell_attendance.corrected')
+        .execute();
+      expect(entries).toHaveLength(0);
     });
 
     it('preserves the original submitter, which section 14 lists among what a correction keeps', async () => {
@@ -835,6 +848,154 @@ describe('recording a Cell meeting (sections 12, 13 and 14)', () => {
         { status: 'HELD', attendance: [{ person_id: one.id, present: true }] },
         halfLeader,
       ).expect(201);
+    });
+
+    it('lets the current leader correct a meeting frozen to their predecessor', async () => {
+      // **The defect this case exists for made the record uncorrectable by anybody who
+      // should have been able to correct it.** `assertMayCorrect` resolved against the
+      // meeting's frozen leader unconditionally, while the guard resolves an `ACTIVE`
+      // Cell through its *current* leader (decisions 0186 and 0188). On a Cell that had
+      // changed hands the two disagreed, so:
+      //
+      //   - the current leader passed the guard and was refused here, and
+      //   - the former leader was refused by the guard.
+      //
+      // Section 7 says in terms that the current leader files it: "On an `ACTIVE` Cell
+      // handed from A to B... B files it." Both checks now ask the same method.
+      const one = await member('Aurelio');
+      const { version } = await recorded([{ person_id: one.id, present: true }]);
+
+      const successor = await createPerson(db, { firstName: 'Nestor', network: 'MENS' });
+      await assignTo(db, successor.id, root.id);
+      const successorAccount = await createAccount(app, db, {
+        person: successor,
+        roles: ['LEADER'],
+      });
+
+      // Handed over the day after the meeting, so the meeting stays Mark's and the Cell
+      // becomes Nestor's.
+      const handover = new Date(`${meetingDate}T12:00:00+08:00`);
+      handover.setUTCDate(handover.getUTCDate() + 1);
+
+      await db.transaction().execute(async (trx) => {
+        await trx
+          .updateTable('cell_leaderships')
+          .set({ ended_at: handover })
+          .where('cell_id', '=', markCell.id)
+          .where('ended_at', 'is', null)
+          .execute();
+
+        await trx
+          .insertInto('cell_leaderships')
+          .values({ person_id: successor.id, cell_id: markCell.id, started_at: handover })
+          .execute();
+      });
+
+      const response = await submit(
+        { status: 'HELD', version, attendance: [{ person_id: one.id, present: false }] },
+        successorAccount,
+      );
+
+      expect(response.status).toBe(201);
+      expect(response.body.corrected).toBe(1);
+
+      // And it still belongs to Mark, which is section 13's freeze: scope and ownership
+      // are different questions.
+      expect(response.body.responsible_leader_id).toBe(mark.id);
+    });
+
+    it('checks the correction capability before disclosing the stored record', async () => {
+      // **Ordering, and it is the hazard `DccAttendanceService` documents.** A
+      // `VERSION_CONFLICT` carries the stored present count and the submitter's name
+      // (section 22), neither of which `GET .../roster` discloses — so raising it before
+      // the capability check lets an actor who may not correct this record read it out of
+      // the refusal, by sending any stale version.
+      //
+      // Under role defaults the residual sits inside the actor's own scope; it becomes a
+      // section 8 disclosure under a grant section 7 explicitly permits, which is the
+      // precondition DCC declined to rest on and this now does not either.
+      const one = await member('Aurelio');
+      await recorded([{ person_id: one.id, present: true }]);
+
+      const admin = await adminAccount();
+      // Root, who is upline of Mark. `OWN_SUBTREE` must reach the meeting's responsible
+      // leader for the guard to pass, and Mark already holds an account —
+      // `accounts_person_id_key` allows one per Person.
+      const halfLeader = await createAccount(app, db, { person: root, roles: [] });
+
+      await db
+        .insertInto('capability_grants')
+        .values({
+          account_id: halfLeader.id,
+          capability: 'cell.take_attendance',
+          scope_type: 'OWN_SUBTREE',
+          read_only: false,
+          reason: 'Invented for this case (CLAUDE.md, Secrets).',
+          granted_by: admin.id,
+        })
+        .execute();
+
+      const response = await submit(
+        { status: 'HELD', version: 99, attendance: [{ person_id: one.id, present: false }] },
+        halfLeader,
+      );
+
+      // The capability refusal, not the conflict — so nothing about the stored record
+      // is in the body.
+      expect(response.status).toBe(403);
+      expect(response.body.error.code).toBe('SCOPE_DENIED');
+      expect(JSON.stringify(response.body)).not.toContain('current_version');
+      expect(JSON.stringify(response.body)).not.toContain('present');
+    });
+
+    it('records on_behalf and the reason on the correction entry', async () => {
+      // Section 21: "a correction made for somebody else is one entry that says so... a
+      // reader filtering `...submitted_on_behalf` for what an upline did to other
+      // people's records would otherwise miss every correction." And the reason belongs
+      // in the column section 21 gives it, not inside `after`.
+      const one = await member('Aurelio');
+      const { version } = await recorded([{ person_id: one.id, present: true }]);
+
+      const admin = await adminAccount();
+      await submit(
+        {
+          status: 'HELD',
+          version,
+          attendance: [{ person_id: one.id, present: false }],
+          correction_reason: 'double counted',
+        },
+        admin,
+      ).expect(201);
+
+      const entry = await db
+        .selectFrom('audit_log')
+        .select(['after', 'reason'])
+        .where('action', '=', 'cell_attendance.corrected')
+        .executeTakeFirstOrThrow();
+
+      expect(entry.reason).toBe('double counted');
+      expect(entry.after).toMatchObject({ on_behalf: true, responsible_leader_id: mark.id });
+
+      // And the Cell's own leader correcting their own meeting is not on behalf.
+      const second = await db
+        .selectFrom('cell_meetings')
+        .select('version')
+        .executeTakeFirstOrThrow();
+
+      await submit({
+        status: 'HELD',
+        version: second.version,
+        attendance: [{ person_id: one.id, present: true }],
+      }).expect(201);
+
+      const entries = await db
+        .selectFrom('audit_log')
+        .select('after')
+        .where('action', '=', 'cell_attendance.corrected')
+        .execute();
+
+      expect(entries).toHaveLength(2);
+      expect(entries[1].after).toMatchObject({ on_behalf: false });
     });
 
     it('refuses a version for a meeting that has no record', async () => {

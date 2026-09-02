@@ -7,6 +7,7 @@ import {
   ApiErrorCode,
   InvariantViolationError,
   NotFoundError,
+  ResourceBusyError,
   ScopeDeniedError,
 } from '../common/errors/api-error';
 import { VersionConflictError } from '../common/errors/version-conflict';
@@ -22,6 +23,7 @@ import {
 } from '../auth/authorization/authorization.service';
 import { Capability } from '../auth/authorization/capabilities';
 import { CellsReadService } from '../cells/cells.read.service';
+import { CellMeetingsScopeService } from './cell-meetings.scope.service';
 import { IdempotencyService } from '../common/idempotency/idempotency.service';
 
 import type { SubmitCellMeetingDto } from './dto/cell-meeting-submit.dto';
@@ -99,6 +101,7 @@ export class CellMeetingsService {
     private readonly audit: AuditService,
     private readonly idempotency: IdempotencyService,
     private readonly authorization: AuthorizationService,
+    private readonly meetingScope: CellMeetingsScopeService,
   ) {}
 
   /**
@@ -564,40 +567,11 @@ export class CellMeetingsService {
   ): Promise<CellMeetingSubmissionResponse> {
     const { cellId, meetingId, existing, body, actor } = params;
 
-    // **The roster is read at the meeting's own instant, exactly as the first
-    // submission reads it** (sections 12 and 13). A correction is an account of the same
-    // meeting, so it answers about the same people; reading `now` would let a membership
-    // change since the meeting silently add or drop a line.
-    const members = await this.cells.membersAsOfWithin(trx, cellId, meetingId);
-    const attendance = assertAttendanceMatchesRoster(body, members, { cellId, meetingId });
-
-    const live = await trx
-      .selectFrom('cell_attendance')
-      .select(['id', 'person_id', 'present', 'version', 'recorded_by', 'recorded_at'])
-      .where('cell_meeting_id', '=', existing.id)
-      .where('superseded_at', 'is', null)
-      .execute();
-
-    const stored = new Map(live.map((row) => [row.person_id, row]));
-
-    // **The version check comes before the capability check, and before any write.**
-    // A stale client is told its record moved rather than that it lacks a capability,
-    // which is section 14's outcome: the person resolving a conflict needs both values.
-    if (body.version !== existing.version) {
-      throw await this.conflictFor(trx, {
-        actor,
-        submittedVersion: body.version ?? null,
-        existing,
-        submittedPresent: attendance.filter((line) => line.present).length,
-        storedPresent: live.filter((row) => row.present).length,
-      });
-    }
-
-    // **A status change is not this operation**, and the refusal is temporary: the
-    // reschedule and the `RESCHEDULED -> NOT_HELD` transition arrive in this slice with
-    // `cell_meeting_changes`, which is what section 13 requires a status move to write.
-    // Refused rather than silently applied, because applying it here would move a
-    // meeting between statuses with no change row to explain it.
+    // **A status change is not this operation**, and it is refused before anything is
+    // read about the roster — a change that writes no `cell_meeting_changes` row is a
+    // meeting moving between statuses with nothing to explain it (section 13). Checked
+    // first because a `NOT_HELD` body carries no attendance, so it would otherwise reach
+    // the "nothing changed" path below and be answered as a no-op.
     if (body.status !== existing.status) {
       throw new InvariantViolationError(
         'Changing a meeting\u2019s status is a separate operation from correcting its ' +
@@ -611,18 +585,102 @@ export class CellMeetingsService {
       );
     }
 
+    // **The roster is read at the meeting's own instant, exactly as the first
+    // submission reads it** (sections 12 and 13). A correction is an account of the same
+    // meeting, so it answers about the same people; reading `now` would let a membership
+    // change since the meeting silently add or drop a line.
+    const members = await this.cells.membersAsOfWithin(trx, cellId, meetingId);
+    const attendance = assertAttendanceMatchesRoster(body, members, { cellId, meetingId });
+
+    const live = await trx
+      .selectFrom('cell_attendance')
+      .select(['id', 'person_id', 'present', 'version'])
+      .where('cell_meeting_id', '=', existing.id)
+      .where('superseded_at', 'is', null)
+      .execute();
+
+    const stored = new Map(live.map((row) => [row.person_id, row]));
+
     const changed = attendance.filter((line) => {
       const row = stored.get(line.person_id);
 
       return row === undefined || row.present !== line.present;
     });
 
-    // **An unchanged submission is not an amendment**, so it needs no correction
-    // capability and writes nothing but its own idempotency completion. Section 9 makes
-    // the same call one domain over: "the version guards against overwriting a change
-    // nobody saw, and there is nothing here to overwrite."
-    if (changed.length > 0) {
-      await this.assertMayCorrect(trx, params);
+    // **A submission that changes nothing is not an amendment**, so it needs no
+    // correction capability, writes no rows, writes no audit entry and does not move the
+    // meeting's version. Section 9 makes the same call one domain over: "the version
+    // guards against overwriting a change nobody saw, and there is nothing here to
+    // overwrite."
+    //
+    // *An earlier version bumped the version and wrote a `cell_attendance.corrected`
+    // entry here, without requiring the capability — so the log recorded corrections
+    // that corrected nothing, made by actors who could not have corrected anything.
+    // Section 7 admits neither reading: either it is an amendment and the capability is
+    // required, or it is not and no correction is recorded.*
+    // **A submission carrying no version, against a record that exists, is section 22's
+    // first null-`submitted_version` case** — and it is a conflict whatever the values
+    // say. The client asserted there is no record; there is one. Section 22: "The record
+    // did not change since it was read; it came into existence while this client was
+    // drafting, which is the same problem from the other side and demands the same
+    // resolution."
+    //
+    // **Not `RESOURCE_BUSY`, which a first version of this answered when the values
+    // happened to agree.** That code means the identical body resubmitted succeeds, and
+    // this one would meet the identical refusal forever — there is no version in it to
+    // become current. It is raised before the correction capability because this actor is
+    // not correcting: they hold `cell.take_attendance`, the guard checked it, and the
+    // conflict body is how section 22 says they learn a record exists.
+    if (body.version === undefined) {
+      throw await this.conflictFor(trx, {
+        actor,
+        submittedVersion: null,
+        existing,
+        submittedPresent: attendance.filter((line) => line.present).length,
+        storedPresent: live.filter((row) => row.present).length,
+      });
+    }
+
+    if (changed.length === 0) {
+      // **A stale version with nothing to change is `RESOURCE_BUSY`, not a conflict**
+      // (section 22, *Write conflicts*): this account agrees with what is stored, so
+      // there is nothing to choose between, and "answering a conflict here would present
+      // two identical values". The identical body resubmitted succeeds — the version it
+      // carries is stale against a record whose values it already matches, so the retry
+      // finds nothing to write and returns.
+      if (body.version !== existing.version) {
+        throw new ResourceBusyError({
+          cell_id: cellId,
+          meeting_id: meetingId,
+          current_version: existing.version,
+        });
+      }
+
+      return this.responseFor(params, {
+        version: existing.version,
+        recorded: attendance.length,
+        present: attendance.filter((line) => line.present).length,
+        corrected: 0,
+      });
+    }
+
+    // **The capability is checked before the conflict is raised, and the order is the
+    // whole point.** A `VERSION_CONFLICT` carries the stored present count and the
+    // submitter's name (section 22), which `GET .../roster` does not disclose — so
+    // raising it first lets an actor who may not correct this record read it out of the
+    // refusal. `DccAttendanceService` documents that hazard and closes it the same way:
+    // "the ordering costs nothing, so it is not left resting on which grants happen to
+    // be issued."
+    await this.assertMayCorrect(trx, params);
+
+    if (body.version !== existing.version) {
+      throw await this.conflictFor(trx, {
+        actor,
+        submittedVersion: body.version ?? null,
+        existing,
+        submittedPresent: attendance.filter((line) => line.present).length,
+        storedPresent: live.filter((row) => row.present).length,
+      });
     }
 
     for (const line of changed) {
@@ -636,12 +694,22 @@ export class CellMeetingsService {
         // a millisecond before its predecessor ended — the overlap migration 0013
         // refuses, and the defect decision 0177 records shipping twice because both
         // sides of the comparison came back through the same driver.
-        await trx
+        //
+        // **The row count is read**, because a concurrent correction closing the same
+        // row first leaves this matching nothing — and falling through to the insert
+        // then violates `cell_attendance_one_live` and answers `INTERNAL_ERROR` on an
+        // ordinary race, which section 22 names as the failure that naming these cases
+        // exists to prevent.
+        const closed = await trx
           .updateTable('cell_attendance')
           .set({ superseded_at: sql<Date>`clock_timestamp()`, superseded_by: successorId })
           .where('id', '=', predecessor.id)
           .where('superseded_at', 'is', null)
-          .execute();
+          .executeTakeFirst();
+
+        if (closed.numUpdatedRows === 0n) {
+          throw await this.lostRaceFor(trx, params, attendance);
+        }
       }
 
       await trx
@@ -663,20 +731,35 @@ export class CellMeetingsService {
         .execute();
     }
 
-    // The meeting's own version moves once per submission, whatever the roster did —
-    // it is the unit (section 14), so a client that read version N and corrected it
-    // holds a stale read afterwards even where its own lines were the unchanged ones.
+    // The meeting's own version moves once per submission that writes something — it is
+    // the unit (section 14), so a client that read N holds a stale read afterwards.
+    //
+    // **Guarded on the version it read, and the result is checked.** Under READ
+    // COMMITTED a concurrent correction's `UPDATE` blocks here, re-qualifies after the
+    // winner commits, and matches nothing. `executeTakeFirstOrThrow` answered that with
+    // a `NoResultError` the exception filter renders as `INTERNAL_ERROR`, on exactly the
+    // race section 14 is about.
     const bumped = await trx
       .updateTable('cell_meetings')
       .set({ version: existing.version + 1 })
       .where('id', '=', existing.id)
       .where('version', '=', existing.version)
       .returning('version')
-      .executeTakeFirstOrThrow();
+      .executeTakeFirst();
 
-    // Section 21 lists "Attendance corrections" among what is audited, and unlike a
-    // first submission this is written whoever the actor is: the record changed, and
-    // the row that changed carries only its own successor's actor.
+    if (bumped === undefined) {
+      throw await this.lostRaceFor(trx, params, attendance);
+    }
+
+    // Section 21 lists "Attendance corrections", and unlike a first submission this is
+    // written whoever the actor is: the record changed, and `cell_meetings` carries one
+    // mutable version while `cell_attendance` carries only the successor's own actor.
+    //
+    // **`on_behalf` is carried on the entry**, which section 21 requires in terms: "a
+    // reader filtering `...submitted_on_behalf` for what an upline did to other people's
+    // records would otherwise miss every correction". Decided on the Person, as the
+    // first-submission entry decides it, because section 14 makes the submitter a Person
+    // and the responsible leader a Person while `actor_id` is an account.
     await this.audit.writeWithin(trx, {
       actorId: actor.accountId,
       action: 'cell_attendance.corrected',
@@ -688,24 +771,104 @@ export class CellMeetingsService {
         version: bumped.version,
         status: existing.status,
         responsible_leader_id: existing.responsible_leader_id,
+        on_behalf: actor.personId !== existing.responsible_leader_id,
         corrected: changed.length,
         present: attendance.filter((line) => line.present).length,
-        reason: body.correction_reason ?? null,
       },
+      // The column section 21 gives it, rather than a field inside `after`.
+      reason: body.correction_reason ?? null,
     });
 
-    return {
-      cell_id: params.cellHandle,
-      meeting_id: meetingId,
-      status: existing.status,
-      reporting_month: params.reportingMonth,
-      responsible_leader_id: existing.responsible_leader_id,
-      facilitated_by: existing.facilitated_by ?? existing.responsible_leader_id,
+    return this.responseFor(params, {
       version: bumped.version,
       recorded: attendance.length,
       present: attendance.filter((line) => line.present).length,
       corrected: changed.length,
+    });
+  }
+
+  /** The one response shape both outcomes of a correction answer with. */
+  private responseFor(
+    params: {
+      cellHandle: string;
+      meetingId: string;
+      reportingMonth: string;
+      existing: { status: string; responsible_leader_id: string; facilitated_by: string | null };
+    },
+    counts: { version: number; recorded: number; present: number; corrected: number },
+  ): CellMeetingSubmissionResponse {
+    return {
+      cell_id: params.cellHandle,
+      meeting_id: params.meetingId,
+      status: params.existing.status,
+      reporting_month: params.reportingMonth,
+      responsible_leader_id: params.existing.responsible_leader_id,
+      facilitated_by: params.existing.facilitated_by ?? params.existing.responsible_leader_id,
+      ...counts,
     };
+  }
+
+  /**
+   * The answer to a correction that lost a race (SKILL.md section 22, *Write conflicts*).
+   *
+   * Section 22 gives every lost race two outcomes, decided by re-reading the committed
+   * state rather than by what the winner wrote: the submission still **disagrees** with
+   * what is stored and answers `VERSION_CONFLICT`, or it now **agrees** and answers
+   * `RESOURCE_BUSY`, because the identical body resubmitted would succeed.
+   *
+   * **Re-read inside the same transaction, which is sound here and is not in every
+   * case.** Nothing has violated a constraint at this point — an `UPDATE` matched no
+   * rows — so the transaction is alive, and under READ COMMITTED each new statement sees
+   * what has committed since it began. `DccAttendanceService` re-reads on the pool
+   * instead because it reaches this path from a constraint violation, which poisons the
+   * transaction it was raised in.
+   */
+  private async lostRaceFor(
+    trx: Transaction<Database>,
+    params: {
+      cellId: string;
+      meetingId: string;
+      existing: {
+        id: string;
+        version: number;
+        submitted_by: string | null;
+        submitted_at: Date | null;
+      };
+      actor: Actor;
+    },
+    attendance: { person_id: string; present: boolean }[],
+  ): Promise<ApiError> {
+    const meeting = await trx
+      .selectFrom('cell_meetings')
+      .select('version')
+      .where('id', '=', params.existing.id)
+      .executeTakeFirstOrThrow();
+
+    const live = await trx
+      .selectFrom('cell_attendance')
+      .select(['person_id', 'present'])
+      .where('cell_meeting_id', '=', params.existing.id)
+      .where('superseded_at', 'is', null)
+      .execute();
+
+    const committed = new Map(live.map((row) => [row.person_id, row.present]));
+    const disagrees = attendance.some((line) => committed.get(line.person_id) !== line.present);
+
+    if (!disagrees) {
+      return new ResourceBusyError({
+        cell_id: params.cellId,
+        meeting_id: params.meetingId,
+        current_version: meeting.version,
+      });
+    }
+
+    return this.conflictFor(trx, {
+      actor: params.actor,
+      submittedVersion: params.existing.version,
+      existing: { ...params.existing, version: meeting.version },
+      submittedPresent: attendance.filter((line) => line.present).length,
+      storedPresent: live.filter((row) => row.present).length,
+    });
   }
 
   /**
@@ -713,10 +876,19 @@ export class CellMeetingsService {
    * decorator cannot declare (SKILL.md section 7).
    *
    * `cell.take_attendance` was checked by the guard before anything about the record was
-   * read, so this is reached only by an actor already in scope of the meeting. The target
-   * is the meeting's **frozen responsible leader**, which is what section 7 resolves a
-   * Cell meeting through (decision 0188) — the same Person the guard used, read from the
-   * row rather than re-resolved so the two checks cannot disagree.
+   * read, so this is reached only by an actor already in scope of the meeting.
+   *
+   * **The target is whatever the guard resolved the meeting to, asked of the same
+   * method.** Section 7 places a Cell meeting through its current leader while the Cell
+   * is `ACTIVE` and through the record's frozen responsible leader once it is closed
+   * (decisions 0186 and 0188) — two different Persons on a Cell that has changed hands.
+   *
+   * *An earlier version resolved against the frozen leader unconditionally, and the
+   * docblock claimed that was "the same Person the guard used, so the two checks cannot
+   * disagree". They disagree on every `ACTIVE` Cell that changed hands, and the
+   * consequence was that **nobody could correct the record**: the current leader was
+   * refused here, and the former leader was refused by the guard. Section 7 says in
+   * terms that the current leader files it.*
    */
   private async assertMayCorrect(
     trx: Transaction<Database>,
@@ -728,13 +900,21 @@ export class CellMeetingsService {
       authority: ActorAuthority;
     },
   ): Promise<void> {
-    const covered = await this.authorization.coversWith(
+    const through = await this.meetingScope.leaderForMeetingScopeWithin(
       trx,
-      params.actor,
-      params.authority,
-      Capability.CellCorrectSubtree,
-      { kind: 'person', personId: params.existing.responsible_leader_id },
+      params.cellId,
+      params.meetingId,
     );
+
+    const covered =
+      through !== null &&
+      (await this.authorization.coversWith(
+        trx,
+        params.actor,
+        params.authority,
+        Capability.CellCorrectSubtree,
+        { kind: 'person', personId: through },
+      ));
 
     if (!covered) {
       throw new ScopeDeniedError(
