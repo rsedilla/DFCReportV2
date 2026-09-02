@@ -90,7 +90,9 @@ export interface CellScopePort {
    *
    * **A dated resolution serving a viewing capability is a different method from this
    * one**, and this is not it. Section 7's "as of the period being viewed" is the wider
-   * rule, and Stage 5's first Cell-scoped reporting read is what needs it.
+   * rule, and the first Cell-targeted viewing route is what needs it — which Stage 5 may
+   * or may not produce, since Section 7 makes an aggregate report's target a scope
+   * selector rather than a Cell.
    *
    * *Two earlier versions of this paragraph were wrong in opposite directions. The
    * first called the asymmetry "section 7's and deliberate", asserting a settlement the

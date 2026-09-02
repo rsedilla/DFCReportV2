@@ -27,8 +27,8 @@ import type { CapabilityRequirement } from '../../src/auth/authorization/authori
  * reason: **neither resolution the guard has is the viewing one.** `leaderForScope` is
  * the undated current-or-last leader and says so in its own docblock;
  * `leaderForMeetingScope` is the dated resolution serving a *recording* capability. A
- * resolution "as of the period being viewed" does not exist yet, and Stage 5's first
- * Cell-scoped reporting read is what owes it.
+ * resolution "as of the period being viewed" does not exist yet, and the first
+ * Cell-targeted viewing route is what owes it.
  *
  * **So the rule that can fail today is the narrow one**: no route declares a viewing
  * capability against a Cell-resolved target. The first route that does reddens this, which

@@ -92,8 +92,8 @@ with nothing to do with it.
 **On an `ACTIVE` Cell, a former leader cannot see the roster of the meeting they led.**
 Not because Section 13 denies them a past period — it does not — but because the surface
 that would serve it is a viewing capability, and no route carries `cell.view_subtree`
-yet. That is a gap in the surface rather than in the rule, and it closes with Stage 5's
-reporting reads.
+yet. That is a gap in the surface rather than in the rule, and it closes with the first
+route that carries a viewing capability against a Cell.
 
 Stating it as a cost rather than as an argument, because the alternative reading of
 Section 13 is not unreasonable: a past leader asking about a past meeting *is* asking
@@ -105,8 +105,11 @@ about a period. The answer is that they should ask a route whose capability says
 had.** That item says to settle what period a read of the audit log asks about "with the
 first dated read", and the roster item claimed to be that first dated read. Under this
 ruling it is not a read in Section 7's sense: `leaderForMeetingScope` is a dated
-resolution serving a **recording** capability. The first dated *read* is still Stage 5's
-reporting, and the audit-log item still waits for it.
+resolution serving a **recording** capability. That item's trigger is a read asking about
+a period, which Stage 5's reports are whatever target they declare, so it still waits for
+them — and that is a **different** trigger from the one the check below carries, which is
+a Cell-*targeted* viewing route and may never be a report at all. The two were one
+sentence for a commit.
 
 ## What can fail on it
 
@@ -141,8 +144,9 @@ which is decision 0142's finding reached again.
   as a rule rather than as an observation.
 - Every recording route slice 2c adds — the correction, the reschedule, the
   `RESCHEDULED → NOT_HELD` transition — resolves the same way, with no per-route argument.
-- Stage 5's first Cell-scoped reporting read resolves as of the period being viewed, and
-  needs a dated resolution of its own that this one is not.
+- The first **Cell-targeted** viewing route resolves as of the period being viewed, and
+  needs a dated resolution of its own that this one is not. Stage 5 may not be what
+  produces it: an aggregate report's target is a scope selector (Section 7), not a Cell.
 
 ---
 
