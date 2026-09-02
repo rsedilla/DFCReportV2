@@ -266,9 +266,9 @@ describe('a closed Cell meeting resolves per record (section 7)', () => {
     expect(response.status).toBe(403);
   });
 
-  it.each(['-09-31', '-02-30', '-13-05', '-09-99'])(
-    'refuses a %s that has the shape of a date and is not one',
-    async (suffix) => {
+  it.each(['2026-09-31', '2026-02-30', '2026-13-05', '2026-09-99'])(
+    'refuses %s, which has the shape of a date and is not one',
+    async (impossible) => {
       // **A shape check is not a date check, and the difference was a 500.** Each of
       // these satisfies `\d{4}-\d{2}-\d{2}`, which is what the guard checked first;
       // PostgreSQL answers each with `22008 date/time field value out of range`, which
@@ -284,19 +284,24 @@ describe('a closed Cell meeting resolves per record (section 7)', () => {
       // it could never have found this. These are the values that separate the two
       // checks.
       //
-      // **The year comes from the meeting's own month, not from a literal, and the
-      // first version hard-coded all four.** The old check only reached the SQL cast
-      // for a closed Cell in an **open** month — so `2026-02-30`, written in September
-      // 2026, was already a 403 rather than the 500 the comment described, and the
-      // other three would have stopped demonstrating it within months. They would still
-      // pass, and would silently stop testing what they name. The fixture sixty lines
-      // above solves this deliberately and says so; these cases now do the same.
-      const impossible = marksMeeting.slice(0, 4) + suffix;
-
+      // **The guard's check runs unconditionally, before the port**, so these do not
+      // depend on the meeting's month being open and the literal years are fine. An
+      // earlier version derived the year from `marksMeeting` on the belief that they
+      // did — a rationale carried over from the *old* code path, where the value only
+      // reached the SQL cast for a closed Cell in an open month. It also took only the
+      // year and left the months literal, so it did not achieve what it claimed.
+      //
+      // **The field is asserted, and without it these pin nothing.** A backstop was
+      // added to `reportingMonthOf` in the same batch as this suite, so deleting the
+      // guard's `isCalendarDate` check now lets the value through to that backstop,
+      // which answers 422 as well — and every case here stayed green. The guard names
+      // the path parameter it refused; the backstop names `date`. Asserting which one
+      // answered is what holds the guard's check in place.
       const response = await roster(impossible, markAccount);
 
       expect(response.status).toBe(422);
       expect(response.body.error.code).toBe('VALIDATION_FAILED');
+      expect(response.body.error.details.field).toBe('params.meetingId');
     },
   );
 
