@@ -976,10 +976,18 @@ describe('recording a Cell meeting (sections 12, 13 and 14)', () => {
     });
 
     it('records on_behalf and the reason on the correction entry', async () => {
-      // Section 21: "a correction made for somebody else is one entry that says so... a
-      // reader filtering `...submitted_on_behalf` for what an upline did to other
-      // people's records would otherwise miss every correction." And the reason belongs
-      // in the column section 21 gives it, not inside `after`.
+      // Section 21: "**A correction made for somebody else is one entry that says so**...
+      // whether it was somebody else's record to correct is an attribute of it, carried
+      // on the entry with the responsible leader", and writing only the correction "loses
+      // every amendment an upline made to a downline's records from the list that exists
+      // to find them". And the reason belongs in the column section 21 gives it, not
+      // inside `after`.
+      //
+      // *This quoted section 21 as naming `...submitted_on_behalf` until 2026-09-02. That
+      // string appears nowhere in the specification, and the commit that corrected the
+      // same invention in the service file said it had fixed "three places" when it had
+      // fixed one — which is the "fix claimed but not made" pattern decisions 0123, 0150
+      // and 0177 record, committed in the act of repairing an invented citation.*
       const one = await member('Aurelio');
       const { version } = await recorded([{ person_id: one.id, present: true }]);
 
@@ -1050,7 +1058,12 @@ describe('recording a Cell meeting (sections 12, 13 and 14)', () => {
 
       const rows = await liveRows();
       const second = rows.find((row) => row.person_id === two.id);
-      const meeting = await db.selectFrom('cell_meetings').select('id').executeTakeFirstOrThrow();
+      const meeting = await db
+        .selectFrom('cell_meetings')
+        .select('id')
+        .where('cell_id', '=', markCell.id)
+        .where('scheduled_date', '=', meetingDate)
+        .executeTakeFirstOrThrow();
 
       const winner = new Client({ connectionString: process.env.DATABASE_URL });
       await winner.connect();
@@ -1062,10 +1075,28 @@ describe('recording a Cell meeting (sections 12, 13 and 14)', () => {
         // locks open. Nothing is committed yet, so the request below still reads version
         // 1 and the pre-winner roster.
         await winner.query('BEGIN');
+
+        // **The winner leaves Bartolome a live successor carrying the value the loser is
+        // about to submit**, and that one statement is what makes this case discriminate
+        // the fix from the defect it was written for. Without it Bartolome has no live
+        // row at all, so `committed.get(two.id)` is `undefined`, every reading disagrees,
+        // and the old on-`trx` answer was `VERSION_CONFLICT` too — the case passed
+        // against the code it exists to refuse. With it, the transaction's own view has
+        // every line agreeing (its own uncommitted successor for Aurelio, the winner's
+        // for Bartolome) while the **committed** state still disagrees on Aurelio:
+        // old code answers `RESOURCE_BUSY`, new code answers `VERSION_CONFLICT`.
+        const successorId = randomUUID();
         await winner.query(
-          `UPDATE cell_attendance SET superseded_at = clock_timestamp(), superseded_by = id
+          `UPDATE cell_attendance SET superseded_at = clock_timestamp(), superseded_by = $2
              WHERE id = $1`,
-          [second?.id],
+          [second?.id, successorId],
+        );
+        await winner.query(
+          `INSERT INTO cell_attendance
+             (id, cell_meeting_id, person_id, present, recorded_by, recorded_at, version)
+           VALUES ($1, $2, $3, false, $4,
+                   (SELECT superseded_at FROM cell_attendance WHERE id = $5), 2)`,
+          [successorId, meeting.id, two.id, markAccount.id, second?.id],
         );
         await winner.query('UPDATE cell_meetings SET version = version + 1 WHERE id = $1', [
           meeting.id,
@@ -1083,12 +1114,23 @@ describe('recording a Cell meeting (sections 12, 13 and 14)', () => {
         });
         const inFlight = track(attempt);
 
-        // Blocked on the winner's row lock, observed rather than slept for.
+        // **Blocked on *the winner's* row lock, named rather than counted.** An earlier
+        // version counted any backend waiting on a `Lock` in this database, which
+        // identifies neither the waiter nor what it waits on — and `CLAUDE.md` records an
+        // orphaned jest process against `dfc_ci` as a live occurrence here, which is
+        // exactly such a backend. `pg_blocking_pids` names the contention, which is the
+        // direction `test/setup/concurrency.ts` argues for at length: a false positive is
+        // the dangerous one.
+        const winnerPid = Number(
+          (await winner.query<{ pid: string }>('SELECT pg_backend_pid() AS pid')).rows[0].pid,
+        );
+
         const waiting = await countWhileInFlight(
           async () => {
             const blocked = await sql<{ count: string }>`
-              SELECT count(*) AS count FROM pg_stat_activity
-               WHERE wait_event_type = 'Lock' AND datname = current_database()
+              SELECT count(*) AS count
+                FROM pg_stat_activity
+               WHERE ${sql.lit(winnerPid)} = ANY (pg_blocking_pids(pid))
             `.execute(db);
 
             return Number(blocked.rows[0].count);
