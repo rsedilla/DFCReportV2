@@ -3335,6 +3335,12 @@ This mirrors the existing treatment of `Cell Leaders with 12+ Members` (Section 
 
 A higher authorized leader may take attendance on behalf of a downline leader within their pastoral subtree.
 
+**That requires `cell.submit_on_behalf`, and it is measured against the leader the meeting resolves through** (ruling of 2026-09-03). An actor who is that leader is filing their own Cell's meeting and needs only `cell.take_attendance`; an actor who reaches it through their subtree is recording somebody else's and needs both. The DCC counterpart is `dcc.submit_on_behalf`, measured against whether the person is on the actor's own checklist (Section 9), and the two are the same rule against the thing each domain hangs attendance on.
+
+**"The leader it resolves through" rather than "the responsible leader", and the difference is one case.** Section 7 resolves a Cell meeting through the Cell's *current* leader while the Cell is `ACTIVE`, and Section 13 freezes the *responsible* leader as of the meeting's date — so on a Cell that has changed hands they are two people. Measuring the capability against the frozen leader would refuse the current leader a meeting Section 7 says in terms that they file: "On an `ACTIVE` Cell handed from A to B… B files it." So it is measured against the resolution, and a successor filing their predecessor's meeting is not acting on behalf of anybody.
+
+**Section 21's `on_behalf` is measured differently, and deliberately.** The audit entry records whether the *record* was somebody else's, which is the responsible leader; the capability governs whether the *meeting* was somebody else's to reach. A successor filing a predecessor's meeting is therefore logged `on_behalf` and needs no on-behalf capability — two questions about one act, each answered about the thing it asks after.
+
 Conducting a meeting and reporting a meeting are separate facts, and this section governs only the second.
 
 - **Conducting** on behalf is recorded as `facilitated_by` on the Cell meeting (Section 13). It describes who ran the meeting.

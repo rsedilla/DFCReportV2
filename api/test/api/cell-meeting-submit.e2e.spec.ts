@@ -97,6 +97,39 @@ describe('recording a Cell meeting (sections 12, 13 and 14)', () => {
     return result.rows[0].day;
   }
 
+  /**
+   * An account holding exactly the capabilities named, and no role at all.
+   *
+   * **The only way to hold one Cell capability and not another.** A `LEADER` holds
+   * `cell.take_attendance`, `cell.submit_on_behalf` and `cell.correct_subtree` all at
+   * `OWN_SUBTREE`, so a role-based actor passes every check and could not tell them
+   * apart. Section 7 permits a grant with no role behind it: "A capability without an
+   * explicit scope grant is not usable", which says nothing about a role.
+   *
+   * The Person is Root, who is upline of Mark — `OWN_SUBTREE` must reach the leader the
+   * meeting resolves through for the guard to pass, and Mark already holds an account.
+   */
+  async function granted(capabilities: string[]): Promise<TestAccount> {
+    const admin = await adminAccount();
+    const account = await createAccount(app, db, { person: root, roles: [] });
+
+    for (const capability of capabilities) {
+      await db
+        .insertInto('capability_grants')
+        .values({
+          account_id: account.id,
+          capability: capability as never,
+          scope_type: 'OWN_SUBTREE',
+          read_only: false,
+          reason: 'Invented for this case (CLAUDE.md, Secrets).',
+          granted_by: admin.id,
+        })
+        .execute();
+    }
+
+    return account;
+  }
+
   /** An Admin, for the cases where the corrector must not be the original submitter. */
   async function adminAccount(): Promise<TestAccount> {
     const person = await createPerson(db, { firstName: 'Admina', network: 'MENS' });
@@ -796,45 +829,23 @@ describe('recording a Cell meeting (sections 12, 13 and 14)', () => {
     });
 
     it('refuses a corrector who holds cell.take_attendance and not cell.correct_subtree', async () => {
-      // **Section 7 splits the two capabilities and this is the only case that can tell
-      // them apart.** `cell.take_attendance` guards the first submission and
+      // **Section 7 splits the two capabilities and this is the case that tells them
+      // apart.** `cell.take_attendance` guards the first submission and
       // `cell.correct_subtree` an amendment of a record that already stands. A route
-      // declares one capability, so the second is checked in the service — the shape
-      // `DccAttendanceService` already uses, for the same reason.
+      // declares one capability, so the second is checked in the service.
       //
-      // **Under role defaults nothing distinguishes them**: a `LEADER` holds both at
-      // `OWN_SUBTREE`, so every other case here passes both checks and would pass with
-      // the second deleted. The actor is therefore built with **no role at all** and one
-      // explicit grant, which is the only way to hold one and not the other. Section 7
-      // permits exactly that: "A capability without an explicit scope grant is not
-      // usable", and a grant needs no role behind it.
+      // The actor holds the on-behalf capability too, because Root is not the leader this
+      // meeting resolves through and section 14 requires it of recording somebody else's
+      // meeting — so without it the refusal would be that one, and this case would be
+      // measuring a different rule than its name claims.
       const one = await member('Aurelio');
       const { version } = await recorded([{ person_id: one.id, present: true }]);
 
-      const admin = await adminAccount();
-      // Root, who is upline of Mark. `OWN_SUBTREE` must reach the meeting's responsible
-      // leader for the guard to pass, and Mark already holds an account —
-      // `accounts_person_id_key` allows one per Person.
-      const halfLeader = await createAccount(app, db, { person: root, roles: [] });
+      const upline = await granted(['cell.take_attendance', 'cell.submit_on_behalf']);
 
-      await db
-        .insertInto('capability_grants')
-        .values({
-          account_id: halfLeader.id,
-          capability: 'cell.take_attendance',
-          scope_type: 'OWN_SUBTREE',
-          read_only: false,
-          reason: 'Invented for this case (CLAUDE.md, Secrets).',
-          granted_by: admin.id,
-        })
-        .execute();
-
-      // It reaches the route — the guard is satisfied — and is refused by the domain
-      // check, which is what makes this a `SCOPE_DENIED` naming the capability rather
-      // than a `CAPABILITY_DENIED` from the guard.
       const response = await submit(
         { status: 'HELD', version, attendance: [{ person_id: one.id, present: false }] },
-        halfLeader,
+        upline,
       );
 
       expect(response.status).toBe(403);
@@ -849,32 +860,51 @@ describe('recording a Cell meeting (sections 12, 13 and 14)', () => {
 
     it('lets that same actor make a first submission, which is the other half of the split', async () => {
       // The complement, and it is what stops the case above passing for the wrong
-      // reason: an actor refused *everything* would redden it too. This one holds
-      // `cell.take_attendance` and records a meeting with it, so the refusal above is
-      // about the correction and not about the actor.
+      // reason: an actor refused *everything* would redden it too.
       const one = await member('Aurelio');
-      const admin = await adminAccount();
-      // Root, who is upline of Mark. `OWN_SUBTREE` must reach the meeting's responsible
-      // leader for the guard to pass, and Mark already holds an account —
-      // `accounts_person_id_key` allows one per Person.
-      const halfLeader = await createAccount(app, db, { person: root, roles: [] });
-
-      await db
-        .insertInto('capability_grants')
-        .values({
-          account_id: halfLeader.id,
-          capability: 'cell.take_attendance',
-          scope_type: 'OWN_SUBTREE',
-          read_only: false,
-          reason: 'Invented for this case (CLAUDE.md, Secrets).',
-          granted_by: admin.id,
-        })
-        .execute();
+      const upline = await granted(['cell.take_attendance', 'cell.submit_on_behalf']);
 
       await submit(
         { status: 'HELD', attendance: [{ person_id: one.id, present: true }] },
-        halfLeader,
+        upline,
       ).expect(201);
+    });
+
+    it('refuses an upline who holds cell.take_attendance and not cell.submit_on_behalf', async () => {
+      // **Section 14: "A higher authorized leader may take attendance on behalf of a
+      // downline leader within their pastoral subtree."** That requires
+      // `cell.submit_on_behalf`, which section 7 lists and which nothing consulted until
+      // the ruling of 2026-09-03 — so an administrator could not grant somebody the
+      // power to record their own Cell without also granting it for everyone beneath
+      // them.
+      //
+      // Root reaches Mark's meeting through the subtree, so it is not Root's meeting.
+      const one = await member('Aurelio');
+      const upline = await granted(['cell.take_attendance']);
+
+      const response = await submit(
+        { status: 'HELD', attendance: [{ person_id: one.id, present: true }] },
+        upline,
+      );
+
+      expect(response.status).toBe(403);
+      expect(response.body.error.code).toBe('SCOPE_DENIED');
+      expect(response.body.error.details.capability).toBe('cell.submit_on_behalf');
+      expect(await db.selectFrom('cell_meetings').select('id').execute()).toHaveLength(0);
+    });
+
+    it('asks nothing extra of the leader whose own meeting it is', async () => {
+      // The other side of the same rule, and the one that keeps it from being a tax on
+      // every leader: Mark is the leader this meeting resolves through, so recording it
+      // is not acting for another and `cell.take_attendance` alone reaches it.
+      const one = await member('Aurelio');
+      const mine = await granted([]);
+      void mine;
+
+      await submit({
+        status: 'HELD',
+        attendance: [{ person_id: one.id, present: true }],
+      }).expect(201);
     });
 
     it('lets the current leader correct a meeting frozen to their predecessor', async () => {

@@ -432,6 +432,7 @@ resolves exactly as well as it did in the single file and no better.
 - 2026-09-03 — [A Cell attendance audit entry targets the Cell, a DCC one the Person](docs/decisions/0189-a-cell-attendance-audit-entry-targets-the-cell.md)
 - 2026-09-03 — [A Cell meeting has one write operation, and `cell_attendance.version` is not compared](docs/decisions/0190-a-cell-meeting-has-one-write-operation.md)
 - 2026-09-03 — [A write that writes nothing owes no further capability, and its confirmation is a disclosure](docs/decisions/0191-a-write-that-writes-nothing-owes-no-further-capability.md)
+- 2026-09-03 — [`cell.submit_on_behalf` is required, and measured against the leader the meeting resolves through](docs/decisions/0192-cell-submit-on-behalf-is-measured-against-the-leader-the-meeting-resolves-through.md)
 
 ### Open — awaiting a ruling
 

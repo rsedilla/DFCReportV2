@@ -465,6 +465,13 @@ export class CellMeetingsService {
         );
       }
 
+      await this.assertMayActForAnother(trx, {
+        cellId,
+        meetingId,
+        actor,
+        authority,
+      });
+
       const members = await this.cells.membersAsOfWithin(trx, cellId, meetingId);
       const attendance = assertAttendanceMatchesRoster(body, members, {
         cellId,
@@ -705,6 +712,12 @@ export class CellMeetingsService {
     // the disclosure. Omitting `version` walked straight through. Whatever is right for
     // a client that read no record, it cannot be that one payload is withheld at one
     // door and handed over at the other.*
+    // **On behalf first, then the amendment capability**, which is the ordering
+    // `DccAttendanceService` documents and closes: the on-behalf check depends on nothing
+    // stored beyond who the meeting resolves through, while `cell.correct_subtree` is
+    // reached exactly when the roster differs from what is stored. Checked the other way
+    // round, the refusal itself would say whether the submitted roster matched.
+    await this.assertMayActForAnother(trx, params);
     await this.assertMayCorrect(trx, params);
 
     // **No version, against a record that exists**, is section 22's first
@@ -927,6 +940,64 @@ export class CellMeetingsService {
       submittedPresent: submitted.filter((line) => line.present).length,
       storedPresent: live.filter((row) => row.present).length,
     });
+  }
+
+  /**
+   * `cell.submit_on_behalf`, which section 14 requires of recording somebody else's
+   * meeting (SKILL.md sections 7 and 14; ruling of 2026-09-03).
+   *
+   * **Measured against the leader the meeting resolves through, not its responsible
+   * leader.** Section 7 places an `ACTIVE` Cell's meeting through the Cell's *current*
+   * leader while section 13 freezes the responsible leader as of the meeting's date, so
+   * on a Cell that has changed hands those are two people. Measuring against the frozen
+   * one would refuse the successor a meeting section 7 says in terms that they file.
+   *
+   * *Section 21's `on_behalf` on the audit entry is measured against the responsible
+   * leader instead, and that is not an inconsistency: the entry records whether the
+   * record was somebody else's, and this governs whether the meeting was somebody else's
+   * to reach. A successor filing a predecessor's meeting is logged on behalf and owes no
+   * on-behalf capability.*
+   *
+   * `cell.take_attendance` was checked by the guard against the same resolution before
+   * this runs, so an actor reaching here is already in scope of the meeting; what is left
+   * is whether the meeting is theirs.
+   */
+  private async assertMayActForAnother(
+    trx: Transaction<Database>,
+    params: {
+      cellId: string;
+      meetingId: string;
+      actor: Actor;
+      authority: ActorAuthority;
+    },
+  ): Promise<void> {
+    const through = await this.meetingScope.leaderForMeetingScopeWithin(
+      trx,
+      params.cellId,
+      params.meetingId,
+    );
+
+    if (through === null || through === params.actor.personId) {
+      // Their own meeting, or one nothing can place — the second is the guard's refusal
+      // to make and it has already made it, since it resolves the same way.
+      return;
+    }
+
+    const covered = await this.authorization.coversWith(
+      trx,
+      params.actor,
+      params.authority,
+      Capability.CellSubmitOnBehalf,
+      { kind: 'person', personId: through },
+    );
+
+    if (!covered) {
+      throw new ScopeDeniedError('Recording a meeting for another leader is outside your scope.', {
+        capability: Capability.CellSubmitOnBehalf,
+        cell_id: params.cellId,
+        meeting_id: params.meetingId,
+      });
+    }
   }
 
   /**
