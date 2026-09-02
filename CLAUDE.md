@@ -428,6 +428,7 @@ resolves exactly as well as it did in the single file and no better.
 - 2026-09-02 — [A date-only field that is not a day is refused at the edge, by one predicate](docs/decisions/0185-a-date-only-field-that-is-not-a-day-is-refused-at-the-edge.md)
 - 2026-09-02 — [The capability decides a meeting's scope resolution, not the HTTP method](docs/decisions/0186-the-capability-decides-a-meetings-scope-not-the-http-method.md)
 - 2026-09-02 — [A handover on a meeting's own day leaves the meeting with the outgoing leader](docs/decisions/0187-a-handover-on-a-meetings-own-day-leaves-the-meeting-with-the-outgoing-leader.md)
+- 2026-09-02 — [A meeting's scope resolves through its frozen responsible leader](docs/decisions/0188-a-meetings-scope-resolves-through-its-frozen-responsible-leader.md)
 
 ### Open — awaiting a ruling
 

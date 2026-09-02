@@ -1565,7 +1565,9 @@ Scope resolves against a target. Where the target is a Person, it resolves throu
 - a **Cell**, a Cell meeting, a membership or a leadership resolves through the Cell's leader **as of the period being viewed**, falling back to its last leader where the Cell is closed. A closed Cell keeps its history and its roster visible to the leader who led it (Sections 10 and 15), which resolving through a current leader it no longer has would prevent
   - **A closed Cell has one exception, and it is not the fallback above.** The rule below is that a write is acted on now and resolves through the Cell's current leader — and a closed Cell has none, so every write against one resolves through nobody. The exception is **recording or correcting a Cell meeting whose month's submission window is still open** (Section 13), together with the meeting-scoped roster read that write requires: those resolve through whoever led the Cell **on the meeting's date**. Nothing else does — not a membership, not a leadership, not a configuration change — and once the window shuts, that too resolves through nobody and only Admin can amend
   - **Per record rather than per Cell**, which no other target in this list is, because the meeting carries the answer and the Cell no longer does. A Cell handed from A to B and then closed has meetings belonging to each, and resolving through the last leader would show A the task (Section 19) while denying A the write
-  - **The date is not chosen by the actor.** A closed Cell's meetings cannot be rescheduled (Section 13), so the authorizing date is the scheduled one, derived from the Cell's own schedule. Without that, an actor could declare an actual date inside their own past tenure and recover authority through a request field — which is the shape the rule below refuses
+  - **Where the meeting has a record, its scope resolves through that record's frozen `responsible_leader_id`; where it has none, through whoever led the Cell on the scheduled date** (ruling of 2026-09-02). The rule above is that "the meeting carries the answer and the Cell no longer does", and the frozen column is the meeting carrying it: Section 13 resolves it once, from the meeting's own instant, and nothing moves it afterwards. So the person who may correct a record and the person the record belongs to are the same person **by construction**, rather than by an argument that happens to hold
+  - **That argument stopped holding the moment a meeting could be rescheduled.** Section 13's "on a closed Cell `actual_date` equals `scheduled_date`" is an inference about rescheduling a Cell that is *already* closed; it says nothing about a meeting moved while the Cell was `ACTIVE` and closed afterwards, which has an actual date and a scheduled date naming different days. Authorizing at the scheduled date would then let the leader of the scheduled day correct a record belonging to the leader of the day it happened, and refuse it to the leader it belongs to — the exact inverse of the coincidence this exception is justified by
+  - **The date is still not chosen by the actor, and that now rests on a pairing rather than on a single rule.** `responsible_leader_id` is frozen at the first submission from the meeting's own instant, and **a first submission cannot carry `RESCHEDULED`** (Section 13) — so the instant it freezes is always the scheduled date, derived from the Cell's own schedule, and a later reschedule moves `actual_date` and never the frozen column. Both halves are load-bearing: an actor able to declare an actual date on a *first* submission could freeze themselves as the responsible leader and keep authority past the closure, which is the shape the rule below refuses
   - The bound is what makes this consistent with the rule below rather than an exception to it. That rule refuses authority resolved *as of an effective date the actor chooses*, because an actor could then reach back far enough to recover it. This bound is not chosen by the actor: it is one fixed, short, forward-moving window per month, set by the calendar, and it closes on the 7th whatever anybody does. A leader recording the meetings of the Cell they led last week is not recovering authority; they are finishing the record the Cell existed to produce
   - **The capability decides which of the two rules applies, and not the HTTP method** (ruling of 2026-09-02). **Exactly three capabilities resolve as of the period being viewed** — `cell.view_subtree`, `reports.view_subtree` and `audit.view`, the *viewing* capabilities. **Every other capability resolves as a write**, through the Cell's current leader, whether the route it guards reads or writes. So `GET /api/v1/cells/{id}/meetings/{meeting_id}/roster` and the `POST` beside it give the same answer, and on an `ACTIVE` Cell that answer is the current leader for both
   - **Stated as a closed list of three with everything else defaulting**, on the same terms as the capability list and the scope values above, and for the same reason a guard needs: a rule phrased as two open lists cannot decide a capability that appears in neither. The first version of this ruling was two lists, and three of the four capabilities that guard a Cell-targeted route today fell in neither of them — `cell.manage_membership`, `cell.manage_configuration` and `cell.manage_lifecycle`; the fourth, `cell.take_attendance`, was named in its recording list. One of the three guards a read that already exists, `GET /api/v1/cells/{id}/members`. *The sentence recording the uncounted-figure failure below carried an uncounted figure of its own for one commit, saying "none of the capabilities that actually guard a Cell-targeted route", which is false of the fourth*
@@ -3166,13 +3168,30 @@ scheduled meeting there at all.
 
 **And a closed Cell's meetings cannot be rescheduled.** A reschedule moves a meeting to another
 date, and a closed Cell has no other dates to move into — every one of them is after the
-closure and refused by the rule above. So on a closed Cell `actual_date` equals
-`scheduled_date`, and a meeting that genuinely moved before the Cell closed is recorded on the
-date it happened, by an Admin amendment.
+closure and refused by the rule above.
 
-That also keeps the authorizing date out of the actor's hands, which Section 7 requires of
-this path: with no reschedule the date comes from the Cell's own schedule, and nobody can
-declare an instant that puts a meeting inside their own past tenure.
+**That is a rule about rescheduling a Cell that is already closed, and it does not make
+`actual_date` equal `scheduled_date` on every meeting a closed Cell holds.** This paragraph
+said it did until 2026-09-02, and the inference is false of a meeting moved while the Cell
+was `ACTIVE` and closed afterwards: both of its dates are before the closure, nothing
+refuses it, and it sits on a closed Cell with the two differing. Section 7 rested its
+authorizing date on the withdrawn sentence, and now resolves such a meeting through its
+frozen `responsible_leader_id` instead.
+
+**A first submission cannot carry `RESCHEDULED`.** The three statuses are what a leader
+reports about a meeting, and a reschedule is a *change* to a record that already exists —
+it is what `cell_meeting_changes` records, it needs a `from_date` to record, and there is
+no record to change until one is written. So the first submission says `HELD` or
+`NOT_HELD`, and a meeting that had already moved when it was first reported is recorded and
+then rescheduled, in that order.
+
+That is not only a shape argument, and Section 7 depends on the other half: `actual_date`
+is chosen by an actor, and `responsible_leader_id` is frozen from the meeting's own instant
+at the first submission. If a first submission could declare an actual date, an actor could
+freeze themselves as a meeting's responsible leader and hold authority over it past the
+Cell's closure. Because it cannot, the frozen instant is always the scheduled date, derived
+from the Cell's own schedule — which is what keeps the authorizing date out of the actor's
+hands, as Section 7 requires of this path.
 
 **That refusal binds new submissions and is not a constraint on the table.** Section 10
 lets Admin backdate a closure, which can move the closure date behind meetings already

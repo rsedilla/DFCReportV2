@@ -438,6 +438,43 @@ describe('recording a Cell meeting (sections 12, 13 and 14)', () => {
     });
   });
 
+  it('refuses RESCHEDULED on a first submission, which decision 0188 rests on', async () => {
+    // **Two rules meet on this refusal, and only one of them is about shape.**
+    //
+    // Section 13's own reason is that a reschedule is a *change* to a record that
+    // already exists: it is what `cell_meeting_changes` records, and a change row needs
+    // a `from_status` and a `from_date`, which do not exist until a record does.
+    //
+    // The other is section 7's, and it is why this case exists now rather than with the
+    // reschedule route. Decision 0188 resolves a closed Cell meeting's scope through its
+    // frozen `responsible_leader_id`, and that value is actor-independent only because
+    // the instant it is frozen from is the *scheduled* date. `actual_date` is chosen by
+    // an actor — so if a first submission could carry one, an actor could freeze
+    // themselves as a meeting's responsible leader and hold authority over it past the
+    // Cell's closure, which is the shape section 7 refuses one field over.
+    //
+    // The DTO refused this before either ruling needed it to. What had no case was the
+    // refusal itself, which is now a premise rather than a detail.
+    const one = await member('Aurelio');
+
+    // **No `actual_date` in the body, and the first version of this case sent one.**
+    // The DTO declares no such field, so `forbidNonWhitelisted` would have refused the
+    // request whatever the status said — a case that passes with the status check
+    // deleted, which is the shape this repository keeps catching. Sending the status
+    // alone leaves `@IsIn` as the only thing that can refuse it.
+    const response = await submit({
+      status: 'RESCHEDULED',
+      attendance: [{ person_id: one.id, present: true }],
+    });
+
+    expect(response.status).toBe(422);
+    expect(response.body.error.code).toBe('VALIDATION_FAILED');
+
+    // And nothing was written, which the status code alone does not say.
+    const rows = await db.selectFrom('cell_meetings').select('id').execute();
+    expect(rows).toHaveLength(0);
+  });
+
   it('refuses a date the Cell was not scheduled to meet on', async () => {
     await member('Aurelio');
 
