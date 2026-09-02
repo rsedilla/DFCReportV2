@@ -28,10 +28,14 @@ because slice 2c adds two more routes to that one method.
 
 **A closed list of three with everything else defaulting, rather than two lists.** The
 first version of this ruling wrote two — recording capabilities against viewing ones — and
-classified neither in between. That is not academic: none of the three capabilities that
-actually guard a Cell-targeted route today fell in either list — `cell.manage_membership`,
+classified neither in between. That is not academic: three of the **four** capabilities
+that guard a Cell-targeted route today fell in neither list — `cell.manage_membership`,
 `cell.manage_configuration`, `cell.manage_lifecycle` — and the first of them guards a read,
 `GET /api/v1/cells/{id}/members`, which is exactly the shape this ruling exists to decide.
+*The fourth, `cell.take_attendance`, was named in the two-list version's recording list,
+and this sentence said "none of the capabilities that actually guard a Cell-targeted
+route" until 2026-09-02 — false of that one. `SKILL.md` was corrected a commit before this
+file was, by a commit whose message quoted this very sentence as the defect.*
 Found by `architecture-guardian` and raised as a Stop Condition against the ruling's own
 first form.
 
@@ -105,11 +109,16 @@ about a period. The answer is that they should ask a route whose capability says
 had.** That item says to settle what period a read of the audit log asks about "with the
 first dated read", and the roster item claimed to be that first dated read. Under this
 ruling it is not a read in Section 7's sense: `leaderForMeetingScope` is a dated
-resolution serving a **recording** capability. That item's trigger is a read asking about
-a period, which Stage 5's reports are whatever target they declare, so it still waits for
-them — and that is a **different** trigger from the one the check below carries, which is
-a Cell-*targeted* viewing route and may never be a report at all. The two were one
-sentence for a commit.
+resolution serving a **recording** capability.
+
+**What settles that item is the first `audit.view` route**, which is the event it already
+names. Not a Stage 5 report: Section 7 resolves an audit entry through *its target*, and
+an aggregate report reads no audit entry and resolves no Cell — the same argument this
+ruling makes forty lines below about the check's own trigger, which a version of this
+paragraph failed to apply here while making it there. **And that route is also what
+reddens the check**, since an `audit.view` read of a Cell-targeted entry is a viewing
+capability against a Cell-resolved target. The two triggers coincide on it, and an
+earlier version of this paragraph asserted they were different.
 
 ## What can fail on it
 
