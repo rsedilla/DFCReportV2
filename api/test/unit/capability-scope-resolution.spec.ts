@@ -31,10 +31,18 @@ import type { CapabilityRequirement } from '../../src/auth/authorization/authori
  * Cell-scoped reporting read is what owes it.
  *
  * **So the rule that can fail today is the narrow one**: no route declares a viewing
- * capability against a Cell-resolved target. When Stage 5 adds the first such route this
- * goes red, which is the moment the dated read resolution is owed — and a red test naming
- * the route is a better way to learn that than a report quietly answering through the
- * wrong leader.
+ * capability against a Cell-resolved target. The first route that does reddens this, which
+ * is the moment the dated read resolution is owed — and a red test naming the route is a
+ * better way to learn that than a report quietly answering through the wrong leader.
+ *
+ * **That is a narrower trigger than "the first Stage 5 reporting read", which is what an
+ * earlier version of this paragraph and of `cell-scope.port.ts` claimed.** Section 7 makes
+ * a report's target a *scope selector* rather than a Cell, and section 22's reporting
+ * routes are aggregate — so a Stage 5 report will most likely declare
+ * `reports.view_subtree` against a scope selector, a `church` or an `actor` target, and
+ * this file will stay green while the dated resolution goes on not existing. What
+ * reddens it is the first **Cell-targeted** viewing route, which decision 0186 names
+ * correctly and two paraphrases of it did not.
  *
  * Written against the compiled module graph rather than by grepping the source, on
  * `module-graph.spec.ts`'s reasoning: what is being checked is the shape Nest built. It
@@ -81,7 +89,14 @@ describe('which scope resolution a capability gets (section 7)', () => {
             continue;
           }
 
-          const requirement = Reflect.getMetadata(CAPABILITY_METADATA, handler) as
+          // **Handler first, then the class, which is `getAllAndOverride`'s order.**
+          // `CapabilityGuard` reads `[context.getHandler(), context.getClass()]`, so a
+          // capability declared on a controller *class* governs every route in it — and a
+          // scan reading only method metadata would not see one. Nothing declares one that
+          // way today, which is exactly why it is the way a route could acquire a viewing
+          // capability against a Cell-resolved target and pass this file.
+          const requirement = (Reflect.getMetadata(CAPABILITY_METADATA, handler) ??
+            Reflect.getMetadata(CAPABILITY_METADATA, prototype.constructor)) as
             CapabilityRequirement | undefined;
 
           if (requirement !== undefined) {

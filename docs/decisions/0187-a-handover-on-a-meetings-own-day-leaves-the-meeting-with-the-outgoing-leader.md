@@ -30,8 +30,12 @@ in exactly one place. A row is in force over `[started_at, ended_at)`, so a hand
 taking effect at precisely 00:00 leaves the outgoing row covering none of the day while
 its `ended_at` still falls *on* that date — and the rule gives that meeting to the
 outgoing leader, where the gloss would give it to the incoming one. Nothing writes such a
-boundary today: a handover takes the instant it is approved, and the only midnight
-boundary this system produces is a backdated closure, which opens no successor. Section 7
+boundary today: a handover takes the instant it is approved, and the only midnight boundary
+this system produces is a closure carrying an explicit effective date, which opens no
+successor. *Not specifically a **backdated** closure, which the first version of this
+paragraph said: a closure dated today resolves to Manila midnight as well, and Section 10
+does not call that backdating — so an ordinary leader reaches the boundary, and it is still
+a closure and still has no successor.* Section 7
 lists Cell leadership under `records.backdate_effective_date`, so a backdated handover is
 a path this specification anticipates, and whoever builds it decides that case. Named by
 `architecture-guardian`, which found the gloss and the query disagreeing about a row class

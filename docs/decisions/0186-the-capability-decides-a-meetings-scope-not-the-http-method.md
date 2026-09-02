@@ -27,17 +27,28 @@ because slice 2c adds two more routes to that one method.
   Whether the route reads or writes does not enter into it.
 
 **A closed list of three with everything else defaulting, rather than two lists.** The
-first version of this ruling wrote two — recording capabilities against viewing ones —
-and classified neither the five management capabilities nor anything added later. That is
-not academic: `GET /api/v1/cells/{id}/members` is a read guarded by
-`cell.manage_membership`, which is exactly the shape this ruling exists to decide, and the
-two-list version decided it in neither direction. Found by `architecture-guardian` and
-raised as a Stop Condition against the ruling's own first form.
+first version of this ruling wrote two — recording capabilities against viewing ones — and
+classified neither in between. That is not academic: none of the three capabilities that
+actually guard a Cell-targeted route today fell in either list — `cell.manage_membership`,
+`cell.manage_configuration`, `cell.manage_lifecycle` — and the first of them guards a read,
+`GET /api/v1/cells/{id}/members`, which is exactly the shape this ruling exists to decide.
+Found by `architecture-guardian` and raised as a Stop Condition against the ruling's own
+first form.
 
-The default is chosen because it is what every Cell-targeted route already does, so
-classifying nothing reclassifies nothing. It is **not** chosen for being narrower, and
-saying so matters: on an `ACTIVE` Cell that has changed hands the two resolutions name
-different people rather than one containing the other.
+**It decides which resolution a capability gets and nothing else.** In particular it does
+not touch Section 7's closed-Cell fallback, which governs every Cell target whichever class
+its capability is in. A second version of this ruling said the two resolutions "both fall
+back to the last leader on a plain Cell target", which invited reading the default as
+deciding the closed-Cell case too — and Section 7 answers that twice and not identically:
+its base bullet gives a closed Cell's last leader the fallback, and its closed-Cell clause
+says every write against one resolves through nobody. The code implements the fallback for
+both classes and the domain layer refuses the writes. That tension is older than this
+ruling, is now recorded as open in `CLAUDE.md`, and is not settled here.
+
+The default is chosen because it is what every Cell-targeted route on an `ACTIVE` Cell
+already does. It is **not** chosen for being narrower, and saying so matters: on an
+`ACTIVE` Cell that has changed hands the two resolutions name different people rather than
+one containing the other.
 
 So `GET .../meetings/{meeting_id}/roster` and the `POST` beside it give one answer, which
 on an `ACTIVE` Cell is the current leader for both. Behaviour is unchanged; what changes
@@ -116,8 +127,10 @@ and every `cell_meeting` target carries a recording capability. It walks the com
 module graph rather than the source, and it carries a vacuity case — every assertion in it
 is over a filtered list, and a scan finding nothing would satisfy them all.
 
-**When Stage 5 adds the first Cell-scoped reporting read, that file goes red**, which is
-the moment the dated read resolution is owed. A red test naming the route is a better way
+**The first Cell-targeted viewing route reddens that file**, which is the moment the dated
+read resolution is owed. Stated that way rather than as "the first Stage 5 report":
+Section 7 makes a report's target a scope selector rather than a Cell, so an aggregate
+report would not reach the check at all, and two paraphrases of this ruling said it would. A red test naming the route is a better way
 to learn that than a report quietly answering through the wrong leader. Added after
 `architecture-guardian` pointed out that the ruling had nothing that could fail on it,
 which is decision 0142's finding reached again.

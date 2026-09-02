@@ -77,8 +77,10 @@ export interface CellScopePort {
    * `kind` and never reads the capability, and neither resolution in this interface is
    * the viewing one. `test/unit/capability-scope-resolution.spec.ts` carries the rule
    * that can fail today — no route declares a viewing capability against a Cell-resolved
-   * target — and goes red on the first Stage 5 reporting read, which is when the dated
-   * read resolution is owed.
+   * target — and goes red on the first Cell-targeted viewing route, which is when the
+   * dated read resolution is owed. *Not on the first Stage 5 report, which an earlier
+   * version of this sentence claimed: section 7 makes a report's target a scope selector
+   * rather than a Cell, so an aggregate report would not reach this at all.*
    *
    * Nothing becomes unrecordable under the strict reading: on an active Cell handed
    * from A to B, B files the meeting and section 13 freezes its responsible leader to

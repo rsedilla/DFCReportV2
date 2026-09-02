@@ -1568,8 +1568,9 @@ Scope resolves against a target. Where the target is a Person, it resolves throu
   - **The date is not chosen by the actor.** A closed Cell's meetings cannot be rescheduled (Section 13), so the authorizing date is the scheduled one, derived from the Cell's own schedule. Without that, an actor could declare an actual date inside their own past tenure and recover authority through a request field — which is the shape the rule below refuses
   - The bound is what makes this consistent with the rule below rather than an exception to it. That rule refuses authority resolved *as of an effective date the actor chooses*, because an actor could then reach back far enough to recover it. This bound is not chosen by the actor: it is one fixed, short, forward-moving window per month, set by the calendar, and it closes on the 7th whatever anybody does. A leader recording the meetings of the Cell they led last week is not recovering authority; they are finishing the record the Cell existed to produce
   - **The capability decides which of the two rules applies, and not the HTTP method** (ruling of 2026-09-02). **Exactly three capabilities resolve as of the period being viewed** — `cell.view_subtree`, `reports.view_subtree` and `audit.view`, the *viewing* capabilities. **Every other capability resolves as a write**, through the Cell's current leader, whether the route it guards reads or writes. So `GET /api/v1/cells/{id}/meetings/{meeting_id}/roster` and the `POST` beside it give the same answer, and on an `ACTIVE` Cell that answer is the current leader for both
-  - **Stated as a closed list of three with everything else defaulting**, on the same terms as the capability list and the scope values above, and for the same reason a guard needs: a rule phrased as two open lists cannot decide a capability that appears in neither. It decided none of the five management capabilities when it was first written, and one of those guards a read that already exists — `GET /api/v1/cells/{id}/members`, under `cell.manage_membership`. Under this rule that read resolves through the Cell's current leader, which is what it already did
-  - **The default is chosen because it is what every Cell-targeted route already does**, so classifying nothing reclassifies nothing — and not because it is the narrower of the two. It is not: on an `ACTIVE` Cell that has changed hands the two resolutions name different people rather than one being a subset of the other, and on a plain Cell target both fall back to the last leader. What the closed list of three buys is that a capability added later cannot fall between the rules, which is the failure this bullet was written to fix
+  - **Stated as a closed list of three with everything else defaulting**, on the same terms as the capability list and the scope values above, and for the same reason a guard needs: a rule phrased as two open lists cannot decide a capability that appears in neither. The first version of this ruling was two lists, and decided none of the capabilities that actually guard a Cell-targeted route today — `cell.manage_membership`, `cell.manage_configuration` and `cell.manage_lifecycle` — one of which guards a read that already exists, `GET /api/v1/cells/{id}/members`
+  - **It decides which of the two resolutions a capability gets, and nothing else.** In particular it does not touch the closed-Cell fallback in the bullet above, which governs every Cell target whichever class its capability is in. Read as though it did, the default would place a management capability on a closed Cell under "resolves through nobody" — which is neither what the bullet above promises nor what the system does, and is the reading a first version of this bullet invited by adding that the two resolutions "both fall back to the last leader on a plain Cell target". Whether that fallback survives for a *write* capability on a closed Cell is a question Section 7 answers twice and not identically, and it is recorded as open in `CLAUDE.md` rather than settled here
+  - **The default is chosen because it is what every Cell-targeted route on an `ACTIVE` Cell already does**, and not because it is the narrower of the two. It is not narrower: on an `ACTIVE` Cell that has changed hands the two resolutions name different people rather than one being a subset of the other. What the closed list of three buys is that a capability added later cannot fall between the rules, which is the failure this bullet was written to fix
   - The roster read is guarded by the capability that records, deliberately and for the reason given above. Having tied its *capability* to the write it serves, resolving its *scope* by the other rule would make one route ask two questions and answer them differently. The method is the wrong discriminator in any case: a `GET` that prepares a write is that write's pre-flight, which is what "the meeting-scoped roster read that write requires" already says. That is the argument for this rule rather than a derivation of it — the general discriminator is added here, and was not previously implied by anything in this list
   - **Nothing becomes unrecordable, which is what makes the strict reading safe.** On an `ACTIVE` Cell handed from A to B, a meeting held under A resolves through B for the roster and for the submission alike — B files it, and Section 13 freezes its responsible leader to A, so the record exists and rolls up to the right person. What A is refused is a *view* of a past period, and that is what a viewing capability is for; it is not what the capability that records is for
 - a **DCC event** is church-wide and resolves through nothing; the endpoints on it are scoped by the people they return, so a roster or a submission covers only the requester's own authorized people (Section 9)
@@ -1619,7 +1620,9 @@ All permission and scope grants — creation, modification, and revocation — m
 
 **"The period being viewed" is the period a request under a viewing capability is asking about. Everything else is acted on now, whatever date it takes effect at.** Authority resolves through the Cell's *current* leader; the relationship being recorded resolves as of its own effective date, because that is the period it describes. Two questions, two answers, and any write carrying an effective date other than now asks both.
 
-*This sentence said "a read" and "a write" until 2026-09-02, and for one commit it said that eleven lines below the bullet declaring the method to be the wrong discriminator — so Section 7 defined the phrase by the split it had just stopped using, and the contradiction that ruling closed between Sections 7 and 13 was reproduced inside Section 7. The rule is unchanged; what moved is which word carries it.*
+*This sentence said "a read" and "a write" until 2026-09-02, and for one commit it said that in the same section as the bullet declaring the method to be the wrong discriminator — so Section 7 defined the phrase by the split it had just stopped using, and the contradiction that ruling closed between Sections 7 and 13 was reproduced inside Section 7. The rule is unchanged; what moved is which word carries it.*
+
+*The commit that repaired it said the two sat "eleven lines" apart. They sat fifty-one. The number came from the review that found the defect and was written into this specification without being counted, which is the failure this document keeps recording, committed in the act of repairing a different one.*
 
 The direction is forced rather than chosen. A leader whose Cell was handed away yesterday holds no authority over it today, and resolving authority as of a past effective date would let them recover it by dating the action far enough back — privilege reclaimed through a date field, which is the shape Section 5 invariant 4 refuses through the org chart. A forward-dated write is the same rule from the other side: a schedule change takes effect at the start of the next month (Section 10) and is authorized by who holds the Cell when it is made, not by whoever may hold it then. Nothing is lost either way, because the leader who did hold the Cell, or who will, is not thereby entitled to act on it now.
 
@@ -2948,11 +2951,14 @@ would not move by one however this column were resolved. An earlier version of t
 paragraph claimed it would.*
 
 **Scope is a separate question, and on one path it uses this same instant.** Section 7
-resolves a Cell meeting through the Cell's leader **as of the period being viewed** under
-a **viewing** capability, and through the current leader under a **recording** one —
-except for a recording capability against a **closed** Cell, which resolves through
-whoever led it on the meeting's date, this rule's instant, while the month's window is
-open.
+names three **viewing** capabilities that resolve a Cell meeting through the Cell's leader
+**as of the period being viewed**, and resolves it through the current leader under every
+other capability — except against a **closed** Cell, where it resolves through whoever led
+it on the meeting's date, this rule's instant, while the month's window is open.
+
+*Three and everything else, rather than two lists of capabilities: this sentence carried
+the two-list form for one commit after Section 7 stopped using it, which is the shape
+Section 7 records as unable to decide a capability appearing in neither.*
 
 That exception exists because a closed Cell has no current leader and the record would
 otherwise be unfilable. It does not merge the two questions: who may act on a record and
@@ -3036,7 +3042,9 @@ handover taking effect at exactly 00:00 leaves the outgoing row covering none of
 while its `ended_at` still falls *on* that date — and the rule as stated gives that
 meeting to the outgoing leader, where the gloss would give it to the incoming one. Nothing
 writes such a boundary today: a handover takes the instant it is approved, and the only
-midnight boundary this system produces is a backdated closure, which opens no successor.
+midnight boundary this system produces is a closure carrying an explicit effective date,
+which opens no successor — backdated or not, since a closure dated **today** resolves to
+Manila midnight too and Section 10 does not call that backdating.
 Section 7 lists Cell leadership under `records.backdate_effective_date`, so a backdated
 handover is a path this specification anticipates; whoever builds it decides that case,
 and it is named here so they find it stated rather than discover it in a sort order.
