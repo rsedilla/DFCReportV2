@@ -29,8 +29,13 @@ and not the ending, which is a search rather than a permission.
 
 **Exactly where the two rules give different answers is not stated here, because one
 question behind it is still open.** Section 7 resolves a Cell through "the Cell's leader
-as of the period being viewed" and does define that phrase — "the period a read is asking
-about", under *An effective date does not move the scope decision*. What it does not say
+as of the period being viewed" and does define that phrase, under *An effective date does
+not move the scope decision*: the period a request under a **viewing** capability is
+asking about, everything else being acted on now. *That definition read "the period a read
+is asking about" when this ruling was written, and this paragraph quoted those words until
+2026-09-02, when decision 0186 moved the split from the HTTP method to the capability.
+`audit.view` is one of the three capabilities Section 7 now names, so the phrase reaches
+this log by capability — which changes nothing about the question below.* What it does not say
 is what period a read of this log asks about: a single entry is an instant, a filtered
 range is a range, and the answers put the divergence in different places. Recorded as open
 in `CLAUDE.md`.

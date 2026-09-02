@@ -372,6 +372,34 @@ describe('people (SKILL.md sections 3, 7 and 8)', () => {
       expect(await db.selectFrom('persons').select('id').execute()).toHaveLength(7);
     });
 
+    it.each(['1994-02-30', '1994-13-05', '0026-01-01'])(
+      'refuses %s as a birthday, which is well-shaped and is not a day this system takes',
+      async (impossible) => {
+        // Section 22, ruling of 2026-09-02: a date-only value that is not a day is
+        // refused at the edge, by the one predicate every date-only field now carries.
+        //
+        // **All three were already refused here, and this case pins the rule rather
+        // than the change.** This file carried the strictest of the three conventions
+        // the ruling found -- `@Matches` plus `@IsDateString({ strict: true })` -- and
+        // that pair agrees with `isCalendarDate` on every well-shaped value, years 1 to
+        // 99 included, which is why `0026-01-01` is in this list rather than because it
+        // is a divergence. A first version of this comment claimed it was one, and the
+        // mutation restoring the pair caught that by surviving every case here.
+        //
+        // The mutation still survives, and that is correct: on this route the two are
+        // equivalent, so there is no behaviour to catch. What these cases pin is
+        // section 22's rule on the fields, so a later loosening of the predicate is a
+        // decision somebody makes rather than a silent widening.
+        const response = await post(raymondAccount, randomUUID()).send(
+          personBody({ pastoral_leader_id: manuel.id, birth_date: impossible }),
+        );
+
+        expect(response.status).toBe(422);
+        expect(response.body.error.code).toBe('VALIDATION_FAILED');
+        expect(await db.selectFrom('persons').select('id').execute()).toHaveLength(7);
+      },
+    );
+
     it('refuses a request with no idempotency key', async () => {
       const response = await request(app.getHttpServer())
         .post('/api/v1/people')

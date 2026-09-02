@@ -1,4 +1,4 @@
-import { IsDateString, Matches } from 'class-validator';
+import { IsManilaCalendarDate } from '../../common/time/is-manila-calendar-date';
 
 /**
  * `GET /api/v1/cells/{id}/meetings` (SKILL.md sections 13 and 22).
@@ -24,26 +24,21 @@ export class CellMeetingsQueryDto {
    * silently shifts if one of them does it in local time.
    */
   /**
-   * **Both decorators, and the shape one alone was a 500.** `@Matches` refuses a
-   * timestamp, which section 22 requires of a date-only field — "never send a date-only
-   * field as a timestamp; the conversion is where months silently shift". It does not
-   * refuse `2026-02-30`, which is well-shaped and is not a day, and which
-   * `reportingMonthOf` throws on: a plain `Error`, which the exception filter does not
-   * recognise, so the route answered `INTERNAL_ERROR`.
+   * **One decorator over section 22's shared predicate, and it replaces a pair.** The
+   * shape alone was a 500: `@Matches` refuses a timestamp, which section 22 requires of
+   * a date-only field — "never send a date-only field as a timestamp; the conversion is
+   * where months silently shift" — and does not refuse `2026-02-30`, which is
+   * well-shaped and is not a day, and which `reportingMonthOf` threw on.
    *
-   * `@IsDateString({ strict: true })` does the second half, and this is the convention
-   * `people.dto.ts` already documents and uses on every date field it takes. This DTO
-   * had only the first half, so the guard's new calendar check protected
-   * `{meeting_id}` on the two routes that name a meeting and left `month` on the one
-   * that does not — the same defect, one route sideways, introduced by the commit that
-   * fixed it.
+   * The pair that fixed it added `@IsDateString({ strict: true })` for the second half.
+   * That was the convention `people.dto.ts` documented, and it was one of three
+   * conventions in this codebase for one rule — which is what the ruling of 2026-09-02
+   * settled, by making section 22 name a single predicate and putting it behind a
+   * single decorator. `IsManilaCalendarDate` does both halves, and every date-only
+   * field in the API now carries it.
    */
-  @Matches(/^\d{4}-\d{2}-\d{2}$/, {
-    message: 'month must be a YYYY-MM-DD Asia/Manila date (SKILL.md section 22).',
+  @IsManilaCalendarDate({
+    message: 'month must be a YYYY-MM-DD Asia/Manila date that exists (SKILL.md section 22).',
   })
-  @IsDateString(
-    { strict: true },
-    { message: 'month must be a date that exists (SKILL.md section 22).' },
-  )
   month!: string;
 }

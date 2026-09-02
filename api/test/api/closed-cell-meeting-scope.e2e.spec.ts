@@ -96,14 +96,14 @@ describe('a closed Cell meeting resolves per record (section 7)', () => {
     // after Nestor's. Every instant is derived from the two dates, so the whole fixture
     // moves with the calendar.
     //
-    // **The handover is a day clear of the meeting deliberately, and that is a
-    // disclosure rather than convenience.** The leadership lookup compares Manila
-    // dates, which section 13 requires at the closure boundary — so on a day when a
-    // handover *also* happens, both the outgoing and incoming rows cover the date and
-    // the comparison cannot tell which of them was leading when the meeting took place.
-    // Section 13 settles week-versus-day and says nothing about same-day, and inventing
-    // an answer here would be a rule nobody decided. It is recorded as open in
-    // `CLAUDE.md`; this fixture stays on the case section 7 actually describes.
+    // **The handover is a day clear of the meeting deliberately.** The leadership lookup
+    // compares Manila dates, which section 13 requires at the closure boundary — so on a
+    // day when a handover *also* happens, both the outgoing and the incoming row cover
+    // the date. Section 13 now settles that case as well as week-versus-day: the
+    // earlier-starting row wins, and `cell-meeting-submit.e2e.spec.ts` is where it is
+    // pinned (decision 0187). This fixture stays a day clear so it measures section 7's
+    // per-record resolution and nothing else — a fixture exercising two rules at once
+    // tells you which one broke only by luck.
     const handover = new Date(`${marksMeeting}T23:00:00+08:00`);
     handover.setUTCDate(handover.getUTCDate() + 1);
     const closure = new Date(`${nestorsMeeting}T23:00:00+08:00`);
@@ -222,11 +222,17 @@ describe('a closed Cell meeting resolves per record (section 7)', () => {
   it('refuses the previous leader on an ACTIVE Cell that changed hands', async () => {
     // **The other side of the exception, and section 7's asymmetry stated as a case.**
     // The dated resolution is for a Cell with no current leader to resolve through. An
-    // ACTIVE Cell has one, so a write against it resolves through whoever holds it
+    // ACTIVE Cell has one, so a route against it resolves through whoever holds it
     // *now* — and its former leader cannot file their own last meeting, while the same
     // person on a *closed* Cell can. That reads oddly until you see what it protects: a
     // leader who still has a Cell is accountable through the person holding it, and a
     // closed Cell leaves nobody in that position.
+    //
+    // **The GET and the POST give one answer, and the capability is why** (decision
+    // 0186). This route carries `cell.take_attendance`, a recording capability, so it
+    // resolves as the submission it prepares rather than as a read of a past period.
+    // Section 13 said "for a read" and "for a write" until that ruling, which put this
+    // case in contradiction with section 7 for four days.
     //
     // Added because a mutation making the ACTIVE branch resolve by date too passed
     // every other case in this file and in the submit suite: the closed-Cell cases
@@ -264,6 +270,34 @@ describe('a closed Cell meeting resolves per record (section 7)', () => {
       .set('Authorization', `Bearer ${ownerAccount.accessToken}`);
 
     expect(response.status).toBe(403);
+
+    // **And the meeting is still recordable, and still Rafael's**, which is the half
+    // that makes the refusal safe rather than merely strict (decision 0186). Teodoro
+    // holds the Cell, so he reaches the roster and files the record — and section 13
+    // freezes `responsible_leader_id` to whoever led the Cell on the meeting's date,
+    // which is Rafael. Nobody loses a record; what Rafael loses is a view of a past
+    // period, which a viewing capability would serve and none exists yet.
+    //
+    // Without this half the case pins a denial and says nothing about what it costs,
+    // which is the argument the ruling actually turns on.
+    const successorAccount = await createAccount(app, db, {
+      person: successor,
+      roles: ['LEADER'],
+    });
+
+    await request(app.getHttpServer())
+      .get(`/api/v1/cells/${active.id}/meetings/${marksMeeting}/roster`)
+      .set('Authorization', `Bearer ${successorAccount.accessToken}`)
+      .expect(200);
+
+    const filed = await request(app.getHttpServer())
+      .post(`/api/v1/cells/${active.id}/meetings/${marksMeeting}/submit`)
+      .set('Authorization', `Bearer ${successorAccount.accessToken}`)
+      .set('Idempotency-Key', randomUUID())
+      .send({ status: 'HELD' })
+      .expect(201);
+
+    expect(filed.body.responsible_leader_id).toBe(owner.id);
   });
 
   it.each(['2026-09-31', '2026-02-30', '2026-13-05', '2026-09-99'])(

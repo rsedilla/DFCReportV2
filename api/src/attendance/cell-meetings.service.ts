@@ -150,12 +150,20 @@ export class CellMeetingsService {
    * with the closed-Cell slice" — this is that slice, and the paragraph outlived the
    * gap by one commit.*
    *
-   * What is **not** settled, and is open in `CLAUDE.md`: on an ACTIVE Cell the guard
-   * resolves through the current leader, which section 13 states as the rule for a
-   * *write* while giving a read "the leader as of the period being viewed". This route
-   * is a read, so a leader who handed on an active Cell is refused the roster of a
-   * meeting section 13 appears to place in their scope. Section 7 bundles this read
-   * with the write it serves and section 13 splits them; nothing says which wins.
+   * **On an ACTIVE Cell that resolves through the current leader, and that is the rule
+   * rather than an artifact of one method serving two routes** (decision 0186). The
+   * capability decides which of section 7's two resolutions applies, not the HTTP
+   * method: section 7 names three capabilities that resolve as of the period being
+   * viewed and this is not one of them, so the route resolves as the submission it
+   * prepares. A leader who handed on an active Cell
+   * is therefore refused this roster, and loses no record by it — the current leader
+   * files the meeting and section 13 freezes its responsible leader to whoever led the
+   * Cell on the day. What they are refused is a view of a past period, which belongs to
+   * a viewing capability and has no route yet.
+   *
+   * *That paragraph recorded this as an open contradiction between sections 7 and 13
+   * for four days. It was one, and section 13's sentence is what has changed: it split
+   * by method, and now splits by capability.*
    */
   async rosterFor(cellId: string, meetingId: string): Promise<Record<string, unknown>> {
     const cell = await this.cells.cellById(this.db, cellId);

@@ -324,6 +324,157 @@ describe('recording a Cell meeting (sections 12, 13 and 14)', () => {
     expect(response.body.facilitated_by).toBe(mark.id);
   });
 
+  describe('a handover on the meeting’s own day (section 13, decision 0187)', () => {
+    /**
+     * Hands `markCell` to a successor at an instant, and returns the successor.
+     *
+     * Written as one helper because the two cases below differ only in **when** the
+     * meeting is filed relative to this call, and that difference is the whole rule.
+     */
+    async function handOver(at: Date): Promise<TestPerson> {
+      const successor = await createPerson(db, { firstName: 'Nestor', network: 'MENS' });
+      await assignTo(db, successor.id, root.id);
+
+      await db.transaction().execute(async (trx) => {
+        await trx
+          .updateTable('cell_leaderships')
+          .set({ ended_at: at })
+          .where('cell_id', '=', markCell.id)
+          .where('ended_at', 'is', null)
+          .execute();
+
+        await trx
+          .insertInto('cell_leaderships')
+          .values({ person_id: successor.id, cell_id: markCell.id, started_at: at })
+          .execute();
+      });
+
+      return successor;
+    }
+
+    /** An Admin, so scope never decides these cases -- attribution is what they measure. */
+    async function admin(): Promise<TestAccount> {
+      const person = await createPerson(db, { firstName: 'Admina', network: 'MENS' });
+      await assignTo(db, person.id, root.id);
+
+      return createAccount(app, db, { person, roles: ['ADMIN'] });
+    }
+
+    it('gives the meeting to the leader who was in place when the day began', async () => {
+      // Both leadership rows cover the meeting's date, because the lookup compares
+      // Manila dates -- which section 13 requires at the closure boundary. The
+      // earlier-starting one wins, so a Cell handed over at noon keeps that day's
+      // meeting with the leader who had it at midnight.
+      const one = await member('Aurelio');
+      await handOver(new Date(`${meetingDate}T12:00:00+08:00`));
+
+      const response = await submit(
+        { status: 'HELD', attendance: [{ person_id: one.id, present: true }] },
+        await admin(),
+      );
+
+      expect(response.status).toBe(201);
+      expect(response.body.responsible_leader_id).toBe(mark.id);
+    });
+
+    it('gives the same answer whether the record is filed before or after the handover', async () => {
+      // **This is the argument the ruling turns on, and no frequency claim substitutes
+      // for it.** Under the previous ordering the same meeting was attributed two
+      // different ways: filed *before* the handover was recorded it found one leadership
+      // row and answered with the outgoing leader, and filed afterwards it found two and
+      // answered with the incoming one. Section 3 makes a past period reproducible and
+      // section 13 freezes this value permanently, so an attribution that moves with the
+      // clerk satisfies neither.
+      //
+      // Two Cells rather than two submissions to one, because a second submission to one
+      // meeting is a correction and this route refuses it. The Cells are identical in
+      // shape and differ only in whether the handover row exists when the meeting is
+      // filed -- which is the variable the rule has to be independent of.
+      const one = await member('Aurelio');
+      const entering = await admin();
+
+      // Cell A: filed while Mark's row is still the only one.
+      const beforeHandover = await submit(
+        { status: 'HELD', attendance: [{ person_id: one.id, present: true }] },
+        entering,
+      );
+
+      expect(beforeHandover.status).toBe(201);
+      expect(beforeHandover.body.responsible_leader_id).toBe(mark.id);
+
+      // Cell B: the same day, the same shape, handed over at noon *before* it is filed.
+      const ben = await createPerson(db, { firstName: 'Ben', network: 'MENS' });
+      await assignTo(db, ben.id, root.id);
+      const bensCell = await createCell(db, { leader: ben, dayOfWeek: 6, createdAt: CREATED });
+
+      const bensSuccessor = await createPerson(db, { firstName: 'Teodoro', network: 'MENS' });
+      await assignTo(db, bensSuccessor.id, root.id);
+      const noon = new Date(`${meetingDate}T12:00:00+08:00`);
+
+      await db.transaction().execute(async (trx) => {
+        await trx
+          .updateTable('cell_leaderships')
+          .set({ ended_at: noon })
+          .where('cell_id', '=', bensCell.id)
+          .where('ended_at', 'is', null)
+          .execute();
+
+        await trx
+          .insertInto('cell_leaderships')
+          .values({ person_id: bensSuccessor.id, cell_id: bensCell.id, started_at: noon })
+          .execute();
+      });
+
+      const afterHandover = await request(app.getHttpServer())
+        .post(`/api/v1/cells/${bensCell.id}/meetings/${meetingDate}/submit`)
+        .set('Authorization', `Bearer ${entering.accessToken}`)
+        .set('Idempotency-Key', randomUUID())
+        .send({ status: 'HELD' });
+
+      expect(afterHandover.status).toBe(201);
+      // Ben, who held the Cell when the day began -- not Teodoro, who holds it now and
+      // whom the previous ordering named.
+      expect(afterHandover.body.responsible_leader_id).toBe(ben.id);
+    });
+  });
+
+  it('refuses RESCHEDULED on a first submission, which decision 0188 rests on', async () => {
+    // **Two rules meet on this refusal, and only one of them is about shape.**
+    //
+    // Section 13's own reason is that a reschedule is a *change* to a record that
+    // already exists: it is what `cell_meeting_changes` records, and a change row needs
+    // a `from_status` and a `from_date`, which do not exist until a record does.
+    //
+    // The other is section 7's, and it is why this case exists now rather than with the
+    // reschedule route. Decision 0188 resolves a closed Cell meeting's scope through its
+    // frozen `responsible_leader_id`, and that value is actor-independent only because
+    // the instant it is frozen from is the *scheduled* date. `actual_date` is chosen by
+    // an actor — so if a first submission could carry one, an actor could freeze
+    // themselves as a meeting's responsible leader and hold authority over it past the
+    // Cell's closure, which is the shape section 7 refuses one field over.
+    //
+    // The DTO refused this before either ruling needed it to. What had no case was the
+    // refusal itself, which is now a premise rather than a detail.
+    const one = await member('Aurelio');
+
+    // **No `actual_date` in the body, and the first version of this case sent one.**
+    // The DTO declares no such field, so `forbidNonWhitelisted` would have refused the
+    // request whatever the status said — a case that passes with the status check
+    // deleted, which is the shape this repository keeps catching. Sending the status
+    // alone leaves `@IsIn` as the only thing that can refuse it.
+    const response = await submit({
+      status: 'RESCHEDULED',
+      attendance: [{ person_id: one.id, present: true }],
+    });
+
+    expect(response.status).toBe(422);
+    expect(response.body.error.code).toBe('VALIDATION_FAILED');
+
+    // And nothing was written, which the status code alone does not say.
+    const rows = await db.selectFrom('cell_meetings').select('id').execute();
+    expect(rows).toHaveLength(0);
+  });
+
   it('refuses a date the Cell was not scheduled to meet on', async () => {
     await member('Aurelio');
 

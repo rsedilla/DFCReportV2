@@ -53,13 +53,18 @@ rather than reversing anything.
 **Resolving at read time through the Cell's leader now.** The literal reading, and it is
 not what Section 7 does for scope either. Section 7 resolves a Cell meeting through the
 Cell's leader "as of the period being viewed", falling back to its last leader where the
-Cell is closed — so *now* is its answer for a write and not for a read.
+Cell is closed — so *now* is its answer under every capability except the three viewing
+ones (Section 7, decision 0186).
 
-*A first version of this section said scope "does resolve through the Cell's leader now",
-citing the subsection that refutes it. Read correctly, scope and attribution converge on
-the meeting's own period for a read and diverge only for a write, which is a narrower and
-truer statement than the one it replaced.* What remains is that they are different
-questions: who may act on a record is not who the record belongs to.
+*Two earlier versions of this aside were wrong. The first said scope "does resolve through
+the Cell's leader now", citing the subsection that refutes it. The second replaced that
+with a read-versus-write split — scope and attribution "converge on the meeting's own
+period for a read and diverge only for a write" — which decision 0186 withdrew on
+2026-09-02: the capability decides, not the HTTP method, and `GET .../roster` and `GET
+.../meetings` are reads carrying a recording capability. For the roster read scope and
+attribution therefore **diverge**, which is exactly what that sentence said happens only
+for a write.* What remains is that they are different questions: who may act on a record
+is not who the record belongs to.
 
 **Stamping whoever holds the Cell at the moment of submission.** Simplest, and it
 differs from the ruling only for a meeting recorded after a handover — which is a live

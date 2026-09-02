@@ -1,3 +1,5 @@
+import { ValidationFailedError } from '../errors/api-error';
+
 /**
  * Dates and instants, in the church's time zone (SKILL.md section 20).
  *
@@ -146,9 +148,29 @@ export function isCalendarDate(value: string): boolean {
  * assume.
  */
 export function startOfManilaDay(day: string): Date {
+  // **`isCalendarDate` rather than the shape alone, and the shape alone silently
+  // invented days.** `Date.UTC` normalises an impossible day into the following month,
+  // so `2026-02-30` came back as 2026-03-02 and every caller downstream was handed a
+  // plausible instant for a day nobody named. `CloseCellDto.effective_date` reached
+  // here with a shape check alone and wrote a Cell closure on that invented day, into
+  // an effective-dated history table, reporting the invented date back in the response
+  // and the audit entry — with no error anywhere on the path.
+  //
+  // The edge is where such a value is refused (section 22, ruling of 2026-09-02) and
+  // every date-only DTO field now carries `IsManilaCalendarDate`. This is the backstop
+  // for the next caller that forgets, on `reportingMonthOf`'s reasoning: a backstop
+  // that answers `INTERNAL_ERROR` is not one, so it throws the refusal the edge would
+  // have thrown rather than a plain `Error`.
+  //
+  // One branch rather than two, and the shape half is not separable from it: the
+  // predicate anchors the same expression, so a value failing the shape fails the
+  // predicate and a second branch for it would be unreachable.
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(day);
-  if (match === null) {
-    throw new Error(`"${day}" is not a YYYY-MM-DD date.`);
+  if (match === null || !isCalendarDate(day)) {
+    throw new ValidationFailedError(`"${day}" is not a YYYY-MM-DD date that exists.`, {
+      field: 'date',
+      value: day,
+    });
   }
 
   const asIfUtc = Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
