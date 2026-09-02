@@ -572,6 +572,13 @@ export class CellMeetingsService {
    * has a unit and does not need that. This is written from section 14 rather than from
    * that service (decision 0100).
    *
+   * **One operation, not two** (decision 0190). Section 14 also named a per-person
+   * correction carrying `cell_attendance.version`, which this route does not offer and
+   * which is withdrawn: the meeting is the unit *because* a Cell meeting belongs to one
+   * leader, and a per-person operation would need a second unit and a second conflict
+   * body for a domain that has one of each. `cell_attendance.version` is written one
+   * higher per superseded row and is never compared.
+   *
    * **What a correction preserves is section 14's list**, and two entries on it are why
    * this method writes less than it might. `responsible_leader_id` is frozen and never
    * re-resolved (section 13). `submitted_by` and `submitted_at` are **not** overwritten:
@@ -660,7 +667,7 @@ export class CellMeetingsService {
     // Section 7 admits neither reading: either it is an amendment and the capability is
     // required, or it is not and no correction is recorded.*
     // **A submission that changes nothing succeeds, writing nothing, and takes no part
-    // in the version check at all** (section 22, *Write conflicts*): a line that agrees
+    // in the version check at all** (section 22, *Write conflicts*; decision 0191): a line that agrees
     // with the committed state "takes no part in the version check … and the identical
     // body resubmitted succeeds, writing nothing". It is not an amendment, so it needs
     // no correction capability, writes no rows, writes no audit entry and does not move
@@ -684,7 +691,11 @@ export class CellMeetingsService {
     }
 
     // **The capability is checked before anything about the stored record is disclosed,
-    // and that now includes the null-version case.** A `VERSION_CONFLICT` carries the
+    // and that now includes the null-version case.** What the early return above still
+    // answers — matched or did not match — is accepted as a disclosure by decision 0191,
+    // on the ground that recovering N people costs 2^N submissions and that no read route
+    // carries per-person attendance at all.
+    // A `VERSION_CONFLICT` carries the
     // stored present count and the submitter's name (section 22), which
     // `GET .../roster` does not — so an actor holding `cell.take_attendance` and not
     // `cell.correct_subtree` could read the record out of a refusal.

@@ -221,11 +221,17 @@ export type AuditAction =
   // because what section 21 is auditing is somebody recording attendance for people
   // who are not their own.
   //
-  // **It targets the Cell**, unlike its DCC twin, which targets the Person. Section 7
-  // resolves an entry's scope through its target and resolves a Cell meeting through
-  // the Cell's leader; the DCC twin names a Person because a DCC event "is church-wide
-  // and resolves through nothing". Same rule, different targets, because the two
-  // domains hang their attendance off different things.
+  // **It targets the Cell**, unlike its DCC twin, which targets the Person (section 21,
+  // decision 0189). Section 7 resolves an entry's scope through its target and resolves a
+  // Cell meeting through the Cell's leader; the DCC twin names a Person because a DCC
+  // event "is church-wide and resolves through nothing". Same rule, different targets,
+  // because the two domains hang their attendance off different things.
+  //
+  // *Section 21 said "Both target the Person" until 2026-09-03, giving the DCC reason as
+  // the general one. This entry diverged from that sentence the day it was written, and
+  // the rule that reconciles them lived here rather than in the specification — which
+  // `CLAUDE.md` calls unfinished work. It is now section 21's, and this comment cites it
+  // rather than carrying it.*
   | 'cell_attendance.submitted_on_behalf'
   // Section 21's "Attendance corrections", the Cell half. **Written whoever the
   // actor is**, unlike the pair above: a first submission by the meeting's own

@@ -429,6 +429,9 @@ resolves exactly as well as it did in the single file and no better.
 - 2026-09-02 — [The capability decides a meeting's scope resolution, not the HTTP method](docs/decisions/0186-the-capability-decides-a-meetings-scope-not-the-http-method.md)
 - 2026-09-02 — [A handover on a meeting's own day leaves the meeting with the outgoing leader](docs/decisions/0187-a-handover-on-a-meetings-own-day-leaves-the-meeting-with-the-outgoing-leader.md)
 - 2026-09-02 — [A meeting's scope resolves through its frozen responsible leader](docs/decisions/0188-a-meetings-scope-resolves-through-its-frozen-responsible-leader.md)
+- 2026-09-03 — [A Cell attendance audit entry targets the Cell, a DCC one the Person](docs/decisions/0189-a-cell-attendance-audit-entry-targets-the-cell.md)
+- 2026-09-03 — [A Cell meeting has one write operation, and `cell_attendance.version` is not compared](docs/decisions/0190-a-cell-meeting-has-one-write-operation.md)
+- 2026-09-03 — [A write that writes nothing owes no further capability, and its confirmation is a disclosure](docs/decisions/0191-a-write-that-writes-nothing-owes-no-further-capability.md)
 
 ### Open — awaiting a ruling
 
