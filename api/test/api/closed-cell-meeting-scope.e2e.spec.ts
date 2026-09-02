@@ -291,12 +291,17 @@ describe('a closed Cell meeting resolves per record (section 7)', () => {
       // reached the SQL cast for a closed Cell in an open month. It also took only the
       // year and left the months literal, so it did not achieve what it claimed.
       //
-      // **The field is asserted, and without it these pin nothing.** A backstop was
-      // added to `reportingMonthOf` in the same batch as this suite, so deleting the
-      // guard's `isCalendarDate` check now lets the value through to that backstop,
-      // which answers 422 as well — and every case here stayed green. The guard names
-      // the path parameter it refused; the backstop names `date`. Asserting which one
-      // answered is what holds the guard's check in place.
+      // **The field is asserted, and without it these pin nothing.** `reportingMonthOf`
+      // became a 422-answering backstop two commits after this suite was written — it
+      // checked only the shape when the suite arrived, and threw a plain `Error` (a
+      // 500) for one commit after that. Once it answered 422, deleting the guard's
+      // `isCalendarDate` check let the value through to it and every case here stayed
+      // green. The guard names the path parameter it refused; the backstop names
+      // `date`. Asserting which one answered is what holds the guard's check in place.
+      //
+      // *An earlier version of this comment said the backstop arrived "in the same
+      // batch as this suite", which is two commits early and disagreed with the commit
+      // message carrying it.*
       const response = await roster(impossible, markAccount);
 
       expect(response.status).toBe(422);
@@ -309,8 +314,15 @@ describe('a closed Cell meeting resolves per record (section 7)', () => {
     // The guard resolves against this parameter, so section 7 requires the route to
     // validate it: a malformed value would otherwise reach a `date` comparison in SQL
     // and answer with a database error rather than a refusal.
+    //
+    // **Asserts the field for the same reason the four above do**, and this case was
+    // left on the status alone when they were fixed — the identical vacuity, one case
+    // below the ones that had it removed. `not-a-date` fails the shape as well as the
+    // calendar, so it is the weaker value; naming the layer is what stops it agreeing
+    // with any 422 the route could produce for any reason.
     const response = await roster('not-a-date', markAccount);
 
     expect(response.status).toBe(422);
+    expect(response.body.error.details.field).toBe('params.meetingId');
   });
 });
