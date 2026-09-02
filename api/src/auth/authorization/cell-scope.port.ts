@@ -34,7 +34,10 @@ export interface CellScopePort {
    * Section 7's "as of the period being viewed" is the wider rule and is not
    * expressible here. This method is the undated case rather than a claim that dates
    * do not matter, and `leaderForMeetingScope` below is the dated one — added for
-   * section 7's closed-Cell exception, which is the first dated read this system has.
+   * section 7's closed-Cell exception. **Not the first dated *read*, which this sentence
+   * called it for four days and which the paragraph on that method retracts at length:
+   * it is a dated resolution serving a *recording* capability (decision 0186), and the
+   * audit-log question that waits on the first dated read still waits.**
    *
    * *This paragraph said "nothing in this system reads a past period yet" and named
    * the reporting slice as the one that would need a dated variant. It was left
@@ -85,8 +88,8 @@ export interface CellScopePort {
    * Nothing becomes unrecordable under the strict reading: on an active Cell handed
    * from A to B, B files the meeting and section 13 freezes its responsible leader to
    * A. What A is refused is a view of a past period, which is what a viewing capability
-   * is for — and there is no such route yet, which is a gap in the surface that Stage
-   * 5 closes rather than a gap in this rule.
+   * is for — and there is no such route yet, which is a gap in the surface that the first
+   * Cell-targeted viewing route closes rather than a gap in this rule.
    *
    * **A dated resolution serving a viewing capability is a different method from this
    * one**, and this is not it. Section 7's "as of the period being viewed" is the wider
