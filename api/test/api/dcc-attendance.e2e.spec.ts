@@ -534,6 +534,43 @@ describe('DCC recording (sections 9 and 14)', () => {
       expect(targets).not.toContain(admin.personId);
     });
 
+    it('does not let the amendment flag reach a removed or not-yet-held event', async () => {
+      // **"An amendment widens *when*, never *what*"** (section 9, decision 0182), and
+      // the whole of that enforcement is a branch order: the flag is conjoined with
+      // `MONTH_CLOSED`, so every other reason falls through to the ordinary refusal.
+      // Swapping those two arms, or widening the first condition, silently hands Admin
+      // the power to record against a Sunday that was removed or has not begun — and
+      // nothing reddened. A rule with nothing that can fail on it is what decision 0142
+      // is about, and this one sits on the boundary the flag was added at.
+      // `removed_by` references `accounts`, not `persons`.
+      const removed = await createEvent(await recentSunday(), {
+        reason: 'Absorbed into the regional conference.',
+        by: admin.id,
+      });
+      const future = await createEvent(await nextSunday());
+
+      const amend = (eventId: string) =>
+        request(app.getHttpServer())
+          .post(`/api/v1/dcc/events/${eventId}/submit`)
+          .set('Authorization', `Bearer ${admin.accessToken}`)
+          .set('Idempotency-Key', randomUUID())
+          .send({
+            records: [{ person_id: mark.id, present: true, version: null }],
+            amendment: { reason: 'The flag must not reach this.' },
+          });
+
+      const onRemoved = await amend(removed);
+      expect(onRemoved.status).toBe(409);
+      expect(onRemoved.body.error.code).not.toBe('PERIOD_CLOSED');
+
+      const onFuture = await amend(future);
+      expect(onFuture.status).toBe(409);
+      expect(onFuture.body.error.code).not.toBe('PERIOD_CLOSED');
+
+      expect(await liveRows(removed)).toHaveLength(0);
+      expect(await liveRows(future)).toHaveLength(0);
+    });
+
     it('writes no entry for a line the amendment did not change', async () => {
       // Section 9: "an unchanged line is not an amendment". Section 21 asks for one entry
       // per action performed. Iterating every *named* line wrote one for the unchanged

@@ -1439,6 +1439,63 @@ describe('recording a Cell meeting (sections 12, 13 and 14)', () => {
       expect(onOpen.status).toBe(201);
     });
 
+    it('still refuses a meeting outside the amender’s scope', async () => {
+      // **The flag widens *when*, never *whose*** (section 13). Everything below the
+      // window check still runs, and this pins the half that is easiest to lose: an
+      // actor holding the backdate capability but no scope over the meeting is refused
+      // exactly as they would be inside an open month.
+      //
+      // **An `ADMIN` will not do**, and the first version of this case used one: section 7
+      // gives that role `cell.take_attendance` at Whole Church, so an Admin reaches every
+      // Cell and the case answered 201. The actor this rule is about holds the backdate
+      // capability at Whole Church — it is `WHOLE_CHURCH_ONLY` — and the recording
+      // capability only over their own subtree, which does not contain Mark.
+      const one = await member('Aurelio');
+      const closed = await closedMonthSaturday();
+      const granter = await adminAccount();
+
+      const ben = await createPerson(db, { firstName: 'Ben', network: 'MENS' });
+      await assignTo(db, ben.id, root.id);
+      const outsider = await createAccount(app, db, { person: ben, roles: [] });
+
+      for (const grant of [
+        { capability: 'cell.take_attendance', scope_type: 'OWN_SUBTREE' },
+        { capability: 'records.backdate_effective_date', scope_type: 'WHOLE_CHURCH' },
+      ] as const) {
+        await db
+          .insertInto('capability_grants')
+          .values({
+            account_id: outsider.id,
+            capability: grant.capability as never,
+            scope_type: grant.scope_type,
+            read_only: false,
+            reason: 'Invented for this case (CLAUDE.md, Secrets).',
+            granted_by: granter.id,
+          })
+          .execute();
+      }
+
+      const response = await amend(
+        {
+          status: 'HELD',
+          attendance: [{ person_id: one.id, present: true }],
+          amendment: { reason: 'Holding the capability is not holding the scope.' },
+        },
+        outsider,
+        closed,
+      );
+
+      expect(response.status).toBe(403);
+
+      const rows = await db
+        .selectFrom('cell_meetings')
+        .select('id')
+        .where('cell_id', '=', markCell.id)
+        .execute();
+
+      expect(rows).toHaveLength(0);
+    });
+
     it('writes no entry for an amendment that corrects nothing', async () => {
       // Section 9 settles it and section 21 states the rule: "an unchanged line is not an
       // amendment", and the log carries one entry per action *performed*. Resubmitting an

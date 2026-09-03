@@ -1185,25 +1185,6 @@ export class CellMeetingsService {
   }
 
   /**
-   * `cell.correct_subtree`, which section 7 requires of an amendment and which the
-   * decorator cannot declare (SKILL.md section 7).
-   *
-   * `cell.take_attendance` was checked by the guard before anything about the record was
-   * read, so this is reached only by an actor already in scope of the meeting.
-   *
-   * **The target is whatever the guard resolved the meeting to, asked of the same
-   * method.** Section 7 places a Cell meeting through its current leader while the Cell
-   * is `ACTIVE` and through the record's frozen responsible leader once it is closed
-   * (decisions 0186 and 0188) — two different Persons on a Cell that has changed hands.
-   *
-   * *An earlier version resolved against the frozen leader unconditionally, and the
-   * docblock claimed that was "the same Person the guard used, so the two checks cannot
-   * disagree". They disagree on every `ACTIVE` Cell that changed hands, and the
-   * consequence was that **nobody could correct the record**: the current leader was
-   * refused here, and the former leader was refused by the guard. Section 7 says in
-   * terms that the current leader files it.*
-   */
-  /**
    * The audit entry a closed-month amendment owes (SKILL.md sections 13 and 21;
    * decision 0182).
    *
@@ -1222,9 +1203,15 @@ export class CellMeetingsService {
    * how the two domains came to record different things for one decision.
    *
    * Targets the Cell, on the reasoning that settled the leadership trio (section 21,
-   * 2026-08-31): section 7 resolves an entry's scope through its target, and a Cell
-   * meeting resolves through the Cell — so the entry is readable exactly where the
-   * meeting is.
+   * 2026-08-31): section 7 resolves an entry's scope through its target, so the entry is
+   * **readable by a scope that reaches the Cell**.
+   *
+   * *Not "readable exactly where the meeting is", which section 21 retracts by name: a
+   * Cell resolves through its leader as of the period viewed and a meeting resolves per
+   * record, so on a closed Cell the two name different people, and once the window shuts
+   * the meeting resolves through nobody while the entry stays readable by the last
+   * leader. This docblock reinstated the retracted phrase, and the commit that removed it
+   * from three other places claimed to have removed it from four.*
    */
   private async writeAmendmentEntry(
     trx: Transaction<Database>,
@@ -1310,6 +1297,29 @@ export class CellMeetingsService {
     );
   }
 
+  /**
+   * `cell.correct_subtree`, which section 7 requires of an amendment and which the
+   * decorator cannot declare (SKILL.md section 7).
+   *
+   * `cell.take_attendance` was checked by the guard before anything about the record was
+   * read, so this is reached only by an actor already in scope of the meeting.
+   *
+   * **The target is whatever the guard resolved the meeting to, asked of the same
+   * method.** Section 7 places a Cell meeting through its current leader while the Cell
+   * is `ACTIVE` and through the record's frozen responsible leader once it is closed
+   * (decisions 0186 and 0188) — two different Persons on a Cell that has changed hands.
+   *
+   * *An earlier version resolved against the frozen leader unconditionally, and the
+   * docblock claimed that was "the same Person the guard used, so the two checks cannot
+   * disagree". They disagree on every `ACTIVE` Cell that changed hands, and the
+   * consequence was that **nobody could correct the record**: the current leader was
+   * refused here, and the former leader was refused by the guard. Section 7 says in
+   * terms that the current leader files it.*
+   *
+   * *This block was stranded twice. Two methods were inserted between it and the method
+   * it documents, leaving `writeAmendmentEntry` carrying three stacked docblocks and this
+   * method none; the first attempt to fix that moved the wrong one.*
+   */
   private async assertMayCorrect(
     // `Db` as well as a transaction: `lostRaceAnswer` runs on the pool after its
     // transaction rolled back, and section 22 requires that re-read to see *committed*
