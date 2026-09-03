@@ -183,7 +183,7 @@ export class DccAttendanceService {
     actor: Actor,
     claim: CurrentClaim,
     /** Present only to amend a closed month (section 9, decision 0182). */
-    amendment?: { reason: string },
+    amendment?: { reason: string } | null,
   ): Promise<Record<string, unknown>> {
     try {
       return await this.writeWithin(eventId, records, actor, claim, amendment);
@@ -247,8 +247,14 @@ export class DccAttendanceService {
     records: readonly SubmittedRecord[],
     actor: Actor,
     claim: CurrentClaim,
-    amendment?: { reason: string },
+    amendmentOrNull?: { reason: string } | null,
   ): Promise<Record<string, unknown>> {
+    // **Normalised, because `@IsOptional()` lets an explicit `null` through.**
+    // `class-validator` treats null as absent and skips the remaining decorators, so
+    // `{ "amendment": null }` arrives untouched and `!== undefined` is true of it — which
+    // dereferenced null on a closed month (a 500 on a well-formed body) and refused an
+    // open-month submission that amends nothing. Null and absent mean one thing here.
+    const amendment = amendmentOrNull ?? undefined;
     // **On the pool, before the transaction opens** (section 24), which is what every
     // other write service in this repository does and says why: `authorityFor` reads
     // `account_roles` and `capability_grants` on `this.db`, and a transaction holding
@@ -383,26 +389,37 @@ export class DccAttendanceService {
 
       const written = await this.applyWithin(trx, { event, actor, planned, assignments, live });
 
-      // **One entry for the amendment, not one per line** (section 9, decision 0182).
-      // What is audited is that a closed month was reopened for this submission, which is
-      // one act however many people it named — and the per-line entries `applyWithin`
-      // already writes carry who was corrected. Targeted at the **event's own submitter
-      // relation** is not available, so it names the actor's own Person: a DCC event
-      // resolves through nothing (section 9), and the per-person twins target the Person
-      // for that reason (decision 0189).
+      // **One entry per recorded person, each targeting that person** (section 21,
+      // decision 0189). Section 7 resolves an audit entry's scope through its target, and
+      // `dcc_attendance`'s existing twins target the **subject** — so this follows the
+      // rule already settled for them rather than inventing one for a submission-level
+      // entry, which section 21 does not define.
+      //
+      // *A first version wrote one entry targeting `actor.personId`, and a review showed
+      // what that costs: the entry resolved into the **amender's** upline scope and out of
+      // the scope of the leaders whose people's closed-month figures had moved — readable
+      // by the wrong population, and precisely inverted from the Cell twin, which targets
+      // the Cell and is therefore readable exactly where the meeting is.*
+      //
+      // The granularity difference from the Cell route is not an inconsistency: section 14
+      // already makes the meeting the unit for a Cell and the person the unit for DCC, and
+      // this follows the same seam. A Cell amendment names one meeting; a DCC amendment
+      // names as many people as it recorded, and each of them has a different leader.
       if (amendment !== undefined) {
-        await this.audit.writeWithin(trx, {
-          actorId: actor.accountId,
-          action: 'dcc_attendance.amended',
-          targetType: 'person',
-          targetId: actor.personId,
-          reason: amendment.reason,
-          after: {
-            dcc_event_id: event.id,
-            event_date: event.eventDate,
-            recorded: planned.length,
-          },
-        });
+        for (const { record } of planned) {
+          await this.audit.writeWithin(trx, {
+            actorId: actor.accountId,
+            action: 'dcc_attendance.amended',
+            targetType: 'person',
+            targetId: record.person_id,
+            reason: amendment.reason,
+            after: {
+              dcc_event_id: event.id,
+              event_date: event.eventDate,
+              reporting_month: reportingMonthOf(event.eventDate),
+            },
+          });
+        }
       }
 
       const response = {

@@ -11,6 +11,7 @@ import {
   IsUUID,
   MaxLength,
   Min,
+  MinLength,
   ValidateNested,
 } from 'class-validator';
 
@@ -32,7 +33,18 @@ import {
  * supplies.
  */
 export class ClosedMonthAmendmentDto {
+  /**
+   * **Non-blank, not merely present.** Section 5 requires a reason for every backdated
+   * effective date, and `@IsString()` alone accepts `""` — which is a reason nobody
+   * supplied, arriving through the very shape this object exists to prevent. Section 21
+   * stores it, so a blank one is an audit entry that explains nothing.
+   *
+   * `correction_reason` on this route is only `@IsString()`, and that is not a precedent
+   * to copy here (section 25 rule 19): section 14 asks for one "as appropriate" and it is
+   * optional, while this one is the whole justification for reaching past a closed window.
+   */
   @IsString()
+  @MinLength(1)
   @MaxLength(500)
   reason!: string;
 }

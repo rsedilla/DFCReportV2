@@ -413,8 +413,17 @@ export class CellMeetingsService {
       // that in terms, so "a retry that happens to arrive after the 7th never rewrites a
       // closed period by accident" — which is why holding the capability is not enough on
       // its own and the request has to say it means to amend.
+      // **Normalised once, because `@IsOptional()` lets an explicit `null` through.**
+      // `class-validator` treats null as absent and skips every other decorator on the
+      // property, so `{ "amendment": null }` arrives untouched and `!== undefined` is true
+      // of it. Left uncollapsed that dereferenced null twice: a 500 on a closed month, and
+      // a 409 refusing an open-month submission that amends nothing. Null and absent mean
+      // one thing here — no amendment — unlike `birth_date`, where omission and null are
+      // two claims and are deliberately told apart.
+      const amendment = body.amendment ?? undefined;
+
       if (!(await isMonthOpen(trx, reportingMonth))) {
-        if (body.amendment === undefined) {
+        if (amendment === undefined) {
           throw new ApiError(
             ApiErrorCode.PERIOD_CLOSED,
             'This month is closed. Only an Admin may amend it, with a reason (SKILL.md ' +
@@ -432,7 +441,7 @@ export class CellMeetingsService {
       // that never needed them. Refused rather than ignored, because section 22's
       // versioning rule makes a field accepted and ignored impossible to give meaning to
       // later.
-      else if (body.amendment !== undefined) {
+      else if (amendment !== undefined) {
         throw new InvariantViolationError(
           'This month is still open, so there is nothing to amend. Submit without the ' +
             'amendment (SKILL.md section 13).',
@@ -473,6 +482,24 @@ export class CellMeetingsService {
           actor,
           authority,
         });
+
+        // **The amendment entry belongs on this path too**, and sat only on the one
+        // below until a review reproduced it: a closed month amended through a
+        // *correction* — the ordinary case, since a closed month usually already has a
+        // record — returned 201 with `corrected: 1` and left nothing in the log saying an
+        // amendment had happened or why. `cell_attendance.corrected` carries
+        // `correction_reason`, which is a different field and was null here.
+        if (amendment !== undefined) {
+          await this.writeAmendmentEntry(trx, {
+            actor,
+            cellId,
+            meetingId,
+            reportingMonth,
+            reason: amendment.reason,
+            recorded: response.recorded,
+            corrected: response.corrected ?? 0,
+          });
+        }
 
         // The same last statement the first-submission path ends with, and the same
         // reasons (CLAUDE.md, *Write endpoints*). 201 on both outcomes, matching
@@ -606,19 +633,15 @@ export class CellMeetingsService {
       // audited is that a closed month was reopened for one write, which is true of an
       // Admin amending their own Cell's meeting. It carries the reason section 13
       // requires, and the month it reached back into.
-      if (body.amendment !== undefined) {
-        await this.audit.writeWithin(trx, {
-          actorId: actor.accountId,
-          action: 'cell_attendance.amended',
-          targetType: 'cell',
-          targetId: cellId,
-          reason: body.amendment.reason,
-          after: {
-            meeting_id: meetingId,
-            reporting_month: reportingMonth,
-            status: body.status,
-            responsible_leader_id: responsibleLeaderId,
-          },
+      if (amendment !== undefined) {
+        await this.writeAmendmentEntry(trx, {
+          actor,
+          cellId,
+          meetingId,
+          reportingMonth,
+          reason: amendment.reason,
+          recorded: attendance.length,
+          corrected: 0,
         });
       }
 
@@ -1196,6 +1219,56 @@ export class CellMeetingsService {
    * not holding the capability is a grant to make, holding it too narrowly is a grant to
    * widen.
    */
+  /**
+   * The audit entry a closed-month amendment owes (SKILL.md sections 13 and 21;
+   * decision 0182).
+   *
+   * **Written whoever the actor is**, unlike the on-behalf pair: what is audited is that
+   * a closed window was reopened for this write, which is true of an Admin amending a
+   * meeting of their own Cell.
+   *
+   * **Called from both submission paths**, which is the whole reason it is a method. It
+   * sat inline on the first-submission path and was unreachable from the correction one —
+   * and a correction is the *ordinary* case for a closed month, since a month usually
+   * closes over meetings that were already reported. A review reproduced it: 201,
+   * `corrected: 1`, and nothing in the log.
+   *
+   * Carries what decision 0182 names — the reason, the reporting month, and the records
+   * changed — rather than the fields each call site happened to have in hand, which is
+   * how the two domains came to record different things for one decision.
+   *
+   * Targets the Cell, on the reasoning that settled the leadership trio (section 21,
+   * 2026-08-31): section 7 resolves an entry's scope through its target, and a Cell
+   * meeting resolves through the Cell — so the entry is readable exactly where the
+   * meeting is.
+   */
+  private async writeAmendmentEntry(
+    trx: Transaction<Database>,
+    params: {
+      actor: Actor;
+      cellId: string;
+      meetingId: string;
+      reportingMonth: string;
+      reason: string;
+      recorded: number;
+      corrected: number;
+    },
+  ): Promise<void> {
+    await this.audit.writeWithin(trx, {
+      actorId: params.actor.accountId,
+      action: 'cell_attendance.amended',
+      targetType: 'cell',
+      targetId: params.cellId,
+      reason: params.reason,
+      after: {
+        meeting_id: params.meetingId,
+        reporting_month: params.reportingMonth,
+        recorded: params.recorded,
+        corrected: params.corrected,
+      },
+    });
+  }
+
   private async assertMayAmendClosedMonth(
     trx: Transaction<Database>,
     actor: Actor,

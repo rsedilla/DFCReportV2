@@ -492,6 +492,81 @@ describe('DCC recording (sections 9 and 14)', () => {
       expect(entries[0].reason).toBe('Register reconciled after the window shut.');
     });
 
+    it('targets each recorded person, not the amender', async () => {
+      // **Section 7 resolves an audit entry's scope through its target**, and
+      // `dcc_attendance`'s existing twins target the *subject* (decision 0189). A first
+      // version wrote one entry against `actor.personId`: it resolved into the amender's
+      // own upline scope and out of the scope of the leaders whose people's closed-month
+      // figures had moved — readable by the wrong population, and inverted from the Cell
+      // twin, which targets the Cell and is readable exactly where the meeting is.
+      //
+      // One entry per person, because a DCC submission may name people belonging to many
+      // different leaders and a single entry resolves through one target only. Section 14
+      // already makes the person the unit in this domain and the meeting the unit in the
+      // other, so the granularity follows a seam that was settled.
+      const eventId = await createEvent(await closedMonthSunday());
+
+      const response = await request(app.getHttpServer())
+        .post(`/api/v1/dcc/events/${eventId}/submit`)
+        .set('Authorization', `Bearer ${admin.accessToken}`)
+        .set('Idempotency-Key', randomUUID())
+        .send({
+          records: [
+            { person_id: mark.id, present: true, version: null },
+            { person_id: timothy.id, present: false, version: null },
+          ],
+          amendment: { reason: 'Two people reconciled after the window shut.' },
+        });
+
+      expect(response.status).toBe(201);
+
+      const targets = (
+        await db
+          .selectFrom('audit_log')
+          .select('target_id')
+          .where('action', '=', 'dcc_attendance.amended')
+          .execute()
+      ).map((row) => row.target_id);
+
+      expect(targets).toHaveLength(2);
+      expect(targets).toEqual(expect.arrayContaining([mark.id, timothy.id]));
+      // The amender is Adele, and naming her would put the entry in her upline's scope.
+      expect(targets).not.toContain(admin.personId);
+    });
+
+    it('treats an explicit null amendment as absent, in both directions', async () => {
+      // `@IsOptional()` passes an explicit null through and skips the remaining
+      // decorators, so `!== undefined` was true of it: a closed month dereferenced null
+      // and answered 500 on a well-formed body, and an open month refused an ordinary
+      // submission that amends nothing.
+      const closed = await createEvent(await closedMonthSunday());
+
+      const onClosed = await request(app.getHttpServer())
+        .post(`/api/v1/dcc/events/${closed}/submit`)
+        .set('Authorization', `Bearer ${admin.accessToken}`)
+        .set('Idempotency-Key', randomUUID())
+        .send({
+          records: [{ person_id: mark.id, present: true, version: null }],
+          amendment: null,
+        });
+
+      expect(onClosed.status).toBe(409);
+      expect(onClosed.body.error.code).toBe('PERIOD_CLOSED');
+
+      const open = await createEvent(await recentSunday());
+
+      const onOpen = await request(app.getHttpServer())
+        .post(`/api/v1/dcc/events/${open}/submit`)
+        .set('Authorization', `Bearer ${admin.accessToken}`)
+        .set('Idempotency-Key', randomUUID())
+        .send({
+          records: [{ person_id: mark.id, present: true, version: null }],
+          amendment: null,
+        });
+
+      expect(onOpen.status).toBe(201);
+    });
+
     it('refuses the amendment flag from an actor without the backdate capability', async () => {
       // Required *in addition to* `dcc.take_attendance`, never in place of it — Manuel
       // may record these people and may not reach past a closed window.

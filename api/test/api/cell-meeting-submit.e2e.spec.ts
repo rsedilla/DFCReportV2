@@ -1357,6 +1357,106 @@ describe('recording a Cell meeting (sections 12, 13 and 14)', () => {
       expect(entries[0].target_id).toBe(markCell.id);
     });
 
+    it('audits an amendment that corrects a record, not only one that creates it', async () => {
+      // **The ordinary case, and it was the unaudited one.** A closed month usually
+      // already holds records, so amending it is normally a *correction* — and the entry
+      // sat inside the first-submission branch, unreachable once `correctWithin` took
+      // over. The month was rewritten, 201 with `corrected: 1`, and nothing in the log
+      // said an amendment had happened or why. `cell_attendance.corrected` carries
+      // `correction_reason`, a different field, which was null here.
+      const one = await member('Aurelio');
+      const admin = await adminAccount();
+      const closed = await closedMonthSaturday();
+
+      await amend(
+        {
+          status: 'HELD',
+          attendance: [{ person_id: one.id, present: true }],
+          amendment: { reason: 'First amendment, creates the record.' },
+        },
+        admin,
+        closed,
+      ).expect(201);
+
+      const second = await amend(
+        {
+          status: 'HELD',
+          version: 1,
+          attendance: [{ person_id: one.id, present: false }],
+          amendment: { reason: 'Second amendment, corrects it.' },
+        },
+        admin,
+        closed,
+      );
+
+      expect(second.status).toBe(201);
+      expect(second.body.corrected).toBe(1);
+
+      const entries = await db
+        .selectFrom('audit_log')
+        .select(['reason', 'target_id'])
+        .where('action', '=', 'cell_attendance.amended')
+        .orderBy('occurred_at')
+        .execute();
+
+      expect(entries).toHaveLength(2);
+      expect(entries[1].reason).toBe('Second amendment, corrects it.');
+      expect(entries[1].target_id).toBe(markCell.id);
+    });
+
+    it('treats an explicit null amendment as absent, in both directions', async () => {
+      // `@IsOptional()` passes an explicit null through untouched and skips every other
+      // decorator, so `!== undefined` was true of it: a closed month dereferenced null
+      // and answered 500 on a well-formed body, and an open month refused an ordinary
+      // submission that amends nothing. Null and absent mean one thing here.
+      const one = await member('Aurelio');
+      const admin = await adminAccount();
+      const closed = await closedMonthSaturday();
+
+      const onClosed = await amend(
+        {
+          status: 'HELD',
+          attendance: [{ person_id: one.id, present: true }],
+          amendment: null,
+        },
+        admin,
+        closed,
+      );
+
+      expect(onClosed.status).toBe(409);
+      expect(onClosed.body.error.code).toBe('PERIOD_CLOSED');
+
+      const onOpen = await amend(
+        {
+          status: 'HELD',
+          attendance: [{ person_id: one.id, present: true }],
+          amendment: null,
+        },
+        admin,
+        meetingDate,
+      );
+
+      expect(onOpen.status).toBe(201);
+    });
+
+    it('refuses a blank reason, which is a reason nobody supplied', async () => {
+      const one = await member('Aurelio');
+      const admin = await adminAccount();
+      const closed = await closedMonthSaturday();
+
+      const response = await amend(
+        {
+          status: 'HELD',
+          attendance: [{ person_id: one.id, present: true }],
+          amendment: { reason: '' },
+        },
+        admin,
+        closed,
+      );
+
+      expect(response.status).toBe(422);
+    });
+
     it('refuses the flag from an actor without records.backdate_effective_date', async () => {
       // The capability is required *in addition to* `cell.take_attendance`, so an
       // amendment widens when and never what or whose. Mark leads the Cell and may
