@@ -3325,6 +3325,14 @@ A `RESCHEDULED` Cell meeting remains associated with its original logical weekly
 
 A `RESCHEDULED` meeting that ultimately does not take place may be changed to `NOT_HELD`, preserving both records.
 
+**A reschedule carries the roster of the day it moved to, and the two are one operation** (ruling of 2026-09-04). The submission that moves a meeting also records its attendance for the new actual date: `status: 'RESCHEDULED'` with `actual_date`, the meeting's `version`, and the complete roster as of that date. It requires `cell.correct_subtree` in addition to `cell.take_attendance` — a reschedule changes a record that already exists, which is what Section 7 owes the amendment capability for.
+
+The two rules that force this are each clear alone. A first submission cannot carry `RESCHEDULED` (above), so a meeting is recorded and *then* moved; and a rescheduled meeting's roster comes from the actual date (Section 12), because that is who could have been there. Performed as two operations, the ordinary flow records attendance against the scheduled-date roster and then moves the roster out from under it — leaving a member who joined between the dates with no record, and one who left with a record for a meeting they were not a member of. That is a meeting failing the "every member exactly once" rule this section states, held silently: coverage counts recorded meetings rather than complete ones, so the month reconciles wrongly (Section 20) with every figure looking ordinary.
+
+**A person on the old roster and not the new one has their record closed with nothing replacing it** — `superseded_at` set and `superseded_by` the row's own id, which is the idiom above. Section 12 makes them a non-member of that meeting rather than somebody whose attendance was misrecorded: they could not have been there. *This is a second occasion for that shape, and the paragraph stating it names only the `NOT_HELD` one; both constraints that meet it carry the exemption by name and neither is specific to that path.*
+
+**The legal transitions are exactly four**, and everything else is refused as an `INVARIANT_VIOLATION`: a first submission is `HELD` or `NOT_HELD`; `HELD` → `RESCHEDULED`; `RESCHEDULED` → `RESCHEDULED`, since a meeting may move twice; and `RESCHEDULED` → `NOT_HELD`. `NOT_HELD` → anything is refused, because `NOT_HELD` means the meeting did not take place and is not being made up, and rescheduling contradicts the fact just recorded. `RESCHEDULED` → `HELD` is not a transition and needs none — `RESCHEDULED` already means the meeting took place on another date, and Section 12 counts both in N. How a status recorded *in error* is corrected is a different operation from a move, is not defined here, and is recorded as open in `CLAUDE.md`.
+
 ### Meeting summary, and the ranking prohibition
 
 The pastor-facing meeting summary reports, at any scope:
