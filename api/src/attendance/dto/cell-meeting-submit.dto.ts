@@ -9,9 +9,9 @@ import {
   IsOptional,
   IsString,
   IsUUID,
+  Matches,
   MaxLength,
   Min,
-  MinLength,
   ValidateNested,
 } from 'class-validator';
 
@@ -34,17 +34,22 @@ import {
  */
 export class ClosedMonthAmendmentDto {
   /**
-   * **Non-blank, not merely present.** Section 5 requires a reason for every backdated
-   * effective date, and `@IsString()` alone accepts `""` — which is a reason nobody
+   * **Non-blank, not merely present or non-empty.** Section 5 requires a reason for every
+   * backdated effective date, and `@IsString()` alone accepts `""` — a reason nobody
    * supplied, arriving through the very shape this object exists to prevent. Section 21
    * stores it, so a blank one is an audit entry that explains nothing.
+   *
+   * `@Matches(/\S/)` rather than `@MinLength(1)`, which was the first fix and let `" "`
+   * through — the same hole one space wider. The repository's nearest precedents
+   * (`people.dto.ts`'s Network-change and backdate reasons) carry `@Length(1, 500)` and
+   * have it too; that is a gap to close there rather than a shape to copy here.
    *
    * `correction_reason` on this route is only `@IsString()`, and that is not a precedent
    * to copy here (section 25 rule 19): section 14 asks for one "as appropriate" and it is
    * optional, while this one is the whole justification for reaching past a closed window.
    */
   @IsString()
-  @MinLength(1)
+  @Matches(/\S/, { message: 'reason must not be blank' })
   @MaxLength(500)
   reason!: string;
 }

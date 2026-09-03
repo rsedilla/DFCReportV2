@@ -489,7 +489,13 @@ export class CellMeetingsService {
         // record — returned 201 with `corrected: 1` and left nothing in the log saying an
         // amendment had happened or why. `cell_attendance.corrected` carries
         // `correction_reason`, which is a different field and was null here.
-        if (amendment !== undefined) {
+        // **Only where the correction actually wrote something**, which section 9 settles
+        // for the other domain in words that bind this one: "an unchanged line is not an
+        // amendment", and section 21 asks for one entry per action *performed*. A
+        // resubmitted identical roster corrects nothing, and wrote a second entry whose
+        // `after` was byte-identical to the first — so the log asserted an amendment
+        // that section 7 says is not one.
+        if (amendment !== undefined && (response.corrected ?? 0) > 0) {
           await this.writeAmendmentEntry(trx, {
             actor,
             cellId,
@@ -1198,28 +1204,6 @@ export class CellMeetingsService {
    * terms that the current leader files it.*
    */
   /**
-   * `records.backdate_effective_date`, required to amend a month that has closed
-   * (SKILL.md sections 13 and 20; decision 0182).
-   *
-   * **In addition to `cell.take_attendance`, never in place of it.** The guard has already
-   * resolved the meeting against the Cell, and `assertMayActForAnother` and
-   * `assertMayCorrect` still run below — an amendment widens *when* a submission is
-   * allowed and never *what* it may do or *whose* meeting it may touch.
-   *
-   * **Targeted at the church**, on `CellsClosureService.assertMayBackdateWithin`'s
-   * reasoning re-derived rather than copied (decision 0100): the authority to reach past a
-   * closed window is not authority over the Cell's leader, so resolving it through that
-   * leader would claim something it does not mean. A Cell is not a Person, and this
-   * capability is `WHOLE_CHURCH_ONLY` (section 7), which makes the target unobservable
-   * today — `coversWith` discards a grant `grantCoversNothing` voids before the target is
-   * read. The choice is section 7's rather than something a test can fail on, and it
-   * begins to matter the day the capability leaves that set.
-   *
-   * The two refusals are told apart because they tell an administrator different things:
-   * not holding the capability is a grant to make, holding it too narrowly is a grant to
-   * widen.
-   */
-  /**
    * The audit entry a closed-month amendment owes (SKILL.md sections 13 and 21;
    * decision 0182).
    *
@@ -1269,6 +1253,28 @@ export class CellMeetingsService {
     });
   }
 
+  /**
+   * `records.backdate_effective_date`, required to amend a month that has closed
+   * (SKILL.md sections 13 and 20; decision 0182).
+   *
+   * **In addition to `cell.take_attendance`, never in place of it.** The guard has already
+   * resolved the meeting against the Cell, and `assertMayActForAnother` and
+   * `assertMayCorrect` still run below — an amendment widens *when* a submission is
+   * allowed and never *what* it may do or *whose* meeting it may touch.
+   *
+   * **Targeted at the church**, on `CellsClosureService.assertMayBackdateWithin`'s
+   * reasoning re-derived rather than copied (decision 0100): the authority to reach past a
+   * closed window is not authority over the Cell's leader, so resolving it through that
+   * leader would claim something it does not mean. A Cell is not a Person, and this
+   * capability is `WHOLE_CHURCH_ONLY` (section 7), which makes the target unobservable
+   * today — `coversWith` discards a grant `grantCoversNothing` voids before the target is
+   * read. The choice is section 7's rather than something a test can fail on, and it
+   * begins to matter the day the capability leaves that set.
+   *
+   * The two refusals are told apart because they tell an administrator different things:
+   * not holding the capability is a grant to make, holding it too narrowly is a grant to
+   * widen.
+   */
   private async assertMayAmendClosedMonth(
     trx: Transaction<Database>,
     actor: Actor,

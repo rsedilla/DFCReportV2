@@ -498,7 +498,7 @@ describe('DCC recording (sections 9 and 14)', () => {
       // version wrote one entry against `actor.personId`: it resolved into the amender's
       // own upline scope and out of the scope of the leaders whose people's closed-month
       // figures had moved — readable by the wrong population, and inverted from the Cell
-      // twin, which targets the Cell and is readable exactly where the meeting is.
+      // twin, which is readable by a scope that reaches the Cell.
       //
       // One entry per person, because a DCC submission may name people belonging to many
       // different leaders and a single entry resolves through one target only. Section 14
@@ -532,6 +532,40 @@ describe('DCC recording (sections 9 and 14)', () => {
       expect(targets).toEqual(expect.arrayContaining([mark.id, timothy.id]));
       // The amender is Adele, and naming her would put the entry in her upline's scope.
       expect(targets).not.toContain(admin.personId);
+    });
+
+    it('writes no entry for a line the amendment did not change', async () => {
+      // Section 9: "an unchanged line is not an amendment". Section 21 asks for one entry
+      // per action performed. Iterating every *named* line wrote one for the unchanged
+      // ones too, so resubmitting an identical body told that person's leader their
+      // frozen figure had moved — once per resubmission.
+      const eventId = await createEvent(await closedMonthSunday());
+
+      const send = (reason: string) =>
+        request(app.getHttpServer())
+          .post(`/api/v1/dcc/events/${eventId}/submit`)
+          .set('Authorization', `Bearer ${admin.accessToken}`)
+          .set('Idempotency-Key', randomUUID())
+          .send({
+            records: [{ person_id: mark.id, present: true, version: null }],
+            amendment: { reason },
+          });
+
+      await send('Creates the record.').expect(201);
+
+      const again = await send('Changes nothing at all.');
+
+      expect(again.status).toBe(201);
+      expect(again.body.unchanged).toBe(1);
+
+      const entries = await db
+        .selectFrom('audit_log')
+        .select('reason')
+        .where('action', '=', 'dcc_attendance.amended')
+        .execute();
+
+      expect(entries).toHaveLength(1);
+      expect(entries[0].reason).toBe('Creates the record.');
     });
 
     it('treats an explicit null amendment as absent, in both directions', async () => {

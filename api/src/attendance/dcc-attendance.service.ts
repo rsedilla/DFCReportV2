@@ -398,25 +398,36 @@ export class DccAttendanceService {
       // *A first version wrote one entry targeting `actor.personId`, and a review showed
       // what that costs: the entry resolved into the **amender's** upline scope and out of
       // the scope of the leaders whose people's closed-month figures had moved — readable
-      // by the wrong population, and precisely inverted from the Cell twin, which targets
-      // the Cell and is therefore readable exactly where the meeting is.*
+      // by the wrong population, and inverted from the Cell twin, which is readable by a
+      // scope that reaches the Cell.*
       //
       // The granularity difference from the Cell route is not an inconsistency: section 14
       // already makes the meeting the unit for a Cell and the person the unit for DCC, and
       // this follows the same seam. A Cell amendment names one meeting; a DCC amendment
       // names as many people as it recorded, and each of them has a different leader.
+      //
+      // **Only the lines that were actually written**, which section 9 settles rather than
+      // leaving to judgement: "an unchanged line is not an amendment". Section 21 asks for
+      // one entry per action performed, and no action is performed on a line whose value
+      // already equals the stored one. Iterating `planned` wrote an entry for those too,
+      // so resubmitting an identical body told every named person's leader their frozen
+      // figure had moved, once per resubmission.
       if (amendment !== undefined) {
-        for (const { record } of planned) {
+        for (const line of planned.filter((entry) => entry.outcome !== 'UNCHANGED')) {
           await this.audit.writeWithin(trx, {
             actorId: actor.accountId,
             action: 'dcc_attendance.amended',
             targetType: 'person',
-            targetId: record.person_id,
+            targetId: line.record.person_id,
             reason: amendment.reason,
             after: {
               dcc_event_id: event.id,
               event_date: event.eventDate,
               reporting_month: reportingMonthOf(event.eventDate),
+              // What changed for this person, which decision 0182 asks the entry to name
+              // and which the previous version dropped when it gained a target.
+              outcome: line.outcome,
+              present: line.record.present,
             },
           });
         }

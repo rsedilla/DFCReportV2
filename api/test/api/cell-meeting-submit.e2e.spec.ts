@@ -1439,6 +1439,43 @@ describe('recording a Cell meeting (sections 12, 13 and 14)', () => {
       expect(onOpen.status).toBe(201);
     });
 
+    it('writes no entry for an amendment that corrects nothing', async () => {
+      // Section 9 settles it and section 21 states the rule: "an unchanged line is not an
+      // amendment", and the log carries one entry per action *performed*. Resubmitting an
+      // identical roster corrects nothing — and wrote a second entry whose `after` was
+      // byte-identical to the first, asserting an amendment section 7 says is not one.
+      const one = await member('Aurelio');
+      const admin = await adminAccount();
+      const closed = await closedMonthSaturday();
+
+      const body = {
+        status: 'HELD',
+        attendance: [{ person_id: one.id, present: true }],
+      };
+
+      await amend({ ...body, amendment: { reason: 'Creates the record.' } }, admin, closed).expect(
+        201,
+      );
+
+      const again = await amend(
+        { ...body, version: 1, amendment: { reason: 'Changes nothing at all.' } },
+        admin,
+        closed,
+      );
+
+      expect(again.status).toBe(201);
+      expect(again.body.corrected).toBe(0);
+
+      const entries = await db
+        .selectFrom('audit_log')
+        .select('reason')
+        .where('action', '=', 'cell_attendance.amended')
+        .execute();
+
+      expect(entries).toHaveLength(1);
+      expect(entries[0].reason).toBe('Creates the record.');
+    });
+
     it('refuses a blank reason, which is a reason nobody supplied', async () => {
       const one = await member('Aurelio');
       const admin = await adminAccount();
@@ -1455,6 +1492,20 @@ describe('recording a Cell meeting (sections 12, 13 and 14)', () => {
       );
 
       expect(response.status).toBe(422);
+
+      // And whitespace is blank too — `@MinLength(1)` was the first fix and let this
+      // through, which is the same hole one space wider.
+      const spaces = await amend(
+        {
+          status: 'HELD',
+          attendance: [{ person_id: one.id, present: true }],
+          amendment: { reason: '   ' },
+        },
+        admin,
+        closed,
+      );
+
+      expect(spaces.status).toBe(422);
     });
 
     it('refuses the flag from an actor without records.backdate_effective_date', async () => {
