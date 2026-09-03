@@ -968,30 +968,16 @@ export class CellMeetingsService {
       return new InvariantViolationError(
         'Changing a meeting’s status is a separate operation from correcting its ' +
           'attendance (SKILL.md section 13).',
-        { cell_id: cellId, meeting_id: meetingId, current_status: meeting.status },
+        // `submitted_status` included because the sequential refusal includes it, and the
+        // whole claim of this branch is that the two answers are the same answer. It
+        // echoes the client's own input and discloses nothing.
+        {
+          cell_id: cellId,
+          meeting_id: meetingId,
+          current_status: meeting.status,
+          submitted_status: body.status,
+        },
       );
-    }
-
-    // **Then the amendment capability, before any of the record is disclosed.** A
-    // `VERSION_CONFLICT` carries the stored present count and the submitter's name, which
-    // `GET .../roster` does not — so without this an actor holding `cell.take_attendance`
-    // and not `cell.correct_subtree` read the record out of a lost race, having been
-    // refused `403` for the identical body sent sequentially. Timing decided which.
-    try {
-      const authority = await this.authorization.authorityFor(actor.accountId);
-      await this.assertMayCorrect(this.db, {
-        cellId,
-        meetingId,
-        existing: { responsible_leader_id: meeting.responsible_leader_id },
-        actor,
-        authority,
-      });
-    } catch (error) {
-      if (error instanceof ScopeDeniedError) {
-        return error;
-      }
-
-      throw error;
     }
 
     const live = await this.db
@@ -1016,6 +1002,36 @@ export class CellMeetingsService {
         meeting_id: meetingId,
         current_version: meeting.version,
       });
+    }
+
+    // **The amendment capability, on the disagreeing branch only, which is
+    // `correctWithin`'s own order.** Section 7: "A write that writes nothing owes no
+    // *amendment* capability" — so an agreeing loser, which wrote nothing and is answered
+    // `RESOURCE_BUSY` above, must not be asked for `cell.correct_subtree`. Checking it
+    // unconditionally refused that actor `403` where the identical body sent sequentially
+    // answers `201 … "corrected": 0`, which is the same timing-decides-the-answer defect
+    // this method was fixed for, mirrored. Worse than a wrong code: section 22 stores a
+    // 4xx against the idempotency key, so a conforming retry of the unchanged body
+    // replayed the refusal permanently, while `RESOURCE_BUSY` is a 503 and releases it.
+    //
+    // Below the comparison, it still runs before anything of the record is disclosed: a
+    // `VERSION_CONFLICT` carries the stored present count and the submitter's name, which
+    // `GET .../roster` does not.
+    try {
+      const authority = await this.authorization.authorityFor(actor.accountId);
+      await this.assertMayCorrect(this.db, {
+        cellId,
+        meetingId,
+        existing: { responsible_leader_id: meeting.responsible_leader_id },
+        actor,
+        authority,
+      });
+    } catch (error) {
+      if (error instanceof ScopeDeniedError) {
+        return error;
+      }
+
+      throw error;
     }
 
     // Both actors and both timestamps, which section 22 requires and a placeholder

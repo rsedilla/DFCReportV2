@@ -1466,6 +1466,55 @@ describe('recording a Cell meeting (sections 12, 13 and 14)', () => {
       }
     });
 
+    it('asks no correction capability of an agreeing loser, which wrote nothing', async () => {
+      // **The mirror of the case above, and the first fix introduced it.** Checking the
+      // amendment capability before the comparison refused this actor 403 where the
+      // identical body sent sequentially answers 201 with `corrected: 0` — so timing
+      // still decided the answer, in the opposite direction. Section 7: "A write that
+      // writes nothing owes no *amendment* capability."
+      //
+      // **And the idempotency key made it permanent.** Section 22 stores a 4xx against
+      // the key and releases a 5xx, so a conforming client retrying the unchanged body on
+      // the same key replayed the 403 for ever, while `RESOURCE_BUSY` is a 503 and frees
+      // it. That is why this is asserted with one key held across the retry.
+      const one = await member('Aurelio');
+      const actor = await granted(['cell.take_attendance', 'cell.submit_on_behalf']);
+      const holder = await winnerHolding([{ personId: one.id, present: true }]);
+      const key = randomUUID();
+
+      try {
+        const attempt = request(app.getHttpServer())
+          .post(`/api/v1/cells/${markCell.id}/meetings/${meetingDate}/submit`)
+          .set('Authorization', `Bearer ${actor.accessToken}`)
+          .set('Idempotency-Key', key)
+          .send({ status: 'HELD', attendance: [{ person_id: one.id, present: true }] });
+        const inFlight = track(attempt);
+
+        expect(await blockedOn(holder, inFlight)).toBeGreaterThan(0);
+
+        await holder.query('COMMIT');
+
+        const response = await attempt;
+
+        expect(response.status).toBe(503);
+        expect(response.body.error.code).toBe('RESOURCE_BUSY');
+
+        // The retry the code names, on the same key, actually succeeds — which is what
+        // `RESOURCE_BUSY` means and what a stored 403 would have made impossible.
+        const retry = await request(app.getHttpServer())
+          .post(`/api/v1/cells/${markCell.id}/meetings/${meetingDate}/submit`)
+          .set('Authorization', `Bearer ${actor.accessToken}`)
+          .set('Idempotency-Key', key)
+          .send({ status: 'HELD', attendance: [{ person_id: one.id, present: true }] });
+
+        expect(retry.status).toBe(201);
+        expect(retry.body.corrected).toBe(0);
+      } finally {
+        await holder.query('ROLLBACK').catch(() => undefined);
+        await holder.end();
+      }
+    });
+
     it('refuses a status disagreement instead of prescribing a retry that cannot succeed', async () => {
       // **`disagrees` is vacuously false over an empty roster.** A `NOT_HELD` body carries
       // no attendance by construction, so `some` was false whatever the winner recorded,
