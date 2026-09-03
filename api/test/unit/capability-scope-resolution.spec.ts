@@ -183,9 +183,9 @@ describe('which scope resolution a capability gets (section 7)', () => {
 
   it('declares the roster read and the submit route identically, which section 7 depends on', async () => {
     // **Section 7's ordering rule rests on this, and rested on it silently until now.**
-    // "Every other capability the write owes is decided before the record's *contents* are
-    // read" permits the submit path to read the meeting row and refuse a status change
-    // before the on-behalf check. That is safe only because the status, version and
+    // "Every other capability the write owes is decided before the record's *contents*
+    // can change what the caller is told" permits the submit path to read the meeting row
+    // and refuse a status change before the on-behalf check. That is safe only because the status, version and
     // submitter it exposes are already handed to the same actor by the roster read -- and
     // "the same actor" is true only while the two routes carry the identical capability
     // and target declaration.
