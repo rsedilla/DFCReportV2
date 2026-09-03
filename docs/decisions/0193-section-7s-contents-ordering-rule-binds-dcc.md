@@ -3,10 +3,12 @@
 Section 7 says every capability a write owes except the amendment one "is decided before
 the record's **contents** can change what the caller is told, and must be", where contents
 means the per-person attendance figures. *Section 7 read "before the record's contents are
-read" when this ruling was made, and was restated hours later because no implementation
-obeyed the stronger form — both load a record before deciding, and must, since the
-amendment capability is decided by what it says. Quoted here as amended, because the
-weaker sentence is the one this ruling was actually applying.* `DccAttendanceService.writeWithin` did not obey it. It derived a
+read" when this ruling was made, and was restated hours later. Not because no
+implementation obeyed the stronger form — the Cell path did and still does — but because
+DCC loads an event's live records in one query before its per-line loop, so the
+read-order form could not be stated for it without forbidding a batch read that discloses
+nothing. Quoted here as amended, because the amended sentence is the one this ruling is
+actually applying.* `DccAttendanceService.writeWithin` did not obey it. It derived a
 line's outcome from the stored `present` and refused a `CREATE` carrying a
 `correction_reason` — *"There is no record to correct for this person"* — both before
 `assertMayRecord` decided `dcc.submit_on_behalf`.

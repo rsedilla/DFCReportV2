@@ -58,12 +58,17 @@ quoted.
 ## What was rejected
 
 **Narrowing the DCC roster to withhold `present`** from an actor holding only the
-recording capability. It breaks the primary workflow described above, and it protects
-nothing: the same actor may write the value.
+recording capability. It would break the workflow described above, and it would protect
+very little: the version must be published regardless, and the same figures are reachable
+in N single-line probes. *An earlier version of this bullet said it "protects nothing: the
+same actor may write the value", which is the unqualified claim this ruling withdraws
+eight lines above — where a record exists and disagrees, changing it needs
+`dcc.correct_subtree`.*
 
 **Accepting in both domains on one reason.** There is no single reason. The Cell case rests
-on a bound and the DCC case rests on who the actor is, and collapsing them is what produced
-the withdrawn claim of 2026-09-03 that a Cell ground covered both paths.
+on a bound; the DCC case rests on the three grounds above, of which the mandatory version
+is the one that is not a judgement call. Collapsing them is what produced the withdrawn
+claim of 2026-09-03 that a Cell ground covered both paths.
 
 ## What this does not settle
 

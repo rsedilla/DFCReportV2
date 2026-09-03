@@ -310,9 +310,13 @@ export class DccAttendanceService {
         // refusal reads stored contents -- it fires exactly when no live record exists --
         // so ahead of `assertMayRecord` it answered `409` for a person with no record and
         // `403` for a person with one, to an actor who may record neither. Section 7
-        // requires every capability but the amendment one to be decided before contents
-        // are read, and this is the DCC half of the rule the Cell route was given in
-        // decision 0192.
+        // requires every capability but the amendment one to be decided before the
+        // contents can change what the caller is told, and this is the DCC half of the
+        // rule the Cell route was given in decision 0192. *That sentence read "before
+        // contents are read" when this comment was written, which this method does not
+        // do and cannot: `liveRecords` loads the event's records in one query above the
+        // loop. Reading them is permitted; answering differently because of them, before
+        // the capability is decided, is not.*
         //
         // Nobody could observe it under role defaults, because the two scopes are equal
         // for every role -- and equality is the load-bearing fact rather than the value,
@@ -632,10 +636,17 @@ export class DccAttendanceService {
    * subtree" means once the submitter is a function (section 14; decision 0172).
    */
   /**
-   * The scope check that runs **before anything about the record is read**.
+   * The scope check that runs **before anything about the record can change what the
+   * caller is told** (section 9, amended 2026-09-03 to section 7's wording).
    *
    * `dcc.take_attendance` is the capability that lets an actor reach this person at
    * all, and it is checked against the person alone — never against what is stored.
+   *
+   * *This said "before anything about the record is read", which is not true of the
+   * method as a whole: `liveRecords` loads the event's records before the loop that
+   * calls this. It is true of what this check consults, which is the point the sentence
+   * was making, and the wording now says that rather than implying a read order the
+   * batch query does not have.*
    *
    * **That ordering is the whole point, and getting it wrong was a disclosure.** An
    * earlier version chose the capability from the line's outcome, which is derived
@@ -687,9 +698,14 @@ export class DccAttendanceService {
     const { actor, authority, personId } = params;
     const target = { kind: 'person', personId } as const;
 
-    // `dcc.take_attendance` was checked by `assertInScope` before anything about the
-    // record was read. What is left is the amendment capability, and it is reached
-    // only by an actor already in scope.
+    // `dcc.take_attendance` was checked by `assertInScope`, against the person and
+    // never against what is stored. What is left is the on-behalf capability and then
+    // the amendment one, both reached only by an actor already in scope.
+    //
+    // *This said "before anything about the record was read", which is false of this
+    // service: `liveRecords` loads the event's records in one query above the loop. What
+    // is true, and is what section 7 requires, is that nothing the caller is told varies
+    // with those contents until the amendment capability -- which is decided by them.*
     //
     // **On behalf first, and the amendment capability last.** `dcc.submit_on_behalf`
     // depends on nothing stored — only on whether this actor is the person's submitter

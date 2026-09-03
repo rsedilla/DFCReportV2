@@ -37,11 +37,17 @@ Every capability except the amendment one is decided before the record's **conte
 change what the caller is told, and must be: whether a record is the actor's to touch is
 not a question about its contents.
 
-*Stated over what the caller is told rather than over what the code reads. Both
-implementations load a record before deciding, and cannot avoid it — the amendment
-capability is decided **by** the contents. What must not differ according to them is a
-refusal, a success or a status code. This sentence said "before the record's contents are
-read" for part of 2026-09-03, which no implementation obeyed.*
+*Stated over what the caller is told rather than over what the code reads. What must not
+differ according to the contents, before the capability is decided, is a refusal, a
+success or a status code; reading them earlier is permitted, because the amendment
+capability is decided **by** them.*
+
+*The two paths differ, and that is the reason for the wording. The Cell path reads no
+attendance until after the on-behalf check and obeys the older, stronger form. The DCC
+path loads an event's live records in one query before its per-line loop, so the
+read-order form was never expressible there without forbidding a batch read that
+discloses nothing. This sentence said "which no implementation obeyed" for part of
+2026-09-03: true of DCC, false of Cell.*
 
 **"Contents" means the per-person attendance figures**, and the term is defined because the
 sentence turns on it: a meeting's own status, version, submitter and submission time are
