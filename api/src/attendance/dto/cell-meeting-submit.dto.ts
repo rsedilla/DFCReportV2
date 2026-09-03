@@ -30,19 +30,63 @@ export class CellAttendanceLineDto {
 /**
  * `POST /api/v1/cells/{id}/meetings/{meeting_id}/submit` (SKILL.md sections 12, 13, 14).
  *
- * **Two statuses here, not three.** `HELD` and `NOT_HELD` are what a *first* submission
- * can say. `RESCHEDULED` moves an existing meeting and belongs with the change history
- * of section 13, which is a separate operation on a record that already exists — so it
- * arrives with `cell_meeting_changes` rather than here, and this DTO refuses it rather
- * than accepting a status the route cannot yet honour.
+ * **One route for the first submission and for a correction**, which is what section 22
+ * documents — its route list carries this one write and notes that an Admin amendment is
+ * a flag on it. Section 13 gives the argument, about the amendment and applying equally
+ * here: everything a correction does is what a submission does, and "a second route would
+ * have to stay behaviourally identical to this one forever". `DccAttendanceService` takes
+ * the same shape one domain over, for the same reason.
+ *
+ * The two are told apart by `version`, and the capability differs between them: section 7
+ * guards a first submission with `cell.take_attendance` and a correction with
+ * `cell.correct_subtree`. A route declares one capability, so the second is checked in
+ * the service — again as DCC does.
+ *
+ * **`actual_date` and `actual_time` are deliberately absent**, and were briefly here.
+ * `forbidNonWhitelisted` refuses an undeclared field, so declaring one the service does
+ * not read turns a refusal into silent acceptance — and section 22's versioning rule
+ * makes that costly in one direction only: a field accepted and ignored cannot later be
+ * given meaning without changing behaviour for clients already sending it. They arrive
+ * with the reschedule that reads them.
+ *
+ * **All three statuses, and the first submission's restriction moved to the service.**
+ * `RESCHEDULED` is not legal on a first submission (section 13, decision 0188), and a DTO
+ * cannot tell a first submission from a correction: whether a record exists is a fact
+ * about the database. It was refused here while the route made only first submissions; it
+ * is now refused in the service, where the answer is known, and the refusal is an
+ * `INVARIANT_VIOLATION` rather than a validation error because the request is well formed
+ * and breaks a domain rule.
+ *
+ * **`RESCHEDULED` is accepted here and reachable by no path today**, which an earlier
+ * version of this block obscured by saying it "is legal on a correction". It is not:
+ * a correction refuses any status change, so no `cell_meetings` row can carry it. The
+ * reschedule route is what makes it reachable, and it arrives with the same slice that
+ * brings back `actual_date` and `actual_time`.
+ *
+ * **That is not the `actual_date` argument run backwards, and a version of this block
+ * said it was.** `actual_date` is absent because accepting a field and ignoring it forfeits
+ * the refusal `forbidNonWhitelisted` would give — an argument against *accepting*. This
+ * status is declared because section 13 names exactly three and the enum is the domain's,
+ * not this route's. Narrowing it later is not impossible, only versioned (section 22), so
+ * the two are separate reasons rather than two halves of one.
  */
 export class SubmitCellMeetingDto {
-  @IsIn(['HELD', 'NOT_HELD'], {
-    message:
-      'status must be HELD or NOT_HELD. A reschedule changes an existing meeting ' +
-      '(SKILL.md section 13).',
-  })
-  status!: 'HELD' | 'NOT_HELD';
+  @IsIn(['HELD', 'RESCHEDULED', 'NOT_HELD'])
+  status!: 'HELD' | 'RESCHEDULED' | 'NOT_HELD';
+
+  /**
+   * Why an already-recorded meeting is being changed (section 14).
+   *
+   * Optional, matching `cell_attendance.correction_reason`, and meaningless on a first
+   * submission — where it is refused, so it cannot be read as a reason for the original.
+   * Section 14 asks for a reason "as appropriate" rather than always: a submission is a
+   * whole roster, and requiring one per changed line would put a dialog in front of a
+   * leader who noticed one mistake in twenty names.
+   */
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  correction_reason?: string;
 
   /**
    * The `cell_meetings.version` the client read, or absent for a first submission.
@@ -52,6 +96,12 @@ export class SubmitCellMeetingDto {
    * client believes no record exists — and two clients can believe that at once, which
    * the unique index over `(cell_id, scheduled_date)` decides rather than a version
    * comparison, because there is no version to compare.
+   *
+   * **Present means the client read a record and is correcting it.** That is what tells
+   * this route which of its two operations it is performing, and therefore which
+   * capability section 7 requires. A version sent for a meeting with no record is
+   * refused — section 22 is explicit that a refusal with no second value to show is not
+   * a `VERSION_CONFLICT`, whatever went stale.
    */
   @IsOptional()
   @IsInt()

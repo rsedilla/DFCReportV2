@@ -44,6 +44,14 @@ import type { CapabilityRequirement } from '../../src/auth/authorization/authori
  * reddens it is the first **Cell-targeted** viewing route, which decision 0186 names
  * correctly and two paraphrases of it did not.
  *
+ * **Two rules, not one, since 2026-09-03.** The cases above are about which *resolution* a
+ * capability gets. The last case is about a declaration's *shape* — that two named routes
+ * carry the identical one — which serves section 7's ordering rule rather than its
+ * resolution rule. They share this file because both are properties of the declarations
+ * Nest compiled and both are checked the same way, and the distinction is stated because
+ * an earlier version of this docblock said "that is the gap this file closes", singular,
+ * while the file had already grown a second one.
+ *
  * Written against the compiled module graph rather than by grepping the source, on
  * `module-graph.spec.ts`'s reasoning: what is being checked is the shape Nest built. It
  * needs `DATABASE_URL` set and no database running (`test/setup/env.ts`).
@@ -171,5 +179,32 @@ describe('which scope resolution a capability gets (section 7)', () => {
     expect(offending.map((route) => `${route.where} (${route.requirement.capability})`)).toEqual(
       [],
     );
+  });
+
+  it('declares the roster read and the submit route identically, which section 7 depends on', async () => {
+    // **Section 7's ordering rule rests on this, and rested on it silently until now.**
+    // "Every other capability the write owes is decided before the record's *contents* are
+    // read" permits the submit path to read the meeting row and refuse a status change
+    // before the on-behalf check. That is safe only because the status, version and
+    // submitter it exposes are already handed to the same actor by the roster read -- and
+    // "the same actor" is true only while the two routes carry the identical capability
+    // and target declaration.
+    //
+    // Give the roster its own viewing capability -- which `CLAUDE.md` records as open for
+    // exactly these routes, and which the case above says does not yet exist -- and the
+    // two stop admitting the same actors, at which point the submit path's early refusal
+    // starts answering something no read answers. That is a disclosure appearing with no
+    // line of the attendance code changed, so it is asserted here rather than left to a
+    // reviewer noticing two decorators drifting apart.
+    const routes = await declaredRoutes();
+    const roster = routes.find((route) => route.where === 'CellMeetingsController.roster');
+    const submit = routes.find((route) => route.where === 'CellMeetingsController.submit');
+
+    // Named, not just compared. `find` returns undefined for a renamed handler, and two
+    // undefineds are equal -- which would pass this case with neither route in the scan.
+    expect(roster).toBeDefined();
+    expect(submit).toBeDefined();
+
+    expect(roster?.requirement).toEqual(submit?.requirement);
   });
 });

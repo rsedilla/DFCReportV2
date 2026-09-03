@@ -16,9 +16,11 @@ import { DatabaseModule } from './database/database.module';
 import { HealthController } from './health/health.controller';
 import { HierarchyModule } from './hierarchy/hierarchy.module';
 import { NetworksModule } from './networks/networks.module';
+import { CELL_MEETING_SCOPE_PORT } from './auth/authorization/cell-meeting-scope.port';
 import { CELL_SCOPE_PORT } from './auth/authorization/cell-scope.port';
 import { CellRelationshipsBindingModule } from './cells/cell-relationships.binding.module';
 import { AttendanceModule } from './attendance/attendance.module';
+import { CellMeetingsScopeService } from './attendance/cell-meetings.scope.service';
 import { CellsModule } from './cells/cells.module';
 import { CellsReadService } from './cells/cells.read.service';
 import { PeopleModule } from './people/people.module';
@@ -76,6 +78,7 @@ import { PeopleModule } from './people/people.module';
      * instance and one connection pool.
      */
     { provide: CELL_SCOPE_PORT, useExisting: CellsReadService },
+    { provide: CELL_MEETING_SCOPE_PORT, useExisting: CellMeetingsScopeService },
     { provide: APP_FILTER, useClass: ApiExceptionFilter },
     { provide: APP_GUARD, useClass: ThrottlerGuard },
     { provide: APP_GUARD, useClass: AccessTokenGuard },

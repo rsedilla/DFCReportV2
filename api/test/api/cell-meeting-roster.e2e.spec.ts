@@ -141,6 +141,55 @@ describe('a Cell meeting roster (sections 12 and 13)', () => {
     expect(response.body.members.map((m: { person_id: string }) => m.person_id)).toContain(late.id);
   });
 
+  it('hands over the status, version and submitter that section 7 says it does', async () => {
+    // **The other half of section 7's ordering argument, and it was unpinned.** Section 7
+    // permits the submit route to read the meeting row and refuse a status change before
+    // deciding the on-behalf capability, on the ground that what such a refusal exposes --
+    // the meeting's own status, version and submitter -- is handed to the same actor by
+    // this route anyway. `capability-scope-resolution.spec.ts` pins that the two routes
+    // carry the identical declaration; nothing pinned that this one actually returns those
+    // three fields. Redact any of them and the specification's justification quietly
+    // becomes false with both decorators still identical.
+    //
+    // Read as the meeting's own leader holding `cell.take_attendance` -- the actor the
+    // argument is about, since an actor holding the correction capability could read the
+    // record out of a `VERSION_CONFLICT` regardless.
+    await db
+      .insertInto('cell_meetings')
+      .values({
+        cell_id: markCell.id,
+        scheduled_date: '2026-09-12',
+        scheduled_time: '19:00',
+        week_starting: '2026-09-07',
+        reporting_month: '2026-09-01',
+        status: 'HELD',
+        responsible_leader_id: mark.id,
+        // `submitted_by` references `accounts`, not `persons` (migration 0011), and the
+        // roster returns the stored value unchanged.
+        submitted_by: markAccount.id,
+        submitted_at: new Date('2026-09-12T21:00:00+08:00'),
+        version: 1,
+      } as never)
+      .execute();
+
+    const response = await roster(markCell.id, '2026-09-12', markAccount);
+
+    expect(response.status).toBe(200);
+    expect(response.body.meeting).toMatchObject({
+      status: 'HELD',
+      version: 1,
+      submitted_by: markAccount.id,
+      // **In the matcher, because the obvious assertion cannot fail.** This read
+      // `expect(response.body.meeting.submitted_at).not.toBeNull()`, and
+      // `expect(undefined).not.toBeNull()` passes — so redacting the field reddened
+      // nothing. `toMatchObject` fails on an absent key, which is what pins it.
+      submitted_at: expect.any(String),
+    });
+    expect(new Date(response.body.meeting.submitted_at as string).getTime()).toBe(
+      new Date('2026-09-12T21:00:00+08:00').getTime(),
+    );
+  });
+
   it('keeps the meeting in its own reporting month whatever the roster date', async () => {
     // The reschedule moves the roster and never the period (sections 12 and 13).
     await db

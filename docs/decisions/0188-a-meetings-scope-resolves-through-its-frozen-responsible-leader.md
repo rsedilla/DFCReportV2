@@ -37,9 +37,15 @@ rather than after.
 
 ## The ruling
 
-**Where a Cell meeting has a record, its scope resolves through that record's frozen
-`responsible_leader_id`. Where it has none, it resolves through whoever led the Cell on the
-scheduled date, as now.**
+**Within Section 7's closed-Cell exception — and only there — a Cell meeting with a
+record resolves through that record's frozen `responsible_leader_id`. Where it has none,
+it resolves through whoever led the Cell on the scheduled date, as now.**
+
+*The first version of this sentence omitted "within the closed-Cell exception" and was
+disambiguated only by a paragraph at the end of the ruling. Building it is what showed the
+gap: read generally it would give an `ACTIVE` Cell's meeting to its frozen leader, which
+silently reverses decision 0186 — and the branch order in the implementation is the one
+place that mistake would have been made.*
 
 **And a first submission cannot carry `RESCHEDULED`.** Both halves are the ruling; the
 second is what keeps the first safe.

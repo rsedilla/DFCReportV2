@@ -8,6 +8,7 @@ import { HierarchyModule } from '../hierarchy/hierarchy.module';
 import { PeopleModule } from '../people/people.module';
 
 import { CellMeetingsController } from './cell-meetings.controller';
+import { CellMeetingsScopeService } from './cell-meetings.scope.service';
 import { CellMeetingsService } from './cell-meetings.service';
 import { DccAttendanceService } from './dcc-attendance.service';
 import { DccCalendarService } from './dcc-calendar.service';
@@ -47,7 +48,16 @@ import { DccController } from './dcc.controller';
     CellsModule,
   ],
   controllers: [DccController, CellMeetingsController],
-  providers: [DccCalendarService, DccAttendanceService, CellMeetingsService],
-  exports: [DccCalendarService],
+  providers: [
+    DccCalendarService,
+    DccAttendanceService,
+    CellMeetingsService,
+    CellMeetingsScopeService,
+  ],
+  // `CellMeetingsScopeService` is exported for `AppModule`'s `CELL_MEETING_SCOPE_PORT`
+  // binding alone (decision 0188). Nest resolves a provider's dependencies in the
+  // module that *registers* it, so a `useExisting` in `AppModule` needs the class
+  // reachable from there — the wiring fault `module-graph.spec.ts` exists to catch.
+  exports: [DccCalendarService, CellMeetingsScopeService],
 })
 export class AttendanceModule {}

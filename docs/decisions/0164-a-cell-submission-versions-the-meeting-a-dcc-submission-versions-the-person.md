@@ -71,6 +71,14 @@ who owns the record rather than from a preference about granularity.
 
 ## What `cell_attendance.version` is for
 
+> **Superseded in part by [decision 0190](0190-a-cell-meeting-has-one-write-operation.md)
+> (2026-09-03).** This section describes a per-person correction write that does not exist:
+> a Cell meeting has one write operation, and `cell_attendance.version` is not compared.
+> The rest of this ruling stands — the two version *units* are still what it settled. The
+> pointer is here because 0190 gave its reason for citing this file as "a reader meeting
+> 0164 first has nothing pointing forward otherwise", and until this note that reader still
+> had nothing.
+
 Correcting one person's record, which Section 14 names separately from a submission:
 "For already-submitted attendance that requires correction, use `Correct Attendance`."
 That write names one person, so it compares one person's version. The row it supersedes

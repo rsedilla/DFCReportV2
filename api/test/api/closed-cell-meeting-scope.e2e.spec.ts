@@ -130,6 +130,19 @@ describe('a closed Cell meeting resolves per record (section 7)', () => {
     await app.close();
   });
 
+  /**
+   * The Monday of a Manila date's ISO week, which `cell_meetings_week_starting_derived`
+   * requires (migration 0011). Computed here rather than hard-coded, because the two
+   * meeting dates move with the calendar so the fixture stays inside the open window.
+   */
+  const mondayOf = (day: string): string => {
+    const at = new Date(`${day}T00:00:00Z`);
+    const isoDay = (at.getUTCDay() + 6) % 7;
+    at.setUTCDate(at.getUTCDate() - isoDay);
+
+    return at.toISOString().slice(0, 10);
+  };
+
   const roster = (meetingId: string, as: TestAccount) =>
     request(app.getHttpServer())
       .get(`/api/v1/cells/${cell.id}/meetings/${meetingId}/roster`)
@@ -193,6 +206,55 @@ describe('a closed Cell meeting resolves per record (section 7)', () => {
     expect(response.body.responsible_leader_id).toBe(mark.id);
   });
 
+  it('lets the leader of the day correct their own meeting, on a closed Cell', async () => {
+    // **Section 7's exception is "recording **or correcting**", and only the recording
+    // half had a case.** The correction path resolves through the same port and the same
+    // frozen leader, so nothing here is new machinery — which is exactly why it is worth
+    // a case: a write nothing exercises is a write nobody has seen work.
+    //
+    // The member's row is inserted already closed, at the Cell's own closure instant.
+    // Migration 0009 refuses an *open* membership on a CLOSED Cell and permits a closed
+    // one, and `membersAsOfWithin` compares dates — so this person was a member on the
+    // meeting's date, which is what the roster asks.
+    const attendee = await createPerson(db, { firstName: 'Perlita', network: 'MENS' });
+    await assignTo(db, attendee.id, mark.id);
+
+    const closedAt = await db
+      .selectFrom('cells')
+      .select('closed_at')
+      .where('id', '=', cell.id)
+      .executeTakeFirstOrThrow();
+
+    await db
+      .insertInto('cell_memberships')
+      .values({
+        person_id: attendee.id,
+        cell_id: cell.id,
+        started_at: CREATED,
+        ended_at: closedAt.closed_at,
+      })
+      .execute();
+
+    const first = await submit(marksMeeting, markAccount, {
+      status: 'HELD',
+      attendance: [{ person_id: attendee.id, present: true }],
+    }).expect(201);
+
+    const corrected = await submit(marksMeeting, markAccount, {
+      status: 'HELD',
+      version: first.body.version as number,
+      attendance: [{ person_id: attendee.id, present: false }],
+      correction_reason: 'she left before we started',
+    }).expect(201);
+
+    expect(corrected.body.corrected).toBe(1);
+    expect(corrected.body.version).toBe((first.body.version as number) + 1);
+
+    // And the correction resolved through the frozen leader, not a re-read of a Cell
+    // that no longer has one.
+    expect(corrected.body.responsible_leader_id).toBe(mark.id);
+  });
+
   it('refuses the leader of the day once that month has shut', async () => {
     // **The bound that keeps the exception consistent with the rule it excepts.**
     // Section 7: "once the window shuts, that too resolves through nobody and only
@@ -217,6 +279,45 @@ describe('a closed Cell meeting resolves per record (section 7)', () => {
     const response = await roster(old.rows[0].day, markAccount);
 
     expect(response.status).toBe(403);
+  });
+
+  it('resolves a rescheduled meeting through its frozen leader, not its scheduled date', async () => {
+    // **Decision 0188, and the case the ruling exists for.** Section 7 fixed the
+    // authorizing date as the *scheduled* one, on section 13's premise that "on a closed
+    // Cell `actual_date` equals `scheduled_date`" — an inference about rescheduling a
+    // Cell that is already closed, and false of a meeting moved while the Cell was
+    // ACTIVE and closed afterwards.
+    //
+    // Mark's Saturday, moved to Nestor's. Section 13 resolves the freeze from the
+    // meeting's own instant, which is the actual date, so the record belongs to Nestor.
+    // Under the withdrawn rule the scheduled date answered Mark — so **Mark could
+    // correct Nestor's record and Nestor could not correct his own**, which is the
+    // inverse of the coincidence section 7's exception is justified by.
+    //
+    // The row is written directly because the reschedule route does not exist yet; this
+    // slice builds it, and this case is what tells it which resolution it inherits.
+    await db
+      .insertInto('cell_meetings')
+      .values({
+        cell_id: cell.id,
+        scheduled_date: marksMeeting,
+        scheduled_time: '19:00',
+        week_starting: mondayOf(marksMeeting),
+        reporting_month: `${marksMeeting.slice(0, 7)}-01`,
+        status: 'RESCHEDULED',
+        actual_date: nestorsMeeting,
+        actual_time: '19:00',
+        // What section 13 would have frozen: the leader at the meeting's own instant.
+        responsible_leader_id: nestor.id,
+      } as never)
+      .execute();
+
+    // Nestor holds the record, so Nestor reaches it.
+    await roster(marksMeeting, nestorAccount).expect(200);
+
+    // And Mark, who led on the scheduled date, does not. That is the assertion the
+    // withdrawn rule reverses: it is 200 for Mark and 403 for Nestor.
+    await roster(marksMeeting, markAccount).expect(403);
   });
 
   it('refuses the previous leader on an ACTIVE Cell that changed hands', async () => {
