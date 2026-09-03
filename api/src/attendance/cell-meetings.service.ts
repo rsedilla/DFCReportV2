@@ -649,9 +649,15 @@ export class CellMeetingsService {
     // capability. That made the **success** answer what the refusal was placed not to:
     // an actor without `cell.submit_on_behalf` got 201 for a roster that matched and 403
     // for one that did not, so two probes read the stored roster back on a meeting they
-    // may not record. `DccAttendanceService` runs its equivalent for every line whatever
-    // the outcome, and pins the identical refusal either way; this is that rule, and the
-    // ordering claim in the commit that introduced it was half true.*
+    // may not record.*
+    //
+    // *`DccAttendanceService` was cited here as running its equivalent "for every line
+    // whatever the outcome", and that is not true: a `CREATE` line carrying a
+    // `correction_reason` throws before `assertMayRecord` is reached, so the on-behalf
+    // check never runs for it. Whether section 7's contents-ordering rule binds DCC at
+    // all is recorded as open in `CLAUDE.md`. The Cell ordering below does not rest on
+    // the DCC one and never did — it rests on the roster read carrying this route's own
+    // declaration, which `capability-scope-resolution.spec.ts` asserts.*
     await this.assertMayActForAnother(trx, params);
 
     // **The roster is read at the meeting's own instant, exactly as the first

@@ -179,8 +179,15 @@ describe('a Cell meeting roster (sections 12 and 13)', () => {
       status: 'HELD',
       version: 1,
       submitted_by: markAccount.id,
+      // **In the matcher, because the obvious assertion cannot fail.** This read
+      // `expect(response.body.meeting.submitted_at).not.toBeNull()`, and
+      // `expect(undefined).not.toBeNull()` passes — so redacting the field reddened
+      // nothing. `toMatchObject` fails on an absent key, which is what pins it.
+      submitted_at: expect.any(String),
     });
-    expect(response.body.meeting.submitted_at).not.toBeNull();
+    expect(new Date(response.body.meeting.submitted_at as string).getTime()).toBe(
+      new Date('2026-09-12T21:00:00+08:00').getTime(),
+    );
   });
 
   it('keeps the meeting in its own reporting month whatever the roster date', async () => {

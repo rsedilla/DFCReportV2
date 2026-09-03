@@ -25,9 +25,20 @@ for a submission that changes nothing then answered **201** to an actor lacking 
 capability, while a differing roster answered 403. Two probes read the stored roster back
 on a meeting the actor may not record.
 
-The ordering is not cosmetic and `DccAttendanceService` had it right: it runs its
-equivalent for every line whatever the outcome, and `dcc-attendance.e2e.spec.ts` pins the
-identical refusal either way. The on-behalf check depends on nothing stored beyond who the
+The ordering is not cosmetic, and `DccAttendanceService` was cited here as having had it
+right: "it runs its equivalent for every line whatever the outcome". **That is true of the
+outcome and false in general**, and the correction is recorded rather than quietly dropped
+because this claim is what the reorder below was argued from. `assertMayRecord` does run
+for a `CREATE`, an `UPDATE` and a no-op alike, and `dcc-attendance.e2e.spec.ts` pins the
+identical refusal for an agreeing and a disagreeing body — but a `CREATE` line carrying a
+`correction_reason` throws before `assertMayRecord` is reached, so for that line the
+on-behalf check never runs at all. Whether §7's contents-ordering rule binds DCC is
+recorded as open in `CLAUDE.md`.
+
+The Cell ordering does not rest on the DCC one and never did. It rests on the roster read
+carrying this route's own capability and target declaration, which
+`capability-scope-resolution.spec.ts` asserts and `cell-meeting-roster.e2e.spec.ts`
+backs on the response side. The on-behalf check depends on nothing stored beyond who the
 meeting resolves through, so it can run first — and it must, because everything after it
 branches on what is stored.
 
