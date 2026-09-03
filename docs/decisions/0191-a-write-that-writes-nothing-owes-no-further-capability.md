@@ -33,9 +33,15 @@ not the actor's. Read generally, this ruling put that check behind the roster co
 so the **success** answered what the refusal was withheld to protect: 201 for a matching
 roster and 403 for a differing one, on a meeting the actor may not record at all.
 
-Every capability except the amendment one is decided before the record's **contents** are
-read, and must be: whether a record is the actor's to touch is not a question about its
-contents.
+Every capability except the amendment one is decided before the record's **contents** can
+change what the caller is told, and must be: whether a record is the actor's to touch is
+not a question about its contents.
+
+*Stated over what the caller is told rather than over what the code reads. Both
+implementations load a record before deciding, and cannot avoid it — the amendment
+capability is decided **by** the contents. What must not differ according to them is a
+refusal, a success or a status code. This sentence said "before the record's contents are
+read" for part of 2026-09-03, which no implementation obeyed.*
 
 **"Contents" means the per-person attendance figures**, and the term is defined because the
 sentence turns on it: a meeting's own status, version, submitter and submission time are
@@ -55,7 +61,11 @@ which `GET /cells/{id}/meetings/{meeting_id}/roster` returns to the same actor u
 identical declaration, asserted by `test/unit/capability-scope-resolution.spec.ts`. The
 DCC roster and submit routes carry an identical declaration too and it proves nothing
 there: one walks the actor's checklist and the other reaches everyone they hold
-`dcc.take_attendance` over. That question is recorded as open in `CLAUDE.md`.
+`dcc.take_attendance` over. **That question was settled the same day as decision 0193**:
+§7's contents-ordering rule binds DCC, the correction-reason refusal moved behind the
+on-behalf check, and the 409/403 record-existence pair it produced went with it. So the
+two paths now state one rule, reached by two different arguments rather than by one
+covering both.
 
 Three narrowings are recorded at this length because each one was introduced by the fix
 for the last. A rule restated to be more precise is a rule being rewritten, and on this
@@ -92,9 +102,11 @@ learn a per-person figure without the correction capability.
 `GET /api/v1/dcc/events/{id}/roster` returns each person's `present`, `version` and
 `recorded_at` under `dcc.take_attendance` — so a DCC route has published per-person
 attendance since the DCC recording slice, and for DCC the bit is already free. This
-ruling covers the Cell path, which is what its scope was narrowed to above; what the
-DCC fact does to the acceptance is recorded as open in `CLAUDE.md` rather than answered
-here.
+ruling covers the Cell path, which is what its scope was narrowed to above. **What the
+DCC fact does to the acceptance was settled the same day as decision 0194**: the
+acceptance is a Cell argument, and the DCC roster publishes those figures deliberately,
+because a leader marking a checklist must see who is already marked and the version they
+submit against.
 
 The first surface that offers those figures makes the bit free, and at that point this
 ruling is inherited rather than re-decided unless whoever builds it revisits it. It is

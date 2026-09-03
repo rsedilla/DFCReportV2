@@ -27,18 +27,33 @@ meeting's own row and never who was marked present, so the bit still costs 2^N a
 acceptance stands on the bound it was given. The first *Cell* surface that offers those
 figures makes it free and revisits this.
 
-**For DCC, the figures are the recording surface.** Section 9 makes a person's attendance
-their direct pastoral leader's obligation, and a leader marking a checklist has to see who
-is already marked or they cannot do the work — they would overwrite their own colleagues'
-entries, or re-ask people who were already counted. Withholding `present` from an actor
-holding `dcc.take_attendance` would protect a figure that is already theirs to write. So
-the 2^N bound is not the argument for DCC and never was; the argument is that the actor is
-the person recording.
+**For DCC, the figures are the recording surface**, on three grounds. They are given in
+order of how much they rest on, because the first two are checkable and the third is an
+inference this ruling draws rather than a sentence Section 9 contains.
 
-**The 2^N bound is also Cell-shaped in a way that does not transfer.** A Cell submission
-must name every member exactly once and is answered as a whole; DCC is recorded per line,
-with per-line outcomes. A bound derived from an all-or-nothing answer says nothing about a
-surface that answers each line.
+**The `version` is not discretionary.** Section 14 requires a client to submit the version
+it read, and makes a DCC record's unit `(dcc_event_id, person_id)`. A per-person surface
+must therefore publish a per-person version or no client can submit a correction at all.
+Of the three fields the roster returns, this one is *required* to be published, and no
+version of this argument had said so.
+
+**The bound the Cell case rests on does not exist here.** A Cell submission must name every
+member exactly once and is answered as a whole, so recovering N figures costs 2^N. DCC is
+recorded per line with per-line outcomes, so the same actor could recover N figures in N
+probes. The acceptance would be worth very little in this domain whether or not the roster
+published anything — publishing is not what makes the figures reachable, which is the
+strongest form of the argument and not the one first written.
+
+**And the figures are mostly the actor's own to write.** Section 9 makes a person's
+attendance their direct pastoral leader's obligation and says a checklist's lines mostly
+repeat what is already recorded, from which a prefilled checklist follows: a leader who
+cannot see what is marked re-asks people already counted. *Mostly, not wholly. Where a
+record exists and disagrees, changing it requires `dcc.correct_subtree`, so there is a
+figure such an actor may read and may not write. A first version of this ruling said
+"withholding it would protect a figure that is already theirs to write" without the
+qualification, which holds only for a record that does not yet exist.* Section 9 does not
+state the prefilled checklist in terms, and this ruling marks it as inferred rather than
+quoted.
 
 ## What was rejected
 
