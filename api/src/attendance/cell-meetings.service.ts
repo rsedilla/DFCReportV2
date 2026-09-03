@@ -944,10 +944,55 @@ export class CellMeetingsService {
   ): Promise<ApiError> {
     const meeting = await this.db
       .selectFrom('cell_meetings')
-      .select(['id', 'version'])
+      .select(['id', 'version', 'status', 'responsible_leader_id'])
       .where('cell_id', '=', cellId)
       .where('scheduled_date', '=', meetingId)
       .executeTakeFirstOrThrow();
+
+    // **The loser answers what this body would be answered against the committed state,
+    // which is what "answers on what it finds" means** (section 22). The two guards below
+    // are the two `correctWithin` runs before it reaches the same comparison, and this
+    // method was reached only from that path until the first-submission catch was added.
+    // Reusing the shape without re-deriving why it has that shape is what decision 0100
+    // is about, and skipping them produced two defects a review reproduced.
+
+    // **A status disagreement first, for the reason `correctWithin` gives where it does
+    // the same:** a `NOT_HELD` body carries no attendance, so it reaches the comparison
+    // below with an empty roster, `some` is vacuously false, and the loser is told
+    // `RESOURCE_BUSY` — whose meaning is that the identical body resubmitted succeeds
+    // writing nothing. It does not: the retry is refused, permanently, because section 13
+    // makes a status change a separate operation. Decision 0158 fixes the test as one
+    // question — could this same body, resubmitted unchanged, succeed? — and here it
+    // could not.
+    if (body.status !== meeting.status) {
+      return new InvariantViolationError(
+        'Changing a meeting’s status is a separate operation from correcting its ' +
+          'attendance (SKILL.md section 13).',
+        { cell_id: cellId, meeting_id: meetingId, current_status: meeting.status },
+      );
+    }
+
+    // **Then the amendment capability, before any of the record is disclosed.** A
+    // `VERSION_CONFLICT` carries the stored present count and the submitter's name, which
+    // `GET .../roster` does not — so without this an actor holding `cell.take_attendance`
+    // and not `cell.correct_subtree` read the record out of a lost race, having been
+    // refused `403` for the identical body sent sequentially. Timing decided which.
+    try {
+      const authority = await this.authorization.authorityFor(actor.accountId);
+      await this.assertMayCorrect(this.db, {
+        cellId,
+        meetingId,
+        existing: { responsible_leader_id: meeting.responsible_leader_id },
+        actor,
+        authority,
+      });
+    } catch (error) {
+      if (error instanceof ScopeDeniedError) {
+        return error;
+      }
+
+      throw error;
+    }
 
     const live = await this.db
       .selectFrom('cell_attendance')
@@ -1069,7 +1114,10 @@ export class CellMeetingsService {
    * terms that the current leader files it.*
    */
   private async assertMayCorrect(
-    trx: Transaction<Database>,
+    // `Db` as well as a transaction: `lostRaceAnswer` runs on the pool after its
+    // transaction rolled back, and section 22 requires that re-read to see *committed*
+    // state, which a doomed transaction's own view does not.
+    trx: Db | Transaction<Database>,
     params: {
       cellId: string;
       meetingId: string;
