@@ -85,4 +85,4 @@ promised and what withholding it did not deliver.
 
 Decision 0192, indexed in [CLAUDE.md](../../CLAUDE.md).
 
-Previous: [2026-09-03 — A write that writes nothing owes no further capability, and its confirmation is a disclosure](0191-a-write-that-writes-nothing-owes-no-further-capability.md)
+Previous: [2026-09-03 — A write that writes nothing owes no *amendment* capability, and its confirmation is a disclosure](0191-a-write-that-writes-nothing-owes-no-further-capability.md)

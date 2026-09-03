@@ -50,12 +50,20 @@ export class CellAttendanceLineDto {
  * with the reschedule that reads them.
  *
  * **All three statuses, and the first submission's restriction moved to the service.**
- * `RESCHEDULED` is legal on a correction and not on a first submission (section 13,
- * decision 0188), and a DTO cannot tell which it is looking at: whether a record exists is
- * a fact about the database. It was refused here while the route made only first
- * submissions; it is now refused in the service, where the answer is known, and the
- * refusal is an `INVARIANT_VIOLATION` rather than a validation error because the request
- * is well formed and breaks a domain rule.
+ * `RESCHEDULED` is not legal on a first submission (section 13, decision 0188), and a DTO
+ * cannot tell a first submission from a correction: whether a record exists is a fact
+ * about the database. It was refused here while the route made only first submissions; it
+ * is now refused in the service, where the answer is known, and the refusal is an
+ * `INVARIANT_VIOLATION` rather than a validation error because the request is well formed
+ * and breaks a domain rule.
+ *
+ * **`RESCHEDULED` is accepted here and reachable by no path today**, which an earlier
+ * version of this block obscured by saying it "is legal on a correction". It is not:
+ * a correction refuses any status change, so no `cell_meetings` row can carry it. The
+ * status is declared rather than removed for the reason `actual_date` was removed —
+ * section 22's versioning rule cuts one way only, and a value a client may already send
+ * cannot later be refused. The reschedule route is what makes it reachable, and it arrives
+ * with the same slice that brings back `actual_date` and `actual_time`.
  */
 export class SubmitCellMeetingDto {
   @IsIn(['HELD', 'RESCHEDULED', 'NOT_HELD'])

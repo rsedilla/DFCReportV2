@@ -1,7 +1,13 @@
-# 2026-09-03 — A write that writes nothing owes no further capability, and its confirmation is a disclosure
+# 2026-09-03 — A write that writes nothing owes no *amendment* capability, and its confirmation is a disclosure
+
+*The file name keeps the withdrawn wording — "owes no further capability" — because it is
+this ruling's identity and every previous/next link in the sequence resolves by it. That is
+deliberate and is recorded here rather than left to be discovered, on the same reasoning
+migration 0011's frozen comment is recorded in decision 0190. The heading above, the index
+entry in `CLAUDE.md` and 0192's link text all carry the narrowed form.*
 
 Slice 2c settled that a submission matching what is already stored is not an amendment:
-Section 9 states the rule and Section 14 the reason — "there is nothing here to
+Section 9 states both the rule and the reason — "there is nothing here to
 overwrite" — so it needs no `cell.correct_subtree`, writes no rows, writes no audit entry
 and does not move the meeting's version.
 
@@ -27,8 +33,24 @@ not the actor's. Read generally, this ruling put that check behind the roster co
 so the **success** answered what the refusal was withheld to protect: 201 for a matching
 roster and 403 for a differing one, on a meeting the actor may not record at all.
 
-Every capability except the amendment one is decided before what is stored is read, and
-must be: whether a record is the actor's to touch is not a question about its contents.
+Every capability except the amendment one is decided before the record's **contents** are
+read, and must be: whether a record is the actor's to touch is not a question about its
+contents.
+
+**"Contents", and this sentence has now been narrowed twice.** It first said "no capability
+beyond the one that reached it"; the correction of 2026-09-03 replaced that with "before
+what is stored is read", which was itself false of both implementations and was caught by
+the review pass on the very commit that wrote it. The Cell path reads the meeting row and
+refuses a status change before the on-behalf check; the DCC path derives a line's outcome
+from the stored record before `assertMayRecord`. Both are safe, and not by luck: what they
+expose is the meeting's own status, version and submitter, which `GET
+/cells/{id}/meetings/{meeting_id}/roster` returns to the same actor under an identical
+capability and target declaration. The protected thing is per-person attendance, which no
+route publishes to an actor holding only the recording capability.
+
+The second narrowing is recorded at this length because the first one is what introduced
+the defect. A rule restated to be more precise is a rule being rewritten, and on this
+project a fix batch has introduced a defect more often than not.
 
 ## Why accepted rather than closed
 
@@ -67,14 +89,24 @@ recording capability gains a read they did not have, not whether the figures exi
 
 ## What this binds
 
-- The unchanged-submission path stays where it is: before the capability check, before the
-  version comparison, writing nothing.
+- The unchanged-submission path sits before the *amendment* capability check and before the
+  version comparison, and **after** the on-behalf one — which is the distinction this
+  ruling's narrowing exists to draw, and which an earlier version of this bullet erased by
+  saying "before the capability check".
 - The refusal for a differing submission stays `SCOPE_DENIED` naming
   `cell.correct_subtree`, which is what tells an administrator what to grant.
 - Section 7 carries the rule, because it is a rule about what a capability owes rather than
   about what a search may reveal.
+- The roster read and the submit route must keep the identical capability and target
+  declaration, because the ordering above is safe only while they admit the same actors.
+  `test/unit/capability-scope-resolution.spec.ts` asserts it.
 
-No code changes.
+**One code change, and this said "No code changes" while the change was in the same
+commit.** Reading the ruling generally put the on-behalf check behind the roster
+comparison; the narrowing is what moves it in front, at `cell-meetings.service.ts`. The
+reorder is often attributed to decision 0192, which requires the capability — but 0192 says
+*that* it is required and this ruling says *when* it is decided, and the ordering is this
+one's.
 
 ---
 
