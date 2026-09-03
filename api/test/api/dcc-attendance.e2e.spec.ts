@@ -462,6 +462,217 @@ describe('DCC recording (sections 9 and 14)', () => {
       expect(await liveRows(eventId)).toHaveLength(0);
     });
 
+    it('records into a closed month with the amendment flag and the capability', async () => {
+      // Section 9, decision 0182: "One shape across both domains, because an amendment is
+      // a submission with a different precondition and nothing else." The flag skips the
+      // window check and nothing else — every per-line rule below still runs.
+      const eventId = await createEvent(await closedMonthSunday());
+
+      const response = await request(app.getHttpServer())
+        .post(`/api/v1/dcc/events/${eventId}/submit`)
+        .set('Authorization', `Bearer ${admin.accessToken}`)
+        .set('Idempotency-Key', randomUUID())
+        .send({
+          records: [{ person_id: mark.id, present: true, version: null }],
+          amendment: { reason: 'Register reconciled after the window shut.' },
+        });
+
+      expect(response.status).toBe(201);
+      expect(response.body.created).toBe(1);
+      expect(await liveRows(eventId)).toHaveLength(1);
+
+      // One entry for the submission rather than one per line, carrying the reason.
+      const entries = await db
+        .selectFrom('audit_log')
+        .select(['action', 'reason'])
+        .where('action', '=', 'dcc_attendance.amended')
+        .execute();
+
+      expect(entries).toHaveLength(1);
+      expect(entries[0].reason).toBe('Register reconciled after the window shut.');
+    });
+
+    it('targets each recorded person, not the amender', async () => {
+      // **Section 7 resolves an audit entry's scope through its target**, and
+      // `dcc_attendance`'s existing twins target the *subject* (decision 0189). A first
+      // version wrote one entry against `actor.personId`: it resolved into the amender's
+      // own upline scope and out of the scope of the leaders whose people's closed-month
+      // figures had moved — readable by the wrong population, and inverted from the Cell
+      // twin, which is readable by a scope that reaches the Cell.
+      //
+      // One entry per person, because a DCC submission may name people belonging to many
+      // different leaders and a single entry resolves through one target only. Section 14
+      // already makes the person the unit in this domain and the meeting the unit in the
+      // other, so the granularity follows a seam that was settled.
+      const eventId = await createEvent(await closedMonthSunday());
+
+      const response = await request(app.getHttpServer())
+        .post(`/api/v1/dcc/events/${eventId}/submit`)
+        .set('Authorization', `Bearer ${admin.accessToken}`)
+        .set('Idempotency-Key', randomUUID())
+        .send({
+          records: [
+            { person_id: mark.id, present: true, version: null },
+            { person_id: timothy.id, present: false, version: null },
+          ],
+          amendment: { reason: 'Two people reconciled after the window shut.' },
+        });
+
+      expect(response.status).toBe(201);
+
+      const targets = (
+        await db
+          .selectFrom('audit_log')
+          .select('target_id')
+          .where('action', '=', 'dcc_attendance.amended')
+          .execute()
+      ).map((row) => row.target_id);
+
+      expect(targets).toHaveLength(2);
+      expect(targets).toEqual(expect.arrayContaining([mark.id, timothy.id]));
+      // The amender is Adele, and naming her would put the entry in her upline's scope.
+      expect(targets).not.toContain(admin.personId);
+    });
+
+    it('does not let the amendment flag reach a removed or not-yet-held event', async () => {
+      // **"An amendment widens *when*, never *what*"** (section 9, decision 0182), and
+      // the whole of that enforcement is a branch order: the flag is conjoined with
+      // `MONTH_CLOSED`, so every other reason falls through to the ordinary refusal.
+      // Swapping those two arms, or widening the first condition, silently hands Admin
+      // the power to record against a Sunday that was removed or has not begun — and
+      // nothing reddened. A rule with nothing that can fail on it is what decision 0142
+      // is about, and this one sits on the boundary the flag was added at.
+      // `removed_by` references `accounts`, not `persons`.
+      const removed = await createEvent(await recentSunday(), {
+        reason: 'Absorbed into the regional conference.',
+        by: admin.id,
+      });
+      const future = await createEvent(await nextSunday());
+
+      const amend = (eventId: string) =>
+        request(app.getHttpServer())
+          .post(`/api/v1/dcc/events/${eventId}/submit`)
+          .set('Authorization', `Bearer ${admin.accessToken}`)
+          .set('Idempotency-Key', randomUUID())
+          .send({
+            records: [{ person_id: mark.id, present: true, version: null }],
+            amendment: { reason: 'The flag must not reach this.' },
+          });
+
+      const onRemoved = await amend(removed);
+      expect(onRemoved.status).toBe(409);
+      expect(onRemoved.body.error.code).not.toBe('PERIOD_CLOSED');
+
+      const onFuture = await amend(future);
+      expect(onFuture.status).toBe(409);
+      expect(onFuture.body.error.code).not.toBe('PERIOD_CLOSED');
+
+      expect(await liveRows(removed)).toHaveLength(0);
+      expect(await liveRows(future)).toHaveLength(0);
+    });
+
+    it('writes no entry for a line the amendment did not change', async () => {
+      // Section 9: "an unchanged line is not an amendment". Section 21 asks for one entry
+      // per action performed. Iterating every *named* line wrote one for the unchanged
+      // ones too, so resubmitting an identical body told that person's leader their
+      // frozen figure had moved — once per resubmission.
+      const eventId = await createEvent(await closedMonthSunday());
+
+      const send = (reason: string) =>
+        request(app.getHttpServer())
+          .post(`/api/v1/dcc/events/${eventId}/submit`)
+          .set('Authorization', `Bearer ${admin.accessToken}`)
+          .set('Idempotency-Key', randomUUID())
+          .send({
+            records: [{ person_id: mark.id, present: true, version: null }],
+            amendment: { reason },
+          });
+
+      await send('Creates the record.').expect(201);
+
+      const again = await send('Changes nothing at all.');
+
+      expect(again.status).toBe(201);
+      expect(again.body.unchanged).toBe(1);
+
+      const entries = await db
+        .selectFrom('audit_log')
+        .select('reason')
+        .where('action', '=', 'dcc_attendance.amended')
+        .execute();
+
+      expect(entries).toHaveLength(1);
+      expect(entries[0].reason).toBe('Creates the record.');
+    });
+
+    it('treats an explicit null amendment as absent, in both directions', async () => {
+      // `@IsOptional()` passes an explicit null through and skips the remaining
+      // decorators, so `!== undefined` was true of it: a closed month dereferenced null
+      // and answered 500 on a well-formed body, and an open month refused an ordinary
+      // submission that amends nothing.
+      const closed = await createEvent(await closedMonthSunday());
+
+      const onClosed = await request(app.getHttpServer())
+        .post(`/api/v1/dcc/events/${closed}/submit`)
+        .set('Authorization', `Bearer ${admin.accessToken}`)
+        .set('Idempotency-Key', randomUUID())
+        .send({
+          records: [{ person_id: mark.id, present: true, version: null }],
+          amendment: null,
+        });
+
+      expect(onClosed.status).toBe(409);
+      expect(onClosed.body.error.code).toBe('PERIOD_CLOSED');
+
+      const open = await createEvent(await recentSunday());
+
+      const onOpen = await request(app.getHttpServer())
+        .post(`/api/v1/dcc/events/${open}/submit`)
+        .set('Authorization', `Bearer ${admin.accessToken}`)
+        .set('Idempotency-Key', randomUUID())
+        .send({
+          records: [{ person_id: mark.id, present: true, version: null }],
+          amendment: null,
+        });
+
+      expect(onOpen.status).toBe(201);
+    });
+
+    it('refuses the amendment flag from an actor without the backdate capability', async () => {
+      // Required *in addition to* `dcc.take_attendance`, never in place of it — Manuel
+      // may record these people and may not reach past a closed window.
+      const eventId = await createEvent(await closedMonthSunday());
+
+      const response = await request(app.getHttpServer())
+        .post(`/api/v1/dcc/events/${eventId}/submit`)
+        .set('Authorization', `Bearer ${manuelAccount.accessToken}`)
+        .set('Idempotency-Key', randomUUID())
+        .send({
+          records: [{ person_id: mark.id, present: true, version: null }],
+          amendment: { reason: 'Trying to reach past the window.' },
+        });
+
+      expect(response.status).toBe(403);
+      expect(response.body.error.details.capability).toBe('records.backdate_effective_date');
+      expect(await liveRows(eventId)).toHaveLength(0);
+    });
+
+    it('refuses the amendment flag on a month that is still open', async () => {
+      const eventId = await createEvent(await recentSunday());
+
+      const response = await request(app.getHttpServer())
+        .post(`/api/v1/dcc/events/${eventId}/submit`)
+        .set('Authorization', `Bearer ${admin.accessToken}`)
+        .set('Idempotency-Key', randomUUID())
+        .send({
+          records: [{ person_id: mark.id, present: true, version: null }],
+          amendment: { reason: 'Nothing to amend.' },
+        });
+
+      expect(response.status).toBe(409);
+      expect(response.body.error.code).toBe('INVARIANT_VIOLATION');
+    });
+
     it('answers NOT_FOUND for an event the calendar does not hold', async () => {
       const response = await roster(manuelAccount, randomUUID()).expect(404);
 

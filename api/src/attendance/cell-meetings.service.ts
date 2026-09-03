@@ -5,6 +5,7 @@ import { randomUUID } from 'node:crypto';
 import {
   ApiError,
   ApiErrorCode,
+  CapabilityDeniedError,
   InvariantViolationError,
   NotFoundError,
   ResourceBusyError,
@@ -403,15 +404,47 @@ export class CellMeetingsService {
         });
       }
 
-      // **The window, on the database's clock** (sections 13 and 20). Only Admin may
-      // amend a closed month, under `records.backdate_effective_date`, and that flag is
-      // the closed-month amendment of decision 0182 — which arrives with the slice that
-      // covers both domains, so a closed month refuses here for everybody today.
+      // **The window, on the database's clock** (sections 13 and 20), and the one thing
+      // an amendment skips (decision 0182). The flag is checked here rather than earlier
+      // because it changes *when* a submission is allowed and nothing else: everything
+      // below runs identically whether the month is open or being amended.
+      //
+      // **Absent the flag, a closed month refuses for an Admin too.** Section 13 asks for
+      // that in terms, so "a retry that happens to arrive after the 7th never rewrites a
+      // closed period by accident" — which is why holding the capability is not enough on
+      // its own and the request has to say it means to amend.
+      // **Normalised once, because `@IsOptional()` lets an explicit `null` through.**
+      // `class-validator` treats null as absent and skips every other decorator on the
+      // property, so `{ "amendment": null }` arrives untouched and `!== undefined` is true
+      // of it. Left uncollapsed that dereferenced null twice: a 500 on a closed month, and
+      // a 409 refusing an open-month submission that amends nothing. Null and absent mean
+      // one thing here — no amendment — unlike `birth_date`, where omission and null are
+      // two claims and are deliberately told apart.
+      const amendment = body.amendment ?? undefined;
+
       if (!(await isMonthOpen(trx, reportingMonth))) {
-        throw new ApiError(
-          ApiErrorCode.PERIOD_CLOSED,
-          'This month is closed. Only an Admin may amend it, with a reason (SKILL.md ' +
-            'sections 13 and 20).',
+        if (amendment === undefined) {
+          throw new ApiError(
+            ApiErrorCode.PERIOD_CLOSED,
+            'This month is closed. Only an Admin may amend it, with a reason (SKILL.md ' +
+              'sections 13 and 20).',
+            { cell_id: cellId, meeting_id: meetingId, reporting_month: reportingMonth },
+          );
+        }
+
+        await this.assertMayAmendClosedMonth(trx, actor, authority);
+      }
+
+      // **And the flag is refused where it is not needed.** An amendment of an *open*
+      // month is not a thing section 13 defines: it would carry a reason nobody asked for
+      // into the audit log and let a client hold the capability's semantics over a write
+      // that never needed them. Refused rather than ignored, because section 22's
+      // versioning rule makes a field accepted and ignored impossible to give meaning to
+      // later.
+      else if (amendment !== undefined) {
+        throw new InvariantViolationError(
+          'This month is still open, so there is nothing to amend. Submit without the ' +
+            'amendment (SKILL.md section 13).',
           { cell_id: cellId, meeting_id: meetingId, reporting_month: reportingMonth },
         );
       }
@@ -449,6 +482,30 @@ export class CellMeetingsService {
           actor,
           authority,
         });
+
+        // **The amendment entry belongs on this path too**, and sat only on the one
+        // below until a review reproduced it: a closed month amended through a
+        // *correction* — the ordinary case, since a closed month usually already has a
+        // record — returned 201 with `corrected: 1` and left nothing in the log saying an
+        // amendment had happened or why. `cell_attendance.corrected` carries
+        // `correction_reason`, which is a different field and was null here.
+        // **Only where the correction actually wrote something**, which section 9 settles
+        // for the other domain in words that bind this one: "an unchanged line is not an
+        // amendment", and section 21 asks for one entry per action *performed*. A
+        // resubmitted identical roster corrects nothing, and wrote a second entry whose
+        // `after` was byte-identical to the first — so the log asserted an amendment
+        // that section 7 says is not one.
+        if (amendment !== undefined && (response.corrected ?? 0) > 0) {
+          await this.writeAmendmentEntry(trx, {
+            actor,
+            cellId,
+            meetingId,
+            reportingMonth,
+            reason: amendment.reason,
+            recorded: response.recorded,
+            corrected: response.corrected ?? 0,
+          });
+        }
 
         // The same last statement the first-submission path ends with, and the same
         // reasons (CLAUDE.md, *Write endpoints*). 201 on both outcomes, matching
@@ -574,6 +631,23 @@ export class CellMeetingsService {
             recorded: attendance.length,
             present: attendance.filter((line) => line.present).length,
           },
+        });
+      }
+
+      // **The amendment's own entry, written whoever the actor is** (section 13). Unlike
+      // the pair above it is not conditional on acting for somebody else: what is being
+      // audited is that a closed month was reopened for one write, which is true of an
+      // Admin amending their own Cell's meeting. It carries the reason section 13
+      // requires, and the month it reached back into.
+      if (amendment !== undefined) {
+        await this.writeAmendmentEntry(trx, {
+          actor,
+          cellId,
+          meetingId,
+          reportingMonth,
+          reason: amendment.reason,
+          recorded: attendance.length,
+          corrected: 0,
         });
       }
 
@@ -1111,6 +1185,119 @@ export class CellMeetingsService {
   }
 
   /**
+   * The audit entry a closed-month amendment owes (SKILL.md sections 13 and 21;
+   * decision 0182).
+   *
+   * **Written whoever the actor is**, unlike the on-behalf pair: what is audited is that
+   * a closed window was reopened for this write, which is true of an Admin amending a
+   * meeting of their own Cell.
+   *
+   * **Called from both submission paths**, which is the whole reason it is a method. It
+   * sat inline on the first-submission path and was unreachable from the correction one —
+   * and a correction is the *ordinary* case for a closed month, since a month usually
+   * closes over meetings that were already reported. A review reproduced it: 201,
+   * `corrected: 1`, and nothing in the log.
+   *
+   * Carries what decision 0182 names — the reason, the reporting month, and the records
+   * changed — rather than the fields each call site happened to have in hand, which is
+   * how the two domains came to record different things for one decision.
+   *
+   * Targets the Cell, on the reasoning that settled the leadership trio (section 21,
+   * 2026-08-31): section 7 resolves an entry's scope through its target, so the entry is
+   * **readable by a scope that reaches the Cell**.
+   *
+   * *Not "readable exactly where the meeting is", which section 21 retracts by name: a
+   * Cell resolves through its leader as of the period viewed and a meeting resolves per
+   * record, so on a closed Cell the two name different people, and once the window shuts
+   * the meeting resolves through nobody while the entry stays readable by the last
+   * leader. This docblock reinstated the retracted phrase, and the commit that removed it
+   * from three other places claimed to have removed it from four.*
+   */
+  private async writeAmendmentEntry(
+    trx: Transaction<Database>,
+    params: {
+      actor: Actor;
+      cellId: string;
+      meetingId: string;
+      reportingMonth: string;
+      reason: string;
+      recorded: number;
+      corrected: number;
+    },
+  ): Promise<void> {
+    await this.audit.writeWithin(trx, {
+      actorId: params.actor.accountId,
+      action: 'cell_attendance.amended',
+      targetType: 'cell',
+      targetId: params.cellId,
+      reason: params.reason,
+      after: {
+        meeting_id: params.meetingId,
+        reporting_month: params.reportingMonth,
+        recorded: params.recorded,
+        corrected: params.corrected,
+      },
+    });
+  }
+
+  /**
+   * `records.backdate_effective_date`, required to amend a month that has closed
+   * (SKILL.md sections 13 and 20; decision 0182).
+   *
+   * **In addition to `cell.take_attendance`, never in place of it.** The guard has already
+   * resolved the meeting against the Cell, and `assertMayActForAnother` and
+   * `assertMayCorrect` still run below — an amendment widens *when* a submission is
+   * allowed and never *what* it may do or *whose* meeting it may touch.
+   *
+   * **Targeted at the church**, on `CellsClosureService.assertMayBackdateWithin`'s
+   * reasoning re-derived rather than copied (decision 0100): the authority to reach past a
+   * closed window is not authority over the Cell's leader, so resolving it through that
+   * leader would claim something it does not mean. A Cell is not a Person, and this
+   * capability is `WHOLE_CHURCH_ONLY` (section 7), which makes the target unobservable
+   * today — `coversWith` discards a grant `grantCoversNothing` voids before the target is
+   * read. The choice is section 7's rather than something a test can fail on, and it
+   * begins to matter the day the capability leaves that set.
+   *
+   * The two refusals are told apart because they tell an administrator different things:
+   * not holding the capability is a grant to make, holding it too narrowly is a grant to
+   * widen.
+   */
+  private async assertMayAmendClosedMonth(
+    trx: Transaction<Database>,
+    actor: Actor,
+    authority: ActorAuthority,
+  ): Promise<void> {
+    if (
+      await this.authorization.coversWith(
+        trx,
+        actor,
+        authority,
+        Capability.RecordsBackdateEffectiveDate,
+        { kind: 'church' },
+      )
+    ) {
+      return;
+    }
+
+    const held = authority.grants.some(
+      (grant) => grant.capability === Capability.RecordsBackdateEffectiveDate,
+    );
+
+    if (!held) {
+      throw new CapabilityDeniedError(
+        `You do not hold ${Capability.RecordsBackdateEffectiveDate}.`,
+        { capability: Capability.RecordsBackdateEffectiveDate },
+      );
+    }
+
+    throw new ScopeDeniedError(
+      'Amending a closed month requires records.backdate_effective_date at Whole Church ' +
+        'scope (SKILL.md section 7).',
+      { capability: Capability.RecordsBackdateEffectiveDate },
+    );
+  }
+
+  /**
    * `cell.correct_subtree`, which section 7 requires of an amendment and which the
    * decorator cannot declare (SKILL.md section 7).
    *
@@ -1128,6 +1315,10 @@ export class CellMeetingsService {
    * consequence was that **nobody could correct the record**: the current leader was
    * refused here, and the former leader was refused by the guard. Section 7 says in
    * terms that the current leader files it.*
+   *
+   * *This block was stranded twice. Two methods were inserted between it and the method
+   * it documents, leaving `writeAmendmentEntry` carrying three stacked docblocks and this
+   * method none; the first attempt to fix that moved the wrong one.*
    */
   private async assertMayCorrect(
     // `Db` as well as a transaction: `lostRaceAnswer` runs on the pool after its

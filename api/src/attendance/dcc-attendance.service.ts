@@ -14,6 +14,7 @@ import { ScopeType } from '../auth/authorization/scopes';
 import {
   ApiError,
   ApiErrorCode,
+  CapabilityDeniedError,
   InvariantViolationError,
   NotFoundError,
   ScopeDeniedError,
@@ -181,9 +182,11 @@ export class DccAttendanceService {
     records: readonly SubmittedRecord[],
     actor: Actor,
     claim: CurrentClaim,
+    /** Present only to amend a closed month (section 9, decision 0182). */
+    amendment?: { reason: string } | null,
   ): Promise<Record<string, unknown>> {
     try {
-      return await this.writeWithin(eventId, records, actor, claim);
+      return await this.writeWithin(eventId, records, actor, claim, amendment);
     } catch (error) {
       // **A lost race on `dcc_attendance_one_live`.** Two writers can reach one
       // person's first record at once — their own submitter, and an upline recording
@@ -244,7 +247,14 @@ export class DccAttendanceService {
     records: readonly SubmittedRecord[],
     actor: Actor,
     claim: CurrentClaim,
+    amendmentOrNull?: { reason: string } | null,
   ): Promise<Record<string, unknown>> {
+    // **Normalised, because `@IsOptional()` lets an explicit `null` through.**
+    // `class-validator` treats null as absent and skips the remaining decorators, so
+    // `{ "amendment": null }` arrives untouched and `!== undefined` is true of it — which
+    // dereferenced null on a closed month (a 500 on a well-formed body) and refused an
+    // open-month submission that amends nothing. Null and absent mean one thing here.
+    const amendment = amendmentOrNull ?? undefined;
     // **On the pool, before the transaction opens** (section 24), which is what every
     // other write service in this repository does and says why: `authorityFor` reads
     // `account_roles` and `capability_grants` on `this.db`, and a transaction holding
@@ -256,8 +266,27 @@ export class DccAttendanceService {
     return this.db.transaction().execute(async (trx) => {
       const event = await this.eventForRecording(trx, eventId);
 
-      if (event.notRecordable !== null) {
+      // **A closed month is the one refusal an amendment lifts** (section 9, decision
+      // 0182), and only that one: `REMOVED` and `NOT_YET_HELD` are facts about the event
+      // rather than about the window, and no capability reaches past them. An amendment
+      // widens *when*, never *what*.
+      //
+      // Absent the flag a closed month refuses for an Admin too, which section 9 asks for
+      // so a retry arriving after the 7th never rewrites a closed period by accident.
+      if (event.notRecordable === 'MONTH_CLOSED' && amendment !== undefined) {
+        await this.assertMayAmendClosedMonth(trx, actor, authority);
+      } else if (event.notRecordable !== null) {
         throw refusalFor(event);
+      } else if (amendment !== undefined) {
+        // Refused rather than ignored, for the reason the Cell route gives: section 22's
+        // versioning rule makes a field accepted and ignored impossible to give meaning
+        // to later, and an amendment of an open month is not an operation section 9
+        // defines.
+        throw new InvariantViolationError(
+          'This month is still open, so there is nothing to amend. Submit without the ' +
+            'amendment (SKILL.md section 9).',
+          { dcc_event_id: eventId },
+        );
       }
 
       assertNamesEachPersonOnce(records);
@@ -359,6 +388,50 @@ export class DccAttendanceService {
       }
 
       const written = await this.applyWithin(trx, { event, actor, planned, assignments, live });
+
+      // **One entry per recorded person, each targeting that person** (section 21,
+      // decision 0189). Section 7 resolves an audit entry's scope through its target, and
+      // `dcc_attendance`'s existing twins target the **subject** — so this follows the
+      // rule already settled for them rather than inventing one for a submission-level
+      // entry, which section 21 does not define.
+      //
+      // *A first version wrote one entry targeting `actor.personId`, and a review showed
+      // what that costs: the entry resolved into the **amender's** upline scope and out of
+      // the scope of the leaders whose people's closed-month figures had moved — readable
+      // by the wrong population, and inverted from the Cell twin, which is readable by a
+      // scope that reaches the Cell.*
+      //
+      // The granularity difference from the Cell route is not an inconsistency: section 14
+      // already makes the meeting the unit for a Cell and the person the unit for DCC, and
+      // this follows the same seam. A Cell amendment names one meeting; a DCC amendment
+      // names as many people as it recorded, and each of them has a different leader.
+      //
+      // **Only the lines that were actually written**, which section 9 settles rather than
+      // leaving to judgement: "an unchanged line is not an amendment". Section 21 asks for
+      // one entry per action performed, and no action is performed on a line whose value
+      // already equals the stored one. Iterating `planned` wrote an entry for those too,
+      // so resubmitting an identical body told every named person's leader their frozen
+      // figure had moved, once per resubmission.
+      if (amendment !== undefined) {
+        for (const line of planned.filter((entry) => entry.outcome !== 'UNCHANGED')) {
+          await this.audit.writeWithin(trx, {
+            actorId: actor.accountId,
+            action: 'dcc_attendance.amended',
+            targetType: 'person',
+            targetId: line.record.person_id,
+            reason: amendment.reason,
+            after: {
+              dcc_event_id: event.id,
+              event_date: event.eventDate,
+              reporting_month: reportingMonthOf(event.eventDate),
+              // What changed for this person, which decision 0182 asks the entry to name
+              // and which the previous version dropped when it gained a target.
+              outcome: line.outcome,
+              present: line.record.present,
+            },
+          });
+        }
+      }
 
       const response = {
         event_id: event.id,
@@ -683,6 +756,55 @@ export class DccAttendanceService {
         person_id: personId,
       });
     }
+  }
+
+  /**
+   * `records.backdate_effective_date`, required to amend a month that has closed
+   * (SKILL.md sections 9 and 20; decision 0182).
+   *
+   * **In addition to `dcc.take_attendance`, never in place of it.** Every per-line check
+   * below still runs — scope, on-behalf, the amendment capability — so an amendment
+   * widens *when* a submission is allowed and never *what* it may record or *whose*
+   * record it may touch.
+   *
+   * **Targeted at the church**, and here that needs no argument about resolving through a
+   * leader: section 9 makes a DCC event church-wide and says it "resolves through
+   * nothing", so the church is the only target it has. The Cell route reaches the same
+   * target by a different route, and the two are deliberately not derived from each other.
+   */
+  private async assertMayAmendClosedMonth(
+    trx: Transaction<Database>,
+    actor: Actor,
+    authority: ActorAuthority,
+  ): Promise<void> {
+    if (
+      await this.authorization.coversWith(
+        trx,
+        actor,
+        authority,
+        Capability.RecordsBackdateEffectiveDate,
+        { kind: 'church' },
+      )
+    ) {
+      return;
+    }
+
+    const held = authority.grants.some(
+      (grant) => grant.capability === Capability.RecordsBackdateEffectiveDate,
+    );
+
+    if (!held) {
+      throw new CapabilityDeniedError(
+        `You do not hold ${Capability.RecordsBackdateEffectiveDate}.`,
+        { capability: Capability.RecordsBackdateEffectiveDate },
+      );
+    }
+
+    throw new ScopeDeniedError(
+      'Amending a closed month requires records.backdate_effective_date at Whole Church ' +
+        'scope (SKILL.md section 7).',
+      { capability: Capability.RecordsBackdateEffectiveDate },
+    );
   }
 
   private async assertMayRecord(

@@ -9,10 +9,50 @@ import {
   IsOptional,
   IsString,
   IsUUID,
+  Matches,
   MaxLength,
   Min,
   ValidateNested,
 } from 'class-validator';
+
+/**
+ * Amending a month that has already closed (SKILL.md section 13; decision 0182).
+ *
+ * **A flag on the submission route, not a route of its own.** Section 13: "Everything an
+ * amendment does is what a submission does — the roster, the per-line rules, the version
+ * check, the all-or-nothing rule, the idempotency obligations of Section 22 — and only
+ * *when* it is allowed and *who* may do it differ. A second route would have to stay
+ * behaviourally identical to this one forever."
+ *
+ * Its presence skips the window check **and nothing else**, and requires
+ * `records.backdate_effective_date` *in addition to* `cell.take_attendance` — so an
+ * amendment widens *when* and never *what* or *whose*.
+ *
+ * The reason is required by the object rather than optional within it: section 13 owes an
+ * amendment a reason, and an optional field on an optional object is a reason nobody
+ * supplies.
+ */
+export class ClosedMonthAmendmentDto {
+  /**
+   * **Non-blank, not merely present or non-empty.** Section 5 requires a reason for every
+   * backdated effective date, and `@IsString()` alone accepts `""` — a reason nobody
+   * supplied, arriving through the very shape this object exists to prevent. Section 21
+   * stores it, so a blank one is an audit entry that explains nothing.
+   *
+   * `@Matches(/\S/)` rather than `@MinLength(1)`, which was the first fix and let `" "`
+   * through — the same hole one space wider. The repository's nearest precedents
+   * (`people.dto.ts`'s Network-change and backdate reasons) carry `@Length(1, 500)` and
+   * have it too; that is a gap to close there rather than a shape to copy here.
+   *
+   * `correction_reason` on this route is only `@IsString()`, and that is not a precedent
+   * to copy here (section 25 rule 19): section 14 asks for one "as appropriate" and it is
+   * optional, while this one is the whole justification for reaching past a closed window.
+   */
+  @IsString()
+  @Matches(/\S/, { message: 'reason must not be blank' })
+  @MaxLength(500)
+  reason!: string;
+}
 
 /** One person's presence at the meeting (SKILL.md section 12). */
 export class CellAttendanceLineDto {
@@ -161,4 +201,15 @@ export class SubmitCellMeetingDto {
   @ValidateNested({ each: true })
   @Type(() => CellAttendanceLineDto)
   attendance?: CellAttendanceLineDto[];
+
+  /**
+   * Present only to amend a month that has already closed (section 13, decision 0182).
+   *
+   * Absent, a closed month refuses for an Admin too — so a retry that happens to arrive
+   * after the 7th never rewrites a closed period by accident.
+   */
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => ClosedMonthAmendmentDto)
+  amendment?: ClosedMonthAmendmentDto;
 }

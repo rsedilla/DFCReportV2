@@ -1280,6 +1280,334 @@ describe('recording a Cell meeting (sections 12, 13 and 14)', () => {
     });
   });
 
+  describe('amending a month that has closed (section 13, decision 0182)', () => {
+    /**
+     * A Saturday whose month shut on the 7th of the month after it.
+     *
+     * Nine weeks back, then walked forward to the next Saturday, so it is always well
+     * clear of the boundary whatever day of the month the suite runs on. Read from the
+     * database for the reason `mostRecentSaturday` gives: the window comparison and this
+     * date must come from one clock.
+     */
+    async function closedMonthSaturday(): Promise<string> {
+      const result = await sql<{ day: string }>`
+        SELECT to_char(
+                 d + ((6 - EXTRACT(ISODOW FROM d)::int + 7) % 7),
+                 'YYYY-MM-DD'
+               ) AS day
+          FROM (SELECT ((now() AT TIME ZONE 'Asia/Manila')::date - 63) AS d) AS s
+      `.execute(db);
+
+      return result.rows[0].day;
+    }
+
+    const amend = (body: Record<string, unknown>, as: TestAccount, date: string) =>
+      request(app.getHttpServer())
+        .post(`/api/v1/cells/${markCell.id}/meetings/${date}/submit`)
+        .set('Authorization', `Bearer ${as.accessToken}`)
+        .set('Idempotency-Key', randomUUID())
+        .send(body);
+
+    it('refuses a closed month without the flag, for an Admin too', async () => {
+      // Section 13 asks for exactly this, so "a retry that happens to arrive after the
+      // 7th never rewrites a closed period by accident". Holding the capability is not
+      // enough on its own — the request has to say it means to amend.
+      const one = await member('Aurelio');
+      const admin = await adminAccount();
+      const closed = await closedMonthSaturday();
+
+      const response = await amend(
+        { status: 'HELD', attendance: [{ person_id: one.id, present: true }] },
+        admin,
+        closed,
+      );
+
+      expect(response.status).toBe(409);
+      expect(response.body.error.code).toBe('PERIOD_CLOSED');
+    });
+
+    it('records into a closed month with the flag and the capability', async () => {
+      const one = await member('Aurelio');
+      const admin = await adminAccount();
+      const closed = await closedMonthSaturday();
+
+      const response = await amend(
+        {
+          status: 'HELD',
+          attendance: [{ person_id: one.id, present: true }],
+          amendment: { reason: 'Paper register found after the window shut.' },
+        },
+        admin,
+        closed,
+      );
+
+      expect(response.status).toBe(201);
+      expect(response.body.recorded).toBe(1);
+
+      // Section 13 requires it audited, and a first submission writes no entry of its
+      // own — so without this action the month would be rewritten with nothing logged.
+      const entries = await db
+        .selectFrom('audit_log')
+        .select(['action', 'reason', 'target_id'])
+        .where('action', '=', 'cell_attendance.amended')
+        .execute();
+
+      expect(entries).toHaveLength(1);
+      expect(entries[0].reason).toBe('Paper register found after the window shut.');
+      expect(entries[0].target_id).toBe(markCell.id);
+    });
+
+    it('audits an amendment that corrects a record, not only one that creates it', async () => {
+      // **The ordinary case, and it was the unaudited one.** A closed month usually
+      // already holds records, so amending it is normally a *correction* — and the entry
+      // sat inside the first-submission branch, unreachable once `correctWithin` took
+      // over. The month was rewritten, 201 with `corrected: 1`, and nothing in the log
+      // said an amendment had happened or why. `cell_attendance.corrected` carries
+      // `correction_reason`, a different field, which was null here.
+      const one = await member('Aurelio');
+      const admin = await adminAccount();
+      const closed = await closedMonthSaturday();
+
+      await amend(
+        {
+          status: 'HELD',
+          attendance: [{ person_id: one.id, present: true }],
+          amendment: { reason: 'First amendment, creates the record.' },
+        },
+        admin,
+        closed,
+      ).expect(201);
+
+      const second = await amend(
+        {
+          status: 'HELD',
+          version: 1,
+          attendance: [{ person_id: one.id, present: false }],
+          amendment: { reason: 'Second amendment, corrects it.' },
+        },
+        admin,
+        closed,
+      );
+
+      expect(second.status).toBe(201);
+      expect(second.body.corrected).toBe(1);
+
+      const entries = await db
+        .selectFrom('audit_log')
+        .select(['reason', 'target_id'])
+        .where('action', '=', 'cell_attendance.amended')
+        .orderBy('occurred_at')
+        .execute();
+
+      expect(entries).toHaveLength(2);
+      expect(entries[1].reason).toBe('Second amendment, corrects it.');
+      expect(entries[1].target_id).toBe(markCell.id);
+    });
+
+    it('treats an explicit null amendment as absent, in both directions', async () => {
+      // `@IsOptional()` passes an explicit null through untouched and skips every other
+      // decorator, so `!== undefined` was true of it: a closed month dereferenced null
+      // and answered 500 on a well-formed body, and an open month refused an ordinary
+      // submission that amends nothing. Null and absent mean one thing here.
+      const one = await member('Aurelio');
+      const admin = await adminAccount();
+      const closed = await closedMonthSaturday();
+
+      const onClosed = await amend(
+        {
+          status: 'HELD',
+          attendance: [{ person_id: one.id, present: true }],
+          amendment: null,
+        },
+        admin,
+        closed,
+      );
+
+      expect(onClosed.status).toBe(409);
+      expect(onClosed.body.error.code).toBe('PERIOD_CLOSED');
+
+      const onOpen = await amend(
+        {
+          status: 'HELD',
+          attendance: [{ person_id: one.id, present: true }],
+          amendment: null,
+        },
+        admin,
+        meetingDate,
+      );
+
+      expect(onOpen.status).toBe(201);
+    });
+
+    it('still refuses a meeting outside the amender’s scope', async () => {
+      // **The flag widens *when*, never *whose*** (section 13). Everything below the
+      // window check still runs, and this pins the half that is easiest to lose: an
+      // actor holding the backdate capability but no scope over the meeting is refused
+      // exactly as they would be inside an open month.
+      //
+      // **An `ADMIN` will not do**, and the first version of this case used one: section 7
+      // gives that role `cell.take_attendance` at Whole Church, so an Admin reaches every
+      // Cell and the case answered 201. The actor this rule is about holds the backdate
+      // capability at Whole Church — it is `WHOLE_CHURCH_ONLY` — and the recording
+      // capability only over their own subtree, which does not contain Mark.
+      const one = await member('Aurelio');
+      const closed = await closedMonthSaturday();
+      const granter = await adminAccount();
+
+      const ben = await createPerson(db, { firstName: 'Ben', network: 'MENS' });
+      await assignTo(db, ben.id, root.id);
+      const outsider = await createAccount(app, db, { person: ben, roles: [] });
+
+      for (const grant of [
+        { capability: 'cell.take_attendance', scope_type: 'OWN_SUBTREE' },
+        { capability: 'records.backdate_effective_date', scope_type: 'WHOLE_CHURCH' },
+      ] as const) {
+        await db
+          .insertInto('capability_grants')
+          .values({
+            account_id: outsider.id,
+            capability: grant.capability as never,
+            scope_type: grant.scope_type,
+            read_only: false,
+            reason: 'Invented for this case (CLAUDE.md, Secrets).',
+            granted_by: granter.id,
+          })
+          .execute();
+      }
+
+      const response = await amend(
+        {
+          status: 'HELD',
+          attendance: [{ person_id: one.id, present: true }],
+          amendment: { reason: 'Holding the capability is not holding the scope.' },
+        },
+        outsider,
+        closed,
+      );
+
+      expect(response.status).toBe(403);
+
+      const rows = await db
+        .selectFrom('cell_meetings')
+        .select('id')
+        .where('cell_id', '=', markCell.id)
+        .execute();
+
+      expect(rows).toHaveLength(0);
+    });
+
+    it('writes no entry for an amendment that corrects nothing', async () => {
+      // Section 9 settles it and section 21 states the rule: "an unchanged line is not an
+      // amendment", and the log carries one entry per action *performed*. Resubmitting an
+      // identical roster corrects nothing — and wrote a second entry whose `after` was
+      // byte-identical to the first, asserting an amendment section 7 says is not one.
+      const one = await member('Aurelio');
+      const admin = await adminAccount();
+      const closed = await closedMonthSaturday();
+
+      const body = {
+        status: 'HELD',
+        attendance: [{ person_id: one.id, present: true }],
+      };
+
+      await amend({ ...body, amendment: { reason: 'Creates the record.' } }, admin, closed).expect(
+        201,
+      );
+
+      const again = await amend(
+        { ...body, version: 1, amendment: { reason: 'Changes nothing at all.' } },
+        admin,
+        closed,
+      );
+
+      expect(again.status).toBe(201);
+      expect(again.body.corrected).toBe(0);
+
+      const entries = await db
+        .selectFrom('audit_log')
+        .select('reason')
+        .where('action', '=', 'cell_attendance.amended')
+        .execute();
+
+      expect(entries).toHaveLength(1);
+      expect(entries[0].reason).toBe('Creates the record.');
+    });
+
+    it('refuses a blank reason, which is a reason nobody supplied', async () => {
+      const one = await member('Aurelio');
+      const admin = await adminAccount();
+      const closed = await closedMonthSaturday();
+
+      const response = await amend(
+        {
+          status: 'HELD',
+          attendance: [{ person_id: one.id, present: true }],
+          amendment: { reason: '' },
+        },
+        admin,
+        closed,
+      );
+
+      expect(response.status).toBe(422);
+
+      // And whitespace is blank too — `@MinLength(1)` was the first fix and let this
+      // through, which is the same hole one space wider.
+      const spaces = await amend(
+        {
+          status: 'HELD',
+          attendance: [{ person_id: one.id, present: true }],
+          amendment: { reason: '   ' },
+        },
+        admin,
+        closed,
+      );
+
+      expect(spaces.status).toBe(422);
+    });
+
+    it('refuses the flag from an actor without records.backdate_effective_date', async () => {
+      // The capability is required *in addition to* `cell.take_attendance`, so an
+      // amendment widens when and never what or whose. Mark leads the Cell and may
+      // record it; he is not an Admin.
+      const one = await member('Aurelio');
+      const closed = await closedMonthSaturday();
+
+      const response = await amend(
+        {
+          status: 'HELD',
+          attendance: [{ person_id: one.id, present: true }],
+          amendment: { reason: 'Trying to reach past the window.' },
+        },
+        markAccount,
+        closed,
+      );
+
+      expect(response.status).toBe(403);
+      expect(response.body.error.details.capability).toBe('records.backdate_effective_date');
+    });
+
+    it('refuses the flag on a month that is still open', async () => {
+      // Not an operation section 13 defines, and refused rather than ignored: section
+      // 22's versioning rule makes a field accepted and ignored impossible to give
+      // meaning to later.
+      const one = await member('Aurelio');
+      const admin = await adminAccount();
+
+      const response = await amend(
+        {
+          status: 'HELD',
+          attendance: [{ person_id: one.id, present: true }],
+          amendment: { reason: 'Nothing to amend.' },
+        },
+        admin,
+        meetingDate,
+      );
+
+      expect(response.status).toBe(409);
+      expect(response.body.error.code).toBe('INVARIANT_VIOLATION');
+    });
+  });
+
   it('refuses a date the Cell was not scheduled to meet on', async () => {
     await member('Aurelio');
 

@@ -244,6 +244,21 @@ export type AuditAction =
   // reason: section 7 resolves an entry through its target, and a Cell meeting
   // resolves through the Cell.
   | 'cell_attendance.corrected'
+  // Amending a month that has already closed (section 13, decision 0182). **Its own
+  // action rather than a field on the entries above**, because a first submission writes
+  // no audit entry at all — only one made on behalf does — so an amendment that records a
+  // meeting nobody had reported would leave a closed month rewritten with nothing in the
+  // log. Section 13 requires it audited, and the entry has to exist whatever the
+  // submission underneath it was.
+  //
+  // Targets the Cell, on the reasoning that settled the pair above (section 21,
+  // 2026-08-31): section 7 resolves an entry through its target, and a Cell meeting
+  // resolves through the Cell.
+  | 'cell_attendance.amended'
+  // The DCC half, targeting the Person for the reason its twins do: a DCC event is
+  // church-wide and resolves through nothing, so the Person is what a reader can
+  // resolve an entry against (sections 9 and 21, decision 0189).
+  | 'dcc_attendance.amended'
   | 'cell_leadership.opened'
   // Section 21 lists this as an action in its own right: "Cell leadership assignment
   // left with account provisioning pending". It names a state rather than an actor,
