@@ -60,10 +60,15 @@ export class CellAttendanceLineDto {
  * **`RESCHEDULED` is accepted here and reachable by no path today**, which an earlier
  * version of this block obscured by saying it "is legal on a correction". It is not:
  * a correction refuses any status change, so no `cell_meetings` row can carry it. The
- * status is declared rather than removed for the reason `actual_date` was removed —
- * section 22's versioning rule cuts one way only, and a value a client may already send
- * cannot later be refused. The reschedule route is what makes it reachable, and it arrives
- * with the same slice that brings back `actual_date` and `actual_time`.
+ * reschedule route is what makes it reachable, and it arrives with the same slice that
+ * brings back `actual_date` and `actual_time`.
+ *
+ * **That is not the `actual_date` argument run backwards, and a version of this block
+ * said it was.** `actual_date` is absent because accepting a field and ignoring it forfeits
+ * the refusal `forbidNonWhitelisted` would give — an argument against *accepting*. This
+ * status is declared because section 13 names exactly three and the enum is the domain's,
+ * not this route's. Narrowing it later is not impossible, only versioned (section 22), so
+ * the two are separate reasons rather than two halves of one.
  */
 export class SubmitCellMeetingDto {
   @IsIn(['HELD', 'RESCHEDULED', 'NOT_HELD'])

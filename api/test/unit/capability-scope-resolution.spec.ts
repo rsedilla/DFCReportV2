@@ -44,6 +44,14 @@ import type { CapabilityRequirement } from '../../src/auth/authorization/authori
  * reddens it is the first **Cell-targeted** viewing route, which decision 0186 names
  * correctly and two paraphrases of it did not.
  *
+ * **Two rules, not one, since 2026-09-03.** The cases above are about which *resolution* a
+ * capability gets. The last case is about a declaration's *shape* — that two named routes
+ * carry the identical one — which serves section 7's ordering rule rather than its
+ * resolution rule. They share this file because both are properties of the declarations
+ * Nest compiled and both are checked the same way, and the distinction is stated because
+ * an earlier version of this docblock said "that is the gap this file closes", singular,
+ * while the file had already grown a second one.
+ *
  * Written against the compiled module graph rather than by grepping the source, on
  * `module-graph.spec.ts`'s reasoning: what is being checked is the shape Nest built. It
  * needs `DATABASE_URL` set and no database running (`test/setup/env.ts`).

@@ -37,19 +37,28 @@ Every capability except the amendment one is decided before the record's **conte
 read, and must be: whether a record is the actor's to touch is not a question about its
 contents.
 
-**"Contents", and this sentence has now been narrowed twice.** It first said "no capability
-beyond the one that reached it"; the correction of 2026-09-03 replaced that with "before
-what is stored is read", which was itself false of both implementations and was caught by
-the review pass on the very commit that wrote it. The Cell path reads the meeting row and
-refuses a status change before the on-behalf check; the DCC path derives a line's outcome
-from the stored record before `assertMayRecord`. Both are safe, and not by luck: what they
-expose is the meeting's own status, version and submitter, which `GET
-/cells/{id}/meetings/{meeting_id}/roster` returns to the same actor under an identical
-capability and target declaration. The protected thing is per-person attendance, which no
-route publishes to an actor holding only the recording capability.
+**"Contents" means the per-person attendance figures**, and the term is defined because the
+sentence turns on it: a meeting's own status, version, submitter and submission time are
+not contents in this sense, and who was marked present is.
 
-The second narrowing is recorded at this length because the first one is what introduced
-the defect. A rule restated to be more precise is a rule being rewritten, and on this
+**This sentence has now been narrowed three times, and twice by the pass on the commit that
+narrowed it.** It first said "no capability beyond the one that reached it". The correction
+of 2026-09-03 replaced that with "before what is stored is read", which was false of both
+implementations. The correction to *that* claimed the Cell path's ground covered the DCC
+path as well — "both are safe, and not by luck" — and the pass on it showed that it does
+not, because a DCC event resolves through the people a route returns rather than through
+its declaration.
+
+So this ruling settles the Cell path and **not** the DCC one. The Cell path is safe on a
+checked ground: its early refusals expose the meeting's own status, version and submitter,
+which `GET /cells/{id}/meetings/{meeting_id}/roster` returns to the same actor under an
+identical declaration, asserted by `test/unit/capability-scope-resolution.spec.ts`. The
+DCC roster and submit routes carry an identical declaration too and it proves nothing
+there: one walks the actor's checklist and the other reaches everyone they hold
+`dcc.take_attendance` over. That question is recorded as open in `CLAUDE.md`.
+
+Three narrowings are recorded at this length because each one was introduced by the fix
+for the last. A rule restated to be more precise is a rule being rewritten, and on this
 project a fix batch has introduced a defect more often than not.
 
 ## Why accepted rather than closed
@@ -73,11 +82,19 @@ also makes the no-op path answer differently from what it does, which is nothing
 
 ## What would change it
 
-**A route that reads per-person attendance, which none does today.** `GET
+**A route that reads per-person attendance, which no *Cell* route does.** `GET
 /api/v1/cells/{id}/meetings/{meeting_id}/roster` returns the Cell's members and the
 meeting's own row — its status, its versions, its submitter — and never who was marked
-present. So the bit this ruling accepts is, today, the only way to learn a per-person
-figure without the correction capability.
+present. So for a Cell meeting the bit this ruling accepts is, today, the only way to
+learn a per-person figure without the correction capability.
+
+*This said "which none does today", of the whole system, and was false when written.*
+`GET /api/v1/dcc/events/{id}/roster` returns each person's `present`, `version` and
+`recorded_at` under `dcc.take_attendance` — so a DCC route has published per-person
+attendance since the DCC recording slice, and for DCC the bit is already free. This
+ruling covers the Cell path, which is what its scope was narrowed to above; what the
+DCC fact does to the acceptance is recorded as open in `CLAUDE.md` rather than answered
+here.
 
 The first surface that offers those figures makes the bit free, and at that point this
 ruling is inherited rather than re-decided unless whoever builds it revisits it. It is
