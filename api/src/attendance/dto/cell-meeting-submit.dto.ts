@@ -15,6 +15,8 @@ import {
   ValidateNested,
 } from 'class-validator';
 
+import { IsManilaCalendarDate } from '../../common/time/is-manila-calendar-date';
+
 /**
  * Amending a month that has already closed (SKILL.md section 13; decision 0182).
  *
@@ -97,11 +99,12 @@ export class CellAttendanceLineDto {
  * `INVARIANT_VIOLATION` rather than a validation error because the request is well formed
  * and breaks a domain rule.
  *
- * **`RESCHEDULED` is accepted here and reachable by no path today**, which an earlier
- * version of this block obscured by saying it "is legal on a correction". It is not:
- * a correction refuses any status change, so no `cell_meetings` row can carry it. The
- * reschedule route is what makes it reachable, and it arrives with the same slice that
- * brings back `actual_date` and `actual_time`.
+ * **`RESCHEDULED` is reachable from 2026-09-04** (decision 0195), on a second submission
+ * carrying `actual_date` against a record that already exists. It was accepted and
+ * reachable by no path before that: a correction refused any status change, so no
+ * `cell_meetings` row could carry it. Four transitions are legal and the service refuses
+ * the rest — a DTO cannot tell them apart, because which one this is depends on what is
+ * stored.
  *
  * **That is not the `actual_date` argument run backwards, and a version of this block
  * said it was.** `actual_date` is absent because accepting a field and ignoring it forfeits
@@ -201,6 +204,34 @@ export class SubmitCellMeetingDto {
   @ValidateNested({ each: true })
   @Type(() => CellAttendanceLineDto)
   attendance?: CellAttendanceLineDto[];
+
+  /**
+   * The date the meeting actually took place, where it moved (section 13, decision 0195).
+   *
+   * **Present exactly on a reschedule**, which is `status: 'RESCHEDULED'` against a record
+   * that already exists. It moves `actual_date` and leaves `scheduled_date` alone, so the
+   * meeting's identity survives — `(cell_id, scheduled_date)` — and so does its
+   * `reporting_month` and its `week_starting`. A January 31 meeting moved to February 2
+   * still reports in January.
+   *
+   * **These two were deliberately absent until this slice**, and the docblock above says
+   * why: `forbidNonWhitelisted` refuses an undeclared field, so declaring one the service
+   * does not read turns a refusal into silent acceptance, and section 22's versioning rule
+   * makes that irreversible. The reschedule route is what reads them, so they arrive with
+   * it.
+   *
+   * `IsManilaCalendarDate` rather than a shape check: a well-formed value that is not a
+   * day — `2026-02-30` — is refused at the edge rather than normalised into a date nobody
+   * named (decision 0185).
+   */
+  @IsOptional()
+  @IsManilaCalendarDate({ message: 'actual_date must be a real calendar date, YYYY-MM-DD' })
+  actual_date?: string;
+
+  /** The time it actually took place, where that moved too. Optional (section 13). */
+  @IsOptional()
+  @Matches(/^([01]\d|2[0-3]):[0-5]\d$/, { message: 'actual_time must be HH:MM' })
+  actual_time?: string;
 
   /**
    * Present only to amend a month that has already closed (section 13, decision 0182).
