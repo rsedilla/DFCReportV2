@@ -11,6 +11,7 @@ import {
   ScopeDeniedError,
 } from '../common/errors/api-error';
 import { VersionConflictError } from '../common/errors/version-conflict';
+import { isUniqueViolation, violatedConstraint } from '../common/errors/postgres-errors';
 import { DATABASE, type Db } from '../database/database.module';
 
 import { isMonthOpen, reportingMonthOf } from '../common/time/submission-window';
@@ -51,6 +52,17 @@ class LostCorrectionRace extends Error {
     this.name = 'LostCorrectionRace';
   }
 }
+
+/**
+ * A meeting's identity: `(cell_id, scheduled_date)` (SKILL.md section 13, migration 0011).
+ *
+ * Named because a lost *first* submission is told apart from every other uniqueness
+ * failure by which index refused it. Section 22 lists exactly two cases carrying a null
+ * `submitted_version` and this is one of them; a violation of any other index on this
+ * table is not a lost race and must keep failing loudly, since letting one surface on its
+ * own answers `INTERNAL_ERROR` on an ordinary race.
+ */
+const ONE_PER_SCHEDULED_DATE = 'cell_meetings_one_per_scheduled_date';
 
 /**
  * What both of this route's operations answer with.
@@ -325,10 +337,31 @@ export class CellMeetingsService {
       // conflicts*). The transaction is gone, so what is read here is the committed
       // state — which is the property section 22's rule turns on, and which a re-read
       // inside the doomed transaction did not have.
-      if (!(error instanceof LostCorrectionRace)) {
+      //
+      // **The lost *first* submission arrives here as a unique violation instead**, and
+      // is the same race one step earlier. Section 22 names it as one of exactly two
+      // cases carrying a null `submitted_version`: "Two first submissions of one meeting
+      // race, and the loser meets the uniqueness of `(cell_id, scheduled_date)`." Both
+      // writers hold no version, because there was nothing to have read.
+      //
+      // **Narrowed on the index by name**, exactly as `DccAttendanceService` narrows on
+      // `dcc_attendance_one_live`. Section 22: a uniqueness violation "left to surface on
+      // its own" is an `INTERNAL_ERROR` on an ordinary race, and that is what naming
+      // these cases exists to prevent — so a violation of any *other* index is not a lost
+      // race and keeps failing loudly.
+      const lostFirstSubmission =
+        isUniqueViolation(error) && violatedConstraint(error) === ONE_PER_SCHEDULED_DATE;
+
+      if (!lostFirstSubmission && !(error instanceof LostCorrectionRace)) {
         throw error;
       }
 
+      // One answer for both, because section 22 states the two outcomes over every lost
+      // race rather than over the correction path: the loser re-reads the committed state
+      // and answers on what it finds. A first submission whose roster the winner already
+      // recorded is `RESOURCE_BUSY`; one that differs is a `VERSION_CONFLICT` carrying
+      // `submitted_version: null` and the stored row as `current`, which is what
+      // `lostRaceAnswer` builds from `body.version ?? null`.
       throw await this.lostRaceAnswer(cellId, meetingId, body, actor);
     }
   }
