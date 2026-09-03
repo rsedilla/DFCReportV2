@@ -14,6 +14,7 @@ import { ScopeType } from '../auth/authorization/scopes';
 import {
   ApiError,
   ApiErrorCode,
+  CapabilityDeniedError,
   InvariantViolationError,
   NotFoundError,
   ScopeDeniedError,
@@ -181,9 +182,11 @@ export class DccAttendanceService {
     records: readonly SubmittedRecord[],
     actor: Actor,
     claim: CurrentClaim,
+    /** Present only to amend a closed month (section 9, decision 0182). */
+    amendment?: { reason: string },
   ): Promise<Record<string, unknown>> {
     try {
-      return await this.writeWithin(eventId, records, actor, claim);
+      return await this.writeWithin(eventId, records, actor, claim, amendment);
     } catch (error) {
       // **A lost race on `dcc_attendance_one_live`.** Two writers can reach one
       // person's first record at once — their own submitter, and an upline recording
@@ -244,6 +247,7 @@ export class DccAttendanceService {
     records: readonly SubmittedRecord[],
     actor: Actor,
     claim: CurrentClaim,
+    amendment?: { reason: string },
   ): Promise<Record<string, unknown>> {
     // **On the pool, before the transaction opens** (section 24), which is what every
     // other write service in this repository does and says why: `authorityFor` reads
@@ -256,8 +260,27 @@ export class DccAttendanceService {
     return this.db.transaction().execute(async (trx) => {
       const event = await this.eventForRecording(trx, eventId);
 
-      if (event.notRecordable !== null) {
+      // **A closed month is the one refusal an amendment lifts** (section 9, decision
+      // 0182), and only that one: `REMOVED` and `NOT_YET_HELD` are facts about the event
+      // rather than about the window, and no capability reaches past them. An amendment
+      // widens *when*, never *what*.
+      //
+      // Absent the flag a closed month refuses for an Admin too, which section 9 asks for
+      // so a retry arriving after the 7th never rewrites a closed period by accident.
+      if (event.notRecordable === 'MONTH_CLOSED' && amendment !== undefined) {
+        await this.assertMayAmendClosedMonth(trx, actor, authority);
+      } else if (event.notRecordable !== null) {
         throw refusalFor(event);
+      } else if (amendment !== undefined) {
+        // Refused rather than ignored, for the reason the Cell route gives: section 22's
+        // versioning rule makes a field accepted and ignored impossible to give meaning
+        // to later, and an amendment of an open month is not an operation section 9
+        // defines.
+        throw new InvariantViolationError(
+          'This month is still open, so there is nothing to amend. Submit without the ' +
+            'amendment (SKILL.md section 9).',
+          { dcc_event_id: eventId },
+        );
       }
 
       assertNamesEachPersonOnce(records);
@@ -359,6 +382,28 @@ export class DccAttendanceService {
       }
 
       const written = await this.applyWithin(trx, { event, actor, planned, assignments, live });
+
+      // **One entry for the amendment, not one per line** (section 9, decision 0182).
+      // What is audited is that a closed month was reopened for this submission, which is
+      // one act however many people it named — and the per-line entries `applyWithin`
+      // already writes carry who was corrected. Targeted at the **event's own submitter
+      // relation** is not available, so it names the actor's own Person: a DCC event
+      // resolves through nothing (section 9), and the per-person twins target the Person
+      // for that reason (decision 0189).
+      if (amendment !== undefined) {
+        await this.audit.writeWithin(trx, {
+          actorId: actor.accountId,
+          action: 'dcc_attendance.amended',
+          targetType: 'person',
+          targetId: actor.personId,
+          reason: amendment.reason,
+          after: {
+            dcc_event_id: event.id,
+            event_date: event.eventDate,
+            recorded: planned.length,
+          },
+        });
+      }
 
       const response = {
         event_id: event.id,
@@ -683,6 +728,55 @@ export class DccAttendanceService {
         person_id: personId,
       });
     }
+  }
+
+  /**
+   * `records.backdate_effective_date`, required to amend a month that has closed
+   * (SKILL.md sections 9 and 20; decision 0182).
+   *
+   * **In addition to `dcc.take_attendance`, never in place of it.** Every per-line check
+   * below still runs — scope, on-behalf, the amendment capability — so an amendment
+   * widens *when* a submission is allowed and never *what* it may record or *whose*
+   * record it may touch.
+   *
+   * **Targeted at the church**, and here that needs no argument about resolving through a
+   * leader: section 9 makes a DCC event church-wide and says it "resolves through
+   * nothing", so the church is the only target it has. The Cell route reaches the same
+   * target by a different route, and the two are deliberately not derived from each other.
+   */
+  private async assertMayAmendClosedMonth(
+    trx: Transaction<Database>,
+    actor: Actor,
+    authority: ActorAuthority,
+  ): Promise<void> {
+    if (
+      await this.authorization.coversWith(
+        trx,
+        actor,
+        authority,
+        Capability.RecordsBackdateEffectiveDate,
+        { kind: 'church' },
+      )
+    ) {
+      return;
+    }
+
+    const held = authority.grants.some(
+      (grant) => grant.capability === Capability.RecordsBackdateEffectiveDate,
+    );
+
+    if (!held) {
+      throw new CapabilityDeniedError(
+        `You do not hold ${Capability.RecordsBackdateEffectiveDate}.`,
+        { capability: Capability.RecordsBackdateEffectiveDate },
+      );
+    }
+
+    throw new ScopeDeniedError(
+      'Amending a closed month requires records.backdate_effective_date at Whole Church ' +
+        'scope (SKILL.md section 7).',
+      { capability: Capability.RecordsBackdateEffectiveDate },
+    );
   }
 
   private async assertMayRecord(

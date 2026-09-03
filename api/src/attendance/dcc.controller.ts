@@ -82,6 +82,7 @@ export class DccController {
       })),
       actor,
       claim,
+      body.amendment,
     );
   }
 }

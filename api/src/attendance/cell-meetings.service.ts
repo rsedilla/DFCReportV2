@@ -5,6 +5,7 @@ import { randomUUID } from 'node:crypto';
 import {
   ApiError,
   ApiErrorCode,
+  CapabilityDeniedError,
   InvariantViolationError,
   NotFoundError,
   ResourceBusyError,
@@ -403,15 +404,38 @@ export class CellMeetingsService {
         });
       }
 
-      // **The window, on the database's clock** (sections 13 and 20). Only Admin may
-      // amend a closed month, under `records.backdate_effective_date`, and that flag is
-      // the closed-month amendment of decision 0182 — which arrives with the slice that
-      // covers both domains, so a closed month refuses here for everybody today.
+      // **The window, on the database's clock** (sections 13 and 20), and the one thing
+      // an amendment skips (decision 0182). The flag is checked here rather than earlier
+      // because it changes *when* a submission is allowed and nothing else: everything
+      // below runs identically whether the month is open or being amended.
+      //
+      // **Absent the flag, a closed month refuses for an Admin too.** Section 13 asks for
+      // that in terms, so "a retry that happens to arrive after the 7th never rewrites a
+      // closed period by accident" — which is why holding the capability is not enough on
+      // its own and the request has to say it means to amend.
       if (!(await isMonthOpen(trx, reportingMonth))) {
-        throw new ApiError(
-          ApiErrorCode.PERIOD_CLOSED,
-          'This month is closed. Only an Admin may amend it, with a reason (SKILL.md ' +
-            'sections 13 and 20).',
+        if (body.amendment === undefined) {
+          throw new ApiError(
+            ApiErrorCode.PERIOD_CLOSED,
+            'This month is closed. Only an Admin may amend it, with a reason (SKILL.md ' +
+              'sections 13 and 20).',
+            { cell_id: cellId, meeting_id: meetingId, reporting_month: reportingMonth },
+          );
+        }
+
+        await this.assertMayAmendClosedMonth(trx, actor, authority);
+      }
+
+      // **And the flag is refused where it is not needed.** An amendment of an *open*
+      // month is not a thing section 13 defines: it would carry a reason nobody asked for
+      // into the audit log and let a client hold the capability's semantics over a write
+      // that never needed them. Refused rather than ignored, because section 22's
+      // versioning rule makes a field accepted and ignored impossible to give meaning to
+      // later.
+      else if (body.amendment !== undefined) {
+        throw new InvariantViolationError(
+          'This month is still open, so there is nothing to amend. Submit without the ' +
+            'amendment (SKILL.md section 13).',
           { cell_id: cellId, meeting_id: meetingId, reporting_month: reportingMonth },
         );
       }
@@ -573,6 +597,27 @@ export class CellMeetingsService {
             responsible_leader_id: responsibleLeaderId,
             recorded: attendance.length,
             present: attendance.filter((line) => line.present).length,
+          },
+        });
+      }
+
+      // **The amendment's own entry, written whoever the actor is** (section 13). Unlike
+      // the pair above it is not conditional on acting for somebody else: what is being
+      // audited is that a closed month was reopened for one write, which is true of an
+      // Admin amending their own Cell's meeting. It carries the reason section 13
+      // requires, and the month it reached back into.
+      if (body.amendment !== undefined) {
+        await this.audit.writeWithin(trx, {
+          actorId: actor.accountId,
+          action: 'cell_attendance.amended',
+          targetType: 'cell',
+          targetId: cellId,
+          reason: body.amendment.reason,
+          after: {
+            meeting_id: meetingId,
+            reporting_month: reportingMonth,
+            status: body.status,
+            responsible_leader_id: responsibleLeaderId,
           },
         });
       }
@@ -1129,6 +1174,63 @@ export class CellMeetingsService {
    * refused here, and the former leader was refused by the guard. Section 7 says in
    * terms that the current leader files it.*
    */
+  /**
+   * `records.backdate_effective_date`, required to amend a month that has closed
+   * (SKILL.md sections 13 and 20; decision 0182).
+   *
+   * **In addition to `cell.take_attendance`, never in place of it.** The guard has already
+   * resolved the meeting against the Cell, and `assertMayActForAnother` and
+   * `assertMayCorrect` still run below — an amendment widens *when* a submission is
+   * allowed and never *what* it may do or *whose* meeting it may touch.
+   *
+   * **Targeted at the church**, on `CellsClosureService.assertMayBackdateWithin`'s
+   * reasoning re-derived rather than copied (decision 0100): the authority to reach past a
+   * closed window is not authority over the Cell's leader, so resolving it through that
+   * leader would claim something it does not mean. A Cell is not a Person, and this
+   * capability is `WHOLE_CHURCH_ONLY` (section 7), which makes the target unobservable
+   * today — `coversWith` discards a grant `grantCoversNothing` voids before the target is
+   * read. The choice is section 7's rather than something a test can fail on, and it
+   * begins to matter the day the capability leaves that set.
+   *
+   * The two refusals are told apart because they tell an administrator different things:
+   * not holding the capability is a grant to make, holding it too narrowly is a grant to
+   * widen.
+   */
+  private async assertMayAmendClosedMonth(
+    trx: Transaction<Database>,
+    actor: Actor,
+    authority: ActorAuthority,
+  ): Promise<void> {
+    if (
+      await this.authorization.coversWith(
+        trx,
+        actor,
+        authority,
+        Capability.RecordsBackdateEffectiveDate,
+        { kind: 'church' },
+      )
+    ) {
+      return;
+    }
+
+    const held = authority.grants.some(
+      (grant) => grant.capability === Capability.RecordsBackdateEffectiveDate,
+    );
+
+    if (!held) {
+      throw new CapabilityDeniedError(
+        `You do not hold ${Capability.RecordsBackdateEffectiveDate}.`,
+        { capability: Capability.RecordsBackdateEffectiveDate },
+      );
+    }
+
+    throw new ScopeDeniedError(
+      'Amending a closed month requires records.backdate_effective_date at Whole Church ' +
+        'scope (SKILL.md section 7).',
+      { capability: Capability.RecordsBackdateEffectiveDate },
+    );
+  }
+
   private async assertMayCorrect(
     // `Db` as well as a transaction: `lostRaceAnswer` runs on the pool after its
     // transaction rolled back, and section 22 requires that re-read to see *committed*

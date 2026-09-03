@@ -3902,6 +3902,7 @@ Audit important actions, including:
 - Cell schedule change, day or time, with effective date
 - Cell meeting rescheduled
 - Cell meeting declared Not Held, with reason
+- Attendance amended after its month closed, with reason, in either domain — one entry per submission rather than per line, because what is audited is that a closed month was reopened for one write, and the per-line entries above already carry who was corrected. **It is written whoever the actor is**, unlike the on-behalf pair: an Admin amending their own Cell's meeting has still reached past a closed window. Without it an amendment that *records* a meeting nobody had reported would leave the month rewritten with nothing in the log, because a first submission writes no entry of its own
 - Cell meeting facilitator recorded
 - Cell membership added, moved, or ended
 - Cell closed, with reason and the decision taken about its members

@@ -16,6 +16,7 @@ import {
 } from 'class-validator';
 
 import { CURSOR_MAX_LENGTH } from '../../common/cursor';
+import { ClosedMonthAmendmentDto } from './cell-meeting-submit.dto';
 
 /**
  * `GET /api/v1/dcc/events/{id}/roster` (SKILL.md section 22, *Pagination*).
@@ -132,4 +133,18 @@ export class SubmitDccAttendanceDto {
   @ValidateNested({ each: true })
   @Type(() => DccAttendanceRecordDto)
   records!: DccAttendanceRecordDto[];
+
+  /**
+   * Present only to amend a month that has already closed (section 9, decision 0182).
+   *
+   * **One shape across both domains**, which section 9 asks for in terms: "the capability
+   * is required in addition to `dcc.take_attendance` rather than in place of it, a reason
+   * is required, an audit entry names it, and absent the flag a closed month refuses for
+   * an Admin too". The type is the Cell route's, imported rather than redeclared, because
+   * two copies of one shape drift.
+   */
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => ClosedMonthAmendmentDto)
+  amendment?: ClosedMonthAmendmentDto;
 }

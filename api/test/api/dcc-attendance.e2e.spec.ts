@@ -462,6 +462,71 @@ describe('DCC recording (sections 9 and 14)', () => {
       expect(await liveRows(eventId)).toHaveLength(0);
     });
 
+    it('records into a closed month with the amendment flag and the capability', async () => {
+      // Section 9, decision 0182: "One shape across both domains, because an amendment is
+      // a submission with a different precondition and nothing else." The flag skips the
+      // window check and nothing else — every per-line rule below still runs.
+      const eventId = await createEvent(await closedMonthSunday());
+
+      const response = await request(app.getHttpServer())
+        .post(`/api/v1/dcc/events/${eventId}/submit`)
+        .set('Authorization', `Bearer ${admin.accessToken}`)
+        .set('Idempotency-Key', randomUUID())
+        .send({
+          records: [{ person_id: mark.id, present: true, version: null }],
+          amendment: { reason: 'Register reconciled after the window shut.' },
+        });
+
+      expect(response.status).toBe(201);
+      expect(response.body.created).toBe(1);
+      expect(await liveRows(eventId)).toHaveLength(1);
+
+      // One entry for the submission rather than one per line, carrying the reason.
+      const entries = await db
+        .selectFrom('audit_log')
+        .select(['action', 'reason'])
+        .where('action', '=', 'dcc_attendance.amended')
+        .execute();
+
+      expect(entries).toHaveLength(1);
+      expect(entries[0].reason).toBe('Register reconciled after the window shut.');
+    });
+
+    it('refuses the amendment flag from an actor without the backdate capability', async () => {
+      // Required *in addition to* `dcc.take_attendance`, never in place of it — Manuel
+      // may record these people and may not reach past a closed window.
+      const eventId = await createEvent(await closedMonthSunday());
+
+      const response = await request(app.getHttpServer())
+        .post(`/api/v1/dcc/events/${eventId}/submit`)
+        .set('Authorization', `Bearer ${manuelAccount.accessToken}`)
+        .set('Idempotency-Key', randomUUID())
+        .send({
+          records: [{ person_id: mark.id, present: true, version: null }],
+          amendment: { reason: 'Trying to reach past the window.' },
+        });
+
+      expect(response.status).toBe(403);
+      expect(response.body.error.details.capability).toBe('records.backdate_effective_date');
+      expect(await liveRows(eventId)).toHaveLength(0);
+    });
+
+    it('refuses the amendment flag on a month that is still open', async () => {
+      const eventId = await createEvent(await recentSunday());
+
+      const response = await request(app.getHttpServer())
+        .post(`/api/v1/dcc/events/${eventId}/submit`)
+        .set('Authorization', `Bearer ${admin.accessToken}`)
+        .set('Idempotency-Key', randomUUID())
+        .send({
+          records: [{ person_id: mark.id, present: true, version: null }],
+          amendment: { reason: 'Nothing to amend.' },
+        });
+
+      expect(response.status).toBe(409);
+      expect(response.body.error.code).toBe('INVARIANT_VIOLATION');
+    });
+
     it('answers NOT_FOUND for an event the calendar does not hold', async () => {
       const response = await roster(manuelAccount, randomUUID()).expect(404);
 
