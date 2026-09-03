@@ -297,14 +297,6 @@ export class DccAttendanceService {
 
         this.assertRecordable(personId, identity, assignments.get(personId));
 
-        if (outcome === 'CREATE' && record.correction_reason !== undefined) {
-          throw new InvariantViolationError(
-            'There is no record to correct for this person, so a correction reason has no ' +
-              'subject. Remove it, or re-read the roster.',
-            { person_id: personId },
-          );
-        }
-
         await this.assertMayRecord(trx, {
           actor,
           authority,
@@ -312,6 +304,28 @@ export class DccAttendanceService {
           onChecklist: checklist.has(personId),
           outcome,
         });
+
+        // **Behind the capability check, and it was in front of it until 2026-09-03**
+        // (section 7, *The amendment capability and nothing else*; decision 0193). This
+        // refusal reads stored contents -- it fires exactly when no live record exists --
+        // so ahead of `assertMayRecord` it answered `409` for a person with no record and
+        // `403` for a person with one, to an actor who may record neither. Section 7
+        // requires every capability but the amendment one to be decided before contents
+        // are read, and this is the DCC half of the rule the Cell route was given in
+        // decision 0192.
+        //
+        // Nobody could observe it under role defaults, because the two scopes are equal
+        // for every role -- and equality is the load-bearing fact rather than the value,
+        // which is `OWN_SUBTREE` for `LEADER` and `WHOLE_CHURCH` for the other two. It
+        // became observable under an asymmetric grant section 7 permits an Admin to
+        // issue, and the ordering costs nothing, so it is not left resting on that.
+        if (outcome === 'CREATE' && record.correction_reason !== undefined) {
+          throw new InvariantViolationError(
+            'There is no record to correct for this person, so a correction reason has no ' +
+              'subject. Remove it, or re-read the roster.',
+            { person_id: personId },
+          );
+        }
 
         planned.push({ record, outcome });
       }

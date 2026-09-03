@@ -652,12 +652,13 @@ export class CellMeetingsService {
     // may not record.*
     //
     // *`DccAttendanceService` was cited here as running its equivalent "for every line
-    // whatever the outcome", and that is not true: a `CREATE` line carrying a
-    // `correction_reason` throws before `assertMayRecord` is reached, so the on-behalf
-    // check never runs for it. Whether section 7's contents-ordering rule binds DCC at
-    // all is recorded as open in `CLAUDE.md`. The Cell ordering below does not rest on
-    // the DCC one and never did — it rests on the roster read carrying this route's own
-    // declaration, which `capability-scope-resolution.spec.ts` asserts.*
+    // whatever the outcome", and that was not true when written: a `CREATE` line
+    // carrying a `correction_reason` threw before `assertMayRecord` was reached, so the
+    // on-behalf check never ran for it. Section 7's contents-ordering rule was settled to
+    // bind DCC (decision 0193) and that refusal now runs behind the check, so the two
+    // domains state one rule. Neither is argued from the other: the Cell ordering rests
+    // on the roster read carrying this route's own declaration, which
+    // `capability-scope-resolution.spec.ts` asserts.*
     await this.assertMayActForAnother(trx, params);
 
     // **The roster is read at the meeting's own instant, exactly as the first

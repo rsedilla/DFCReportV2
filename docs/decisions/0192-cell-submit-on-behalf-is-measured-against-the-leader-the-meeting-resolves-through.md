@@ -31,9 +31,11 @@ outcome and false in general**, and the correction is recorded rather than quiet
 because this claim is what the reorder below was argued from. `assertMayRecord` does run
 for a `CREATE`, an `UPDATE` and a no-op alike, and `dcc-attendance.e2e.spec.ts` pins the
 identical refusal for an agreeing and a disagreeing body — but a `CREATE` line carrying a
-`correction_reason` throws before `assertMayRecord` is reached, so for that line the
-on-behalf check never runs at all. Whether §7's contents-ordering rule binds DCC is
-recorded as open in `CLAUDE.md`.
+`correction_reason` threw before `assertMayRecord` was reached, so for that line the
+on-behalf check did not run at all. **Settled the same day as decision 0193**: §7's
+contents-ordering rule binds DCC, the refusal moved behind the check, and the 409/403
+record-existence pair it produced went with it. The citation above is now true of that
+line too.
 
 The Cell ordering does not rest on the DCC one and never did. It rests on the roster read
 carrying this route's own capability and target declaration, which

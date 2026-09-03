@@ -1152,6 +1152,62 @@ describe('DCC recording (sections 9 and 14)', () => {
       expect(agreeing.body.error.message).toBe(disagreeing.body.error.message);
     });
 
+    it('answers the same refusal whether or not the person has a record at all', async () => {
+      // **The other half of that oracle, and it sat one refusal further forward**
+      // (section 7, decision 0193). `assertMayRecord` was reached only after a `CREATE`
+      // carrying a `correction_reason` had already been refused as having nothing to
+      // correct — and that refusal fires exactly when no live record exists. So the same
+      // actor, sending the same body, learned whether a record existed: `409` where it
+      // did not and `403` where it did.
+      //
+      // Two people rather than two events, deliberately: a second event a week earlier
+      // can fall in a month whose window shut on the 7th, which would refuse for an
+      // unrelated reason and pin nothing.
+      const eventId = await createEvent(await recentSunday());
+
+      // Silas is Mark's to record, exactly as Timothy is — inside Manuel's subtree and
+      // off his checklist — and has no record for this event.
+      const silas = await createPerson(db, { firstName: 'Silas', network: 'MENS' });
+      await assignTo(db, silas.id, mark.id);
+
+      await submit(admin, eventId, [
+        { person_id: timothy.id, present: true, version: null },
+      ]).expect(201);
+
+      await db
+        .updateTable('account_roles')
+        .set({ revoked_at: sql<Date>`now()` })
+        .where('account_id', '=', manuelAccount.id)
+        .execute();
+
+      await db
+        .insertInto('capability_grants')
+        .values({
+          account_id: manuelAccount.id,
+          capability: 'dcc.take_attendance',
+          scope_type: 'OWN_SUBTREE',
+          read_only: false,
+          reason: 'Invented for this case (CLAUDE.md, Secrets).',
+          granted_by: admin.id,
+        })
+        .execute();
+
+      const correcting = { correction_reason: 'Checked with the leader afterwards.' };
+
+      // Identical bodies but for the person: one has a stored record, one has none.
+      const hasRecord = await submit(manuelAccount, eventId, [
+        { person_id: timothy.id, present: true, version: null, ...correcting },
+      ]).expect(403);
+      const hasNone = await submit(manuelAccount, eventId, [
+        { person_id: silas.id, present: true, version: null, ...correcting },
+      ]).expect(403);
+
+      // One capability, one message, whatever exists.
+      expect(hasRecord.body.error.details.capability).toBe('dcc.submit_on_behalf');
+      expect(hasNone.body.error.details.capability).toBe('dcc.submit_on_behalf');
+      expect(hasNone.body.error.message).toBe(hasRecord.body.error.message);
+    });
+
     it('refuses somebody outside the actor’s subtree', async () => {
       const stranger = await createPerson(db, { firstName: 'Salome', network: 'WOMENS' });
       await assignTo(db, stranger.id, null);
