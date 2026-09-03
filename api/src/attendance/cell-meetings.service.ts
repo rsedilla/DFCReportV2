@@ -11,6 +11,7 @@ import {
   ScopeDeniedError,
 } from '../common/errors/api-error';
 import { VersionConflictError } from '../common/errors/version-conflict';
+import { isUniqueViolation, violatedConstraint } from '../common/errors/postgres-errors';
 import { DATABASE, type Db } from '../database/database.module';
 
 import { isMonthOpen, reportingMonthOf } from '../common/time/submission-window';
@@ -51,6 +52,17 @@ class LostCorrectionRace extends Error {
     this.name = 'LostCorrectionRace';
   }
 }
+
+/**
+ * A meeting's identity: `(cell_id, scheduled_date)` (SKILL.md section 13, migration 0011).
+ *
+ * Named because a lost *first* submission is told apart from every other uniqueness
+ * failure by which index refused it. Section 22 lists exactly two cases carrying a null
+ * `submitted_version` and this is one of them; a violation of any other index on this
+ * table is not a lost race and must keep failing loudly, since letting one surface on its
+ * own answers `INTERNAL_ERROR` on an ordinary race.
+ */
+const ONE_PER_SCHEDULED_DATE = 'cell_meetings_one_per_scheduled_date';
 
 /**
  * What both of this route's operations answer with.
@@ -325,10 +337,31 @@ export class CellMeetingsService {
       // conflicts*). The transaction is gone, so what is read here is the committed
       // state — which is the property section 22's rule turns on, and which a re-read
       // inside the doomed transaction did not have.
-      if (!(error instanceof LostCorrectionRace)) {
+      //
+      // **The lost *first* submission arrives here as a unique violation instead**, and
+      // is the same race one step earlier. Section 22 names it as one of exactly two
+      // cases carrying a null `submitted_version`: "Two first submissions of one meeting
+      // race, and the loser meets the uniqueness of `(cell_id, scheduled_date)`." Both
+      // writers hold no version, because there was nothing to have read.
+      //
+      // **Narrowed on the index by name**, exactly as `DccAttendanceService` narrows on
+      // `dcc_attendance_one_live`. Section 22: a uniqueness violation "left to surface on
+      // its own" is an `INTERNAL_ERROR` on an ordinary race, and that is what naming
+      // these cases exists to prevent — so a violation of any *other* index is not a lost
+      // race and keeps failing loudly.
+      const lostFirstSubmission =
+        isUniqueViolation(error) && violatedConstraint(error) === ONE_PER_SCHEDULED_DATE;
+
+      if (!lostFirstSubmission && !(error instanceof LostCorrectionRace)) {
         throw error;
       }
 
+      // One answer for both, because section 22 states the two outcomes over every lost
+      // race rather than over the correction path: the loser re-reads the committed state
+      // and answers on what it finds. A first submission whose roster the winner already
+      // recorded is `RESOURCE_BUSY`; one that differs is a `VERSION_CONFLICT` carrying
+      // `submitted_version: null` and the stored row as `current`, which is what
+      // `lostRaceAnswer` builds from `body.version ?? null`.
       throw await this.lostRaceAnswer(cellId, meetingId, body, actor);
     }
   }
@@ -911,10 +944,41 @@ export class CellMeetingsService {
   ): Promise<ApiError> {
     const meeting = await this.db
       .selectFrom('cell_meetings')
-      .select(['id', 'version'])
+      .select(['id', 'version', 'status', 'responsible_leader_id'])
       .where('cell_id', '=', cellId)
       .where('scheduled_date', '=', meetingId)
       .executeTakeFirstOrThrow();
+
+    // **The loser answers what this body would be answered against the committed state,
+    // which is what "answers on what it finds" means** (section 22). The two guards below
+    // are the two `correctWithin` runs before it reaches the same comparison, and this
+    // method was reached only from that path until the first-submission catch was added.
+    // Reusing the shape without re-deriving why it has that shape is what decision 0100
+    // is about, and skipping them produced two defects a review reproduced.
+
+    // **A status disagreement first, for the reason `correctWithin` gives where it does
+    // the same:** a `NOT_HELD` body carries no attendance, so it reaches the comparison
+    // below with an empty roster, `some` is vacuously false, and the loser is told
+    // `RESOURCE_BUSY` — whose meaning is that the identical body resubmitted succeeds
+    // writing nothing. It does not: the retry is refused, permanently, because section 13
+    // makes a status change a separate operation. Decision 0158 fixes the test as one
+    // question — could this same body, resubmitted unchanged, succeed? — and here it
+    // could not.
+    if (body.status !== meeting.status) {
+      return new InvariantViolationError(
+        'Changing a meeting’s status is a separate operation from correcting its ' +
+          'attendance (SKILL.md section 13).',
+        // `submitted_status` included because the sequential refusal includes it, and the
+        // whole claim of this branch is that the two answers are the same answer. It
+        // echoes the client's own input and discloses nothing.
+        {
+          cell_id: cellId,
+          meeting_id: meetingId,
+          current_status: meeting.status,
+          submitted_status: body.status,
+        },
+      );
+    }
 
     const live = await this.db
       .selectFrom('cell_attendance')
@@ -938,6 +1002,36 @@ export class CellMeetingsService {
         meeting_id: meetingId,
         current_version: meeting.version,
       });
+    }
+
+    // **The amendment capability, on the disagreeing branch only, which is
+    // `correctWithin`'s own order.** Section 7: "A write that writes nothing owes no
+    // *amendment* capability" — so an agreeing loser, which wrote nothing and is answered
+    // `RESOURCE_BUSY` above, must not be asked for `cell.correct_subtree`. Checking it
+    // unconditionally refused that actor `403` where the identical body sent sequentially
+    // answers `201 … "corrected": 0`, which is the same timing-decides-the-answer defect
+    // this method was fixed for, mirrored. Worse than a wrong code: section 22 stores a
+    // 4xx against the idempotency key, so a conforming retry of the unchanged body
+    // replayed the refusal permanently, while `RESOURCE_BUSY` is a 503 and releases it.
+    //
+    // Below the comparison, it still runs before anything of the record is disclosed: a
+    // `VERSION_CONFLICT` carries the stored present count and the submitter's name, which
+    // `GET .../roster` does not.
+    try {
+      const authority = await this.authorization.authorityFor(actor.accountId);
+      await this.assertMayCorrect(this.db, {
+        cellId,
+        meetingId,
+        existing: { responsible_leader_id: meeting.responsible_leader_id },
+        actor,
+        authority,
+      });
+    } catch (error) {
+      if (error instanceof ScopeDeniedError) {
+        return error;
+      }
+
+      throw error;
     }
 
     // Both actors and both timestamps, which section 22 requires and a placeholder
@@ -1036,7 +1130,10 @@ export class CellMeetingsService {
    * terms that the current leader files it.*
    */
   private async assertMayCorrect(
-    trx: Transaction<Database>,
+    // `Db` as well as a transaction: `lostRaceAnswer` runs on the pool after its
+    // transaction rolled back, and section 22 requires that re-read to see *committed*
+    // state, which a doomed transaction's own view does not.
+    trx: Db | Transaction<Database>,
     params: {
       cellId: string;
       meetingId: string;

@@ -1296,4 +1296,311 @@ describe('recording a Cell meeting (sections 12, 13 and 14)', () => {
 
     expect(response.status).toBe(404);
   });
+
+  describe('two first submissions racing (section 22, *Write conflicts*)', () => {
+    const liveRows = () =>
+      db
+        .selectFrom('cell_attendance')
+        .select(['person_id', 'present', 'version', 'id'])
+        .where('superseded_at', 'is', null)
+        .execute();
+
+    /**
+     * The winner, written on a second connection and left uncommitted.
+     *
+     * **A holder rather than two requests fired together.** Two API requests serialise:
+     * the loser re-reads a committed meeting, takes the ordinary "second submission"
+     * path, and never meets the index at all — which is how a case for this branch went
+     * green against the code it was written to refuse. What the branch needs is a writer
+     * that holds `(cell_id, scheduled_date)` and commits only once the request is
+     * provably blocked on it.
+     *
+     * `attendance` is written inside the same transaction so the loser's re-read sees a
+     * roster to compare against, which is what decides `RESOURCE_BUSY` from
+     * `VERSION_CONFLICT`.
+     */
+    async function winnerHolding(
+      attendance: { personId: string; present: boolean }[],
+    ): Promise<Client> {
+      const schedule = await db
+        .selectFrom('cell_schedules')
+        .select('time_of_day')
+        .where('cell_id', '=', markCell.id)
+        .where('ended_at', 'is', null)
+        .executeTakeFirstOrThrow();
+
+      const holder = new Client({ connectionString: process.env.DATABASE_URL });
+      await holder.connect();
+      await holder.query('BEGIN');
+
+      // `week_starting` and `reporting_month` derived in SQL from the meeting's own date,
+      // so this fixture cannot disagree with the service about which week or month the
+      // meeting belongs to (sections 13 and 20).
+      const { rows } = await holder.query<{ id: string }>(
+        `INSERT INTO cell_meetings
+           (cell_id, scheduled_date, scheduled_time, week_starting, reporting_month,
+            status, responsible_leader_id, submitted_by, submitted_at, version)
+         VALUES ($1, $2::date, $3::time,
+                 $2::date - (EXTRACT(ISODOW FROM $2::date)::int - 1),
+                 date_trunc('month', $2::date)::date,
+                 'HELD', $4, $5, clock_timestamp(), 1)
+         RETURNING id`,
+        [markCell.id, meetingDate, schedule.time_of_day, mark.id, markAccount.id],
+      );
+
+      for (const line of attendance) {
+        await holder.query(
+          `INSERT INTO cell_attendance
+             (cell_meeting_id, person_id, present, recorded_by, recorded_at, version)
+           VALUES ($1, $2, $3, $4, clock_timestamp(), 1)`,
+          [rows[0].id, line.personId, line.present, markAccount.id],
+        );
+      }
+
+      return holder;
+    }
+
+    /** Blocks until the request is provably waiting on a lock, bounded by the request. */
+    async function blockedOn(holder: Client, inFlight: ReturnType<typeof track>): Promise<number> {
+      // **`pg_blocking_pids`, not a `pg_locks` count**, on the reasoning the correction
+      // race above states: a cluster-wide count of ungranted locks names neither the
+      // waiter nor what it waits on, `CLAUDE.md` records an orphaned jest process against
+      // `dfc_ci` as a live occurrence, and a `transactionid` row carries no database to
+      // filter on. `test/setup/concurrency.ts` gives the direction of harm — these probes
+      // assert a waiter *appears*, so a false positive passes a case that should have
+      // failed. It would have, here and asymmetrically: with a premature commit the
+      // conflict case still answers 409 through the correction path, which is not the
+      // code it exists to test, while only the `RESOURCE_BUSY` case reddens.
+      const holderPid = Number(
+        (await holder.query<{ pid: string }>('SELECT pg_backend_pid() AS pid')).rows[0].pid,
+      );
+
+      return countWhileInFlight(
+        async () => {
+          const blocked = await sql<{ count: string }>`
+            SELECT count(*) AS count
+              FROM pg_stat_activity
+             WHERE ${sql.lit(holderPid)} = ANY (pg_blocking_pids(pid))
+          `.execute(db);
+
+          return Number(blocked.rows[0].count);
+        },
+        inFlight,
+        'the first submission to block on cell_meetings_one_per_scheduled_date',
+      );
+    }
+
+    it('answers the loser a conflict with a null submitted version, not a 500', async () => {
+      // `docs/ROADMAP.md` makes this Stage 4's "Done when": a concurrent double
+      // submission produces a conflict rather than a silent overwrite. Section 22 names
+      // this as one of exactly two cases carrying a null `submitted_version` — "Two first
+      // submissions of one meeting race, and the loser meets the uniqueness of
+      // `(cell_id, scheduled_date)`" — and says a uniqueness violation "left to surface
+      // on its own is an `INTERNAL_ERROR` on an ordinary race", which is what this was.
+      const one = await member('Aurelio');
+      const holder = await winnerHolding([{ personId: one.id, present: true }]);
+
+      try {
+        // The loser disagrees with the winner: absent against present.
+        const attempt = submit({
+          status: 'HELD',
+          attendance: [{ person_id: one.id, present: false }],
+        });
+        const inFlight = track(attempt);
+
+        expect(await blockedOn(holder, inFlight)).toBeGreaterThan(0);
+
+        await holder.query('COMMIT');
+
+        const response = await attempt;
+
+        expect(response.status).toBe(409);
+        expect(response.body.error.code).toBe('VERSION_CONFLICT');
+        // Neither writer held a version, because there was nothing to have read.
+        expect(response.body.error.details.submitted_version).toBeNull();
+        expect(response.body.error.details.current_version).toBe(1);
+
+        // The winner's record stands alone and was not overwritten.
+        const live = await liveRows();
+        expect(live).toHaveLength(1);
+        expect(live[0].person_id).toBe(one.id);
+        expect(live[0].present).toBe(true);
+      } finally {
+        await holder.query('ROLLBACK').catch(() => undefined);
+        await holder.end();
+      }
+    });
+
+    it('refuses the conflict payload to an actor who may record but not correct', async () => {
+      // **`lostRaceAnswer` was written downstream of `assertMayCorrect` and the new caller
+      // skipped it** (decision 0100: reusing a shape requires re-deriving why it has that
+      // shape). A `VERSION_CONFLICT` carries the stored present count and the submitter's
+      // name, which `GET .../roster` does not — so this actor read the record out of a
+      // lost race, having been refused 403 for the identical body sent sequentially.
+      // Timing decided which answer they got.
+      const one = await member('Aurelio');
+      const actor = await granted(['cell.take_attendance', 'cell.submit_on_behalf']);
+      const holder = await winnerHolding([{ personId: one.id, present: true }]);
+
+      try {
+        const attempt = submit(
+          { status: 'HELD', attendance: [{ person_id: one.id, present: false }] },
+          actor,
+        );
+        const inFlight = track(attempt);
+
+        expect(await blockedOn(holder, inFlight)).toBeGreaterThan(0);
+
+        await holder.query('COMMIT');
+
+        const response = await attempt;
+
+        expect(response.status).toBe(403);
+        expect(response.body.error.code).toBe('SCOPE_DENIED');
+        expect(response.body.error.details.capability).toBe('cell.correct_subtree');
+        // And nothing of the stored record came back with the refusal.
+        expect(JSON.stringify(response.body)).not.toContain('present');
+      } finally {
+        await holder.query('ROLLBACK').catch(() => undefined);
+        await holder.end();
+      }
+    });
+
+    it('asks no correction capability of an agreeing loser, which wrote nothing', async () => {
+      // **The mirror of the case above, and the first fix introduced it.** Checking the
+      // amendment capability before the comparison refused this actor 403 where the
+      // identical body sent sequentially answers 201 with `corrected: 0` — so timing
+      // still decided the answer, in the opposite direction. Section 7: "A write that
+      // writes nothing owes no *amendment* capability."
+      //
+      // **And the idempotency key made it permanent.** Section 22 stores a 4xx against
+      // the key and releases a 5xx, so a conforming client retrying the unchanged body on
+      // the same key replayed the 403 for ever, while `RESOURCE_BUSY` is a 503 and frees
+      // it. That is why this is asserted with one key held across the retry.
+      const one = await member('Aurelio');
+      const actor = await granted(['cell.take_attendance', 'cell.submit_on_behalf']);
+      const holder = await winnerHolding([{ personId: one.id, present: true }]);
+      const key = randomUUID();
+
+      try {
+        const attempt = request(app.getHttpServer())
+          .post(`/api/v1/cells/${markCell.id}/meetings/${meetingDate}/submit`)
+          .set('Authorization', `Bearer ${actor.accessToken}`)
+          .set('Idempotency-Key', key)
+          .send({ status: 'HELD', attendance: [{ person_id: one.id, present: true }] });
+        const inFlight = track(attempt);
+
+        expect(await blockedOn(holder, inFlight)).toBeGreaterThan(0);
+
+        await holder.query('COMMIT');
+
+        const response = await attempt;
+
+        expect(response.status).toBe(503);
+        expect(response.body.error.code).toBe('RESOURCE_BUSY');
+
+        // The retry the code names, on the same key, actually succeeds — which is what
+        // `RESOURCE_BUSY` means and what a stored 403 would have made impossible.
+        const retry = await request(app.getHttpServer())
+          .post(`/api/v1/cells/${markCell.id}/meetings/${meetingDate}/submit`)
+          .set('Authorization', `Bearer ${actor.accessToken}`)
+          .set('Idempotency-Key', key)
+          .send({ status: 'HELD', attendance: [{ person_id: one.id, present: true }] });
+
+        expect(retry.status).toBe(201);
+        expect(retry.body.corrected).toBe(0);
+      } finally {
+        await holder.query('ROLLBACK').catch(() => undefined);
+        await holder.end();
+      }
+    });
+
+    it('refuses a status disagreement instead of prescribing a retry that cannot succeed', async () => {
+      // **`disagrees` is vacuously false over an empty roster.** A `NOT_HELD` body carries
+      // no attendance by construction, so `some` was false whatever the winner recorded,
+      // and the loser was told `RESOURCE_BUSY` — which section 22 defines as "the
+      // identical body resubmitted succeeds, writing nothing". It does not: section 13
+      // makes a status change a separate operation, so the retry is refused permanently.
+      // Decision 0158 fixes the test as one question, and the answer here was no.
+      //
+      // This is the same shape `correctWithin` already guards against, and says so where
+      // it does it.
+      const one = await member('Aurelio');
+      const holder = await winnerHolding([{ personId: one.id, present: true }]);
+
+      try {
+        const attempt = submit({
+          status: 'NOT_HELD',
+          not_held_reason: 'LEADER_UNAVAILABLE',
+        });
+        const inFlight = track(attempt);
+
+        expect(await blockedOn(holder, inFlight)).toBeGreaterThan(0);
+
+        await holder.query('COMMIT');
+
+        const response = await attempt;
+
+        expect(response.status).toBe(409);
+        expect(response.body.error.code).toBe('INVARIANT_VIOLATION');
+        expect(response.body.error.details.current_status).toBe('HELD');
+
+        // The answer is the one the same body gets sequentially, which is the property
+        // that makes it right: timing no longer decides.
+        const sequential = await submit({
+          status: 'NOT_HELD',
+          not_held_reason: 'LEADER_UNAVAILABLE',
+        });
+
+        expect(sequential.status).toBe(409);
+        expect(sequential.body.error.code).toBe('INVARIANT_VIOLATION');
+      } finally {
+        await holder.query('ROLLBACK').catch(() => undefined);
+        await holder.end();
+      }
+    });
+
+    it('answers RESOURCE_BUSY when the winner recorded what the loser was carrying', async () => {
+      // Section 22's other outcome, over the same race: the loser re-reads and finds it
+      // agrees, so there is nothing to choose between and a conflict would present two
+      // identical values. The identical body resubmitted then succeeds writing nothing,
+      // which is what that code means.
+      const one = await member('Aurelio');
+      const holder = await winnerHolding([{ personId: one.id, present: true }]);
+
+      try {
+        const attempt = submit({
+          status: 'HELD',
+          attendance: [{ person_id: one.id, present: true }],
+        });
+        const inFlight = track(attempt);
+
+        expect(await blockedOn(holder, inFlight)).toBeGreaterThan(0);
+
+        await holder.query('COMMIT');
+
+        const response = await attempt;
+
+        // 503, not 409, and deliberately so (decision 0095): the retry is the remedy,
+        // and a conflict would present two identical values.
+        expect(response.status).toBe(503);
+        expect(response.body.error.code).toBe('RESOURCE_BUSY');
+
+        // And the retry it names actually succeeds, writing nothing further.
+        const retry = await submit({
+          status: 'HELD',
+          attendance: [{ person_id: one.id, present: true }],
+        });
+
+        expect(retry.status).toBe(201);
+
+        const live = await liveRows();
+        expect(live).toHaveLength(1);
+        expect(live[0].present).toBe(true);
+      } finally {
+        await holder.query('ROLLBACK').catch(() => undefined);
+        await holder.end();
+      }
+    });
+  });
 });
