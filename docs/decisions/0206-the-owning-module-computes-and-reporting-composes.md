@@ -69,4 +69,4 @@ the tree never held.
 
 Decision 0206, indexed in [CLAUDE.md](../../CLAUDE.md).
 
-Previous: [2026-09-05 — A report resolves the tree as of the end of its period, and attribution has two keys](0205-a-report-resolves-the-tree-as-of-the-end-of-its-period.md)
+Previous: [2026-09-05 — A report resolves the tree as of the end of its period, and attribution has three keys](0205-a-report-resolves-the-tree-as-of-the-end-of-its-period.md)

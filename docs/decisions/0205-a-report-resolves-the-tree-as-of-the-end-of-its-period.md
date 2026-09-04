@@ -49,7 +49,7 @@ An **open** period resolves as of now, which is Section 16's own parenthesis and
 exception: the end of the period has not happened yet, and Section 17 already requires a
 report to say whether the period it shows is open.
 
-## Attribution has three keys, and one is not keyed on a person
+## Attribution has three keys
 
 *This ruling was first written with two keys and was wrong: it gave Cell figures the person
 key, which Section 13 contradicts in terms — "Sections 12 and 20 count a meeting under the
@@ -60,8 +60,11 @@ corrected because the two-key version declared its own list closed, which is wha
 made the third key hard to add later.*
 
 - **DCC unique people, classification and buckets attribute by the person**, placed in the
-  tree as of the period's end. Section 16 states the figure directly: "Total People —
-  distinct people in the pastoral subtree."
+  tree as of the period's end. Section 16's `Total People` — "distinct people in the pastoral
+  subtree" — gives the shape of the key rather than this figure, being a current-state
+  inventory metric (Section 3) where a DCC monthly figure counts who attended in the period.
+  *Said to state it "directly" until the retraction was applied to Section 20 and not to this
+  ruling, which is its source.*
 - **Cell unique people and classification attribute by the meeting's frozen responsible
   leader.** Section 10 makes Cell membership independent of pastoral assignment, so for a
   Cell whose members sit outside their leader's subtree the two keys attribute the same
@@ -112,11 +115,16 @@ two, which decision 0206 then settled, leaving nothing blocking. It disagreed wi
   `persons` or `pastoral_assignments` — so a whole-church monthly report cannot be a join and
   must be assembled through service interfaces. The answer is an amendment to Section 2 in
   either direction, and it is architectural rather than a detail of one query.
-- **The dated Person-target scope resolution Section 7 says does not exist.** Section 7:
+- **Whether a report asking about a past month is authorized dated or undated.** Section 7:
   "It is a *dated* viewing read — one asking about a past month — that owes a resolution as of
-  that period, and no route asks one yet." A Stage 5 monthly report is that route. This ruling
-  obliges the dated walk in `hierarchy` and is silent on the authorization half, which decides
-  who may read a leader's October figures.
+  that period, and no route asks one yet." A Stage 5 monthly report is that route, because
+  Section 7 fixes datedness to the **capability** — `reports.view_subtree` is one of the three
+  it names — rather than to the target's kind. This ruling obliges the dated walk in
+  `hierarchy` and is silent on the authorization half, which decides who may read a leader's
+  October figures. *Withdrawn on 2026-09-05 on the argument that a report's target is a scope
+  selector rather than a Person, and restored the same day: that is true and does not carry
+  the conclusion, since the datedness rule never keyed on the target. It stands as a Stop
+  Condition, and `CLAUDE.md` carries the live case it turns on.*
 
 Which instant *within* the end-of-period day. Section 20 already fixes a date-only value to
 00:00 Asia/Manila, so "the end of the period" is an instant this specification can express,
