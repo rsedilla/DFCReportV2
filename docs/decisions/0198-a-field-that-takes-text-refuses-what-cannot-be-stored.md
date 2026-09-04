@@ -6,8 +6,13 @@ recorded the question this ruling answers: Section 22 names `INTERNAL_ERROR` on 
 well-formed request as a failure mode and says **nothing** about what a free-text field may
 contain, so the decorator had no derivable scope and was applied from memory.
 
-Three reproduced `INTERNAL_ERROR`s were left standing on merged routes by that gap, and a
-fourth class of harm was not an error at all.
+Two reproduced `INTERNAL_ERROR`s were left standing on merged routes by that gap — DCC's
+`correction_reason` and a Cell closure's `note` — with more fields identically shaped and
+unreproduced. *A draft of this ruling said three, which was the `CLAUDE.md` bullet's own
+distinction between reproduced and merely shaped, lost in the restating.* The review of
+this branch then reproduced two more of a kind neither had counted: a forged pagination
+cursor, whose decoded fields reach a keyset comparison without passing any validator.
+And a fourth class of harm is not an error at all.
 
 ## The two characters, and why they are not the same problem
 
@@ -59,10 +64,25 @@ sibling fails the second. Such a property must then refuse a null byte **and** a
 surrogate, or it is named in the failure.
 
 Exemption is by appearing in `NEVER_STORED` with a reason, and every reason has the same
-shape: the value never reaches a column as written. Four pagination cursors, which are
-decoded before anything reads them and refused when unresolvable (decision 0159); two
-refresh tokens and a reset token, compared against a hash; and two passwords, which Section
-6 says are never stored at all.
+shape: **the value never reaches the database at all**, which is a stricter test than
+"no column holds it". `SearchPeopleDto.q` is stored nowhere and is not exempt, because a
+query parameter reaches a statement.
+
+Nine entries: four pagination cursors, two refresh tokens, a reset token, and two passwords.
+The tokens are compared against a sha256 hash computed in the application, so the value as
+sent reaches no statement; Section 6 says a password is never stored at all.
+
+**The cursors needed the rule applied a second time to make their exemption true.** A cursor
+is base64url and reaches no statement as sent — but it is *decoded* into strings that go
+straight into a keyset comparison, and the decoders checked only `typeof === 'string'`. A
+forged cursor therefore carried a null byte past every validator in the application and
+answered 500, on two of the three paged routes. All three decoders now ask `isStorableText`
+of each decoded field, which makes an unstorable cursor an unresolvable one — the answer
+decision 0159 already gives.
+
+That is why the predicate is a plain function in `common/text/storable-text.ts` and the
+decorator delegates to it: text reaches the database through two kinds of edge, and only one
+of them is a DTO.
 
 **It found a field this ruling would otherwise have missed.** `SearchPeopleDto.q` is a search
 term, not a stored value — and it reaches the database as a query parameter, so a null byte

@@ -29,11 +29,19 @@ describe('storable text is refused at the edge, on every field that takes text',
    * Fields that accept arbitrary text and are exempt, each because the value never reaches
    * a column as written.
    *
-   * `cursor` is opaque and is decoded before anything reads it — a cursor that cannot be
-   * resolved is refused (decision 0159), so a null byte inside one is a refused cursor
-   * rather than a stored character. `refresh_token` and `token` are compared against a
-   * hash and never stored in the form they arrive in. `password` likewise, and section 6
-   * is explicit that it is never stored at all.
+   * **One criterion, and it is about the database rather than about storage.** A value is
+   * exempt only where it never reaches the database at all — not merely where no column
+   * holds it. `SearchPeopleDto.q` is not stored anywhere and is *not* exempt, because it
+   * reaches a query parameter and a null byte there answers `INTERNAL_ERROR` exactly as a
+   * stored one does.
+   *
+   * A `cursor` is base64url and never reaches the database as sent. Its *decoded* fields
+   * do, and a forged cursor carrying a null byte inside them reached the keyset comparison
+   * and answered 500 until `decodeCursor` began asking `isStorableText` of each — a cursor
+   * that cannot be resolved is refused (decision 0159), and one carrying text the database
+   * cannot keep cannot be resolved. `refresh_token` and `token` are compared against a
+   * sha256 hash computed in the application, so the value as sent reaches no statement.
+   * `password` likewise, and section 6 is explicit that it is never stored at all.
    */
   const NEVER_STORED = new Set([
     'DccRosterDto.cursor',
@@ -75,7 +83,7 @@ describe('storable text is refused at the edge, on every field that takes text',
     value: unknown,
   ): Promise<boolean> {
     const instance = plainToInstance(cls, { [property]: value });
-    const errors = await validate(instance as object);
+    const errors = await validate(instance);
 
     return errors.some((error) => error.property === property);
   }
@@ -89,7 +97,7 @@ describe('storable text is refused at the edge, on every field that takes text',
     const root = resolve(__dirname, '../../src');
 
     for (const file of dtoFiles(root)) {
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
       const module_ = require(file) as Record<string, unknown>;
 
       for (const [name, exported] of Object.entries(module_)) {
@@ -121,10 +129,12 @@ describe('storable text is refused at the edge, on every field that takes text',
     const covered: string[] = [];
 
     for (const { name, cls, properties } of classes) {
-      // A property list taken from an instance is empty for a class whose fields are only
-      // declared, so the property names are recovered from the validation errors an empty
-      // object produces as well.
-      const empty = await validate(plainToInstance(cls, {}) as object);
+      // **Two sources, because neither is complete.** The validation errors an empty object
+      // produces name only the *required* properties; the optional ones come from the class
+      // field emit, which holds because `target: ES2023` implies `useDefineForClassFields`.
+      // Lower the target and every optional free-text field would leave this check silently,
+      // with the run still green — so that setting is load-bearing here.
+      const empty = await validate(plainToInstance(cls, {}));
       const candidates = Array.from(new Set([...properties, ...empty.map((e) => e.property)]));
 
       for (const property of candidates) {

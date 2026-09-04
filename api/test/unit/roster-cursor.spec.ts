@@ -114,6 +114,41 @@ describe('the roster cursor', () => {
     expect(() => decodeRosterCursor(value)).toThrow(/pagination cursor could not be read/);
   });
 
+  it('refuses a forged cursor carrying text the database cannot store', () => {
+    // **The rule at the second kind of edge** (SKILL.md section 22; decision 0198). A cursor
+    // is base64url and reaches no statement as sent, so it is exempt from the decorator that
+    // guards free-text fields -- but its *decoded* fields go straight into the keyset
+    // comparison, and the decoder checked only `typeof === 'string'`.
+    //
+    // A forged cursor therefore carried a null byte past every validator in the application
+    // and answered `INTERNAL_ERROR` from the database, on two of the three paged routes. It
+    // is refused here instead, as unresolvable -- the answer decision 0159 already gives a
+    // cursor that cannot be read, and one naming text the database cannot keep cannot be.
+    //
+    // The mutation: restore `typeof x === 'string'` in `decodeRosterCursor` and the two
+    // refusals below stop throwing.
+    const NUL = String.fromCharCode(0);
+    const LONE_HIGH_SURROGATE = String.fromCharCode(0xd800);
+    const GRINNING_FACE = String.fromCodePoint(0x1f600);
+
+    const forge = (overrides: Record<string, string>): string =>
+      Buffer.from(JSON.stringify({ ...key, ...overrides }), 'utf8').toString('base64url');
+
+    expect(() => decodeRosterCursor(forge({ lastName: `a${NUL}b` }))).toThrow(
+      /pagination cursor could not be read/,
+    );
+
+    // The lone surrogate too, which is the half that would not have failed loudly: the
+    // database accepts it and silently rewrites it to U+FFFD.
+    expect(() => decodeRosterCursor(forge({ memberId: `a${LONE_HIGH_SURROGATE}b` }))).toThrow(
+      /pagination cursor could not be read/,
+    );
+
+    // A valid pair still round-trips, so the refusal is the narrow one.
+    const emoji = { ...key, firstName: `Zosimo ${GRINNING_FACE}` };
+    expect(decodeRosterCursor(encodeRosterCursor(emoji) as string)).toEqual(emoji);
+  });
+
   it('names the field, so a client can bind the message', () => {
     // Section 22's envelope carries `details.field`. Asserted once rather than on every
     // case above: what varies there is which shape is unresolvable, and the answer is

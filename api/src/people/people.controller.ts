@@ -26,6 +26,7 @@ import { PeopleReassignmentService } from './people.reassignment.service';
 import { PeopleService } from './people.service';
 import { PeopleSexCorrectionService } from './people.sex-correction.service';
 import { fullProfile, normalizeMobile, type SearchCursor } from './people.shared';
+import { isStorableText } from '../common/text/storable-text';
 
 /**
  * `/api/v1/people` (SKILL.md section 22).
@@ -436,8 +437,8 @@ function decodeCursor(value: string | undefined): SearchCursor | null {
     if (
       typeof parsed === 'object' &&
       parsed !== null &&
-      typeof (parsed as SearchCursor).lastName === 'string' &&
-      typeof (parsed as SearchCursor).firstName === 'string' &&
+      isStorableText((parsed as SearchCursor).lastName) &&
+      isStorableText((parsed as SearchCursor).firstName) &&
       typeof (parsed as SearchCursor).id === 'string'
     ) {
       return parsed as SearchCursor;

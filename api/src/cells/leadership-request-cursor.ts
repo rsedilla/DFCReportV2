@@ -1,6 +1,7 @@
 import { unresolvableCursor } from '../common/cursor';
 
 import type { CellRequestKind } from '../database/schema';
+import { isStorableText } from '../common/text/storable-text';
 
 /**
  * The opaque cursor `GET /api/v1/cells/leadership-requests` pages by
@@ -126,8 +127,8 @@ export function decodeLeadershipRequestCursor(
     if (
       typeof parsed === 'object' &&
       parsed !== null &&
-      typeof (parsed as LeadershipRequestCursor).requestedAt === 'string' &&
-      typeof (parsed as LeadershipRequestCursor).id === 'string' &&
+      isStorableText((parsed as LeadershipRequestCursor).requestedAt) &&
+      isStorableText((parsed as LeadershipRequestCursor).id) &&
       // The timestamp is cast to `timestamptz` in the query, so a value PostgreSQL
       // cannot parse reaches it as a cast error rather than as an empty page — the
       // 500-instead-of-an-answer failure this repository keeps recording. Checked here
