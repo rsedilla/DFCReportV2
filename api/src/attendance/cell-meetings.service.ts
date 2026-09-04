@@ -523,6 +523,7 @@ export class CellMeetingsService {
         const response = await this.correctWithin(trx, {
           cellId,
           cellHandle: cell.cellId,
+          cell,
           meetingId,
           reportingMonth,
           existing,
@@ -543,7 +544,17 @@ export class CellMeetingsService {
         // resubmitted identical roster corrects nothing, and wrote a second entry whose
         // `after` was byte-identical to the first — so the log asserted an amendment
         // that section 7 says is not one.
-        if (amendment !== undefined && (response.corrected ?? 0) > 0) {
+        // **A transition always writes, so `corrected` is the wrong question for one.**
+        // `transitionWithin` reports `corrected` as the count of attendance lines that
+        // moved — always 0 on a `NOT_HELD` transition, which carries no attendance by
+        // construction, and 0 on a reschedule whose roster is unchanged. Gating on it
+        // alone meant an amending reschedule and an amending `NOT_HELD` both answered 201
+        // into a closed month and wrote **no** `cell_attendance.amended` entry: the reason
+        // was accepted, required, and then discarded, which is what section 13 audits the
+        // amendment to prevent.
+        const movedTheRecord = body.status !== existing.status || body.actual_date !== undefined;
+
+        if (amendment !== undefined && (movedTheRecord || (response.corrected ?? 0) > 0)) {
           await this.writeAmendmentEntry(trx, {
             actor,
             cellId,
@@ -759,6 +770,7 @@ export class CellMeetingsService {
     params: {
       cellId: string;
       cellHandle: string;
+      cell: { state: string; closedAt: Date | null };
       meetingId: string;
       reportingMonth: string;
       existing: {
@@ -1067,6 +1079,7 @@ export class CellMeetingsService {
     params: {
       cellId: string;
       cellHandle: string;
+      cell: { state: string; closedAt: Date | null };
       meetingId: string;
       reportingMonth: string;
       existing: {
@@ -1083,7 +1096,7 @@ export class CellMeetingsService {
       authority: ActorAuthority;
     },
   ): Promise<CellMeetingSubmissionResponse> {
-    const { cellId, meetingId, existing, body, actor } = params;
+    const { cellId, cell, meetingId, existing, body, actor } = params;
     const toRescheduled = body.status === 'RESCHEDULED';
 
     // A reschedule is a move, and a move needs somewhere to move to.
@@ -1092,6 +1105,74 @@ export class CellMeetingsService {
         'Rescheduling a meeting requires the date it actually took place on (SKILL.md ' +
           'section 13).',
         { cell_id: cellId, meeting_id: meetingId },
+      );
+    }
+
+    // **A reason, which section 13 requires of `NOT_HELD` and the DTO cannot.** The field
+    // is optional there because a first submission of `HELD` carries none, so the service
+    // is where "required where the status is `NOT_HELD`" can be enforced. Without it the
+    // write reached `cell_meetings_not_held_reason_iff_not_held` and answered a raw 500 on
+    // a well-formed request — section 22's named failure mode, and the third
+    // constraint-driven 500 found on this path.
+    if (!toRescheduled && body.not_held_reason === undefined) {
+      throw new InvariantViolationError(
+        'Declaring a meeting not held requires a reason (SKILL.md section 13).',
+        { cell_id: cellId, meeting_id: meetingId },
+      );
+    }
+
+    // **A closed Cell's meetings cannot be rescheduled** (section 13, stated in terms):
+    // "A reschedule moves a meeting to another date, and a closed Cell has no other dates
+    // to move into — every one of them is after the closure and refused by the rule
+    // above."
+    //
+    // Left unchecked this was worse than a missing refusal. `membersAsOfWithin` returns an
+    // empty roster for a date after the closure, so the roster assertion passed vacuously
+    // on a body carrying no attendance, every real record was closed with a
+    // self-reference, and the meeting stayed `RESCHEDULED` — which section 12 counts in N.
+    // The month then held a meeting nobody attended, and every member's monthly bucket
+    // fell by one against a meeting the Cell could not have held.
+    if (toRescheduled && cell.state === 'CLOSED') {
+      throw new InvariantViolationError(
+        'A closed Cell has no dates to move a meeting into (SKILL.md section 13).',
+        { cell_id: cellId, meeting_id: meetingId },
+      );
+    }
+
+    // **A move that moves nothing is not a move.** Section 13 defines `RESCHEDULED` as a
+    // date *other than* the scheduled one, and a `cell_meeting_changes` row whose
+    // `from_date` equals its `to_date` is indistinguishable in the history from one that
+    // moved. The time-only refusal below states that argument; without this the ordinary
+    // route reached the same shape two ways — a resubmitted identical reschedule, and a
+    // first move naming the meeting's own scheduled date.
+    const standsOn =
+      existing.status === 'RESCHEDULED' ? await this.actualDateOf(trx, existing.id) : meetingId;
+
+    if (toRescheduled && body.actual_date === standsOn) {
+      throw new InvariantViolationError(
+        'This meeting is already on that date (SKILL.md section 13).',
+        { cell_id: cellId, meeting_id: meetingId, actual_date: body.actual_date },
+      );
+    }
+
+    // **The month it moves into must be open too.** The window check that guards this
+    // route reads the meeting's own `reporting_month`, which a reschedule never changes —
+    // so `actual_date` reached no window function at all, and a meeting could be moved
+    // into a month that shut weeks ago. Decision 0195 and `CLAUDE.md` both said this was
+    // "refused today by the window check that already guards the route"; it was not, and
+    // the refusal is written rather than the claim withdrawn, because a record naming a
+    // day inside a closed month is the thing section 13 shuts the window to prevent.
+    if (toRescheduled && !(await isMonthOpen(trx, reportingMonthOf(body.actual_date as string)))) {
+      throw new ApiError(
+        ApiErrorCode.PERIOD_CLOSED,
+        'That month is closed, so a meeting cannot be moved into it (SKILL.md sections ' +
+          '13 and 20).',
+        {
+          cell_id: cellId,
+          meeting_id: meetingId,
+          actual_date: body.actual_date,
+          reporting_month: reportingMonthOf(body.actual_date as string),
+        },
       );
     }
 
@@ -1113,22 +1194,32 @@ export class CellMeetingsService {
     await this.assertMayActForAnother(trx, params);
     await this.assertMayCorrect(trx, params);
 
-    if (body.version === undefined || body.version !== existing.version) {
-      throw await this.conflictFor(trx, {
-        actor,
-        submittedVersion: body.version ?? null,
-        existing,
-        submittedPresent: (body.attendance ?? []).filter((line) => line.present).length,
-        storedPresent: 0,
-      });
-    }
-
+    // **Read before the version check, because the conflict has to carry it.** Section 14
+    // and section 22 require a conflict to show both values "so that a person can choose
+    // between them", and section 22 says a refusal with no second value to show is not a
+    // conflict at all.
+    //
+    // *This read `live` afterwards and passed `storedPresent: 0`, hard-coded because the
+    // rows were not in hand yet. A stale reschedule against a meeting with somebody
+    // present was answered a conflict reporting nobody present — a fabricated figure, and
+    // the person resolving it would have discarded the stored record on the strength of
+    // it.*
     const live = await trx
       .selectFrom('cell_attendance')
       .select(['id', 'person_id', 'present', 'version'])
       .where('cell_meeting_id', '=', existing.id)
       .where('superseded_at', 'is', null)
       .execute();
+
+    if (body.version === undefined || body.version !== existing.version) {
+      throw await this.conflictFor(trx, {
+        actor,
+        submittedVersion: body.version ?? null,
+        existing,
+        submittedPresent: (body.attendance ?? []).filter((line) => line.present).length,
+        storedPresent: live.filter((row) => row.present).length,
+      });
+    }
 
     // **The roster of the day it moved to** (section 12), which is the ruling. On a
     // `NOT_HELD` transition there is no roster at all: the meeting did not happen, so
@@ -1330,6 +1421,17 @@ export class CellMeetingsService {
     );
   }
 
+  /** The date a meeting currently stands on, where it has already moved. */
+  private async actualDateOf(trx: Transaction<Database>, meetingRowId: string): Promise<string> {
+    const row = await trx
+      .selectFrom('cell_meetings')
+      .select(['scheduled_date', 'actual_date'])
+      .where('id', '=', meetingRowId)
+      .executeTakeFirstOrThrow();
+
+    return row.actual_date ?? row.scheduled_date;
+  }
+
   private responseFor(
     params: {
       cellHandle: string;
@@ -1378,10 +1480,19 @@ export class CellMeetingsService {
   ): Promise<ApiError> {
     const meeting = await this.db
       .selectFrom('cell_meetings')
-      .select(['id', 'version', 'status', 'responsible_leader_id'])
+      .select(['id', 'version', 'status', 'responsible_leader_id', 'submitted_by', 'submitted_at'])
       .where('cell_id', '=', cellId)
       .where('scheduled_date', '=', meetingId)
       .executeTakeFirstOrThrow();
+
+    // Read once, above every branch: both outcomes below need the committed roster, and a
+    // conflict must carry the stored figure whichever branch builds it.
+    const committedRows = await this.db
+      .selectFrom('cell_attendance')
+      .select(['person_id', 'present'])
+      .where('cell_meeting_id', '=', meeting.id)
+      .where('superseded_at', 'is', null)
+      .execute();
 
     // **The loser answers what this body would be answered against the committed state,
     // which is what "answers on what it finds" means** (section 22). The two guards below
@@ -1390,28 +1501,44 @@ export class CellMeetingsService {
     // Reusing the shape without re-deriving why it has that shape is what decision 0100
     // is about, and skipping them produced two defects a review reproduced.
 
-    // **A status disagreement first, for the reason `correctWithin` gives where it does
-    // the same:** a `NOT_HELD` body carries no attendance, so it reaches the comparison
-    // below with an empty roster, `some` is vacuously false, and the loser is told
-    // `RESOURCE_BUSY` — whose meaning is that the identical body resubmitted succeeds
-    // writing nothing. It does not: the retry is refused, permanently, because section 13
-    // makes a status change a separate operation. Decision 0158 fixes the test as one
-    // question — could this same body, resubmitted unchanged, succeed? — and here it
-    // could not.
+    // **A status disagreement first**, because a `NOT_HELD` body carries no attendance and
+    // would otherwise reach the comparison below with an empty roster: `some` is vacuously
+    // false, and the loser is told `RESOURCE_BUSY` — whose meaning is that the identical
+    // body resubmitted succeeds writing nothing.
+    //
+    // **What that answer should be changed with decision 0195**, and this method asserted
+    // the withdrawn rule until 2026-09-04: it returned "a status change is a separate
+    // operation", which section 13 no longer says. Four transitions are legal now, so a
+    // status disagreement after a lost race is one of two things.
     if (body.status !== meeting.status) {
-      return new InvariantViolationError(
-        'Changing a meeting’s status is a separate operation from correcting its ' +
-          'attendance (SKILL.md section 13).',
-        // `submitted_status` included because the sequential refusal includes it, and the
-        // whole claim of this branch is that the two answers are the same answer. It
-        // echoes the client's own input and discloses nothing.
-        {
+      // Illegal against the committed state: answer exactly what the same body gets
+      // sequentially, which is the property that stops timing deciding the answer.
+      if (!isLegalTransition(meeting.status, body.status)) {
+        return new InvariantViolationError(transitionRefusal(meeting.status, body.status), {
           cell_id: cellId,
           meeting_id: meetingId,
           current_status: meeting.status,
           submitted_status: body.status,
+        });
+      }
+
+      // A **legal** transition that lost the race is a version conflict and never
+      // `RESOURCE_BUSY`. Decision 0158 fixes the test as one question — could this same
+      // body, resubmitted unchanged, succeed? — and here it cannot: `transitionWithin`
+      // has no unchanged-submission early return, so its version check is unconditional
+      // and the winner has already moved the version past what this body carries. The
+      // retry `RESOURCE_BUSY` prescribes was refused for ever.
+      return this.conflictFor(this.db, {
+        actor,
+        submittedVersion: body.version ?? null,
+        existing: {
+          version: meeting.version,
+          submitted_by: meeting.submitted_by,
+          submitted_at: meeting.submitted_at,
         },
-      );
+        submittedPresent: (body.attendance ?? []).filter((line) => line.present).length,
+        storedPresent: committedRows.filter((row) => row.present).length,
+      });
     }
 
     const live = await this.db

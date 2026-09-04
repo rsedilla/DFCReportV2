@@ -112,8 +112,17 @@ quietly rewrites history.
 fixes the reporting month at creation and a reschedule never moves it, so the *record*
 stays in its own month — but the actual date may fall outside it, and the closed-month
 amendment of decision 0182 governs when a record may be written rather than which dates it
-may name. Refused for now by the window check that already guards the route, which is the
-conservative answer.
+may name.
+
+*This said it was "refused for now by the window check that already guards the route,
+which is the conservative answer". It was not refused at all: that check reads the
+meeting's own `reporting_month`, which a reschedule never changes, so `actual_date` reached
+no window function anywhere and a meeting could be moved into a month shut for weeks.
+Reproduced by `architecture-guardian` at 201.* The refusal is now written rather than the
+claim withdrawn, because a record naming a day inside a closed month is what section 13
+shuts the window to prevent — but it is a refusal this ruling chose after the fact, not one
+the specification stated, so what remains open is whether it is the **right** bound rather
+than whether one exists.
 
 ---
 

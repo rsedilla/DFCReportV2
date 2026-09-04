@@ -154,6 +154,29 @@ describe('recording a Cell meeting (sections 12, 13 and 14)', () => {
     return person;
   }
 
+  /**
+   * A Saturday whose month shut on the 7th of the month after it.
+   *
+   * Nine weeks back, then walked forward to the next Saturday, so it is always well clear
+   * of the boundary whatever day of the month the suite runs on. Read from the database
+   * for the reason `mostRecentSaturday` gives: the window comparison and this date must
+   * come from one clock.
+   *
+   * Outer scope because both the amendment cases and the transition cases need it — a
+   * reschedule may not move a meeting into a shut month either.
+   */
+  async function closedMonthSaturday(): Promise<string> {
+    const result = await sql<{ day: string }>`
+      SELECT to_char(
+               d + ((6 - EXTRACT(ISODOW FROM d)::int + 7) % 7),
+               'YYYY-MM-DD'
+             ) AS day
+        FROM (SELECT ((now() AT TIME ZONE 'Asia/Manila')::date - 63) AS d) AS s
+    `.execute(db);
+
+    return result.rows[0].day;
+  }
+
   /** A member over an explicit window, for the cases where the roster moves under a date. */
   async function memberBetween(
     firstName: string,
@@ -1553,6 +1576,247 @@ describe('recording a Cell meeting (sections 12, 13 and 14)', () => {
       expect(response.body.error.code).toBe('INVARIANT_VIOLATION');
     });
 
+    it('refuses to move a meeting of a closed Cell', async () => {
+      // Section 13 in terms: "a closed Cell has no other dates to move into — every one of
+      // them is after the closure". Unchecked, this was worse than a missing refusal:
+      // `membersAsOfWithin` returns an empty roster for a date after the closure, so the
+      // roster assertion passed vacuously on a body carrying no attendance, every real
+      // record was closed with a self-reference, and the meeting stayed `RESCHEDULED` —
+      // which section 12 counts in N. The month then held a meeting nobody attended.
+      const one = await member('Aurelio');
+
+      await submit({
+        status: 'HELD',
+        attendance: [{ person_id: one.id, present: true }],
+      }).expect(201);
+
+      // **A closure is a whole operation, not a column.** `cells_closure_reason_iff_closed`
+      // wants the reason with the state, and a constraint trigger refuses a closed Cell
+      // that still holds an open category, schedule or leadership row — section 10's
+      // "closing a Cell ends its open rows on the closure effective date". The fixture
+      // does what the closure endpoint does rather than half of it.
+      // In one transaction, because the triggers are deferred to commit and each
+      // half is invalid without the other: an `ACTIVE` Cell must hold an open category
+      // row, and a `CLOSED` one must hold none.
+      const closedAt = new Date(`${meetingDate}T20:00:00+08:00`);
+
+      await db.transaction().execute(async (trx) => {
+        // Memberships too: section 10 ends them on the closure date, "because a person
+        // holds at most one open membership" and one left in a closed Cell could join no
+        // other. Ending at the closure instant leaves them members *on* the meeting date,
+        // which is what the roster comparison uses.
+        for (const table of [
+          'cell_categories',
+          'cell_schedules',
+          'cell_leaderships',
+          'cell_memberships',
+        ] as const) {
+          await trx
+            .updateTable(table)
+            .set({ ended_at: closedAt } as never)
+            .where('cell_id', '=', markCell.id)
+            .where('ended_at', 'is', null)
+            .execute();
+        }
+
+        await trx
+          .updateTable('cells')
+          .set({
+            state: 'CLOSED',
+            closed_at: closedAt,
+            closure_reason: 'MERGED_INTO_ANOTHER_CELL',
+          } as never)
+          .where('id', '=', markCell.id)
+          .execute();
+      });
+
+      const response = await submit({
+        status: 'RESCHEDULED',
+        version: 1,
+        actual_date: movedTo(),
+        attendance: [{ person_id: one.id, present: true }],
+      });
+
+      expect(response.status).toBe(409);
+      expect(response.body.error.code).toBe('INVARIANT_VIOLATION');
+
+      // The record is untouched: still HELD, still one live row.
+      const live = await db
+        .selectFrom('cell_attendance')
+        .select('id')
+        .where('superseded_at', 'is', null)
+        .execute();
+      expect(live).toHaveLength(1);
+    });
+
+    it('refuses a move into a month whose window has shut', async () => {
+      // The window check guarding this route reads the meeting's own `reporting_month`,
+      // which a reschedule never changes — so `actual_date` reached no window function at
+      // all and a meeting could be moved into a month shut for weeks. Decision 0195 and
+      // CLAUDE.md both claimed this was already refused; it was not.
+      const one = await member('Aurelio');
+
+      await submit({
+        status: 'HELD',
+        attendance: [{ person_id: one.id, present: true }],
+      }).expect(201);
+
+      const backThen = await closedMonthSaturday();
+
+      const response = await submit({
+        status: 'RESCHEDULED',
+        version: 1,
+        actual_date: backThen,
+        attendance: [{ person_id: one.id, present: true }],
+      });
+
+      expect(response.status).toBe(409);
+      expect(response.body.error.code).toBe('PERIOD_CLOSED');
+    });
+
+    it('refuses a move that moves nothing, both ways of asking', async () => {
+      // Section 13 defines `RESCHEDULED` as a date *other than* the scheduled one, and a
+      // change row whose `from_date` equals its `to_date` is indistinguishable in the
+      // history from one that moved. The route reached that shape two ways.
+      const one = await member('Aurelio');
+
+      await submit({
+        status: 'HELD',
+        attendance: [{ person_id: one.id, present: true }],
+      }).expect(201);
+
+      // (a) A first move naming the meeting's own scheduled date.
+      const ontoItself = await submit({
+        status: 'RESCHEDULED',
+        version: 1,
+        actual_date: meetingDate,
+        attendance: [{ person_id: one.id, present: true }],
+      });
+      expect(ontoItself.status).toBe(409);
+
+      await submit({
+        status: 'RESCHEDULED',
+        version: 1,
+        actual_date: movedTo(),
+        attendance: [{ person_id: one.id, present: true }],
+      }).expect(201);
+
+      // (b) The same reschedule resubmitted against the moved meeting.
+      const again = await submit({
+        status: 'RESCHEDULED',
+        version: 2,
+        actual_date: movedTo(),
+        attendance: [{ person_id: one.id, present: true }],
+      });
+      expect(again.status).toBe(409);
+
+      // One move, one row.
+      expect(await changeRows()).toHaveLength(1);
+    });
+
+    it('refuses NOT_HELD with no reason rather than answering 500', async () => {
+      // Section 13 requires a reason. The DTO cannot enforce it — a first submission of
+      // `HELD` carries none — so without a service check the write reached
+      // `cell_meetings_not_held_reason_iff_not_held` and answered a raw 500 on a
+      // well-formed request, which is section 22's named failure mode.
+      const one = await member('Aurelio');
+
+      await submit({
+        status: 'HELD',
+        attendance: [{ person_id: one.id, present: true }],
+      }).expect(201);
+
+      await submit({
+        status: 'RESCHEDULED',
+        version: 1,
+        actual_date: movedTo(),
+        attendance: [{ person_id: one.id, present: true }],
+      }).expect(201);
+
+      const response = await submit({ status: 'NOT_HELD', version: 2 });
+
+      expect(response.status).toBe(409);
+      expect(response.body.error.code).toBe('INVARIANT_VIOLATION');
+    });
+
+    it('carries the stored present count on a conflicting move', async () => {
+      // Sections 14 and 22 require a conflict to show both values "so that a person can
+      // choose between them". This reported `present: 0` whatever was stored, because the
+      // live rows were read after the version check — a fabricated figure, on the strength
+      // of which somebody would discard the stored record.
+      const one = await member('Aurelio');
+      const two = await member('Bartolome');
+
+      await submit({
+        status: 'HELD',
+        attendance: [
+          { person_id: one.id, present: true },
+          { person_id: two.id, present: false },
+        ],
+      }).expect(201);
+
+      const stale = await submit({
+        status: 'RESCHEDULED',
+        version: 99,
+        actual_date: movedTo(),
+        attendance: [
+          { person_id: one.id, present: true },
+          { person_id: two.id, present: true },
+        ],
+      });
+
+      expect(stale.status).toBe(409);
+      expect(stale.body.error.code).toBe('VERSION_CONFLICT');
+      expect(stale.body.error.details.current.present).toBe(1);
+      expect(stale.body.error.details.submitted.present).toBe(2);
+    });
+
+    it('audits an amendment made by a transition, whose corrected count is zero', async () => {
+      // The amendment entry was gated on `corrected > 0`, which is the *correction* path's
+      // rule. A transition reports `corrected` as the count of attendance lines that
+      // moved — always 0 for a `NOT_HELD`, and 0 for a reschedule whose roster is
+      // unchanged — so an amending transition wrote no entry and the reason, which
+      // section 13 requires and the route insists on, was discarded.
+      const one = await member('Aurelio');
+      const admin = await adminAccount();
+      const closed = await closedMonthSaturday();
+
+      const amend = (body: Record<string, unknown>) =>
+        request(app.getHttpServer())
+          .post(`/api/v1/cells/${markCell.id}/meetings/${closed}/submit`)
+          .set('Authorization', `Bearer ${admin.accessToken}`)
+          .set('Idempotency-Key', randomUUID())
+          .send(body);
+
+      await amend({
+        status: 'HELD',
+        attendance: [{ person_id: one.id, present: true }],
+        amendment: { reason: 'Creating the record.' },
+      }).expect(201);
+
+      const moved = await amend({
+        status: 'RESCHEDULED',
+        version: 1,
+        actual_date: movedTo(),
+        attendance: [{ person_id: one.id, present: true }],
+        amendment: { reason: 'It actually moved.' },
+      });
+
+      expect(moved.status).toBe(201);
+      expect(moved.body.corrected).toBe(0);
+
+      const reasons = (
+        await db
+          .selectFrom('audit_log')
+          .select('reason')
+          .where('action', '=', 'cell_attendance.amended')
+          .orderBy('occurred_at')
+          .execute()
+      ).map((row) => row.reason);
+
+      expect(reasons).toEqual(['Creating the record.', 'It actually moved.']);
+    });
+
     it('refuses a reschedule with nowhere to move to', async () => {
       const one = await member('Aurelio');
 
@@ -1573,26 +1837,6 @@ describe('recording a Cell meeting (sections 12, 13 and 14)', () => {
   });
 
   describe('amending a month that has closed (section 13, decision 0182)', () => {
-    /**
-     * A Saturday whose month shut on the 7th of the month after it.
-     *
-     * Nine weeks back, then walked forward to the next Saturday, so it is always well
-     * clear of the boundary whatever day of the month the suite runs on. Read from the
-     * database for the reason `mostRecentSaturday` gives: the window comparison and this
-     * date must come from one clock.
-     */
-    async function closedMonthSaturday(): Promise<string> {
-      const result = await sql<{ day: string }>`
-        SELECT to_char(
-                 d + ((6 - EXTRACT(ISODOW FROM d)::int + 7) % 7),
-                 'YYYY-MM-DD'
-               ) AS day
-          FROM (SELECT ((now() AT TIME ZONE 'Asia/Manila')::date - 63) AS d) AS s
-      `.execute(db);
-
-      return result.rows[0].day;
-    }
-
     const amend = (body: Record<string, unknown>, as: TestAccount, date: string) =>
       request(app.getHttpServer())
         .post(`/api/v1/cells/${markCell.id}/meetings/${date}/submit`)
