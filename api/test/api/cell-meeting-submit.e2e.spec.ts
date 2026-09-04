@@ -177,6 +177,44 @@ describe('recording a Cell meeting (sections 12, 13 and 14)', () => {
     return result.rows[0].day;
   }
 
+  /**
+   * Blocks until the request is provably waiting **on this holder**, bounded by the
+   * request.
+   *
+   * **`pg_blocking_pids`, not a `pg_locks` count.** A cluster-wide count of ungranted
+   * locks names neither the waiter nor what it waits on, `CLAUDE.md` records an orphaned
+   * jest process against `dfc_ci` as a live occurrence, and a `transactionid` row carries
+   * no database to filter on. `test/setup/concurrency.ts` gives the direction of harm —
+   * these probes assert a waiter *appears*, so a false positive passes a case that should
+   * have failed.
+   *
+   * Outer scope because both race blocks need it: the first-submission races and the
+   * transition race, which is the one nothing exercised until 2026-09-04.
+   */
+  async function blockedOn(
+    holder: Client,
+    inFlight: ReturnType<typeof track>,
+    what = 'the submission to block on the holder',
+  ): Promise<number> {
+    const holderPid = Number(
+      (await holder.query<{ pid: string }>('SELECT pg_backend_pid() AS pid')).rows[0].pid,
+    );
+
+    return countWhileInFlight(
+      async () => {
+        const blocked = await sql<{ count: string }>`
+          SELECT count(*) AS count
+            FROM pg_stat_activity
+           WHERE ${sql.lit(holderPid)} = ANY (pg_blocking_pids(pid))
+        `.execute(db);
+
+        return Number(blocked.rows[0].count);
+      },
+      inFlight,
+      what,
+    );
+  }
+
   /** A member over an explicit window, for the cases where the roster moves under a date. */
   async function memberBetween(
     firstName: string,
@@ -1817,6 +1855,225 @@ describe('recording a Cell meeting (sections 12, 13 and 14)', () => {
       expect(reasons).toEqual(['Creating the record.', 'It actually moved.']);
     });
 
+    it('corrects a moved meeting against the roster of the day it moved to', async () => {
+      // Section 13: "The instant is the meeting's `actual_date` where it has one… The
+      // actual date is also where the meeting's roster comes from." The correction path
+      // read the *scheduled* date, which was harmless while `RESCHEDULED` was unreachable
+      // and became a defect the moment it was reachable: the roster route answered with
+      // the actual date's members, submitting exactly that back was refused as naming a
+      // non-member, and submitting the scheduled date's roster instead succeeded and left
+      // three live rows for a Cell with two members on either date.
+      const between = (days: number) => {
+        const day = new Date(`${meetingDate}T12:00:00+08:00`);
+        day.setUTCDate(day.getUTCDate() + days);
+
+        return day;
+      };
+
+      const stayer = await member('Aurelio');
+      const leaver = await memberBetween('Bartolome', CREATED, between(3));
+      const joiner = await memberBetween('Crisanto', between(3));
+
+      await submit({
+        status: 'HELD',
+        attendance: [
+          { person_id: stayer.id, present: true },
+          { person_id: leaver.id, present: true },
+        ],
+      }).expect(201);
+
+      await submit({
+        status: 'RESCHEDULED',
+        version: 1,
+        actual_date: movedTo(),
+        attendance: [
+          { person_id: stayer.id, present: true },
+          { person_id: joiner.id, present: true },
+        ],
+      }).expect(201);
+
+      // The roster the read offers is the roster the write accepts.
+      const corrected = await submit({
+        status: 'RESCHEDULED',
+        version: 2,
+        attendance: [
+          { person_id: stayer.id, present: false },
+          { person_id: joiner.id, present: true },
+        ],
+      });
+
+      expect(corrected.status).toBe(201);
+
+      const live = await db
+        .selectFrom('cell_attendance')
+        .select(['person_id', 'present'])
+        .where('superseded_at', 'is', null)
+        .execute();
+
+      expect(live).toHaveLength(2);
+      expect(live.map((row) => row.person_id).sort()).toEqual([stayer.id, joiner.id].sort());
+    });
+
+    it('lets an Admin amendment move a meeting inside a closed month', async () => {
+      // Section 13: "The flag skips the window check and nothing else." The first fix
+      // refused a move into a closed month unconditionally, which blocked the very case an
+      // amendment most often exists for — and the branch's own test concealed it by
+      // computing its target from the *open* month.
+      const one = await member('Aurelio');
+      const admin = await adminAccount();
+      const closed = await closedMonthSaturday();
+
+      const amendAt = (body: Record<string, unknown>) =>
+        request(app.getHttpServer())
+          .post(`/api/v1/cells/${markCell.id}/meetings/${closed}/submit`)
+          .set('Authorization', `Bearer ${admin.accessToken}`)
+          .set('Idempotency-Key', randomUUID())
+          .send(body);
+
+      await amendAt({
+        status: 'HELD',
+        attendance: [{ person_id: one.id, present: true }],
+        amendment: { reason: 'Creating the record.' },
+      }).expect(201);
+
+      // A week later, inside the same shut month.
+      const laterThatMonth = (() => {
+        const day = new Date(`${closed}T12:00:00+08:00`);
+        day.setUTCDate(day.getUTCDate() + 7);
+
+        return day.toISOString().slice(0, 10);
+      })();
+
+      const moved = await amendAt({
+        status: 'RESCHEDULED',
+        version: 1,
+        actual_date: laterThatMonth,
+        attendance: [{ person_id: one.id, present: true }],
+        amendment: { reason: 'It actually happened the following week.' },
+      });
+
+      expect(moved.status).toBe(201);
+      expect(moved.body.status).toBe('RESCHEDULED');
+    });
+
+    it('refuses a move to a date the Cell had no members on', async () => {
+      // The same corruption the closed-Cell refusal exists for, reached by the other door.
+      // An empty roster makes every check below vacuous: a body carrying no attendance
+      // passes, every real record is closed with a self-reference, and the meeting stays
+      // `RESCHEDULED` — which section 12 counts in N.
+      const late = await memberBetween('Aurelio', new Date(`${meetingDate}T00:00:00+08:00`));
+
+      await submit({
+        status: 'HELD',
+        attendance: [{ person_id: late.id, present: true }],
+      }).expect(201);
+
+      const before = (() => {
+        const day = new Date(`${meetingDate}T12:00:00+08:00`);
+        day.setUTCDate(day.getUTCDate() - 7);
+
+        return day.toISOString().slice(0, 10);
+      })();
+
+      const response = await submit({ status: 'RESCHEDULED', version: 1, actual_date: before });
+
+      expect(response.status).toBe(409);
+      expect(response.body.error.code).toBe('INVARIANT_VIOLATION');
+
+      const live = await db
+        .selectFrom('cell_attendance')
+        .select('id')
+        .where('superseded_at', 'is', null)
+        .execute();
+      expect(live).toHaveLength(1);
+    });
+
+    it('refuses NOT_HELD with reason OTHER and no note rather than answering 500', async () => {
+      // `cell_meetings_other_requires_note` sits beside the reason constraint in migration
+      // 0011. The first fix guarded one and stopped a field short of the other, and this
+      // was the fourth constraint-driven 500 found on this path.
+      const one = await member('Aurelio');
+
+      await submit({
+        status: 'HELD',
+        attendance: [{ person_id: one.id, present: true }],
+      }).expect(201);
+
+      await submit({
+        status: 'RESCHEDULED',
+        version: 1,
+        actual_date: movedTo(),
+        attendance: [{ person_id: one.id, present: true }],
+      }).expect(201);
+
+      const response = await submit({
+        status: 'NOT_HELD',
+        version: 2,
+        not_held_reason: 'OTHER',
+      });
+
+      expect(response.status).toBe(409);
+      expect(response.body.error.code).toBe('INVARIANT_VIOLATION');
+    });
+
+    it('answers a lost transition race a conflict, even when the winner made the same move', async () => {
+      // **The gap that let finding 3 through.** Every other race case here writes a *first*
+      // meeting row; nothing exercised a race on the transition path. `lostRaceAnswer`
+      // branched on `body.status !== meeting.status` — a predicate over the request, where
+      // the question is whether the request was a transition — so when the winner had made
+      // the same move the statuses agreed, the loser fell through to the roster comparison
+      // and was told `RESOURCE_BUSY`, whose retry then answered "already on that date",
+      // permanently. Section 22 and decision 0158 both refuse that.
+      const one = await member('Aurelio');
+
+      await submit({
+        status: 'HELD',
+        attendance: [{ person_id: one.id, present: true }],
+      }).expect(201);
+
+      const meeting = await db
+        .selectFrom('cell_meetings')
+        .select(['id', 'scheduled_time'])
+        .where('cell_id', '=', markCell.id)
+        .where('scheduled_date', '=', meetingDate)
+        .executeTakeFirstOrThrow();
+
+      const holder = new Client({ connectionString: process.env.DATABASE_URL });
+      await holder.connect();
+
+      try {
+        await holder.query('BEGIN');
+        await holder.query(
+          `UPDATE cell_meetings
+              SET status = 'RESCHEDULED', actual_date = $2::date, actual_time = $3::time,
+                  version = version + 1
+            WHERE id = $1`,
+          [meeting.id, movedTo(), meeting.scheduled_time],
+        );
+
+        // The same move, from the version the client read.
+        const attempt = submit({
+          status: 'RESCHEDULED',
+          version: 1,
+          actual_date: movedTo(),
+          attendance: [{ person_id: one.id, present: true }],
+        });
+        const inFlight = track(attempt);
+
+        expect(await blockedOn(holder, inFlight)).toBeGreaterThan(0);
+
+        await holder.query('COMMIT');
+
+        const response = await attempt;
+
+        expect(response.status).toBe(409);
+        expect(response.body.error.code).toBe('VERSION_CONFLICT');
+      } finally {
+        await holder.query('ROLLBACK').catch(() => undefined);
+        await holder.end();
+      }
+    });
+
     it('refuses a reschedule with nowhere to move to', async () => {
       const one = await member('Aurelio');
 
@@ -2225,35 +2482,6 @@ describe('recording a Cell meeting (sections 12, 13 and 14)', () => {
     }
 
     /** Blocks until the request is provably waiting on a lock, bounded by the request. */
-    async function blockedOn(holder: Client, inFlight: ReturnType<typeof track>): Promise<number> {
-      // **`pg_blocking_pids`, not a `pg_locks` count**, on the reasoning the correction
-      // race above states: a cluster-wide count of ungranted locks names neither the
-      // waiter nor what it waits on, `CLAUDE.md` records an orphaned jest process against
-      // `dfc_ci` as a live occurrence, and a `transactionid` row carries no database to
-      // filter on. `test/setup/concurrency.ts` gives the direction of harm — these probes
-      // assert a waiter *appears*, so a false positive passes a case that should have
-      // failed. It would have, here and asymmetrically: with a premature commit the
-      // conflict case still answers 409 through the correction path, which is not the
-      // code it exists to test, while only the `RESOURCE_BUSY` case reddens.
-      const holderPid = Number(
-        (await holder.query<{ pid: string }>('SELECT pg_backend_pid() AS pid')).rows[0].pid,
-      );
-
-      return countWhileInFlight(
-        async () => {
-          const blocked = await sql<{ count: string }>`
-            SELECT count(*) AS count
-              FROM pg_stat_activity
-             WHERE ${sql.lit(holderPid)} = ANY (pg_blocking_pids(pid))
-          `.execute(db);
-
-          return Number(blocked.rows[0].count);
-        },
-        inFlight,
-        'the first submission to block on cell_meetings_one_per_scheduled_date',
-      );
-    }
-
     it('answers the loser a conflict with a null submitted version, not a 500', async () => {
       // `docs/ROADMAP.md` makes this Stage 4's "Done when": a concurrent double
       // submission produces a conflict rather than a silent overwrite. Section 22 names
