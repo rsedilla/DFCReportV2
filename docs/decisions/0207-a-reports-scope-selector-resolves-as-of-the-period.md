@@ -7,9 +7,9 @@ settled by the owner. It blocked Stage 5's first query and nothing else did.
 
 Section 7 fixes datedness to the **capability**: "Exactly three capabilities resolve as of
 the period being viewed — `cell.view_subtree`, `reports.view_subtree` and `audit.view`, the
-*viewing* capabilities." And it says of the dated case: "It is a *dated* viewing read — one
-asking about a past month — that owes a resolution as of that period, and no route asks one
-yet."
+*viewing* capabilities." And it said of the dated case, until this ruling amended the last clause: "It is a *dated*
+viewing read — one asking about a past month — that owes a resolution as of that period, and
+no route asks one yet."
 
 A Stage 5 monthly report is that route. What Section 7 does not say is how a **report scope
 selector** — the target it gives a report, rather than a Person — resolves. Its only sentence
@@ -55,6 +55,12 @@ periods during which that person was theirs, after the person has moved away. Th
 deliberate — the alternative erases a leader's own history the moment somebody is reassigned,
 and Section 12 already records the sibling fairness question about a person who attended and
 has since left as a question about the rule rather than a defect in it.
+
+**The cost runs in a second direction the first version did not name.** If Manuel led Mark in
+October and Manuel is re-parented *under* Mark in November, Manuel may read October reports
+covering people who are today in his own upline's subtree. That is the same rule correctly
+applied rather than a leak — those people were his in October — but it reads differently from
+the departure case, and stating only the departure case would understate what was chosen.
 
 ---
 
