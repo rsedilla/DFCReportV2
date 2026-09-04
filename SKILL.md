@@ -4093,6 +4093,8 @@ Refused rather than stripped or substituted: no section of this specification gi
 
 A valid surrogate **pair** is unaffected. An emoji is two code units and is well formed, so a note typed on a phone passes. What this refuses is a value no keyboard produces.
 
+**A field constrained to a *format* is bound too, and by the same reasoning one step further along** (ruling of 2026-09-04). Such a field does not accept arbitrary text, so the rule above does not reach it — but it stores a `text` column like any other, and a format check that cannot be *evaluated* on a value is a worse failure than one that rejects it. **A validator that constrains a format must be able to evaluate every value it is given, and must refuse rather than throw.** Where the library behind it cannot, the guard belongs inside that same validator, ahead of the call that throws — not in a decorator beside it, because a validation framework may run every check on a field rather than stopping at the first refusal. This was written because an email address answered `INTERNAL_ERROR` on an unpaired surrogate: the check threw inside itself, on the two routes reachable without an account.
+
 #### Field naming
 
 One concept carries one field name across every endpoint. **Names are `snake_case`**, and an identifier's name is either a bare `id` or `ids`, or ends in `_id` or `_ids`.

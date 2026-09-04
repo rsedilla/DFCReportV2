@@ -80,6 +80,54 @@ describe('authentication (SKILL.md section 6)', () => {
       expect(wrongPassword.body.error.code).toBe('UNAUTHENTICATED');
     });
 
+    it('refuses an address it cannot even evaluate, rather than answering 500', async () => {
+      // **The one defect of this class reachable without an account.** `validator`'s
+      // `isEmail` calls `encodeURI` inside its own length check, and `encodeURI` throws
+      // `URIError: URI malformed` on an unpaired surrogate -- so the throw escaped the
+      // validator and left through the `ValidationPipe` as `INTERNAL_ERROR`, on the two
+      // routes anyone can reach: signing in, and asking for a password reset.
+      //
+      // Decorator ordering could not have fixed it: class-validator runs every validator
+      // on a property and collects their answers rather than stopping at the first. The
+      // storability check has to sit *inside* the same validator, ahead of the call that
+      // throws (`IsEmailAddress`).
+      //
+      // The null byte was always refused cleanly at 422; it is asserted beside the
+      // surrogate because the two fail for different reasons and only one was ever loud.
+      //
+      // The mutation: restore `@IsEmail()` on `LoginDto.email` and the first expectation
+      // goes from 422 to 500.
+      const LONE_SURROGATE = String.fromCharCode(0xd800);
+      const NUL = String.fromCharCode(0);
+
+      const surrogate = await request(app.getHttpServer())
+        .post('/api/v1/auth/login')
+        .send({ email: `a${LONE_SURROGATE}b@example.test`, password: PASSWORD });
+
+      expect(surrogate.status).toBe(422);
+      expect(surrogate.body.error.code).toBe('VALIDATION_FAILED');
+
+      const nul = await request(app.getHttpServer())
+        .post('/api/v1/auth/login')
+        .send({ email: `a${NUL}b@example.test`, password: PASSWORD });
+
+      expect(nul.status).toBe(422);
+
+      // The same field on the other unauthenticated route.
+      const reset = await request(app.getHttpServer())
+        .post('/api/v1/auth/forgot-password')
+        .send({ email: `a${LONE_SURROGATE}b@example.test` });
+
+      expect(reset.status).toBe(422);
+
+      // A real address still signs in, so the refusal is the narrow one.
+      const ordinary = await request(app.getHttpServer())
+        .post('/api/v1/auth/login')
+        .send({ email: account.email, password: PASSWORD });
+
+      expect(ordinary.status).toBe(200);
+    });
+
     it('stores no token, only a hash of one', async () => {
       const response = await request(app.getHttpServer())
         .post('/api/v1/auth/login')
