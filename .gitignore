@@ -42,3 +42,8 @@ Thumbs.db
 # against an accidental `git add`, never the plan. See docs/TREE_CSV.md.
 *.tree.csv
 tree-data/
+
+# stray temp files
+# A file written by an editing script that failed between creating its temporary and
+# renaming it over the target. One reached `main` that way, empty, swept in by `git add -A`.
+*.tmp
