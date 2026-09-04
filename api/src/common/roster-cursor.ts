@@ -1,4 +1,5 @@
 import { unresolvableCursor } from './cursor';
+import { isStorableText } from './text/storable-text';
 
 /**
  * The opaque cursor for a collection ordered by `(last_name, first_name, member_id)`
@@ -83,9 +84,9 @@ export function decodeRosterCursor(value: string | undefined): RosterCursor | nu
     if (
       typeof parsed === 'object' &&
       parsed !== null &&
-      typeof (parsed as RosterCursor).lastName === 'string' &&
-      typeof (parsed as RosterCursor).firstName === 'string' &&
-      typeof (parsed as RosterCursor).memberId === 'string'
+      isStorableText((parsed as RosterCursor).lastName) &&
+      isStorableText((parsed as RosterCursor).firstName) &&
+      isStorableText((parsed as RosterCursor).memberId)
     ) {
       return parsed as RosterCursor;
     }

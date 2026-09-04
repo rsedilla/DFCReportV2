@@ -17,6 +17,7 @@ import { CURSOR_MAX_LENGTH, NAME_FIELD_MAX_LENGTH } from '../../common/cursor';
 import { IsManilaCalendarDate } from '../../common/time/is-manila-calendar-date';
 
 import type { CivilStatus, Sex } from '../../database/schema';
+import { IsStorableText } from '../../common/text/is-storable-text';
 
 /**
  * Section 25, rules 5 and 6: never add a civil-status or sex value beyond these
@@ -58,15 +59,18 @@ const CIVIL_STATUSES: CivilStatus[] = ['SINGLE', 'MARRIED', 'WIDOWED'];
 export class CreatePersonDto {
   @IsString()
   @Length(1, NAME_FIELD_MAX_LENGTH)
+  @IsStorableText()
   first_name!: string;
 
   @IsOptional()
   @IsString()
   @Length(0, NAME_FIELD_MAX_LENGTH)
+  @IsStorableText()
   middle_name?: string | null;
 
   @IsString()
   @Length(1, NAME_FIELD_MAX_LENGTH)
+  @IsStorableText()
   last_name!: string;
 
   /**
@@ -95,6 +99,7 @@ export class CreatePersonDto {
   @IsOptional()
   @IsString()
   @Length(0, 40)
+  @IsStorableText()
   mobile_number?: string | null;
 
   /**
@@ -129,16 +134,19 @@ export class EditPersonDto {
   @IsOptional()
   @IsString()
   @Length(1, NAME_FIELD_MAX_LENGTH)
+  @IsStorableText()
   first_name?: string;
 
   @IsOptional()
   @IsString()
   @Length(0, NAME_FIELD_MAX_LENGTH)
+  @IsStorableText()
   middle_name?: string | null;
 
   @IsOptional()
   @IsString()
   @Length(1, NAME_FIELD_MAX_LENGTH)
+  @IsStorableText()
   last_name?: string;
 
   /**
@@ -167,6 +175,7 @@ export class EditPersonDto {
   @IsOptional()
   @IsString()
   @Length(0, 40)
+  @IsStorableText()
   mobile_number?: string | null;
 }
 
@@ -189,6 +198,7 @@ export class CorrectSexDto {
    */
   @IsString()
   @Length(1, 500)
+  @IsStorableText()
   reason!: string;
 
   /**
@@ -245,6 +255,7 @@ export class ReassignPastoralLeaderDto {
   @IsOptional()
   @IsString()
   @Length(1, 500)
+  @IsStorableText()
   reason?: string;
 
   /**
@@ -270,10 +281,12 @@ export class ReassignPastoralLeaderDto {
 export class DuplicateCandidatesDto {
   @IsString()
   @Length(1, NAME_FIELD_MAX_LENGTH)
+  @IsStorableText()
   first_name!: string;
 
   @IsString()
   @Length(1, NAME_FIELD_MAX_LENGTH)
+  @IsStorableText()
   last_name!: string;
 
   @IsOptional()
@@ -287,6 +300,7 @@ export class DuplicateCandidatesDto {
   @IsOptional()
   @IsString()
   @Length(0, 40)
+  @IsStorableText()
   mobile_number?: string;
 
   /** Section 22: defaults to 50, maximum 200. */
@@ -306,6 +320,7 @@ export class SearchPeopleDto {
   // prefix, and would do so silently if that constant were ever raised. The minimum is
   // its own rule — two characters, so a one-letter probe cannot page the directory.
   @Length(2, NAME_FIELD_MAX_LENGTH)
+  @IsStorableText()
   q!: string;
 
   /**

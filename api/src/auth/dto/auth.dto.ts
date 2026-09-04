@@ -1,4 +1,5 @@
 import { IsEmail, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
+import { IsStorableText } from '../../common/text/is-storable-text';
 
 export class LoginDto {
   @IsEmail({}, { message: 'Enter a valid email address.' })
@@ -17,6 +18,7 @@ export class LoginDto {
   @IsOptional()
   @IsString()
   @MaxLength(120)
+  @IsStorableText()
   device_label?: string;
 }
 
@@ -29,6 +31,7 @@ export class RefreshDto {
   @IsOptional()
   @IsString()
   @MaxLength(120)
+  @IsStorableText()
   device_label?: string;
 }
 

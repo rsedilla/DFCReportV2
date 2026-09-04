@@ -17,6 +17,7 @@ import {
 
 import { CURSOR_MAX_LENGTH } from '../../common/cursor';
 import { ClosedMonthAmendmentDto } from './cell-meeting-submit.dto';
+import { IsStorableText } from '../../common/text/is-storable-text';
 
 /**
  * `GET /api/v1/dcc/events/{id}/roster` (SKILL.md section 22, *Pagination*).
@@ -108,6 +109,7 @@ export class DccAttendanceRecordDto {
   @IsOptional()
   @IsString()
   @MaxLength(500)
+  @IsStorableText()
   correction_reason?: string;
 }
 

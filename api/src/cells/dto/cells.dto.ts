@@ -24,6 +24,7 @@ import type {
   CellDeclineReason,
   CellRequestKind,
 } from '../../database/schema';
+import { IsStorableText } from '../../common/text/is-storable-text';
 
 const CATEGORIES: CellCategory[] = ['YOUTH', 'YOUNG_PRO', 'COUPLE'];
 
@@ -241,6 +242,7 @@ export class DeclineLeadershipRequestDto {
   @Transform(({ value }: { value: unknown }) => (typeof value === 'string' ? value.trim() : value))
   @MinLength(1)
   @MaxLength(500)
+  @IsStorableText()
   note?: string;
 }
 
@@ -391,6 +393,7 @@ export class CloseCellDto {
   // and what is stored is what was checked.
   @Transform(({ value }: { value: unknown }) => (typeof value === 'string' ? value.trim() : value))
   @MinLength(1)
+  @IsStorableText()
   note?: string;
 
   /**
