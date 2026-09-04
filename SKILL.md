@@ -4076,6 +4076,19 @@ The three ways it failed are different from each other, and the rule closes all 
 
 This says nothing about a date's **range**. A day in 1900 or in 2200 is a day; whether a particular field should accept one is that field's own rule — Section 3 for a birthday, Section 5's floor for an effective date — and not this one.
 
+#### Text a request may carry
+
+**A field that accepts arbitrary text refuses text the database cannot store as written, and it refuses it at the edge** (ruling of 2026-09-04). Two characters a JSON string may legally contain fail differently, and the difference is why this is a rule rather than a guard on whichever field last broke:
+
+- **U+0000.** PostgreSQL rejects a null byte in `text` outright, so it surfaces as `INTERNAL_ERROR` on a well-formed request — the failure mode named above, reached from a value rather than from a date.
+- **An unpaired surrogate.** Accepted, and silently rewritten to U+FFFD. The request answers success and the record then says a person wrote something they did not write, which Section 3's reproducibility guarantee and Section 21's audit both rest on not happening.
+
+Refused rather than stripped or substituted: no section of this specification gives either character a meaning, so there is nothing for a domain layer to decide and nothing a leader meant by it. A refusal at the edge names the field, which is what a client needs in order to fix it; accepting the substitution stores text nobody typed.
+
+**Every such field, rather than the one that broke.** This rule was first written as a guard on one route, applied from memory, and shipped covering two of that route's three free-text fields while claiming all of them — then corrected in one direction and left wrong in the other, because a shared DTO class carried it into a second route nobody had checked. The scope is therefore stated here and enforced by a check that derives the field list rather than repeating it: any property accepting a harmless string must refuse these two, and a field is exempt only where the value never reaches a column as written — an opaque cursor, or a credential compared against a hash.
+
+A valid surrogate **pair** is unaffected. An emoji is two code units and is well formed, so a note typed on a phone passes. What this refuses is a value no keyboard produces.
+
 #### Field naming
 
 One concept carries one field name across every endpoint. **Names are `snake_case`**, and an identifier's name is either a bare `id` or `ids`, or ends in `_id` or `_ids`.
