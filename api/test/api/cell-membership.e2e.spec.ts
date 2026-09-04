@@ -617,8 +617,11 @@ describe('cell membership (section 10)', () => {
 
     it('is refused to a leader whose scope does not reach the Cell', async () => {
       // The same target rule as the write routes: the Cell, resolved through its
-      // leader (section 7). Everyone who may act on the list may read it, and nobody
-      // else.
+      // leader (section 7). Ben holds `cell.view_subtree` at OWN_SUBTREE from his
+      // LEADER defaults and Mark's Cell is outside it, so the read is refused on scope
+      // rather than on the capability. *This comment said "everyone who may act on the
+      // list may read it, and nobody else" until decision 0204, which separated the
+      // two: the case below grants the read without the write.*
       const outsider = await createPerson(db, { firstName: 'Ben', network: 'MENS' });
       await assignTo(db, outsider.id, root.id);
       const account = await createAccount(app, db, { person: outsider, roles: ['LEADER'] });
@@ -627,6 +630,76 @@ describe('cell membership (section 10)', () => {
         .get(`/api/v1/cells/${markCell.id}/members`)
         .set('Authorization', `Bearer ${account.accessToken}`)
         .expect(403);
+    });
+
+    it('is reachable on a read-only grant, which is the whole point of decision 0204', async () => {
+      // **The case the old guard made impossible, and the database refused it.** This
+      // route carried `cell.manage_membership` until decision 0204. Section 7 makes
+      // `read_only` valid only on a read capability, and
+      // `capability_grants_read_only_is_a_read` enforces that as a CHECK -- so a
+      // read-only grant of the management capability is not merely ineffective, it
+      // cannot be inserted. There was no way to express "may see this Cell's members".
+      //
+      // `cell.view_subtree` is a read capability, so the grant below is legal and is
+      // honoured. Reverting the decorator reddens this: Ben's LEADER defaults give him
+      // `cell.manage_membership` at OWN_SUBTREE only, and Mark's Cell is outside it.
+      const ben = await createPerson(db, { firstName: 'Ben', network: 'MENS' });
+      await assignTo(db, ben.id, root.id);
+      const account = await createAccount(app, db, { person: ben, roles: ['LEADER'] });
+
+      await db
+        .insertInto('capability_grants')
+        .values({
+          account_id: account.id,
+          capability: 'cell.view_subtree',
+          scope_type: 'WHOLE_CHURCH',
+          read_only: true,
+          reason: 'Invented for this case (CLAUDE.md, Secrets).',
+          granted_by: admin.id,
+        })
+        .execute();
+
+      await addMember(admin, markCell.id, juan.id).expect(201);
+
+      const response = await request(app.getHttpServer())
+        .get(`/api/v1/cells/${markCell.id}/members`)
+        .set('Authorization', `Bearer ${account.accessToken}`)
+        .expect(200);
+
+      expect(response.body.data).toHaveLength(1);
+      expect(response.body.data[0]).toMatchObject({ person_id: juan.id });
+    });
+
+    it('leaves that same grant unable to change the roster, which is what it buys', async () => {
+      // The pair the ruling turns on. Seeing the roster and moving it are now separable,
+      // and this is the half that must stay refused -- a read capability granted Whole
+      // Church confers no write anywhere. Section 7: the flag "is the visible difference
+      // between letting someone see a Network and letting them change it".
+      const ben = await createPerson(db, { firstName: 'Ben', network: 'MENS' });
+      await assignTo(db, ben.id, root.id);
+      const account = await createAccount(app, db, { person: ben, roles: ['LEADER'] });
+
+      await db
+        .insertInto('capability_grants')
+        .values({
+          account_id: account.id,
+          capability: 'cell.view_subtree',
+          scope_type: 'WHOLE_CHURCH',
+          read_only: true,
+          reason: 'Invented for this case (CLAUDE.md, Secrets).',
+          granted_by: admin.id,
+        })
+        .execute();
+
+      await request(app.getHttpServer())
+        .get(`/api/v1/cells/${markCell.id}/members`)
+        .set('Authorization', `Bearer ${account.accessToken}`)
+        .expect(200);
+
+      const refused = await addMember(account, markCell.id, juan.id).expect(403);
+      expect(refused.body.error.code).toBe('SCOPE_DENIED');
+
+      await removeMember(account, markCell.id, juan.id).expect(403);
     });
 
     it('answers NOT_FOUND for a Cell that is not there', async () => {

@@ -1,5 +1,7 @@
 import { Test } from '@nestjs/testing';
 import { ModulesContainer } from '@nestjs/core';
+import { ROUTE_ARGS_METADATA } from '@nestjs/common/constants';
+import { getMetadataStorage } from 'class-validator';
 
 import { AppModule } from '../../src/app.module';
 import { CAPABILITY_METADATA } from '../../src/auth/authorization/authorization.decorators';
@@ -30,10 +32,16 @@ import type { CapabilityRequirement } from '../../src/auth/authorization/authori
  * resolution "as of the period being viewed" does not exist yet, and the first
  * Cell-targeted viewing route is what owes it.
  *
- * **So the rule that can fail today is the narrow one**: no route declares a viewing
- * capability against a Cell-resolved target. The first route that does reddens this, which
- * is the moment the dated read resolution is owed — and a red test naming the route is a
- * better way to learn that than a report quietly answering through the wrong leader.
+ * **So the rule that can fail is the narrow one**: no route declares a viewing capability
+ * against a Cell-resolved target except the undated reads named in the allowlist below. The
+ * next route to do so reddens this, and a red test naming the route is a better way to learn
+ * that than a report quietly answering through the wrong leader.
+ *
+ * **The allowlist arrived with decision 0204**, which moved `GET /api/v1/cells/{id}/members`
+ * onto `cell.view_subtree` and found this case refusing it. What the case is *for* is a read
+ * that asks about a past period and would silently get the undated resolution; a read naming
+ * no period is asking about now, which is what `leaderForScope` answers. The two were being
+ * enforced as one.
  *
  * **That is a narrower trigger than "the first Stage 5 reporting read", which is what an
  * earlier version of this paragraph and of `cell-scope.port.ts` claimed.** Section 7 makes
@@ -70,6 +78,10 @@ describe('which scope resolution a capability gets (section 7)', () => {
   interface DeclaredRoute {
     where: string;
     requirement: CapabilityRequirement;
+    /** The handler's parameter classes, for the DTO check the allowlist owes. */
+    paramTypes: unknown[];
+    /** The keys named by `@Param('x')` / `@Query('x')`, which carry no DTO. */
+    argumentKeys: string[];
   }
 
   async function declaredRoutes(): Promise<DeclaredRoute[]> {
@@ -108,7 +120,23 @@ describe('which scope resolution a capability gets (section 7)', () => {
             CapabilityRequirement | undefined;
 
           if (requirement !== undefined) {
-            found.push({ where: `${wrapper.name}.${name}`, requirement });
+            const paramTypes = (Reflect.getMetadata('design:paramtypes', prototype, name) ??
+              []) as unknown[];
+
+            // Nest keys this `<paramtype>:<index>`, and `data` is the string a decorator
+            // named — `id` for `@Param('id')`, absent for a whole-DTO `@Query()`.
+            const args = (Reflect.getMetadata(ROUTE_ARGS_METADATA, prototype.constructor, name) ??
+              {}) as Record<string, { data?: unknown }>;
+            const argumentKeys = Object.values(args)
+              .map((argument) => argument.data)
+              .filter((data): data is string => typeof data === 'string');
+
+            found.push({
+              where: `${wrapper.name}.${name}`,
+              requirement,
+              paramTypes,
+              argumentKeys,
+            });
           }
         }
       }
@@ -143,11 +171,32 @@ describe('which scope resolution a capability gets (section 7)', () => {
     expect(kinds.has('cell_meeting')).toBe(true);
   });
 
-  it('gives no viewing capability a Cell-resolved target, because that resolution does not exist', async () => {
+  /**
+   * The one Cell-targeted viewing route, and the period it asks about (decision 0204).
+   *
+   * An allowlist rather than a blanket refusal, because the obligation this case names is
+   * owed by a *dated* read and not by every route in the viewing class. Section 7 defines
+   * the phrase under *An effective date does not move the scope decision*: "the period a
+   * request under a viewing capability is asking about". A request naming no period is
+   * asking about now, and `leaderForScope` — the current leader, falling back to the last
+   * where the Cell is closed — is the resolution for now.
+   *
+   * So this route receives exactly the resolution section 7 prescribes for it, and the
+   * earlier form of this case refused it on a trigger that conflated "declares a viewing
+   * capability" with "asks about a past period".
+   *
+   * **The teeth are in the allowlist being exhaustive.** Any other Cell-targeted viewing
+   * route reddens this and its author has to say which period it asks about — and if the
+   * answer is a past month, the dated resolution it owes still does not exist.
+   */
+  const UNDATED_CELL_VIEWING: string[] = ['CellsController.members'];
+
+  it('gives a Cell-resolved target no viewing capability but the undated reads named here', async () => {
     const offending = (await declaredRoutes()).filter(
       (route) =>
         VIEWING.includes(route.requirement.capability) &&
-        CELL_RESOLVED.includes(route.requirement.target.kind),
+        CELL_RESOLVED.includes(route.requirement.target.kind) &&
+        !UNDATED_CELL_VIEWING.includes(route.where),
     );
 
     // Named rather than counted: the failure this exists for is a route somebody adds,
@@ -155,6 +204,155 @@ describe('which scope resolution a capability gets (section 7)', () => {
     expect(offending.map((route) => `${route.where} (${route.requirement.capability})`)).toEqual(
       [],
     );
+  });
+
+  /**
+   * Names that would make a request ask about a period other than now.
+   *
+   * **Matched as tokens of a normalised name rather than as whole names.** A hand-written
+   * list of whole names missed `actual_date`, which is a property name this repository
+   * already uses (`SubmitCellMeetingDto`), and would go on missing `start_date`,
+   * `date_from`, `week` and the rest of the family.
+   *
+   * Two passes, because one does not reach both families. The long tokens are looked for
+   * inside the name normalised to lowercase alphanumerics, which is what catches `as_of`
+   * and `reporting_month` after their separators are gone. The short names are compared
+   * against the name's *tokens*, split on separators and camel-case boundaries, which is
+   * what catches `started_at` and `ended_at` -- this repository's own effective-dating
+   * pair, and a family a single normalised-string pass misses entirely, because
+   * `startedat` neither equals `start` nor contains a long token. *A first version of this
+   * docblock claimed the one pass "catches all of them" and it did not.*
+   *
+   * A false positive is the fail-safe direction: it is a red test somebody has to argue
+   * about, which is the outcome this file exists to force. The three the allowlisted route
+   * actually takes -- the `id` it binds by `@Param`, and `limit` and `cursor` off its DTO
+   * -- match nothing here. *Written as "the two" in the batch that made it three.*
+   */
+  const PERIOD_TOKENS = [
+    'date',
+    'month',
+    'year',
+    'week',
+    'quarter',
+    'period',
+    'asof',
+    'since',
+    'until',
+    'effective',
+    'reporting',
+  ];
+
+  /** Whole names that are period-bearing but too short to look for inside another word. */
+  const PERIOD_NAMES = new Set(['from', 'to', 'day', 'before', 'after', 'at', 'start', 'end']);
+
+  function namesAPeriod(property: string): boolean {
+    const normalised = property.toLowerCase().replace(/[^a-z0-9]/g, '');
+    if (PERIOD_TOKENS.some((token) => normalised.includes(token))) {
+      return true;
+    }
+
+    // Split on separators and camel-case boundaries, so `started_at` and `startedAt` both
+    // yield an `at` token. Compared exactly, never as a substring: `at` inside `category`
+    // is not a period and refusing it would make the check useless.
+    const tokens = property
+      .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+      .toLowerCase()
+      .split(/[^a-z0-9]+/)
+      .filter((token) => token !== '');
+
+    return tokens.some((token) => PERIOD_NAMES.has(token));
+  }
+
+  it('lets no allowlisted route take a period, which is the property it is exempt for', async () => {
+    // **The allowlist's exemption rests on the route naming no period, and this is what
+    // checks that.** Section 7: "A viewing request that names no period is asking about
+    // now", so `leaderForScope` answers correctly for it. The case beside this one asserts
+    // the route exists and is viewing-against-a-Cell; neither of those is the property the
+    // exemption is *for*, and without this case a `month` parameter added later would be
+    // exempted silently -- the failure the tripwire exists to catch, reached through the one
+    // route it no longer watches.
+    //
+    // **Both ways Nest takes a parameter *by name* are read**, because covering one of
+    // them is how this kind of check ships looking complete. A third shape contributes
+    // nothing and is stated rather than implied: a whole-object binding whose metatype
+    // carries no class-validator metadata (`@Query() q: Record<string, string>`, `@Req()`)
+    // yields `Object`, returns no metadata, and is not refused by `ValidationPipe` either.
+    // Nothing binds that way today. A `@Query()` DTO contributes its validated
+    // property names, derived from class-validator's own metadata on
+    // `storable-text-coverage.spec.ts`'s reasoning -- a property added next year is inside
+    // the check without its author knowing it exists. A `@Param('month')` or
+    // `@Query('month')` contributes the key it names, which carries no DTO and would
+    // otherwise be invisible.
+    const routes = await declaredRoutes();
+
+    const offending: string[] = [];
+
+    for (const allowed of UNDATED_CELL_VIEWING) {
+      const route = routes.find((candidate) => candidate.where === allowed);
+      expect(route).toBeDefined();
+
+      const accepted: string[] = [];
+
+      for (const paramType of route?.paramTypes ?? []) {
+        if (typeof paramType !== 'function') {
+          continue;
+        }
+
+        const metadatas = getMetadataStorage().getTargetValidationMetadatas(
+          paramType,
+          '',
+          false,
+          false,
+        );
+
+        for (const property of new Set(metadatas.map((metadata) => metadata.propertyName))) {
+          accepted.push(`${(paramType as { name: string }).name}.${property}`);
+        }
+      }
+
+      for (const key of route?.argumentKeys ?? []) {
+        accepted.push(key);
+      }
+
+      // **Counted per route rather than once for the whole loop.** An aggregate counter is
+      // satisfied by the first route that has a DTO, so a second allowlisted route taking
+      // its period some other way would be inspected zero times and pass -- which is the
+      // one-rule-one-path shape `CLAUDE.md` records as this project's recurring fix-batch
+      // defect, and the first version of this case had it.
+      expect(accepted.length).toBeGreaterThan(0);
+
+      // **And per *source*, which is that shape one level down.** The line above is
+      // satisfied by the DTO alone, so if the `ROUTE_ARGS_METADATA` read ever stopped
+      // resolving -- a Nest upgrade moving where it writes, a controller shape it does not
+      // reach -- the `@Query('month')` blind spot would reopen and nothing would go red. A
+      // mutation proves that read works today; it does not keep proving it. Every route on
+      // this allowlist binds at least its Cell id by name, so requiring one key is a
+      // property of the allowlist rather than of this one route.
+      expect(route?.argumentKeys ?? []).not.toHaveLength(0);
+
+      for (const name of accepted) {
+        const property = name.slice(name.indexOf('.') + 1);
+        if (namesAPeriod(property)) {
+          offending.push(`${allowed} takes ${name}`);
+        }
+      }
+    }
+
+    expect(offending).toEqual([]);
+  });
+
+  it('finds every route the allowlist names, so it cannot outlive one', async () => {
+    // Without this the allowlist is a list of strings nothing checks. A renamed or deleted
+    // handler would leave an entry permitting a route that no longer exists, and the next
+    // route to take that name would be exempted silently.
+    const routes = await declaredRoutes();
+
+    for (const allowed of UNDATED_CELL_VIEWING) {
+      const route = routes.find((candidate) => candidate.where === allowed);
+      expect(route).toBeDefined();
+      expect(VIEWING).toContain(route?.requirement.capability);
+      expect(CELL_RESOLVED).toContain(route?.requirement.target.kind);
+    }
   });
 
   it('gives every Cell meeting target a recording capability', async () => {
@@ -190,10 +388,17 @@ describe('which scope resolution a capability gets (section 7)', () => {
     // "the same actor" is true only while the two routes carry the identical capability
     // and target declaration.
     //
-    // Give the roster its own viewing capability -- which `CLAUDE.md` records as open for
-    // exactly these routes, and which the case above says does not yet exist -- and the
-    // two stop admitting the same actors, at which point the submit path's early refusal
-    // starts answering something no read answers. That is a disclosure appearing with no
+    // Give the roster its own viewing capability -- which decision 0204 did for
+    // `GET /cells/{id}/members` while leaving these two deliberately untouched -- and the
+    // two stop being *guaranteed* to admit the same actors, at which point the submit
+    // path's early refusal can start answering something no read answers. *Guaranteed
+    // rather than flatly: `role-defaults.ts` gives `cell.take_attendance` and
+    // `cell.view_subtree` the identical scope at all three roles, so an account holding
+    // only role defaults would go on reaching both. What breaks the pairing is an
+    // explicit grant -- including a `read_only` one, which is expressible on the viewing
+    // capability and rejected at creation on the recording one. This comment made the
+    // roles-to-accounts step flatly in the same batch that corrected it three lines
+    // away in decision 0204.* That is a disclosure appearing with no
     // line of the attendance code changed, so it is asserted here rather than left to a
     // reviewer noticing two decorators drifting apart.
     const routes = await declaredRoutes();

@@ -101,19 +101,28 @@ export class CellsController {
    * list turned a documented-but-unbuilt route into a blocker. Section 22 has
    * documented this path since before the endpoint existed.
    *
-   * **`cell.manage_membership`, resolved against the Cell**, which is what the two
-   * write routes below declare. Everyone who may act on this list may see it, and
-   * nobody else — a derivation rather than a new rule, and section 7 declares its
-   * capability list closed so inventing a read capability for it is not available.
+   * **`cell.view_subtree`, resolved against the Cell** (decision 0204). It is section
+   * 7's read capability for this domain, and it guarded no route until this one: the
+   * route carried `cell.manage_membership` while the capability written for exactly
+   * this read sat unused in the enum and the role defaults.
    *
-   * The cost is real and is escalated rather than hidden: guarding a read with a write
-   * capability means `read_only` on a grant of it is rejected at creation (section 7),
-   * so a person cannot be given roster visibility without also being given the power
-   * to change it. Whether a Cell roster deserves a read capability of its own is
-   * recorded as open in `CLAUDE.md`.
+   * **What that cost is what section 7 already fixed one route over.** `read_only` is
+   * valid only on a read capability, and a management capability granted `read_only`
+   * is rejected at creation — so under the old guard there was no way to express
+   * "may see this Cell's members" at all. Section 7 took the meeting roster off
+   * `cell.manage_membership` on the same argument.
+   *
+   * **No role gains or loses access.** `role-defaults.ts` gives the two capabilities
+   * the identical scope at all three roles, so the change is which capability an
+   * explicit grant must name, and that `read_only` is now expressible on it.
+   *
+   * **The scope resolution is unchanged**, because the guard branches on the target's
+   * `kind` and never reads the capability. Section 7 places this route in its viewing
+   * class, whose resolution is "as of the period being viewed" — and a request naming
+   * no period asks about now, which is what `leaderForScope` answers.
    */
   @Get(':id/members')
-  @RequiresCapability(Capability.CellManageMembership, {
+  @RequiresCapability(Capability.CellViewSubtree, {
     kind: 'cell',
     from: 'params.id',
   })
