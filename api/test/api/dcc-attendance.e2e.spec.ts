@@ -1554,6 +1554,120 @@ describe('DCC recording (sections 9 and 14)', () => {
   // The race two first submissions run (section 22, Write conflicts)
   // ---------------------------------------------------------------------------
 
+  describe('the amendment capability on a lost race (section 7, decision 0201)', () => {
+    /** An account holding `dcc.take_attendance` over its own subtree and nothing else. */
+    const takeAttendanceOnly = async (): Promise<void> => {
+      await db
+        .updateTable('account_roles')
+        .set({ revoked_at: sql<Date>`now()` })
+        .where('account_id', '=', manuelAccount.id)
+        .execute();
+
+      await db
+        .insertInto('capability_grants')
+        .values({
+          account_id: manuelAccount.id,
+          capability: 'dcc.take_attendance',
+          scope_type: 'OWN_SUBTREE',
+          read_only: false,
+          reason: 'Invented for this case (CLAUDE.md, Secrets).',
+          granted_by: admin.id,
+        })
+        .execute();
+    };
+
+    /**
+     * Runs `body` while a holder has written `present` for Mark and not committed, so the
+     * submission blocks on `dcc_attendance_one_live` and loses deterministically.
+     */
+    const raceAgainstStored = async (
+      eventId: string,
+      storedPresent: boolean,
+      submittedPresent: boolean,
+    ) => {
+      const holder = new Client({ connectionString: process.env.DATABASE_URL });
+      await holder.connect();
+
+      try {
+        await holder.query('BEGIN');
+        await holder.query(
+          `INSERT INTO dcc_attendance
+             (dcc_event_id, person_id, present, responsible_leader_id, recorded_by, version)
+           VALUES ($1, $2, $3, $4, $5, 1)`,
+          [eventId, mark.id, storedPresent, manuel.id, admin.id],
+        );
+
+        const attempt = submit(manuelAccount, eventId, [
+          { person_id: mark.id, present: submittedPresent, version: null },
+        ]);
+        const inFlight = track(attempt);
+
+        await countWhileInFlight(
+          async () => {
+            const { rows } = await holder.query<{ count: string }>(
+              `SELECT count(*) AS count FROM pg_locks
+                WHERE NOT granted AND locktype IN ('transactionid', 'tuple')`,
+            );
+
+            return Number(rows[0].count);
+          },
+          inFlight,
+          'the submission to block on dcc_attendance_one_live',
+        );
+
+        await holder.query('COMMIT');
+
+        return await attempt;
+      } finally {
+        await holder.query('ROLLBACK').catch(() => undefined);
+        await holder.end();
+      }
+    };
+
+    it('refuses a disagreeing loser without dcc.correct_subtree, disclosing nothing', async () => {
+      // **The half DCC was missing.** Section 7 decides every other capability before the
+      // stored contents can change what the caller is told, and the `VERSION_CONFLICT`
+      // body carries the stored value *and the name of the account that recorded it* --
+      // neither of which the DCC roster publishes to this actor.
+      //
+      // The Cell route gates this branch; DCC did not, so the identical body answered
+      // `403` sent sequentially and `409` with the disclosure when it lost a race. Timing
+      // decided what a caller was told about somebody else's record.
+      //
+      // The mutation: drop the `coversWith` branch in `conflictAfterLostRace` and this
+      // goes 403 to 409.
+      const eventId = await createEvent(await recentSunday());
+      await takeAttendanceOnly();
+
+      const response = await raceAgainstStored(eventId, true, false);
+
+      expect(response.status).toBe(403);
+      expect(response.body.error.code).toBe('SCOPE_DENIED');
+      expect(response.body.error.details.capability).toBe('dcc.correct_subtree');
+
+      // Nothing of the record reaches the refusal: not the stored value, not who wrote it.
+      expect(JSON.stringify(response.body)).not.toMatch(/current|present|recorded_by|Adele/i);
+    });
+
+    it('answers an agreeing loser RESOURCE_BUSY, and asks it for no amendment capability', async () => {
+      // **The mirror, which is why the gate is on one branch only.** A loser carrying what
+      // the winner recorded wrote nothing, and section 7 owes no amendment capability for
+      // a write that writes nothing (decision 0191). Gating unconditionally would refuse
+      // this actor `403` where the identical body sent sequentially answers `201` -- and
+      // section 22 stores a 4xx against the idempotency key, so a conforming retry would
+      // replay the refusal for ever, while `RESOURCE_BUSY` releases it.
+      //
+      // The mutation: move the capability check above the `stale === null` return.
+      const eventId = await createEvent(await recentSunday());
+      await takeAttendanceOnly();
+
+      const response = await raceAgainstStored(eventId, true, true);
+
+      expect(response.status).toBe(503);
+      expect(response.body.error.code).toBe('RESOURCE_BUSY');
+    });
+  });
+
   describe('two first submissions for one person', () => {
     it('answers the loser a conflict with a null submitted version, not a 500', async () => {
       // `docs/ROADMAP.md` makes this Stage 4's "Done when": "a concurrent double
