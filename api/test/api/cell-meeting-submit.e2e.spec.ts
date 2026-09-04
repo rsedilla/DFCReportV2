@@ -12,6 +12,7 @@ import {
   createCell,
   createPerson,
   createTestApp,
+  resetRateLimits,
 } from '../setup/fixtures';
 
 import type { INestApplication } from '@nestjs/common';
@@ -56,6 +57,12 @@ describe('recording a Cell meeting (sections 12, 13 and 14)', () => {
 
   beforeEach(async () => {
     await truncateAll(db);
+    // **Cases share an application and therefore a source address** (`fixtures.ts`), and
+    // this file now makes more than 120 requests a minute — so without this a later case
+    // is answered 429 and the failure reads as a defect in whatever that case was about.
+    // It surfaced here exactly as that docblock predicts: three race cases went red on a
+    // retry, and the cause was the four cases added above them.
+    resetRateLimits(app);
 
     root = await createPerson(db, { firstName: 'Oriel', network: 'MENS' });
     await assignTo(db, root.id, null);
@@ -1961,21 +1968,32 @@ describe('recording a Cell meeting (sections 12, 13 and 14)', () => {
       // An empty roster makes every check below vacuous: a body carrying no attendance
       // passes, every real record is closed with a self-reference, and the meeting stays
       // `RESCHEDULED` — which section 12 counts in N.
-      const late = await memberBetween('Aurelio', new Date(`${meetingDate}T00:00:00+08:00`));
+      // A member from the meeting date only, so the day the meeting moves *to* has nobody.
+      const late = await memberBetween(
+        'Aurelio',
+        new Date(`${meetingDate}T00:00:00+08:00`),
+        new Date(`${meetingDate}T23:00:00+08:00`),
+      );
 
       await submit({
         status: 'HELD',
         attendance: [{ person_id: late.id, present: true }],
       }).expect(201);
 
-      const before = (() => {
+      // **Forward, not backward.** A date seven days *back* lands in a shut month whenever
+      // the most recent Saturday falls early in a month, and the `PERIOD_CLOSED` check runs
+      // before the empty-roster one — so the case would have gone red on 82 days of the
+      // next two years, the first four days from when it was written. A future date is in
+      // an open month on every day of the year, which is the property `mostRecentSaturday`
+      // is built around.
+      const emptyDay = (() => {
         const day = new Date(`${meetingDate}T12:00:00+08:00`);
-        day.setUTCDate(day.getUTCDate() - 7);
+        day.setUTCDate(day.getUTCDate() + 7);
 
         return day.toISOString().slice(0, 10);
       })();
 
-      const response = await submit({ status: 'RESCHEDULED', version: 1, actual_date: before });
+      const response = await submit({ status: 'RESCHEDULED', version: 1, actual_date: emptyDay });
 
       expect(response.status).toBe(409);
       expect(response.body.error.code).toBe('INVARIANT_VIOLATION');
@@ -2072,6 +2090,121 @@ describe('recording a Cell meeting (sections 12, 13 and 14)', () => {
         await holder.query('ROLLBACK').catch(() => undefined);
         await holder.end();
       }
+    });
+
+    it('does not let an explicit null amendment skip the closed-month refusal', async () => {
+      // **One extra JSON key was the whole bypass.** `@IsOptional()` lets `null` through
+      // untouched, so `body.amendment !== undefined` was true of it — and the closed-month
+      // check read the raw field where `submitWithin` had already normalised it. An
+      // ordinary leader could move a meeting into a month shut for weeks with no
+      // `records.backdate_effective_date`, no reason, and nothing in the audit log. The
+      // third defect this null has caused in this file.
+      const one = await member('Aurelio');
+
+      await submit({
+        status: 'HELD',
+        attendance: [{ person_id: one.id, present: true }],
+      }).expect(201);
+
+      const response = await submit({
+        status: 'RESCHEDULED',
+        version: 1,
+        actual_date: await closedMonthSaturday(),
+        attendance: [{ person_id: one.id, present: true }],
+        amendment: null,
+      });
+
+      expect(response.status).toBe(409);
+      expect(response.body.error.code).toBe('PERIOD_CLOSED');
+
+      const amended = await db
+        .selectFrom('audit_log')
+        .select('id')
+        .where('action', '=', 'cell_attendance.amended')
+        .execute();
+      expect(amended).toHaveLength(0);
+    });
+
+    it('refuses a first submission of NOT_HELD with no reason, or OTHER with no note', async () => {
+      // Both constraints were guarded on the transition path and on neither here — which
+      // is the ordinary way a `NOT_HELD` meeting is recorded, so the commonest body in
+      // this domain answered 500. Four constraint-driven 500s have now been found on this
+      // route, every one a check that existed in the schema and not in the service.
+      await member('Aurelio');
+
+      const noReason = await submit({ status: 'NOT_HELD' });
+      expect(noReason.status).toBe(409);
+      expect(noReason.body.error.code).toBe('INVARIANT_VIOLATION');
+
+      const noNote = await submit({ status: 'NOT_HELD', not_held_reason: 'OTHER' });
+      expect(noNote.status).toBe(409);
+      expect(noNote.body.error.code).toBe('INVARIANT_VIOLATION');
+    });
+
+    it('refuses a changed not-held reason rather than discarding it', async () => {
+      // It fell through as a correction and answered 201 having written nothing: a leader
+      // who filed one reason and resubmitted another was told it worked, and the record
+      // still said the first. Section 13 requires the reason and section 21 audits it, so
+      // silently discarding one is the worst of the three available answers.
+      await member('Aurelio');
+
+      await submit({
+        status: 'NOT_HELD',
+        not_held_reason: 'WEATHER_OR_CALAMITY',
+      }).expect(201);
+
+      const changed = await submit({
+        status: 'NOT_HELD',
+        version: 1,
+        not_held_reason: 'HOLIDAY_OR_CHURCH_EVENT',
+      });
+
+      expect(changed.status).toBe(409);
+      expect(changed.body.error.code).toBe('INVARIANT_VIOLATION');
+
+      // And an identical resubmission is still the no-op success it always was.
+      const same = await submit({
+        status: 'NOT_HELD',
+        version: 1,
+        not_held_reason: 'WEATHER_OR_CALAMITY',
+      });
+      expect(same.status).toBe(201);
+
+      const stored = await db
+        .selectFrom('cell_meetings')
+        .select('not_held_reason')
+        .where('cell_id', '=', markCell.id)
+        .executeTakeFirstOrThrow();
+      expect(stored.not_held_reason).toBe('WEATHER_OR_CALAMITY');
+    });
+
+    it('refuses an actual time with no actual date', async () => {
+      // Classified as a correction and the field silently discarded — the one shape
+      // section 22's versioning rule says can never be given meaning later. The refusal
+      // written for it was unreachable from this path.
+      const one = await member('Aurelio');
+
+      await submit({
+        status: 'HELD',
+        attendance: [{ person_id: one.id, present: true }],
+      }).expect(201);
+
+      await submit({
+        status: 'RESCHEDULED',
+        version: 1,
+        actual_date: movedTo(),
+        attendance: [{ person_id: one.id, present: true }],
+      }).expect(201);
+
+      const response = await submit({
+        status: 'RESCHEDULED',
+        version: 2,
+        actual_time: '20:00',
+        attendance: [{ person_id: one.id, present: true }],
+      });
+
+      expect(response.status).toBe(409);
+      expect(response.body.error.code).toBe('INVARIANT_VIOLATION');
     });
 
     it('refuses a reschedule with nowhere to move to', async () => {

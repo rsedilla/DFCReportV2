@@ -90,6 +90,7 @@ function classifyOperation(
   storedStatus: string,
   body: SubmitCellMeeting,
   context: { cell_id: string; meeting_id: string },
+  storedNotHeldReason: string | null = null,
 ): MeetingOperation {
   const details = {
     ...context,
@@ -100,17 +101,61 @@ function classifyOperation(
   // Coherence first, so a refusal names what is actually wrong. An actual date under any
   // status but `RESCHEDULED` is a malformed move rather than an illegal transition, and
   // "cannot move from HELD to HELD" would send its author looking for the wrong mistake.
-  if (body.status !== 'RESCHEDULED' && body.actual_date !== undefined) {
+  if (body.status !== 'RESCHEDULED' && (body.actual_date ?? body.actual_time) !== undefined) {
     return {
       kind: 'refused',
       error: new InvariantViolationError(
-        'An actual date belongs to a reschedule (SKILL.md section 13).',
+        'An actual date or time belongs to a reschedule (SKILL.md section 13).',
+        details,
+      ),
+    };
+  }
+
+  // **A time without a date is not a move**, and the refusal for it further down was
+  // unreachable from here: this step keyed on `actual_date` alone, so a body carrying only
+  // `actual_time` was classified a correction, accepted, and the field silently discarded
+  // — the one shape section 22's versioning rule says can never be given meaning later.
+  if (
+    body.status === 'RESCHEDULED' &&
+    body.actual_date === undefined &&
+    body.actual_time !== undefined
+  ) {
+    return {
+      kind: 'refused',
+      error: new InvariantViolationError(
+        'Moving a meeting to another time requires the date it took place on (SKILL.md ' +
+          'section 13).',
         details,
       ),
     };
   }
 
   if (body.status === storedStatus && body.actual_date === undefined) {
+    // **`NOT_HELD` → `NOT_HELD` with a different reason is not a correction of attendance,
+    // and there is none to correct.** It fell through as one and answered 201 having
+    // written nothing: a leader who filed `WEATHER_OR_CALAMITY` and resubmitted
+    // `HOLIDAY_OR_CHURCH_EVENT` was told it worked, and the record still said weather.
+    // Section 13 requires the reason and section 21 audits it, so silently discarding one
+    // is the worst of the three available answers.
+    //
+    // Refused rather than applied: changing it is a claim that the first record was wrong,
+    // which is the operation section 13 does not define and `CLAUDE.md` records as open.
+    // An identical resubmission is still a no-op success, because nothing changed.
+    if (
+      storedStatus === 'NOT_HELD' &&
+      body.not_held_reason !== undefined &&
+      body.not_held_reason !== storedNotHeldReason
+    ) {
+      return {
+        kind: 'refused',
+        error: new InvariantViolationError(
+          'Changing why a meeting was not held is a correction of the original report, ' +
+            'and this route does not make one (SKILL.md section 13).',
+          details,
+        ),
+      };
+    }
+
     return { kind: 'correction' };
   }
 
@@ -140,6 +185,50 @@ function classifyOperation(
   }
 
   return { kind: 'declare_not_held' };
+}
+
+/**
+ * What section 13 requires of a `NOT_HELD` meeting, on **both** paths that can write one.
+ *
+ * "`NOT_HELD` is always declared by the responsible leader with a reason", and a reason of
+ * `OTHER` carries a note saying what happened. Two `CHECK` constraints hold the same rule
+ * in migration 0011 — `cell_meetings_not_held_reason_iff_not_held` and
+ * `cell_meetings_other_requires_note` — and reaching either answers a raw 500 on a
+ * well-formed request, which is section 22's named failure mode.
+ *
+ * **A function because the rule has two call sites and had one guard.** Both constraints
+ * were guarded on the transition path and on neither the first submission, which is the
+ * ordinary way a `NOT_HELD` meeting is recorded — so `{"status":"NOT_HELD"}` answered 500
+ * on the commonest body in this domain. Four constraint-driven 500s have now been found on
+ * this route, every one of them a check that existed in the schema and not in the service.
+ *
+ * *The claim that "the DTO cannot" enforce this was false and is what left the first
+ * submission unguarded: both predicates are payload-only, and `CloseCellDto` enforces the
+ * identical shape with `@ValidateIf`. It is kept in the service rather than moved because
+ * this route already answers its domain refusals as `INVARIANT_VIOLATION`, and one route
+ * answering `VALIDATION_FAILED` for the same rule is the inconsistency, not the fix.*
+ */
+function assertNotHeldIsExplained(
+  body: SubmitCellMeeting,
+  context: { cell_id: string; meeting_id: string },
+): void {
+  if (body.status !== 'NOT_HELD') {
+    return;
+  }
+
+  if (body.not_held_reason === undefined) {
+    throw new InvariantViolationError(
+      'Declaring a meeting not held requires a reason (SKILL.md section 13).',
+      context,
+    );
+  }
+
+  if (body.not_held_reason === 'OTHER' && (body.not_held_note ?? '').trim() === '') {
+    throw new InvariantViolationError(
+      'A reason of OTHER requires a note saying what happened (SKILL.md section 13).',
+      context,
+    );
+  }
 }
 
 /**
@@ -580,6 +669,7 @@ export class CellMeetingsService {
           'id',
           'version',
           'status',
+          'not_held_reason',
           'responsible_leader_id',
           'facilitated_by',
           'submitted_by',
@@ -601,6 +691,7 @@ export class CellMeetingsService {
           cellId,
           cellHandle: cell.cellId,
           cell,
+          amendment,
           meetingId,
           reportingMonth,
           existing,
@@ -697,6 +788,10 @@ export class CellMeetingsService {
         actor,
         authority,
       });
+
+      // Section 13's `NOT_HELD` rule, on the path that records most of them. Both
+      // constraints behind it were guarded on the transition path and on neither here.
+      assertNotHeldIsExplained(body, { cell_id: cellId, meeting_id: meetingId });
 
       const members = await this.cells.membersAsOfWithin(trx, cellId, meetingId);
       const attendance = assertAttendanceMatchesRoster(body, members, {
@@ -848,12 +943,24 @@ export class CellMeetingsService {
       cellId: string;
       cellHandle: string;
       cell: { state: string; closedAt: Date | null };
+      /**
+       * The amendment, **normalised once** in `submitWithin` — never `body.amendment`.
+       *
+       * `@IsOptional()` lets an explicit `null` through untouched, so the raw field is not
+       * `undefined` for a body carrying `"amendment": null`. Reading it raw here let one
+       * extra JSON key skip the closed-month refusal entirely: no capability check, no
+       * audit entry, and a meeting moved into a month shut for weeks. That is the third
+       * defect this null has caused in this file, which is why it is threaded rather than
+       * re-derived.
+       */
+      amendment: { reason: string } | undefined;
       meetingId: string;
       reportingMonth: string;
       existing: {
         id: string;
         version: number;
         status: string;
+        not_held_reason: string | null;
         responsible_leader_id: string;
         facilitated_by: string | null;
         submitted_by: string | null;
@@ -875,10 +982,12 @@ export class CellMeetingsService {
     // and they disagreed: a second reschedule leaves the status unchanged and was treated
     // as a correction, and a lost race whose winner made the same move saw two statuses
     // agree and answered `RESOURCE_BUSY` for a retry that could never succeed.*
-    const operation = classifyOperation(existing.status, body, {
-      cell_id: cellId,
-      meeting_id: meetingId,
-    });
+    const operation = classifyOperation(
+      existing.status,
+      body,
+      { cell_id: cellId, meeting_id: meetingId },
+      existing.not_held_reason,
+    );
 
     if (operation.kind === 'refused') {
       throw operation.error;
@@ -1150,12 +1259,24 @@ export class CellMeetingsService {
       cellId: string;
       cellHandle: string;
       cell: { state: string; closedAt: Date | null };
+      /**
+       * The amendment, **normalised once** in `submitWithin` — never `body.amendment`.
+       *
+       * `@IsOptional()` lets an explicit `null` through untouched, so the raw field is not
+       * `undefined` for a body carrying `"amendment": null`. Reading it raw here let one
+       * extra JSON key skip the closed-month refusal entirely: no capability check, no
+       * audit entry, and a meeting moved into a month shut for weeks. That is the third
+       * defect this null has caused in this file, which is why it is threaded rather than
+       * re-derived.
+       */
+      amendment: { reason: string } | undefined;
       meetingId: string;
       reportingMonth: string;
       existing: {
         id: string;
         version: number;
         status: string;
+        not_held_reason: string | null;
         responsible_leader_id: string;
         facilitated_by: string | null;
         submitted_by: string | null;
@@ -1182,19 +1303,7 @@ export class CellMeetingsService {
     // answered a raw 500 on a well-formed request — section 22's named failure mode, and
     // the third and fourth constraint-driven 500s found on this path.*
     if (!toRescheduled) {
-      if (body.not_held_reason === undefined) {
-        throw new InvariantViolationError(
-          'Declaring a meeting not held requires a reason (SKILL.md section 13).',
-          { cell_id: cellId, meeting_id: meetingId },
-        );
-      }
-
-      if (body.not_held_reason === 'OTHER' && (body.not_held_note ?? '').trim() === '') {
-        throw new InvariantViolationError(
-          'A reason of OTHER requires a note saying what happened (SKILL.md section 13).',
-          { cell_id: cellId, meeting_id: meetingId },
-        );
-      }
+      assertNotHeldIsExplained(body, { cell_id: cellId, meeting_id: meetingId });
     }
 
     // **A closed Cell's meetings cannot be rescheduled** (section 13, stated in terms):
@@ -1243,7 +1352,7 @@ export class CellMeetingsService {
     // computing its target from the open month.*
     if (
       operation.kind === 'reschedule' &&
-      body.amendment === undefined &&
+      params.amendment === undefined &&
       !(await isMonthOpen(trx, reportingMonthOf(operation.actualDate)))
     ) {
       throw new ApiError(
@@ -1584,7 +1693,15 @@ export class CellMeetingsService {
   ): Promise<ApiError> {
     const meeting = await this.db
       .selectFrom('cell_meetings')
-      .select(['id', 'version', 'status', 'responsible_leader_id', 'submitted_by', 'submitted_at'])
+      .select([
+        'id',
+        'version',
+        'status',
+        'not_held_reason',
+        'responsible_leader_id',
+        'submitted_by',
+        'submitted_at',
+      ])
       .where('cell_id', '=', cellId)
       .where('scheduled_date', '=', meetingId)
       .executeTakeFirstOrThrow();
@@ -1625,10 +1742,15 @@ export class CellMeetingsService {
     // comparison and was told `RESOURCE_BUSY`, whose retry then answered "this meeting is
     // already on that date", permanently. The defect the previous batch claimed to have
     // removed, surviving for exactly the case where both writers moved the meeting.*
-    const committedOperation = classifyOperation(meeting.status, body, {
-      cell_id: cellId,
-      meeting_id: meetingId,
-    });
+    // The same inputs as well as the same function: the stored reason is part of the
+    // question for a `NOT_HELD` body, so omitting it here would make the two sides
+    // disagree again in exactly the way deciding it once was meant to prevent.
+    const committedOperation = classifyOperation(
+      meeting.status,
+      body,
+      { cell_id: cellId, meeting_id: meetingId },
+      meeting.not_held_reason,
+    );
 
     if (committedOperation.kind === 'refused') {
       // Answer exactly what this body gets sequentially against the committed state, which
