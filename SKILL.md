@@ -3826,31 +3826,54 @@ This is not a formatting preference. A Cell meeting belongs to the week its sche
 
 ### Which tree a report walks, and what attributes a figure to a scope
 
-**A report resolves the pastoral tree as of the end of the period being reported** (ruling
-of 2026-09-05). Section 18 requires historical reports to respect historical pastoral
-assignments; Section 16 names the instant for `Cell Leaders with 12+ Members` — "as of the
-end of the period being reported, which for the current period means now" — and that instant
-governs every report rather than that one metric. An open period therefore resolves as of
-now, and Section 17 already requires a report to say that the period is open.
+**Where a report resolves the pastoral tree, it resolves it as of the end of the period
+being reported** (ruling of 2026-09-05). Section 18 requires historical reports to respect
+historical pastoral assignments "where applicable"; Section 16 names the instant for
+`Cell Leaders with 12+ Members` — "as of the end of the period being reported — which for
+the current period means now" — and that instant governs wherever a report walks the tree
+rather than that one metric. An open period therefore resolves as of now, and Section 17
+already requires a report to say that the period is open.
 
-Resolving against the *current* tree is refused because it breaks two guarantees this
-specification makes elsewhere: Section 3's reproducibility, since a reassignment would
+*Section 16 grounds its instant on that metric being a current-state one, and Section 3
+puts current-state metrics on one side of a line and period-based classification and
+monthly attendance on the other. Carrying the instant across that line is what this ruling
+does, rather than something Section 16 already said.* Participation is measured over a
+rolling window ending at the report's date rather than a calendar month (Section 16), so
+"the end of the period" is that date for it.
+
+Resolving against the **current** tree is refused because two guarantees stated elsewhere
+depend on the historical one: Section 3's reproducibility, since a reassignment would
 rewrite every closed month behind it, and the invalidation list below, whose backdating
 clause says in terms that what a backdate changes is "which subtree a person belonged to
 during those periods".
 
-**Two different keys attribute a figure to a scope, and they are not interchangeable.**
+**Three different keys attribute a figure to a scope, one per domain plus coverage. They are
+not interchangeable, and the third is not a tree walk at all.**
 
-- **Unique people, classification and monthly-attendance buckets attribute by the person**,
-  placed in the tree as of the period's end. Section 9: totals "aggregate upward through the
-  tree", so a leader's total is the people in their subtree.
-- **Coverage attributes by the record's responsible leader**, frozen as of the event or
-  meeting date. Section 9 defines DCC coverage as how many responsible leaders have a record,
-  and says a submission made on behalf completes that leader's coverage — so it is a fact
-  about who owed the record.
+- **DCC unique people, classification and monthly-attendance buckets attribute by the
+  person**, placed in the tree as of the period's end. Section 16 states the figure
+  directly — "Total People — distinct people in the pastoral subtree".
+- **Cell unique people and classification attribute by the meeting's responsible leader**,
+  frozen as of the meeting date. Section 13 states it and names this section: "Sections 12
+  and 20 count a meeting under the leader it names." Section 12 states the same rule from
+  the other side — a Cell report "is not resolved through the pastoral leader of each
+  individual member, who may differ". Cell **monthly-attendance buckets** exist at Cell
+  scope only (Section 12), so no tree walk arises for them at all.
+- **Coverage attributes by the obligation rather than by the record**, because coverage
+  exists to surface the records that are *missing* and a missing record has no responsible
+  leader frozen on it. For DCC the denominator is the responsible leaders as of the event
+  date, and the numerator is those holding a record (Section 9). For Cells the denominator
+  is the Cell's scheduled meetings, each appearing for the leader who led the Cell on the
+  scheduled date (Sections 13 and 15) — a meeting has no row until it is reported.
 
-A Network root shows they are different keys rather than two descriptions of one: Section 9
-excludes roots from coverage denominators and keeps them in every unique-people total.
+It follows that a monthly report resolves the tree at **more than one instant**: the
+period's end for the person key, and each event or meeting date for coverage. That is not
+an exception to the rule above but the scope of it — the rule governs where a report places
+a *person*, and coverage places an *obligation*.
+
+A Network root shows the keys are genuinely different rather than three names for one:
+Section 9 excludes roots from coverage denominators and keeps them in every unique-people
+total.
 
 ### Unique people
 
