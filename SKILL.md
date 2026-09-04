@@ -142,7 +142,9 @@ Principle 13 requires a modular monolith. These are the modules, and the list is
 
 *A first version of this paragraph said the joins were in `hierarchy`'s recursive walks and that asking `people` per row would “turn one query into hundreds”. Neither is true of the two joins it exempts: `ancestorsOf` and `subtreeOf` select identifiers only and join nothing, and `directLeaderNameOf` returns at most one row. The category was right and the description was written from what the exemption was for rather than from the queries — in the paragraph added to stop exactly that.*
 
-**`reporting` is the module this rule bites hardest, and it takes the ordinary route** (ruling of 2026-09-05). It owns `report_snapshots` and `notifications` and nothing else, so it roots no query in attendance, Cell, membership, Person or pastoral-assignment tables, and a whole-church monthly report is therefore not a join. The owning module computes its own aggregates — `hierarchy` the dated subtree walk, `attendance` the DCC and Cell figures — and `reporting` composes them and stores the snapshot. Widening the exemption for it was considered and refused: an exemption covering six tables across four modules is not an exemption but this rule reversed for one module.
+**`reporting` is the module this rule bites hardest, and it takes the ordinary route** (ruling of 2026-09-05). It owns `report_snapshots` and `notifications` and nothing else, so it roots no query in attendance, Cell, membership, Person or pastoral-assignment tables, and a whole-church monthly report is therefore not a join. The owning module computes its own aggregates — `hierarchy` the dated subtree walk, `attendance` the DCC and Cell attendance figures, and **`cells` the Cell coverage denominator**, whose every input (`cell_schedules`, `cells`, `cell_leaderships`) it owns — and `reporting` composes them and stores the snapshot. *A first version named two computing modules and directed `attendance` at three tables `cells` owns, which is the rule this paragraph exists to uphold, broken inside it.* Widening the exemption was considered and refused: it would reach around eleven tables across four modules, which is not an exemption but this rule reversed for one module.
+
+**The `Owns` column above names a responsibility, and Section 26 names tables.** The two differ for `reporting` deliberately, and the difference is easy to misread: `reporting` is responsible for classification, monthly attendance, coverage and Network Summary — their definitions, their composition, the snapshot and the API surface — while the SQL aggregating any module's tables lives with those tables. It is the only module where the two readings come apart, because it is the only one whose whole subject matter is other modules' records.
 
 The exemption is deliberately narrow and the asymmetry is the point. A write is what an invariant guards, so the five pastoral-assignment rules have one home only while `hierarchy` is the sole writer of `pastoral_assignments`. A join reads rows the owning module would have returned anyway and changes nothing.
 
@@ -3850,11 +3852,17 @@ clause says in terms that what a backdate changes is "which subtree a person bel
 during those periods".
 
 **Three different keys attribute a figure to a scope, one per domain plus coverage. They are
-not interchangeable, and the third is not a tree walk at all.**
+not interchangeable.** *An earlier version added "and the third is not a tree walk at all",
+which the paragraph below it refutes: scoping a coverage denominator to a leader walks that
+leader's subtree at the event or meeting date. The clause belonged to the Cell-bucket claim
+in the second bullet and had been transplanted onto the headline.*
 
 - **DCC unique people, classification and monthly-attendance buckets attribute by the
-  person**, placed in the tree as of the period's end. Section 16 states the figure
-  directly — "Total People — distinct people in the pastoral subtree".
+  person**, placed in the tree as of the period's end. Section 16's `Total People` — "distinct people
+  in the pastoral subtree" — gives the shape of the key rather than this figure: it is a
+  current-state inventory metric (Section 3), while a DCC monthly figure counts the people
+  who attended in the period. *Cited as stating the figure "directly" for one commit, which
+  over-claimed in the same way as the Section 9 citation it replaced.*
 - **Cell unique people and classification attribute by the meeting's responsible leader**,
   frozen as of the meeting date. Section 13 states it and names this section: "Sections 12
   and 20 count a meeting under the leader it names." Section 12 states the same rule from
@@ -3866,7 +3874,9 @@ not interchangeable, and the third is not a tree walk at all.**
   leader frozen on it. For DCC the denominator is the responsible leaders as of the event
   date, and the numerator is those holding a record (Section 9). For Cells the denominator
   is the Cell's scheduled meetings, each appearing for the leader who led the Cell on the
-  scheduled date (Sections 13 and 15) — a meeting has no row until it is reported.
+  scheduled date (Sections 13 and 15), and the numerator is those with a record — a meeting
+  has no row until it is reported. *Both halves are now stated for both domains: an earlier
+  version gave DCC its numerator and left the Cell one to be inferred.*
 
 It follows that a monthly report resolves the tree at **more than one instant**: the
 period's end for the person key, and each event or meeting date for coverage. That is not
@@ -3877,7 +3887,7 @@ A Network root shows the keys are genuinely different rather than three names fo
 Section 9 excludes roots from coverage denominators and keeps them in every unique-people
 total.
 
-**Where the person key finds no open assignment at the period's end, it uses the last open assignment that person held at any instant within the period** (ruling of 2026-09-05). Section 5 makes zero open assignments legitimate for an archived Person, one encoded but not yet assigned, and an administrator, while Section 3 forbids filtering a period-based report by current lifecycle state — so without this such a person's real recorded attendance would sit in the Whole Church total and in no leader's, and Section 16's drill-down and Section 17's chain would lose people between two levels. The fallback keeps them in exactly one subtree, so both identities below still sum and every level of a drill-down adds up to the level above. It is reproducible because assignment history is never deleted (Section 5).
+**Where the person key finds no open assignment at the period's end, it uses the last open assignment that person held at any instant within the period** (ruling of 2026-09-05). Section 5 makes zero open assignments legitimate for an archived Person, one encoded but not yet assigned, and an administrator, while Section 3 forbids filtering a period-based report by current lifecycle state — so without this such a person's real recorded attendance would sit in the Whole Church total and in no leader's, and Section 16's drill-down and Section 17's chain would lose people between two levels. The fallback keeps them in exactly one subtree, so both identities below still sum, and every level of a drill-down adds up to the level above **except for the residual named in the next paragraph**. It is reproducible because assignment history is never deleted (Section 5). **The fallback applies up the chain**: where the leader it lands on is themselves unassigned at the period's end, theirs resolves the same way — which is what makes the additivity claim hold, rather than hold one level at a time.
 
 Where a person held no open assignment at **any** instant of the period, they appear in the Whole Church total alone. No leader discipled them in that period, and attributing them to one would invent a pastoral relationship the tree never held.
 

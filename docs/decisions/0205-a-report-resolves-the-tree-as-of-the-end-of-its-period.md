@@ -1,4 +1,7 @@
-# 2026-09-05 — A report resolves the tree as of the end of its period, and attribution has two keys
+# 2026-09-05 — A report resolves the tree as of the end of its period, and attribution has three keys
+
+*Titled "two keys" when written. The body was corrected to three the same day and the heading
+was not, so the first line a reader met stated the superseded answer.*
 
 Settled before Stage 5's first query, because it decides every figure Stage 5 produces and
 is stated generally in no section.
@@ -46,7 +49,7 @@ An **open** period resolves as of now, which is Section 16's own parenthesis and
 exception: the end of the period has not happened yet, and Section 17 already requires a
 report to say whether the period it shows is open.
 
-## Attribution has three keys, and the third is not a tree walk
+## Attribution has three keys, and one is not keyed on a person
 
 *This ruling was first written with two keys and was wrong: it gave Cell figures the person
 key, which Section 13 contradicts in terms — "Sections 12 and 20 count a meeting under the
@@ -90,8 +93,10 @@ Section 2's closed exemption list does not permit.
 ## What it does not settle, and three Stop Conditions it raised
 
 `architecture-guardian` raised three questions this ruling cannot answer, each escalated
-rather than invented. They are recorded in `CLAUDE.md`, and the third blocks Stage 5's
-first query.
+rather than invented. They are recorded in `CLAUDE.md`. *This sentence said "the third
+blocks Stage 5's first query" and was wrong when written — the blocking two were the first
+two, which decision 0206 then settled, leaving nothing blocking. It disagreed with
+`CLAUDE.md` on the one fact the index exists to carry, and `CLAUDE.md` is the authority.*
 
 - **Where a person with no open pastoral assignment at the period's end lands**, in a period
   they have attendance in. Section 5 makes zero open assignments legitimate for an archived
