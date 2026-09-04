@@ -142,6 +142,10 @@ Principle 13 requires a modular monolith. These are the modules, and the list is
 
 *A first version of this paragraph said the joins were in `hierarchy`'s recursive walks and that asking `people` per row would “turn one query into hundreds”. Neither is true of the two joins it exempts: `ancestorsOf` and `subtreeOf` select identifiers only and join nothing, and `directLeaderNameOf` returns at most one row. The category was right and the description was written from what the exemption was for rather than from the queries — in the paragraph added to stop exactly that.*
 
+**`reporting` is the module this rule bites hardest, and it takes the ordinary route** (ruling of 2026-09-05). It owns `report_snapshots` and `notifications` and nothing else, so it roots no query in attendance, Cell, membership, Person or pastoral-assignment tables, and a whole-church monthly report is therefore not a join. The owning module computes its own aggregates — `hierarchy` the dated subtree walk, `attendance` the DCC and Cell attendance figures, **`cells` the Cell coverage denominator**, whose every input (`cell_schedules`, `cells`, `cell_leaderships`) it owns, and **`people` identity, lifecycle filtering and the drill-down population** (§16 excludes archived and merged Persons from Participation, which needs `person_lifecycle` and `merged_into_id`) — and `reporting` composes them and stores the snapshot. *A first version named two computing modules and directed `attendance` at three tables `cells` owns — the rule this paragraph exists to uphold, broken inside it. The correction then named three while the count in its own next sentence said four, and the missing one was `people`.* Widening the exemption was considered and refused: it would reach around eleven tables across four modules, which is not an exemption but this rule reversed for one module.
+
+**The `Owns` column above names a responsibility, and Section 26 names tables.** The two differ for `reporting` deliberately, and the difference is easy to misread: `reporting` is responsible for classification, monthly attendance, coverage and Network Summary — their definitions, their composition, the snapshot and the API surface — while the SQL aggregating any module's tables lives with those tables. It is the only module where the two readings come apart, because it is the only one whose whole subject matter is other modules' records.
+
 The exemption is deliberately narrow and the asymmetry is the point. A write is what an invariant guards, so the five pastoral-assignment rules have one home only while `hierarchy` is the sole writer of `pastoral_assignments`. A join reads rows the owning module would have returned anyway and changes nothing.
 
 **Where the dependency would be a cycle, and only there, it is inverted through a port — and such a port is optional and refuses** (ruling of 2026-09-01). The consuming module declares the interface it needs, the owning module implements it, and a binding module joins the two — which is what keeps this section's dependency direction acyclic where two modules each need something the other owns.
@@ -1579,6 +1583,8 @@ Scope resolves against a target. Where the target is a Person, it resolves throu
   - **The guard is therefore given the actor as the target**, and the restriction to those people is a check in the owning module. "Church-wide" invites the Whole Church target and that reading is wrong: it would deny every Leader holding `dcc.take_attendance` at own/subtree, which is every leader who records DCC. The actor target passes because `OWN_SUBTREE` includes the actor, and it leaves the decision that matters on the people rather than on the event. This is the shape `GET /api/v1/people/duplicate-candidates` already uses for a church-wide read whose scoping is done by what it returns
 - an **Account** resolves through its Person
 - a **report scope selector** is itself the target: a request for a scope the actor does not hold is `SCOPE_DENIED`, never silently narrowed to what they do hold
+  - **It resolves as of the period being reported** (ruling of 2026-09-05), which is the capability rule above applied to the one target that had no instant — `reports.view_subtree` is named there and the selector's instant was not. An open period resolves as of now. So a leader may read October's figures for a downline leader who left their subtree in November, and may drill into them: the total is computed from the October tree and already contains that leader's people, so authorizing undated would show a figure while refusing the breakdown that explains it, against Section 20's additivity — on the actor's own screen rather than in the arithmetic, since the identity still holds and what breaks is the actor's ability to see one of its addends. Historical visibility follows historical responsibility, which is this section's own reason, given in the base bullet above where a Cell target "resolves through the Cell's leader **as of the period being viewed**" and cited there to Sections 10 and 15. *A first version cited those two sections as giving the reason. They do not: §10 says a closed Cell's recorded attendance and prior reports are unaffected and gives no visibility rule, and §15's only closed-Cell provision is the attention list, which is bounded by the submission window and justified by a recording obligation rather than by historical visibility. It also cited the closed-Cell **fallback**, which is the undated half of that bullet, where the dated half is what carries this.*
+  - **This moves no write.** The rule below — authority resolves through the current leader, and a write carrying an effective date other than now is still authorized now — is untouched, and it is what stops privilege being reclaimed through a date field. A viewing capability confers no write, `read_only` is valid on it, and a reported period is one that already happened rather than a date an actor picks to act at.
 - an **audit entry** resolves through its target
 - a **setting** is Whole Church only, and is never in scope at any narrower value
 
@@ -1656,7 +1662,7 @@ All permission and scope grants — creation, modification, and revocation — m
 
 #### An effective date does not move the scope decision
 
-**"The period being viewed" is the period a request under a viewing capability is asking about. Everything else is acted on now, whatever date it takes effect at.** **A viewing request that names no period is asking about now**, and resolves through the Cell's current leader on the base bullet's terms, falling back to its last leader where the Cell is closed. It is a *dated* viewing read — one asking about a past month — that owes a resolution as of that period, and no route asks one yet. The distinction is stated because it was previously enforced as though declaring a viewing capability were itself the trigger, which would have made `GET /api/v1/cells/{id}/members` owe a resolution for a period it never names (ruling of 2026-09-04). Authority resolves through the Cell's *current* leader; the relationship being recorded resolves as of its own effective date, because that is the period it describes. Two questions, two answers, and any write carrying an effective date other than now asks both.
+**"The period being viewed" is the period a request under a viewing capability is asking about. Everything else is acted on now, whatever date it takes effect at.** **A viewing request that names no period is asking about now**, and resolves through the Cell's current leader on the base bullet's terms, falling back to its last leader where the Cell is closed. It is a *dated* viewing read — one asking about a past month — that owes a resolution as of that period. **Stage 5's monthly report will be the first route that asks**, and the ruling of 2026-09-05 answers it for the one target that had no instant: a report scope selector resolves as of the period reported, above. *This sentence read "and no route asks one yet" until then.* The distinction is stated because it was previously enforced as though declaring a viewing capability were itself the trigger, which would have made `GET /api/v1/cells/{id}/members` owe a resolution for a period it never names (ruling of 2026-09-04). Authority resolves through the Cell's *current* leader; the relationship being recorded resolves as of its own effective date, because that is the period it describes. Two questions, two answers, and any write carrying an effective date other than now asks both.
 
 *This sentence said "a read" and "a write" until 2026-09-02, and for one commit it said that in the same section as the bullet declaring the method to be the wrong discriminator — so Section 7 defined the phrase by the split it had just stopped using, and the contradiction that ruling closed between Sections 7 and 13 was reproduced inside Section 7. The rule is unchanged; what moved is which word carries it.*
 
@@ -3823,6 +3829,69 @@ Asia/Manila observes no daylight saving time, so the offset is a constant +08:00
 **A calendar week begins on Monday**, following ISO 8601, consistently with the date format used throughout. Sunday belongs to the week that began on the preceding Monday.
 
 This is not a formatting preference. A Cell meeting belongs to the week its schedule placed it in, and `cell_meetings.week_starting` records which — so the week boundary decides which meetings fall in which week, and a rescheduled meeting's week is the week it was scheduled in, not the week it moved to. *An earlier version said Section 13 makes the week "the unit of a Cell's identity". It does not: the identity is the Cell and the scheduled date, because a week straddling a month boundary can hold two scheduled meetings. The week is what a meeting reports in, which is what this rule decides.* A Sunday-start convention is common locally and will be somebody's default, which is why the rule is fixed here rather than left to the calendar library.
+
+### Which tree a report walks, and what attributes a figure to a scope
+
+**Where a report resolves the pastoral tree, it resolves it as of the end of the period
+being reported** (ruling of 2026-09-05). Section 18 requires historical reports to respect
+historical pastoral assignments "where applicable"; Section 16 names the instant for
+`Cell Leaders with 12+ Members` — "as of the end of the period being reported — which for
+the current period means now" — and that instant governs wherever a report walks the tree
+rather than that one metric. An open period therefore resolves as of now, and Section 17
+already requires a report to say that the period is open.
+
+*Section 16 grounds its instant on that metric being a current-state one, and Section 3
+puts current-state metrics on one side of a line and period-based classification and
+monthly attendance on the other. Carrying the instant across that line is what this ruling
+does, rather than something Section 16 already said.* Participation is measured over a
+rolling window ending at the report's date rather than a calendar month (Section 16), so
+"the end of the period" is that date for it.
+
+Resolving against the **current** tree is refused because two guarantees stated elsewhere
+depend on the historical one: Section 3's reproducibility, since a reassignment would
+rewrite every closed month behind it, and the invalidation list below, whose backdating
+clause says in terms that what a backdate changes is "which subtree a person belonged to
+during those periods".
+
+**Three different keys attribute a figure to a scope, one per domain plus coverage. They are
+not interchangeable.** *An earlier version added "and the third is not a tree walk at all",
+which the paragraph below it refutes: scoping a coverage denominator to a leader walks that
+leader's subtree at the event or meeting date. The clause belonged to the Cell-bucket claim
+in the second bullet and had been transplanted onto the headline.*
+
+- **DCC unique people, classification and monthly-attendance buckets attribute by the
+  person**, placed in the tree as of the period's end. Section 16's `Total People` — "distinct people
+  in the pastoral subtree" — gives the shape of the key rather than this figure: it is a
+  current-state inventory metric (Section 3), while a DCC monthly figure counts the people
+  who attended in the period. *Cited as stating the figure "directly" for one commit, which
+  over-claimed in the same way as the Section 9 citation it replaced.*
+- **Cell unique people and classification attribute by the meeting's responsible leader**,
+  frozen as of the meeting date. Section 13 states it and names this section: "Sections 12
+  and 20 count a meeting under the leader it names." Section 12 states the same rule from
+  the other side — a Cell report "is not resolved through the pastoral leader of each
+  individual member, who may differ". Cell **monthly-attendance buckets** exist at Cell
+  scope only (Section 12), so no tree walk arises for them at all.
+- **Coverage attributes by the obligation rather than by the record**, because coverage
+  exists to surface the records that are *missing* and a missing record has no responsible
+  leader frozen on it. For DCC the denominator is the responsible leaders as of the event
+  date, and the numerator is those holding a record (Section 9). For Cells the denominator
+  is the Cell's scheduled meetings, each appearing for the leader who led the Cell on the
+  scheduled date (Sections 13 and 15), and the numerator is those with a record — a meeting
+  has no row until it is reported. *Both halves are now stated for both domains: an earlier
+  version gave DCC its numerator and left the Cell one to be inferred.*
+
+It follows that a monthly report resolves the tree at **more than one instant**: the
+period's end for the person key, and each event or meeting date for coverage. That is not
+an exception to the rule above but the scope of it — the rule governs where a report places
+a *person*, and coverage places an *obligation*.
+
+A Network root shows the keys are genuinely different rather than three names for one:
+Section 9 excludes roots from coverage denominators and keeps them in every unique-people
+total.
+
+**Where the person key finds no open assignment at the period's end, it uses the last open assignment that person held at any instant within the period** (ruling of 2026-09-05). Section 5 makes zero open assignments legitimate for an archived Person, one encoded but not yet assigned, and an administrator, while Section 3 forbids filtering a period-based report by current lifecycle state — so without this such a person's real recorded attendance would sit in the Whole Church total and in no leader's, and Section 16's drill-down and Section 17's chain would lose people between two levels. The fallback keeps them in exactly one subtree, so both identities below still sum, and every level of a drill-down adds up to the level above **except for the residual named in the next paragraph**. It is reproducible because assignment history is never deleted (Section 5). **The fallback applies up the chain**: where the leader it lands on is themselves unassigned at the period's end, theirs resolves the same way — which is what makes the additivity claim hold, rather than hold one level at a time. **It is resolved with cycle detection, as Section 5 requires of any walk of the pastoral tree**, and that is not a formality here: the graph it walks is *last open assignment held at any instant within the period*, which collapses rows from different instants into one edge set, and Section 5 invariant 2 constrains the **active** tree at write time rather than that collapsed map. Two people can each end a period unassigned having each been under the other earlier in it, from writes that were legal when made. A detected cycle is a data-integrity defect and the figure refuses rather than silently truncating the chain.
+
+Where a person held no open assignment at **any** instant of the period, they appear in the Whole Church total alone. No leader discipled them in that period, and attributing them to one would invent a pastoral relationship the tree never held.
 
 ### Unique people
 
