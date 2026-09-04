@@ -66,6 +66,54 @@ class LostCorrectionRace extends Error {
 const ONE_PER_SCHEDULED_DATE = 'cell_meetings_one_per_scheduled_date';
 
 /**
+ * The transitions section 13 names, and no others (decision 0195).
+ *
+ * A first submission is `HELD` or `NOT_HELD` and is refused `RESCHEDULED` elsewhere, so
+ * this governs only a second submission against a record that exists.
+ *
+ * `RESCHEDULED` → `HELD` is absent because it is not a transition and needs none:
+ * `RESCHEDULED` already means "the meeting took place, or is planned, on a date other than
+ * its scheduled one", and section 12 counts `HELD` and `RESCHEDULED` alike in N.
+ */
+const LEGAL_TRANSITIONS: ReadonlyMap<string, readonly string[]> = new Map([
+  ['HELD', ['RESCHEDULED']],
+  ['RESCHEDULED', ['RESCHEDULED', 'NOT_HELD']],
+  ['NOT_HELD', []],
+]);
+
+function isLegalTransition(from: string, to: string): boolean {
+  return (LEGAL_TRANSITIONS.get(from) ?? []).includes(to);
+}
+
+/**
+ * Why this particular change is refused, rather than one message for all of them.
+ *
+ * A leader meeting a refusal needs to know whether they asked for something this domain
+ * does not do or something it does elsewhere, and the two illegal cases fail for different
+ * reasons — one contradicts a fact already recorded, the other is a claim that a record was
+ * wrong, which is a different operation from a move (section 13, and recorded as open in
+ * `CLAUDE.md`).
+ */
+function transitionRefusal(from: string, to: string): string {
+  if (from === 'NOT_HELD') {
+    return (
+      'This meeting was reported as not held, and not being made up. It cannot be moved ' +
+      'or reported as held afterwards (SKILL.md section 13).'
+    );
+  }
+
+  if (from === 'HELD' && to === 'NOT_HELD') {
+    return (
+      'A meeting already reported as held cannot be changed to not held: that is a ' +
+      'correction of the original report rather than a change to the meeting, and this ' +
+      'route does not make one (SKILL.md section 13).'
+    );
+  }
+
+  return `A Cell meeting cannot move from ${from} to ${to} (SKILL.md section 13).`;
+}
+
+/**
  * What both of this route's operations answer with.
  *
  * Declared as a shape rather than `Record<string, unknown>` because it is handed to
@@ -734,17 +782,20 @@ export class CellMeetingsService {
     // meeting moving between statuses with nothing to explain it (section 13). Checked
     // first because a `NOT_HELD` body carries no attendance, so it would otherwise reach
     // the "nothing changed" path below and be answered as a no-op.
+    // *Every status change was refused here until 2026-09-04 (decision 0195), which is
+    // what made `RESCHEDULED` a status no path could produce. Exactly four transitions are
+    // legal now, and the rest are refused in the same place for the same reason.*
     if (body.status !== existing.status) {
-      throw new InvariantViolationError(
-        'Changing a meeting\u2019s status is a separate operation from correcting its ' +
-          'attendance (SKILL.md section 13).',
-        {
+      if (!isLegalTransition(existing.status, body.status)) {
+        throw new InvariantViolationError(transitionRefusal(existing.status, body.status), {
           cell_id: cellId,
           meeting_id: meetingId,
           current_status: existing.status,
           submitted_status: body.status,
-        },
-      );
+        });
+      }
+
+      return this.transitionWithin(trx, params);
     }
 
     // **Whether this meeting is the actor's to record at all, decided before anything
@@ -970,6 +1021,294 @@ export class CellMeetingsService {
   }
 
   /** The one response shape both outcomes of a correction answer with. */
+  /**
+   * A meeting moving between statuses (SKILL.md section 13; decision 0195).
+   *
+   * **The move and the roster are one operation**, which is the whole of that ruling. A
+   * rescheduled meeting's roster comes from the **actual** date (section 12) — "the people
+   * who could actually have been there" — and a first submission cannot carry
+   * `RESCHEDULED`, so a meeting is recorded and then moved. Performed as two operations
+   * the ordinary flow records attendance against the scheduled-date roster and then moves
+   * the roster out from under it, leaving the meeting failing section 13's "every member
+   * exactly once" rule with nothing to surface it: coverage counts recorded meetings
+   * rather than complete ones, so the month reconciles wrongly and every figure looks
+   * ordinary.
+   *
+   * **The identity, the month and the week never move.** `(cell_id, scheduled_date)` is
+   * the meeting (section 13), `reporting_month` is fixed at creation, and `week_starting`
+   * is the week the schedule placed it in — a 31 January meeting moved to 2 February still
+   * reports in January. `responsible_leader_id` is frozen and is not re-resolved, which is
+   * what keeps a rescheduled meeting from moving between leaders' totals inside a period
+   * that may have closed.
+   */
+  private async transitionWithin(
+    trx: Transaction<Database>,
+    params: {
+      cellId: string;
+      cellHandle: string;
+      meetingId: string;
+      reportingMonth: string;
+      existing: {
+        id: string;
+        version: number;
+        status: string;
+        responsible_leader_id: string;
+        facilitated_by: string | null;
+        submitted_by: string | null;
+        submitted_at: Date | null;
+      };
+      body: SubmitCellMeeting;
+      actor: Actor;
+      authority: ActorAuthority;
+    },
+  ): Promise<CellMeetingSubmissionResponse> {
+    const { cellId, meetingId, existing, body, actor } = params;
+    const toRescheduled = body.status === 'RESCHEDULED';
+
+    // A reschedule is a move, and a move needs somewhere to move to.
+    if (toRescheduled && body.actual_date === undefined) {
+      throw new InvariantViolationError(
+        'Rescheduling a meeting requires the date it actually took place on (SKILL.md ' +
+          'section 13).',
+        { cell_id: cellId, meeting_id: meetingId },
+      );
+    }
+
+    // **`actual_time` cannot move on its own**, which is not pedantry: the changes row
+    // records a move from one date and time to another, and a body carrying only a time
+    // would write a row whose `from_date` and `to_date` are equal — a move that moved
+    // nothing, indistinguishable in the history from one that did.
+    if (!toRescheduled && (body.actual_date !== undefined || body.actual_time !== undefined)) {
+      throw new InvariantViolationError(
+        'An actual date or time belongs to a reschedule (SKILL.md section 13).',
+        { cell_id: cellId, meeting_id: meetingId, submitted_status: body.status },
+      );
+    }
+
+    // Both checks that decide whether this meeting is the actor's to touch, in section 7's
+    // order: whose it is, then whether they may amend it. A transition always changes the
+    // record, so the amendment capability is owed unconditionally — unlike a correction,
+    // where a submission matching what is stored is not an amendment.
+    await this.assertMayActForAnother(trx, params);
+    await this.assertMayCorrect(trx, params);
+
+    if (body.version === undefined || body.version !== existing.version) {
+      throw await this.conflictFor(trx, {
+        actor,
+        submittedVersion: body.version ?? null,
+        existing,
+        submittedPresent: (body.attendance ?? []).filter((line) => line.present).length,
+        storedPresent: 0,
+      });
+    }
+
+    const live = await trx
+      .selectFrom('cell_attendance')
+      .select(['id', 'person_id', 'present', 'version'])
+      .where('cell_meeting_id', '=', existing.id)
+      .where('superseded_at', 'is', null)
+      .execute();
+
+    // **The roster of the day it moved to** (section 12), which is the ruling. On a
+    // `NOT_HELD` transition there is no roster at all: the meeting did not happen, so
+    // there is nobody to have been absent from it.
+    const roster = toRescheduled
+      ? await this.cells.membersAsOfWithin(trx, cellId, body.actual_date as string)
+      : [];
+    const attendance = toRescheduled
+      ? assertAttendanceMatchesRoster(body, roster, { cellId, meetingId })
+      : [];
+
+    const named = new Set(attendance.map((line) => line.person_id));
+    const stored = new Map(live.map((row) => [row.person_id, row]));
+
+    // **Everyone the new roster does not name has their record closed with nothing
+    // replacing it** — `superseded_by` the row's own id, which is decision 0183's idiom
+    // and section 13's only permitted shape for this. Two occasions reach it: a
+    // `RESCHEDULED` meeting declared `NOT_HELD`, which closes every row, and a reschedule
+    // whose new date has a different membership, which closes the rows of people who left.
+    //
+    // Closed rather than deleted, and closed rather than left standing: section 12 makes
+    // such a person a non-member of *this meeting* rather than somebody whose attendance
+    // was misrecorded — they could not have been there — and Principle 12 keeps the
+    // history legible.
+    for (const row of live) {
+      if (named.has(row.person_id)) {
+        continue;
+      }
+
+      const closed = await trx
+        .updateTable('cell_attendance')
+        .set({ superseded_at: sql<Date>`clock_timestamp()`, superseded_by: row.id })
+        .where('id', '=', row.id)
+        .where('superseded_at', 'is', null)
+        .executeTakeFirst();
+
+      if (closed.numUpdatedRows === 0n) {
+        throw new LostCorrectionRace();
+      }
+    }
+
+    // The lines that moved, on the correction path's own terms: only what changed is
+    // superseded, and the successor's `recorded_at` is read back in SQL from the row it
+    // closes so the two cannot overlap (migration 0013).
+    let corrected = 0;
+
+    for (const line of attendance) {
+      const predecessor = stored.get(line.person_id);
+
+      if (predecessor !== undefined && predecessor.present === line.present) {
+        continue;
+      }
+
+      corrected += 1;
+      const successorId = randomUUID();
+
+      if (predecessor !== undefined) {
+        const closed = await trx
+          .updateTable('cell_attendance')
+          .set({ superseded_at: sql<Date>`clock_timestamp()`, superseded_by: successorId })
+          .where('id', '=', predecessor.id)
+          .where('superseded_at', 'is', null)
+          .executeTakeFirst();
+
+        if (closed.numUpdatedRows === 0n) {
+          throw new LostCorrectionRace();
+        }
+      }
+
+      await trx
+        .insertInto('cell_attendance')
+        .values({
+          id: successorId,
+          cell_meeting_id: existing.id,
+          person_id: line.person_id,
+          present: line.present,
+          recorded_by: actor.accountId,
+          correction_reason: body.correction_reason ?? null,
+          version: predecessor === undefined ? 1 : predecessor.version + 1,
+          ...(predecessor === undefined
+            ? {}
+            : {
+                recorded_at: sql<Date>`(SELECT superseded_at FROM cell_attendance WHERE id = ${predecessor.id})`,
+              }),
+        })
+        .execute();
+    }
+
+    // The meeting as it stands, read before it moves: the `from_*` columns of the changes
+    // row below come from here, and the actual time defaults from it.
+    const before = await trx
+      .selectFrom('cell_meetings')
+      .select(['scheduled_date', 'scheduled_time', 'actual_date', 'actual_time'])
+      .where('id', '=', existing.id)
+      .executeTakeFirstOrThrow();
+
+    // **Where the meeting was**, which section 13 defines rather than leaving to this
+    // method: "The instant is the meeting's `actual_date` where it has one, and its
+    // `scheduled_date` otherwise." A meeting rescheduled twice moves from the date it had
+    // last, not from the one it was originally scheduled for, so recording the scheduled
+    // date on the second move would make the history read as though the first had not
+    // happened.
+    const fromDate = before.actual_date ?? before.scheduled_date;
+    const fromTime = before.actual_time ?? before.scheduled_time;
+
+    // **A meeting that moved day and not time keeps its time.** `cell_meetings` requires
+    // the two together — `cell_meetings_actual_time_with_date` checks
+    // `(actual_date IS NOT NULL) = (actual_time IS NOT NULL)` — so a reschedule naming
+    // only a date violated the constraint and surfaced as an `INTERNAL_ERROR` on a
+    // well-formed request, which is section 22's named failure mode.
+    //
+    // Defaulted rather than made required, because section 13 asks a reschedule to
+    // preserve the "new scheduled date/time" and a Cell that moves a meeting to another
+    // day usually meets at its own hour. The schema is what forced the question; the
+    // answer is the domain's.
+    const actualTime = toRescheduled ? (body.actual_time ?? before.scheduled_time) : null;
+
+    // The meeting itself. Guarded on the version it read and the result checked, for the
+    // reason the correction path gives: under READ COMMITTED a concurrent write blocks
+    // here, re-qualifies, and matches nothing.
+    const moved = await trx
+      .updateTable('cell_meetings')
+      .set({
+        status: body.status,
+        version: existing.version + 1,
+        ...(toRescheduled
+          ? { actual_date: body.actual_date, actual_time: actualTime }
+          : {
+              not_held_reason: body.not_held_reason ?? null,
+              not_held_note: body.not_held_note ?? null,
+              // **The actual date is cleared, and the schema is what says so.**
+              // `cell_meetings_actual_date_iff_rescheduled` checks
+              // `(status = 'RESCHEDULED') = (actual_date IS NOT NULL)`, so a moved meeting
+              // declared `NOT_HELD` while keeping its actual date violates it and
+              // surfaces as an `INTERNAL_ERROR`. Section 13 agrees rather than merely
+              // permitting it: "A `NOT_HELD` meeting has no actual date and uses the
+              // scheduled one."
+              //
+              // Section 13's "preserving both records" is satisfied by
+              // `cell_meeting_changes`, which keeps the move and the declaration as two
+              // rows — that is the whole reason a meeting's changes live in their own
+              // rows rather than in columns on the meeting.
+              actual_date: null,
+              actual_time: null,
+            }),
+      } as never)
+      .where('id', '=', existing.id)
+      .where('version', '=', existing.version)
+      .returning('version')
+      .executeTakeFirst();
+
+    if (moved === undefined) {
+      throw new LostCorrectionRace();
+    }
+
+    // **The move lives in its own row** (section 13): "A meeting rescheduled twice would
+    // overwrite the first reschedule in a single set of columns", and a `RESCHEDULED`
+    // meeting later declared `NOT_HELD` must preserve both records.
+    await trx
+      .insertInto('cell_meeting_changes')
+      .values({
+        cell_meeting_id: existing.id,
+        from_status: existing.status,
+        to_status: body.status,
+        from_date: fromDate,
+        from_time: fromTime,
+        to_date: toRescheduled ? (body.actual_date as string) : null,
+        to_time: actualTime,
+        reason: toRescheduled ? null : (body.not_held_reason ?? null),
+        note: toRescheduled ? null : (body.not_held_note ?? null),
+        actor_id: actor.accountId,
+      } as never)
+      .execute();
+
+    await this.audit.writeWithin(trx, {
+      actorId: actor.accountId,
+      action: toRescheduled ? 'cell_meeting.rescheduled' : 'cell_meeting.not_held',
+      targetType: 'cell',
+      targetId: cellId,
+      reason: toRescheduled ? null : (body.not_held_reason ?? null),
+      before: { meeting_id: meetingId, status: existing.status },
+      after: {
+        meeting_id: meetingId,
+        status: body.status,
+        ...(toRescheduled
+          ? { actual_date: body.actual_date as string, recorded: attendance.length }
+          : { not_held_reason: body.not_held_reason ?? null }),
+      },
+    });
+
+    return this.responseFor(
+      { ...params, existing: { ...existing, status: body.status } },
+      {
+        version: existing.version + 1,
+        recorded: attendance.length,
+        present: attendance.filter((line) => line.present).length,
+        corrected,
+      },
+    );
+  }
+
   private responseFor(
     params: {
       cellHandle: string;

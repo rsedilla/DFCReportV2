@@ -154,6 +154,22 @@ describe('recording a Cell meeting (sections 12, 13 and 14)', () => {
     return person;
   }
 
+  /** A member over an explicit window, for the cases where the roster moves under a date. */
+  async function memberBetween(
+    firstName: string,
+    from: Date,
+    to: Date | null = null,
+  ): Promise<TestPerson> {
+    const person = await createPerson(db, { firstName, network: 'MENS' });
+    await assignTo(db, person.id, mark.id);
+    await db
+      .insertInto('cell_memberships')
+      .values({ person_id: person.id, cell_id: markCell.id, started_at: from, ended_at: to })
+      .execute();
+
+    return person;
+  }
+
   const submit = (body: Record<string, unknown>, as: TestAccount = markAccount, date?: string) =>
     request(app.getHttpServer())
       .post(`/api/v1/cells/${markCell.id}/meetings/${date ?? meetingDate}/submit`)
@@ -1273,6 +1289,239 @@ describe('recording a Cell meeting (sections 12, 13 and 14)', () => {
         status: 'NOT_HELD',
         version,
         not_held_reason: 'WEATHER_OR_CALAMITY',
+      });
+
+      expect(response.status).toBe(409);
+      expect(response.body.error.code).toBe('INVARIANT_VIOLATION');
+    });
+  });
+
+  describe('moving a meeting (section 13, decision 0195)', () => {
+    /** The Saturday a week after the scheduled one, which the meeting moves to. */
+    const movedTo = () => {
+      const day = new Date(`${meetingDate}T12:00:00+08:00`);
+      day.setUTCDate(day.getUTCDate() + 7);
+
+      return day.toISOString().slice(0, 10);
+    };
+
+    const changeRows = () =>
+      db
+        .selectFrom('cell_meeting_changes')
+        .select(['from_status', 'to_status', 'from_date', 'to_date', 'reason'])
+        .orderBy('occurred_at')
+        .execute();
+
+    const meetingRow = () =>
+      db
+        .selectFrom('cell_meetings')
+        .select(['status', 'actual_date', 'reporting_month', 'week_starting', 'version'])
+        .where('cell_id', '=', markCell.id)
+        .where('scheduled_date', '=', meetingDate)
+        .executeTakeFirstOrThrow();
+
+    it('moves the actual date and leaves the identity, month and week alone', async () => {
+      // Section 13: a reschedule "changes the meeting's actual date/time, never its
+      // identity or which reporting period it belongs to". `responsible_leader_id` is
+      // frozen too, which is what keeps a moved meeting from sliding between leaders'
+      // totals inside a period that may have closed.
+      const one = await member('Aurelio');
+
+      const first = await submit({
+        status: 'HELD',
+        attendance: [{ person_id: one.id, present: true }],
+      });
+      expect(first.status).toBe(201);
+
+      const before = await meetingRow();
+
+      const moved = await submit({
+        status: 'RESCHEDULED',
+        version: 1,
+        actual_date: movedTo(),
+        actual_time: '19:30',
+        attendance: [{ person_id: one.id, present: true }],
+      });
+
+      expect(moved.status).toBe(201);
+      expect(moved.body.status).toBe('RESCHEDULED');
+      expect(moved.body.responsible_leader_id).toBe(mark.id);
+
+      const after = await meetingRow();
+      expect(after.status).toBe('RESCHEDULED');
+      expect(after.actual_date).toBe(movedTo());
+      expect(after.reporting_month).toBe(before.reporting_month);
+      expect(after.week_starting).toBe(before.week_starting);
+      expect(after.version).toBe(2);
+
+      const changes = await changeRows();
+      expect(changes).toHaveLength(1);
+      expect(changes[0]).toMatchObject({
+        from_status: 'HELD',
+        to_status: 'RESCHEDULED',
+        from_date: meetingDate,
+        to_date: movedTo(),
+      });
+    });
+
+    it('takes the roster from the day it moved to, both directions', async () => {
+      // **The whole of decision 0195.** Section 12 takes a rescheduled meeting's roster
+      // from the actual date, "the people who could actually have been there" — so the
+      // move carries that roster. A member who joined between the two dates gets a record
+      // they did not have; one who left has theirs closed with nothing replacing it,
+      // because section 12 makes them a non-member of this meeting rather than somebody
+      // misrecorded.
+      // **Both boundaries fall between the two dates, not on either of them.**
+      // `membersAsOfWithin` compares Manila *dates* — `started_at::date <= on::date` and
+      // `ended_at::date >= on::date` — so a membership ending at 23:00 on the meeting date
+      // still covers that date, and one starting at 23:30 covers it too. A first version
+      // put both on the meeting date, which made all three people members of it, and the
+      // opening submission was rightly refused for naming an incomplete roster.
+      const between = (days: number) => {
+        const day = new Date(`${meetingDate}T12:00:00+08:00`);
+        day.setUTCDate(day.getUTCDate() + days);
+
+        return day;
+      };
+
+      const stayed = await member('Aurelio');
+      const left = await memberBetween('Bartolome', CREATED, between(3));
+      const joined = await memberBetween('Crisanto', between(3));
+
+      await submit({
+        status: 'HELD',
+        attendance: [
+          { person_id: stayed.id, present: true },
+          { person_id: left.id, present: true },
+        ],
+      }).expect(201);
+
+      const moved = await submit({
+        status: 'RESCHEDULED',
+        version: 1,
+        actual_date: movedTo(),
+        attendance: [
+          { person_id: stayed.id, present: true },
+          { person_id: joined.id, present: false },
+        ],
+      });
+
+      expect(moved.status).toBe(201);
+      expect(moved.body.recorded).toBe(2);
+
+      const rows = await db
+        .selectFrom('cell_attendance')
+        .select(['person_id', 'present', 'superseded_at', 'superseded_by', 'id'])
+        .execute();
+
+      const liveRows = rows.filter((row) => row.superseded_at === null);
+      expect(liveRows.map((row) => row.person_id).sort()).toEqual([stayed.id, joined.id].sort());
+
+      // Bartolome's row is closed and names itself — decision 0183's shape, reached here
+      // for the second occasion the specification recognises.
+      const dropped = rows.find((row) => row.person_id === left.id);
+      expect(dropped?.superseded_at).not.toBeNull();
+      expect(dropped?.superseded_by).toBe(dropped?.id);
+    });
+
+    it('declares a moved meeting not held, keeping both records', async () => {
+      // Section 13: "A `RESCHEDULED` meeting that ultimately does not take place may be
+      // changed to `NOT_HELD`, preserving both records." Its attendance is closed, and a
+      // `NOT_HELD` meeting carries none.
+      const one = await member('Aurelio');
+
+      await submit({
+        status: 'HELD',
+        attendance: [{ person_id: one.id, present: true }],
+      }).expect(201);
+
+      await submit({
+        status: 'RESCHEDULED',
+        version: 1,
+        actual_date: movedTo(),
+        attendance: [{ person_id: one.id, present: true }],
+      }).expect(201);
+
+      const notHeld = await submit({
+        status: 'NOT_HELD',
+        version: 2,
+        not_held_reason: 'WEATHER_OR_CALAMITY',
+      });
+
+      expect(notHeld.status).toBe(201);
+      expect(notHeld.body.status).toBe('NOT_HELD');
+
+      const live = await db
+        .selectFrom('cell_attendance')
+        .select('id')
+        .where('superseded_at', 'is', null)
+        .execute();
+      expect(live).toHaveLength(0);
+
+      const rows = await db.selectFrom('cell_attendance').select(['id', 'superseded_by']).execute();
+      expect(rows.every((row) => row.superseded_by === row.id)).toBe(true);
+
+      // Both moves survive, which is what "preserving both records" asks for.
+      const changes = await changeRows();
+      expect(changes.map((row) => `${row.from_status}->${row.to_status}`)).toEqual([
+        'HELD->RESCHEDULED',
+        'RESCHEDULED->NOT_HELD',
+      ]);
+      expect(changes[1].reason).toBe('WEATHER_OR_CALAMITY');
+    });
+
+    it('refuses the transitions section 13 does not name', async () => {
+      const one = await member('Aurelio');
+
+      await submit({
+        status: 'NOT_HELD',
+        not_held_reason: 'LEADER_UNAVAILABLE',
+      }).expect(201);
+
+      // `NOT_HELD` means the meeting did not take place and is not being made up, so
+      // moving it contradicts the fact just recorded.
+      const revive = await submit({
+        status: 'RESCHEDULED',
+        version: 1,
+        actual_date: movedTo(),
+        attendance: [{ person_id: one.id, present: true }],
+      });
+
+      expect(revive.status).toBe(409);
+      expect(revive.body.error.code).toBe('INVARIANT_VIOLATION');
+      expect(revive.body.error.details.current_status).toBe('NOT_HELD');
+    });
+
+    it('refuses HELD to NOT_HELD, which is a correction rather than a move', async () => {
+      const one = await member('Aurelio');
+
+      await submit({
+        status: 'HELD',
+        attendance: [{ person_id: one.id, present: true }],
+      }).expect(201);
+
+      const response = await submit({
+        status: 'NOT_HELD',
+        version: 1,
+        not_held_reason: 'LEADER_UNAVAILABLE',
+      });
+
+      expect(response.status).toBe(409);
+      expect(response.body.error.code).toBe('INVARIANT_VIOLATION');
+    });
+
+    it('refuses a reschedule with nowhere to move to', async () => {
+      const one = await member('Aurelio');
+
+      await submit({
+        status: 'HELD',
+        attendance: [{ person_id: one.id, present: true }],
+      }).expect(201);
+
+      const response = await submit({
+        status: 'RESCHEDULED',
+        version: 1,
+        attendance: [{ person_id: one.id, present: true }],
       });
 
       expect(response.status).toBe(409);
