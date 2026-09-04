@@ -196,10 +196,44 @@ function classifyOperation(
  * defects in this file came from that gap, and each fix closed one read while the next
  * read stayed open — which is what makes this a class rather than a list.
  *
- * Applied to the whole body rather than to named fields, so a field added later inherits
- * the normalisation instead of inheriting the defect. `attendance` keeps its own shape:
- * an array of objects with no optional members, so there is nothing inside it to strip.
+ * Applied to the whole body rather than to named fields, so a **top-level** field added
+ * later inherits the normalisation instead of inheriting the defect.
+ *
+ * **It strips the top level only, and that is the whole of what it promises.** An earlier
+ * version of this paragraph said a field added later inherits the normalisation, without
+ * that qualifier, and it is false of a nested one: `Object.entries` does not recurse, so an
+ * optional member added to `ClosedMonthAmendmentDto` or to `CellAttendanceLineDto` inherits
+ * the defect rather than the fix. The sentence mattered because it is the one a future
+ * reader relies on, and it said the opposite of what the code does.
+ *
+ * The two nested shapes are safe today, and the reason is a property of them rather than of
+ * this function: **neither carries an optional member**. `ClosedMonthAmendmentDto` has one
+ * required `reason`, and `CellAttendanceLineDto` has a required `person_id` and `present`,
+ * so an explicit null inside either is refused as `VALIDATION_FAILED` at the edge and no
+ * `!== undefined` read is reached. Add an optional member to either and this function stops
+ * covering it — normalise there too, rather than at the read.
  */
+/**
+ * A string that says nothing, read as absent.
+ *
+ * `correction_reason` carries `@IsString()` and `@MaxLength(500)` and no non-blank rule,
+ * which the DTO notes in terms is "not a precedent" — so `""` and `"   "` are accepted at
+ * the edge and reach the write. Stored as an empty note they would be indistinguishable to
+ * a reader from a move nobody explained, while occupying a column that says one was.
+ *
+ * Local to this file rather than shared: the other reasons this repository writes refuse
+ * blankness at the edge instead (`ClosedMonthAmendmentDto`'s `@Matches(/\S/)`, and the
+ * Network-change and backdate reasons), and widening `correction_reason` to match them
+ * would change what the *correction* path accepts, which is not this change.
+ */
+function blankToNull(value: string | undefined): string | null {
+  if (value === undefined || value.trim() === '') {
+    return null;
+  }
+
+  return value;
+}
+
 function withoutNulls(body: SubmitCellMeeting): SubmitCellMeeting {
   const cleaned = { ...body } as Record<string, unknown>;
 
@@ -1489,10 +1523,21 @@ export class CellMeetingsService {
       );
     }
 
-    const attendance =
-      operation.kind === 'reschedule'
-        ? assertAttendanceMatchesRoster(body, roster, { cellId, meetingId })
-        : [];
+    // **One section 13 rule, checked on every path that can break it.** The assertion ran
+    // on the reschedule branch alone and a `NOT_HELD` transition took the `[]` beside it,
+    // so "a meeting that did not take place carries no attendance" was enforced on the
+    // first submission and not on the transition — the same sentence of the same section,
+    // answered two ways by one route. A body carrying a full roster, or naming somebody who
+    // is not in the database at all, was answered `201` with its contents discarded, which
+    // is the shape section 22 says can never be given meaning later.
+    //
+    // Called unconditionally rather than on a second branch, because a branch is what was
+    // wrong. `declare_not_held` is reachable only from a stored `RESCHEDULED` with a
+    // submitted `NOT_HELD` — `LEGAL_TRANSITIONS` admits nothing else into it — so this
+    // takes the function's own `NOT_HELD` branch, refuses a non-empty list, and returns
+    // `[]`. The empty `roster` it is handed on that path is never read, since that branch
+    // returns before the membership checks.
+    const attendance = assertAttendanceMatchesRoster(body, roster, { cellId, meetingId });
 
     const named = new Set(attendance.map((line) => line.person_id));
     const stored = new Map(live.map((row) => [row.person_id, row]));
@@ -1652,7 +1697,25 @@ export class CellMeetingsService {
         to_date: toRescheduled ? (body.actual_date as string) : null,
         to_time: actualTime,
         reason: toRescheduled ? null : (body.not_held_reason ?? null),
-        note: toRescheduled ? null : (body.not_held_note ?? null),
+        // **Section 13's fifth thing, which had nowhere to go until migration 0014.** A
+        // rescheduled meeting must preserve "original scheduled date/time, new scheduled
+        // date/time, optional note/context, who rescheduled it, timestamp". This row
+        // carried four of the five and forced the note to null on a move, so a leader's
+        // stated reason for moving a meeting was accepted by the route and written to no
+        // row anywhere — `correction_reason` reaches the successor `cell_attendance` rows
+        // and an unchanged roster produces none.
+        //
+        // `reason` stays null on a move because it is the NOT_HELD enum and a move has no
+        // such reason; the note is free text and now stands without one (ruling of
+        // 2026-09-04).
+        //
+        // **Blank normalised to null, because `correction_reason` carries only
+        // `@IsString()` and `@MaxLength(500)`** — so `""` and `"   "` reach here, and a
+        // reason nobody supplied is stored as absent rather than as an empty note that a
+        // reader cannot tell from one. `not_held_note` needs no such treatment on this
+        // line: `assertNotHeldIsExplained` has already refused a blank one where section
+        // 13 requires it, and where it does not require one the field is absent.
+        note: toRescheduled ? blankToNull(body.correction_reason) : (body.not_held_note ?? null),
         actor_id: actor.accountId,
       } as never)
       .execute();

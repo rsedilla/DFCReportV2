@@ -1376,7 +1376,7 @@ describe('recording a Cell meeting (sections 12, 13 and 14)', () => {
     const changeRows = () =>
       db
         .selectFrom('cell_meeting_changes')
-        .select(['from_status', 'to_status', 'from_date', 'to_date', 'reason'])
+        .select(['from_status', 'to_status', 'from_date', 'to_date', 'reason', 'note'])
         .orderBy('occurred_at')
         .execute();
 
@@ -1535,6 +1535,73 @@ describe('recording a Cell meeting (sections 12, 13 and 14)', () => {
       expect(changes[1]).toMatchObject({ from_date: first, to_date: second });
     });
 
+    it('keeps the note a leader gave for moving a meeting', async () => {
+      // Section 13 asks a rescheduled meeting to preserve "original scheduled date/time,
+      // new scheduled date/time, **optional note/context**, who rescheduled it,
+      // timestamp". The route wrote four of those five and forced the note to null on a
+      // move, so the reason a leader typed was accepted and stored in no row at all:
+      // `correction_reason` reaches only the successor `cell_attendance` rows, and the
+      // common reschedule leaves the roster alone and produces none.
+      //
+      // It had nowhere to go. `cell_meeting_changes.reason` is the `NOT_HELD` enum and
+      // migration 0011's `note_only_with_reason` required one beside any note, which a
+      // move can never have. Migration 0014 drops that constraint (ruling of 2026-09-04).
+      //
+      // The mutation: restore `note: toRescheduled ? null : ...` and the first
+      // expectation goes from the sentence to null.
+      const one = await member('Aurelio');
+
+      await submit({
+        status: 'HELD',
+        attendance: [{ person_id: one.id, present: true }],
+      }).expect(201);
+
+      await submit({
+        status: 'RESCHEDULED',
+        version: 1,
+        actual_date: movedTo(),
+        correction_reason: 'The venue was unavailable.',
+        attendance: [{ person_id: one.id, present: true }],
+      }).expect(201);
+
+      const changes = await changeRows();
+      expect(changes).toHaveLength(1);
+      expect(changes[0].note).toBe('The venue was unavailable.');
+
+      // `reason` stays null on a move: it is the NOT_HELD enum, and the meeting was
+      // moved rather than abandoned. The note now stands without one, which is the
+      // whole of what 0014 changed.
+      expect(changes[0].reason).toBeNull();
+    });
+
+    it('stores no note for a move explained with blank text', async () => {
+      // `correction_reason` carries `@IsString()` and `@MaxLength(500)` and no non-blank
+      // rule — the DTO says in terms that this "is not a precedent" — so `"   "` reaches
+      // the write. Stored as given it would occupy a column that says a leader explained
+      // the move, and a reader could not tell it from one who did.
+      //
+      // Normalised in the service rather than refused at the edge, because tightening
+      // `correction_reason` would change what the *correction* path accepts, which is a
+      // different change from this one.
+      const one = await member('Aurelio');
+
+      await submit({
+        status: 'HELD',
+        attendance: [{ person_id: one.id, present: true }],
+      }).expect(201);
+
+      await submit({
+        status: 'RESCHEDULED',
+        version: 1,
+        actual_date: movedTo(),
+        correction_reason: '   ',
+        attendance: [{ person_id: one.id, present: true }],
+      }).expect(201);
+
+      const changes = await changeRows();
+      expect(changes[0].note).toBeNull();
+    });
+
     it('declares a moved meeting not held, keeping both records', async () => {
       // Section 13: "A `RESCHEDULED` meeting that ultimately does not take place may be
       // changed to `NOT_HELD`, preserving both records." Its attendance is closed, and a
@@ -1579,6 +1646,75 @@ describe('recording a Cell meeting (sections 12, 13 and 14)', () => {
         'RESCHEDULED->NOT_HELD',
       ]);
       expect(changes[1].reason).toBe('WEATHER_OR_CALAMITY');
+    });
+
+    it('refuses attendance on a transition to NOT_HELD, as the first submission does', async () => {
+      // **The same sentence of section 13, on the other path that can break it.** "A
+      // meeting that did not take place carries no attendance" is a property of the
+      // status, not of how the meeting arrived at it — and the route enforced it on the
+      // first submission (the case above, `refuses attendance on a meeting that did not
+      // take place`) and not on the transition, because the roster assertion ran on the
+      // reschedule branch alone and this branch took the `[]` beside it.
+      //
+      // What that answered was `201` for a body whose contents were discarded, which is
+      // the shape section 22 says can never be given meaning later: an actor is told the
+      // roster they sent was accepted, and no row holds it.
+      //
+      // The mutation this case names is the ternary itself — restore
+      // `operation.kind === 'reschedule' ? assert(...) : []` and both expectations below
+      // go from 409 to 201.
+      const one = await member('Aurelio');
+
+      await submit({
+        status: 'HELD',
+        attendance: [{ person_id: one.id, present: true }],
+      }).expect(201);
+
+      await submit({
+        status: 'RESCHEDULED',
+        version: 1,
+        actual_date: movedTo(),
+        attendance: [{ person_id: one.id, present: true }],
+      }).expect(201);
+
+      const withRoster = await submit({
+        status: 'NOT_HELD',
+        version: 2,
+        not_held_reason: 'LEADER_UNAVAILABLE',
+        attendance: [{ person_id: one.id, present: true }],
+      });
+
+      expect(withRoster.status).toBe(409);
+      expect(withRoster.body.error.code).toBe('INVARIANT_VIOLATION');
+
+      // **And a person who is not in the database at all**, which is the sharper half:
+      // the duplicate-name and non-member checks live behind the same assertion, so
+      // skipping it accepted a line naming nobody. Refused now for the status rule
+      // before membership is ever consulted.
+      const stranger = await submit({
+        status: 'NOT_HELD',
+        version: 2,
+        not_held_reason: 'LEADER_UNAVAILABLE',
+        attendance: [{ person_id: randomUUID(), present: true }],
+      });
+
+      expect(stranger.status).toBe(409);
+      expect(stranger.body.error.code).toBe('INVARIANT_VIOLATION');
+
+      // Nothing moved: the meeting is still the moved one, and its record still stands.
+      const after = await db
+        .selectFrom('cell_meetings')
+        .select(['status', 'version'])
+        .executeTakeFirstOrThrow();
+      expect(after.status).toBe('RESCHEDULED');
+      expect(after.version).toBe(2);
+
+      const live = await db
+        .selectFrom('cell_attendance')
+        .select('id')
+        .where('superseded_at', 'is', null)
+        .execute();
+      expect(live).toHaveLength(1);
     });
 
     it('refuses the transitions section 13 does not name', async () => {
