@@ -107,6 +107,47 @@ type LineOutcome = 'CREATE' | 'CORRECT' | 'UNCHANGED';
  * for whether a Person holds an account, `authorization` for scope, `audit` for its
  * entries.
  */
+/**
+ * Records with every explicitly-null optional field read as absent.
+ *
+ * **The same class the Cell route closed, one level down.** `@IsOptional()` treats `null`
+ * as absent for the purpose of *skipping validation* and then leaves the null in place, so
+ * `record.correction_reason !== undefined` was true of a line that said nothing — and a
+ * body meaning "no correction reason" was answered `INVARIANT_VIOLATION` where omitting the
+ * key entirely answered 201. Two bodies with one meaning, two answers, and the loud one
+ * belonged to the body that had said nothing.
+ *
+ * **Applied to each record rather than to the body, because that is where this route's
+ * optionals live.** The Cell submission carries its optional fields at the top level and is
+ * normalised there; here the only per-line optional is inside `records`, so a top-level
+ * sweep copied across from that route would have looked right and changed nothing. The
+ * shape of the fix follows the shape of the DTO rather than the shape of its neighbour
+ * (section 25 rule 19).
+ *
+ * `amendment` is already read as `?? undefined` at its own use, which is the narrower form
+ * of the same idea and is left where it is.
+ *
+ * **`version` is excluded, and it is the one field here where null and absent differ.**
+ * Section 22 makes a null version an assertion — "I read no record" — rather than a field
+ * the caller declined to fill, and the DTO declares it required and nullable to say exactly
+ * that. Stripping it would turn a client's claim about what it read into silence, which is
+ * the opposite of what this function is for. The Cell route needed no such carve-out
+ * because its `version` is optional and absent means the same thing there.
+ */
+function normalized(records: readonly SubmittedRecord[]): readonly SubmittedRecord[] {
+  return records.map((record) => {
+    const cleaned = { ...record } as Record<string, unknown>;
+
+    for (const [key, value] of Object.entries(cleaned)) {
+      if (value === null && key !== 'version') {
+        delete cleaned[key];
+      }
+    }
+
+    return cleaned as unknown as SubmittedRecord;
+  });
+}
+
 @Injectable()
 export class DccAttendanceService {
   constructor(
@@ -186,7 +227,7 @@ export class DccAttendanceService {
     amendment?: { reason: string } | null,
   ): Promise<Record<string, unknown>> {
     try {
-      return await this.writeWithin(eventId, records, actor, claim, amendment);
+      return await this.writeWithin(eventId, normalized(records), actor, claim, amendment);
     } catch (error) {
       // **A lost race on `dcc_attendance_one_live`.** Two writers can reach one
       // person's first record at once — their own submitter, and an upline recording

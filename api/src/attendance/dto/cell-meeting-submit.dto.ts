@@ -6,6 +6,7 @@ import {
   IsBoolean,
   IsIn,
   IsInt,
+  IsObject,
   IsOptional,
   IsString,
   IsUUID,
@@ -225,6 +226,13 @@ export class SubmitCellMeetingDto {
   @IsArray()
   @ArrayNotEmpty()
   @ArrayMaxSize(500)
+  // **Each element is an object, checked before it is validated as one.**
+  // `@ValidateNested({ each: true })` recurses into an array-valued element, finds no
+  // declared property on it, and passes -- so `[[]]` reached the domain layer and was
+  // refused there for breaking a rule the request had not broken. `isObject` excludes
+  // arrays by definition, so this refuses the shape at the edge and names the field
+  // (SKILL.md section 22).
+  @IsObject({ each: true })
   @ValidateNested({ each: true })
   @Type(() => CellAttendanceLineDto)
   attendance?: CellAttendanceLineDto[];

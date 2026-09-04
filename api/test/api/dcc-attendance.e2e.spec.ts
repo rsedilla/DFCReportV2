@@ -191,7 +191,12 @@ describe('DCC recording (sections 9 and 14)', () => {
     person_id: string;
     present: boolean;
     version: number | null;
-    correction_reason?: string;
+    /**
+     * `null` as well as absent, because a client can send either and the two mean the
+     * same thing. Typing it `string | undefined` here would make the case that pins
+     * that unwritable, which is a test type deciding what the API accepts.
+     */
+    correction_reason?: string | null;
   }
 
   const submit = (
@@ -630,6 +635,49 @@ describe('DCC recording (sections 9 and 14)', () => {
 
       expect(entries).toHaveLength(1);
       expect(entries[0].reason).toBe('Creates the record.');
+    });
+
+    it('treats an explicit null correction reason as absent, as the Cell route does', async () => {
+      // `@IsOptional()` treats `null` as absent for the purpose of *skipping validation*
+      // and leaves the null in place, so `record.correction_reason !== undefined` was true
+      // of a line that had said nothing -- and a body meaning "no correction reason" was
+      // refused where omitting the key entirely succeeded. Two bodies with one meaning and
+      // two answers, the loud one belonging to the body that said nothing.
+      //
+      // Normalised per record rather than per body, because that is where this route's
+      // optionals live: a top-level sweep copied from the Cell route would look right and
+      // change nothing.
+      //
+      // The mutation: stop calling `normalized` and this goes 201 to 409.
+      const eventId = await createEvent(await recentSunday());
+
+      const response = await submit(markAccount, eventId, [
+        { person_id: timothy.id, present: true, version: null, correction_reason: null },
+      ]);
+
+      expect(response.status).toBe(201);
+      expect(response.body.created).toBe(1);
+
+      const stored = await liveRows(eventId);
+      expect(stored).toHaveLength(1);
+      expect(stored[0].correction_reason).toBeNull();
+    });
+
+    it('refuses a record that is not an object, naming the field', async () => {
+      // The same shape as the Cell route's roster: an array-valued element passes
+      // `@ValidateNested({ each: true })` and reaches the domain layer.
+      //
+      // The mutation: drop `@IsObject({ each: true })` from `records`.
+      const eventId = await createEvent(await recentSunday());
+
+      const response = await request(app.getHttpServer())
+        .post(`/api/v1/dcc/events/${eventId}/submit`)
+        .set('Authorization', `Bearer ${markAccount.accessToken}`)
+        .set('Idempotency-Key', randomUUID())
+        .send({ records: [[]] });
+
+      expect(response.status).toBe(422);
+      expect(response.body.error.code).toBe('VALIDATION_FAILED');
     });
 
     it('treats an explicit null amendment as absent, in both directions', async () => {
