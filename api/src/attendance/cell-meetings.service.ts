@@ -1324,7 +1324,6 @@ export class CellMeetingsService {
     });
   }
 
-  /** The one response shape both outcomes of a correction answer with. */
   /**
    * A meeting moving between statuses (SKILL.md section 13; decision 0195).
    *
@@ -1767,6 +1766,7 @@ export class CellMeetingsService {
     return row.actual_date ?? row.scheduled_date;
   }
 
+  /** The one response shape both outcomes of a correction answer with. */
   private responseFor(
     params: {
       cellHandle: string;

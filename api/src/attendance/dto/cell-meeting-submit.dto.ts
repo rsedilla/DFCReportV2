@@ -52,11 +52,13 @@ export class ClosedMonthAmendmentDto {
    * and it is optional, while this one is the whole justification for reaching past a
    * closed window.
    *
-   * **`@IsStorableText` because this field reaches `audit_log.reason`**, and a null byte
-   * in it answered `INTERNAL_ERROR` on every path of this route. It was the one free-text
-   * field of this DTO left undecorated when the other two were guarded — in the commit
-   * whose own docblock claimed the rule was applied to every free-text field on the
-   * route. Same route, same file, same class, found by the review after.
+   * **`@IsStorableText` because this field reaches `audit_log.reason`**, where a null byte
+   * answered `INTERNAL_ERROR`. Not on every path that carries the field: an open month is
+   * refused before the value reaches the database, and a closed-month resubmission that
+   * changes nothing writes no audit entry. The path that reaches it is a closed-month
+   * submission that records something.
+   *
+   * `dcc.dto.ts` uses this class too, so the decorator guards both routes' amendment reason.
    */
   @IsString()
   @Matches(/\S/, { message: 'reason must not be blank' })

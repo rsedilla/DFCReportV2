@@ -44,12 +44,16 @@ export const IS_STORABLE_TEXT = 'isStorableText';
  * emoji is two code units and is well formed, so a note typed on a phone passes. Every value
  * a person can type passes; what this refuses is a value no keyboard produces.
  *
- * **Where it is applied is a route-by-route decision, and section 22 states no rule.** It
- * guards the three free-text fields of the Cell meeting submit route — `correction_reason`,
- * `not_held_note`, and the amendment's `reason`. Other routes carry free-text fields without
- * it, and they are recorded as open in `CLAUDE.md` rather than quietly assumed covered. A
- * version of this paragraph claimed the rule was "applied to every free-text field on a
- * route" while one field of this route's own DTO was undecorated and answering 500.
+ * **Where it is applied is not derivable, because section 22 states no storability rule.**
+ * It guards `correction_reason` and `not_held_note` on the Cell meeting submit route, and
+ * `ClosedMonthAmendmentDto.reason` — which `dcc.dto.ts` also uses, so the DCC submit route's
+ * amendment reason is guarded too. Free-text fields it does not reach are recorded as open
+ * in `CLAUDE.md`.
+ *
+ * *Two versions of this paragraph have now described the wrong scope: the first claimed
+ * every free-text field on a route while one field of that route's DTO was undecorated, and
+ * the second called the rule route-scoped when a shared DTO class carries it across routes.
+ * Check the imports of the classes this decorates before restating it.*
  */
 export function IsStorableText(options?: ValidationOptions): PropertyDecorator {
   return ValidateBy(
