@@ -46,6 +46,13 @@ export interface CellScopePort {
    * section 7's sense (decision 0186), and the audit-log question that waits on the
    * first dated read still waits.**
    *
+   * **This method serves a viewing capability since decision 0204**, which moved
+   * `GET /api/v1/cells/{id}/members` onto `cell.view_subtree`. That does not make it
+   * the dated read above, and does not narrow what it answers: section 7 defines "the
+   * period being viewed" as the period the request asks about, that route names none,
+   * and a request naming no period is asking about now. The undated answer is the
+   * correct one for that route rather than an approximation tolerated for it.
+   *
    * *This paragraph said "nothing in this system reads a past period yet" and named
    * the reporting slice as the one that would need a dated variant. It was left
    * standing in the commit that added the variant directly beneath it, and cited as

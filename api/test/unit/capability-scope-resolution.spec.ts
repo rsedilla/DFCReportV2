@@ -30,10 +30,16 @@ import type { CapabilityRequirement } from '../../src/auth/authorization/authori
  * resolution "as of the period being viewed" does not exist yet, and the first
  * Cell-targeted viewing route is what owes it.
  *
- * **So the rule that can fail today is the narrow one**: no route declares a viewing
- * capability against a Cell-resolved target. The first route that does reddens this, which
- * is the moment the dated read resolution is owed — and a red test naming the route is a
- * better way to learn that than a report quietly answering through the wrong leader.
+ * **So the rule that can fail is the narrow one**: no route declares a viewing capability
+ * against a Cell-resolved target except the undated reads named in the allowlist below. The
+ * next route to do so reddens this, and a red test naming the route is a better way to learn
+ * that than a report quietly answering through the wrong leader.
+ *
+ * **The allowlist arrived with decision 0204**, which moved `GET /api/v1/cells/{id}/members`
+ * onto `cell.view_subtree` and found this case refusing it. What the case is *for* is a read
+ * that asks about a past period and would silently get the undated resolution; a read naming
+ * no period is asking about now, which is what `leaderForScope` answers. The two were being
+ * enforced as one.
  *
  * **That is a narrower trigger than "the first Stage 5 reporting read", which is what an
  * earlier version of this paragraph and of `cell-scope.port.ts` claimed.** Section 7 makes
@@ -143,11 +149,32 @@ describe('which scope resolution a capability gets (section 7)', () => {
     expect(kinds.has('cell_meeting')).toBe(true);
   });
 
-  it('gives no viewing capability a Cell-resolved target, because that resolution does not exist', async () => {
+  /**
+   * The one Cell-targeted viewing route, and the period it asks about (decision 0204).
+   *
+   * An allowlist rather than a blanket refusal, because the obligation this case names is
+   * owed by a *dated* read and not by every route in the viewing class. Section 7 defines
+   * the phrase under *An effective date does not move the scope decision*: "the period a
+   * request under a viewing capability is asking about". A request naming no period is
+   * asking about now, and `leaderForScope` — the current leader, falling back to the last
+   * where the Cell is closed — is the resolution for now.
+   *
+   * So this route receives exactly the resolution section 7 prescribes for it, and the
+   * earlier form of this case refused it on a trigger that conflated "declares a viewing
+   * capability" with "asks about a past period".
+   *
+   * **The teeth are in the allowlist being exhaustive.** Any other Cell-targeted viewing
+   * route reddens this and its author has to say which period it asks about — and if the
+   * answer is a past month, the dated resolution it owes still does not exist.
+   */
+  const UNDATED_CELL_VIEWING: string[] = ['CellsController.members'];
+
+  it('gives a Cell-resolved target no viewing capability but the undated reads named here', async () => {
     const offending = (await declaredRoutes()).filter(
       (route) =>
         VIEWING.includes(route.requirement.capability) &&
-        CELL_RESOLVED.includes(route.requirement.target.kind),
+        CELL_RESOLVED.includes(route.requirement.target.kind) &&
+        !UNDATED_CELL_VIEWING.includes(route.where),
     );
 
     // Named rather than counted: the failure this exists for is a route somebody adds,
@@ -155,6 +182,20 @@ describe('which scope resolution a capability gets (section 7)', () => {
     expect(offending.map((route) => `${route.where} (${route.requirement.capability})`)).toEqual(
       [],
     );
+  });
+
+  it('finds every route the allowlist names, so it cannot outlive one', async () => {
+    // Without this the allowlist is a list of strings nothing checks. A renamed or deleted
+    // handler would leave an entry permitting a route that no longer exists, and the next
+    // route to take that name would be exempted silently.
+    const routes = await declaredRoutes();
+
+    for (const allowed of UNDATED_CELL_VIEWING) {
+      const route = routes.find((candidate) => candidate.where === allowed);
+      expect(route).toBeDefined();
+      expect(VIEWING).toContain(route?.requirement.capability);
+      expect(CELL_RESOLVED).toContain(route?.requirement.target.kind);
+    }
   });
 
   it('gives every Cell meeting target a recording capability', async () => {
