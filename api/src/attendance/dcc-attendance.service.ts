@@ -1285,6 +1285,36 @@ export class DccAttendanceService {
       return null;
     }
 
+    // **The amendment capability, on the disagreeing branch only** (section 7; decision
+    // 0201). This mirrors what `CellMeetingsService.lostRaceAnswer` does, and it is the
+    // half DCC was missing: an actor holding `dcc.take_attendance` alone was answered a
+    // `409` carrying the stored value *and the name of the account that recorded it*,
+    // where the identical body sent sequentially answers `403 dcc.correct_subtree`. The
+    // DCC roster publishes neither of those, so section 7's ordering rule -- nothing the
+    // caller is told varies with the stored contents until the amendment capability is
+    // decided -- applies here exactly as it does one domain over.
+    //
+    // **Only on this branch.** A loser that agrees with the winner wrote nothing and is
+    // answered `RESOURCE_BUSY` above, and section 7 owes no amendment capability for a
+    // write that writes nothing (decision 0191). Checking it unconditionally would refuse
+    // that actor `403` where the identical body sent sequentially answers `201` -- the
+    // mirror defect, and the one the Cell path reproduced before this shape was settled.
+    const authority = await this.authorization.authorityFor(actor.accountId);
+    const mayCorrect = await this.authorization.coversWith(
+      this.db,
+      actor,
+      authority,
+      Capability.DccCorrectSubtree,
+      { kind: 'person', personId: stale.record.person_id },
+    );
+
+    if (!mayCorrect) {
+      return new ScopeDeniedError('Correcting this person’s DCC record is outside your scope.', {
+        capability: Capability.DccCorrectSubtree,
+        person_id: stale.record.person_id,
+      });
+    }
+
     return this.conflictFor(
       this.db,
       actor,
