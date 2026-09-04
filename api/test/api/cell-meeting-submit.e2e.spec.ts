@@ -331,6 +331,48 @@ describe('recording a Cell meeting (sections 12, 13 and 14)', () => {
     expect(response.status).toBe(409);
   });
 
+  it('refuses a facilitator who is not a Person, rather than answering 500', async () => {
+    // Section 13 makes `facilitated_by` nullable and defaulted, and `@IsUUID()` checks its
+    // shape. Nothing asked whether the Person exists, so a well-formed body naming an
+    // absent one reached `cell_meetings_facilitated_by_fkey` and answered
+    // `INTERNAL_ERROR` -- section 22's named failure mode, and the last of the reachable
+    // 500s on this route.
+    //
+    // **Existence only.** What the field may name beyond existing -- any Person, a member
+    // of this Cell, or someone in the leader's subtree -- is three readings that refuse
+    // different bodies, and is recorded as open. Existence is what all three share.
+    //
+    // The mutation: drop the `isForeignKeyViolation` branch and this goes 409 to 500.
+    const one = await member('Aurelio');
+
+    const response = await submit({
+      status: 'HELD',
+      facilitated_by: randomUUID(),
+      attendance: [{ person_id: one.id, present: true }],
+    });
+
+    expect(response.status).toBe(409);
+    expect(response.body.error.code).toBe('INVARIANT_VIOLATION');
+
+    // Nothing was written: the meeting has no row, so a retry naming a real facilitator
+    // is still a first submission.
+    const rows = await db.selectFrom('cell_meetings').select('id').execute();
+    expect(rows).toHaveLength(0);
+  });
+
+  it('refuses an attendance element that is not an object, naming the field', async () => {
+    // `@ValidateNested({ each: true })` recurses into an array-valued element, finds no
+    // declared property on it and passes -- so `[[]]` reached the roster check and was
+    // refused for breaking the members rule, which the request had not broken. A 422
+    // wearing a 409, pointing a client at the wrong thing.
+    //
+    // The mutation: drop `@IsObject({ each: true })` and this goes 422 to 409.
+    const response = await submit({ status: 'HELD', attendance: [[]] });
+
+    expect(response.status).toBe(422);
+    expect(response.body.error.code).toBe('VALIDATION_FAILED');
+  });
+
   it('refuses a person who was not a member on the meeting date', async () => {
     // Section 12 records attendance for members only and has no visitor state: "A
     // person coming to a Cell for the first time is added as a member by the leader,

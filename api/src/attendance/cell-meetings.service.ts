@@ -12,7 +12,11 @@ import {
   ScopeDeniedError,
 } from '../common/errors/api-error';
 import { VersionConflictError } from '../common/errors/version-conflict';
-import { isUniqueViolation, violatedConstraint } from '../common/errors/postgres-errors';
+import {
+  isForeignKeyViolation,
+  isUniqueViolation,
+  violatedConstraint,
+} from '../common/errors/postgres-errors';
 import { DATABASE, type Db } from '../database/database.module';
 
 import { isMonthOpen, reportingMonthOf } from '../common/time/submission-window';
@@ -64,6 +68,15 @@ class LostCorrectionRace extends Error {
  * own answers `INTERNAL_ERROR` on an ordinary race.
  */
 const ONE_PER_SCHEDULED_DATE = 'cell_meetings_one_per_scheduled_date';
+
+/**
+ * The foreign key behind `facilitated_by`, named so that only this one is translated.
+ *
+ * The other three on `cell_meetings` take server-derived values -- the Cell from the
+ * path, the responsible leader from the leadership lookup, the submitter from the actor
+ * -- so one of those failing is a defect rather than a caller's mistake.
+ */
+const FACILITATOR_IS_A_PERSON = 'cell_meetings_facilitated_by_fkey';
 
 /**
  * What a second submission *is*, decided once (SKILL.md section 13; decision 0195).
@@ -658,6 +671,29 @@ export class CellMeetingsService {
       // race and keeps failing loudly.
       const lostFirstSubmission =
         isUniqueViolation(error) && violatedConstraint(error) === ONE_PER_SCHEDULED_DATE;
+
+      // **A facilitator who is not a Person is the caller's mistake, not a defect.**
+      // `facilitated_by` is the one field on this route carrying a client-chosen
+      // identifier that no earlier check resolves: section 13 makes it nullable and
+      // defaulted, `@IsUUID()` checks its shape, and nothing asks whether the Person
+      // exists — so a well-formed body naming an absent one reached the foreign key and
+      // answered `INTERNAL_ERROR`, which is section 22's named failure mode.
+      //
+      // Narrowed on the constraint by name, exactly as the lost first submission above is
+      // narrowed on its index: every other foreign key on this table takes a
+      // server-derived value, so one of those failing is a defect and must keep failing
+      // loudly rather than being reported to a leader as their typo.
+      //
+      // **What the field may name beyond existing is still open** (`CLAUDE.md`): any
+      // Person, a member of that Cell, or someone in the leader's subtree are three
+      // readings that refuse different bodies. Existence is the part all three share, so
+      // it is the part that can be enforced without settling the rest.
+      if (isForeignKeyViolation(error) && violatedConstraint(error) === FACILITATOR_IS_A_PERSON) {
+        throw new InvariantViolationError(
+          'The person named as the facilitator does not exist (SKILL.md section 13).',
+          { cell_id: cellId, meeting_id: meetingId, facilitated_by: raw.facilitated_by },
+        );
+      }
 
       if (!lostFirstSubmission && !(error instanceof LostCorrectionRace)) {
         throw error;
