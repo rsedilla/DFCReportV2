@@ -12,7 +12,7 @@ Read [SKILL.md](../SKILL.md) before starting any stage. Read [CLAUDE.md](../CLAU
 
 `main` carries the specification. Pull request #1 merged on 2026-08-20 after six `architecture-guardian` passes and review by a second code owner.
 
-One thing from this stage remains open and is recorded in `CLAUDE.md`: what an aggregate Cell attendance view offers in place of buckets. It is a Stop Condition and blocks nothing before Stage 5.
+The one thing from this stage that remained open — what an aggregate Cell attendance view offers in place of buckets — was settled on 2026-09-04 as decision 0202, before any Stage 5 code: nothing replaces them. Unique people, classification and coverage are the whole of an aggregate view, because they are the three figures with no self-reported denominator between them, and coverage leads.
 
 ---
 
