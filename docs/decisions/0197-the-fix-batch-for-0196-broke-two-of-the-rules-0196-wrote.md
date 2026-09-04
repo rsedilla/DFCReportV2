@@ -36,7 +36,7 @@ failure mode, introduced by a commit whose subject was closing that failure mode
 **Five more instances of the null-byte half were already reachable**, and were not found by
 the audit that produced 0196: `correction_reason` on a plain correction and on a move that
 changes a line, `not_held_note` on a `NOT_HELD` transition **and on a first submission**, and
-the amendment's own `reason` on every path that carries one. **The audit could not have found
+the amendment's own `reason` on a closed-month submission that records something. **The audit could not have found
 them.** It enumerated every constraint on the three attendance tables, and none of these is
 constraint-driven — they are the column type refusing a value. The audit's scope was
 constraints and its conclusion was written about the route.
@@ -65,10 +65,17 @@ by the review of this ruling.*
 
 **Where the decorator is applied beyond this route is deliberately not settled here**, and
 the reason is that nothing gives it a scope to derive: Section 22 names `INTERNAL_ERROR` as a
-failure mode and says nothing about what a free-text field may contain. The DCC submission,
-Cell closure, and the `people` reasons and names all carry free-text fields without it and
-are recorded as open in `CLAUDE.md`. Applying it by memory across five modules is how this
-route ended up with two of three fields covered and a docblock claiming three.
+failure mode and says nothing about what a free-text field may contain. The DCC submission's
+`correction_reason`, Cell closure's `note`, and the `people` reasons and names carry free-text
+fields without it and are recorded as open in `CLAUDE.md`.
+
+The DCC *amendment* reason is guarded, because `dcc.dto.ts` uses this same
+`ClosedMonthAmendmentDto` — a side effect of decorating a shared class rather than a decision,
+and pinned by a case on that route so it cannot be removed silently. *This ruling first said
+DCC was uncovered outright, which was the scope claim wrong in the other direction: corrected
+one round for claiming a field it did not guard, then wrong again for denying one it did.*
+Applying it by memory across five modules is how this route ended up with two of three fields
+covered and a docblock claiming three.
 
 ## The claim the batch made that the batch refuted
 
