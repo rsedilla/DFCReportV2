@@ -188,18 +188,32 @@ function classifyOperation(
 }
 
 /**
- * A submission with every explicitly-null optional field turned back into an absent one.
+ * A submission normalised once, at the only door into this route.
  *
- * **The class, closed at the door.** `class-validator`'s `@IsOptional()` treats `null` as
- * absent for the purpose of *skipping validation* and then leaves the null in place, so
- * every `x !== undefined` downstream is true of a body that meant to say nothing. Four
- * defects in this file came from that gap, and each fix closed one read while the next
- * read stayed open — which is what makes this a class rather than a list.
+ * Two ways a body can say nothing while looking as though it said something, closed in one
+ * place rather than at each read.
  *
- * Applied to the whole body rather than to named fields, so a **top-level** field added
- * later inherits the normalisation instead of inheriting the defect.
+ * **Nulls.** `class-validator`'s `@IsOptional()` treats `null` as absent for the purpose of
+ * *skipping validation* and then leaves the null in place, so every `x !== undefined`
+ * downstream is true of a body that meant to say nothing. Four defects in this file came
+ * from that gap, and each fix closed one read while the next read stayed open — which is
+ * what makes it a class rather than a list.
  *
- * **It strips the top level only, and that is the whole of what it promises.** An earlier
+ * **Blank free text.** `correction_reason` carries `@IsString()` and a length and no
+ * non-blank rule, and `not_held_note` is refused blank only where section 13 requires one at
+ * all — where the reason is `OTHER`. So `"   "` reached the writes, and section 13 says a
+ * note that is blank is a note nobody wrote. Stored as given it is indistinguishable to a
+ * reader from a move nobody explained, in a column whose presence says one was.
+ *
+ * **Nulls are stripped from the whole body; blankness is named field by field, and the
+ * difference is real.** Null and absent mean one thing on every field here, so nothing has
+ * to be listed. Blankness is only a question for free text: every other string on this DTO
+ * is a format — a status, a UUID, a date, a time, an enum — and a blank one is refused by
+ * its own decorator with a message naming the format, which is a better answer than being
+ * silently dropped. `FREE_TEXT` is therefore the two fields a person types prose into, and
+ * a third such field added later belongs in it.
+ *
+ * **Both strip the top level only, and that is the whole of what this promises.** An earlier
  * version of this paragraph said a field added later inherits the normalisation, without
  * that qualifier, and it is false of a nested one: `Object.entries` does not recurse, so an
  * optional member added to `ClosedMonthAmendmentDto` or to `CellAttendanceLineDto` inherits
@@ -212,34 +226,27 @@ function classifyOperation(
  * so an explicit null inside either is refused as `VALIDATION_FAILED` at the edge and no
  * `!== undefined` read is reached. Add an optional member to either and this function stops
  * covering it — normalise there too, rather than at the read.
- */
-/**
- * A string that says nothing, read as absent.
  *
- * `correction_reason` carries `@IsString()` and `@MaxLength(500)` and no non-blank rule,
- * which the DTO notes in terms is "not a precedent" — so `""` and `"   "` are accepted at
- * the edge and reach the write. Stored as an empty note they would be indistinguishable to
- * a reader from a move nobody explained, while occupying a column that says one was.
- *
- * Local to this file rather than shared: the other reasons this repository writes refuse
- * blankness at the edge instead (`ClosedMonthAmendmentDto`'s `@Matches(/\S/)`, and the
- * Network-change and backdate reasons), and widening `correction_reason` to match them
- * would change what the *correction* path accepts, which is not this change.
+ * *What this deliberately does **not** do is normalise a value the database cannot store. A
+ * null byte is refused at the edge by `@IsStorableText`, because stripping it would store
+ * text nobody wrote; see `common/text/is-storable-text.ts`.*
  */
-function blankToNull(value: string | undefined): string | null {
-  if (value === undefined || value.trim() === '') {
-    return null;
-  }
+const FREE_TEXT = ['correction_reason', 'not_held_note'] as const;
 
-  return value;
-}
-
-function withoutNulls(body: SubmitCellMeeting): SubmitCellMeeting {
+function normalized(body: SubmitCellMeeting): SubmitCellMeeting {
   const cleaned = { ...body } as Record<string, unknown>;
 
   for (const [key, value] of Object.entries(cleaned)) {
     if (value === null) {
       delete cleaned[key];
+    }
+  }
+
+  for (const field of FREE_TEXT) {
+    const value = cleaned[field];
+
+    if (typeof value === 'string' && value.trim() === '') {
+      delete cleaned[field];
     }
   }
 
@@ -627,7 +634,7 @@ export class CellMeetingsService {
     // counter-example the repository already carries — there, omission means "leave it"
     // and null means "no birthday", two claims that must stay apart — and no field here
     // has that shape.
-    const body = withoutNulls(raw);
+    const body = normalized(raw);
 
     try {
       return await this.submitWithin(cellId, meetingId, body, actor, claim);
@@ -1709,13 +1716,14 @@ export class CellMeetingsService {
         // such reason; the note is free text and now stands without one (ruling of
         // 2026-09-04).
         //
-        // **Blank normalised to null, because `correction_reason` carries only
-        // `@IsString()` and `@MaxLength(500)`** — so `""` and `"   "` reach here, and a
-        // reason nobody supplied is stored as absent rather than as an empty note that a
-        // reader cannot tell from one. `not_held_note` needs no such treatment on this
-        // line: `assertNotHeldIsExplained` has already refused a blank one where section
-        // 13 requires it, and where it does not require one the field is absent.
-        note: toRescheduled ? blankToNull(body.correction_reason) : (body.not_held_note ?? null),
+        // **Blankness is handled at the door and not here**, for both fields at once.
+        // An earlier version of this line normalised `correction_reason` alone and
+        // justified leaving `not_held_note` alone on a false premise — that
+        // `assertNotHeldIsExplained` has already refused a blank one. It refuses a blank
+        // note only where the reason is `OTHER`, so `LEADER_UNAVAILABLE` with a note of
+        // `"   "` stored the whitespace, in the commit whose own ruling is that one rule
+        // enforced on one of two paths is the defect.
+        note: toRescheduled ? (body.correction_reason ?? null) : (body.not_held_note ?? null),
         actor_id: actor.accountId,
       } as never)
       .execute();

@@ -15,6 +15,7 @@ import {
   ValidateNested,
 } from 'class-validator';
 
+import { IsStorableText } from '../../common/text/is-storable-text';
 import { IsManilaCalendarDate } from '../../common/time/is-manila-calendar-date';
 
 /**
@@ -120,15 +121,27 @@ export class SubmitCellMeetingDto {
   /**
    * Why an already-recorded meeting is being changed (section 14).
    *
-   * Optional, matching `cell_attendance.correction_reason`, and meaningless on a first
-   * submission — where it is refused, so it cannot be read as a reason for the original.
-   * Section 14 asks for a reason "as appropriate" rather than always: a submission is a
-   * whole roster, and requiring one per changed line would put a dialog in front of a
-   * leader who noticed one mistake in twenty names.
+   * Optional, matching `cell_attendance.correction_reason`. Section 14 asks for a reason
+   * "as appropriate" rather than always: a submission is a whole roster, and requiring one
+   * per changed line would put a dialog in front of a leader who noticed one mistake in
+   * twenty names.
+   *
+   * **It is meaningless on a first submission and is accepted there, and this paragraph
+   * said it was refused.** It is not: a first submission carrying one answers 201 and the
+   * value is stored nowhere. Nor is it stored on a transition to `NOT_HELD`, where that
+   * branch writes `not_held_note` into the column instead. So the field is honoured on the
+   * correction and reschedule paths and dropped on the two beside them, which is the shape
+   * section 22 says can never be given meaning later.
+   *
+   * Recorded as open in `CLAUDE.md` rather than fixed here, because the answer is a rule
+   * and not a guard: refusing it on a first submission is one answer, and storing it on a
+   * `NOT_HELD` transition is another, and that one has to say what happens when a leader
+   * sends both a `correction_reason` and a `not_held_note` for a single column.
    */
   @IsOptional()
   @IsString()
   @MaxLength(500)
+  @IsStorableText()
   correction_reason?: string;
 
   /**
@@ -177,6 +190,7 @@ export class SubmitCellMeetingDto {
   @IsOptional()
   @IsString()
   @MaxLength(1000)
+  @IsStorableText()
   not_held_note?: string;
 
   /**

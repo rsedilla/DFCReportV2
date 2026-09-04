@@ -83,7 +83,8 @@ is a different change from this one.
 ### The migration relaxes and adds nothing, and the first draft did not
 
 The first draft replaced the constraint with a non-blank-and-at-most-500 check. That would
-have shipped **the sixth constraint-driven 500 on this route**: `not_held_note` writes the
+have shipped **one more constraint-driven 500 on this route, after the five already found**:
+`not_held_note` writes the
 same column and its DTO bounds it at 1000, so a legal note between 501 and 1000 characters
 would have met a `CHECK` with no service guard in front of it. Two fields with different
 bounds share the column, and one arbitrary bound over both is a rule neither of them states.

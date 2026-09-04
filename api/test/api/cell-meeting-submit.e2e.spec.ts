@@ -2170,6 +2170,153 @@ describe('recording a Cell meeting (sections 12, 13 and 14)', () => {
       expect(response.body.error.code).toBe('INVARIANT_VIOLATION');
     });
 
+    it('refuses free text a text column cannot hold, rather than answering 500', async () => {
+      // **The class the reschedule note reached, and three paths already had.** A JSON
+      // string may legally carry U+0000, which PostgreSQL refuses in `text`, and an
+      // unpaired surrogate, which has no UTF-8 encoding — both pass `@IsString()` and a
+      // length bound and answer `INTERNAL_ERROR` on the way in, which is section 22's
+      // named failure mode.
+      //
+      // It became newly reachable on the unchanged-roster reschedule when that path
+      // started writing `correction_reason` to a column; it was already reachable on the
+      // plain correction, on a move that changes a line, and on `not_held_note`. Refused
+      // at the edge by `@IsStorableText`, so all four answer `VALIDATION_FAILED` with the
+      // field named.
+      //
+      // The mutation: drop `@IsStorableText()` from either field and the matching case
+      // goes from 422 to 500.
+      const one = await member('Aurelio');
+
+      await submit({
+        status: 'HELD',
+        attendance: [{ person_id: one.id, present: true }],
+      }).expect(201);
+
+      const nulByte = await submit({
+        status: 'RESCHEDULED',
+        version: 1,
+        actual_date: movedTo(),
+        correction_reason: 'venue \u0000 closed',
+        attendance: [{ person_id: one.id, present: true }],
+      });
+
+      expect(nulByte.status).toBe(422);
+      expect(nulByte.body.error.code).toBe('VALIDATION_FAILED');
+
+      const loneSurrogate = await submit({
+        status: 'RESCHEDULED',
+        version: 1,
+        actual_date: movedTo(),
+        correction_reason: 'venue \uD800 closed',
+        attendance: [{ person_id: one.id, present: true }],
+      });
+
+      expect(loneSurrogate.status).toBe(422);
+
+      // The same rule on the sibling field, which reaches the same column by the other
+      // branch and 500'd on `main`.
+      await submit({
+        status: 'RESCHEDULED',
+        version: 1,
+        actual_date: movedTo(),
+        attendance: [{ person_id: one.id, present: true }],
+      }).expect(201);
+
+      const note = await submit({
+        status: 'NOT_HELD',
+        version: 2,
+        not_held_reason: 'OTHER',
+        not_held_note: 'nobody \u0000 came',
+      });
+
+      expect(note.status).toBe(422);
+    });
+
+    it('stores the longest note both fields admit, at each of their own bounds', async () => {
+      // **The argument that withdrew the first draft of migration 0014, with something
+      // that can fail on it.** That draft added `CHECK (... length(note) <= 500)`, and
+      // `not_held_note` is bounded at 1000 by its DTO while `correction_reason` is bounded
+      // at 500 — so a legal note between the two would have met a constraint with no
+      // service guard in front of it. The reasoning was right and nothing pinned it:
+      // re-adding a length `CHECK` turned no test red.
+      //
+      // Both bounds are exercised because the column takes both fields, and the defect the
+      // draft would have shipped lives strictly between them.
+      const one = await member('Aurelio');
+      const atCorrectionBound = 'c'.repeat(500);
+      const atNoteBound = 'n'.repeat(1000);
+
+      await submit({
+        status: 'HELD',
+        attendance: [{ person_id: one.id, present: true }],
+      }).expect(201);
+
+      await submit({
+        status: 'RESCHEDULED',
+        version: 1,
+        actual_date: movedTo(),
+        correction_reason: atCorrectionBound,
+        attendance: [{ person_id: one.id, present: true }],
+      }).expect(201);
+
+      await submit({
+        status: 'NOT_HELD',
+        version: 2,
+        not_held_reason: 'OTHER',
+        not_held_note: atNoteBound,
+      }).expect(201);
+
+      const changes = await changeRows();
+      expect(changes.map((row) => row.note?.length ?? null)).toEqual([500, 1000]);
+
+      // One character past its own bound is refused at the edge, not by the database.
+      await submit({
+        status: 'HELD',
+        attendance: [{ person_id: one.id, present: true }],
+        correction_reason: 'c'.repeat(501),
+      }).expect(422);
+    });
+
+    it('stores no note for a declaration explained with blank text', async () => {
+      // Section 13's blank-note rule binds both fields that reach the column, and the
+      // first version of it bound one. `assertNotHeldIsExplained` refuses a blank note
+      // only where the reason is `OTHER`, so `LEADER_UNAVAILABLE` with a note of `"   "`
+      // met nothing and stored the whitespace — in the commit whose own ruling is that a
+      // rule enforced on one of two paths is the defect.
+      //
+      // Normalised at the door now, so both fields answer alike. The mutation: remove
+      // `not_held_note` from `FREE_TEXT` and this goes from null to `"   "`.
+      const one = await member('Aurelio');
+
+      await submit({
+        status: 'HELD',
+        attendance: [{ person_id: one.id, present: true }],
+      }).expect(201);
+
+      await submit({
+        status: 'RESCHEDULED',
+        version: 1,
+        actual_date: movedTo(),
+        attendance: [{ person_id: one.id, present: true }],
+      }).expect(201);
+
+      await submit({
+        status: 'NOT_HELD',
+        version: 2,
+        not_held_reason: 'LEADER_UNAVAILABLE',
+        not_held_note: '   ',
+      }).expect(201);
+
+      const changes = await changeRows();
+      expect(changes[1].note).toBeNull();
+
+      const meeting = await db
+        .selectFrom('cell_meetings')
+        .select('not_held_note')
+        .executeTakeFirstOrThrow();
+      expect(meeting.not_held_note).toBeNull();
+    });
+
     it('answers a lost transition race a conflict, even when the winner made the same move', async () => {
       // **The gap that let finding 3 through.** Every other race case here writes a *first*
       // meeting row; nothing exercised a race on the transition path. `lostRaceAnswer`

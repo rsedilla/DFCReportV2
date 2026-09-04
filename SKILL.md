@@ -3321,7 +3321,9 @@ For a rescheduled meeting, preserve:
 
 **The note lives in `cell_meeting_changes.note`, and it stands there without a `reason`** (ruling of 2026-09-04). Four of those five were written from the day that table gained its first rows; the note had nowhere to go. `reason` on that table is the closed enum of `NOT_HELD` reasons above, and migration 0011 constrained a note to require one beside it — a reason a move can never have, because the meeting was moved rather than abandoned. So this clause was unimplementable rather than merely unimplemented, and the submission's `correction_reason` was accepted on a move and written to no row at all: it reaches only the successor `cell_attendance` rows, and the ordinary reschedule leaves the roster alone and produces none.
 
-The constraint was stricter than this section, rather than derived from it — the schema block below lists `reason` and `note` as independent nullable columns and couples them nowhere. Migration 0014 drops the coupling. A note that is blank is a note nobody wrote, and is stored as absent.
+The constraint was stricter than this section, rather than derived from it — the schema block above lists `reason` and `note` as independent nullable columns and couples them nowhere. Migration 0014 drops the coupling.
+
+**A note that is blank is a note nobody wrote, and is stored as absent — on both fields that reach the column.** `correction_reason` on a move and `not_held_note` on a declaration are normalised together, at the route's door rather than at either write. Stated for both because the first version of this rule was applied to one: whitespace sent as a `not_held_note` alongside a reason other than `OTHER` met no refusal and was stored as given, which is the one-rule-one-path shape this section keeps having to close.
 
 A rescheduled meeting remains one logical meeting, not two separate meetings, and does not create an additional applicable meeting for that calendar week.
 
