@@ -3319,6 +3319,10 @@ For a rescheduled meeting, preserve:
 - who rescheduled it
 - timestamp
 
+**The note lives in `cell_meeting_changes.note`, and it stands there without a `reason`** (ruling of 2026-09-04). Four of those five were written from the day that table gained its first rows; the note had nowhere to go. `reason` on that table is the closed enum of `NOT_HELD` reasons above, and migration 0011 constrained a note to require one beside it — a reason a move can never have, because the meeting was moved rather than abandoned. So this clause was unimplementable rather than merely unimplemented, and the submission's `correction_reason` was accepted on a move and written to no row at all: it reaches only the successor `cell_attendance` rows, and the ordinary reschedule leaves the roster alone and produces none.
+
+The constraint was stricter than this section, rather than derived from it — the schema block below lists `reason` and `note` as independent nullable columns and couples them nowhere. Migration 0014 drops the coupling. A note that is blank is a note nobody wrote, and is stored as absent.
+
 A rescheduled meeting remains one logical meeting, not two separate meetings, and does not create an additional applicable meeting for that calendar week.
 
 A `RESCHEDULED` Cell meeting remains associated with its original logical weekly meeting and its original reporting month, even when the new date falls in a different calendar month. Rescheduling changes the meeting's actual date/time, never its identity or which reporting period it belongs to. For example, a January 31 Cell meeting rescheduled to February 2 remains part of January's Cell meeting report and does not create an additional February meeting.
@@ -3332,6 +3336,8 @@ The two rules that force this are each clear alone. A first submission cannot ca
 **A person on the old roster and not the new one has their record closed with nothing replacing it** — `superseded_at` set and `superseded_by` the row's own id, which is the idiom above. Section 12 makes them a non-member of that meeting rather than somebody whose attendance was misrecorded: they could not have been there. *This is a second occasion for that shape, and the paragraph stating it names only the `NOT_HELD` one; both constraints that meet it carry the exemption by name and neither is specific to that path.*
 
 **The legal transitions are exactly four**, and everything else is refused as an `INVARIANT_VIOLATION`: a first submission is `HELD` or `NOT_HELD`; `HELD` → `RESCHEDULED`; `RESCHEDULED` → `RESCHEDULED`, since a meeting may move twice; and `RESCHEDULED` → `NOT_HELD`. `NOT_HELD` → anything is refused, because `NOT_HELD` means the meeting did not take place and is not being made up, and rescheduling contradicts the fact just recorded. `RESCHEDULED` → `HELD` is not a transition and needs none — `RESCHEDULED` already means the meeting took place on another date, and Section 12 counts both in N. How a status recorded *in error* is corrected is a different operation from a move, is not defined here, and is recorded as open in `CLAUDE.md`.
+
+**"No attendance is recorded" is a property of the status, not of the path that reached it** (ruling of 2026-09-04). A `NOT_HELD` meeting carries none whether it is declared by a first submission or arrived at by the one transition that reaches it, and a submission carrying attendance is refused on both. It is written here because it was enforced on one and not the other: the roster check ran on the reschedule branch alone, so a transition to `NOT_HELD` accepted a full roster — or a line naming somebody who is not in the church at all, since the membership and duplicate checks sit behind the same refusal — and answered success having discarded it. A body accepted and ignored is the one shape Section 22 says can never be given meaning later.
 
 ### Meeting summary, and the ranking prohibition
 
