@@ -188,6 +188,31 @@ function classifyOperation(
 }
 
 /**
+ * A submission with every explicitly-null optional field turned back into an absent one.
+ *
+ * **The class, closed at the door.** `class-validator`'s `@IsOptional()` treats `null` as
+ * absent for the purpose of *skipping validation* and then leaves the null in place, so
+ * every `x !== undefined` downstream is true of a body that meant to say nothing. Four
+ * defects in this file came from that gap, and each fix closed one read while the next
+ * read stayed open — which is what makes this a class rather than a list.
+ *
+ * Applied to the whole body rather than to named fields, so a field added later inherits
+ * the normalisation instead of inheriting the defect. `attendance` keeps its own shape:
+ * an array of objects with no optional members, so there is nothing inside it to strip.
+ */
+function withoutNulls(body: SubmitCellMeeting): SubmitCellMeeting {
+  const cleaned = { ...body } as Record<string, unknown>;
+
+  for (const [key, value] of Object.entries(cleaned)) {
+    if (value === null) {
+      delete cleaned[key];
+    }
+  }
+
+  return cleaned as unknown as SubmitCellMeeting;
+}
+
+/**
  * What section 13 requires of a `NOT_HELD` meeting, on **both** paths that can write one.
  *
  * "`NOT_HELD` is always declared by the responsible leader with a reason", and a reason of
@@ -216,7 +241,12 @@ function assertNotHeldIsExplained(
     return;
   }
 
-  if (body.not_held_reason === undefined) {
+  // `== null` rather than `=== undefined`, which is not redundant with the normalisation
+  // at the door: this guard names a constraint, and a guard that names a constraint should
+  // hold whatever reaches it. The `=== undefined` version passed `null` straight through to
+  // `cell_meetings_not_held_reason_iff_not_held` and answered 500 — the fifth
+  // constraint-driven 500 on this route, on the same constraint as the fourth.
+  if (body.not_held_reason == null) {
     throw new InvariantViolationError(
       'Declaring a meeting not held requires a reason (SKILL.md section 13).',
       context,
@@ -541,10 +571,30 @@ export class CellMeetingsService {
   async submit(
     cellId: string,
     meetingId: string,
-    body: SubmitCellMeeting,
+    raw: SubmitCellMeeting,
     actor: Actor,
     claim: CurrentClaim,
   ): Promise<Record<string, unknown>> {
+    // **Every optional field normalised once, at the only door into this route.**
+    //
+    // `@IsOptional()` skips every other decorator when a value is `null`, and `whitelist`
+    // strips undeclared keys rather than null ones — so `{"x": null}` arrives untouched
+    // and `x !== undefined` is true of it. This class has now produced four defects in
+    // this file: two dereferences, one refusal that skipped a capability check and an
+    // audit entry entirely, and a 500 on the commonest body in this domain — the last one
+    // on the very constraint the previous commit added a guard for, because that guard
+    // closed the `undefined` half and left the `null` half open.
+    //
+    // Normalising **here** rather than at each read is the difference between fixing
+    // instances and closing the class. Nothing below this line sees a `null` in an
+    // optional field, so no future read can reopen it by testing `!== undefined`.
+    //
+    // Null and absent mean one thing on every field of this body. `birth_date` is the
+    // counter-example the repository already carries — there, omission means "leave it"
+    // and null means "no birthday", two claims that must stay apart — and no field here
+    // has that shape.
+    const body = withoutNulls(raw);
+
     try {
       return await this.submitWithin(cellId, meetingId, body, actor, claim);
     } catch (error) {

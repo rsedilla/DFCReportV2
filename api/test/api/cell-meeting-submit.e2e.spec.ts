@@ -2207,6 +2207,51 @@ describe('recording a Cell meeting (sections 12, 13 and 14)', () => {
       expect(response.body.error.code).toBe('INVARIANT_VIOLATION');
     });
 
+    it('treats an explicitly null optional field as absent, on every field of the body', async () => {
+      // **The class, pinned rather than its instances.** `@IsOptional()` skips every other
+      // decorator on a null and leaves the null in place, so `x !== undefined` is true of
+      // a body that meant to say nothing. Four defects in this file came from that, each
+      // fix closing one read while the next stayed open — two dereferences, a refusal that
+      // skipped a capability check and an audit entry, and a 500 on the commonest body in
+      // this domain, on the very constraint the previous commit had guarded.
+      //
+      // A null is now stripped at the door, so each of these behaves exactly as omitting
+      // the key does. Asserted per field, because the defect was always one field's read.
+      const one = await member('Aurelio');
+
+      // `not_held_reason: null` reached `cell_meetings_not_held_reason_iff_not_held` and
+      // answered 500. Absent and null must both be the domain refusal.
+      const nullReason = await submit({ status: 'NOT_HELD', not_held_reason: null });
+      expect(nullReason.status).toBe(409);
+      expect(nullReason.body.error.code).toBe('INVARIANT_VIOLATION');
+
+      // `version: null` was refused where absent succeeds — a first submission carries no
+      // version, and null says the same thing.
+      const nullVersion = await submit({
+        status: 'HELD',
+        version: null,
+        attendance: [{ person_id: one.id, present: true }],
+      });
+      expect(nullVersion.status).toBe(201);
+
+      // `actual_date: null` misrouted the operation: a plain correction was classified as
+      // a transition, and a second reschedule answered 422 naming a field this route does
+      // not have. Null must simply mean "not moving".
+      const nullActualDate = await submit({
+        status: 'HELD',
+        version: 1,
+        actual_date: null,
+        actual_time: null,
+        attendance: [{ person_id: one.id, present: false }],
+      });
+      expect(nullActualDate.status).toBe(201);
+      expect(nullActualDate.body.status).toBe('HELD');
+
+      // And the meeting really did take the correction rather than a transition.
+      const changes = await changeRows();
+      expect(changes).toHaveLength(0);
+    });
+
     it('refuses a reschedule with nowhere to move to', async () => {
       const one = await member('Aurelio');
 
