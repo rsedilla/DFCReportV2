@@ -2296,6 +2296,7 @@ Cell category is editable over time, e.g. Youth -> Young Pro.
 - Keep the same Cell ID.
 - Preserve category history with effective dates.
 - Historical reports must use the category valid at the time being reported.
+- **A closed Cell carries the category it held when it closed** (ruling of 2026-09-04). A closure ends the open category row on its effective date, so a Cell closed on 10 March has no category row valid at 31 March — and Section 12 evaluates a month's figures as of the end of the reporting month. The category valid at the time being reported is therefore read at the last instant the Cell existed, which is the same thing as the last category it held. *Excluding the Cell instead was the alternative and is refused: Section 10 says a Cell closed part-way through a month simply has fewer recorded meetings, not none, so dropping it from the month would discard meetings it did hold. This is the idiom Section 13 already uses at the same boundary — for a meeting's own lookups the closure instant is read as the end of that day.* Most reports never reach it, because a count of Cells or Cell categories means active Cells unless the report says otherwise.
 - Audit category changes.
 
 The capability is `cell.manage_configuration` (Section 7), which governs a Cell's schedule on the same terms. Unlike a schedule change, a category change takes effect on the date it is made: nothing derives a count of scheduled meetings from a category, so there is no figure a mid-month change would silently rewrite.
@@ -2886,9 +2887,21 @@ The rules above **do** define what happens in each of the first two cases. What 
 
 - A person who attended a Cell and has since left appears in that Cell's report, because the population is who attended it. Whether a leader should see someone no longer theirs is open.
 - A member who joined part-way through the month is measured against the Cell's whole month, so `Completed` is unreachable for them and they read the same as a full-month member who came once. Whether that is acceptable is open.
-- What an aggregate view should offer in place of buckets, beyond unique people and coverage, is genuinely undefined.
+- What an aggregate view should offer in place of buckets, beyond unique people and coverage, **was** genuinely undefined and is settled below (ruling of 2026-09-04).
 
-The first two are fairness questions with a defined behaviour behind them; an implementer follows the rules above and does not stop. The third has no defined behaviour and is a Stop Condition.
+The first two are fairness questions with a defined behaviour behind them; an implementer follows the rules above and does not stop.
+
+#### What an aggregate view offers instead
+
+**Nothing further. Unique people, classification and coverage are the whole of it** (ruling of 2026-09-04), and coverage is the figure to lead with.
+
+The reason is not that no replacement could be designed. It is that **the bucket denominator is self-reported**, and every candidate replacement inherits that. `N` counts the meetings a Cell actually recorded, so any figure expressed as a share of `N` rewards a Cell for recording fewer meetings — including the obvious repair of normalising each person against their own Cell's `N` before aggregating. That removes the cross-Cell inflation described above and leaves the incentive untouched: a person at one of one still outranks a person at three of four. The constraint this section already sets is the test, and it is about the incentive rather than the arithmetic — *no bucket rewards a Cell for recording fewer meetings*.
+
+**Coverage does not have that property, which is what makes it the headline.** Its denominator is derived from the Cell's configured schedule against the calendar (Section 10), not from what anybody submitted. Recording less makes coverage worse, never better. It is the one figure on the screen that cannot be improved by doing less of the work it measures.
+
+Classification aggregates for the reason already stated — it carries no denominator — and unique people is a count. So the three that aggregate are exactly the three that have no self-reported denominator between them, which is why the list is closed rather than merely short.
+
+Where a pastor needs to act rather than to read, the idiom already exists and needs no new metric: an attention list, filtered and never ranked, of the Cells whose coverage is low — the same shape Section 13 names for meetings awaiting a record, and permitted by Section 15. That is a list of Cells to help, not a score.
 
 Each of the first two was previously "fixed" by changing the definition, and each fix broke either reconciliation (Section 20) or reproducibility (Section 3). Settle them against real data during implementation, verify with the reconciliation tests, and record the ruling here.
 
@@ -3121,6 +3134,8 @@ Attendance for a calendar month may be recorded or corrected until the **end of 
 **The whole of the 7th, and earlier drafts of this sentence said "at 23:59".** Read to the letter that shut the window at 23:59:00 and left the last sixty seconds of the 7th closed — a gap nobody wrote, and one no leader could discover: refused at 23:59:30 they are told the month closed, and every published rule says it closes at 23:59 on the 7th, which has not passed. `23:59` is how a person writes the end of a day on a clock with no seconds hand, and the cost of reading it that way is sixty seconds of grace a month on a boundary chosen for pastoral rather than technical reasons.
 
 Once closed, unreported meetings remain permanently unreported and outside the denominator, and coverage for that month is frozen. Only Admin may amend a closed month, using `records.backdate_effective_date` (Section 7), with a reason, audit logged (Section 21), and invalidating that month's stored figures (Section 20).
+
+**“Permanently” means absent an amendment, and an amendment may create a record where there was none** (ruling of 2026-09-04). A missing record is the commonest way a month is wrong, so an amendment that could only correct an existing one would not reach the case it exists for. *The objection this settles was that creating a record moves the month's numerator while its coverage denominator is frozen, leaving the two halves of the coverage line drawn from different populations. That rests on a misreading of what is frozen: this clause freezes the month against ordinary submission, and an amendment is the stated exception which — by this same sentence — invalidates the stored figures. Section 20 keys a stored figure to a version of the source records it derives from, so both halves are recomputed together from the amended records and never come from different populations. What stays permanently outside the denominator is a meeting nobody ever reported; a meeting reported late by an amendment has been reported.*
 
 **The amendment is a flag on the submission route, not a route of its own** (ruling of 2026-09-01). `POST /api/v1/cells/{id}/meetings/{meeting_id}/submit` takes an optional amendment object carrying the reason; absent, the route behaves exactly as it does for an open month. Everything an amendment does is what a submission does — the roster, the per-line rules, the version check, the all-or-nothing rule, the idempotency obligations of Section 22 — and only *when* it is allowed and *who* may do it differ. A second route would have to stay behaviourally identical to this one forever.
 
