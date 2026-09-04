@@ -1,6 +1,7 @@
-import { IsEmail, IsIn, IsString, IsUUID, MaxLength, MinLength } from 'class-validator';
+import { IsIn, IsString, IsUUID, MaxLength, MinLength } from 'class-validator';
 
 import type { AccountRole } from '../../database/schema';
+import { IsEmailAddress } from '../../common/text/is-email-address';
 
 /**
  * The roles a provisioning request may name today (SKILL.md section 6).
@@ -26,7 +27,7 @@ export class ProvisionAccountDto {
    * login credential, and making it a Person field would let a leader repoint a
    * downline leader's address and take the account through a password reset.
    */
-  @IsEmail()
+  @IsEmailAddress()
   @MaxLength(320)
   email!: string;
 
@@ -36,7 +37,7 @@ export class ProvisionAccountDto {
 }
 
 export class ForgotPasswordDto {
-  @IsEmail()
+  @IsEmailAddress()
   @MaxLength(320)
   email!: string;
 }

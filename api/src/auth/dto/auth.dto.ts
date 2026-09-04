@@ -1,8 +1,9 @@
-import { IsEmail, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
+import { IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
 import { IsStorableText } from '../../common/text/is-storable-text';
+import { IsEmailAddress } from '../../common/text/is-email-address';
 
 export class LoginDto {
-  @IsEmail({}, { message: 'Enter a valid email address.' })
+  @IsEmailAddress({ message: 'Enter a valid email address.' })
   @MaxLength(320)
   email!: string;
 
