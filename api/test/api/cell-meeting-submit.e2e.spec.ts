@@ -2171,20 +2171,22 @@ describe('recording a Cell meeting (sections 12, 13 and 14)', () => {
     });
 
     it('refuses free text a text column cannot hold, rather than answering 500', async () => {
-      // **The class the reschedule note reached, and three paths already had.** A JSON
-      // string may legally carry U+0000, which PostgreSQL refuses in `text`, and an
-      // unpaired surrogate, which has no UTF-8 encoding — both pass `@IsString()` and a
-      // length bound and answer `INTERNAL_ERROR` on the way in, which is section 22's
-      // named failure mode.
+      // **Two characters a `text` column will not keep as written, and they fail
+      // differently.** U+0000 is refused by PostgreSQL outright, so it surfaces as
+      // `INTERNAL_ERROR` — section 22's named failure mode. An unpaired surrogate is
+      // *accepted* and silently rewritten to U+FFFD, so the request answers 201 and the
+      // record then says a leader wrote something they did not write.
       //
-      // It became newly reachable on the unchanged-roster reschedule when that path
-      // started writing `correction_reason` to a column; it was already reachable on the
-      // plain correction, on a move that changes a line, and on `not_held_note`. Refused
-      // at the edge by `@IsStorableText`, so all four answer `VALIDATION_FAILED` with the
-      // field named.
+      // *The first version of this comment said both answer `INTERNAL_ERROR`, and so did
+      // the ruling it implemented. The surrogate half was measured against the database
+      // afterwards and is false: inserted directly it stores U+FFFD and returns 201. The
+      // wrong mechanism made every undecorated field look safer than it is.*
       //
-      // The mutation: drop `@IsStorableText()` from either field and the matching case
-      // goes from 422 to 500.
+      // Both are refused at the edge, on all three free-text fields of this route.
+      //
+      // The mutations differ for that same reason: drop `@IsStorableText()` and the
+      // null-byte case goes 422 to 500, while the surrogate case goes 422 to 201 storing
+      // a replacement character. One expected code would have pinned only half of this.
       const one = await member('Aurelio');
 
       await submit({
@@ -2230,6 +2232,47 @@ describe('recording a Cell meeting (sections 12, 13 and 14)', () => {
       });
 
       expect(note.status).toBe(422);
+
+      // The amendment's own `reason` is the third free-text field of this route, and is
+      // pinned where it actually reaches a column — see the closed-month block below.
+    });
+
+    it('accepts an emoji, which is two code units and is well formed', async () => {
+      // **The case that makes the surrogate rule safe to have.** `LONE_SURROGATE` must
+      // refuse an unpaired half and accept a pair, and the obvious wrong simplification —
+      // matching the whole surrogate block — refuses every emoji while leaving the suite
+      // green. A leader typing a note on a phone is the ordinary case here, not the exotic
+      // one, so the rule needs something that fails when it stops being true.
+      //
+      // The mutation: widen the regex to the whole surrogate block and this goes 201 to
+      // 422 on the move below.
+      const one = await member('Aurelio');
+      const withEmoji = 'moved to the barangay hall 😀';
+
+      await submit({
+        status: 'HELD',
+        attendance: [{ person_id: one.id, present: true }],
+      }).expect(201);
+
+      await submit({
+        status: 'RESCHEDULED',
+        version: 1,
+        actual_date: movedTo(),
+        correction_reason: withEmoji,
+        attendance: [{ person_id: one.id, present: true }],
+      }).expect(201);
+
+      // Stored as written, rather than as a replacement character.
+      const changes = await changeRows();
+      expect(changes[0].note).toBe(withEmoji);
+
+      // The sibling field takes the same characters.
+      await submit({
+        status: 'NOT_HELD',
+        version: 2,
+        not_held_reason: 'OTHER',
+        not_held_note: 'nobody could come 😢',
+      }).expect(201);
     });
 
     it('stores the longest note both fields admit, at each of their own bounds', async () => {
@@ -2578,6 +2621,37 @@ describe('recording a Cell meeting (sections 12, 13 and 14)', () => {
 
       expect(response.status).toBe(409);
       expect(response.body.error.code).toBe('PERIOD_CLOSED');
+    });
+
+    it('refuses an amendment reason a text column cannot hold', async () => {
+      // **The third free-text field of this route, and the one left undecorated** when the
+      // other two were guarded — same route, same DTO file, same class. It reaches
+      // `audit_log.reason`, so a null byte in it answered `INTERNAL_ERROR` on the way in.
+      //
+      // Pinned **here** rather than beside the other two, because this is where the field
+      // reaches a write. A probe on an open month is refused for the month before the value
+      // reaches the database, so it would have gone 422 to 409 under mutation and pinned
+      // the decorator while demonstrating nothing about the 500 it exists to stop. The
+      // first version of this case did exactly that.
+      //
+      // The mutation: drop `@IsStorableText()` from `ClosedMonthAmendmentDto.reason` and
+      // this goes 422 to 500.
+      const one = await member('Aurelio');
+      const admin = await adminAccount();
+      const closed = await closedMonthSaturday();
+
+      const response = await amend(
+        {
+          status: 'HELD',
+          attendance: [{ person_id: one.id, present: true }],
+          amendment: { reason: 'paper \u0000 register' },
+        },
+        admin,
+        closed,
+      );
+
+      expect(response.status).toBe(422);
+      expect(response.body.error.code).toBe('VALIDATION_FAILED');
     });
 
     it('records into a closed month with the flag and the capability', async () => {

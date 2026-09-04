@@ -12,32 +12,63 @@ That last one is the reason this file exists rather than a line in a commit mess
 
 Decision 0196 made an unchanged-roster reschedule write `correction_reason` into
 `cell_meeting_changes.note`, where before it was written nowhere. That was the fix. It also
-made the field reach a `text` column on that path for the first time, and `text` refuses
-two things a JSON string may legally carry:
+made the field reach a `text` column on that path for the first time, and a `text` column
+will not keep two things a JSON string may legally carry. **They fail differently, and the
+first version of this ruling said they fail alike:**
 
-- **U+0000.** PostgreSQL rejects a null byte outright.
-- **A lone surrogate.** Not well-formed Unicode, so it has no UTF-8 encoding for the wire.
+- **U+0000 is refused by the database.** `invalid byte sequence for encoding "UTF8": 0x00`,
+  surfacing as `INTERNAL_ERROR` on a well-formed request.
+- **A lone surrogate is accepted and silently changed.** `node-postgres` substitutes U+FFFD,
+  so the row keeps three characters with a replacement mark in the middle and the request
+  answers 201.
+
+*This ruling first said the surrogate "has no UTF-8 encoding for the wire" and answers
+`INTERNAL_ERROR`. That was reasoned rather than measured, and it is false: inserted directly
+it returns 201 storing U+FFFD. The error mattered beyond its own sentence, because it made
+every field lacking the decorator look safer than it is — implying the residual failure is
+one a client is told about, when on that half it is silent corruption of what a leader
+wrote. Corrected after a reviewer disputed it and the database was asked.*
 
 `correction_reason` carried `@IsString()` and `@MaxLength(500)` and nothing else, so a body
 answering `201` on `11c7226` answered `500 INTERNAL_ERROR` on the fix — Section 22's named
 failure mode, introduced by a commit whose subject was closing that failure mode.
 
-Three more instances of the same class were already reachable and were not found by the
-audit that produced 0196: `correction_reason` on a plain correction, on a move that changes
-a line, and `not_held_note` on a `NOT_HELD` transition. **The audit could not have found
+**Five more instances of the null-byte half were already reachable**, and were not found by
+the audit that produced 0196: `correction_reason` on a plain correction and on a move that
+changes a line, `not_held_note` on a `NOT_HELD` transition **and on a first submission**, and
+the amendment's own `reason` on every path that carries one. **The audit could not have found
 them.** It enumerated every constraint on the three attendance tables, and none of these is
 constraint-driven — they are the column type refusing a value. The audit's scope was
 constraints and its conclusion was written about the route.
 
-**The ruling: free text is refused at the edge, on every field of a route rather than the
-one that broke.** `@IsStorableText` (`common/text/is-storable-text.ts`) is applied to
-`correction_reason` and `not_held_note` together, and answers `VALIDATION_FAILED` with the
-field named. Refused rather than stripped: no section gives a null byte a meaning, so there
-is nothing for a domain layer to decide, and stripping it would store text nobody wrote.
+*The count in this paragraph read "three" and then "four places" below, both written while
+the first-submission path and the amendment reason were unexamined. Six is what a reviewer
+reproduced. A count stated twice, in the ruling written to correct a count stated once.*
 
-Applied to both fields on the evidence of this same file's history — the null class took
-four fixes because each closed one read and left the next open — and stated here so the
-next free-text field on this route is written with the decorator rather than without it.
+**The ruling: free text is refused at the edge, on every free-text field of this route
+rather than the one that broke.** `@IsStorableText` (`common/text/is-storable-text.ts`) is
+applied to all three — `correction_reason`, `not_held_note`, and
+`ClosedMonthAmendmentDto.reason` — and answers `VALIDATION_FAILED` with the field named.
+Refused rather than stripped or substituted: no section gives either character a meaning, so
+there is nothing for a domain layer to decide, and accepting the substitution stores text
+nobody typed.
+
+Applied to all three on the evidence of this same file's history — the null class took four
+fixes because each closed one read and left the next open — and stated here so the next
+free-text field on this route is written with the decorator rather than without it.
+
+*The first version of this ruling said "every free-text field on a route" and left the
+amendment's `reason` undecorated: same route, same DTO file, one class down, still answering
+500. The claim was in the shipped source of the new file, which makes it the sentence a later
+reviewer trusts instead of re-checking — the exact failure the section above records. Found
+by the review of this ruling.*
+
+**Where the decorator is applied beyond this route is deliberately not settled here**, and
+the reason is that nothing gives it a scope to derive: Section 22 names `INTERNAL_ERROR` as a
+failure mode and says nothing about what a free-text field may contain. The DCC submission,
+Cell closure, and the `people` reasons and names all carry free-text fields without it and
+are recorded as open in `CLAUDE.md`. Applying it by memory across five modules is how this
+route ended up with two of three fields covered and a docblock claiming three.
 
 ## The claim the batch made that the batch refuted
 
@@ -46,7 +77,7 @@ The batch added to `CLAUDE.md`, of the `facilitated_by` foreign key:
 > So the five-500 family that shaped this route is closed, and this bullet is the whole of
 > what remains of it.
 
-False in four places at the moment it was committed, by the count above. It is the sentence
+False in six places at the moment it was committed, by the count above. It is the sentence
 a later reviewer trusts *instead of* re-checking, which is what makes it worse than the
 defect it described. It now says what was actually established — that there is no sibling
 **among the constraints** — and records what it originally claimed and why that was wrong.

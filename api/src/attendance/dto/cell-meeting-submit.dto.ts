@@ -47,13 +47,21 @@ export class ClosedMonthAmendmentDto {
    * (`people.dto.ts`'s Network-change and backdate reasons) carry `@Length(1, 500)` and
    * have it too; that is a gap to close there rather than a shape to copy here.
    *
-   * `correction_reason` on this route is only `@IsString()`, and that is not a precedent
-   * to copy here (section 25 rule 19): section 14 asks for one "as appropriate" and it is
-   * optional, while this one is the whole justification for reaching past a closed window.
+   * `correction_reason` on this route carries no non-blank rule, and that is not a
+   * precedent to copy here (section 25 rule 19): section 14 asks for one "as appropriate"
+   * and it is optional, while this one is the whole justification for reaching past a
+   * closed window.
+   *
+   * **`@IsStorableText` because this field reaches `audit_log.reason`**, and a null byte
+   * in it answered `INTERNAL_ERROR` on every path of this route. It was the one free-text
+   * field of this DTO left undecorated when the other two were guarded — in the commit
+   * whose own docblock claimed the rule was applied to every free-text field on the
+   * route. Same route, same file, same class, found by the review after.
    */
   @IsString()
   @Matches(/\S/, { message: 'reason must not be blank' })
   @MaxLength(500)
+  @IsStorableText()
   reason!: string;
 }
 

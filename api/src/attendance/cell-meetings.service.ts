@@ -187,6 +187,9 @@ function classifyOperation(
   return { kind: 'declare_not_held' };
 }
 
+/** The fields of this DTO a person types prose into, rather than a format. */
+const FREE_TEXT = ['correction_reason', 'not_held_note'] as const;
+
 /**
  * A submission normalised once, at the only door into this route.
  *
@@ -231,8 +234,6 @@ function classifyOperation(
  * null byte is refused at the edge by `@IsStorableText`, because stripping it would store
  * text nobody wrote; see `common/text/is-storable-text.ts`.*
  */
-const FREE_TEXT = ['correction_reason', 'not_held_note'] as const;
-
 function normalized(body: SubmitCellMeeting): SubmitCellMeeting {
   const cleaned = { ...body } as Record<string, unknown>;
 

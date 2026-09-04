@@ -1,42 +1,56 @@
 import { ValidateBy, buildMessage, type ValidationOptions } from 'class-validator';
 
 /**
- * Free text a client sends that PostgreSQL can actually store (SKILL.md section 22).
- *
- * **A `text` column refuses two things a JSON string may legally contain**, and both reach
- * the database as a well-formed request that answers `INTERNAL_ERROR` — section 22's named
- * failure mode, and the shape this route has now produced six times:
- *
- * - **U+0000.** PostgreSQL rejects a null byte in `text` outright. `"venue \u0000 closed"`
- *   is a valid JSON string, passes `@IsString()` and `@MaxLength()`, and 500s on the way in.
- * - **A lone surrogate.** `"\uD800"` is a valid JavaScript string and is not well-formed
- *   Unicode, so it has no UTF-8 encoding for the wire.
- *
- * **A validator rather than a service guard, and rather than normalisation.** This is a
- * property of the *string* rather than of the domain: no section of `SKILL.md` gives a null
- * byte a meaning, so there is nothing for a domain layer to decide and nothing a leader
- * meant by it. Refusing it at the edge answers `VALIDATION_FAILED` with the field named,
- * which is what a client needs to fix it. Stripping the character instead would store text
- * nobody wrote, silently.
- *
- * **Applied to every free-text field on a route rather than to the one that broke**, on the
- * evidence of this file's neighbours: the null class in `cell-meetings.service.ts` took four
- * fixes because each closed one read and left the next open, and the reschedule note reached
- * this rule only because a fix made a previously-discarded field reach a column. A field
- * bounded by `@IsString()` and a length is bounded against neither of these.
- *
- * Every value a person can type passes. What it refuses is a value no keyboard produces.
- */
-/**
  * A high surrogate with no low one after it, or a low surrogate with no high one before it.
  *
  * `String.prototype.isWellFormed` says this in one call and needs `lib: es2024`; this file is
- * not the place to move the whole project's target, so the pair is matched directly.
+ * not the place to move the whole project's target, so the pair is matched directly. The two
+ * agree on every input: checked against `isWellFormed` over every code unit and over every
+ * two-unit combination across the surrogate range, with no divergence.
  */
 const LONE_SURROGATE = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/;
 
+/** Named here and used here, matching `IS_MANILA_CALENDAR_DATE`. */
 export const IS_STORABLE_TEXT = 'isStorableText';
 
+/**
+ * Free text a client sends that PostgreSQL can store as written (SKILL.md section 22).
+ *
+ * **Two things a JSON string may legally contain that a `text` column will not keep**, and
+ * they fail differently — which matters, because the difference decides whether a field
+ * without this decorator is merely unguarded or actively lossy:
+ *
+ * - **U+0000 is refused by the database.** `invalid byte sequence for encoding "UTF8": 0x00`,
+ *   which surfaces as `INTERNAL_ERROR` on a well-formed request — section 22's named failure
+ *   mode. Loud, and reachable on this route wherever the decorator is absent.
+ * - **A lone surrogate is accepted and silently changed.** `node-postgres` substitutes
+ *   U+FFFD, so `"a\uD800b"` is stored as three characters, the middle one a replacement mark,
+ *   and the request answers 201. Quiet, and worse: the record then says a leader wrote
+ *   something they did not write.
+ *
+ * *An earlier version of this file said the lone surrogate "has no UTF-8 encoding for the
+ * wire" and answers `INTERNAL_ERROR`. It does not — inserted directly it returns 201 storing
+ * U+FFFD, which was measured against the database only after a reviewer disputed it. The
+ * wrong mechanism made every field lacking this decorator look safer than it is, by implying
+ * the failure is one a client would be told about.*
+ *
+ * **Refused rather than stripped or substituted.** No section of `SKILL.md` gives either
+ * character a meaning, so there is nothing for a domain layer to decide and nothing a leader
+ * meant by it; refusing at the edge answers `VALIDATION_FAILED` with the field named, which
+ * is what a client needs in order to fix it. The alternative is to accept the substitution,
+ * and that stores text nobody typed.
+ *
+ * **A valid surrogate pair is unaffected**, which is the case that matters in practice: an
+ * emoji is two code units and is well formed, so a note typed on a phone passes. Every value
+ * a person can type passes; what this refuses is a value no keyboard produces.
+ *
+ * **Where it is applied is a route-by-route decision, and section 22 states no rule.** It
+ * guards the three free-text fields of the Cell meeting submit route — `correction_reason`,
+ * `not_held_note`, and the amendment's `reason`. Other routes carry free-text fields without
+ * it, and they are recorded as open in `CLAUDE.md` rather than quietly assumed covered. A
+ * version of this paragraph claimed the rule was "applied to every free-text field on a
+ * route" while one field of this route's own DTO was undecorated and answering 500.
+ */
 export function IsStorableText(options?: ValidationOptions): PropertyDecorator {
   return ValidateBy(
     {
