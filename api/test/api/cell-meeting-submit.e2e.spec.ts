@@ -1424,6 +1424,49 @@ describe('recording a Cell meeting (sections 12, 13 and 14)', () => {
       expect(dropped?.superseded_by).toBe(dropped?.id);
     });
 
+    it('records a second move from where the meeting was, not where it was scheduled', async () => {
+      // Section 13 defines the instant: "the meeting's `actual_date` where it has one, and
+      // its `scheduled_date` otherwise". A meeting rescheduled twice moves from the date it
+      // had last — recording the scheduled date again would make the history read as
+      // though the first move had not happened, which is the thing keeping changes in
+      // their own rows is for.
+      //
+      // Nothing pinned this until now: every other case moves a meeting once, and on a
+      // first move the two dates are the same.
+      const one = await member('Aurelio');
+      const first = movedTo();
+      const second = (() => {
+        const day = new Date(`${meetingDate}T12:00:00+08:00`);
+        day.setUTCDate(day.getUTCDate() + 14);
+
+        return day.toISOString().slice(0, 10);
+      })();
+
+      await submit({
+        status: 'HELD',
+        attendance: [{ person_id: one.id, present: true }],
+      }).expect(201);
+
+      await submit({
+        status: 'RESCHEDULED',
+        version: 1,
+        actual_date: first,
+        attendance: [{ person_id: one.id, present: true }],
+      }).expect(201);
+
+      await submit({
+        status: 'RESCHEDULED',
+        version: 2,
+        actual_date: second,
+        attendance: [{ person_id: one.id, present: true }],
+      }).expect(201);
+
+      const changes = await changeRows();
+      expect(changes).toHaveLength(2);
+      expect(changes[0]).toMatchObject({ from_date: meetingDate, to_date: first });
+      expect(changes[1]).toMatchObject({ from_date: first, to_date: second });
+    });
+
     it('declares a moved meeting not held, keeping both records', async () => {
       // Section 13: "A `RESCHEDULED` meeting that ultimately does not take place may be
       // changed to `NOT_HELD`, preserving both records." Its attendance is closed, and a

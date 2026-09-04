@@ -785,7 +785,28 @@ export class CellMeetingsService {
     // *Every status change was refused here until 2026-09-04 (decision 0195), which is
     // what made `RESCHEDULED` a status no path could produce. Exactly four transitions are
     // legal now, and the rest are refused in the same place for the same reason.*
-    if (body.status !== existing.status) {
+    // **A move is not always a status change**, which is the trap here: section 13 permits
+    // a meeting to be rescheduled twice, and the second move leaves the status where it
+    // already is. Dispatching on the status alone sent that submission down the correction
+    // path, which ignores `actual_date` — so a legitimate second reschedule answered 201,
+    // moved nothing, and wrote no `cell_meeting_changes` row. Silently.
+    if (body.status !== existing.status || body.actual_date !== undefined) {
+      // Coherence before legality, so the message names what is actually wrong. A body
+      // carrying an actual date under any status but `RESCHEDULED` is a malformed move
+      // rather than an illegal transition, and answering "cannot move from HELD to HELD"
+      // would send its author looking for the wrong mistake.
+      if (body.status !== 'RESCHEDULED' && body.actual_date !== undefined) {
+        throw new InvariantViolationError(
+          'An actual date belongs to a reschedule (SKILL.md section 13).',
+          {
+            cell_id: cellId,
+            meeting_id: meetingId,
+            current_status: existing.status,
+            submitted_status: body.status,
+          },
+        );
+      }
+
       if (!isLegalTransition(existing.status, body.status)) {
         throw new InvariantViolationError(transitionRefusal(existing.status, body.status), {
           cell_id: cellId,
