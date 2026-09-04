@@ -138,7 +138,56 @@ the three questions it could not answer were answered.
 
 ---
 
-## Stage 4 — Attendance
+## Stage 4 — Attendance — **complete**
+
+Closed on 2026-09-04. All three clauses of the exit criterion are met, each with a test that
+fails when the behaviour is removed.
+
+**The month walk is what closed it**, and it is the last thing built rather than the first:
+`api/test/api/stage-four-month.e2e.spec.ts` records every meeting a Cell's schedule derives
+for a month — one of them moved to another date, the last of them not held with a reason —
+records that month's DCC events alongside, then meets a genuinely shut month, is refused
+`PERIOD_CLOSED` as leader *and* as Admin without the flag, and reaches back through it with
+an amendment that writes its audit entry. Every other spec in this domain exercises one
+slice against a fixture built for it; nothing had run them together, and a month is the unit
+sections 12 and 20 actually measure in.
+
+Two things about that test are worth knowing before reading it. **"A full month" is every
+meeting of the month that has already happened**, which on the first seven days of any month
+is the whole of the previous one and otherwise is the month to date — so it counts what the
+schedule derives rather than a number written down, because a test that hard-codes four goes
+red on the days the answer is three. And **the close is demonstrated on a different month**:
+the service reads its instant from the database and there is no seam to inject one, so the
+month that shuts is one that genuinely has, two months back. A real refusal rather than a
+simulated boundary.
+
+The conflict clause was proven earlier and in both domains (#67), including the first
+submission that lost a race and had been answering `INTERNAL_ERROR`.
+
+**What was built:** the DCC calendar and recording (#59), the Cell meetings listing (#61),
+Cell meeting recording (#62), per-record scope placement (#63), the closed-month amendment
+on both submit routes (#68), and meeting transitions (#65, #69). Twenty rulings were settled
+before the code that needed them — four in #56, nine in #58, three in #60 and four in #64,
+counted from those pull requests rather than remembered.
+
+**The transitions slice cost twelve `architecture-guardian` passes**, and the shape of that
+is recorded in decisions 0195 to 0197 rather than tidied away. Passes one to eleven each
+found behavioural defects, every one reproduced against a real database. Three consecutive
+times, the batch fixing one pass's findings introduced something of its own — including a
+regression that made a previously-discarded field reach a `text` column and answer 500, and,
+inside the commit recording the ruling *against* enforcing a rule on one path only, that same
+shape reintroduced. The twelfth pass found nothing behavioural. What kept the loop running
+was not the code but the volume of self-describing prose each fix batch added: a large share
+of the later findings were false claims — counts, ordinals, a failure mechanism asserted
+instead of measured — in commentary nothing required.
+
+**Two things this stage did not finish, both recorded and neither blocking.** The DCC
+calendar is advanced by `npm run generate:dcc` and **nothing schedules it**; that is
+deployment work, and it sits with the least-privilege database role, the liveness probe and
+the isolation-level pin rather than being invented here with no deployment to target. And
+three reachable `INTERNAL_ERROR`s remain on merged routes — an unknown `facilitated_by`, and
+a null byte in DCC's `correction_reason` or a Cell closure's `note` — each reproduced, each
+recorded in `CLAUDE.md`, and each outside the route this stage's last branch owned.
 
 - DCC calendar generated ahead of a twelve-month floor, by a scheduled command (§9)
 - DCC recording, responsible leader, roll-up to the nearest account-holding upline
