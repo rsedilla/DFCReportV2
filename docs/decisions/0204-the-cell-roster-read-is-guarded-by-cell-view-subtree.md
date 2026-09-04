@@ -30,8 +30,12 @@ copy is whichever capability the one existing Cell-scoped read carries.
 
 **No role gains or loses access.** `role-defaults.ts` gives `cell.view_subtree` and
 `cell.manage_membership` the identical scope at all three roles — Whole Church for Senior
-Pastor and Admin, own/subtree for Leader. Every account reaching this route today reaches
-it after the swap, and no account reaches it that did not.
+Pastor and Admin, own/subtree for Leader. Every account holding **only role
+defaults** reaches this route after the swap exactly as it did before. *That is the whole
+of what `role-defaults.ts` shows, and a first version of this sentence said "every
+account" — false of an explicit grant in both directions, and corrected rather than
+defended, because it is precisely the assurance that would let the next reader skip the
+check. Nothing in `api/src` or `api/scripts` writes `capability_grants`; only tests do.*
 
 **Scope resolution is unchanged.** `CapabilityGuard` branches on the target's `kind` and
 never reads the capability, so a `{ kind: 'cell' }` target takes `leaderForScope` under

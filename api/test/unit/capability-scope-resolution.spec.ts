@@ -1,5 +1,6 @@
 import { Test } from '@nestjs/testing';
 import { ModulesContainer } from '@nestjs/core';
+import { getMetadataStorage } from 'class-validator';
 
 import { AppModule } from '../../src/app.module';
 import { CAPABILITY_METADATA } from '../../src/auth/authorization/authorization.decorators';
@@ -76,6 +77,8 @@ describe('which scope resolution a capability gets (section 7)', () => {
   interface DeclaredRoute {
     where: string;
     requirement: CapabilityRequirement;
+    /** The handler's parameter classes, for the DTO check the allowlist owes. */
+    paramTypes: unknown[];
   }
 
   async function declaredRoutes(): Promise<DeclaredRoute[]> {
@@ -114,7 +117,9 @@ describe('which scope resolution a capability gets (section 7)', () => {
             CapabilityRequirement | undefined;
 
           if (requirement !== undefined) {
-            found.push({ where: `${wrapper.name}.${name}`, requirement });
+            const paramTypes = (Reflect.getMetadata('design:paramtypes', prototype, name) ??
+              []) as unknown[];
+            found.push({ where: `${wrapper.name}.${name}`, requirement, paramTypes });
           }
         }
       }
@@ -184,6 +189,79 @@ describe('which scope resolution a capability gets (section 7)', () => {
     );
   });
 
+  it('lets no allowlisted route take a period, which is the property it is exempt for', async () => {
+    // **The allowlist's exemption rests on one property and this is what checks it.** A
+    // route is exempt because it names no period, so section 7's "as of the period being
+    // viewed" is `now` for it and `leaderForScope` answers correctly. Assert only that the
+    // handler exists and the exemption survives a `month` parameter being added to it later
+    // -- which is the failure the tripwire exists for, reached through the one route it no
+    // longer watches.
+    //
+    // Derived from the DTO's own validation metadata rather than from a list, on
+    // `storable-text-coverage.spec.ts`'s reasoning: a property added next year is inside the
+    // check without its author knowing the check exists.
+    const routes = await declaredRoutes();
+
+    // Names that would make a request ask about a period other than now. Matched on the
+    // whole property name rather than as substrings, so `limit` and `cursor` pass and a
+    // `month`, `as_of` or `reporting_month` does not.
+    const PERIOD = new Set([
+      'month',
+      'year',
+      'as_of',
+      'asOf',
+      'date',
+      'from',
+      'to',
+      'since',
+      'until',
+      'period',
+      'reporting_month',
+      'reportingMonth',
+      'effective_date',
+      'effectiveDate',
+    ]);
+
+    const offending: string[] = [];
+    let inspected = 0;
+
+    for (const allowed of UNDATED_CELL_VIEWING) {
+      const route = routes.find((candidate) => candidate.where === allowed);
+      expect(route).toBeDefined();
+
+      for (const paramType of route?.paramTypes ?? []) {
+        if (typeof paramType !== 'function') {
+          continue;
+        }
+
+        const metadatas = getMetadataStorage().getTargetValidationMetadatas(
+          paramType,
+          '',
+          false,
+          false,
+        );
+
+        if (metadatas.length === 0) {
+          continue;
+        }
+
+        inspected += 1;
+
+        for (const property of new Set(metadatas.map((metadata) => metadata.propertyName))) {
+          if (PERIOD.has(property)) {
+            offending.push(`${allowed} takes ${(paramType as { name: string }).name}.${property}`);
+          }
+        }
+      }
+    }
+
+    // **The vacuity guard.** `design:paramtypes` is emitted only where a decorator is
+    // present, and a DTO reached through a differently-shaped signature would leave the loop
+    // above inspecting nothing and passing. At least one validated DTO must have been read.
+    expect(inspected).toBeGreaterThan(0);
+    expect(offending).toEqual([]);
+  });
+
   it('finds every route the allowlist names, so it cannot outlive one', async () => {
     // Without this the allowlist is a list of strings nothing checks. A renamed or deleted
     // handler would leave an entry permitting a route that no longer exists, and the next
@@ -231,8 +309,8 @@ describe('which scope resolution a capability gets (section 7)', () => {
     // "the same actor" is true only while the two routes carry the identical capability
     // and target declaration.
     //
-    // Give the roster its own viewing capability -- which `CLAUDE.md` records as open for
-    // exactly these routes, and which the case above says does not yet exist -- and the
+    // Give the roster its own viewing capability -- which decision 0204 did for
+    // `GET /cells/{id}/members` while leaving these two deliberately untouched -- and the
     // two stop admitting the same actors, at which point the submit path's early refusal
     // starts answering something no read answers. That is a disclosure appearing with no
     // line of the attendance code changed, so it is asserted here rather than left to a
