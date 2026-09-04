@@ -142,6 +142,8 @@ Principle 13 requires a modular monolith. These are the modules, and the list is
 
 *A first version of this paragraph said the joins were in `hierarchy`'s recursive walks and that asking `people` per row would “turn one query into hundreds”. Neither is true of the two joins it exempts: `ancestorsOf` and `subtreeOf` select identifiers only and join nothing, and `directLeaderNameOf` returns at most one row. The category was right and the description was written from what the exemption was for rather than from the queries — in the paragraph added to stop exactly that.*
 
+**`reporting` is the module this rule bites hardest, and it takes the ordinary route** (ruling of 2026-09-05). It owns `report_snapshots` and `notifications` and nothing else, so it roots no query in attendance, Cell, membership, Person or pastoral-assignment tables, and a whole-church monthly report is therefore not a join. The owning module computes its own aggregates — `hierarchy` the dated subtree walk, `attendance` the DCC and Cell figures — and `reporting` composes them and stores the snapshot. Widening the exemption for it was considered and refused: an exemption covering six tables across four modules is not an exemption but this rule reversed for one module.
+
 The exemption is deliberately narrow and the asymmetry is the point. A write is what an invariant guards, so the five pastoral-assignment rules have one home only while `hierarchy` is the sole writer of `pastoral_assignments`. A join reads rows the owning module would have returned anyway and changes nothing.
 
 **Where the dependency would be a cycle, and only there, it is inverted through a port — and such a port is optional and refuses** (ruling of 2026-09-01). The consuming module declares the interface it needs, the owning module implements it, and a binding module joins the two — which is what keeps this section's dependency direction acyclic where two modules each need something the other owns.
@@ -3874,6 +3876,10 @@ a *person*, and coverage places an *obligation*.
 A Network root shows the keys are genuinely different rather than three names for one:
 Section 9 excludes roots from coverage denominators and keeps them in every unique-people
 total.
+
+**Where the person key finds no open assignment at the period's end, it uses the last open assignment that person held at any instant within the period** (ruling of 2026-09-05). Section 5 makes zero open assignments legitimate for an archived Person, one encoded but not yet assigned, and an administrator, while Section 3 forbids filtering a period-based report by current lifecycle state — so without this such a person's real recorded attendance would sit in the Whole Church total and in no leader's, and Section 16's drill-down and Section 17's chain would lose people between two levels. The fallback keeps them in exactly one subtree, so both identities below still sum and every level of a drill-down adds up to the level above. It is reproducible because assignment history is never deleted (Section 5).
+
+Where a person held no open assignment at **any** instant of the period, they appear in the Whole Church total alone. No leader discipled them in that period, and attributing them to one would invent a pastoral relationship the tree never held.
 
 ### Unique people
 
