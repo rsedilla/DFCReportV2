@@ -462,6 +462,33 @@ describe('DCC recording (sections 9 and 14)', () => {
       expect(await liveRows(eventId)).toHaveLength(0);
     });
 
+    it('refuses an amendment reason a text column cannot hold', async () => {
+      // `ClosedMonthAmendmentDto` is shared with the Cell submit route, so the
+      // `@IsStorableText` added there guards this route's amendment reason too — a null byte
+      // in it reached `audit_log.reason` and answered `INTERNAL_ERROR` before that.
+      //
+      // Pinned here because nothing else does. The coverage arrived as a side effect of
+      // decorating a shared class, and three records on that branch said this route was
+      // still uncovered; without this case, giving DCC its own amendment DTO would reopen
+      // the 500 silently.
+      //
+      // The mutation: drop `@IsStorableText()` from `ClosedMonthAmendmentDto.reason` and
+      // this goes 422 to 500.
+      const eventId = await createEvent(await closedMonthSunday());
+
+      const response = await request(app.getHttpServer())
+        .post(`/api/v1/dcc/events/${eventId}/submit`)
+        .set('Authorization', `Bearer ${admin.accessToken}`)
+        .set('Idempotency-Key', randomUUID())
+        .send({
+          records: [{ person_id: mark.id, present: true, version: null }],
+          amendment: { reason: 'paper \u0000 register' },
+        });
+
+      expect(response.status).toBe(422);
+      expect(response.body.error.code).toBe('VALIDATION_FAILED');
+    });
+
     it('records into a closed month with the amendment flag and the capability', async () => {
       // Section 9, decision 0182: "One shape across both domains, because an amendment is
       // a submission with a different precondition and nothing else." The flag skips the

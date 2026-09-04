@@ -314,9 +314,33 @@ export function outbox(app: INestApplication): CapturingEmailAdapter {
  * (section 24), and loosening it so a test suite fits would be tuning the
  * application to the tests. The endpoint's own limit is pinned deliberately in
  * `accounts.e2e.spec.ts` instead.
+ *
+ * **The pending timers are cleared first, and clearing the map alone was a time bomb.**
+ * `ThrottlerStorageService.setExpirationTime` schedules a 60-second timer per hit whose
+ * callback opens with `const { totalHits } = this.storage.get(key)`. Clearing the map
+ * without cancelling those timers leaves every one of them destructuring `undefined`, and
+ * the throw lands on whatever case happens to be running 60 seconds later:
+ *
+ * ```text
+ * TypeError: Cannot destructure property 'totalHits' of 'this.storage.get(...)' as it is
+ *   undefined.  at Timeout._onTimeout (@nestjs/throttler/src/throttler.service.ts:37:15)
+ * ```
+ *
+ * It fires only when the process outlives the first reset by a minute, so a spec file run
+ * alone passes and the same file inside a full run fails — 15 cases in one file, none of
+ * them about rate limiting, all of them reading as defects in whatever they were testing.
+ * That is the same "passes alone, fails together" shape the reset itself was written for,
+ * reached through the reset.
+ *
+ * `onApplicationShutdown` is the public method that cancels them, and calling it here is
+ * not a misuse: it clears timers and nothing else, and the application under test is not
+ * being shut down by it. It leaves the cancelled ids in their arrays, which is harmless —
+ * a cleared timeout id is a number, and the callback that would have filtered it out is
+ * the one that no longer runs.
  */
 export function resetRateLimits(app: INestApplication): void {
   const storage = app.get<ThrottlerStorageService>(ThrottlerStorage);
+  storage.onApplicationShutdown();
   storage.storage.clear();
 }
 

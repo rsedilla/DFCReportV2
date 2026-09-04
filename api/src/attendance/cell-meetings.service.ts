@@ -66,6 +66,292 @@ class LostCorrectionRace extends Error {
 const ONE_PER_SCHEDULED_DATE = 'cell_meetings_one_per_scheduled_date';
 
 /**
+ * What a second submission *is*, decided once (SKILL.md section 13; decision 0195).
+ *
+ * **The operation is a function of the triple** — the stored status, the submitted status,
+ * and whether an actual date is named — and of nothing else. It was decided in three
+ * separate places before 2026-09-04, each keying on the request body alone, and two
+ * behavioural defects were exactly that mismatch: a correction of a moved meeting read the
+ * wrong roster, and a lost race whose winner had made the *same* move was told
+ * `RESOURCE_BUSY` because the two statuses happened to agree.
+ *
+ * Deciding it once is what lets `lostRaceAnswer` ask the same question of the **committed**
+ * state that the write asked of the state it read. That is section 22's rule — "the loser
+ * re-reads the committed state and answers on what it finds" — and it cannot be obeyed by
+ * three predicates that disagree.
+ */
+type MeetingOperation =
+  | { kind: 'correction' }
+  | { kind: 'reschedule'; actualDate: string }
+  | { kind: 'declare_not_held' }
+  | { kind: 'refused'; error: ApiError };
+
+function classifyOperation(
+  storedStatus: string,
+  body: SubmitCellMeeting,
+  context: { cell_id: string; meeting_id: string },
+  storedNotHeldReason: string | null = null,
+): MeetingOperation {
+  const details = {
+    ...context,
+    current_status: storedStatus,
+    submitted_status: body.status,
+  };
+
+  // Coherence first, so a refusal names what is actually wrong. An actual date under any
+  // status but `RESCHEDULED` is a malformed move rather than an illegal transition, and
+  // "cannot move from HELD to HELD" would send its author looking for the wrong mistake.
+  if (body.status !== 'RESCHEDULED' && (body.actual_date ?? body.actual_time) !== undefined) {
+    return {
+      kind: 'refused',
+      error: new InvariantViolationError(
+        'An actual date or time belongs to a reschedule (SKILL.md section 13).',
+        details,
+      ),
+    };
+  }
+
+  // **A time without a date is not a move**, and the refusal for it further down was
+  // unreachable from here: this step keyed on `actual_date` alone, so a body carrying only
+  // `actual_time` was classified a correction, accepted, and the field silently discarded
+  // — the one shape section 22's versioning rule says can never be given meaning later.
+  if (
+    body.status === 'RESCHEDULED' &&
+    body.actual_date === undefined &&
+    body.actual_time !== undefined
+  ) {
+    return {
+      kind: 'refused',
+      error: new InvariantViolationError(
+        'Moving a meeting to another time requires the date it took place on (SKILL.md ' +
+          'section 13).',
+        details,
+      ),
+    };
+  }
+
+  if (body.status === storedStatus && body.actual_date === undefined) {
+    // **`NOT_HELD` → `NOT_HELD` with a different reason is not a correction of attendance,
+    // and there is none to correct.** It fell through as one and answered 201 having
+    // written nothing: a leader who filed `WEATHER_OR_CALAMITY` and resubmitted
+    // `HOLIDAY_OR_CHURCH_EVENT` was told it worked, and the record still said weather.
+    // Section 13 requires the reason and section 21 audits it, so silently discarding one
+    // is the worst of the three available answers.
+    //
+    // Refused rather than applied: changing it is a claim that the first record was wrong,
+    // which is the operation section 13 does not define and `CLAUDE.md` records as open.
+    // An identical resubmission is still a no-op success, because nothing changed.
+    if (
+      storedStatus === 'NOT_HELD' &&
+      body.not_held_reason !== undefined &&
+      body.not_held_reason !== storedNotHeldReason
+    ) {
+      return {
+        kind: 'refused',
+        error: new InvariantViolationError(
+          'Changing why a meeting was not held is a correction of the original report, ' +
+            'and this route does not make one (SKILL.md section 13).',
+          details,
+        ),
+      };
+    }
+
+    return { kind: 'correction' };
+  }
+
+  if (body.status !== storedStatus && !isLegalTransition(storedStatus, body.status)) {
+    return {
+      kind: 'refused',
+      error: new InvariantViolationError(transitionRefusal(storedStatus, body.status), details),
+    };
+  }
+
+  // A second move leaves the status where it already is, so `RESCHEDULED` → `RESCHEDULED`
+  // is a move rather than a correction — which is why the actual date and not the status
+  // is what tells them apart.
+  if (body.status === 'RESCHEDULED') {
+    if (body.actual_date === undefined) {
+      return {
+        kind: 'refused',
+        error: new InvariantViolationError(
+          'Rescheduling a meeting requires the date it actually took place on (SKILL.md ' +
+            'section 13).',
+          details,
+        ),
+      };
+    }
+
+    return { kind: 'reschedule', actualDate: body.actual_date };
+  }
+
+  return { kind: 'declare_not_held' };
+}
+
+/** The fields of this DTO a person types prose into, rather than a format. */
+const FREE_TEXT = ['correction_reason', 'not_held_note'] as const;
+
+/**
+ * A submission normalised once, at the only door into this route.
+ *
+ * Two ways a body can say nothing while looking as though it said something, closed in one
+ * place rather than at each read.
+ *
+ * **Nulls.** `class-validator`'s `@IsOptional()` treats `null` as absent for the purpose of
+ * *skipping validation* and then leaves the null in place, so every `x !== undefined`
+ * downstream is true of a body that meant to say nothing. Four defects in this file came
+ * from that gap, and each fix closed one read while the next read stayed open — which is
+ * what makes it a class rather than a list.
+ *
+ * **Blank free text.** `correction_reason` carries `@IsString()` and a length and no
+ * non-blank rule, and `not_held_note` is refused blank only where section 13 requires one at
+ * all — where the reason is `OTHER`. So `"   "` reached the writes, and section 13 says a
+ * note that is blank is a note nobody wrote. Stored as given it is indistinguishable to a
+ * reader from a move nobody explained, in a column whose presence says one was.
+ *
+ * **Nulls are stripped from the whole body; blankness is named field by field, and the
+ * difference is real.** Null and absent mean one thing on every field here, so nothing has
+ * to be listed. Blankness is only a question for free text: every other string on this DTO
+ * is a format — a status, a UUID, a date, a time, an enum — and a blank one is refused by
+ * its own decorator with a message naming the format, which is a better answer than being
+ * silently dropped. `FREE_TEXT` is therefore the two fields a person types prose into, and
+ * a third such field added later belongs in it.
+ *
+ * **Both strip the top level only, and that is the whole of what this promises.** An earlier
+ * version of this paragraph said a field added later inherits the normalisation, without
+ * that qualifier, and it is false of a nested one: `Object.entries` does not recurse, so an
+ * optional member added to `ClosedMonthAmendmentDto` or to `CellAttendanceLineDto` inherits
+ * the defect rather than the fix. The sentence mattered because it is the one a future
+ * reader relies on, and it said the opposite of what the code does.
+ *
+ * The two nested shapes are safe today, and the reason is a property of them rather than of
+ * this function: **neither carries an optional member**. `ClosedMonthAmendmentDto` has one
+ * required `reason`, and `CellAttendanceLineDto` has a required `person_id` and `present`,
+ * so an explicit null inside either is refused as `VALIDATION_FAILED` at the edge and no
+ * `!== undefined` read is reached. Add an optional member to either and this function stops
+ * covering it — normalise there too, rather than at the read.
+ *
+ * *What this deliberately does **not** do is normalise a value the database cannot store. A
+ * null byte is refused at the edge by `@IsStorableText`, because stripping it would store
+ * text nobody wrote; see `common/text/is-storable-text.ts`.*
+ */
+function normalized(body: SubmitCellMeeting): SubmitCellMeeting {
+  const cleaned = { ...body } as Record<string, unknown>;
+
+  for (const [key, value] of Object.entries(cleaned)) {
+    if (value === null) {
+      delete cleaned[key];
+    }
+  }
+
+  for (const field of FREE_TEXT) {
+    const value = cleaned[field];
+
+    if (typeof value === 'string' && value.trim() === '') {
+      delete cleaned[field];
+    }
+  }
+
+  return cleaned as unknown as SubmitCellMeeting;
+}
+
+/**
+ * What section 13 requires of a `NOT_HELD` meeting, on **both** paths that can write one.
+ *
+ * "`NOT_HELD` is always declared by the responsible leader with a reason", and a reason of
+ * `OTHER` carries a note saying what happened. Two `CHECK` constraints hold the same rule
+ * in migration 0011 — `cell_meetings_not_held_reason_iff_not_held` and
+ * `cell_meetings_other_requires_note` — and reaching either answers a raw 500 on a
+ * well-formed request, which is section 22's named failure mode.
+ *
+ * **A function because the rule has two call sites and had one guard.** Both constraints
+ * were guarded on the transition path and on neither the first submission, which is the
+ * ordinary way a `NOT_HELD` meeting is recorded — so `{"status":"NOT_HELD"}` answered 500
+ * on the commonest body in this domain. Four constraint-driven 500s have now been found on
+ * this route, every one of them a check that existed in the schema and not in the service.
+ *
+ * *The claim that "the DTO cannot" enforce this was false and is what left the first
+ * submission unguarded: both predicates are payload-only, and `CloseCellDto` enforces the
+ * identical shape with `@ValidateIf`. It is kept in the service rather than moved because
+ * this route already answers its domain refusals as `INVARIANT_VIOLATION`, and one route
+ * answering `VALIDATION_FAILED` for the same rule is the inconsistency, not the fix.*
+ */
+function assertNotHeldIsExplained(
+  body: SubmitCellMeeting,
+  context: { cell_id: string; meeting_id: string },
+): void {
+  if (body.status !== 'NOT_HELD') {
+    return;
+  }
+
+  // `== null` rather than `=== undefined`, which is not redundant with the normalisation
+  // at the door: this guard names a constraint, and a guard that names a constraint should
+  // hold whatever reaches it. The `=== undefined` version passed `null` straight through to
+  // `cell_meetings_not_held_reason_iff_not_held` and answered 500 — the fifth
+  // constraint-driven 500 on this route, on the same constraint as the fourth.
+  if (body.not_held_reason == null) {
+    throw new InvariantViolationError(
+      'Declaring a meeting not held requires a reason (SKILL.md section 13).',
+      context,
+    );
+  }
+
+  if (body.not_held_reason === 'OTHER' && (body.not_held_note ?? '').trim() === '') {
+    throw new InvariantViolationError(
+      'A reason of OTHER requires a note saying what happened (SKILL.md section 13).',
+      context,
+    );
+  }
+}
+
+/**
+ * The transitions section 13 names, and no others (decision 0195).
+ *
+ * A first submission is `HELD` or `NOT_HELD` and is refused `RESCHEDULED` elsewhere, so
+ * this governs only a second submission against a record that exists.
+ *
+ * `RESCHEDULED` → `HELD` is absent because it is not a transition and needs none:
+ * `RESCHEDULED` already means "the meeting took place, or is planned, on a date other than
+ * its scheduled one", and section 12 counts `HELD` and `RESCHEDULED` alike in N.
+ */
+const LEGAL_TRANSITIONS: ReadonlyMap<string, readonly string[]> = new Map([
+  ['HELD', ['RESCHEDULED']],
+  ['RESCHEDULED', ['RESCHEDULED', 'NOT_HELD']],
+  ['NOT_HELD', []],
+]);
+
+function isLegalTransition(from: string, to: string): boolean {
+  return (LEGAL_TRANSITIONS.get(from) ?? []).includes(to);
+}
+
+/**
+ * Why this particular change is refused, rather than one message for all of them.
+ *
+ * A leader meeting a refusal needs to know whether they asked for something this domain
+ * does not do or something it does elsewhere, and the two illegal cases fail for different
+ * reasons — one contradicts a fact already recorded, the other is a claim that a record was
+ * wrong, which is a different operation from a move (section 13, and recorded as open in
+ * `CLAUDE.md`).
+ */
+function transitionRefusal(from: string, to: string): string {
+  if (from === 'NOT_HELD') {
+    return (
+      'This meeting was reported as not held, and not being made up. It cannot be moved ' +
+      'or reported as held afterwards (SKILL.md section 13).'
+    );
+  }
+
+  if (from === 'HELD' && to === 'NOT_HELD') {
+    return (
+      'A meeting already reported as held cannot be changed to not held: that is a ' +
+      'correction of the original report rather than a change to the meeting, and this ' +
+      'route does not make one (SKILL.md section 13).'
+    );
+  }
+
+  return `A Cell meeting cannot move from ${from} to ${to} (SKILL.md section 13).`;
+}
+
+/**
  * What both of this route's operations answer with.
  *
  * Declared as a shape rather than `Record<string, unknown>` because it is handed to
@@ -327,10 +613,30 @@ export class CellMeetingsService {
   async submit(
     cellId: string,
     meetingId: string,
-    body: SubmitCellMeeting,
+    raw: SubmitCellMeeting,
     actor: Actor,
     claim: CurrentClaim,
   ): Promise<Record<string, unknown>> {
+    // **Every optional field normalised once, at the only door into this route.**
+    //
+    // `@IsOptional()` skips every other decorator when a value is `null`, and `whitelist`
+    // strips undeclared keys rather than null ones — so `{"x": null}` arrives untouched
+    // and `x !== undefined` is true of it. This class has now produced four defects in
+    // this file: two dereferences, one refusal that skipped a capability check and an
+    // audit entry entirely, and a 500 on the commonest body in this domain — the last one
+    // on the very constraint the previous commit added a guard for, because that guard
+    // closed the `undefined` half and left the `null` half open.
+    //
+    // Normalising **here** rather than at each read is the difference between fixing
+    // instances and closing the class. Nothing below this line sees a `null` in an
+    // optional field, so no future read can reopen it by testing `!== undefined`.
+    //
+    // Null and absent mean one thing on every field of this body. `birth_date` is the
+    // counter-example the repository already carries — there, omission means "leave it"
+    // and null means "no birthday", two claims that must stay apart — and no field here
+    // has that shape.
+    const body = normalized(raw);
+
     try {
       return await this.submitWithin(cellId, meetingId, body, actor, claim);
     } catch (error) {
@@ -455,6 +761,7 @@ export class CellMeetingsService {
           'id',
           'version',
           'status',
+          'not_held_reason',
           'responsible_leader_id',
           'facilitated_by',
           'submitted_by',
@@ -475,6 +782,8 @@ export class CellMeetingsService {
         const response = await this.correctWithin(trx, {
           cellId,
           cellHandle: cell.cellId,
+          cell,
+          amendment,
           meetingId,
           reportingMonth,
           existing,
@@ -495,7 +804,17 @@ export class CellMeetingsService {
         // resubmitted identical roster corrects nothing, and wrote a second entry whose
         // `after` was byte-identical to the first — so the log asserted an amendment
         // that section 7 says is not one.
-        if (amendment !== undefined && (response.corrected ?? 0) > 0) {
+        // **A transition always writes, so `corrected` is the wrong question for one.**
+        // `transitionWithin` reports `corrected` as the count of attendance lines that
+        // moved — always 0 on a `NOT_HELD` transition, which carries no attendance by
+        // construction, and 0 on a reschedule whose roster is unchanged. Gating on it
+        // alone meant an amending reschedule and an amending `NOT_HELD` both answered 201
+        // into a closed month and wrote **no** `cell_attendance.amended` entry: the reason
+        // was accepted, required, and then discarded, which is what section 13 audits the
+        // amendment to prevent.
+        const movedTheRecord = body.status !== existing.status || body.actual_date !== undefined;
+
+        if (amendment !== undefined && (movedTheRecord || (response.corrected ?? 0) > 0)) {
           await this.writeAmendmentEntry(trx, {
             actor,
             cellId,
@@ -561,6 +880,10 @@ export class CellMeetingsService {
         actor,
         authority,
       });
+
+      // Section 13's `NOT_HELD` rule, on the path that records most of them. Both
+      // constraints behind it were guarded on the transition path and on neither here.
+      assertNotHeldIsExplained(body, { cell_id: cellId, meeting_id: meetingId });
 
       const members = await this.cells.membersAsOfWithin(trx, cellId, meetingId);
       const attendance = assertAttendanceMatchesRoster(body, members, {
@@ -711,12 +1034,25 @@ export class CellMeetingsService {
     params: {
       cellId: string;
       cellHandle: string;
+      cell: { state: string; closedAt: Date | null };
+      /**
+       * The amendment, **normalised once** in `submitWithin` — never `body.amendment`.
+       *
+       * `@IsOptional()` lets an explicit `null` through untouched, so the raw field is not
+       * `undefined` for a body carrying `"amendment": null`. Reading it raw here let one
+       * extra JSON key skip the closed-month refusal entirely: no capability check, no
+       * audit entry, and a meeting moved into a month shut for weeks. That is the third
+       * defect this null has caused in this file, which is why it is threaded rather than
+       * re-derived.
+       */
+      amendment: { reason: string } | undefined;
       meetingId: string;
       reportingMonth: string;
       existing: {
         id: string;
         version: number;
         status: string;
+        not_held_reason: string | null;
         responsible_leader_id: string;
         facilitated_by: string | null;
         submitted_by: string | null;
@@ -729,22 +1065,28 @@ export class CellMeetingsService {
   ): Promise<CellMeetingSubmissionResponse> {
     const { cellId, meetingId, existing, body, actor } = params;
 
-    // **A status change is not this operation**, and it is refused before anything is
-    // read about the roster — a change that writes no `cell_meeting_changes` row is a
-    // meeting moving between statuses with nothing to explain it (section 13). Checked
-    // first because a `NOT_HELD` body carries no attendance, so it would otherwise reach
-    // the "nothing changed" path below and be answered as a no-op.
-    if (body.status !== existing.status) {
-      throw new InvariantViolationError(
-        'Changing a meeting\u2019s status is a separate operation from correcting its ' +
-          'attendance (SKILL.md section 13).',
-        {
-          cell_id: cellId,
-          meeting_id: meetingId,
-          current_status: existing.status,
-          submitted_status: body.status,
-        },
-      );
+    // **What this submission is, decided once** (decision 0195). Everything below routes
+    // on the answer, and `lostRaceAnswer` asks the same function the same question against
+    // the committed state — which is what makes section 22's "answers on what it finds"
+    // mean the same thing on both sides of a race.
+    //
+    // *Three predicates decided it before 2026-09-04, each over the request body alone,
+    // and they disagreed: a second reschedule leaves the status unchanged and was treated
+    // as a correction, and a lost race whose winner made the same move saw two statuses
+    // agree and answered `RESOURCE_BUSY` for a retry that could never succeed.*
+    const operation = classifyOperation(
+      existing.status,
+      body,
+      { cell_id: cellId, meeting_id: meetingId },
+      existing.not_held_reason,
+    );
+
+    if (operation.kind === 'refused') {
+      throw operation.error;
+    }
+
+    if (operation.kind !== 'correction') {
+      return this.transitionWithin(trx, { ...params, operation });
     }
 
     // **Whether this meeting is the actor's to record at all, decided before anything
@@ -772,7 +1114,20 @@ export class CellMeetingsService {
     // submission reads it** (sections 12 and 13). A correction is an account of the same
     // meeting, so it answers about the same people; reading `now` would let a membership
     // change since the meeting silently add or drop a line.
-    const members = await this.cells.membersAsOfWithin(trx, cellId, meetingId);
+    // **At the meeting's own instant, which section 13 defines as its actual date where it
+    // has one.** A correction answers about the same people the meeting had, and section
+    // 12 says a moved meeting's roster comes from the day it moved to — "the people who
+    // could actually have been there".
+    //
+    // *This read the scheduled date unconditionally, which was harmless while `RESCHEDULED`
+    // was unreachable and became a defect the moment decision 0195 made it reachable:
+    // `GET .../roster` answered with the actual date's members, submitting exactly that
+    // back was refused as naming a non-member, and submitting the scheduled date's roster
+    // instead succeeded and left the meeting holding three live rows for a Cell with two
+    // members on either date. Section 13's "every member exactly once" broken silently,
+    // and section 20's reconciliation with it.*
+    const rosterDate = await this.actualDateOf(trx, existing.id);
+    const members = await this.cells.membersAsOfWithin(trx, cellId, rosterDate);
     const attendance = assertAttendanceMatchesRoster(body, members, { cellId, meetingId });
 
     const live = await trx
@@ -969,6 +1324,448 @@ export class CellMeetingsService {
     });
   }
 
+  /**
+   * A meeting moving between statuses (SKILL.md section 13; decision 0195).
+   *
+   * **The move and the roster are one operation**, which is the whole of that ruling. A
+   * rescheduled meeting's roster comes from the **actual** date (section 12) — "the people
+   * who could actually have been there" — and a first submission cannot carry
+   * `RESCHEDULED`, so a meeting is recorded and then moved. Performed as two operations
+   * the ordinary flow records attendance against the scheduled-date roster and then moves
+   * the roster out from under it, leaving the meeting failing section 13's "every member
+   * exactly once" rule with nothing to surface it: coverage counts recorded meetings
+   * rather than complete ones, so the month reconciles wrongly and every figure looks
+   * ordinary.
+   *
+   * **The identity, the month and the week never move.** `(cell_id, scheduled_date)` is
+   * the meeting (section 13), `reporting_month` is fixed at creation, and `week_starting`
+   * is the week the schedule placed it in — a 31 January meeting moved to 2 February still
+   * reports in January. `responsible_leader_id` is frozen and is not re-resolved, which is
+   * what keeps a rescheduled meeting from moving between leaders' totals inside a period
+   * that may have closed.
+   */
+  private async transitionWithin(
+    trx: Transaction<Database>,
+    params: {
+      cellId: string;
+      cellHandle: string;
+      cell: { state: string; closedAt: Date | null };
+      /**
+       * The amendment, **normalised once** in `submitWithin` — never `body.amendment`.
+       *
+       * `@IsOptional()` lets an explicit `null` through untouched, so the raw field is not
+       * `undefined` for a body carrying `"amendment": null`. Reading it raw here let one
+       * extra JSON key skip the closed-month refusal entirely: no capability check, no
+       * audit entry, and a meeting moved into a month shut for weeks. That is the third
+       * defect this null has caused in this file, which is why it is threaded rather than
+       * re-derived.
+       */
+      amendment: { reason: string } | undefined;
+      meetingId: string;
+      reportingMonth: string;
+      existing: {
+        id: string;
+        version: number;
+        status: string;
+        not_held_reason: string | null;
+        responsible_leader_id: string;
+        facilitated_by: string | null;
+        submitted_by: string | null;
+        submitted_at: Date | null;
+      };
+      body: SubmitCellMeeting;
+      actor: Actor;
+      authority: ActorAuthority;
+      /** Decided once by `classifyOperation`, never re-derived here. */
+      operation: Exclude<MeetingOperation, { kind: 'refused' } | { kind: 'correction' }>;
+    },
+  ): Promise<CellMeetingSubmissionResponse> {
+    const { cellId, cell, meetingId, existing, body, actor, operation } = params;
+    const toRescheduled = operation.kind === 'reschedule';
+
+    // **The reason and its note, which section 13 requires of `NOT_HELD` and the DTO
+    // cannot.** Both fields are optional there because a first submission of `HELD` carries
+    // neither, so the service is where "required where the status is `NOT_HELD`" and
+    // "required where the reason is `OTHER`" can be enforced.
+    //
+    // *Two constraints, and the first fix guarded one and stopped a field short of the
+    // other: `cell_meetings_not_held_reason_iff_not_held` and
+    // `cell_meetings_other_requires_note` sit side by side in migration 0011, and both
+    // answered a raw 500 on a well-formed request — section 22's named failure mode, and
+    // the third and fourth constraint-driven 500s found on this path.*
+    if (!toRescheduled) {
+      assertNotHeldIsExplained(body, { cell_id: cellId, meeting_id: meetingId });
+    }
+
+    // **A closed Cell's meetings cannot be rescheduled** (section 13, stated in terms):
+    // "A reschedule moves a meeting to another date, and a closed Cell has no other dates
+    // to move into — every one of them is after the closure and refused by the rule
+    // above."
+    //
+    // Left unchecked this was worse than a missing refusal. `membersAsOfWithin` returns an
+    // empty roster for a date after the closure, so the roster assertion passed vacuously
+    // on a body carrying no attendance, every real record was closed with a
+    // self-reference, and the meeting stayed `RESCHEDULED` — which section 12 counts in N.
+    // The month then held a meeting nobody attended, and every member's monthly bucket
+    // fell by one against a meeting the Cell could not have held.
+    if (toRescheduled && cell.state === 'CLOSED') {
+      throw new InvariantViolationError(
+        'A closed Cell has no dates to move a meeting into (SKILL.md section 13).',
+        { cell_id: cellId, meeting_id: meetingId },
+      );
+    }
+
+    // **A move that moves nothing is not a move.** Section 13 defines `RESCHEDULED` as a
+    // date *other than* the scheduled one, and a `cell_meeting_changes` row whose
+    // `from_date` equals its `to_date` is indistinguishable in the history from one that
+    // moved. The time-only refusal below states that argument; without this the ordinary
+    // route reached the same shape two ways — a resubmitted identical reschedule, and a
+    // first move naming the meeting's own scheduled date.
+    const standsOn = await this.actualDateOf(trx, existing.id);
+
+    if (operation.kind === 'reschedule' && operation.actualDate === standsOn) {
+      throw new InvariantViolationError(
+        'This meeting is already on that date (SKILL.md section 13).',
+        { cell_id: cellId, meeting_id: meetingId, actual_date: operation.actualDate },
+      );
+    }
+
+    // **The month it moves into must be open too — unless this is an amendment.** The
+    // window check guarding this route reads the meeting's own `reporting_month`, which a
+    // reschedule never changes, so `actual_date` reached no window function at all and a
+    // meeting could be moved into a month shut for weeks.
+    //
+    // *The first fix refused that unconditionally, which blocked the very thing section 13
+    // grants: "the flag skips the window check and nothing else". An Admin could amend a
+    // closed month by correcting attendance or declaring `NOT_HELD`, but never by moving a
+    // meeting — the case an amendment most often exists for. That is the mirror defect
+    // this project has now produced three times, and the branch's own test concealed it by
+    // computing its target from the open month.*
+    if (
+      operation.kind === 'reschedule' &&
+      params.amendment === undefined &&
+      !(await isMonthOpen(trx, reportingMonthOf(operation.actualDate)))
+    ) {
+      throw new ApiError(
+        ApiErrorCode.PERIOD_CLOSED,
+        'That month is closed, so a meeting cannot be moved into it (SKILL.md sections ' +
+          '13 and 20).',
+        {
+          cell_id: cellId,
+          meeting_id: meetingId,
+          actual_date: operation.actualDate,
+          reporting_month: reportingMonthOf(operation.actualDate),
+        },
+      );
+    }
+
+    // **`actual_time` cannot move on its own**, which is not pedantry: the changes row
+    // records a move from one date and time to another, and a body carrying only a time
+    // would write a row whose `from_date` and `to_date` are equal — a move that moved
+    // nothing, indistinguishable in the history from one that did.
+    if (!toRescheduled && (body.actual_date !== undefined || body.actual_time !== undefined)) {
+      throw new InvariantViolationError(
+        'An actual date or time belongs to a reschedule (SKILL.md section 13).',
+        { cell_id: cellId, meeting_id: meetingId, submitted_status: body.status },
+      );
+    }
+
+    // Both checks that decide whether this meeting is the actor's to touch, in section 7's
+    // order: whose it is, then whether they may amend it. A transition always changes the
+    // record, so the amendment capability is owed unconditionally — unlike a correction,
+    // where a submission matching what is stored is not an amendment.
+    await this.assertMayActForAnother(trx, params);
+    await this.assertMayCorrect(trx, params);
+
+    // **Read before the version check, because the conflict has to carry it.** Section 14
+    // and section 22 require a conflict to show both values "so that a person can choose
+    // between them", and section 22 says a refusal with no second value to show is not a
+    // conflict at all.
+    //
+    // *This read `live` afterwards and passed `storedPresent: 0`, hard-coded because the
+    // rows were not in hand yet. A stale reschedule against a meeting with somebody
+    // present was answered a conflict reporting nobody present — a fabricated figure, and
+    // the person resolving it would have discarded the stored record on the strength of
+    // it.*
+    const live = await trx
+      .selectFrom('cell_attendance')
+      .select(['id', 'person_id', 'present', 'version'])
+      .where('cell_meeting_id', '=', existing.id)
+      .where('superseded_at', 'is', null)
+      .execute();
+
+    if (body.version === undefined || body.version !== existing.version) {
+      throw await this.conflictFor(trx, {
+        actor,
+        submittedVersion: body.version ?? null,
+        existing,
+        submittedPresent: (body.attendance ?? []).filter((line) => line.present).length,
+        storedPresent: live.filter((row) => row.present).length,
+      });
+    }
+
+    // **The roster of the day it moved to** (section 12), which is the ruling. On a
+    // `NOT_HELD` transition there is no roster at all: the meeting did not happen, so
+    // there is nobody to have been absent from it.
+    const roster =
+      operation.kind === 'reschedule'
+        ? await this.cells.membersAsOfWithin(trx, cellId, operation.actualDate)
+        : [];
+
+    // **A date the Cell had nobody on is not a date it could have met on.** Section 12
+    // takes the roster from the actual date, and an empty one makes every check below
+    // vacuous: `assertAttendanceMatchesRoster` passes on a body carrying no attendance,
+    // every real record is closed with a self-reference, and the meeting stays
+    // `RESCHEDULED` — which section 12 counts in N. The month then holds a meeting nobody
+    // attended and every member's bucket falls by one.
+    //
+    // *That is the same corruption the closed-Cell refusal above was written for, reached
+    // by the other door: a date before the Cell had members, or before it existed. One
+    // door was closed and the other left open.*
+    if (operation.kind === 'reschedule' && roster.length === 0) {
+      throw new InvariantViolationError(
+        'This Cell had no members on that date, so a meeting cannot be moved to it ' +
+          '(SKILL.md sections 12 and 13).',
+        { cell_id: cellId, meeting_id: meetingId, actual_date: operation.actualDate },
+      );
+    }
+
+    // **One section 13 rule, checked on every path that can break it.** The assertion ran
+    // on the reschedule branch alone and a `NOT_HELD` transition took the `[]` beside it,
+    // so "a meeting that did not take place carries no attendance" was enforced on the
+    // first submission and not on the transition — the same sentence of the same section,
+    // answered two ways by one route. A body carrying a full roster, or naming somebody who
+    // is not in the database at all, was answered `201` with its contents discarded, which
+    // is the shape section 22 says can never be given meaning later.
+    //
+    // Called unconditionally rather than on a second branch, because a branch is what was
+    // wrong. `declare_not_held` is reachable only from a stored `RESCHEDULED` with a
+    // submitted `NOT_HELD` — `LEGAL_TRANSITIONS` admits nothing else into it — so this
+    // takes the function's own `NOT_HELD` branch, refuses a non-empty list, and returns
+    // `[]`. The empty `roster` it is handed on that path is never read, since that branch
+    // returns before the membership checks.
+    const attendance = assertAttendanceMatchesRoster(body, roster, { cellId, meetingId });
+
+    const named = new Set(attendance.map((line) => line.person_id));
+    const stored = new Map(live.map((row) => [row.person_id, row]));
+
+    // **Everyone the new roster does not name has their record closed with nothing
+    // replacing it** — `superseded_by` the row's own id, which is decision 0183's idiom
+    // and section 13's only permitted shape for this. Two occasions reach it: a
+    // `RESCHEDULED` meeting declared `NOT_HELD`, which closes every row, and a reschedule
+    // whose new date has a different membership, which closes the rows of people who left.
+    //
+    // Closed rather than deleted, and closed rather than left standing: section 12 makes
+    // such a person a non-member of *this meeting* rather than somebody whose attendance
+    // was misrecorded — they could not have been there — and Principle 12 keeps the
+    // history legible.
+    for (const row of live) {
+      if (named.has(row.person_id)) {
+        continue;
+      }
+
+      const closed = await trx
+        .updateTable('cell_attendance')
+        .set({ superseded_at: sql<Date>`clock_timestamp()`, superseded_by: row.id })
+        .where('id', '=', row.id)
+        .where('superseded_at', 'is', null)
+        .executeTakeFirst();
+
+      if (closed.numUpdatedRows === 0n) {
+        throw new LostCorrectionRace();
+      }
+    }
+
+    // The lines that moved, on the correction path's own terms: only what changed is
+    // superseded, and the successor's `recorded_at` is read back in SQL from the row it
+    // closes so the two cannot overlap (migration 0013).
+    let corrected = 0;
+
+    for (const line of attendance) {
+      const predecessor = stored.get(line.person_id);
+
+      if (predecessor !== undefined && predecessor.present === line.present) {
+        continue;
+      }
+
+      corrected += 1;
+      const successorId = randomUUID();
+
+      if (predecessor !== undefined) {
+        const closed = await trx
+          .updateTable('cell_attendance')
+          .set({ superseded_at: sql<Date>`clock_timestamp()`, superseded_by: successorId })
+          .where('id', '=', predecessor.id)
+          .where('superseded_at', 'is', null)
+          .executeTakeFirst();
+
+        if (closed.numUpdatedRows === 0n) {
+          throw new LostCorrectionRace();
+        }
+      }
+
+      await trx
+        .insertInto('cell_attendance')
+        .values({
+          id: successorId,
+          cell_meeting_id: existing.id,
+          person_id: line.person_id,
+          present: line.present,
+          recorded_by: actor.accountId,
+          correction_reason: body.correction_reason ?? null,
+          version: predecessor === undefined ? 1 : predecessor.version + 1,
+          ...(predecessor === undefined
+            ? {}
+            : {
+                recorded_at: sql<Date>`(SELECT superseded_at FROM cell_attendance WHERE id = ${predecessor.id})`,
+              }),
+        })
+        .execute();
+    }
+
+    // The meeting as it stands, read before it moves: the `from_*` columns of the changes
+    // row below come from here, and the actual time defaults from it.
+    const before = await trx
+      .selectFrom('cell_meetings')
+      .select(['scheduled_date', 'scheduled_time', 'actual_date', 'actual_time'])
+      .where('id', '=', existing.id)
+      .executeTakeFirstOrThrow();
+
+    // **Where the meeting was**, which section 13 defines rather than leaving to this
+    // method: "The instant is the meeting's `actual_date` where it has one, and its
+    // `scheduled_date` otherwise." A meeting rescheduled twice moves from the date it had
+    // last, not from the one it was originally scheduled for, so recording the scheduled
+    // date on the second move would make the history read as though the first had not
+    // happened.
+    const fromDate = before.actual_date ?? before.scheduled_date;
+    const fromTime = before.actual_time ?? before.scheduled_time;
+
+    // **A meeting that moved day and not time keeps its time.** `cell_meetings` requires
+    // the two together — `cell_meetings_actual_time_with_date` checks
+    // `(actual_date IS NOT NULL) = (actual_time IS NOT NULL)` — so a reschedule naming
+    // only a date violated the constraint and surfaced as an `INTERNAL_ERROR` on a
+    // well-formed request, which is section 22's named failure mode.
+    //
+    // Defaulted rather than made required, because section 13 asks a reschedule to
+    // preserve the "new scheduled date/time" and a Cell that moves a meeting to another
+    // day usually meets at its own hour. The schema is what forced the question; the
+    // answer is the domain's.
+    const actualTime = toRescheduled ? (body.actual_time ?? before.scheduled_time) : null;
+
+    // The meeting itself. Guarded on the version it read and the result checked, for the
+    // reason the correction path gives: under READ COMMITTED a concurrent write blocks
+    // here, re-qualifies, and matches nothing.
+    const moved = await trx
+      .updateTable('cell_meetings')
+      .set({
+        status: body.status,
+        version: existing.version + 1,
+        ...(toRescheduled
+          ? { actual_date: body.actual_date, actual_time: actualTime }
+          : {
+              not_held_reason: body.not_held_reason ?? null,
+              not_held_note: body.not_held_note ?? null,
+              // **The actual date is cleared, and the schema is what says so.**
+              // `cell_meetings_actual_date_iff_rescheduled` checks
+              // `(status = 'RESCHEDULED') = (actual_date IS NOT NULL)`, so a moved meeting
+              // declared `NOT_HELD` while keeping its actual date violates it and
+              // surfaces as an `INTERNAL_ERROR`. Section 13 agrees rather than merely
+              // permitting it: "A `NOT_HELD` meeting has no actual date and uses the
+              // scheduled one."
+              //
+              // Section 13's "preserving both records" is satisfied by
+              // `cell_meeting_changes`, which keeps the move and the declaration as two
+              // rows — that is the whole reason a meeting's changes live in their own
+              // rows rather than in columns on the meeting.
+              actual_date: null,
+              actual_time: null,
+            }),
+      } as never)
+      .where('id', '=', existing.id)
+      .where('version', '=', existing.version)
+      .returning('version')
+      .executeTakeFirst();
+
+    if (moved === undefined) {
+      throw new LostCorrectionRace();
+    }
+
+    // **The move lives in its own row** (section 13): "A meeting rescheduled twice would
+    // overwrite the first reschedule in a single set of columns", and a `RESCHEDULED`
+    // meeting later declared `NOT_HELD` must preserve both records.
+    await trx
+      .insertInto('cell_meeting_changes')
+      .values({
+        cell_meeting_id: existing.id,
+        from_status: existing.status,
+        to_status: body.status,
+        from_date: fromDate,
+        from_time: fromTime,
+        to_date: toRescheduled ? (body.actual_date as string) : null,
+        to_time: actualTime,
+        reason: toRescheduled ? null : (body.not_held_reason ?? null),
+        // **Section 13's fifth thing, which had nowhere to go until migration 0014.** A
+        // rescheduled meeting must preserve "original scheduled date/time, new scheduled
+        // date/time, optional note/context, who rescheduled it, timestamp". This row
+        // carried four of the five and forced the note to null on a move, so a leader's
+        // stated reason for moving a meeting was accepted by the route and written to no
+        // row anywhere — `correction_reason` reaches the successor `cell_attendance` rows
+        // and an unchanged roster produces none.
+        //
+        // `reason` stays null on a move because it is the NOT_HELD enum and a move has no
+        // such reason; the note is free text and now stands without one (ruling of
+        // 2026-09-04).
+        //
+        // **Blankness is handled at the door and not here**, for both fields at once.
+        // An earlier version of this line normalised `correction_reason` alone and
+        // justified leaving `not_held_note` alone on a false premise — that
+        // `assertNotHeldIsExplained` has already refused a blank one. It refuses a blank
+        // note only where the reason is `OTHER`, so `LEADER_UNAVAILABLE` with a note of
+        // `"   "` stored the whitespace, in the commit whose own ruling is that one rule
+        // enforced on one of two paths is the defect.
+        note: toRescheduled ? (body.correction_reason ?? null) : (body.not_held_note ?? null),
+        actor_id: actor.accountId,
+      } as never)
+      .execute();
+
+    await this.audit.writeWithin(trx, {
+      actorId: actor.accountId,
+      action: toRescheduled ? 'cell_meeting.rescheduled' : 'cell_meeting.not_held',
+      targetType: 'cell',
+      targetId: cellId,
+      reason: toRescheduled ? null : (body.not_held_reason ?? null),
+      before: { meeting_id: meetingId, status: existing.status },
+      after: {
+        meeting_id: meetingId,
+        status: body.status,
+        ...(toRescheduled
+          ? { actual_date: body.actual_date as string, recorded: attendance.length }
+          : { not_held_reason: body.not_held_reason ?? null }),
+      },
+    });
+
+    return this.responseFor(
+      { ...params, existing: { ...existing, status: body.status } },
+      {
+        version: existing.version + 1,
+        recorded: attendance.length,
+        present: attendance.filter((line) => line.present).length,
+        corrected,
+      },
+    );
+  }
+
+  /** The date a meeting currently stands on, where it has already moved. */
+  private async actualDateOf(trx: Transaction<Database>, meetingRowId: string): Promise<string> {
+    const row = await trx
+      .selectFrom('cell_meetings')
+      .select(['scheduled_date', 'actual_date'])
+      .where('id', '=', meetingRowId)
+      .executeTakeFirstOrThrow();
+
+    return row.actual_date ?? row.scheduled_date;
+  }
+
   /** The one response shape both outcomes of a correction answer with. */
   private responseFor(
     params: {
@@ -1018,10 +1815,27 @@ export class CellMeetingsService {
   ): Promise<ApiError> {
     const meeting = await this.db
       .selectFrom('cell_meetings')
-      .select(['id', 'version', 'status', 'responsible_leader_id'])
+      .select([
+        'id',
+        'version',
+        'status',
+        'not_held_reason',
+        'responsible_leader_id',
+        'submitted_by',
+        'submitted_at',
+      ])
       .where('cell_id', '=', cellId)
       .where('scheduled_date', '=', meetingId)
       .executeTakeFirstOrThrow();
+
+    // Read once, above every branch: both outcomes below need the committed roster, and a
+    // conflict must carry the stored figure whichever branch builds it.
+    const committedRows = await this.db
+      .selectFrom('cell_attendance')
+      .select(['person_id', 'present'])
+      .where('cell_meeting_id', '=', meeting.id)
+      .where('superseded_at', 'is', null)
+      .execute();
 
     // **The loser answers what this body would be answered against the committed state,
     // which is what "answers on what it finds" means** (section 22). The two guards below
@@ -1030,28 +1844,60 @@ export class CellMeetingsService {
     // Reusing the shape without re-deriving why it has that shape is what decision 0100
     // is about, and skipping them produced two defects a review reproduced.
 
-    // **A status disagreement first, for the reason `correctWithin` gives where it does
-    // the same:** a `NOT_HELD` body carries no attendance, so it reaches the comparison
-    // below with an empty roster, `some` is vacuously false, and the loser is told
-    // `RESOURCE_BUSY` — whose meaning is that the identical body resubmitted succeeds
-    // writing nothing. It does not: the retry is refused, permanently, because section 13
-    // makes a status change a separate operation. Decision 0158 fixes the test as one
-    // question — could this same body, resubmitted unchanged, succeed? — and here it
-    // could not.
-    if (body.status !== meeting.status) {
-      return new InvariantViolationError(
-        'Changing a meeting’s status is a separate operation from correcting its ' +
-          'attendance (SKILL.md section 13).',
-        // `submitted_status` included because the sequential refusal includes it, and the
-        // whole claim of this branch is that the two answers are the same answer. It
-        // echoes the client's own input and discloses nothing.
-        {
-          cell_id: cellId,
-          meeting_id: meetingId,
-          current_status: meeting.status,
-          submitted_status: body.status,
+    // **A status disagreement first**, because a `NOT_HELD` body carries no attendance and
+    // would otherwise reach the comparison below with an empty roster: `some` is vacuously
+    // false, and the loser is told `RESOURCE_BUSY` — whose meaning is that the identical
+    // body resubmitted succeeds writing nothing.
+    //
+    // **What that answer should be changed with decision 0195**, and this method asserted
+    // the withdrawn rule until 2026-09-04: it returned "a status change is a separate
+    // operation", which section 13 no longer says. Four transitions are legal now, so a
+    // status disagreement after a lost race is one of two things.
+    // **The same question, asked of the committed state**, which is what section 22 means
+    // by "the loser re-reads the committed state and answers on what it finds". Asking it
+    // through `classifyOperation` rather than by comparing statuses here is the whole
+    // point of deciding the operation once.
+    //
+    // *This branched on `body.status !== meeting.status` — a predicate over the request,
+    // where the question is whether the request was a **transition**. When the winner had
+    // made the same move the two statuses agreed, so the loser fell through to the roster
+    // comparison and was told `RESOURCE_BUSY`, whose retry then answered "this meeting is
+    // already on that date", permanently. The defect the previous batch claimed to have
+    // removed, surviving for exactly the case where both writers moved the meeting.*
+    // The same inputs as well as the same function: the stored reason is part of the
+    // question for a `NOT_HELD` body, so omitting it here would make the two sides
+    // disagree again in exactly the way deciding it once was meant to prevent.
+    const committedOperation = classifyOperation(
+      meeting.status,
+      body,
+      { cell_id: cellId, meeting_id: meetingId },
+      meeting.not_held_reason,
+    );
+
+    if (committedOperation.kind === 'refused') {
+      // Answer exactly what this body gets sequentially against the committed state, which
+      // is the property that stops timing deciding the answer.
+      return committedOperation.error;
+    }
+
+    if (committedOperation.kind !== 'correction') {
+      // A **legal** transition that lost the race is a version conflict and never
+      // `RESOURCE_BUSY`. Decision 0158 fixes the test as one question — could this same
+      // body, resubmitted unchanged, succeed? — and here it cannot: `transitionWithin`
+      // has no unchanged-submission early return, so its version check is unconditional
+      // and the winner has already moved the version past what this body carries. The
+      // retry `RESOURCE_BUSY` prescribes was refused for ever.
+      return this.conflictFor(this.db, {
+        actor,
+        submittedVersion: body.version ?? null,
+        existing: {
+          version: meeting.version,
+          submitted_by: meeting.submitted_by,
+          submitted_at: meeting.submitted_at,
         },
-      );
+        submittedPresent: (body.attendance ?? []).filter((line) => line.present).length,
+        storedPresent: committedRows.filter((row) => row.present).length,
+      });
     }
 
     const live = await this.db

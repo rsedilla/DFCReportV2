@@ -15,6 +15,9 @@ import {
   ValidateNested,
 } from 'class-validator';
 
+import { IsStorableText } from '../../common/text/is-storable-text';
+import { IsManilaCalendarDate } from '../../common/time/is-manila-calendar-date';
+
 /**
  * Amending a month that has already closed (SKILL.md section 13; decision 0182).
  *
@@ -44,13 +47,23 @@ export class ClosedMonthAmendmentDto {
    * (`people.dto.ts`'s Network-change and backdate reasons) carry `@Length(1, 500)` and
    * have it too; that is a gap to close there rather than a shape to copy here.
    *
-   * `correction_reason` on this route is only `@IsString()`, and that is not a precedent
-   * to copy here (section 25 rule 19): section 14 asks for one "as appropriate" and it is
-   * optional, while this one is the whole justification for reaching past a closed window.
+   * `correction_reason` on this route carries no non-blank rule, and that is not a
+   * precedent to copy here (section 25 rule 19): section 14 asks for one "as appropriate"
+   * and it is optional, while this one is the whole justification for reaching past a
+   * closed window.
+   *
+   * **`@IsStorableText` because this field reaches `audit_log.reason`**, where a null byte
+   * answered `INTERNAL_ERROR`. Not on every path that carries the field: an open month is
+   * refused before the value reaches the database, and a closed-month resubmission that
+   * changes nothing writes no audit entry. The path that reaches it is a closed-month
+   * submission that records something.
+   *
+   * `dcc.dto.ts` uses this class too, so the decorator guards both routes' amendment reason.
    */
   @IsString()
   @Matches(/\S/, { message: 'reason must not be blank' })
   @MaxLength(500)
+  @IsStorableText()
   reason!: string;
 }
 
@@ -97,11 +110,12 @@ export class CellAttendanceLineDto {
  * `INVARIANT_VIOLATION` rather than a validation error because the request is well formed
  * and breaks a domain rule.
  *
- * **`RESCHEDULED` is accepted here and reachable by no path today**, which an earlier
- * version of this block obscured by saying it "is legal on a correction". It is not:
- * a correction refuses any status change, so no `cell_meetings` row can carry it. The
- * reschedule route is what makes it reachable, and it arrives with the same slice that
- * brings back `actual_date` and `actual_time`.
+ * **`RESCHEDULED` is reachable from 2026-09-04** (decision 0195), on a second submission
+ * carrying `actual_date` against a record that already exists. It was accepted and
+ * reachable by no path before that: a correction refused any status change, so no
+ * `cell_meetings` row could carry it. Four transitions are legal and the service refuses
+ * the rest — a DTO cannot tell them apart, because which one this is depends on what is
+ * stored.
  *
  * **That is not the `actual_date` argument run backwards, and a version of this block
  * said it was.** `actual_date` is absent because accepting a field and ignoring it forfeits
@@ -117,15 +131,27 @@ export class SubmitCellMeetingDto {
   /**
    * Why an already-recorded meeting is being changed (section 14).
    *
-   * Optional, matching `cell_attendance.correction_reason`, and meaningless on a first
-   * submission — where it is refused, so it cannot be read as a reason for the original.
-   * Section 14 asks for a reason "as appropriate" rather than always: a submission is a
-   * whole roster, and requiring one per changed line would put a dialog in front of a
-   * leader who noticed one mistake in twenty names.
+   * Optional, matching `cell_attendance.correction_reason`. Section 14 asks for a reason
+   * "as appropriate" rather than always: a submission is a whole roster, and requiring one
+   * per changed line would put a dialog in front of a leader who noticed one mistake in
+   * twenty names.
+   *
+   * **It is meaningless on a first submission and is accepted there, and this paragraph
+   * said it was refused.** It is not: a first submission carrying one answers 201 and the
+   * value is stored nowhere. Nor is it stored on a transition to `NOT_HELD`, where that
+   * branch writes `not_held_note` into the column instead. So the field is honoured on the
+   * correction and reschedule paths and dropped on the two beside them, which is the shape
+   * section 22 says can never be given meaning later.
+   *
+   * Recorded as open in `CLAUDE.md` rather than fixed here, because the answer is a rule
+   * and not a guard: refusing it on a first submission is one answer, and storing it on a
+   * `NOT_HELD` transition is another, and that one has to say what happens when a leader
+   * sends both a `correction_reason` and a `not_held_note` for a single column.
    */
   @IsOptional()
   @IsString()
   @MaxLength(500)
+  @IsStorableText()
   correction_reason?: string;
 
   /**
@@ -174,6 +200,7 @@ export class SubmitCellMeetingDto {
   @IsOptional()
   @IsString()
   @MaxLength(1000)
+  @IsStorableText()
   not_held_note?: string;
 
   /**
@@ -201,6 +228,34 @@ export class SubmitCellMeetingDto {
   @ValidateNested({ each: true })
   @Type(() => CellAttendanceLineDto)
   attendance?: CellAttendanceLineDto[];
+
+  /**
+   * The date the meeting actually took place, where it moved (section 13, decision 0195).
+   *
+   * **Present exactly on a reschedule**, which is `status: 'RESCHEDULED'` against a record
+   * that already exists. It moves `actual_date` and leaves `scheduled_date` alone, so the
+   * meeting's identity survives — `(cell_id, scheduled_date)` — and so does its
+   * `reporting_month` and its `week_starting`. A January 31 meeting moved to February 2
+   * still reports in January.
+   *
+   * **These two were deliberately absent until this slice**, and the docblock above says
+   * why: `forbidNonWhitelisted` refuses an undeclared field, so declaring one the service
+   * does not read turns a refusal into silent acceptance, and section 22's versioning rule
+   * makes that irreversible. The reschedule route is what reads them, so they arrive with
+   * it.
+   *
+   * `IsManilaCalendarDate` rather than a shape check: a well-formed value that is not a
+   * day — `2026-02-30` — is refused at the edge rather than normalised into a date nobody
+   * named (decision 0185).
+   */
+  @IsOptional()
+  @IsManilaCalendarDate({ message: 'actual_date must be a real calendar date, YYYY-MM-DD' })
+  actual_date?: string;
+
+  /** The time it actually took place, where that moved too. Optional (section 13). */
+  @IsOptional()
+  @Matches(/^([01]\d|2[0-3]):[0-5]\d$/, { message: 'actual_time must be HH:MM' })
+  actual_time?: string;
 
   /**
    * Present only to amend a month that has already closed (section 13, decision 0182).

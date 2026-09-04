@@ -255,6 +255,17 @@ export type AuditAction =
   // 2026-08-31): section 7 resolves an entry through its target, and a Cell meeting
   // resolves through the Cell.
   | 'cell_attendance.amended'
+  // Section 21 names both by hand: "Cell meeting rescheduled" and "Cell meeting declared
+  // Not Held, with reason". Two actions rather than one `cell_meeting.status_changed`,
+  // because a reader looking for meetings that moved and a reader looking for meetings
+  // that did not happen are asking different questions, and section 21's own list draws
+  // the line there.
+  //
+  // Both target the **Cell**, on the reasoning that settled the attendance pair above
+  // (section 21, 2026-09-03): section 7 resolves an entry through its target, and a Cell
+  // meeting resolves through the Cell.
+  | 'cell_meeting.rescheduled'
+  | 'cell_meeting.not_held'
   // The DCC half, targeting the Person for the reason its twins do: a DCC event is
   // church-wide and resolves through nothing, so the Person is what a reader can
   // resolve an entry against (sections 9 and 21, decision 0189).
