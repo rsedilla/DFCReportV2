@@ -3824,6 +3824,34 @@ Asia/Manila observes no daylight saving time, so the offset is a constant +08:00
 
 This is not a formatting preference. A Cell meeting belongs to the week its schedule placed it in, and `cell_meetings.week_starting` records which — so the week boundary decides which meetings fall in which week, and a rescheduled meeting's week is the week it was scheduled in, not the week it moved to. *An earlier version said Section 13 makes the week "the unit of a Cell's identity". It does not: the identity is the Cell and the scheduled date, because a week straddling a month boundary can hold two scheduled meetings. The week is what a meeting reports in, which is what this rule decides.* A Sunday-start convention is common locally and will be somebody's default, which is why the rule is fixed here rather than left to the calendar library.
 
+### Which tree a report walks, and what attributes a figure to a scope
+
+**A report resolves the pastoral tree as of the end of the period being reported** (ruling
+of 2026-09-05). Section 18 requires historical reports to respect historical pastoral
+assignments; Section 16 names the instant for `Cell Leaders with 12+ Members` — "as of the
+end of the period being reported, which for the current period means now" — and that instant
+governs every report rather than that one metric. An open period therefore resolves as of
+now, and Section 17 already requires a report to say that the period is open.
+
+Resolving against the *current* tree is refused because it breaks two guarantees this
+specification makes elsewhere: Section 3's reproducibility, since a reassignment would
+rewrite every closed month behind it, and the invalidation list below, whose backdating
+clause says in terms that what a backdate changes is "which subtree a person belonged to
+during those periods".
+
+**Two different keys attribute a figure to a scope, and they are not interchangeable.**
+
+- **Unique people, classification and monthly-attendance buckets attribute by the person**,
+  placed in the tree as of the period's end. Section 9: totals "aggregate upward through the
+  tree", so a leader's total is the people in their subtree.
+- **Coverage attributes by the record's responsible leader**, frozen as of the event or
+  meeting date. Section 9 defines DCC coverage as how many responsible leaders have a record,
+  and says a submission made on behalf completes that leader's coverage — so it is a fact
+  about who owed the record.
+
+A Network root shows they are different keys rather than two descriptions of one: Section 9
+excludes roots from coverage denominators and keeps them in every unique-people total.
+
 ### Unique people
 
 When a report says `Total People`, it means distinct people in the relevant scope and period.
