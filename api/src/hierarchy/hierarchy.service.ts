@@ -140,6 +140,55 @@ export class HierarchyService {
   }
 
   /**
+   * The pastoral subtree in force at an instant, including the person themselves.
+   *
+   * **The dated counterpart of `subtreeOf`, and reporting owes its existence**
+   * (decision 0206). Section 18 requires a historical report to respect historical
+   * pastoral assignments and Section 20 resolves the tree as of the end of the
+   * period reported, so every reporting read walks the tree at an instant.
+   * `subtreeOf` filters `ended_at IS NULL` and answers only about now, which makes
+   * it the wrong method for all of them: a reassignment in November would silently
+   * rewrite October.
+   *
+   * **`[started_at, ended_at)`, the same half-open period `directChildrenAsOf`
+   * uses**, and for the reason stated there: a row ending exactly at `at` is not in
+   * force at `at`, so a close-and-open pair sharing one instant resolves to the
+   * successor rather than to both. That property is what stops a reassignment
+   * duplicating a person into two subtrees for the instant it happens.
+   *
+   * **Which instant a report passes is not decided here**, and deliberately:
+   * Section 20 fixes the *period*, and the instant within its last day is recorded
+   * as open in `CLAUDE.md`. This method answers about whatever instant it is given,
+   * which is the same contract `directChildrenAsOf` and `assignmentsAsOf` already
+   * have.
+   *
+   * **Cycle-safe, and that is not decoration here.** Section 5 requires it of any
+   * recursive walk, and a dated walk can meet a cycle the *active* tree never had:
+   * the rows in force at a past instant are a different edge set, and invariant 2
+   * was evaluated against the tree as it stood at each write rather than against
+   * this projection of it. Section 20's fallback for an unassigned person walks up
+   * the same graph and names the same hazard.
+   */
+  async subtreeAsOf(executor: Db, personId: string, at: Date): Promise<string[]> {
+    const result = await sql<{ person_id: string; depth: number; is_cycle: boolean }>`
+      WITH RECURSIVE subtree AS (
+        SELECT ${personId}::uuid AS person_id, 0 AS depth
+        UNION ALL
+        SELECT pa.person_id, s.depth + 1
+          FROM pastoral_assignments pa
+          JOIN subtree s ON pa.leader_id = s.person_id
+         WHERE pa.started_at <= ${at}
+           AND (pa.ended_at IS NULL OR pa.ended_at > ${at})
+      ) CYCLE person_id SET is_cycle USING path
+      SELECT person_id, depth, is_cycle FROM subtree ORDER BY depth
+    `.execute(executor);
+
+    this.rejectCycle(result.rows, personId);
+
+    return result.rows.map((row) => row.person_id);
+  }
+
+  /**
    * Opens a pastoral assignment inside a caller's transaction.
    *
    * Here rather than in the calling module because `hierarchy` is the only writer
