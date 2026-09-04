@@ -211,13 +211,22 @@ describe('which scope resolution a capability gets (section 7)', () => {
    *
    * **Matched as tokens of a normalised name rather than as whole names.** A hand-written
    * list of whole names missed `actual_date`, which is a property name this repository
-   * already uses (`CellMeetingSubmitDto`), and would go on missing `start_date`,
-   * `date_from`, `week` and the rest of the family. Normalising to lowercase alphanumerics
-   * and looking for a token inside it catches all of them.
+   * already uses (`SubmitCellMeetingDto`), and would go on missing `start_date`,
+   * `date_from`, `week` and the rest of the family.
+   *
+   * Two passes, because one does not reach both families. The long tokens are looked for
+   * inside the name normalised to lowercase alphanumerics, which is what catches `as_of`
+   * and `reporting_month` after their separators are gone. The short names are compared
+   * against the name's *tokens*, split on separators and camel-case boundaries, which is
+   * what catches `started_at` and `ended_at` -- this repository's own effective-dating
+   * pair, and a family a single normalised-string pass misses entirely, because
+   * `startedat` neither equals `start` nor contains a long token. *A first version of this
+   * docblock claimed the one pass "catches all of them" and it did not.*
    *
    * A false positive is the fail-safe direction: it is a red test somebody has to argue
-   * about, which is the outcome this file exists to force. `limit` and `cursor` contain
-   * none of these, which is why the two the allowlisted route actually takes pass.
+   * about, which is the outcome this file exists to force. The three the allowlisted route
+   * actually takes -- the `id` it binds by `@Param`, and `limit` and `cursor` off its DTO
+   * -- match nothing here. *Written as "the two" in the batch that made it three.*
    */
   const PERIOD_TOKENS = [
     'date',
@@ -238,9 +247,20 @@ describe('which scope resolution a capability gets (section 7)', () => {
 
   function namesAPeriod(property: string): boolean {
     const normalised = property.toLowerCase().replace(/[^a-z0-9]/g, '');
-    return (
-      PERIOD_NAMES.has(normalised) || PERIOD_TOKENS.some((token) => normalised.includes(token))
-    );
+    if (PERIOD_TOKENS.some((token) => normalised.includes(token))) {
+      return true;
+    }
+
+    // Split on separators and camel-case boundaries, so `started_at` and `startedAt` both
+    // yield an `at` token. Compared exactly, never as a substring: `at` inside `category`
+    // is not a period and refusing it would make the check useless.
+    const tokens = property
+      .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+      .toLowerCase()
+      .split(/[^a-z0-9]+/)
+      .filter((token) => token !== '');
+
+    return tokens.some((token) => PERIOD_NAMES.has(token));
   }
 
   it('lets no allowlisted route take a period, which is the property it is exempt for', async () => {
@@ -252,8 +272,12 @@ describe('which scope resolution a capability gets (section 7)', () => {
     // exempted silently -- the failure the tripwire exists to catch, reached through the one
     // route it no longer watches.
     //
-    // **Both ways Nest takes a parameter are read**, because covering one of them is how
-    // this kind of check ships looking complete. A `@Query()` DTO contributes its validated
+    // **Both ways Nest takes a parameter *by name* are read**, because covering one of
+    // them is how this kind of check ships looking complete. A third shape contributes
+    // nothing and is stated rather than implied: a whole-object binding whose metatype
+    // carries no class-validator metadata (`@Query() q: Record<string, string>`, `@Req()`)
+    // yields `Object`, returns no metadata, and is not refused by `ValidationPipe` either.
+    // Nothing binds that way today. A `@Query()` DTO contributes its validated
     // property names, derived from class-validator's own metadata on
     // `storable-text-coverage.spec.ts`'s reasoning -- a property added next year is inside
     // the check without its author knowing it exists. A `@Param('month')` or
@@ -296,6 +320,15 @@ describe('which scope resolution a capability gets (section 7)', () => {
       // one-rule-one-path shape `CLAUDE.md` records as this project's recurring fix-batch
       // defect, and the first version of this case had it.
       expect(accepted.length).toBeGreaterThan(0);
+
+      // **And per *source*, which is that shape one level down.** The line above is
+      // satisfied by the DTO alone, so if the `ROUTE_ARGS_METADATA` read ever stopped
+      // resolving -- a Nest upgrade moving where it writes, a controller shape it does not
+      // reach -- the `@Query('month')` blind spot would reopen and nothing would go red. A
+      // mutation proves that read works today; it does not keep proving it. Every route on
+      // this allowlist binds at least its Cell id by name, so requiring one key is a
+      // property of the allowlist rather than of this one route.
+      expect(route?.argumentKeys ?? []).not.toHaveLength(0);
 
       for (const name of accepted) {
         const property = name.slice(name.indexOf('.') + 1);
