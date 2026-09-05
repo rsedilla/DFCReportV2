@@ -3840,6 +3840,15 @@ the current period means now" — and that instant governs wherever a report wal
 rather than that one metric. An open period therefore resolves as of now, and Section 17
 already requires a report to say that the period is open.
 
+**The instant is the last millisecond of the period's final day** (ruling of 2026-09-05),
+which is what `endOfManilaDay` already computes for Section 13's closure boundary. Not the
+next day's midnight: rows are in force over `[started_at, ended_at)`, so an assignment
+beginning exactly at midnight belongs to the following day, and handing that instant back
+would place a November edge in October's tree. A millisecond rather than a microsecond,
+because that is the resolution a `timestamptz` and a JavaScript `Date` share. Reporting takes
+the existing helper rather than deriving a second answer to a question Section 13 already
+answered.
+
 *Section 16 grounds its instant on that metric being a current-state one, and Section 3
 puts current-state metrics on one side of a line and period-based classification and
 monthly attendance on the other. Carrying the instant across that line is what this ruling
