@@ -199,6 +199,190 @@ export class HierarchyService {
   }
 
   /**
+   * The people a leader's report covers, placed on section 20's reporting graph.
+   *
+   * **Not the tree, and not `subtreeAsOf` either** (decision 0206). Section 20 places a
+   * person by their open assignment at the period's end, and where they have none by the
+   * last one they held at any instant *within* the period. So this walks a map that
+   * collapses rows from several instants, where `subtreeAsOf` reads one instant and
+   * collapses nothing. Both exist, and using the wrong one is a silent wrong total rather
+   * than an error: `subtreeAsOf` loses everybody archived mid-period, who section 3 forbids
+   * filtering out of a period-based report.
+   *
+   * **The fallback applies up the chain**, which is what makes a drill-down sum rather than
+   * sum one level at a time: a leader who is themselves unassigned at the period's end
+   * resolves the same way, so their subtree does not detach from the level above.
+   *
+   * **Cycle-safe, and here that is not a formality.** Section 5 invariant 2 constrains the
+   * *active* tree at each write, and this map is not it — two people can each end a period
+   * unassigned having each been under the other within it, from writes that were legal when
+   * made.
+   *
+   * **`rejectCycle` is deliberately not called here.** It reads a per-row flag produced by
+   * one walk, which is detection scoped to what that walk reached — and where this graph is
+   * functional a cycle in it is a *closed component*, so a walk seeded at a leader above
+   * never enters it and section 20's refusal never fires. `grounded` replaces it: it is
+   * everything with at least one chain terminating at a root or at somebody holding no edge,
+   * and `has_cycle` asks whether any person holding an edge has **no** terminating chain.
+   *
+   * **That argument holds only while the graph is functional, and nothing enforces that.**
+   * One out-edge per person is a *premise* here, not a property: two `pastoral_assignments`
+   * rows in force at one instant would break it, and whether non-overlap is a rule of
+   * section 5 or an accident of the backdate floor is an open **Stop Condition** in
+   * `CLAUDE.md`. No write path reaches it today. Under an overlap both flags can miss, and
+   * `reporting-subtree.spec.ts` pins the two ways rather than leaving them to be rediscovered:
+   * a cycle member holding a second, grounded edge grounds the whole cycle, so `has_cycle` is
+   * false; and one person reached by two distinct paths is returned twice, which is not a
+   * cycle in either sense.
+   *
+   * **Both flags are read, and neither subsumes the other.** `has_cycle` is the graph
+   * question above. `walked_a_cycle` is the walk's own `CYCLE` clause, which marks a person
+   * repeated on that row's **own path** — so it catches a cycle the walk enters, including
+   * one `has_cycle` misses because a second edge grounded it. It is not a check that a person
+   * was reached twice: two distinct paths to one person repeat nothing on either path.
+   *
+   * **A person whose leader held no in-period assignment is not lost** (decision 0209): the
+   * `departed` tier continues the chain from that leader's last assignment, whenever it was.
+   * **Two predicates keep that answer reproducible, not one** — the tier is seeded from *this*
+   * period's own primary edges, and `last_ever` reads only rows started at or before
+   * `periodEnd`. Either alone lets a later write move an earlier period's answer, and each is
+   * pinned by its own case.
+   *
+   * **A person whose own last assignment predates the period, and who leads nobody, is in no
+   * leader's subtree here.** Section 20's residual sentence — as decision 0209 amended it —
+   * says "no open assignment at any instant of the period, and none before it either", which
+   * does not name this class; the divergence is recorded as open in `CLAUDE.md`, where the
+   * finding is that the amendment is too wide rather than that this behaviour is wrong.
+   *
+   * *An earlier version of this docblock said both halves of the unreachable-component hole
+   * were unsettled Stop Conditions and that this method must not compute a published figure.
+   * Decision 0209 and the two commits implementing it had already settled them. What is still
+   * open is narrower and blocks no figure: the blast radius of the refusal, which is
+   * church-wide, and whether such a cycle admits a repair at all.*
+   *
+   * **What is half-open is the row, not the period.** Each assignment is in force over
+   * `[started_at, ended_at)`; the interval of instants the fallback considers is closed at
+   * both ends, since `started_at <= periodEnd AND ended_at > periodStart` is exactly "the
+   * row's range intersects `[periodStart, periodEnd]`". `periodEnd` is the last millisecond
+   * of the period's final day (decision 0208). *A first version described the period itself
+   * as half-open at its start, which is the wrong interval and is how the next bound gets
+   * written wrongly.*
+   */
+  async reportingSubtree(
+    executor: Db,
+    leaderId: string,
+    periodStart: Date,
+    periodEnd: Date,
+  ): Promise<string[]> {
+    const result = await sql<{
+      person_id: string | null;
+      depth: number;
+      walked_a_cycle: boolean;
+      has_cycle: boolean;
+    }>`
+      WITH RECURSIVE in_force AS (
+        SELECT person_id, leader_id
+          FROM pastoral_assignments
+         WHERE started_at <= ${periodEnd}
+           AND (ended_at IS NULL OR ended_at > ${periodEnd})
+      ),
+      within_period AS (
+        SELECT DISTINCT ON (pa.person_id) pa.person_id, pa.leader_id
+          FROM pastoral_assignments pa
+         WHERE pa.started_at <= ${periodEnd}
+           AND (pa.ended_at IS NULL OR pa.ended_at > ${periodStart})
+           AND NOT EXISTS (
+             SELECT 1 FROM in_force f WHERE f.person_id = pa.person_id
+           )
+         ORDER BY pa.person_id, pa.started_at DESC, pa.ended_at DESC NULLS FIRST, pa.id DESC
+      ),
+      primary_edges AS (
+        SELECT person_id, leader_id FROM in_force
+        UNION ALL
+        SELECT person_id, leader_id FROM within_period
+      ),
+      last_ever AS (
+        SELECT DISTINCT ON (pa.person_id) pa.person_id, pa.leader_id
+          FROM pastoral_assignments pa
+         WHERE pa.started_at <= ${periodEnd}
+           AND NOT EXISTS (
+             SELECT 1 FROM primary_edges p WHERE p.person_id = pa.person_id
+           )
+         ORDER BY pa.person_id, pa.started_at DESC, pa.ended_at DESC NULLS FIRST, pa.id DESC
+      ),
+      departed AS (
+        SELECT le.person_id, le.leader_id
+          FROM last_ever le
+         WHERE EXISTS (
+           SELECT 1 FROM primary_edges p WHERE p.leader_id = le.person_id
+         )
+        UNION
+        SELECT le.person_id, le.leader_id
+          FROM last_ever le
+          JOIN departed d ON d.leader_id = le.person_id
+      ),
+      edges AS (
+        SELECT person_id, leader_id FROM primary_edges
+        UNION ALL
+        SELECT person_id, leader_id FROM departed
+      ),
+      terminals AS (
+        SELECT person_id FROM edges WHERE leader_id IS NULL
+        UNION
+        SELECT e.leader_id AS person_id
+          FROM edges e
+         WHERE e.leader_id IS NOT NULL
+           AND NOT EXISTS (SELECT 1 FROM edges x WHERE x.person_id = e.leader_id)
+      ),
+      grounded AS (
+        SELECT person_id FROM terminals
+        UNION
+        SELECT e.person_id
+          FROM edges e
+          JOIN grounded g ON e.leader_id = g.person_id
+      ),
+      subtree AS (
+        SELECT ${leaderId}::uuid AS person_id, 0 AS depth
+        UNION ALL
+        SELECT e.person_id, s.depth + 1
+          FROM edges e
+          JOIN subtree s ON e.leader_id = s.person_id
+      ) CYCLE person_id SET walked_a_cycle USING path
+      SELECT subtree.person_id,
+             subtree.depth,
+             bool_or(subtree.walked_a_cycle) OVER () AS walked_a_cycle,
+             EXISTS (
+               SELECT 1 FROM edges e
+                WHERE NOT EXISTS (
+                  SELECT 1 FROM grounded g WHERE g.person_id = e.person_id
+                )
+             ) AS has_cycle
+        FROM subtree
+       ORDER BY depth
+    `.execute(executor);
+
+    // **The refusal reaches past what the walk reached** (section 20). Where the graph is
+    // functional a cycle in it is a closed component, so a walk seeded above never enters it
+    // and scoping detection to the walk let a report return cleanly while silently short.
+    // `grounded` is everything with a chain terminating at a root or at somebody holding no
+    // edge; a person holding an edge and not grounded is in a cycle or beneath one.
+    //
+    // **Functional is a premise, not a property** — see the docblock. Under an overlap a
+    // cycle member with a second, grounded edge grounds the cycle and `has_cycle` misses it,
+    // which is why the walk's own flag is read as well and why neither is dropped.
+    if (result.rows[0]?.has_cycle === true || result.rows[0]?.walked_a_cycle === true) {
+      throw new InvariantViolationError(
+        'The pastoral tree contains a cycle and cannot be resolved. This is a data defect: report it rather than retrying.',
+        { person_id: leaderId },
+      );
+    }
+
+    return result.rows
+      .map((row) => row.person_id)
+      .filter((personId): personId is string => personId !== null);
+  }
+
+  /**
    * Opens a pastoral assignment inside a caller's transaction.
    *
    * Here rather than in the calling module because `hierarchy` is the only writer
