@@ -13,7 +13,7 @@ docblocks claimed the identity held "by construction".
 
 The DCC slice closed its own instance by taking **every figure in one statement**, which holds at
 any isolation level, and pinned the shape rather than the outcome:
-`reporting-reconciliation.spec.ts` asserts the composed read issues exactly one query.
+`reporting-reconciliation.spec.ts` asserts that one owning module's read issues exactly one query.
 
 That property is not extendable **to a report**, and the distinction matters because the test is
 narrower than it reads. It counts the queries `DccFiguresService.monthFigures` issues — one owning
@@ -60,9 +60,16 @@ All three are lock-then-decide. Under `REPEATABLE READ` the snapshot is taken by
 decide on the state the request arrived with. Section 24 records that two of the three raise nothing
 to warn anybody.
 
-None of that is touched here. A reporting transaction takes no lock, writes nothing, and decides no
-authorization; it reads. The two isolation levels coexist because the level is a property of a
-transaction and only the *default* is global.
+None of that is touched here. A reporting transaction takes **no row or advisory lock** — the kind
+all three of those use, and the narrower claim is the one that carries this argument, for the reason
+given under the costs below — writes nothing, and authorizes nothing; it reads. The two isolation
+levels coexist because the level is a property of a transaction and only the *default* is global.
+
+**The second clause is a fact about the system as it stands, not a property of reporting.** No
+reporting route exists, so nothing authorizes inside one of these transactions. A change measuring
+an actor's reach against the same snapshot a report is computed from would falsify it, and that
+question is open rather than answered here — Section 24 carries the same caveat, and this ruling
+should not be read as asserting more than it does.
 
 *This ruling's first draft recommended pinning `REPEATABLE READ` more broadly, on the ground that
 one-statement was unsustainable. Section 24 refutes that in terms, three times over. The

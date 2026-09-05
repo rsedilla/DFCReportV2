@@ -44,8 +44,11 @@ than merely the support:
 - **A duplicate's damage is not confined to one walk.** `P` holds two in-force rows, under sibling
   leaders `L1` and `L2`. Each sibling's walk contains `P` exactly once and neither refuses; the root
   contains `P` twice. So the scoped rule publishes two totals that look correct and cannot both be,
-  and Principle 11 — "never count duplicate people twice when aggregating multiple Cells or
-  branches" — is broken across precisely the aggregation Section 20's drill-down performs. A
+  and Section 25's eleventh rule — "never count duplicate people twice when aggregating multiple
+  Cells or branches" — is broken across precisely the aggregation Section 20's drill-down performs.
+  *Cited as "Principle 11" in two places until 2026-09-05; Section 1's eleventh principle is the
+  arbitrary-depth tree, and one sentence was using the same label for two different lists while
+  citing Section 1's Principle 10 correctly beside it.* A
   `DISTINCT ON` tiebreak, which this ruling refuses below, would at least have kept `P` in one
   subtree; the scoped refusal did not.
 - **The sentence offered as proof was false in the regime it governs.** It said any walk reaching a
