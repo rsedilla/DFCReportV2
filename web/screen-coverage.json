@@ -1,0 +1,183 @@
+{
+  "$comment": [
+    "Which screen reaches each API route, checked by web/scripts/check-screen-coverage.mjs.",
+    "",
+    "The route list is derived from api/src/**/*.controller.ts and is not edited here:",
+    "a route this file does not mention fails the build, and an entry naming no route",
+    "fails it too. Adding an endpoint means adding a line here in the same commit.",
+    "",
+    "Exactly one of `screen`, `waived_to` or `no_screen_owed` per entry. A waiver names",
+    "the stage that owes the screen, so an unstaged waiver is visible; `no_screen_owed`",
+    "is for a route no person ever reaches. Both carry a reason, because nothing can",
+    "check either one.",
+    "",
+    "Thirteen of the thirty-five are reached by a screen today; twenty-one are waived and",
+    "one owes none. That is the interface debt Stage 3 and Stage 4 accumulated with",
+    "nothing recording it (ruling of 2026-09-06), written down rather than discovered at",
+    "the pilot. The check prints these three numbers, so they are read rather than trusted."
+  ],
+  "routes": [
+    {
+      "route": "POST /api/v1/auth/activate",
+      "screen": "web/app/activate/page.tsx"
+    },
+    {
+      "route": "POST /api/v1/auth/forgot-password",
+      "screen": "web/app/forgot-password/page.tsx"
+    },
+    {
+      "route": "POST /api/v1/auth/reset-password",
+      "screen": "web/app/reset-password/page.tsx"
+    },
+    {
+      "route": "POST /api/v1/auth/login",
+      "screen": "web/app/sign-in/page.tsx"
+    },
+    {
+      "route": "POST /api/v1/auth/refresh",
+      "screen": "web/lib/session.ts, from every authenticated screen"
+    },
+    {
+      "route": "POST /api/v1/auth/logout",
+      "screen": "web/app/session/page.tsx"
+    },
+    {
+      "route": "POST /api/v1/auth/logout-all",
+      "screen": "web/app/session/page.tsx"
+    },
+    {
+      "route": "GET /api/v1/auth/me",
+      "screen": "web/app/session/page.tsx"
+    },
+    {
+      "route": "GET /api/v1/people",
+      "screen": "web/app/people/page.tsx"
+    },
+    {
+      "route": "POST /api/v1/people",
+      "screen": "web/app/people/new/page.tsx"
+    },
+    {
+      "route": "GET /api/v1/people/:id",
+      "screen": "web/app/people/[id]/page.tsx"
+    },
+    {
+      "route": "PATCH /api/v1/people/:id",
+      "screen": "web/app/people/[id]/edit/page.tsx"
+    },
+    {
+      "route": "GET /api/v1/people/duplicate-candidates",
+      "screen": "web/components/possible-matches.tsx"
+    },
+    {
+      "route": "GET /api/v1/people/:id/pastoral-path",
+      "waived_to": "screens block",
+      "reason": "§8 asks for the chain when a profile is opened, and the profile screen does not request it yet. My Network is where it lands."
+    },
+    {
+      "route": "PUT /api/v1/people/:id/pastoral-leader",
+      "waived_to": "screens block",
+      "reason": "Reassignment is the highest-risk authorization surface in the system (§5). My Network is the screen that performs it."
+    },
+    {
+      "route": "PUT /api/v1/people/:id/sex",
+      "waived_to": "after the pilot — Admin screens",
+      "reason": "Admin-only (§7, people.correct_sex), and it forces a Network change. It belongs to the Admin surface §19 describes, which the pilot does not need."
+    },
+    {
+      "route": "POST /api/v1/accounts",
+      "waived_to": "after the pilot — Admin screens",
+      "reason": "Account provisioning is Admin's operational responsibility (§6, §19). The pilot's accounts are provisioned before it starts."
+    },
+    {
+      "route": "POST /api/v1/accounts/:id/activation-email",
+      "waived_to": "after the pilot — Admin screens",
+      "reason": "Resending an activation email is Admin operations, alongside provisioning above."
+    },
+    {
+      "route": "GET /api/v1/cells/:id/members",
+      "waived_to": "screens block",
+      "reason": "The Cell roster (§12). Cell Attendance reads it, and it is the roster view §12 keeps separate from the statistical report."
+    },
+    {
+      "route": "POST /api/v1/cells/:id/members",
+      "waived_to": "screens block",
+      "reason": "Adding a member is part of running a Cell during the pilot month (§10)."
+    },
+    {
+      "route": "DELETE /api/v1/cells/:id/members/:person_id",
+      "waived_to": "screens block",
+      "reason": "The other half of membership, and a move is one transaction (§10)."
+    },
+    {
+      "route": "PUT /api/v1/cells/:id/schedule",
+      "waived_to": "screens block",
+      "reason": "A schedule change decides which meetings a month derives, so a pilot month needs it reachable (§10, §13)."
+    },
+    {
+      "route": "GET /api/v1/cells/:id/meetings",
+      "waived_to": "screens block",
+      "reason": "Cell Meetings. §19 puts meetings awaiting a record above the numbers on every leader's dashboard."
+    },
+    {
+      "route": "GET /api/v1/cells/:id/meetings/:meetingId/roster",
+      "waived_to": "screens block",
+      "reason": "Who there is to record (§13). Cell Meetings calls it before a submission."
+    },
+    {
+      "route": "POST /api/v1/cells/:id/meetings/:meetingId/submit",
+      "waived_to": "screens block",
+      "reason": "Recording a meeting is the thing the pilot exists to test — whether leaders record every week."
+    },
+    {
+      "route": "GET /api/v1/dcc/events/:id/roster",
+      "waived_to": "screens block",
+      "reason": "The DCC checklist (§9). A leader marking it must see who is already marked."
+    },
+    {
+      "route": "POST /api/v1/dcc/events/:id/submit",
+      "waived_to": "screens block",
+      "reason": "DCC recording, the second half of the pilot's month cycle (§9)."
+    },
+    {
+      "route": "POST /api/v1/cells",
+      "waived_to": "after the pilot — Admin screens",
+      "reason": "Direct creation is Admin's during the initial-encoding phase (§2, §10). The pilot's Cells exist before it starts."
+    },
+    {
+      "route": "PUT /api/v1/cells/:id/category",
+      "waived_to": "after the pilot — Admin screens",
+      "reason": "Configuration rather than operation (§10). Nothing in one pilot month requires changing a category."
+    },
+    {
+      "route": "POST /api/v1/cells/:id/closure",
+      "waived_to": "after the pilot — Admin screens",
+      "reason": "A closure is never reversed (decision 0133), so it is deliberately not put in front of a pilot leader."
+    },
+    {
+      "route": "POST /api/v1/cells/leadership-requests",
+      "waived_to": "after the pilot — Admin screens",
+      "reason": "Request-and-approve is how a Cell is created or changes hands (§10). One branch running one month needs neither."
+    },
+    {
+      "route": "GET /api/v1/cells/leadership-requests",
+      "waived_to": "after the pilot — Admin screens",
+      "reason": "The Admin queue §19 describes. It pairs with the approve and decline routes below."
+    },
+    {
+      "route": "POST /api/v1/cells/leadership-requests/:request_id/approve",
+      "waived_to": "after the pilot — Admin screens",
+      "reason": "The Admin queue's action (§10). A pending request changes nothing until it is decided."
+    },
+    {
+      "route": "POST /api/v1/cells/leadership-requests/:request_id/decline",
+      "waived_to": "after the pilot — Admin screens",
+      "reason": "The other outcome of the queue, and a decision is final (decision 0147)."
+    },
+    {
+      "route": "GET /api/v1/health",
+      "no_screen_owed": true,
+      "reason": "The liveness probe (§24). It is called by the deployment platform and never by a person, so no stage will ever owe it a screen."
+    }
+  ]
+}
