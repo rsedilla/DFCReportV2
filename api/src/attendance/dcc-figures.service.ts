@@ -3,6 +3,7 @@ import { sql } from 'kysely';
 
 import { ValidationFailedError } from '../common/errors/api-error';
 import { DATABASE, type Db } from '../database/database.module';
+import { isCalendarDate } from '../common/time/manila';
 import { windowClosesAt } from '../common/time/submission-window';
 
 /**
@@ -29,7 +30,10 @@ export interface DccPersonFigures {
  * takes its own snapshot even inside one transaction. A Sunday removed between them yields
  * a person whose `timesInMonth` exceeds `n`, who then falls outside every emitted bucket,
  * and section 20's identity fails on live data. Section 20 names the calendar on its
- * invalidation list for exactly this reason.
+ * invalidation list for the same underlying reason — a calendar change moves every bucket
+ * without touching an attendance row — though that clause is about a *stored* figure going
+ * stale rather than about a torn read inside a live one. *An earlier version said "for
+ * exactly this reason", which claimed section 20 addressed a case it does not.*
  */
 export interface DccMonthFigures {
   /** N — the applicable events the month holds (section 9). */
@@ -193,6 +197,19 @@ export class DccFiguresService {
  * refuses for a date-only field and decision 0200 for a format validator, and an
  * understated report is worse than a refused one because nobody can see it is wrong.
  *
+ * **It composes `isCalendarDate` rather than writing a fifth regex**, which is section 22's
+ * one-predicate rule: "One rather than several, because the alternative is what this system
+ * actually had: three conventions for a single rule." A hand-written
+ * `\d{4}-(0[1-9]|1[0-2])-01` admitted `0026-01-01`, which `isCalendarDate` refuses and
+ * documents why — `Date.UTC(26, ...)` applies the legacy two-digit-year mapping, so that
+ * month's window would have been computed from 1926. No wrong answer was producible, since
+ * every such year is past and `open` is false either way; it is the class of divergence the
+ * rule exists to stop.
+ *
+ * **The refusal names the field**, which section 22 requires because it is what a client
+ * needs in order to fix it, and which every other `ValidationFailedError` in this
+ * application does.
+ *
  * `ValidationFailedError` rather than a plain `Error`: `reportingMonthOf` records why, in
  * this same domain. The exception filter renders an unrecognised `Error` as
  * `INTERNAL_ERROR`, so a refusal thrown as one turns a client's bad month into a 500.
@@ -201,9 +218,10 @@ export class DccFiguresService {
  * value becomes load-bearing and there is no route yet to check it at.
  */
 function assertReportingMonth(reportingMonth: string): void {
-  if (!/^\d{4}-(0[1-9]|1[0-2])-01$/.test(reportingMonth)) {
+  if (!isCalendarDate(reportingMonth) || !reportingMonth.endsWith('-01')) {
     throw new ValidationFailedError('A reporting month is the first of a month, as YYYY-MM-01.', {
-      period: reportingMonth,
+      field: 'period',
+      value: reportingMonth,
     });
   }
 }

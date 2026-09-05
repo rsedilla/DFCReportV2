@@ -346,6 +346,75 @@ describe('section 20 reconciliation, DCC monthly (Stage 5 Done-when)', () => {
     expect(after).toEqual(before);
   });
 
+  it('says an open month is open, which is the other half of section 17', async () => {
+    // **The half that had nothing able to fail.** Every other case here uses October 2020,
+    // so `open` was only ever asserted as `false` -- replace the whole comparison with
+    // `false AS open` and the suite stayed green. A future month needs no events and no
+    // attendance to pin the other branch.
+    //
+    // Section 17 requires the marker because an open month's figures are still changing,
+    // and it is load-bearing beside an N that counts calendar rows whether or not their day
+    // has passed (section 9).
+    const open = await reporting.dccMonthly({ kind: 'WHOLE_CHURCH' }, '2099-01-01');
+    expect(open.open).toBe(true);
+    expect(open.n).toBe(0);
+
+    const closed = await reporting.dccMonthly({ kind: 'WHOLE_CHURCH' }, MONTH);
+    expect(closed.open).toBe(false);
+  });
+
+  it('takes every figure in one statement, which is what makes the identity hold', async () => {
+    // **The commit's headline fix had nothing that could fail.** `n` and the population were
+    // read with `Promise.all` on a pooled connection: two connections, two snapshots, and a
+    // Sunday removed between them yields a person whose count exceeds N and who falls
+    // outside every bucket. Restoring that shape breaks no assertion in this file, because
+    // the identity still holds sequentially on a quiescent database -- which is exactly why
+    // the defect shipped in the first place.
+    //
+    // CLAIMED.md's standard is that a conformance claim with nothing that can fail is a
+    // wish, so the shape is pinned rather than the outcome: one statement is one snapshot at
+    // any isolation level, and two statements are not.
+    // **Counted on the executor, not on the connection.** A `sql` template resolves its
+    // executor through `db.getExecutor()` and calls `executeQuery` there, so a counter on
+    // the Kysely instance never fires. And every member is bound to its target: Kysely reads
+    // private fields off `this`, which a proxy does not declare, so an unbound method throws
+    // on the first internal call rather than counting.
+    let queries = 0;
+
+    const count = <T extends object>(target: T, method: string): T =>
+      new Proxy(target, {
+        get(inner, property) {
+          const value = Reflect.get(inner, property, inner) as unknown;
+
+          if (property === method && typeof value === 'function') {
+            return (...args: unknown[]) => {
+              queries += 1;
+              return (value as (...a: unknown[]) => unknown).apply(inner, args);
+            };
+          }
+
+          return typeof value === 'function' ? value.bind(inner) : value;
+        },
+      });
+
+    const counting = new Proxy(db, {
+      get(target, property) {
+        const value = Reflect.get(target, property, target) as unknown;
+
+        if (property === 'getExecutor' && typeof value === 'function') {
+          return (...args: unknown[]) =>
+            count((value as (...a: unknown[]) => object).apply(target, args), 'executeQuery');
+        }
+
+        return typeof value === 'function' ? value.bind(target) : value;
+      },
+    });
+
+    await new DccFiguresService(counting).monthFigures(MONTH);
+
+    expect(queries).toBe(1);
+  });
+
   it('refuses a month that is not the first of one, rather than under-reporting it', async () => {
     // The calendar is matched on a `YYYY-MM` prefix, which sorts chronologically only for a
     // well-formed month. A malformed one would match nothing and return a plausible empty
@@ -367,6 +436,15 @@ describe('section 20 reconciliation, DCC monthly (Stage 5 Done-when)', () => {
     await expect(reporting.dccMonthly({ kind: 'WHOLE_CHURCH' }, '2020-13-01')).rejects.toThrow(
       ValidationFailedError,
     );
+
+    // **The case that makes composing `isCalendarDate` mean something.** A hand-written
+    // `\d{4}-(0[1-9]|1[0-2])-01` accepts this and `isCalendarDate` refuses it, because
+    // `Date.UTC(26, ...)` applies the legacy two-digit-year mapping and the month's window
+    // would be computed from 1926. Without this assertion the two predicates are
+    // indistinguishable here, and section 22's one-predicate rule has nothing that can fail.
+    await expect(reporting.dccMonthly({ kind: 'WHOLE_CHURCH' }, '0026-01-01')).rejects.toThrow(
+      ValidationFailedError,
+    );
   });
 
   it('a month with no applicable events has an empty population and no buckets', async () => {
@@ -375,7 +453,6 @@ describe('section 20 reconciliation, DCC monthly (Stage 5 Done-when)', () => {
     // nobody attended, and both identities hold over zero.
     const root = await createPerson(db, { firstName: 'Oriel', network: 'MENS' });
     await assignTo(db, root.id, null);
-    recorder = await accountFor(root.id);
 
     const report = await reporting.dccMonthly({ kind: 'WHOLE_CHURCH' }, MONTH);
 
