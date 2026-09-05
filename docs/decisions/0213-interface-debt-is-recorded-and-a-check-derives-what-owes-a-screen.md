@@ -69,7 +69,8 @@ owes one.
 
 ## Why the ledger starts full of waivers
 
-It ships pre-populated with a waiver for every route that exists today, so it is green on
+It ships pre-populated for every route that exists today — thirteen reached by a screen,
+twenty-one waived and one owing none — so it is green on
 the day it lands and red the moment route thirty-six arrives unledgered — including during
 the screens block itself, which is when new routes appear fastest.
 
@@ -79,7 +80,7 @@ not transfer. Axe-core has nothing to measure until a screen exists; this check 
 thirty-five things to measure now, and deferring it leaves the gap open across exactly the
 period the debt is being incurred.
 
-**The waiver list is the weak point and is recorded as one.** A file of thirty-five waivers
+**The waiver list is the weak point and is recorded as one.** A file of twenty-one waivers
 can rot into a rubber stamp, each new one copied from the line above. Requiring a waiver to
 name the stage that owes the screen makes an unstaged waiver visible; whether that is enough
 is not proven, and nothing here claims it is.
