@@ -28,9 +28,13 @@
  * **A waiver is permitted and is not a defeat.** Shipping API-only is what the
  * API-first constraint asks for (`SKILL.md` §2), and twenty-one waivers is what
  * this repository owes today — the check prints the three counts rather than
- * leaving them here to go stale. What a waiver may not be is silent:
- * it names the stage that owes the screen, so an unstaged waiver is visible to
- * a reader rather than being a line that looks like all the others.
+ * leaving them here to go stale. What a waiver may not be is silent: it names
+ * the stage that owes the screen, **and the stage must be one the ledger
+ * declares**. Without that the requirement was decorative — the first version
+ * tested only that the string was non-empty, so `"waived_to": "banana"` passed,
+ * while `CLAUDE.md` and decision 0213 described the naming as enforced. A
+ * specification describing a guarantee its implementation does not provide is
+ * the defect this whole change is named after.
  *
  * **A route may also owe no screen at all**, which is a third state rather than
  * a waiver with a distant stage on it. The liveness probe is called by the
@@ -39,11 +43,14 @@
  * file becomes a rubber stamp. It carries a reason for the same purpose a
  * waiver does: nothing can check either, so the reason is all a reader has.
  *
- * This check does not verify that a named screen *exists*. It could, and it
- * deliberately does not yet: no route names a screen today, so the branch would
- * ship untested, and the screens block is where the first one arrives.
+ * **A named screen must exist on disk**, so `screen` is a repository-relative
+ * path and nothing else; anything a reader needs beyond the path goes in `note`.
+ * An earlier draft skipped this on the ground that "no route names a screen
+ * today", which was false when it was written — thirteen did — so the rule that
+ * would have shipped untested in fact had thirteen cases the moment it landed.
  */
 import { readdir, readFile } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import process from 'node:process';
@@ -162,8 +169,16 @@ const routes = await declaredRoutes();
 const ledger = await readLedger();
 const entries = Array.isArray(ledger.routes) ? ledger.routes : [];
 
+// The stages a waiver may name. Declared once, so a typo fails rather than
+// inventing a stage, and so adding one is a deliberate edit in a single place.
+const stages = Array.isArray(ledger.stages) ? ledger.stages : [];
+
 const failures = [];
 const seen = new Set();
+
+if (stages.length === 0) {
+  failures.push('the ledger declares no `stages`, so no waiver can name one');
+}
 
 for (const entry of entries) {
   if (typeof entry?.route !== 'string') {
@@ -198,11 +213,27 @@ for (const entry of entries) {
   }
 
   // A waiver and a no-screen claim are both assertions about the future, and
-  // neither is checkable. The reason is the only thing a reader has, so it is
-  // required; `screen` names a file and speaks for itself.
+  // neither is checkable in itself. The reason is the only thing a reader has,
+  // so it is required; `screen` names a file and is checked below instead.
   if (!hasScreen && (typeof entry.reason !== 'string' || entry.reason === '')) {
     failures.push(
       `\`${entry.route}\` is ${hasWaiver ? `waived to \`${entry.waived_to}\`` : 'marked as owing no screen'} and gives no \`reason\``,
+    );
+  }
+
+  // The stage must be one the ledger declares. Without this the requirement to
+  // "name the stage that owes the screen" is satisfied by any non-empty string.
+  if (hasWaiver && !stages.includes(entry.waived_to)) {
+    failures.push(
+      `\`${entry.route}\` is waived to \`${entry.waived_to}\`, which is not a stage the ` +
+        `ledger declares (${stages.map((stage) => `\`${stage}\``).join(', ')})`,
+    );
+  }
+
+  // A screen that does not exist is a coverage claim nothing backs.
+  if (hasScreen && !existsSync(path.join(REPO, entry.screen))) {
+    failures.push(
+      `\`${entry.route}\` names the screen \`${entry.screen}\`, which does not exist`,
     );
   }
 }

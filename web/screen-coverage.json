@@ -6,15 +6,20 @@
     "a route this file does not mention fails the build, and an entry naming no route",
     "fails it too. Adding an endpoint means adding a line here in the same commit.",
     "",
-    "Exactly one of `screen`, `waived_to` or `no_screen_owed` per entry. A waiver names",
-    "the stage that owes the screen, so an unstaged waiver is visible; `no_screen_owed`",
-    "is for a route no person ever reaches. Both carry a reason, because nothing can",
-    "check either one.",
+    "Exactly one of `screen`, `waived_to` or `no_screen_owed` per entry. A `screen` is a",
+    "repository-relative path and must exist; anything more a reader needs goes in `note`.",
+    "A `waived_to` must name one of the `stages` declared above -- without that the naming",
+    "requirement is satisfied by any non-empty string. `no_screen_owed` is for a route no",
+    "person ever reaches. The latter two carry a reason, because nothing can check either.",
     "",
     "Thirteen of the thirty-five are reached by a screen today; twenty-one are waived and",
     "one owes none. That is the interface debt Stage 3 and Stage 4 accumulated with",
     "nothing recording it (ruling of 2026-09-06), written down rather than discovered at",
     "the pilot. The check prints these three numbers, so they are read rather than trusted."
+  ],
+  "stages": [
+    "screens block",
+    "after the pilot — Admin screens"
   ],
   "routes": [
     {
@@ -35,7 +40,8 @@
     },
     {
       "route": "POST /api/v1/auth/refresh",
-      "screen": "web/lib/session.ts, from every authenticated screen"
+      "screen": "web/lib/session.ts",
+      "note": "Called from every authenticated screen rather than from one."
     },
     {
       "route": "POST /api/v1/auth/logout",
