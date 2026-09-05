@@ -29,26 +29,45 @@ the behaviour the method currently has:
 *The commit that added the walk's `CYCLE` flag justified it by the second case. It closes the
 narrower one where the second edge points inside the first's subtree, and not this.*
 
-## The ruling: refuse, and scope the refusal to the walk
+## The ruling: detection is over the whole edge set, exactly as it is for a cycle
 
-**Where a walk's own result contains a person more than once, the figure refuses**, on the terms
-Section 20 already gives a detected cycle: a data-integrity defect, reported rather than retried.
+**Where any person holds more than one edge in the placement graph, every figure computed from it
+refuses**, on the terms Section 20 already gives a detected cycle: a data-integrity defect, reported
+rather than retried. Detection is a property of the edge set, not of a walk.
 
-**Scoped to the walk, and not church-wide — which is the opposite of the cycle rule, deliberately.**
-The two defects differ in exactly the property that decides blast radius:
+**This ruling's first draft scoped the refusal to the walk whose own result held a duplicate**, on
+the argument that a duplicate corrupts only a total that contains it, so refusing more would punish
+a leader for another branch's state — decision 0209's own ground, borrowed. `architecture-guardian`
+falsified it by running the query, and it is recorded here because the conclusion was wrong rather
+than merely the support:
 
-- A **cycle** is a closed component. Its members are absent from a total that should contain them,
-  and nothing in that total shows it, so only whole-graph detection can see it. Detection has to
-  reach past the walk because the damage does.
-- A **duplicate** corrupts only a total that contains it. A leader whose subtree holds no duplicated
-  person has a figure that is correct and complete, and refusing it would punish them for another
-  branch's state — which is the ground decision 0209 gave for refusing "refuse the whole report" for
-  the dangling-parent case, applied here where it fits.
+- **A duplicate's damage is not confined to one walk.** `P` holds two in-force rows, under sibling
+  leaders `L1` and `L2`. Each sibling's walk contains `P` exactly once and neither refuses; the root
+  contains `P` twice. So the scoped rule publishes two totals that look correct and cannot both be,
+  and Principle 11 — "never count duplicate people twice when aggregating multiple Cells or
+  branches" — is broken across precisely the aggregation Section 20's drill-down performs. A
+  `DISTINCT ON` tiebreak, which this ruling refuses below, would at least have kept `P` in one
+  subtree; the scoped refusal did not.
+- **The sentence offered as proof was false in the regime it governs.** It said any walk reaching a
+  person beneath a cycle must pass through the cycle to get there. That is true of a *functional*
+  graph, and the whole subject of this ruling is the graph that is not one: with `X` under both `B`
+  inside a cycle and `M` outside it, the walk from `M` returns `X` and touches nothing.
 
-**And scoping loses nothing, checked rather than assumed.** Any walk that reaches a person beneath a
-cycle must pass through the cycle to get there, so a walk whose result is affected always touches the
-condition. The two rules are therefore not in tension: each is scoped to where its own damage
-reaches.
+**So the two refusals are the same refusal, and there is one rule rather than two.** A cycle is a
+closed component invisible from above; a duplicate is a corruption visible from above and invisible
+from below. Neither is contained by the walk that meets it, and whole-graph detection is what both
+require.
+
+**It also closes both failures enumerated above rather than one**, which the scoped version did not.
+A cycle grounded by a second edge is grounded *by an overlap*, so a rule that refuses on any overlap
+refuses that case too, and `has_cycle`'s blind spot stops being reachable without a second
+mechanism.
+
+**The blast radius is accepted, and it is the one Section 20 already has.** A cycle anywhere refuses
+every figure for the period; an overlap now does the same. Whether that radius is right is an open
+question in `CLAUDE.md` for the cycle, and this ruling deliberately puts the overlap under the same
+question rather than inventing a second answer for it — a narrower answer for one and not the other
+was what produced the defect above.
 
 ## Why refuse rather than pick a row
 
@@ -64,7 +83,13 @@ a better disguise.
 
 ## The real remedy is at the write, and is not this ruling
 
-`CLAUDE.md`'s overlap Stop Condition already proposes it: an exclusion constraint,
+**Both pinned cases flip.** `reporting-subtree.spec.ts` currently pins the non-refusing behaviour of
+each failure — a leader beside a grounded cycle answering cleanly, and a walk returning a person
+twice — as the behaviour the method has rather than the behaviour it should have. Implementing this
+turns both into rejections. That is stated here rather than left to the slice, because a test
+rewritten beside the code it blesses tends to bless what the code does.
+
+`CLAUDE.md`'s overlap Stop Condition already proposes the real remedy: an exclusion constraint,
 
 ```sql
 EXCLUDE USING gist (person_id WITH =, tstzrange(started_at, ended_at) WITH &&)
@@ -82,8 +107,9 @@ exists**, and it stops being reachable when it does.
   failing, which Principle 10 and Section 20 both forbid.
 - **De-duplicate the result.** Hides the defect one layer later and still has to choose a leader for
   the drill-down.
-- **Refuse church-wide, as the cycle does.** Disproportionate for a defect whose damage does not
-  leave the total that contains it, and refused on decision 0209's own argument.
+- **Refuse only the walk that sees the duplicate.** This ruling's first answer, and wrong: the damage
+  leaves the total that contains it, so the rule publishes corrupt figures while appearing to be the
+  proportionate choice. Refused on a reproduction rather than on an argument.
 
 ---
 
