@@ -54,9 +54,11 @@ not mention.** `web/scripts/check-screen-coverage.mjs`, wired into `npm run lint
 in the shape of `check-contrast.mjs`. The first two mechanisms are prose, and `CLAUDE.md`'s
 own argument for the accessibility gates binds them: a conformance claim with nothing that
 can fail is a wish. That sentence is `CLAUDE.md`'s rather than Section 23's, which commits
-the web application to WCAG 2.2 AA and does not itself say it. The check is
-what makes the Done rule fail-able, and it is specified here so that its absence is visible
-if it slips.
+the web application to WCAG 2.2 AA and does not itself say it. The check is what makes the
+Done rule fail-able **in the half described below**, and it is specified here so that its
+absence is visible if it slips. The unqualified form of that sentence stood here for one
+commit and is what the paragraph below retracts; it is qualified at the point it is made
+rather than three sentences later, because the head sentence is the one a reader quotes.
 
 **It makes half of it fail-able, and the half is named rather than glossed.** The check
 reads the controllers and the ledger; it never reads `docs/ROADMAP.md`. So the obligation
@@ -95,9 +97,17 @@ thirty-five things to measure now, and deferring it leaves the gap open across e
 period the debt is being incurred.
 
 **The waiver list is the weak point and is recorded as one.** A file of twenty-one waivers
-can rot into a rubber stamp, each new one copied from the line above. Requiring a waiver to
-name the stage that owes the screen makes an unstaged waiver visible; whether that is enough
-is not proven, and nothing here claims it is.
+can rot into a rubber stamp, each new one copied from the line above. A waiver must name the
+stage that owes the screen, **and the check refuses a stage name it does not know** — the
+permitted stages are declared once in the ledger and a waiver naming anything else fails the
+build. That much is enforced; whether naming a stage is *enough* to stop the rot is not
+proven, and nothing here claims it is.
+
+*The first version of this ruling claimed the naming requirement was enforced when the check
+tested only that the string was non-empty, so `"waived_to": "banana"` passed. The check was
+given the closed list rather than the claim being softened, because the alternative was a
+specification describing a guarantee its implementation did not provide — which is the defect
+this ruling is named after.*
 
 ## What was rejected
 
@@ -117,6 +127,15 @@ therefore strictly wider, and the ground for rejecting it is cost and reach rath
 equivalence. That this branch voluntarily wrote Stage 5's full divergence does not rescue
 the claim: the comparison is between two rules, and the adopted rule does not compel that
 paragraph.
+
+## The check merges first
+
+The Definition of Done clause names `web/screen-coverage.json` as where a waiver is filed,
+and both that file and the check arrive in a separate change. **That change merges before
+this one.** Merged the other way round, the clause requires a waiver in a file that does not
+exist and no check runs, so neither half can fail — the state this ruling exists to end,
+reached by merge order. The dependency is recorded here because nothing else can hold it:
+branch protection orders no pair of pull requests.
 
 ## What is not settled here
 

@@ -50,7 +50,8 @@ A change is not complete until it is verified.
 - Reporting changes include a reconciliation test asserting `SKILL.md` §20: classification buckets and monthly-attendance buckets must each sum to the same unique-people total. A reconciliation failure is a data-integrity defect, not a rounding issue.
 - Authorization is tested at the API layer, not only the service layer, because the API is the sole authority for authorization (`SKILL.md` §7).
 - Invariants that can be expressed as database constraints are verified to exist as database constraints, not only as application code.
-- **A stage that ships an endpoint family no person can reach records that debt**, in two places: **per route in `web/screen-coverage.json`**, as a waiver naming the stage that owes the screen, and **as prose in `docs/ROADMAP.md`** naming the screens themselves. Shipping API-only is permitted and is often right — §2 fixes the API-first constraint — but it may not happen silently. A stage's bullet list is scope and its "Done when" is the exit criterion, and where the two diverge the bullets lapse with nothing recording it: Stage 3 delivered Cells and Stage 4 delivered attendance, and `web/app` reaches neither. **Only the first half can fail.** `web/scripts/check-screen-coverage.mjs` reads the controllers and the ledger and never the roadmap, so a stage that files its waivers and writes nothing in the roadmap stays green. That is stated rather than left to be discovered, because a clause claiming an enforcement it does not have is the exact defect this one was written about (ruling of 2026-09-06).
+- **A stage that ships an endpoint family no person can reach files a waiver for each such route in `web/screen-coverage.json`**, naming the stage that owes the screen. `web/scripts/check-screen-coverage.mjs` fails the build on a route the ledger does not mention, on a ledger entry no controller declares, and on a waiver naming a stage the ledger does not declare. Shipping API-only is permitted and is often right — §2 fixes the API-first constraint — but it may not happen silently (ruling of 2026-09-06).
+- **That stage also names the screens it owes, in prose, in `docs/ROADMAP.md`.** This half has nothing that can fail: the check reads the controllers and the ledger and never the roadmap, so a stage that files its waivers and writes nothing here is green. It is a separate bullet because the enforcement above does not reach it, and reading the two as one rule is what would let this half be assumed. A stage's bullet list is scope and its "Done when" is the exit criterion, and where the two diverge the bullets lapse with nothing recording it: Stage 3 delivered Cells and Stage 4 delivered attendance, and `web/app` reaches neither.
 
 ### Write endpoints
 
@@ -246,7 +247,7 @@ on one line — recounted rather than incremented. Adding 0213 moved the first t
 neither of the others, 0213 carrying no `Next:`. The forward half was
 dropped after 0182 and 0173 never had one, so the chain is walkable backward
 throughout and forward only as far as 0182 — worth repairing, not worth
-restating the rule over. A batch that day "corrected" this sentence to claim
+restating the rule over. A batch on 2026-09-05 "corrected" this sentence to claim
 backward links only, on an anchored `^Next:` grep that matched the single file
 where the link sits on its own line; it replaced a true sentence with a false
 one, in the paragraph whose subject is false cross-references, and
