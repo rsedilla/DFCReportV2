@@ -218,16 +218,32 @@ export class HierarchyService {
    * unassigned having each been under the other within it, from writes that were legal when
    * made.
    *
-   * **`rejectCycle` reaches a cycle only where the walk does, and from a real report's seed
-   * it does not.** This graph is functional — one out-edge per person — so a cycle is a
-   * *closed component*: no member of it is the child of any non-member, and a walk seeded at
-   * a leader above can never enter it. Section 20 says a detected cycle refuses the figure
-   * rather than truncating the chain, and from above this truncates silently instead. The
-   * same shape loses a person whose own assignment is open but whose *leader* is unreachable,
-   * and section 20's residual does not cover them. **Both are recorded as a Stop Condition in
-   * `CLAUDE.md` and are unsettled**, so this method must not be used to compute a published
-   * figure until they are. *A first version of this docblock claimed section 20's rule "is
-   * what `rejectCycle` does". It does it for one seed and no others.*
+   * **Detection is over the whole edge set rather than over what the walk reached, which is
+   * why `rejectCycle` is deliberately not called here.** That helper reads a per-row flag
+   * produced by one walk, and this graph is functional — one out-edge per person — so a
+   * cycle in it is a *closed component*: no member is the child of a non-member, and a walk
+   * seeded at a leader above never enters it. Section 20 says a detected cycle refuses the
+   * figure rather than truncating the chain, and scoped detection truncated silently instead.
+   * `grounded` is everything whose chain terminates at a root or at somebody holding no edge;
+   * anything holding an edge and not grounded is in a cycle or beneath one.
+   *
+   * **Two flags, and neither subsumes the other, so both are read.** `has_cycle` asks whether
+   * any chain fails to terminate. `walked_a_cycle` is the walk's own `CYCLE` flag and asks
+   * whether this walk revisited a person — which an overlap giving one person two in-force
+   * edges does, while every chain still reaches a root, so `has_cycle` alone reports nothing
+   * and returns that person twice.
+   *
+   * **A person whose leader held no in-period assignment is not lost** (decision 0209): the
+   * `departed` tier continues the chain from that leader's last assignment, whenever it was,
+   * seeded from *this* period's own primary edges so a later write cannot change an earlier
+   * period's answer. Section 20's residual still covers only somebody who held no open
+   * assignment at any instant of the period.
+   *
+   * *Both of the above were recorded as unsettled Stop Conditions until decision 0209 and the
+   * two commits implementing it; this docblock said so, and said this method must not compute
+   * a published figure, for one commit after it stopped being true. What remains open is
+   * narrower and does not block a figure: the blast radius of the refusal, which is
+   * church-wide, and whether such a cycle can be repaired at all.*
    *
    * **What is half-open is the row, not the period.** Each assignment is in force over
    * `[started_at, ended_at)`; the interval of instants the fallback considers is closed at
