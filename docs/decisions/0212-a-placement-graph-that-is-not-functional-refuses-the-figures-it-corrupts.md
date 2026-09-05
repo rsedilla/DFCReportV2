@@ -89,4 +89,6 @@ exists**, and it stops being reachable when it does.
 
 Decision 0212, indexed in [CLAUDE.md](../../CLAUDE.md).
 
-Previous: [2026-09-05 — The placement graph authorizes a leader-scoped report, and one edge definition serves both directions](0211-the-placement-graph-authorizes-a-leader-scoped-report.md)
+Previous: [2026-09-05 — A report is computed in one read-only transaction at `REPEATABLE READ`](0210-a-report-is-one-read-only-transaction-at-repeatable-read.md)
+
+*Number 0211 is not skipped by accident. It was drafted in this batch, settling which graph authorizes a leader-scoped report, and was withdrawn before review: `CLAUDE.md` says that walk is built with the route it authorizes rather than in advance, and drafting it early coupled it to 0210 in a way that produced most of the findings against both. The number is left unused rather than reassigned, because these files are referred to positionally.*
