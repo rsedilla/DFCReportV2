@@ -211,17 +211,17 @@ describe('the reporting placement graph (decision 0206)', () => {
     await expect(placement(manuel.id)).resolves.toEqual([manuel.id]);
   });
 
-  it('refuses a cycle the walk meets even where the graph is grounded', async () => {
-    // **The walk's own detection, which the whole-graph check does not subsume.** The two
-    // answer different questions. `has_cycle` asks whether any chain fails to terminate;
-    // this graph's chains all reach the root, so it says no. The *walk* still loops, because
-    // an overlap gives Manuel two in-force edges -- one to the root, one to Mark, who is
-    // under Manuel.
+  it('refuses an overlap whose second edge points inside the subtree of the first', async () => {
+    // **Decision 0212: the graph is not functional, so every figure computed from it
+    // refuses.** This fixture used to pin the walk's own `CYCLE` flag, on the reasoning that
+    // `has_cycle` misses this shape -- every chain here reaches the root, so no chain fails
+    // to terminate, while the walk itself revisits Manuel.
     //
-    // Without the walk's flag the query returns Manuel twice and reports nothing, which
-    // section 5 invariant 2 forbids in terms: a cycle introduced by direct SQL "surfaces as
-    // an error rather than a hang". *Restoring `has_cycle` alone left this unpinned, and a
-    // mutation is what showed it.*
+    // That flag is gone. Under 0212 the overlap is detected first and directly: Manuel holds
+    // two edges in force at the period's end, which is the premise `grounded` depends on and
+    // which nothing enforced. Refusing on the overlap makes a second cycle detector
+    // unreachable rather than merely redundant -- in a functional graph a cycle is a closed
+    // component, so `has_cycle` is complete.
     //
     // Both rows are writable: `pastoral_assignments_one_active` is partial over open rows,
     // and the second row is closed -- after the period, so still in force at its end.
@@ -245,7 +245,7 @@ describe('the reporting placement graph (decision 0206)', () => {
       })
       .execute();
 
-    await expect(placement(root.id)).rejects.toThrow(/cycle/i);
+    await expect(placement(root.id)).rejects.toThrow(/more than one assignment in force/i);
   });
 
   it('places a person by their open assignment at the period end', async () => {
@@ -437,20 +437,20 @@ describe('the reporting placement graph (decision 0206)', () => {
   });
 
   it('answers cleanly for a leader beside a cycle the walk does not enter', async () => {
-    // **Pinned as the behaviour it currently has, not as the behaviour it should have.** The
-    // whole-graph check is `grounded`, and grounding is reachability from a terminal: a cycle
-    // member holding a *second* edge that is grounded grounds itself, and so grounds the
-    // whole cycle. `has_cycle` is therefore false here, and the refusal that does fire for
-    // the root comes from the walk's own flag rather than from the graph check.
+    // **Decision 0212, and the case that decided it.** `grounded` is reachability from a
+    // terminal, so a cycle member holding a *second* edge that is grounded grounds itself and
+    // so grounds the whole cycle: `has_cycle` is false here. Mark, beside the cycle rather
+    // than above it, used to be answered cleanly over a graph that holds one.
     //
-    // Aldo is under Tessa and, overlapping, under Bruno who is under Aldo. Every chain still
-    // reaches the root, so the graph check sees nothing; a walk from Mark never touches the
-    // cycle and answers, while a walk from the root enters it and refuses.
+    // The overlap refusal closes it without a second cycle detector, which is what 0212 means
+    // by the wider rule closing both enumerated failures rather than one: a cycle grounded by
+    // a second edge is grounded *by an overlap*. Aldo holds two edges in force, so every
+    // figure computed from this graph refuses -- Mark's included, and Mark is the one that
+    // used to come back looking right.
     //
-    // Two in-force rows for one person is the overlap **Stop Condition** recorded in
-    // `CLAUDE.md`, which no write path reaches; the remedy proposed there is a database
-    // constraint, and it closes this. Pinned here so that settling it cannot forget the case,
-    // and because the fix batch that added the second flag claimed to have closed it.
+    // Two in-force rows for one person is the overlap **Stop Condition** in `CLAUDE.md`, which
+    // no write path reaches; the remedy proposed there is a database constraint at the write,
+    // and it makes this unreachable rather than merely refused.
     const root = await createPerson(db, { firstName: 'Oriel', network: 'MENS' });
     const mark = await createPerson(db, { firstName: 'Mark', network: 'MENS' });
     const tessa = await createPerson(db, { firstName: 'Tessa', network: 'MENS' });
@@ -466,21 +466,23 @@ describe('the reporting placement graph (decision 0206)', () => {
     // Aldo's second, overlapping edge: under Bruno, who is under him.
     await insertAssignment(REAL_ROW_ID, aldo.id, bruno.id, OCT_1, DECEMBER);
 
-    await expect(placement(mark.id)).resolves.toEqual([mark.id]);
-    await expect(placement(root.id)).rejects.toThrow(/cycle/i);
+    await expect(placement(mark.id)).rejects.toThrow(/more than one assignment in force/i);
+    await expect(placement(root.id)).rejects.toThrow(/more than one assignment in force/i);
   });
 
-  it('returns a person twice where an overlap places them under two leaders', async () => {
-    // **Pinned as the behaviour it currently has.** `in_force` carries no `DISTINCT ON`, so
-    // an overlap contributes two edges for one person and the walk reaches them by two
-    // distinct paths. Neither flag fires: every chain reaches the root, and PostgreSQL's
-    // `CYCLE` clause marks a key repeated on a row's *own* path rather than a person reached
-    // twice. Principle 10 makes a total of people distinct, so a caller counting this list
-    // would count Xavi twice.
+  it('refuses every figure where an overlap places one person under two leaders', async () => {
+    // **Decision 0212, and the reproduction that inverted its first draft.** `in_force` carries
+    // no `DISTINCT ON`, so an overlap contributes two edges and the walk reaches Xavi by two
+    // distinct paths. No cycle flag can see it: PostgreSQL's `CYCLE` clause marks a key
+    // repeated on a row's *own* path, and two paths to one person repeat nothing.
     //
-    // The fix batch that added the walk's flag said reading it closes this case. It closes
-    // the narrower one above, where the second edge points *inside* the first's subtree.
-    // Inside the same recorded overlap Stop Condition, and pinned for the same reason.
+    // 0212's first draft refused only the walk that saw the duplicate, which looks
+    // proportionate and publishes corrupt figures: with Xavi under siblings Aldo and Bruno,
+    // *each sibling's* walk holds Xavi once and refuses nothing, while every total above holds
+    // Xavi twice -- section 25's eleventh rule, broken across exactly the aggregation section
+    // 20's drill-down performs. So detection is over the whole edge set, and both siblings are
+    // asserted here rather than the root alone, because the siblings are what falsified the
+    // narrow rule.
     const root = await createPerson(db, { firstName: 'Oriel', network: 'MENS' });
     const aldo = await createPerson(db, { firstName: 'Aldo', network: 'MENS' });
     const bruno = await createPerson(db, { firstName: 'Bruno', network: 'MENS' });
@@ -493,10 +495,9 @@ describe('the reporting placement graph (decision 0206)', () => {
 
     await insertAssignment(REAL_ROW_ID, xavi.id, bruno.id, OCT_1, DECEMBER);
 
-    const placed = await placement(root.id);
-    expect(placed).toHaveLength(5);
-    expect(new Set(placed).size).toBe(4);
-    expect(placed.filter((id) => id === xavi.id)).toHaveLength(2);
+    await expect(placement(root.id)).rejects.toThrow(/more than one assignment in force/i);
+    await expect(placement(aldo.id)).rejects.toThrow(/more than one assignment in force/i);
+    await expect(placement(bruno.id)).rejects.toThrow(/more than one assignment in force/i);
   });
 
   it('ignores an assignment that begins after the period', async () => {

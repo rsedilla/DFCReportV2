@@ -35,6 +35,25 @@ export interface DccPersonFigures {
  * stale rather than about a torn read inside a live one. *An earlier version said "for
  * exactly this reason", which claimed section 20 addressed a case it does not.*
  */
+/**
+ * How a caller narrows and where it reads from.
+ *
+ * **`executor` exists so a report can be one snapshot** (decision 0210). `reporting` opens a
+ * `READ ONLY REPEATABLE READ` transaction and passes it here, so the tree walk that chose
+ * the population and the figures counted over it cannot describe two states of the database.
+ * Omitted, this reads on the pool, which is right for a caller taking one figure and wrong
+ * for a report composing several.
+ *
+ * **`personIds` narrows the population and nothing else.** N, the removed Sundays and the
+ * open flag are properties of the month rather than of the people, so a leader-scoped report
+ * measures its own people against the same N a whole-church one does — which is what makes
+ * a bucket mean the same thing at every scope, and what lets the drill-down sum.
+ */
+export interface DccMonthFiguresOptions {
+  executor?: Db;
+  personIds?: readonly string[];
+}
+
 export interface DccMonthFigures {
   /** N — the applicable events the month holds (section 9). */
   n: number;
@@ -99,8 +118,16 @@ export class DccFiguresService {
    * yet — Person Merge is unbuilt — so no report can be wrong today; this is named because
    * the exclusions above read as a complete list and are not one.
    */
-  async monthFigures(reportingMonth: string): Promise<DccMonthFigures> {
+  async monthFigures(
+    reportingMonth: string,
+    options: DccMonthFiguresOptions = {},
+  ): Promise<DccMonthFigures> {
     assertReportingMonth(reportingMonth);
+
+    // `null` means every attendee, which is what Whole Church asks for. An empty array is a
+    // different question with a different answer — a leader whose subtree holds nobody — and
+    // `= ANY('{}')` is false for every row, so it answers it correctly without a branch.
+    const population = options.personIds === undefined ? null : [...options.personIds];
 
     // The `YYYY-MM` prefix the calendar is matched on. Derived from the repository's
     // reporting-month format rather than taken as a second parameter, so there is one
@@ -132,6 +159,10 @@ export class DccFiguresService {
         SELECT DISTINCT person_id
           FROM live
          WHERE to_char(event_date, 'YYYY-MM') = ${month}
+           AND (
+             ${population}::uuid[] IS NULL
+             OR person_id = ANY (${population}::uuid[])
+           )
       ),
       figures AS (
         SELECT m.person_id,
@@ -163,7 +194,7 @@ export class DccFiguresService {
              figures.lifetime_through_month::text AS lifetime_through_month
         FROM month_meta
         LEFT JOIN figures ON true
-    `.execute(this.db);
+    `.execute(options.executor ?? this.db);
 
     // `month_meta` aggregates without `GROUP BY`, so it is exactly one row and the left
     // join guarantees at least one row back even where nobody attended. Reading the month's

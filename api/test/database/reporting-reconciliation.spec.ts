@@ -5,6 +5,7 @@ import { Test } from '@nestjs/testing';
 import { AppConfigModule } from '../../src/config/config.module';
 import { DatabaseModule } from '../../src/database/database.module';
 import { DccFiguresService } from '../../src/attendance/dcc-figures.service';
+import { HierarchyService } from '../../src/hierarchy/hierarchy.service';
 import { ReportingService } from '../../src/reporting/reporting.service';
 import { ValidationFailedError } from '../../src/common/errors/api-error';
 import { createTestDb, truncateAll } from '../setup/database';
@@ -84,14 +85,18 @@ describe('section 20 reconciliation, DCC monthly (Stage 5 Done-when)', () => {
   beforeAll(async () => {
     db = createTestDb();
 
-    // **The two providers rather than `ReportingModule`.** Importing the module pulls
+    // **The providers rather than `ReportingModule`.** Importing the module pulls
     // `AttendanceModule` and, behind it, most of the application graph -- which this file
     // has no use for and which makes an unrelated wiring change fail it. That the real
     // module resolves is asserted where it belongs, in `module-graph.spec.ts`, which
     // compiles the whole of `AppModule`.
+    //
+    // `HierarchyService` joined the list when leader scope arrived: `ReportingService`
+    // composes the placement graph now (decision 0206), and every scope goes through the
+    // same constructor. This file still asks only for Whole Church, which needs no walk.
     const moduleRef = await Test.createTestingModule({
       imports: [AppConfigModule, DatabaseModule],
-      providers: [DccFiguresService, ReportingService],
+      providers: [DccFiguresService, HierarchyService, ReportingService],
     }).compile();
 
     app = moduleRef.createNestApplication();
