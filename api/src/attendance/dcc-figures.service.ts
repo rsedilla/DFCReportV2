@@ -1,8 +1,9 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { sql } from 'kysely';
 
+import { ValidationFailedError } from '../common/errors/api-error';
 import { DATABASE, type Db } from '../database/database.module';
-import { Inject } from '@nestjs/common';
+import { windowClosesAt } from '../common/time/submission-window';
 
 /**
  * One person's DCC attendance, reduced to the two numbers a monthly report needs.
@@ -15,6 +16,35 @@ export interface DccPersonFigures {
   personId: string;
   timesInMonth: number;
   lifetimeThroughMonth: number;
+}
+
+/**
+ * Everything a DCC monthly report is composed from, taken in one read.
+ *
+ * **One statement rather than several, and that is a correctness requirement rather than
+ * a tidiness one.** Section 20 asserts that both views cover the same population; the
+ * bucket identity depends on no person having attended more applicable events than the
+ * month holds. Read `n` and the population in two statements and they are two snapshots —
+ * the pool hands out two connections, and at READ COMMITTED (section 24) each statement
+ * takes its own snapshot even inside one transaction. A Sunday removed between them yields
+ * a person whose `timesInMonth` exceeds `n`, who then falls outside every emitted bucket,
+ * and section 20's identity fails on live data. Section 20 names the calendar on its
+ * invalidation list for exactly this reason.
+ */
+export interface DccMonthFigures {
+  /** N — the applicable events the month holds (section 9). */
+  n: number;
+  /**
+   * The removed Sundays of the month, as Manila dates.
+   *
+   * Section 9 requires a removal to be "visible on any report covering that month, so that
+   * a month showing four events where the calendar shows five is explained rather than
+   * merely odd". `n` alone cannot explain itself.
+   */
+  removed: string[];
+  /** Whether the month is still open for submission (sections 13 and 17). */
+  open: boolean;
+  people: DccPersonFigures[];
 }
 
 /**
@@ -36,55 +66,57 @@ export class DccFiguresService {
   constructor(@Inject(DATABASE) private readonly db: Db) {}
 
   /**
-   * N — the applicable DCC events a month holds (section 9).
+   * Every figure a DCC monthly report needs, from one snapshot.
    *
-   * **A count of calendar rows, never a count of Sundays.** Section 9 fixes it that way in
-   * terms: "a month with five Sundays where one carried no service has N = 4". A removed
-   * Sunday keeps its row and is excluded here, which is what makes a report able to explain
-   * the difference rather than merely show a smaller number.
+   * **N is a count of calendar rows, never a count of Sundays** (section 9): "a month with
+   * five Sundays where one carried no service has N = 4". It counts rows the calendar
+   * holds whether or not their day has passed, which is section 9's rule rather than an
+   * oversight — an applicable event is a row, and the exclusions it draws are removal and
+   * a row the calendar has not reached. That is readable only alongside `open`, which is
+   * why section 17 requires it and why both are returned together.
    *
-   * The month is matched in Asia/Manila (section 20). `event_date` is a `date` rather than
-   * an instant, so the comparison is on the date itself and no zone conversion arises —
-   * the column already holds the Manila day the calendar named.
-   */
-  async applicableEvents(month: string): Promise<number> {
-    const row = await sql<{ n: string }>`
-      SELECT count(*)::text AS n
-        FROM dcc_events
-       WHERE to_char(event_date, 'YYYY-MM') = ${month}
-         AND removed_at IS NULL
-    `.execute(this.db);
-
-    return Number(row.rows[0]?.n ?? '0');
-  }
-
-  /**
-   * Every person who attended at least once in the month, with the two counts a report
-   * buckets them by.
-   *
-   * **The population is attendees, which is section 12's rule and section 20's identity.**
-   * Somebody marked absent is not in it — that is a recorded fact about them and not an
-   * attendance — and neither is somebody whose only record falls on a removed Sunday,
-   * because that Sunday is not an applicable event.
+   * **The population is attendees** (section 12, section 20). Somebody marked absent is not
+   * in it — that is a recorded fact about them rather than an attendance — and neither is
+   * somebody whose only record falls on a removed Sunday.
    *
    * **Only live rows count.** A correction supersedes rather than overwrites (section 9),
    * so `superseded_at IS NULL` is what stops one corrected record counting twice. Without
-   * it the unique-people total still reconciles — both views over-count together — which
-   * is exactly the failure a reconciliation test cannot catch, and is why the fixture
-   * carries a superseded row.
+   * it the unique-people total still reconciles — both views over-count together — which is
+   * exactly the failure a reconciliation test cannot catch on its own.
    *
    * **`lifetimeThroughMonth` is truncated at the month's end rather than taken as of now**
    * (sections 9 and 12): a person who was a VIP in October and attended again in November
    * is a VIP on October's report forever. Any other reading moves a closed month's figures,
    * which section 20 forbids.
+   *
+   * **What it does not do: resolve a merged identity.** Section 3 requires a merged pair to
+   * count as one person "when reports are generated", for every period including past ones,
+   * and that resolution belongs to `people` (section 2). Nothing writes `merged_into_id`
+   * yet — Person Merge is unbuilt — so no report can be wrong today; this is named because
+   * the exclusions above read as a complete list and are not one.
    */
-  async monthlyFigures(month: string): Promise<DccPersonFigures[]> {
+  async monthFigures(reportingMonth: string): Promise<DccMonthFigures> {
+    assertReportingMonth(reportingMonth);
+
+    // The `YYYY-MM` prefix the calendar is matched on. Derived from the repository's
+    // reporting-month format rather than taken as a second parameter, so there is one
+    // spelling of a month in the system.
+    const month = reportingMonth.slice(0, 7);
+
     const rows = await sql<{
-      person_id: string;
-      times_in_month: string;
-      lifetime_through_month: string;
+      n: string;
+      removed: string[] | null;
+      open: boolean;
+      person_id: string | null;
+      times_in_month: string | null;
+      lifetime_through_month: string | null;
     }>`
-      WITH live AS (
+      WITH calendar AS (
+        SELECT id, event_date, removed_at
+          FROM dcc_events
+         WHERE to_char(event_date, 'YYYY-MM') = ${month}
+      ),
+      live AS (
         SELECT a.person_id, e.event_date
           FROM dcc_attendance a
           JOIN dcc_events e ON e.id = a.dcc_event_id
@@ -96,23 +128,82 @@ export class DccFiguresService {
         SELECT DISTINCT person_id
           FROM live
          WHERE to_char(event_date, 'YYYY-MM') = ${month}
+      ),
+      figures AS (
+        SELECT m.person_id,
+               count(*) FILTER (
+                 WHERE to_char(l.event_date, 'YYYY-MM') = ${month}
+               ) AS times_in_month,
+               count(*) FILTER (
+                 WHERE to_char(l.event_date, 'YYYY-MM') <= ${month}
+               ) AS lifetime_through_month
+          FROM attended_this_month m
+          JOIN live l ON l.person_id = m.person_id
+         GROUP BY m.person_id
+      ),
+      month_meta AS (
+        SELECT count(*) FILTER (WHERE removed_at IS NULL)::text AS n,
+               array_remove(
+                 array_agg(to_char(event_date, 'YYYY-MM-DD')
+                   ORDER BY event_date) FILTER (WHERE removed_at IS NOT NULL),
+                 NULL
+               ) AS removed,
+               (now() < ${windowClosesAt(reportingMonth)}) AS open
+          FROM calendar
       )
-      SELECT m.person_id,
-             count(*) FILTER (
-               WHERE to_char(l.event_date, 'YYYY-MM') = ${month}
-             )::text AS times_in_month,
-             count(*) FILTER (
-               WHERE to_char(l.event_date, 'YYYY-MM') <= ${month}
-             )::text AS lifetime_through_month
-        FROM attended_this_month m
-        JOIN live l ON l.person_id = m.person_id
-       GROUP BY m.person_id
+      SELECT month_meta.n,
+             month_meta.removed,
+             month_meta.open,
+             figures.person_id,
+             figures.times_in_month::text AS times_in_month,
+             figures.lifetime_through_month::text AS lifetime_through_month
+        FROM month_meta
+        LEFT JOIN figures ON true
     `.execute(this.db);
 
-    return rows.rows.map((row) => ({
-      personId: row.person_id,
-      timesInMonth: Number(row.times_in_month),
-      lifetimeThroughMonth: Number(row.lifetime_through_month),
-    }));
+    // `month_meta` aggregates without `GROUP BY`, so it is exactly one row and the left
+    // join guarantees at least one row back even where nobody attended. Reading the month's
+    // own figures off `[0]` is therefore safe rather than optimistic.
+    const first = rows.rows[0];
+
+    return {
+      n: Number(first?.n ?? '0'),
+      removed: first?.removed ?? [],
+      open: first?.open ?? false,
+      people: rows.rows
+        .filter((row) => row.person_id !== null)
+        .map((row) => ({
+          personId: row.person_id as string,
+          timesInMonth: Number(row.times_in_month),
+          lifetimeThroughMonth: Number(row.lifetime_through_month),
+        })),
+    };
+  }
+}
+
+/**
+ * A reporting month is the first of a month, which is this repository's existing spelling
+ * of one (`submission-window.ts`). Anything else is refused rather than answered.
+ *
+ * **The month comparison in the query is a string comparison and its correctness rests on
+ * the shape.** `to_char` zero-pads, so a `YYYY-MM` prefix sorts lexicographically exactly
+ * as it sorts chronologically — but only against a well-formed argument. A month written
+ * `2027-1` matches nothing and sorts *before* `2027-10`, so a malformed value would yield a
+ * plausible, understated report rather than an error. That is the shape decision 0185
+ * refuses for a date-only field and decision 0200 for a format validator, and an
+ * understated report is worse than a refused one because nobody can see it is wrong.
+ *
+ * `ValidationFailedError` rather than a plain `Error`: `reportingMonthOf` records why, in
+ * this same domain. The exception filter renders an unrecognised `Error` as
+ * `INTERNAL_ERROR`, so a refusal thrown as one turns a client's bad month into a 500.
+ *
+ * Checked here rather than only at a future controller's edge, because this is where the
+ * value becomes load-bearing and there is no route yet to check it at.
+ */
+function assertReportingMonth(reportingMonth: string): void {
+  if (!/^\d{4}-(0[1-9]|1[0-2])-01$/.test(reportingMonth)) {
+    throw new ValidationFailedError('A reporting month is the first of a month, as YYYY-MM-01.', {
+      period: reportingMonth,
+    });
   }
 }
