@@ -216,11 +216,26 @@ export class HierarchyService {
    * **Cycle-safe, and here that is not a formality.** Section 5 invariant 2 constrains the
    * *active* tree at each write, and this map is not it — two people can each end a period
    * unassigned having each been under the other within it, from writes that were legal when
-   * made. Section 20 says a detected cycle refuses the figure rather than truncating the
-   * chain, which is what `rejectCycle` does.
+   * made.
    *
-   * The period is half-open at its start and inclusive at its end, matching the instants
-   * decision 0208 fixes: `periodEnd` is the last millisecond of the period's final day.
+   * **`rejectCycle` reaches a cycle only where the walk does, and from a real report's seed
+   * it does not.** This graph is functional — one out-edge per person — so a cycle is a
+   * *closed component*: no member of it is the child of any non-member, and a walk seeded at
+   * a leader above can never enter it. Section 20 says a detected cycle refuses the figure
+   * rather than truncating the chain, and from above this truncates silently instead. The
+   * same shape loses a person whose own assignment is open but whose *leader* is unreachable,
+   * and section 20's residual does not cover them. **Both are recorded as a Stop Condition in
+   * `CLAUDE.md` and are unsettled**, so this method must not be used to compute a published
+   * figure until they are. *A first version of this docblock claimed section 20's rule "is
+   * what `rejectCycle` does". It does it for one seed and no others.*
+   *
+   * **What is half-open is the row, not the period.** Each assignment is in force over
+   * `[started_at, ended_at)`; the interval of instants the fallback considers is closed at
+   * both ends, since `started_at <= periodEnd AND ended_at > periodStart` is exactly "the
+   * row's range intersects `[periodStart, periodEnd]`". `periodEnd` is the last millisecond
+   * of the period's final day (decision 0208). *A first version described the period itself
+   * as half-open at its start, which is the wrong interval and is how the next bound gets
+   * written wrongly.*
    */
   async reportingSubtree(
     executor: Db,

@@ -84,6 +84,30 @@ describe('the reporting placement graph (decision 0206)', () => {
       .execute();
   };
 
+  /** Fixed so the final `id DESC` tiebreak cannot decide the case it is meant to lose. */
+  const ZERO_LENGTH_ID = 'ffffffff-ffff-4fff-8fff-ffffffffffff';
+  const REAL_ROW_ID = '00000000-0000-4000-8000-000000000001';
+
+  const insertAssignment = async (
+    id: string,
+    personId: string,
+    leaderId: string,
+    startedAt: Date,
+    endedAt: Date,
+  ) => {
+    await db
+      .insertInto('pastoral_assignments')
+      .values({
+        id,
+        person_id: personId,
+        leader_id: leaderId,
+        root_network: null,
+        started_at: startedAt,
+        ended_at: endedAt,
+      })
+      .execute();
+  };
+
   const placement = (leaderId: string) =>
     hierarchy.reportingSubtree(db, leaderId, PERIOD_START, PERIOD_END);
 
@@ -107,6 +131,78 @@ describe('the reporting placement graph (decision 0206)', () => {
 
     await expect(placement(ana.id)).rejects.toThrow(/cycle/i);
     await expect(placement(ben.id)).rejects.toThrow(/cycle/i);
+  });
+
+  it('does not reach a cycle from above it, which is the defect section 20 does not cover', async () => {
+    // **The refusal above fires only because that case seeds inside the cycle.** This graph
+    // is functional -- one out-edge per person -- so a cycle is a closed component: no member
+    // is the child of a non-member, and a walk from a leader above can never enter it. A real
+    // report is always scoped above.
+    //
+    // So the root's October figure returns cleanly and is short by everyone behind the cycle,
+    // which is the silent truncation section 20 says must not happen. **Pinned as the
+    // behaviour it currently has, not as the behaviour it should have** -- what it should do
+    // is a Stop Condition in `CLAUDE.md`, and every remedy changes this expectation. It is
+    // here so that settling it cannot forget this case.
+    const root = await createPerson(db, { firstName: 'Oriel', network: 'MENS' });
+    const ana = await createPerson(db, { firstName: 'Ana', network: 'MENS' });
+    const ben = await createPerson(db, { firstName: 'Ben', network: 'MENS' });
+
+    await assignTo(db, root.id, null, SEPTEMBER);
+
+    const anaUnderBen = await assignTo(db, ana.id, ben.id, OCT_1);
+    await closeAt(anaUnderBen, OCT_10);
+    const benUnderAna = await assignTo(db, ben.id, ana.id, OCT_12);
+    await closeAt(benUnderAna, OCT_20);
+
+    // No refusal, and neither Ana nor Ben is in it.
+    await expect(placement(root.id)).resolves.toEqual([root.id]);
+  });
+
+  it('loses a person whose own assignment is open but whose leader is unreachable', async () => {
+    // **The same hole without a cycle, and section 20 has no rule for it at all.** Manuel is
+    // archived in September, so he holds no open row and correctly resolves to nobody. Mark
+    // holds an open row under Manuel for the whole of October -- so he is *not* in section
+    // 20's residual, which covers only somebody who held no open assignment at any instant of
+    // the period. He is nonetheless in no leader's subtree.
+    //
+    // Section 20 claims a drill-down sums "except for the residual". This is a second
+    // exception it does not name. Pinned as current behaviour; the Stop Condition owns it.
+    const root = await createPerson(db, { firstName: 'Oriel', network: 'MENS' });
+    const manuel = await createPerson(db, { firstName: 'Manuel', network: 'MENS' });
+    const mark = await createPerson(db, { firstName: 'Mark', network: 'MENS' });
+
+    await assignTo(db, root.id, null, SEPTEMBER);
+    const manuelsRow = await assignTo(db, manuel.id, root.id, AUGUST);
+    await closeAt(manuelsRow, SEPTEMBER);
+    await assignTo(db, mark.id, manuel.id, SEPTEMBER);
+
+    await expect(placement(root.id)).resolves.toEqual([root.id]);
+    await expect(placement(manuel.id)).resolves.toEqual([manuel.id, mark.id]);
+  });
+
+  it('prefers the row actually held over one held for no time', async () => {
+    // The `ended_at DESC` tiebreak, which nothing pinned. A zero-length row is legal
+    // (`pastoral_assignments_period_ordered` is `>=`), and two rows can share a `started_at`.
+    // Without the tiebreak the fallback can name a leader the person was under for zero time.
+    const root = await createPerson(db, { firstName: 'Oriel', network: 'MENS' });
+    const manuel = await createPerson(db, { firstName: 'Manuel', network: 'MENS' });
+    const ben = await createPerson(db, { firstName: 'Ben', network: 'MENS' });
+    const mark = await createPerson(db, { firstName: 'Mark', network: 'MENS' });
+
+    await assignTo(db, root.id, null, SEPTEMBER);
+    await assignTo(db, manuel.id, root.id, SEPTEMBER);
+    await assignTo(db, ben.id, root.id, SEPTEMBER);
+
+    // **Identifiers are fixed, and the zero-length row deliberately carries the higher
+    // one.** `id DESC` is the final tiebreak, so with random identifiers the case decides
+    // itself by coin flip -- it passed with the `ended_at` tiebreak removed, pinning
+    // nothing. Ordered this way, only `ended_at DESC` can pick the row actually held.
+    await insertAssignment(ZERO_LENGTH_ID, mark.id, manuel.id, OCT_12, OCT_12);
+    await insertAssignment(REAL_ROW_ID, mark.id, ben.id, OCT_12, OCT_20);
+
+    await expect(placement(ben.id)).resolves.toEqual([ben.id, mark.id]);
+    await expect(placement(manuel.id)).resolves.toEqual([manuel.id]);
   });
 
   it('places a person by their open assignment at the period end', async () => {
