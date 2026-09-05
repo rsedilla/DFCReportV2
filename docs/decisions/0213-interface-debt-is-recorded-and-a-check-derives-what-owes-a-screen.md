@@ -27,8 +27,9 @@ deliverable unbuilt — which is the right call, and is now made deliberately an
 instead of by omission.
 
 Stage 4 shows the honest form of the same thing: two things it did not finish, both written
-down, neither blocking. Stage 3 recorded nothing at all. The habit exists in one place and
-is made an obligation everywhere.
+down, neither blocking. Stage 3 has no such section — it records plenty about what it did,
+and nothing about what it did not. The habit exists in one place and is made an obligation
+everywhere.
 
 **Eight of the fifty-three open items in `CLAUDE.md` are deferred to "the first screens"** —
 counted rather than remembered. That is a queue of decisions waiting on a deliverable no
@@ -37,9 +38,11 @@ lost between a specification requirement and a stage nobody has scheduled it in.
 
 ## Three mechanisms
 
-**A stage that ships an endpoint family no person can reach records the debt** in
-`docs/ROADMAP.md`, naming the screens it owes and the stage that owes them. It may still
-ship API-only; it may not do so silently. Written to Definition of Done.
+**A stage that ships an endpoint family no person can reach records the debt** twice: per
+route in `web/screen-coverage.json`, as a waiver naming the stage that owes the screen, and
+as prose in `docs/ROADMAP.md` naming the screens themselves. It may still ship API-only; it
+may not do so silently. Written to Definition of Done, which says which of the two halves
+can fail.
 
 **The roadmap gains a screens block**, sitting between Stage 5 and the pilot, and Stage 6's
 exit criterion gains an interface clause — a month closes with real data recorded and read
@@ -55,6 +58,17 @@ the web application to WCAG 2.2 AA and does not itself say it. The check is
 what makes the Done rule fail-able, and it is specified here so that its absence is visible
 if it slips.
 
+**It makes half of it fail-able, and the half is named rather than glossed.** The check
+reads the controllers and the ledger; it never reads `docs/ROADMAP.md`. So the obligation
+to file a per-route waiver naming the stage that owes the screen is enforced, and the
+obligation to describe those screens in the roadmap is prose that stays prose. A stage
+that files its waivers and writes nothing in the roadmap is green. That is a real gap and
+it is written down rather than papered over, because a rule claiming an enforcement it does
+not have is precisely the defect this ruling exists to name — and the first draft of this
+paragraph committed it, saying the check "makes this fail" of a clause whose subject was
+the roadmap. Closing the gap would mean the check parsing prose for a stage name, which
+buys less than it costs; naming it is the honest alternative.
+
 ## Why the check derives its list rather than declaring one
 
 A hand-maintained list is a list somebody eventually forgets to extend, which is Section
@@ -64,10 +78,10 @@ it derives its own field list and found one nobody would have listed, `SearchPeo
 
 So the ledger is compared against routes read out of `api/src/**/*.controller.ts`, and a
 route the ledger does not mention fails the build. A new endpoint cannot merge without a
-line saying which screen reaches it, or a dated waiver saying why none does and which stage
-owes one.
+line saying which screen reaches it, a waiver naming the stage that owes one and why, or
+a statement that no screen is owed at all.
 
-## Why the ledger starts full of waivers
+## Why the ledger starts with every route already in it
 
 It ships pre-populated for every route that exists today — thirteen reached by a screen,
 twenty-one waived and one owing none — so it is green on
@@ -93,7 +107,16 @@ API-only, so it forbids the practice rather than the silence.
 
 **Binding every scope bullet to its "Done when"** — requiring each to appear in the exit
 criterion or be struck with a reason. It attacks the general divergence rather than the
-interface case, touches every stage's text, and buys nothing the recorded debt does not.
+interface case and touches every stage's text.
+
+*It was rejected here as buying "nothing the recorded debt does not", and that was false.*
+The adopted rule fires only on an endpoint family no person can reach, so a scope bullet
+with **no endpoint at all** never triggers it — and Stage 5 carries one, "Materialized
+closed months", which could go unbuilt with nothing owed. The rejected alternative is
+therefore strictly wider, and the ground for rejecting it is cost and reach rather than
+equivalence. That this branch voluntarily wrote Stage 5's full divergence does not rescue
+the claim: the comparison is between two rules, and the adopted rule does not compel that
+paragraph.
 
 ## What is not settled here
 

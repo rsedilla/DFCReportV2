@@ -50,7 +50,7 @@ A change is not complete until it is verified.
 - Reporting changes include a reconciliation test asserting `SKILL.md` §20: classification buckets and monthly-attendance buckets must each sum to the same unique-people total. A reconciliation failure is a data-integrity defect, not a rounding issue.
 - Authorization is tested at the API layer, not only the service layer, because the API is the sole authority for authorization (`SKILL.md` §7).
 - Invariants that can be expressed as database constraints are verified to exist as database constraints, not only as application code.
-- **A stage that ships an endpoint family no person can reach records that debt in `docs/ROADMAP.md`**, naming the screens it owes and the stage that owes them. Shipping API-only is permitted and is often right — §2 fixes the API-first constraint — but it may not happen silently. A stage's bullet list is scope and its "Done when" is the exit criterion, and where the two diverge the bullets lapse with nothing recording it: Stage 3 delivered Cells and Stage 4 delivered attendance, and `web/app` reaches neither. `web/scripts/check-screen-coverage.mjs` is what makes this fail rather than be remembered (ruling of 2026-09-06).
+- **A stage that ships an endpoint family no person can reach records that debt**, in two places: **per route in `web/screen-coverage.json`**, as a waiver naming the stage that owes the screen, and **as prose in `docs/ROADMAP.md`** naming the screens themselves. Shipping API-only is permitted and is often right — §2 fixes the API-first constraint — but it may not happen silently. A stage's bullet list is scope and its "Done when" is the exit criterion, and where the two diverge the bullets lapse with nothing recording it: Stage 3 delivered Cells and Stage 4 delivered attendance, and `web/app` reaches neither. **Only the first half can fail.** `web/scripts/check-screen-coverage.mjs` reads the controllers and the ledger and never the roadmap, so a stage that files its waivers and writes nothing in the roadmap stays green. That is stated rather than left to be discovered, because a clause claiming an enforcement it does not have is the exact defect this one was written about (ruling of 2026-09-06).
 
 ### Write endpoints
 
@@ -241,8 +241,9 @@ rewritten to remove that language, because resolving each by inference is how a
 false cross-reference gets introduced, and this log records enough of those
 already. Each file carries previous/next links instead, so a positional reference
 resolves exactly as well as it did in the single file and no better. *Checked on
-2026-09-05: of 211 files, 210 carry `Previous:`, 181 carry `Next:`, and 180 carry both
-on one line. The forward half was
+2026-09-06: of 212 files, 211 carry `Previous:`, 181 carry `Next:`, and 180 carry both
+on one line — recounted rather than incremented. Adding 0213 moved the first two and
+neither of the others, 0213 carrying no `Next:`. The forward half was
 dropped after 0182 and 0173 never had one, so the chain is walkable backward
 throughout and forward only as far as 0182 — worth repairing, not worth
 restating the rule over. A batch that day "corrected" this sentence to claim
