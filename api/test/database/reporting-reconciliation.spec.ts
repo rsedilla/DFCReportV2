@@ -5,6 +5,7 @@ import { Test } from '@nestjs/testing';
 import { AppConfigModule } from '../../src/config/config.module';
 import { DatabaseModule } from '../../src/database/database.module';
 import { DccFiguresService } from '../../src/attendance/dcc-figures.service';
+import { HierarchyService } from '../../src/hierarchy/hierarchy.service';
 import { ReportingService } from '../../src/reporting/reporting.service';
 import { ValidationFailedError } from '../../src/common/errors/api-error';
 import { createTestDb, truncateAll } from '../setup/database';
@@ -84,14 +85,18 @@ describe('section 20 reconciliation, DCC monthly (Stage 5 Done-when)', () => {
   beforeAll(async () => {
     db = createTestDb();
 
-    // **The two providers rather than `ReportingModule`.** Importing the module pulls
+    // **The providers rather than `ReportingModule`.** Importing the module pulls
     // `AttendanceModule` and, behind it, most of the application graph -- which this file
     // has no use for and which makes an unrelated wiring change fail it. That the real
     // module resolves is asserted where it belongs, in `module-graph.spec.ts`, which
     // compiles the whole of `AppModule`.
+    //
+    // `HierarchyService` joined the list when leader scope arrived: `ReportingService`
+    // composes the placement graph now (decision 0206), and every scope goes through the
+    // same constructor. This file still asks only for Whole Church, which needs no walk.
     const moduleRef = await Test.createTestingModule({
       imports: [AppConfigModule, DatabaseModule],
-      providers: [DccFiguresService, ReportingService],
+      providers: [DccFiguresService, HierarchyService, ReportingService],
     }).compile();
 
     app = moduleRef.createNestApplication();
@@ -421,30 +426,43 @@ describe('section 20 reconciliation, DCC monthly (Stage 5 Done-when)', () => {
     // report -- worse than a refusal, because nobody can see it is wrong. Decision 0185
     // settles the same shape for a date-only field.
     //
-    // **Asserted on the error class rather than its message, and a mutation is why.** With
+    // **Asserted on the error class and its details rather than on its message, and a mutation is why.** With
     // the guard removed this case still passed: `windowClosesAt` throws its own "not the
     // first of a month" and the regex matched it. But that is a plain `Error`, which the
     // exception filter renders as `INTERNAL_ERROR` -- a 500 on a client's bad month, which
     // is the exact failure `reportingMonthOf` records having shipped once. Passing for that
     // reason is the test pinning nothing.
-    await expect(reporting.dccMonthly({ kind: 'WHOLE_CHURCH' }, '2020-10')).rejects.toThrow(
-      ValidationFailedError,
-    );
-    await expect(reporting.dccMonthly({ kind: 'WHOLE_CHURCH' }, '2020-10-15')).rejects.toThrow(
-      ValidationFailedError,
-    );
-    await expect(reporting.dccMonthly({ kind: 'WHOLE_CHURCH' }, '2020-13-01')).rejects.toThrow(
-      ValidationFailedError,
-    );
+    // **The field and the value are asserted, not merely the class.** Section 22 requires a
+    // refusal to name the field a client needs in order to fix it, and asserting only
+    // `ValidationFailedError` cannot see that it named the wrong one. It could not: when
+    // leader scope derived a period's bounds *before* validating the month, three of these
+    // four answered `field: "date"`, and two quoted a month the caller never sent --
+    // `2020-13-01` refused as `"2020-14-01"`, which is decision 0185's shape reached one
+    // call earlier. This file stayed green throughout, because the class was all it read.
+    const refusalFor = async (period: string) => {
+      try {
+        await reporting.dccMonthly({ kind: 'WHOLE_CHURCH' }, period);
+      } catch (error) {
+        expect(error).toBeInstanceOf(ValidationFailedError);
+        return (error as ValidationFailedError).details;
+      }
 
-    // **The case that makes composing `isCalendarDate` mean something.** A hand-written
-    // `\d{4}-(0[1-9]|1[0-2])-01` accepts this and `isCalendarDate` refuses it, because
-    // `Date.UTC(26, ...)` applies the legacy two-digit-year mapping and the month's window
-    // would be computed from 1926. Without this assertion the two predicates are
+      throw new Error(`expected ${period} to be refused`);
+    };
+
+    // `0026-01-01` is **the case that makes composing `isCalendarDate` mean something.** A
+    // hand-written `\d{4}-(0[1-9]|1[0-2])-01` accepts it and `isCalendarDate` refuses it,
+    // because `Date.UTC(26, ...)` applies the legacy two-digit-year mapping and the month's
+    // window would be computed from 1926. Without it the two predicates are
     // indistinguishable here, and section 22's one-predicate rule has nothing that can fail.
-    await expect(reporting.dccMonthly({ kind: 'WHOLE_CHURCH' }, '0026-01-01')).rejects.toThrow(
-      ValidationFailedError,
-    );
+    // `9999-12-01` is a real month and a valid date, and is the **only** month whose
+    // successor is not writable as `YYYY-MM-DD` -- which is how a period's end is derived.
+    // Unbounded it reached that derivation and answered `{field: "date", value:
+    // "10000-01-01"}`, the same signature as `2020-13-01` one call further along, in the
+    // batch whose stated purpose was closing that class.
+    for (const period of ['2020-10', '2020-10-15', '2020-13-01', '0026-01-01', '9999-12-01']) {
+      expect(await refusalFor(period)).toMatchObject({ field: 'period', value: period });
+    }
   });
 
   it('a month with no applicable events has an empty population and no buckets', async () => {

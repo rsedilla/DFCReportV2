@@ -1,12 +1,22 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 
-import { DccFiguresService, type DccPersonFigures } from '../attendance/dcc-figures.service';
+import {
+  DccFiguresService,
+  assertReportingMonth,
+  type DccPersonFigures,
+} from '../attendance/dcc-figures.service';
+import { DATABASE, type Db } from '../database/database.module';
+import { HierarchyService } from '../hierarchy/hierarchy.service';
+import { reportingPeriodBounds } from './reporting-period';
 
 /**
- * Which population a report covers. Section 20 enumerates four; this is the one that
- * needs no tree walk, and the rest arrive with decision 0206's fallback.
+ * Which population a report covers. Section 20 enumerates four; two exist.
+ *
+ * `LEADER` names a Person, and the people it covers are that person's **placement**
+ * subtree (decision 0206), not the tree in force at any one instant — which is a different
+ * and wider set, and using the wrong one is a silent wrong total rather than an error.
  */
-export type ReportScope = { kind: 'WHOLE_CHURCH' };
+export type ReportScope = { kind: 'WHOLE_CHURCH' } | { kind: 'LEADER'; personId: string };
 
 /** The five buckets of section 9's classification, in the order that section lists them. */
 export interface DccClassification {
@@ -66,19 +76,33 @@ export interface DccMonthlyReport {
  */
 @Injectable()
 export class ReportingService {
-  constructor(private readonly dccFigures: DccFiguresService) {}
+  constructor(
+    @Inject(DATABASE) private readonly db: Db,
+    private readonly dccFigures: DccFiguresService,
+    private readonly hierarchy: HierarchyService,
+  ) {}
 
   /**
    * The DCC monthly report for a scope and a month (SKILL.md sections 9, 12 and 20).
    *
    * **Both views cover one population and both sum to it**, which is section 20's
    * reconciliation and Stage 5's exit criterion. That holds by construction rather than by
-   * arithmetic that happens to agree — but the construction includes the read: `n` and the
-   * population come from **one statement**, so they cannot describe two states of the
-   * calendar. *A first version took them with `Promise.all` on a pooled connection, which
-   * is two snapshots: a Sunday removed between them yields a person whose `timesInMonth`
-   * exceeds `n` and who then falls outside every bucket. The docblocks asserted "by
-   * construction" over code that did not have it.*
+   * arithmetic that happens to agree, and the construction is now two things rather than
+   * one. `n` and the population still come from a single statement, so they cannot describe
+   * two states of the calendar. *A first version took them with `Promise.all` on a pooled
+   * connection, which is two snapshots: a Sunday removed between them yields a person whose
+   * `timesInMonth` exceeds `n` and who then falls outside every bucket. The docblocks
+   * asserted "by construction" over code that did not have it.*
+   *
+   * **And the whole report is one `READ ONLY REPEATABLE READ` transaction** (decision 0210),
+   * which is what carries the identity *between* modules. A leader-scoped report is two
+   * statements by construction — section 2 puts the tree walk in `hierarchy` and the figures
+   * in `attendance`, and neither may root a query in the other's tables — and at section 24's
+   * `READ COMMITTED` each statement takes its own snapshot even inside a transaction. So a
+   * reassignment committing between the walk and the count would give a population and a set
+   * of figures describing two trees. The isolation level is set **per transaction**; changing
+   * `default_transaction_isolation` would break the three lock-then-decide mechanisms section
+   * 24 names, and this must never be read as licence to do that.
    *
    * **Where the month holds no applicable events the population is empty and there are no
    * buckets.** Section 12 refuses a `Completed (0/0)` bucket on the ground that a bucket
@@ -86,18 +110,42 @@ export class ReportingService {
    * events: nobody could attend, so there is nothing to bucket rather than a row of zeroes.
    */
   async dccMonthly(scope: ReportScope, period: string): Promise<DccMonthlyReport> {
-    const figures = await this.dccFigures.monthFigures(period);
+    // **Refused before anything is derived from it.** `reportingPeriodBounds` validates
+    // nothing and will happily build `2020-14-01` out of `2020-13-01`, so a malformed month
+    // reaching it is answered by the *date* helper, naming a field the caller never sent and
+    // quoting a month it never wrote. Section 22 requires the refusal to name the field a
+    // client needs in order to fix it, and that field is `period`.
+    assertReportingMonth(period);
 
-    return {
-      scope,
-      period,
-      open: figures.open,
-      n: figures.n,
-      removedEvents: figures.removed,
-      uniquePeople: figures.people.length,
-      classification: classify(figures.people),
-      buckets: bucket(figures.people, figures.n),
-    };
+    const { start, end } = reportingPeriodBounds(period);
+
+    return this.db
+      .transaction()
+      .setIsolationLevel('repeatable read')
+      .setAccessMode('read only')
+      .execute(async (trx) => {
+        // The placement graph, walked by the module that owns `pastoral_assignments`
+        // (section 2, decision 0206). `undefined` rather than a list is Whole Church, and
+        // the difference from an empty list is load-bearing: a leader with nobody beneath
+        // them reports zero, which is not the same question as "everybody".
+        const personIds =
+          scope.kind === 'LEADER'
+            ? await this.hierarchy.reportingSubtree(trx, scope.personId, start, end)
+            : undefined;
+
+        const figures = await this.dccFigures.monthFigures(period, { executor: trx, personIds });
+
+        return {
+          scope,
+          period,
+          open: figures.open,
+          n: figures.n,
+          removedEvents: figures.removed,
+          uniquePeople: figures.people.length,
+          classification: classify(figures.people),
+          buckets: bucket(figures.people, figures.n),
+        };
+      });
   }
 }
 

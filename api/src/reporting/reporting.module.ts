@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 
 import { AttendanceModule } from '../attendance/attendance.module';
+import { HierarchyModule } from '../hierarchy/hierarchy.module';
 import { ReportingService } from './reporting.service';
 
 /**
@@ -13,11 +14,13 @@ import { ReportingService } from './reporting.service';
  * around eleven tables across four modules, which is not an exemption but the ownership
  * rule reversed for one module.
  *
- * A plain import rather than a port: `reporting -> attendance` is not a cycle, and
- * section 2 is explicit that a dependency which is not a cycle takes the ordinary route.
+ * A plain import rather than a port: neither `reporting -> attendance` nor
+ * `reporting -> hierarchy` is a cycle, and section 2 is explicit that a dependency which is
+ * not a cycle takes the ordinary route. `hierarchy` arrives with leader scope, which needs
+ * the placement graph walked by the module that owns `pastoral_assignments`.
  */
 @Module({
-  imports: [AttendanceModule],
+  imports: [AttendanceModule, HierarchyModule],
   providers: [ReportingService],
   exports: [ReportingService],
 })
