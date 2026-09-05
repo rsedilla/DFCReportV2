@@ -54,6 +54,7 @@ describe('the reporting placement graph (decision 0206)', () => {
   const LATE_AUGUST = new Date('2020-08-25T00:00:00+08:00');
   const SEPTEMBER = new Date('2020-09-01T00:00:00+08:00');
   const NOVEMBER = new Date('2020-11-01T00:00:00+08:00');
+  const DECEMBER = new Date('2020-12-01T00:00:00+08:00');
 
   beforeAll(async () => {
     db = createTestDb();
@@ -210,6 +211,43 @@ describe('the reporting placement graph (decision 0206)', () => {
     await expect(placement(manuel.id)).resolves.toEqual([manuel.id]);
   });
 
+  it('refuses a cycle the walk meets even where the graph is grounded', async () => {
+    // **The walk's own detection, which the whole-graph check does not subsume.** The two
+    // answer different questions. `has_cycle` asks whether any chain fails to terminate;
+    // this graph's chains all reach the root, so it says no. The *walk* still loops, because
+    // an overlap gives Manuel two in-force edges -- one to the root, one to Mark, who is
+    // under Manuel.
+    //
+    // Without the walk's flag the query returns Manuel twice and reports nothing, which
+    // section 5 invariant 2 forbids in terms: a cycle introduced by direct SQL "surfaces as
+    // an error rather than a hang". *Restoring `has_cycle` alone left this unpinned, and a
+    // mutation is what showed it.*
+    //
+    // Both rows are writable: `pastoral_assignments_one_active` is partial over open rows,
+    // and the second row is closed -- after the period, so still in force at its end.
+    const root = await createPerson(db, { firstName: 'Oriel', network: 'MENS' });
+    const manuel = await createPerson(db, { firstName: 'Manuel', network: 'MENS' });
+    const mark = await createPerson(db, { firstName: 'Mark', network: 'MENS' });
+
+    await assignTo(db, root.id, null, SEPTEMBER);
+    await assignTo(db, manuel.id, root.id, SEPTEMBER);
+    await assignTo(db, mark.id, manuel.id, SEPTEMBER);
+
+    // Manuel's second, overlapping edge: under Mark, closed after the period ends.
+    await db
+      .insertInto('pastoral_assignments')
+      .values({
+        person_id: manuel.id,
+        leader_id: mark.id,
+        root_network: null,
+        started_at: OCT_1,
+        ended_at: DECEMBER,
+      })
+      .execute();
+
+    await expect(placement(root.id)).rejects.toThrow(/cycle/i);
+  });
+
   it('places a person by their open assignment at the period end', async () => {
     // The ordinary case, and the one every other case is measured against.
     const root = await createPerson(db, { firstName: 'Oriel', network: 'MENS' });
@@ -316,6 +354,53 @@ describe('the reporting placement graph (decision 0206)', () => {
 
     await expect(placement(manuel.id)).resolves.toEqual([manuel.id]);
     await expect(placement(root.id)).resolves.toEqual([root.id, manuel.id]);
+  });
+
+  it('does not let a later write change a closed period', async () => {
+    // **Section 3's reproducibility guarantee, reached through the extended chain.** The
+    // tier that carries a departed leader must ask whether the chain *of this period*
+    // reaches them, not whether anybody has ever been under them. A predicate unbounded in
+    // time makes a November write change October's answer -- reproduced by
+    // `architecture-guardian`, and the reason the tier is now seeded from this period's own
+    // primary edges and closed recursively rather than by a bare `EXISTS`.
+    //
+    // Mark's only assignment ended in August, so October reaches him through nobody.
+    const root = await createPerson(db, { firstName: 'Oriel', network: 'MENS' });
+    const manuel = await createPerson(db, { firstName: 'Manuel', network: 'MENS' });
+    const mark = await createPerson(db, { firstName: 'Mark', network: 'MENS' });
+    const later = await createPerson(db, { firstName: 'Nena', network: 'MENS' });
+
+    await assignTo(db, root.id, null, SEPTEMBER);
+    await assignTo(db, manuel.id, root.id, SEPTEMBER);
+    const longClosed = await assignTo(db, mark.id, manuel.id, AUGUST);
+    await closeAt(longClosed, LATE_AUGUST);
+
+    const before = await placement(root.id);
+    expect(before).toEqual([root.id, manuel.id]);
+
+    // A November write putting somebody under Mark. October must not move.
+    await assignTo(db, later.id, mark.id, NOVEMBER);
+
+    await expect(placement(root.id)).resolves.toEqual(before);
+  });
+
+  it('carries a departed leader more than one level up', async () => {
+    // The extended tier is closed recursively rather than applied once: Manuel is departed
+    // and so is his own leader Grace, so a single pass seeded from primary edges would place
+    // Manuel and lose Grace -- taking Mark with her.
+    const root = await createPerson(db, { firstName: 'Oriel', network: 'MENS' });
+    const grace = await createPerson(db, { firstName: 'Grace', network: 'MENS' });
+    const manuel = await createPerson(db, { firstName: 'Manuel', network: 'MENS' });
+    const mark = await createPerson(db, { firstName: 'Mark', network: 'MENS' });
+
+    await assignTo(db, root.id, null, SEPTEMBER);
+    const gracesRow = await assignTo(db, grace.id, root.id, AUGUST);
+    await closeAt(gracesRow, SEPTEMBER);
+    const manuelsRow = await assignTo(db, manuel.id, grace.id, AUGUST);
+    await closeAt(manuelsRow, SEPTEMBER);
+    await assignTo(db, mark.id, manuel.id, SEPTEMBER);
+
+    await expect(placement(root.id)).resolves.toEqual([root.id, grace.id, manuel.id, mark.id]);
   });
 
   it('ignores an assignment that begins after the period', async () => {

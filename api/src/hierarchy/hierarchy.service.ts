@@ -243,7 +243,12 @@ export class HierarchyService {
     periodStart: Date,
     periodEnd: Date,
   ): Promise<string[]> {
-    const result = await sql<{ person_id: string | null; depth: number; has_cycle: boolean }>`
+    const result = await sql<{
+      person_id: string | null;
+      depth: number;
+      walked_a_cycle: boolean;
+      has_cycle: boolean;
+    }>`
       WITH RECURSIVE in_force AS (
         SELECT person_id, leader_id
           FROM pastoral_assignments
@@ -265,17 +270,25 @@ export class HierarchyService {
         UNION ALL
         SELECT person_id, leader_id FROM within_period
       ),
-      departed AS (
+      last_ever AS (
         SELECT DISTINCT ON (pa.person_id) pa.person_id, pa.leader_id
           FROM pastoral_assignments pa
          WHERE pa.started_at <= ${periodEnd}
            AND NOT EXISTS (
              SELECT 1 FROM primary_edges p WHERE p.person_id = pa.person_id
            )
-           AND EXISTS (
-             SELECT 1 FROM pastoral_assignments led WHERE led.leader_id = pa.person_id
-           )
          ORDER BY pa.person_id, pa.started_at DESC, pa.ended_at DESC NULLS FIRST, pa.id DESC
+      ),
+      departed AS (
+        SELECT le.person_id, le.leader_id
+          FROM last_ever le
+         WHERE EXISTS (
+           SELECT 1 FROM primary_edges p WHERE p.leader_id = le.person_id
+         )
+        UNION
+        SELECT le.person_id, le.leader_id
+          FROM last_ever le
+          JOIN departed d ON d.leader_id = le.person_id
       ),
       edges AS (
         SELECT person_id, leader_id FROM primary_edges
@@ -306,6 +319,7 @@ export class HierarchyService {
       ) CYCLE person_id SET walked_a_cycle USING path
       SELECT subtree.person_id,
              subtree.depth,
+             bool_or(subtree.walked_a_cycle) OVER () AS walked_a_cycle,
              EXISTS (
                SELECT 1 FROM edges e
                 WHERE NOT EXISTS (
@@ -322,7 +336,7 @@ export class HierarchyService {
     // whose chain terminates at a root or at somebody who holds no edge; anything with an
     // edge and not grounded is in a cycle or beneath one. Scoping detection to the walk is
     // what let a report return cleanly while silently short.
-    if (result.rows[0]?.has_cycle === true) {
+    if (result.rows[0]?.has_cycle === true || result.rows[0]?.walked_a_cycle === true) {
       throw new InvariantViolationError(
         'The pastoral tree contains a cycle and cannot be resolved. This is a data defect: report it rather than retrying.',
         { person_id: leaderId },

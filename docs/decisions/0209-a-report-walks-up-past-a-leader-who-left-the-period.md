@@ -59,13 +59,21 @@ Three alternatives were considered and refused.
   another branch, which they can neither cause nor repair.
 - **Refuse the archive, as Section 3 refuses archiving a Person who leads a Cell.** This was
   recommended and then withdrawn, and the withdrawal is recorded because the reasoning matters.
-  The precedent's *form* fits and its *substance* does not: a Cell with no current leader is
-  corrupt immediately and permanently, while a disciple whose leader was archived is a
-  transient state the church's own process resolves. Worse, blocking the archive inverts the
+  The precedent's *form* fits and its *substance* does not, and the sound ground is narrower
+  than the first version of this paragraph claimed. A leaderless `ACTIVE` Cell violates a
+  deferred constraint trigger (Section 11): the database refuses to hold that state at all.
+  Zero open pastoral assignments is the opposite — Section 5 invariant 3 makes it explicitly
+  legitimate, for three separate reasons. One is a state the schema forbids; the other is a
+  state the schema provides for. *An earlier version rested this on the Cell case being
+  “permanent”, which Section 3 does not say and which is false — Section 3 names two
+  resolutions, handover and closure.* Worse, blocking the archive inverts the
   real workflow — the pastoral decision about the disciples is usually made *after* — so the
   likely outcome is that the archive never happens and the person stays recorded as active,
-  corrupting every current-state count. That is the harm Section 3's rule exists to prevent,
-  produced by copying it.
+  corrupting every current-state count. *That is a different harm from the one Section 3's
+  rule addresses — Section 3 guards against a Cell whose leader is not a current Person, and
+  separately warns in the other direction that “a real Person who has stopped attending must
+  not automatically be archived”. The point stands on its own terms and does not need
+  Section 3 to have made it.*
 
 ## The gap is surfaced, and this half is not optional
 
