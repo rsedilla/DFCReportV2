@@ -166,8 +166,18 @@ export class HierarchyService {
    * recursive walk, and a dated walk can meet a cycle the *active* tree never had:
    * the rows in force at a past instant are a different edge set, and invariant 2
    * was evaluated against the tree as it stood at each write rather than against
-   * this projection of it. Section 20's fallback for an unassigned person walks up
-   * the same graph and names the same hazard.
+   * this projection of it. Section 20's fallback for an unassigned person names the
+   * same hazard on a **different** graph -- its own is "last open assignment held at
+   * any instant within the period", which collapses rows from several instants into
+   * one edge set, where this walks one instant and collapses nothing.
+   *
+   * **That difference is why this method is not, by itself, Section 20's person
+   * key.** A person with no open assignment at the instant asked about is absent
+   * from this result and must be placed by that fallback; one who held none at any
+   * instant of the period belongs in the Whole Church total alone. Neither is this
+   * method's to do, and a caller that treats `subtreeAsOf(root, periodEnd)` as a
+   * Network total will be short by exactly those people. *A first version said
+   * "the same graph", which invited precisely that reading.*
    */
   async subtreeAsOf(executor: Db, personId: string, at: Date): Promise<string[]> {
     const result = await sql<{ person_id: string; depth: number; is_cycle: boolean }>`

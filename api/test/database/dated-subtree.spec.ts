@@ -131,8 +131,13 @@ describe('the dated subtree walk (decision 0206)', () => {
   });
 
   it('includes the person themselves, and answers for a leaf', async () => {
-    // `OWN_SUBTREE` includes the actor (section 7), and every caller of this method is
-    // resolving a scope that does.
+    // The anchor row is in the result. The rule is section 16's `Total People` --
+    // "distinct people in the pastoral subtree" -- reached through section 20's person
+    // key, and a subtree total that excluded the leader would be short by one at every
+    // level. *A first version justified it by section 7's `OWN_SUBTREE` including the
+    // actor and by "every caller of this method": there are no callers, and scope
+    // resolution goes through `isWithinSubtree`, an undated upward walk, rather than
+    // through this.*
     const raymond = await createPerson(db, { firstName: 'Raymond', network: 'MENS' });
     const mark = await createPerson(db, { firstName: 'Mark', network: 'MENS' });
 
