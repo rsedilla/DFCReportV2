@@ -199,6 +199,73 @@ export class HierarchyService {
   }
 
   /**
+   * The people a leader's report covers, placed on section 20's reporting graph.
+   *
+   * **Not the tree, and not `subtreeAsOf` either** (decision 0206). Section 20 places a
+   * person by their open assignment at the period's end, and where they have none by the
+   * last one they held at any instant *within* the period. So this walks a map that
+   * collapses rows from several instants, where `subtreeAsOf` reads one instant and
+   * collapses nothing. Both exist, and using the wrong one is a silent wrong total rather
+   * than an error: `subtreeAsOf` loses everybody archived mid-period, who section 3 forbids
+   * filtering out of a period-based report.
+   *
+   * **The fallback applies up the chain**, which is what makes a drill-down sum rather than
+   * sum one level at a time: a leader who is themselves unassigned at the period's end
+   * resolves the same way, so their subtree does not detach from the level above.
+   *
+   * **Cycle-safe, and here that is not a formality.** Section 5 invariant 2 constrains the
+   * *active* tree at each write, and this map is not it — two people can each end a period
+   * unassigned having each been under the other within it, from writes that were legal when
+   * made. Section 20 says a detected cycle refuses the figure rather than truncating the
+   * chain, which is what `rejectCycle` does.
+   *
+   * The period is half-open at its start and inclusive at its end, matching the instants
+   * decision 0208 fixes: `periodEnd` is the last millisecond of the period's final day.
+   */
+  async reportingSubtree(
+    executor: Db,
+    leaderId: string,
+    periodStart: Date,
+    periodEnd: Date,
+  ): Promise<string[]> {
+    const result = await sql<{ person_id: string; depth: number; is_cycle: boolean }>`
+      WITH RECURSIVE in_force AS (
+        SELECT person_id, leader_id
+          FROM pastoral_assignments
+         WHERE started_at <= ${periodEnd}
+           AND (ended_at IS NULL OR ended_at > ${periodEnd})
+      ),
+      fallback AS (
+        SELECT DISTINCT ON (pa.person_id) pa.person_id, pa.leader_id
+          FROM pastoral_assignments pa
+         WHERE pa.started_at <= ${periodEnd}
+           AND (pa.ended_at IS NULL OR pa.ended_at > ${periodStart})
+           AND NOT EXISTS (
+             SELECT 1 FROM in_force f WHERE f.person_id = pa.person_id
+           )
+         ORDER BY pa.person_id, pa.started_at DESC, pa.ended_at DESC NULLS FIRST, pa.id DESC
+      ),
+      edges AS (
+        SELECT person_id, leader_id FROM in_force
+        UNION ALL
+        SELECT person_id, leader_id FROM fallback
+      ),
+      subtree AS (
+        SELECT ${leaderId}::uuid AS person_id, 0 AS depth
+        UNION ALL
+        SELECT e.person_id, s.depth + 1
+          FROM edges e
+          JOIN subtree s ON e.leader_id = s.person_id
+      ) CYCLE person_id SET is_cycle USING path
+      SELECT person_id, depth, is_cycle FROM subtree ORDER BY depth
+    `.execute(executor);
+
+    this.rejectCycle(result.rows, leaderId);
+
+    return result.rows.map((row) => row.person_id);
+  }
+
+  /**
    * Opens a pastoral assignment inside a caller's transaction.
    *
    * Here rather than in the calling module because `hierarchy` is the only writer
