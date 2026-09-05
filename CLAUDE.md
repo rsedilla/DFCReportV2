@@ -238,11 +238,16 @@ Adding a ruling means adding both, in the same change.
 "the ruling below", "the entry above", "superseded the same day". Nothing has been
 rewritten to remove that language, because resolving each by inference is how a
 false cross-reference gets introduced, and this log records enough of those
-already. Each file carries a link to the previous one, so a positional reference
-resolves exactly as well as it did in the single file and no better. *This read
-"previous/next links" until 2026-09-05; one file of 209 carries a `Next:` line,
-so the forward half was a claim about the repository that was false of 208 of
-them. Backward links are what exist and what the sentence now describes.*
+already. Each file carries previous/next links instead, so a positional reference
+resolves exactly as well as it did in the single file and no better. *Checked on
+2026-09-05: 181 of 212 files carry both, on one line. The forward half was
+dropped after 0182 and 0173 never had one, so the chain is walkable backward
+throughout and forward only as far as 0182 — worth repairing, not worth
+restating the rule over. A batch that day "corrected" this sentence to claim
+backward links only, on an anchored `^Next:` grep that matched the single file
+where the link sits on its own line; it replaced a true sentence with a false
+one, in the paragraph whose subject is false cross-references, and
+`architecture-guardian` caught it.*
 
 - 2026-08-19 — [Who may reassign a person's pastoral leader](docs/decisions/0001-who-may-reassign-a-persons-pastoral-leader.md)
 - 2026-08-19 — [Senior Pastors may reassign across both Networks](docs/decisions/0002-senior-pastors-may-reassign-across-both-networks.md)
