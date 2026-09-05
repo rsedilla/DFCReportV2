@@ -432,24 +432,32 @@ describe('section 20 reconciliation, DCC monthly (Stage 5 Done-when)', () => {
     // exception filter renders as `INTERNAL_ERROR` -- a 500 on a client's bad month, which
     // is the exact failure `reportingMonthOf` records having shipped once. Passing for that
     // reason is the test pinning nothing.
-    await expect(reporting.dccMonthly({ kind: 'WHOLE_CHURCH' }, '2020-10')).rejects.toThrow(
-      ValidationFailedError,
-    );
-    await expect(reporting.dccMonthly({ kind: 'WHOLE_CHURCH' }, '2020-10-15')).rejects.toThrow(
-      ValidationFailedError,
-    );
-    await expect(reporting.dccMonthly({ kind: 'WHOLE_CHURCH' }, '2020-13-01')).rejects.toThrow(
-      ValidationFailedError,
-    );
+    // **The field and the value are asserted, not merely the class.** Section 22 requires a
+    // refusal to name the field a client needs in order to fix it, and asserting only
+    // `ValidationFailedError` cannot see that it named the wrong one. It could not: when
+    // leader scope derived a period's bounds *before* validating the month, three of these
+    // four answered `field: "date"`, and two quoted a month the caller never sent --
+    // `2020-13-01` refused as `"2020-14-01"`, which is decision 0185's shape reached one
+    // call earlier. This file stayed green throughout, because the class was all it read.
+    const refusalFor = async (period: string) => {
+      try {
+        await reporting.dccMonthly({ kind: 'WHOLE_CHURCH' }, period);
+      } catch (error) {
+        expect(error).toBeInstanceOf(ValidationFailedError);
+        return (error as ValidationFailedError).details;
+      }
 
-    // **The case that makes composing `isCalendarDate` mean something.** A hand-written
-    // `\d{4}-(0[1-9]|1[0-2])-01` accepts this and `isCalendarDate` refuses it, because
-    // `Date.UTC(26, ...)` applies the legacy two-digit-year mapping and the month's window
-    // would be computed from 1926. Without this assertion the two predicates are
+      throw new Error(`expected ${period} to be refused`);
+    };
+
+    // `0026-01-01` is **the case that makes composing `isCalendarDate` mean something.** A
+    // hand-written `\d{4}-(0[1-9]|1[0-2])-01` accepts it and `isCalendarDate` refuses it,
+    // because `Date.UTC(26, ...)` applies the legacy two-digit-year mapping and the month's
+    // window would be computed from 1926. Without it the two predicates are
     // indistinguishable here, and section 22's one-predicate rule has nothing that can fail.
-    await expect(reporting.dccMonthly({ kind: 'WHOLE_CHURCH' }, '0026-01-01')).rejects.toThrow(
-      ValidationFailedError,
-    );
+    for (const period of ['2020-10', '2020-10-15', '2020-13-01', '0026-01-01']) {
+      expect(await refusalFor(period)).toMatchObject({ field: 'period', value: period });
+    }
   });
 
   it('a month with no applicable events has an empty population and no buckets', async () => {

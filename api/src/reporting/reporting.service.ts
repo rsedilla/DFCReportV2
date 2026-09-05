@@ -1,6 +1,10 @@
 import { Inject, Injectable } from '@nestjs/common';
 
-import { DccFiguresService, type DccPersonFigures } from '../attendance/dcc-figures.service';
+import {
+  DccFiguresService,
+  assertReportingMonth,
+  type DccPersonFigures,
+} from '../attendance/dcc-figures.service';
 import { DATABASE, type Db } from '../database/database.module';
 import { HierarchyService } from '../hierarchy/hierarchy.service';
 import { reportingPeriodBounds } from './reporting-period';
@@ -106,6 +110,13 @@ export class ReportingService {
    * events: nobody could attend, so there is nothing to bucket rather than a row of zeroes.
    */
   async dccMonthly(scope: ReportScope, period: string): Promise<DccMonthlyReport> {
+    // **Refused before anything is derived from it.** `reportingPeriodBounds` validates
+    // nothing and will happily build `2020-14-01` out of `2020-13-01`, so a malformed month
+    // reaching it is answered by the *date* helper, naming a field the caller never sent and
+    // quoting a month it never wrote. Section 22 requires the refusal to name the field a
+    // client needs in order to fix it, and that field is `period`.
+    assertReportingMonth(period);
+
     const { start, end } = reportingPeriodBounds(period);
 
     return this.db

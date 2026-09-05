@@ -245,10 +245,12 @@ export class DccFiguresService {
  * this same domain. The exception filter renders an unrecognised `Error` as
  * `INTERNAL_ERROR`, so a refusal thrown as one turns a client's bad month into a 500.
  *
- * Checked here rather than only at a future controller's edge, because this is where the
- * value becomes load-bearing and there is no route yet to check it at.
+ * **Exported, because this is no longer the first thing to touch the value.** Leader scope
+ * derives a period's bounds before any figure is read, and deriving them from an unvalidated
+ * month produced a refusal naming `date` and quoting a month the caller never sent — decision
+ * 0185's shape, one call earlier. Whoever touches a reporting month first calls this.
  */
-function assertReportingMonth(reportingMonth: string): void {
+export function assertReportingMonth(reportingMonth: string): void {
   if (!isCalendarDate(reportingMonth) || !reportingMonth.endsWith('-01')) {
     throw new ValidationFailedError('A reporting month is the first of a month, as YYYY-MM-01.', {
       field: 'period',

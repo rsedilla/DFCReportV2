@@ -80,7 +80,12 @@ describe('a leader-scoped DCC monthly report (decisions 0206, 0210)', () => {
     root = await createPerson(db, { firstName: 'Oriel', network: 'MENS' });
     manuel = await createPerson(db, { firstName: 'Manuel', network: 'MENS' });
     ben = await createPerson(db, { firstName: 'Ben', network: 'MENS' });
-    mark = await createPerson(db, { firstName: 'Mark', network: 'MENS' });
+    // **Archived, and that is load-bearing rather than colour.** Without `archived` the
+    // fixture leaves `person_lifecycle` at `CURRENT`, and the section 3 claim below —
+    // that a period-based report is not filtered by current lifecycle state — has nothing
+    // that can fail: `architecture-guardian` added exactly that filter to the population
+    // query and the whole suite stayed green.
+    mark = await createPerson(db, { firstName: 'Mark', network: 'MENS', archived: true });
     tessa = await createPerson(db, { firstName: 'Tessa', network: 'MENS' });
     nena = await createPerson(db, { firstName: 'Nena', network: 'MENS' });
     // `dcc_attendance.recorded_by` references an **account**, not a Person. Inserted
@@ -134,7 +139,14 @@ describe('a leader-scoped DCC monthly report (decisions 0206, 0210)', () => {
       .execute();
   };
 
-  /** Mark twice, Tessa once, Manuel once, Nena once. Ben and the root attend nothing. */
+  /**
+   * Mark twice; Tessa, Manuel, Nena and the root once each. Ben attends nothing.
+   *
+   * **The root attends deliberately.** With the root attending nothing the identity reduces
+   * to `level = sum(children)`, and the general form section 20 actually claims —
+   * `level = own + sum(children)` — goes untested in the file whose whole subject is
+   * additivity.
+   */
   const october = async () => {
     const first = await event(OCT_4);
     const second = await event(OCT_11);
@@ -143,6 +155,7 @@ describe('a leader-scoped DCC monthly report (decisions 0206, 0210)', () => {
     await attend(second, mark.id, manuel.id);
     await attend(first, tessa.id, ben.id);
     await attend(first, manuel.id, root.id);
+    await attend(first, root.id, root.id);
     await attend(first, nena.id, root.id);
   };
 
@@ -164,15 +177,16 @@ describe('a leader-scoped DCC monthly report (decisions 0206, 0210)', () => {
     expect(atManuel.uniquePeople).toBe(2);
     expect(atBen.uniquePeople).toBe(1);
 
-    // The level above is exactly their sum, because the root attended nothing himself.
-    expect(atRoot.uniquePeople).toBe(atManuel.uniquePeople + atBen.uniquePeople);
-    expect(atRoot.uniquePeople).toBe(3);
+    // The general form: the level above is its own people plus its children's. The root
+    // attended once himself, so a query that only ever summed children would read 3 here.
+    expect(atRoot.uniquePeople).toBe(1 + atManuel.uniquePeople + atBen.uniquePeople);
+    expect(atRoot.uniquePeople).toBe(4);
 
     // **And the church is larger than the root by exactly the residual** -- Nena, who held
     // no open assignment at any instant of the period and is therefore in no leader's
     // subtree. Section 20 puts her in the Whole Church total alone, so this is the one
     // place the drill-down deliberately does not sum.
-    expect(wholeChurch.uniquePeople).toBe(4);
+    expect(wholeChurch.uniquePeople).toBe(5);
     expect(wholeChurch.uniquePeople - atRoot.uniquePeople).toBe(1);
   });
 
@@ -227,19 +241,96 @@ describe('a leader-scoped DCC monthly report (decisions 0206, 0210)', () => {
     expect(atTessa.uniquePeople).toBe(1);
     expect(atTessa.classification.vip).toBe(1);
 
-    // Nena leads nobody and is in no leader's subtree, but a scope always includes the
-    // person it names -- `OWN_SUBTREE` "includes the actor" (`scopes.ts`). So her own report
-    // is her own attendance: one person, and emphatically not the church's four.
+    // Nena leads nobody and is in no leader's subtree, but a walk always returns its own
+    // seed -- which is what makes the drill-down sum, since a leader's own attendance has to
+    // land somewhere. So her report is her own attendance: one person, not the church's five.
     const atNena = await leader(nena.id);
     expect(atNena.uniquePeople).toBe(1);
 
-    // And somebody who leads nobody and attended nothing is genuinely empty -- the case
-    // that would read as the whole church if an empty population were taken for no
-    // restriction at all.
     const gale = await createPerson(db, { firstName: 'Gale', network: 'WOMENS' });
     const atGale = await leader(gale.id);
     expect(atGale.uniquePeople).toBe(0);
     expect(atGale.buckets.every((b) => b.people === 0)).toBe(true);
+  });
+
+  it('treats an empty population as nobody, never as everybody', async () => {
+    await october();
+
+    // **Unreachable through `dccMonthly`, so exercised directly.** `reportingSubtree` seeds
+    // itself with the leader, so it never returns an empty array and no leader-scoped report
+    // can produce this call. The branch is real all the same -- an empty list and "no
+    // restriction" are different questions -- and replacing the ternary with one that treats
+    // `[]` as unrestricted left the entire suite green when `architecture-guardian` tried it.
+    // A childless scope answered with the church's own figures is the largest wrong answer
+    // this query can give, and it is the one nothing was checking.
+    const figures = app.get(DccFiguresService);
+
+    const unrestricted = await figures.monthFigures(PERIOD);
+    const nobody = await figures.monthFigures(PERIOD, { personIds: [] });
+
+    expect(unrestricted.people).toHaveLength(5);
+    expect(nobody.people).toHaveLength(0);
+
+    // The month's own figures are properties of the calendar and survive the narrowing.
+    expect(nobody.n).toBe(unrestricted.n);
+    expect(nobody.open).toBe(unrestricted.open);
+    expect(nobody.removed).toEqual(unrestricted.removed);
+  });
+
+  it('holds one population across a write committed between its two reads', async () => {
+    await october();
+
+    // **The third assertion decision 0210 asks of this slice, and the only one that survives
+    // a change of mechanism.** Reading the isolation level back catches the level being
+    // dropped; it does not catch a later refactor hoisting one of the two reads out of the
+    // transaction. This does: the tree walk and the figures must describe one population, and
+    // at `READ COMMITTED` a write landing between them would be visible to the second.
+    //
+    // The write is committed on a **separate connection** while the report is mid-flight,
+    // from inside the seam between the two reads.
+    const figures = app.get(DccFiguresService);
+    const original = figures.monthFigures.bind(figures);
+    const other = createTestDb();
+
+    figures.monthFigures = async (month, options = {}) => {
+      // Between the walk and the count: a second Sunday for Mark, who is already in the
+      // population. Under a shared snapshot his bucket stays at 2.
+      const extra = await other
+        .insertInto('dcc_events')
+        .values({ event_date: '2020-10-18' })
+        .returning('id')
+        .executeTakeFirstOrThrow();
+
+      await other
+        .insertInto('dcc_attendance')
+        .values({
+          dcc_event_id: extra.id,
+          person_id: mark.id,
+          present: true,
+          responsible_leader_id: manuel.id,
+          recorded_by: recorder,
+        })
+        .execute();
+
+      return original(month, options);
+    };
+
+    try {
+      const during = await leader(manuel.id);
+
+      // N was read inside the snapshot and cannot see the third Sunday; neither can Mark's
+      // count. Both identities still hold over the population the walk chose.
+      expect(during.n).toBe(2);
+      expect(during.buckets.find((b) => b.times === 2)?.people).toBe(1);
+      expect(during.buckets.reduce((sum, b) => sum + b.people, 0)).toBe(during.uniquePeople);
+    } finally {
+      figures.monthFigures = original;
+      await other.destroy();
+    }
+
+    // And the next report, outside that snapshot, sees the write.
+    const after = await leader(manuel.id);
+    expect(after.n).toBe(3);
   });
 
   it('computes the whole report inside one read-only repeatable-read transaction', async () => {
