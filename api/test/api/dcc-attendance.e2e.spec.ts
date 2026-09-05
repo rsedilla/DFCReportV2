@@ -148,7 +148,26 @@ describe('DCC recording (sections 9 and 14)', () => {
     return shift(now, dayOfWeek === 0 ? -7 : -dayOfWeek);
   };
 
-  const nextSunday = async (): Promise<string> => shift(await recentSunday(), 7);
+  /**
+   * The next Sunday **strictly after** today, which is the mirror of `recentSunday` above
+   * and has to be derived the same way rather than by adding a week to it.
+   *
+   * **`shift(recentSunday(), 7)` lands on today when today is a Sunday**, because
+   * `recentSunday` is deliberately strictly *before* today and therefore a fortnight's
+   * distance from the next one. Today's Manila day has begun, so the event is recordable and
+   * the one case using this — which asserts a future event is refused — was answered 201 and
+   * failed. That is a test that fails one day in seven: green on this branch through Saturday
+   * 2026-09-05 and red the moment the Manila clock crossed into Sunday, with no code change.
+   *
+   * The docblock above already names Sunday as the day this pair goes wrong; it narrowed
+   * `recentSunday` and left its counterpart deriving from the narrowed value.
+   */
+  const nextSunday = async (): Promise<string> => {
+    const now = await today();
+    const dayOfWeek = isoDayOf(now);
+
+    return shift(now, dayOfWeek === 0 ? 7 : 7 - dayOfWeek);
+  };
 
   /** A Sunday two months back, whose window shut on the 7th of the month after it. */
   const closedMonthSunday = async (): Promise<string> => {

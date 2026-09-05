@@ -225,21 +225,30 @@ export class HierarchyService {
    * everything with at least one chain terminating at a root or at somebody holding no edge,
    * and `has_cycle` asks whether any person holding an edge has **no** terminating chain.
    *
-   * **That argument holds only while the graph is functional, and nothing enforces that.**
-   * One out-edge per person is a *premise* here, not a property: two `pastoral_assignments`
-   * rows in force at one instant would break it, and whether non-overlap is a rule of
-   * section 5 or an accident of the backdate floor is an open **Stop Condition** in
-   * `CLAUDE.md`. No write path reaches it today. Under an overlap both flags can miss, and
-   * `reporting-subtree.spec.ts` pins the two ways rather than leaving them to be rediscovered:
-   * a cycle member holding a second, grounded edge grounds the whole cycle, so `has_cycle` is
-   * false; and one person reached by two distinct paths is returned twice, which is not a
-   * cycle in either sense.
+   * **That argument holds only while the graph is functional, so functionality is checked
+   * rather than assumed** (decision 0212). One out-edge per person is a premise, not a
+   * property: two `pastoral_assignments` rows in force at the period's end break it, and
+   * whether non-overlap is a rule of section 5 or an accident of the backdate floor is an
+   * open **Stop Condition** in `CLAUDE.md`, whose remedy is a constraint at the write. No
+   * write path reaches it today. Until that constraint exists this method refuses instead,
+   * which closes both ways an overlap defeats cycle detection: a cycle member holding a
+   * second, grounded edge grounds the whole cycle so `has_cycle` is false, and a person
+   * reached by two distinct paths is returned twice, which is not a cycle in either sense.
    *
-   * **Both flags are read, and neither subsumes the other.** `has_cycle` is the graph
-   * question above. `walked_a_cycle` is the walk's own `CYCLE` clause, which marks a person
-   * repeated on that row's **own path** — so it catches a cycle the walk enters, including
-   * one `has_cycle` misses because a second edge grounded it. It is not a check that a person
-   * was reached twice: two distinct paths to one person repeat nothing on either path.
+   * **What it does not reach is an overlap that opens and closes inside the period.** The
+   * fallback selects one row per person, so such an overlap yields one edge and nothing
+   * refuses — while the row selected is the later-*starting* one, which need not be the
+   * leader the person was under for most of the period. Recorded as open in `CLAUDE.md`; the
+   * same constraint closes it.
+   *
+   * **The walk's own `CYCLE` clause is retained for termination, and its flag is no longer
+   * read.** Removing the clause does not merely lose a detector — a recursive walk seeded
+   * inside a cycle does not terminate without it, and the refusals below cannot fire on a
+   * query that never returns. What the clause cannot do is detect: it marks a person repeated
+   * on that row's **own path**, so two distinct paths to one person repeat nothing, and a
+   * cycle it does catch is one `has_cycle` already catches now that the graph is known
+   * functional. A flag no fixture can make fire alone is a branch nothing pins, so it is
+   * gone and the clause behind it is documented rather than removed.
    *
    * **A person whose leader held no in-period assignment is not lost** (decision 0209): the
    * `departed` tier continues the chain from that leader's last assignment, whenever it was.
@@ -277,7 +286,7 @@ export class HierarchyService {
     const result = await sql<{
       person_id: string | null;
       depth: number;
-      walked_a_cycle: boolean;
+      not_functional: boolean;
       has_cycle: boolean;
     }>`
       WITH RECURSIVE in_force AS (
@@ -350,7 +359,9 @@ export class HierarchyService {
       ) CYCLE person_id SET walked_a_cycle USING path
       SELECT subtree.person_id,
              subtree.depth,
-             bool_or(subtree.walked_a_cycle) OVER () AS walked_a_cycle,
+             EXISTS (
+               SELECT 1 FROM edges GROUP BY person_id HAVING count(*) > 1
+             ) AS not_functional,
              EXISTS (
                SELECT 1 FROM edges e
                 WHERE NOT EXISTS (
@@ -361,16 +372,31 @@ export class HierarchyService {
        ORDER BY depth
     `.execute(executor);
 
-    // **The refusal reaches past what the walk reached** (section 20). Where the graph is
-    // functional a cycle in it is a closed component, so a walk seeded above never enters it
-    // and scoping detection to the walk let a report return cleanly while silently short.
-    // `grounded` is everything with a chain terminating at a root or at somebody holding no
-    // edge; a person holding an edge and not grounded is in a cycle or beneath one.
+    // **Functionality is checked before anything is concluded from it** (decision 0212).
+    // Every argument below rests on one out-edge per person, and nothing in the schema
+    // enforces that: `pastoral_assignments_one_active` is partial over open rows, so two rows
+    // in force at the period's end are writable. Section 20 makes a figure computed from a
+    // graph that is not functional refuse, on the terms it already gives a cycle.
     //
-    // **Functional is a premise, not a property** — see the docblock. Under an overlap a
-    // cycle member with a second, grounded edge grounds the cycle and `has_cycle` misses it,
-    // which is why the walk's own flag is read as well and why neither is dropped.
-    if (result.rows[0]?.has_cycle === true || result.rows[0]?.walked_a_cycle === true) {
+    // **Detected over the whole edge set rather than over the walk**, and 0212 records the
+    // reproduction that settled it: with one person under two sibling leaders, each sibling's
+    // walk holds them once and refuses nothing while every total above holds them twice —
+    // section 25's eleventh rule broken across exactly the aggregation a drill-down performs.
+    // Checked first because a cycle conclusion drawn over a non-functional graph is unsound.
+    if (result.rows[0]?.not_functional === true) {
+      throw new InvariantViolationError(
+        'The pastoral placement graph is not functional: at least one person holds more than one assignment in force. This is a data defect: report it rather than retrying.',
+        { person_id: leaderId },
+      );
+    }
+
+    // **The cycle refusal reaches past what the walk reached** (section 20). In a functional
+    // graph a cycle is a closed component, so a walk seeded above never enters it and scoping
+    // detection to the walk let a report return cleanly while silently short. `grounded` is
+    // everything with a chain terminating at a root or at somebody holding no edge; a person
+    // holding an edge and not grounded is in a cycle or beneath one, and above the graph is
+    // known functional, so that is exactly "is in or beneath a cycle".
+    if (result.rows[0]?.has_cycle === true) {
       throw new InvariantViolationError(
         'The pastoral tree contains a cycle and cannot be resolved. This is a data defect: report it rather than retrying.',
         { person_id: leaderId },

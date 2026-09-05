@@ -35,6 +35,25 @@ export interface DccPersonFigures {
  * stale rather than about a torn read inside a live one. *An earlier version said "for
  * exactly this reason", which claimed section 20 addressed a case it does not.*
  */
+/**
+ * How a caller narrows and where it reads from.
+ *
+ * **`executor` exists so a report can be one snapshot** (decision 0210). `reporting` opens a
+ * `READ ONLY REPEATABLE READ` transaction and passes it here, so the tree walk that chose
+ * the population and the figures counted over it cannot describe two states of the database.
+ * Omitted, this reads on the pool, which is right for a caller taking one figure and wrong
+ * for a report composing several.
+ *
+ * **`personIds` narrows the population and nothing else.** N, the removed Sundays and the
+ * open flag are properties of the month rather than of the people, so a leader-scoped report
+ * measures its own people against the same N a whole-church one does — which is what makes
+ * a bucket mean the same thing at every scope, and what lets the drill-down sum.
+ */
+export interface DccMonthFiguresOptions {
+  executor?: Db;
+  personIds?: readonly string[];
+}
+
 export interface DccMonthFigures {
   /** N — the applicable events the month holds (section 9). */
   n: number;
@@ -99,8 +118,16 @@ export class DccFiguresService {
    * yet — Person Merge is unbuilt — so no report can be wrong today; this is named because
    * the exclusions above read as a complete list and are not one.
    */
-  async monthFigures(reportingMonth: string): Promise<DccMonthFigures> {
+  async monthFigures(
+    reportingMonth: string,
+    options: DccMonthFiguresOptions = {},
+  ): Promise<DccMonthFigures> {
     assertReportingMonth(reportingMonth);
+
+    // `null` means every attendee, which is what Whole Church asks for. An empty array is a
+    // different question with a different answer — a leader whose subtree holds nobody — and
+    // `= ANY('{}')` is false for every row, so it answers it correctly without a branch.
+    const population = options.personIds === undefined ? null : [...options.personIds];
 
     // The `YYYY-MM` prefix the calendar is matched on. Derived from the repository's
     // reporting-month format rather than taken as a second parameter, so there is one
@@ -132,6 +159,10 @@ export class DccFiguresService {
         SELECT DISTINCT person_id
           FROM live
          WHERE to_char(event_date, 'YYYY-MM') = ${month}
+           AND (
+             ${population}::uuid[] IS NULL
+             OR person_id = ANY (${population}::uuid[])
+           )
       ),
       figures AS (
         SELECT m.person_id,
@@ -163,7 +194,7 @@ export class DccFiguresService {
              figures.lifetime_through_month::text AS lifetime_through_month
         FROM month_meta
         LEFT JOIN figures ON true
-    `.execute(this.db);
+    `.execute(options.executor ?? this.db);
 
     // `month_meta` aggregates without `GROUP BY`, so it is exactly one row and the left
     // join guarantees at least one row back even where nobody attended. Reading the month's
@@ -214,14 +245,30 @@ export class DccFiguresService {
  * this same domain. The exception filter renders an unrecognised `Error` as
  * `INTERNAL_ERROR`, so a refusal thrown as one turns a client's bad month into a 500.
  *
- * Checked here rather than only at a future controller's edge, because this is where the
- * value becomes load-bearing and there is no route yet to check it at.
+ * **Exported, because this is no longer the first thing to touch the value.** Leader scope
+ * derives a period's bounds before any figure is read, and deriving them from an unvalidated
+ * month produced a refusal naming `date` and quoting a month the caller never sent — decision
+ * 0185's shape, one call earlier. Whoever touches a reporting month first calls this.
  */
-function assertReportingMonth(reportingMonth: string): void {
+export function assertReportingMonth(reportingMonth: string): void {
   if (!isCalendarDate(reportingMonth) || !reportingMonth.endsWith('-01')) {
     throw new ValidationFailedError('A reporting month is the first of a month, as YYYY-MM-01.', {
       field: 'period',
       value: reportingMonth,
     });
+  }
+
+  // **December 9999 is refused here, and it is the last month this format can express.**
+  // Every date in this system is `YYYY-MM-DD` with a four-digit year, so `9999-12` is the
+  // only month whose *successor* is not writable — and a period's end is derived from that
+  // successor. Left to reach the derivation it threw naming `date` and quoting
+  // `10000-01-01`, a month no caller sent: decision 0185's shape, and the identical
+  // signature to the `2020-13-01` case this function was reordered to close. Refused where
+  // the field is still `period`, rather than closed one call later where it is not.
+  if (reportingMonth.startsWith('9999-12')) {
+    throw new ValidationFailedError(
+      'A reporting month must be before December 9999, which is the last month this date format can express.',
+      { field: 'period', value: reportingMonth },
+    );
   }
 }
