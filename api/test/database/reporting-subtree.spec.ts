@@ -113,6 +113,8 @@ describe('the reporting placement graph (decision 0206)', () => {
 
   it('refuses a cycle that only the collapsed map has', async () => {
     // **Two writes, both legal when made, and no cycle ever exists in the active tree.**
+    // Seeded from inside the cycle. The case below seeds from above it, which is what a real
+    // report does and what this one cannot demonstrate.
     // Ana is under Ben until 10 October. Ben is placed under Ana on the 12th -- at which
     // point Ana has no open assignment, so section 5 invariant 2 sees no cycle and permits
     // it. Both rows close before the month ends.
@@ -155,19 +157,22 @@ describe('the reporting placement graph (decision 0206)', () => {
     const benUnderAna = await assignTo(db, ben.id, ana.id, OCT_12);
     await closeAt(benUnderAna, OCT_20);
 
-    // No refusal, and neither Ana nor Ben is in it.
-    await expect(placement(root.id)).resolves.toEqual([root.id]);
+    // Detection is over the whole graph now, so the figure refuses from above as section 20
+    // requires -- rather than returning cleanly and short by everyone behind the cycle.
+    await expect(placement(root.id)).rejects.toThrow(/cycle/i);
   });
 
-  it('loses a person whose own assignment is open but whose leader is unreachable', async () => {
-    // **The same hole without a cycle, and section 20 has no rule for it at all.** Manuel is
-    // archived in September, so he holds no open row and correctly resolves to nobody. Mark
-    // holds an open row under Manuel for the whole of October -- so he is *not* in section
-    // 20's residual, which covers only somebody who held no open assignment at any instant of
-    // the period. He is nonetheless in no leader's subtree.
+  it('carries a person up past a leader who left before the period', async () => {
+    // **The defect decision 0209 settles.** Manuel is archived in September, so he holds no
+    // assignment within October. Mark holds an open row under Manuel throughout -- so he is
+    // *not* in section 20's residual, which covers only somebody who held no open assignment
+    // at any instant of the period, and dropping him made section 20's additivity claim
+    // false with nothing detecting it.
     //
-    // Section 20 claims a drill-down sums "except for the residual". This is a second
-    // exception it does not name. Pinned as current behaviour; the Stop Condition owns it.
+    // Decision 0209: the chain continues from Manuel's last assignment, whenever it was, so
+    // Mark reaches the root through him. Two rules rather than one -- the fallback for a
+    // *person* stays in-period, and what extends is the resolution of a *leader who has
+    // already left*.
     const root = await createPerson(db, { firstName: 'Oriel', network: 'MENS' });
     const manuel = await createPerson(db, { firstName: 'Manuel', network: 'MENS' });
     const mark = await createPerson(db, { firstName: 'Mark', network: 'MENS' });
@@ -177,7 +182,7 @@ describe('the reporting placement graph (decision 0206)', () => {
     await closeAt(manuelsRow, SEPTEMBER);
     await assignTo(db, mark.id, manuel.id, SEPTEMBER);
 
-    await expect(placement(root.id)).resolves.toEqual([root.id]);
+    await expect(placement(root.id)).resolves.toEqual([root.id, manuel.id, mark.id]);
     await expect(placement(manuel.id)).resolves.toEqual([manuel.id, mark.id]);
   });
 

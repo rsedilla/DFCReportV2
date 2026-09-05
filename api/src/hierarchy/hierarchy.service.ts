@@ -243,14 +243,14 @@ export class HierarchyService {
     periodStart: Date,
     periodEnd: Date,
   ): Promise<string[]> {
-    const result = await sql<{ person_id: string; depth: number; is_cycle: boolean }>`
+    const result = await sql<{ person_id: string | null; depth: number; has_cycle: boolean }>`
       WITH RECURSIVE in_force AS (
         SELECT person_id, leader_id
           FROM pastoral_assignments
          WHERE started_at <= ${periodEnd}
            AND (ended_at IS NULL OR ended_at > ${periodEnd})
       ),
-      fallback AS (
+      within_period AS (
         SELECT DISTINCT ON (pa.person_id) pa.person_id, pa.leader_id
           FROM pastoral_assignments pa
          WHERE pa.started_at <= ${periodEnd}
@@ -260,10 +260,42 @@ export class HierarchyService {
            )
          ORDER BY pa.person_id, pa.started_at DESC, pa.ended_at DESC NULLS FIRST, pa.id DESC
       ),
-      edges AS (
+      primary_edges AS (
         SELECT person_id, leader_id FROM in_force
         UNION ALL
-        SELECT person_id, leader_id FROM fallback
+        SELECT person_id, leader_id FROM within_period
+      ),
+      departed AS (
+        SELECT DISTINCT ON (pa.person_id) pa.person_id, pa.leader_id
+          FROM pastoral_assignments pa
+         WHERE pa.started_at <= ${periodEnd}
+           AND NOT EXISTS (
+             SELECT 1 FROM primary_edges p WHERE p.person_id = pa.person_id
+           )
+           AND EXISTS (
+             SELECT 1 FROM pastoral_assignments led WHERE led.leader_id = pa.person_id
+           )
+         ORDER BY pa.person_id, pa.started_at DESC, pa.ended_at DESC NULLS FIRST, pa.id DESC
+      ),
+      edges AS (
+        SELECT person_id, leader_id FROM primary_edges
+        UNION ALL
+        SELECT person_id, leader_id FROM departed
+      ),
+      terminals AS (
+        SELECT person_id FROM edges WHERE leader_id IS NULL
+        UNION
+        SELECT e.leader_id AS person_id
+          FROM edges e
+         WHERE e.leader_id IS NOT NULL
+           AND NOT EXISTS (SELECT 1 FROM edges x WHERE x.person_id = e.leader_id)
+      ),
+      grounded AS (
+        SELECT person_id FROM terminals
+        UNION
+        SELECT e.person_id
+          FROM edges e
+          JOIN grounded g ON e.leader_id = g.person_id
       ),
       subtree AS (
         SELECT ${leaderId}::uuid AS person_id, 0 AS depth
@@ -271,13 +303,35 @@ export class HierarchyService {
         SELECT e.person_id, s.depth + 1
           FROM edges e
           JOIN subtree s ON e.leader_id = s.person_id
-      ) CYCLE person_id SET is_cycle USING path
-      SELECT person_id, depth, is_cycle FROM subtree ORDER BY depth
+      ) CYCLE person_id SET walked_a_cycle USING path
+      SELECT subtree.person_id,
+             subtree.depth,
+             EXISTS (
+               SELECT 1 FROM edges e
+                WHERE NOT EXISTS (
+                  SELECT 1 FROM grounded g WHERE g.person_id = e.person_id
+                )
+             ) AS has_cycle
+        FROM subtree
+       ORDER BY depth
     `.execute(executor);
 
-    this.rejectCycle(result.rows, leaderId);
+    // **The refusal is over the whole graph, not over what the walk reached** (section 20).
+    // This graph is functional, so a cycle is a closed component: no member is the child of
+    // a non-member, and a walk seeded above it never enters it. `grounded` is everything
+    // whose chain terminates at a root or at somebody who holds no edge; anything with an
+    // edge and not grounded is in a cycle or beneath one. Scoping detection to the walk is
+    // what let a report return cleanly while silently short.
+    if (result.rows[0]?.has_cycle === true) {
+      throw new InvariantViolationError(
+        'The pastoral tree contains a cycle and cannot be resolved. This is a data defect: report it rather than retrying.',
+        { person_id: leaderId },
+      );
+    }
 
-    return result.rows.map((row) => row.person_id);
+    return result.rows
+      .map((row) => row.person_id)
+      .filter((personId): personId is string => personId !== null);
   }
 
   /**
