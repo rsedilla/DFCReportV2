@@ -83,6 +83,22 @@ route the ledger does not mention fails the build. A new endpoint cannot merge w
 line saying which screen reaches it, a waiver naming the stage that owes one and why, or
 a statement that no screen is owed at all.
 
+**Deriving buys that only if what the derivation cannot read is a failure**, and this is
+the half the first implementation got wrong. It skipped what it could not parse, and
+`architecture-guardian` reproduced seven shapes that each dropped a real route and still
+passed — the `{ path }` object form of `@Controller`, a template-literal or constant
+argument, a decorator sharing a line with another, a wrapped multi-line decorator, `@All`,
+`@Head`, and a `@Controller` in a file the scan's naming convention excluded. The worst was
+the constant argument, because the controller is still read and its other routes still
+covered, so nothing about the ledger looks short.
+
+A derivation that silently under-reads is **worse than the declared list it replaced**: it
+claims a completeness a declared list never claimed, and the claim is what a reader relies
+on. So the rule is that the check refuses what it cannot parse rather than passing over it,
+and that is a property of this mechanism rather than a detail of one script. It is recorded
+here because the paragraph above gives deriving as the reason to trust the gate, and on its
+own that reason does not hold.
+
 ## Why the ledger starts with every route already in it
 
 It ships pre-populated for every route that exists today — thirteen reached by a screen,
