@@ -218,32 +218,47 @@ export class HierarchyService {
    * unassigned having each been under the other within it, from writes that were legal when
    * made.
    *
-   * **Detection is over the whole edge set rather than over what the walk reached, which is
-   * why `rejectCycle` is deliberately not called here.** That helper reads a per-row flag
-   * produced by one walk, and this graph is functional — one out-edge per person — so a
-   * cycle in it is a *closed component*: no member is the child of a non-member, and a walk
-   * seeded at a leader above never enters it. Section 20 says a detected cycle refuses the
-   * figure rather than truncating the chain, and scoped detection truncated silently instead.
-   * `grounded` is everything whose chain terminates at a root or at somebody holding no edge;
-   * anything holding an edge and not grounded is in a cycle or beneath one.
+   * **`rejectCycle` is deliberately not called here.** It reads a per-row flag produced by
+   * one walk, which is detection scoped to what that walk reached — and where this graph is
+   * functional a cycle in it is a *closed component*, so a walk seeded at a leader above
+   * never enters it and section 20's refusal never fires. `grounded` replaces it: it is
+   * everything with at least one chain terminating at a root or at somebody holding no edge,
+   * and `has_cycle` asks whether any person holding an edge has **no** terminating chain.
    *
-   * **Two flags, and neither subsumes the other, so both are read.** `has_cycle` asks whether
-   * any chain fails to terminate. `walked_a_cycle` is the walk's own `CYCLE` flag and asks
-   * whether this walk revisited a person — which an overlap giving one person two in-force
-   * edges does, while every chain still reaches a root, so `has_cycle` alone reports nothing
-   * and returns that person twice.
+   * **That argument holds only while the graph is functional, and nothing enforces that.**
+   * One out-edge per person is a *premise* here, not a property: two `pastoral_assignments`
+   * rows in force at one instant would break it, and whether non-overlap is a rule of
+   * section 5 or an accident of the backdate floor is an open **Stop Condition** in
+   * `CLAUDE.md`. No write path reaches it today. Under an overlap both flags can miss, and
+   * `reporting-subtree.spec.ts` pins the two ways rather than leaving them to be rediscovered:
+   * a cycle member holding a second, grounded edge grounds the whole cycle, so `has_cycle` is
+   * false; and one person reached by two distinct paths is returned twice, which is not a
+   * cycle in either sense.
+   *
+   * **Both flags are read, and neither subsumes the other.** `has_cycle` is the graph
+   * question above. `walked_a_cycle` is the walk's own `CYCLE` clause, which marks a person
+   * repeated on that row's **own path** — so it catches a cycle the walk enters, including
+   * one `has_cycle` misses because a second edge grounded it. It is not a check that a person
+   * was reached twice: two distinct paths to one person repeat nothing on either path.
    *
    * **A person whose leader held no in-period assignment is not lost** (decision 0209): the
-   * `departed` tier continues the chain from that leader's last assignment, whenever it was,
-   * seeded from *this* period's own primary edges so a later write cannot change an earlier
-   * period's answer. Section 20's residual still covers only somebody who held no open
-   * assignment at any instant of the period.
+   * `departed` tier continues the chain from that leader's last assignment, whenever it was.
+   * **Two predicates keep that answer reproducible, not one** — the tier is seeded from *this*
+   * period's own primary edges, and `last_ever` reads only rows started at or before
+   * `periodEnd`. Either alone lets a later write move an earlier period's answer, and each is
+   * pinned by its own case.
    *
-   * *Both of the above were recorded as unsettled Stop Conditions until decision 0209 and the
-   * two commits implementing it; this docblock said so, and said this method must not compute
-   * a published figure, for one commit after it stopped being true. What remains open is
-   * narrower and does not block a figure: the blast radius of the refusal, which is
-   * church-wide, and whether such a cycle can be repaired at all.*
+   * **A person whose own last assignment predates the period, and who leads nobody, is in no
+   * leader's subtree here.** Section 20's residual sentence — as decision 0209 amended it —
+   * says "no open assignment at any instant of the period, and none before it either", which
+   * does not name this class; the divergence is recorded as open in `CLAUDE.md`, where the
+   * finding is that the amendment is too wide rather than that this behaviour is wrong.
+   *
+   * *An earlier version of this docblock said both halves of the unreachable-component hole
+   * were unsettled Stop Conditions and that this method must not compute a published figure.
+   * Decision 0209 and the two commits implementing it had already settled them. What is still
+   * open is narrower and blocks no figure: the blast radius of the refusal, which is
+   * church-wide, and whether such a cycle admits a repair at all.*
    *
    * **What is half-open is the row, not the period.** Each assignment is in force over
    * `[started_at, ended_at)`; the interval of instants the fallback considers is closed at
@@ -346,12 +361,15 @@ export class HierarchyService {
        ORDER BY depth
     `.execute(executor);
 
-    // **The refusal is over the whole graph, not over what the walk reached** (section 20).
-    // This graph is functional, so a cycle is a closed component: no member is the child of
-    // a non-member, and a walk seeded above it never enters it. `grounded` is everything
-    // whose chain terminates at a root or at somebody who holds no edge; anything with an
-    // edge and not grounded is in a cycle or beneath one. Scoping detection to the walk is
-    // what let a report return cleanly while silently short.
+    // **The refusal reaches past what the walk reached** (section 20). Where the graph is
+    // functional a cycle in it is a closed component, so a walk seeded above never enters it
+    // and scoping detection to the walk let a report return cleanly while silently short.
+    // `grounded` is everything with a chain terminating at a root or at somebody holding no
+    // edge; a person holding an edge and not grounded is in a cycle or beneath one.
+    //
+    // **Functional is a premise, not a property** — see the docblock. Under an overlap a
+    // cycle member with a second, grounded edge grounds the cycle and `has_cycle` misses it,
+    // which is why the walk's own flag is read as well and why neither is dropped.
     if (result.rows[0]?.has_cycle === true || result.rows[0]?.walked_a_cycle === true) {
       throw new InvariantViolationError(
         'The pastoral tree contains a cycle and cannot be resolved. This is a data defect: report it rather than retrying.',

@@ -403,6 +403,102 @@ describe('the reporting placement graph (decision 0206)', () => {
     await expect(placement(root.id)).resolves.toEqual([root.id, grace.id, manuel.id, mark.id]);
   });
 
+  it('does not let a later write move a departed leader out of a closed period', async () => {
+    // **The same rule as the case above, on the predicate that case does not reach.** The
+    // reproducibility guarantee rests on two predicates, not one: the `departed` seed, which
+    // asks whether *this* period's primary edges name the person as a leader, and
+    // `last_ever`'s `started_at <= periodEnd`, which decides *which* of their rows the tier
+    // then carries. The case above pins the seed. It passed with the second predicate
+    // removed, because its later-written person leads nobody and so never enters the tier at
+    // all -- one rule, two predicates, pinned for one.
+    //
+    // Here the November write targets Manuel, who *is* a departed leader of an in-period
+    // primary edge. Unbounded, `last_ever` picks his November row and October's answer moves:
+    // Manuel and Mark leave the root's own branch and appear under Nena.
+    const root = await createPerson(db, { firstName: 'Oriel', network: 'MENS' });
+    const nena = await createPerson(db, { firstName: 'Nena', network: 'MENS' });
+    const manuel = await createPerson(db, { firstName: 'Manuel', network: 'MENS' });
+    const mark = await createPerson(db, { firstName: 'Mark', network: 'MENS' });
+
+    await assignTo(db, root.id, null, SEPTEMBER);
+    await assignTo(db, nena.id, root.id, SEPTEMBER);
+    const manuelsRow = await assignTo(db, manuel.id, root.id, AUGUST);
+    await closeAt(manuelsRow, SEPTEMBER);
+    await assignTo(db, mark.id, manuel.id, SEPTEMBER);
+
+    // Nena leads nobody in October, and must still lead nobody after a November write.
+    await expect(placement(nena.id)).resolves.toEqual([nena.id]);
+    const rootBefore = [...(await placement(root.id))].sort();
+
+    await assignTo(db, manuel.id, nena.id, NOVEMBER);
+
+    await expect(placement(nena.id)).resolves.toEqual([nena.id]);
+    expect([...(await placement(root.id))].sort()).toEqual(rootBefore);
+  });
+
+  it('answers cleanly for a leader beside a cycle the walk does not enter', async () => {
+    // **Pinned as the behaviour it currently has, not as the behaviour it should have.** The
+    // whole-graph check is `grounded`, and grounding is reachability from a terminal: a cycle
+    // member holding a *second* edge that is grounded grounds itself, and so grounds the
+    // whole cycle. `has_cycle` is therefore false here, and the refusal that does fire for
+    // the root comes from the walk's own flag rather than from the graph check.
+    //
+    // Aldo is under Tessa and, overlapping, under Bruno who is under Aldo. Every chain still
+    // reaches the root, so the graph check sees nothing; a walk from Mark never touches the
+    // cycle and answers, while a walk from the root enters it and refuses.
+    //
+    // Two in-force rows for one person is the overlap **Stop Condition** recorded in
+    // `CLAUDE.md`, which no write path reaches; the remedy proposed there is a database
+    // constraint, and it closes this. Pinned here so that settling it cannot forget the case,
+    // and because the fix batch that added the second flag claimed to have closed it.
+    const root = await createPerson(db, { firstName: 'Oriel', network: 'MENS' });
+    const mark = await createPerson(db, { firstName: 'Mark', network: 'MENS' });
+    const tessa = await createPerson(db, { firstName: 'Tessa', network: 'MENS' });
+    const aldo = await createPerson(db, { firstName: 'Aldo', network: 'MENS' });
+    const bruno = await createPerson(db, { firstName: 'Bruno', network: 'MENS' });
+
+    await assignTo(db, root.id, null, SEPTEMBER);
+    await assignTo(db, mark.id, root.id, SEPTEMBER);
+    await assignTo(db, tessa.id, root.id, SEPTEMBER);
+    await assignTo(db, aldo.id, tessa.id, SEPTEMBER);
+    await assignTo(db, bruno.id, aldo.id, SEPTEMBER);
+
+    // Aldo's second, overlapping edge: under Bruno, who is under him.
+    await insertAssignment(REAL_ROW_ID, aldo.id, bruno.id, OCT_1, DECEMBER);
+
+    await expect(placement(mark.id)).resolves.toEqual([mark.id]);
+    await expect(placement(root.id)).rejects.toThrow(/cycle/i);
+  });
+
+  it('returns a person twice where an overlap places them under two leaders', async () => {
+    // **Pinned as the behaviour it currently has.** `in_force` carries no `DISTINCT ON`, so
+    // an overlap contributes two edges for one person and the walk reaches them by two
+    // distinct paths. Neither flag fires: every chain reaches the root, and PostgreSQL's
+    // `CYCLE` clause marks a key repeated on a row's *own* path rather than a person reached
+    // twice. Principle 10 makes a total of people distinct, so a caller counting this list
+    // would count Xavi twice.
+    //
+    // The fix batch that added the walk's flag said reading it closes this case. It closes
+    // the narrower one above, where the second edge points *inside* the first's subtree.
+    // Inside the same recorded overlap Stop Condition, and pinned for the same reason.
+    const root = await createPerson(db, { firstName: 'Oriel', network: 'MENS' });
+    const aldo = await createPerson(db, { firstName: 'Aldo', network: 'MENS' });
+    const bruno = await createPerson(db, { firstName: 'Bruno', network: 'MENS' });
+    const xavi = await createPerson(db, { firstName: 'Xavi', network: 'MENS' });
+
+    await assignTo(db, root.id, null, SEPTEMBER);
+    await assignTo(db, aldo.id, root.id, SEPTEMBER);
+    await assignTo(db, bruno.id, root.id, SEPTEMBER);
+    await assignTo(db, xavi.id, aldo.id, SEPTEMBER);
+
+    await insertAssignment(REAL_ROW_ID, xavi.id, bruno.id, OCT_1, DECEMBER);
+
+    const placed = await placement(root.id);
+    expect(placed).toHaveLength(5);
+    expect(new Set(placed).size).toBe(4);
+    expect(placed.filter((id) => id === xavi.id)).toHaveLength(2);
+  });
+
   it('ignores an assignment that begins after the period', async () => {
     // A November edge is not October's, at either end of the rule: it is not in force at the
     // period's end and it does not overlap the period, so it contributes nothing.
