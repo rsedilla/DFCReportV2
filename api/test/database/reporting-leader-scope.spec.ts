@@ -40,6 +40,7 @@ describe('a leader-scoped DCC monthly report (decisions 0206, 0210)', () => {
   const PERIOD = '2020-10-01';
   const OCT_4 = '2020-10-04';
   const OCT_11 = '2020-10-11';
+  const OCT_25 = '2020-10-25';
   const SEPTEMBER = new Date('2020-09-01T00:00:00+08:00');
   const OCT_20 = new Date('2020-10-20T00:00:00+08:00');
 
@@ -80,12 +81,7 @@ describe('a leader-scoped DCC monthly report (decisions 0206, 0210)', () => {
     root = await createPerson(db, { firstName: 'Oriel', network: 'MENS' });
     manuel = await createPerson(db, { firstName: 'Manuel', network: 'MENS' });
     ben = await createPerson(db, { firstName: 'Ben', network: 'MENS' });
-    // **Archived, and that is load-bearing rather than colour.** Without `archived` the
-    // fixture leaves `person_lifecycle` at `CURRENT`, and the section 3 claim below —
-    // that a period-based report is not filtered by current lifecycle state — has nothing
-    // that can fail: `architecture-guardian` added exactly that filter to the population
-    // query and the whole suite stayed green.
-    mark = await createPerson(db, { firstName: 'Mark', network: 'MENS', archived: true });
+    mark = await createPerson(db, { firstName: 'Mark', network: 'MENS' });
     tessa = await createPerson(db, { firstName: 'Tessa', network: 'MENS' });
     nena = await createPerson(db, { firstName: 'Nena', network: 'MENS' });
     // `dcc_attendance.recorded_by` references an **account**, not a Person. Inserted
@@ -107,13 +103,41 @@ describe('a leader-scoped DCC monthly report (decisions 0206, 0210)', () => {
     await assignTo(db, ben.id, root.id, SEPTEMBER);
     await assignTo(db, tessa.id, ben.id, SEPTEMBER);
 
-    // Mark is archived on the 20th: no open assignment at the period's end, so decision
-    // 0206's fallback places him under Manuel, whom he was under within the month.
+    // Mark is archived on the 20th: his assignment closes and his lifecycle moves, both at
+    // that instant. Decision 0206's fallback then places him under Manuel, whom he was under
+    // within the month.
     const marksRow = await assignTo(db, mark.id, manuel.id, SEPTEMBER);
     await db
       .updateTable('pastoral_assignments')
       .set({ ended_at: OCT_20 })
       .where('id', '=', marksRow)
+      .execute();
+
+    // **Archived by moving the lifecycle, not by creating him archived.** The section 3
+    // claim below — that a period-based report is not filtered by current lifecycle state —
+    // needs an `ARCHIVED` row or it has nothing that can fail: `architecture-guardian` added
+    // exactly that filter to the population query and the whole suite stayed green.
+    //
+    // `createPerson({ archived: true })` would be shorter and would date the row at the
+    // epoch, eight months before his first assignment — an ordering the domain cannot
+    // produce, since creation opens the assignment and section 5 forbids reassigning an
+    // archived Person. Written as the domain writes it, so the fixture is a state the
+    // system could actually reach.
+    await db
+      .updateTable('person_lifecycle')
+      .set({ ended_at: OCT_20 })
+      .where('person_id', '=', mark.id)
+      .where('ended_at', 'is', null)
+      .execute();
+
+    await db
+      .insertInto('person_lifecycle')
+      .values({
+        person_id: mark.id,
+        state: 'ARCHIVED',
+        reason: 'NO_LONGER_IN_CURRENT_NETWORK',
+        started_at: OCT_20,
+      })
       .execute();
   });
 
@@ -124,6 +148,21 @@ describe('a leader-scoped DCC monthly report (decisions 0206, 0210)', () => {
       .returning('id')
       .executeTakeFirstOrThrow();
     return row.id;
+  };
+
+  /** `dcc_events_removal_is_whole` requires an actor and a reason together (section 9). */
+  const removedEvent = async (day: string) => {
+    const id = await event(day);
+    await db
+      .updateTable('dcc_events')
+      .set({
+        removed_at: new Date(),
+        removed_by: recorder,
+        removal_reason: 'Invented for this case (CLAUDE.md, Secrets).',
+      })
+      .where('id', '=', id)
+      .execute();
+    return id;
   };
 
   const attend = async (eventId: string, personId: string, leaderId: string) => {
@@ -150,6 +189,12 @@ describe('a leader-scoped DCC monthly report (decisions 0206, 0210)', () => {
   const october = async () => {
     const first = await event(OCT_4);
     const second = await event(OCT_11);
+
+    // **A removed Sunday, so the month's own figures have something to differ on.** Without
+    // it `removed` is `[]` at every scope and the assertion that narrowing does not touch it
+    // holds however wrong the query is. N stays 2, because a removed row is not an
+    // applicable event (section 9).
+    await removedEvent(OCT_25);
 
     await attend(first, mark.id, manuel.id);
     await attend(second, mark.id, manuel.id);
@@ -272,8 +317,11 @@ describe('a leader-scoped DCC monthly report (decisions 0206, 0210)', () => {
     expect(nobody.people).toHaveLength(0);
 
     // The month's own figures are properties of the calendar and survive the narrowing.
+    // `removed` is non-empty in this fixture on purpose: compared empty it would hold
+    // however the query narrowed it.
     expect(nobody.n).toBe(unrestricted.n);
     expect(nobody.open).toBe(unrestricted.open);
+    expect(nobody.removed).toEqual(['2020-10-25']);
     expect(nobody.removed).toEqual(unrestricted.removed);
   });
 

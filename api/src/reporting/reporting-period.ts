@@ -28,6 +28,12 @@ export interface ReportingPeriod {
  * `period` as the field. Deriving bounds from an unvalidated month is what produced a
  * refusal quoting a month nobody sent (decision 0185's shape, one call earlier).
  *
+ * **That includes December 9999**, which is a real month and a valid date and whose
+ * successor is not writable as `YYYY-MM-DD`. `assertReportingMonth` refuses it for that
+ * reason; without it the successor built below is `10000-01-01`, `startOfManilaDay` refuses
+ * *that*, and the caller is told `date` about a month they never wrote. The bound belongs
+ * to the validator rather than here, because here the field name is already lost.
+ *
  * **The end is one millisecond before the next month begins**, which is exactly
  * `endOfManilaDay` of the final day without having to name that day. A first version did
  * name it — stepping back inside the previous Manila day and rendering it with a second

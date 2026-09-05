@@ -257,4 +257,18 @@ export function assertReportingMonth(reportingMonth: string): void {
       value: reportingMonth,
     });
   }
+
+  // **December 9999 is refused here, and it is the last month this format can express.**
+  // Every date in this system is `YYYY-MM-DD` with a four-digit year, so `9999-12` is the
+  // only month whose *successor* is not writable — and a period's end is derived from that
+  // successor. Left to reach the derivation it threw naming `date` and quoting
+  // `10000-01-01`, a month no caller sent: decision 0185's shape, and the identical
+  // signature to the `2020-13-01` case this function was reordered to close. Refused where
+  // the field is still `period`, rather than closed one call later where it is not.
+  if (reportingMonth.startsWith('9999-12')) {
+    throw new ValidationFailedError(
+      'A reporting month must be before December 9999, which is the last month this date format can express.',
+      { field: 'period', value: reportingMonth },
+    );
+  }
 }

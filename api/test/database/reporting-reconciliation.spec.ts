@@ -426,7 +426,7 @@ describe('section 20 reconciliation, DCC monthly (Stage 5 Done-when)', () => {
     // report -- worse than a refusal, because nobody can see it is wrong. Decision 0185
     // settles the same shape for a date-only field.
     //
-    // **Asserted on the error class rather than its message, and a mutation is why.** With
+    // **Asserted on the error class and its details rather than on its message, and a mutation is why.** With
     // the guard removed this case still passed: `windowClosesAt` throws its own "not the
     // first of a month" and the regex matched it. But that is a plain `Error`, which the
     // exception filter renders as `INTERNAL_ERROR` -- a 500 on a client's bad month, which
@@ -455,7 +455,12 @@ describe('section 20 reconciliation, DCC monthly (Stage 5 Done-when)', () => {
     // because `Date.UTC(26, ...)` applies the legacy two-digit-year mapping and the month's
     // window would be computed from 1926. Without it the two predicates are
     // indistinguishable here, and section 22's one-predicate rule has nothing that can fail.
-    for (const period of ['2020-10', '2020-10-15', '2020-13-01', '0026-01-01']) {
+    // `9999-12-01` is a real month and a valid date, and is the **only** month whose
+    // successor is not writable as `YYYY-MM-DD` -- which is how a period's end is derived.
+    // Unbounded it reached that derivation and answered `{field: "date", value:
+    // "10000-01-01"}`, the same signature as `2020-13-01` one call further along, in the
+    // batch whose stated purpose was closing that class.
+    for (const period of ['2020-10', '2020-10-15', '2020-13-01', '0026-01-01', '9999-12-01']) {
       expect(await refusalFor(period)).toMatchObject({ field: 'period', value: period });
     }
   });
