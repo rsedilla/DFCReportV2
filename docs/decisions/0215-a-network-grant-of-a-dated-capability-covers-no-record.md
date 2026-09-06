@@ -7,9 +7,21 @@ Decision 0214 supplied the dated walk those need for `OWN_SUBTREE` and
 `SUBTREE_EXCL_SELF`, and supplied nothing for `NETWORK`.
 
 `scopeCovers` resolves a `NETWORK` grant through `NetworksService.currentNetwork`, which is
-undated. So an October report authorized that way would be measured against the leader's
-**current** Network, and Section 4 lets a Network change — reached through
+undated. So a report for a closed month authorized that way would be measured against the
+leader's **current** Network, and Section 4 lets a Network change — reached through
 `people.correct_sex` — move it.
+
+**The refusal is not conditional on the period, and the ground is wider than that example.**
+For an open month Section 20 says the selector resolves "as of now", which is what
+`currentNetwork` answers, so the closed-month case is where the two visibly differ — but a
+route cannot ask which period it was given before deciding whether the scope type has a
+resolution at all. What has no dated resolution is the **grant**, not the request. *A first
+version argued only from the closed-month case and left the open one with no stated ground
+while the code refused it anyway, which is the shape this ruling exists to close.*
+
+**A Whole Church selector is outside this.** A `NETWORK` grant never covers Whole Church,
+dated or not — that is Section 7's non-narrowing rule — so it keeps that refusal and its
+own reason rather than being told the problem is datedness.
 
 **A `NETWORK` grant of a capability that resolves as of a period covers no record, and the
 request is refused.** Fail-closed, and refused where the grant is read rather than where the
@@ -29,15 +41,18 @@ rule about Network scope.
 was written first, at the owner's direction, and `architecture-guardian` found it settling
 an escalated Stop Condition in a `switch` branch with nothing in `docs/decisions/` and
 nothing in `SKILL.md` — which `CLAUDE.md` says means the work is unfinished. The refusal is
-kept and written down rather than removed, because removing it would authorize an October
-report against a November Network.
+kept and written down rather than removed, because removing it would authorize a dated
+request against an undated answer.
 
 ## The refusal names the grant, not the record
 
-Section 7 already draws this distinction for a capability granted too narrowly, and gives
-the reason: *"'not over this record' would be a lie. It says another target would work; for
-a capability section 7 gives at Whole Church only, none would. An administrator reading the
-generic wording goes looking for the right record, and the thing to fix is the grant."*
+Section 7 already draws this distinction for a capability granted too narrowly, and
+`authorization.service.ts` states the reason where it implements it: *"'not over this
+record' would be a lie. It says another target would work; for a capability section 7 gives
+at Whole Church only, none would. An administrator reading the generic wording goes looking
+for the right record, and the thing to fix is the grant."* *A first version of this ruling
+attributed those words to Section 7, which does not contain them — a ruling quoting the
+implementation as though it were the specification inverts the source of truth.*
 
 The same is true here for the same reason — under this ruling **no** target works for a
 `NETWORK` grant of a dated capability — so the refusal joins that path rather than the
@@ -51,8 +66,8 @@ names.*
 ## Why not the alternatives
 
 **Resolve it undated**, as `scopeCovers` does today for every other target. That is the
-answer the open bullet offers first, and it authorizes a past period against a present
-Network — the failure the datedness exists to prevent, admitted silently.
+answer the open bullet offers first, and for a closed month it authorizes that period
+against a present Network — the failure the datedness exists to prevent, admitted silently.
 
 **Build `network_as_of` now.** `networks` already has the function; what is missing is a
 ruling that a Network grant *should* be dated, and inventing one to unblock a route is

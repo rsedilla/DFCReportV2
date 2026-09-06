@@ -217,11 +217,12 @@ describe('GET /api/v1/reports/dcc/monthly (sections 7, 20 and 22)', () => {
   });
 
   /**
-   * Decision 0214's fail-closed answer. `NetworksService.currentNetwork` is undated, so
-   * resolving a `NETWORK` grant here would authorize October against a November Network.
-   * `CLAUDE.md` carries that as a Stop Condition; until it is settled the route refuses.
+   * **Decision 0215**, not 0214 — which says nothing about Networks at all.
+   * `NetworksService.currentNetwork` is undated, so resolving a `NETWORK` grant here would
+   * answer a dated request with a present Network. `CLAUDE.md` carries what such a grant
+   * *ought* to mean as a Stop Condition; 0215 settles only that the route refuses.
    */
-  describe('a NETWORK grant is refused rather than resolved (decision 0214)', () => {
+  describe('a NETWORK grant is refused rather than resolved (decision 0215)', () => {
     it('refuses a Network-scoped grant of reports.view_subtree', async () => {
       const outsider = await createPerson(db, {
         firstName: 'Noel',
@@ -251,7 +252,10 @@ describe('GET /api/v1/reports/dcc/monthly (sections 7, 20 and 22)', () => {
       // grant here, so "not over this record" would send an administrator looking for a
       // record when the thing to fix is the grant -- the distinction §7 already draws for
       // a capability granted too narrowly.
-      expect(response.body.error.message).toContain('Network');
+      expect(response.body.error.message).toContain('no dated resolution');
+      // **Not "past period".** The first version of this message said so, and this very
+      // case sends a month that has not happened yet.
+      expect(response.body.error.message).not.toContain('past period');
       expect(response.body.error.details.scope_type).toBe('NETWORK');
     });
   });

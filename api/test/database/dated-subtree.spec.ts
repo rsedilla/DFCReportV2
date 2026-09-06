@@ -186,8 +186,9 @@ describe('the dated subtree walk (decision 0206)', () => {
    * **It is here rather than beside the route, because the property is this walk's.** The
    * route's own suite moves people in months either side of the period, so every fixture
    * date lands strictly inside or outside the instant and nothing sits *on* it --
-   * `architecture-guardian` mutated both bounds of the predicate and all sixteen of those
-   * cases stayed green. The boundary is what the method's docblock calls load-bearing, so
+   * `architecture-guardian` mutated both bounds of the predicate and all **thirteen** of
+   * those cases stayed green. *Written as sixteen for one commit, which counts three cases
+   * added by the batch that fixed the finding -- two of them not boundary cases at all.* The boundary is what the method's docblock calls load-bearing, so
    * it is pinned where `subtreeAsOf`'s counterpart already is.
    */
   describe('the dated upward walk', () => {
@@ -226,28 +227,47 @@ describe('the dated subtree walk (decision 0206)', () => {
       ]);
     });
 
-    it('agrees with the downward walk, which is what makes the pair safe', async () => {
+    it('agrees with the downward walk, at an instant where the undated walk would not', async () => {
       const raymond = await createPerson(db, { firstName: 'Raymond', network: 'MENS' });
       const manuel = await createPerson(db, { firstName: 'Manuel', network: 'MENS' });
+      const ben = await createPerson(db, { firstName: 'Ben', network: 'MENS' });
       const mark = await createPerson(db, { firstName: 'Mark', network: 'MENS' });
-      const outside = await createPerson(db, { firstName: 'Noel', network: 'MENS' });
 
       await assignTo(db, raymond.id, null, OCTOBER);
       await assignTo(db, manuel.id, raymond.id, OCTOBER);
-      await assignTo(db, mark.id, manuel.id, OCTOBER);
-      await assignTo(db, outside.id, raymond.id, OCTOBER);
+      await assignTo(db, ben.id, raymond.id, OCTOBER);
 
-      // The docblock claims the two read one tree from opposite ends. Asserted rather
-      // than left as a claim.
-      const beneathManuel = await hierarchy.subtreeAsOf(db, manuel.id, MID_OCTOBER);
+      // **Mark moves, which is what makes this about datedness.** A first version opened
+      // every row at OCTOBER and closed none, so the undated walk answered identically at
+      // every node and delegating to it would have survived the case.
+      const marksFirst = await assignTo(db, mark.id, manuel.id, OCTOBER);
+      await closeAt(marksFirst, NOVEMBER);
+      await assignTo(db, mark.id, ben.id, NOVEMBER);
 
-      for (const person of [raymond, manuel, mark, outside]) {
-        await expect(
-          hierarchy.isWithinSubtreeAsOf(db, manuel.id, person.id, MID_OCTOBER, {
-            includeSelf: true,
-          }),
-        ).resolves.toBe(beneathManuel.includes(person.id));
+      for (const at of [MID_OCTOBER, DECEMBER]) {
+        const beneathManuel = await hierarchy.subtreeAsOf(db, manuel.id, at);
+        const beneathBen = await hierarchy.subtreeAsOf(db, ben.id, at);
+
+        for (const [root, beneath] of [
+          [manuel, beneathManuel],
+          [ben, beneathBen],
+        ] as const) {
+          for (const person of [raymond, manuel, ben, mark]) {
+            await expect(
+              hierarchy.isWithinSubtreeAsOf(db, root.id, person.id, at, { includeSelf: true }),
+            ).resolves.toBe(beneath.includes(person.id));
+          }
+        }
       }
+
+      // And the two instants genuinely disagree, so the loop above is not asserting one
+      // answer twice.
+      await expect(
+        hierarchy.isWithinSubtreeAsOf(db, manuel.id, mark.id, MID_OCTOBER, { includeSelf: true }),
+      ).resolves.toBe(true);
+      await expect(
+        hierarchy.isWithinSubtreeAsOf(db, manuel.id, mark.id, DECEMBER, { includeSelf: true }),
+      ).resolves.toBe(false);
     });
 
     it('refuses a cycle rather than walking it for ever', async () => {

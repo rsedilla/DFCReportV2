@@ -338,7 +338,14 @@ export class AuthorizationService {
         continue;
       }
 
-      if (target.kind === 'report_scope' && grant.scope.type === ScopeType.Network) {
+      // **A leader-scoped selector only.** A Whole Church selector under a Network grant is
+      // refused by section 7's non-narrowing rule and has nothing to do with datedness, so
+      // routing it here would answer it with the wrong reason.
+      if (
+        target.kind === 'report_scope' &&
+        target.leaderPersonId !== null &&
+        grant.scope.type === ScopeType.Network
+      ) {
         coveredNothing = 'undated-network';
         continue;
       }
@@ -363,11 +370,12 @@ export class AuthorizationService {
     }
 
     if (coveredNothing === 'undated-network') {
-      // Same lie, different cause. This one is temporary by construction: it goes away
-      // when the Stop Condition recorded in `CLAUDE.md` is settled, and the wording says
-      // so rather than implying the grant was a mistake.
+      // Same lie, different cause (decision 0215). **It says nothing about which period
+      // was asked for**: a first version said "resolves as of a past period", which was
+      // false of the open month, of a future one, and of the very test that pinned it.
+      // What is true regardless is that a Network grant has no dated resolution at all.
       throw new ScopeDeniedError(
-        `You hold ${capability} at Network scope, and this request resolves as of a past period. A Network grant has no dated resolution, so it covers no record here.`,
+        `You hold ${capability} at Network scope, and it resolves as of a period. A Network grant has no dated resolution, so it covers no record here.`,
         { capability, scope_type: ScopeType.Network },
       );
     }
@@ -556,9 +564,11 @@ export class AuthorizationService {
    * resolving one here would authorize an October report against the leader's
    * **November** Network -- and section 7 fixes datedness to the capability while saying
    * nothing about a scope type that cannot honour it. `CLAUDE.md` carries that as a Stop
-   * Condition; until it is settled this declines to authorize where no rule exists, which
-   * is what section 7's fail-closed default already requires. Deleting this branch is the
-   * whole of what settling it costs.
+   * Condition; decision 0215 settles only that the route refuses, and section 7 states it.
+   *
+   * *Settling it removes two things rather than one: the branch below, and the clause in
+   * `authorize` that produces the message. A first version of this sentence said deleting
+   * the branch was the whole cost, and was made false by the commit that added the second.*
    */
   private async reportScopeCovers(
     executor: Db,
@@ -591,9 +601,11 @@ export class AuthorizationService {
           { includeSelf: false },
         );
       case ScopeType.Network:
-        // Unreachable: `authorize` refuses a Network grant against this target above, so
-        // that the refusal can name the grant rather than the record. Kept for
-        // exhaustiveness, and `false` because fail-closed is the answer either way.
+        // **Not dead, and not the primary enforcement either.** `authorize` refuses this
+        // above so the refusal can name the grant rather than the record (decision 0215),
+        // but `coversWith` is a second public entry that reaches here without passing
+        // that clause. No caller hands it a `report_scope` target today, and this is what
+        // makes that an accident of the call graph rather than a hole.
         return false;
       case ScopeType.WholeChurch:
         return true;
