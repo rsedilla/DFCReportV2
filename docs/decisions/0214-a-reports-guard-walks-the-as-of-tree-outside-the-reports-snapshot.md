@@ -36,47 +36,24 @@ application already runs.
 to deliver it" — and its sibling `coversWith` takes one so that a caller already inside a
 transaction can decide there.
 
-**Sixteen call sites across seven services take `coversWith`, and they are not taking it for
-liveness alone.** Two say so in terms. `people.reassignment.service.ts` takes it "inside its
-own transaction, **after the lock**: a coverage test over the pool would answer from the
-state the request arrived with, which is the staleness the lock exists to remove";
-`cells.closure.service.ts` takes it because "*whether to ask* depends on an instant only the
-transaction has". Those are consistency reasons.
+**Other callers do re-decide inside a transaction, for several different reasons** — a lock
+that changed what the decision rests on, an instant only the transaction has, Section 24's
+rule against reaching the pool from inside a transaction, and in two places the reverse: a
+pooled read after a rollback, which Section 22 requires to see committed state.
 
-*This ruling's first version said `coversWith` exists for liveness and not for snapshot
-consistency, that its callers were "the two attendance write paths", and that no caller in
-this application re-decides authorization inside a transaction to see a consistent snapshot.
-All three were false, and the paragraph making them had announced itself as "worth checking
-rather than assuming". They are recorded rather than deleted because the corrected reading
-is what carries the answer, and a reader who checks the code will find the pattern this
-ruling declines to follow.*
+**None of those reaches a report, and the reason is one fact rather than a survey: its guard
+runs before the transaction exists.** No connection is held, so no liveness question arises;
+there is no lock, so no post-lock state; there is no transaction-derived instant, because the
+period's bounds come from the request's own argument; and nothing is rolled back, because
+nothing is written.
 
-**The sixteen have mixed reasons, and no single discriminator fits them.** Roughly: six
-re-decide after taking a lock, because the lock changed what the decision rests on; two are
-handed the **pool** rather than a transaction, because a re-read after a rolled-back
-transaction has to see committed state; three pass a Whole Church target, which `coversWith`
-answers before it reads anything at all; and the rest take a transaction for the plainest
-reason of all — Section 24 forbids reaching the pool from inside one, so a caller already in
-a transaction must pass it. `cells.closure.service.ts` says exactly that: `coversWith`
-"rather than `authorize`, which reads the account's grants on the pool and would be the
-liveness hazard section 24 names if called while holding a connection."
-
-**So the question is not why the others re-decide inside; it is whether a report needs to.**
-It does not, and each of those reasons says why. Liveness does not arise: **the guard runs
-before the reporting transaction exists**, so it is never a pooled read taken while holding
-a connection. There is no lock, so no post-lock state. There is no instant only the
-transaction has — `reportingPeriodBounds` derives the period's bounds from the request's own
-argument, before the transaction opens. And nothing is rolled back, because nothing is
-written.
-
-*This paragraph has been given three grounds and the first two were false. It said
-`coversWith` exists for liveness and not consistency; then that the lock was "the
-discriminator in every one of those cases"; and `architecture-guardian` refuted both against
-the call sites. Nine of the sixteen take no lock before the call, `assertMayCorrect` is
-handed the pool on one of its three paths and `dcc-attendance.service.ts:1303` on its only
-one, and three never reach the executor. The lesson is the one this file keeps recording in
-other people's work: the tidy unifying claim was the thing to stop reaching for, and what
-carries the answer is the last paragraph, which asks only about a report.*
+*Three earlier versions of this paragraph each named a single reason the other callers take
+an executor — liveness, then a lock, then a three-form generalisation — and
+`architecture-guardian` refuted each of the three against the call sites. The survey was
+never load-bearing: the answer rests on Section 24's third clause and on where the guard
+already runs. It is **cut rather than corrected a fourth time**, and that is the part worth
+keeping. The tidy generalisation was the defect, not the answer it was decorating, and three
+review passes were spent on commentary nothing required.*
 
 `ReportingService.dccMonthly` opens its `READ ONLY` `REPEATABLE READ` transaction *inside
 itself*, after the guard has already decided. So "outside" is the architecture as it stands,
