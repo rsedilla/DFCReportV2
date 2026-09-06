@@ -14,10 +14,7 @@ import {
 } from '../../common/errors/api-error';
 import { isUuid, NIL_UUID } from '../../common/identifiers';
 import { isCalendarDate } from '../../common/time/manila';
-import {
-  isReportingMonth,
-  reportingPeriodBounds,
-} from '../../common/time/reporting-period';
+import { isReportingMonth, reportingPeriodBounds } from '../../common/time/reporting-period';
 
 import {
   AUTHENTICATED_ONLY_METADATA,
@@ -126,9 +123,12 @@ export class CapabilityGuard implements CanActivate {
   ): Target {
     const period = readPath(request, spec.periodFrom);
     if (typeof period !== 'string' || !isReportingMonth(period)) {
-      throw new ValidationFailedError(`${spec.periodFrom} must be a reporting month, as YYYY-MM-01.`, {
-        field: spec.periodFrom,
-      });
+      throw new ValidationFailedError(
+        `${spec.periodFrom} must be a reporting month, as YYYY-MM-01.`,
+        {
+          field: spec.periodFrom,
+        },
+      );
     }
     const at = reportingPeriodBounds(period).end;
 
@@ -138,10 +138,9 @@ export class CapabilityGuard implements CanActivate {
     }
 
     if (scope !== 'LEADER') {
-      throw new ValidationFailedError(
-        `${spec.scopeFrom} must be WHOLE_CHURCH or LEADER.`,
-        { field: spec.scopeFrom },
-      );
+      throw new ValidationFailedError(`${spec.scopeFrom} must be WHOLE_CHURCH or LEADER.`, {
+        field: spec.scopeFrom,
+      });
     }
 
     const leaderId = readPath(request, spec.leaderFrom);

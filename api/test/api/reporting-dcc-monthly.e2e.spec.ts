@@ -59,7 +59,11 @@ describe('GET /api/v1/reports/dcc/monthly (sections 7, 20 and 22)', () => {
   beforeEach(async () => {
     await truncateAll(db);
 
-    raymond = await createPerson(db, { firstName: 'Raymond', lastName: 'Alvarez', network: 'MENS' });
+    raymond = await createPerson(db, {
+      firstName: 'Raymond',
+      lastName: 'Alvarez',
+      network: 'MENS',
+    });
     manuel = await createPerson(db, { firstName: 'Manuel', lastName: 'Bautista', network: 'MENS' });
     mark = await createPerson(db, { firstName: 'Mark', lastName: 'Castillo', network: 'MENS' });
     drifter = await createPerson(db, { firstName: 'Dante', lastName: 'Espino', network: 'MENS' });
@@ -80,7 +84,10 @@ describe('GET /api/v1/reports/dcc/monthly (sections 7, 20 and 22)', () => {
 
   describe('the scope selector is the target (section 7)', () => {
     it('lets a Leader read their own subtree', async () => {
-      const response = await get(`period=${OCTOBER}&scope=LEADER&leader_id=${mark.id}`, raymondAccount);
+      const response = await get(
+        `period=${OCTOBER}&scope=LEADER&leader_id=${mark.id}`,
+        raymondAccount,
+      );
 
       expect(response.status).toBe(200);
       expect(response.body.scope).toEqual({ kind: 'LEADER', personId: mark.id });
@@ -214,10 +221,7 @@ describe('GET /api/v1/reports/dcc/monthly (sections 7, 20 and 22)', () => {
         })
         .execute();
 
-      const response = await get(
-        `period=${OCTOBER}&scope=LEADER&leader_id=${mark.id}`,
-        grantee,
-      );
+      const response = await get(`period=${OCTOBER}&scope=LEADER&leader_id=${mark.id}`, grantee);
 
       expect(response.status).toBe(403);
       expect(response.body.error.code).toBe('SCOPE_DENIED');

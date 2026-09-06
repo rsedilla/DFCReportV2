@@ -1,4 +1,6 @@
-import { IsIn, IsString, IsUUID, ValidateIf } from 'class-validator';
+import { IsIn, IsUUID, ValidateIf } from 'class-validator';
+
+import { IsManilaCalendarDate } from '../../common/time/is-manila-calendar-date';
 
 /**
  * The scope selector a report is asked for (SKILL.md section 7).
@@ -18,11 +20,20 @@ export class DccMonthlyReportDto {
    * The reporting month, as the first of it — `2026-10-01`, which is this repository's
    * one spelling of a month.
    *
-   * Bounded here only as a string: `assertReportingMonth` is what decides whether it is a
-   * reporting month, and the capability guard has already applied it before this DTO is
+   * **`IsManilaCalendarDate` rather than `@IsString()`**, which is what it was and which
+   * `storable-text-coverage.spec.ts` correctly flagged: a bare `@IsString()` accepts
+   * arbitrary text, so §22's storability rule reached it and the check derived it as a
+   * free-text field. It is not one. Constraining the shape is the honest fix rather than
+   * decorating a month as though a leader might type a null byte into it — and decision
+   * 0185's validator refuses a well-formed value that is not a real day, where a regex
+   * would admit `2026-02-30`.
+   *
+   * **What stays in `assertReportingMonth` is the rest of the rule**: that the day is the
+   * first of the month, and that the month is before December 9999. Those are domain
+   * bounds rather than a shape, and the capability guard applies them before this DTO is
    * constructed, because the instant it resolves scope at is derived from this field.
    */
-  @IsString()
+  @IsManilaCalendarDate({ message: 'period must be a real calendar date, YYYY-MM-DD' })
   period!: string;
 
   @IsIn(REPORT_SCOPES)
