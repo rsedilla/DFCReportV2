@@ -14,31 +14,33 @@
  * is the instance that has already paid for it, having derived its own field
  * list and found one nobody would have listed.
  *
- * **Deriving is only worth anything if what it cannot read is a failure.** The
- * first version skipped what it could not parse, and `architecture-guardian`
- * reproduced seven shapes that each dropped a real route and still exited 0 —
- * `@Controller({ path })`, a template-literal or constant argument, a decorator
- * sharing a line with another, a Prettier-wrapped multi-line decorator, `@All`,
- * `@Head`, and a `@Controller` in a file not named `*.controller.ts`. The worst
- * was the constant argument, because the controller is still read and its other
- * routes still covered, so nothing about the ledger looks short. So this file
- * now **refuses what it cannot parse** rather than passing over it: an
- * unreadable decorator, an unreadable controller, a `@Controller` outside the
- * naming convention, or a global prefix it cannot confirm all fail the build.
- * A derivation that silently under-reads is worse than a declared list, because
- * it claims the completeness a declared list never claimed.
+ * **It parses TypeScript rather than scanning text, and that is the whole of why
+ * the derivation can be trusted.** Two regular-expression versions preceded this
+ * one and `architecture-guardian` broke both. The first *skipped* what it could
+ * not read: seven shapes each dropped a real route and still exited 0. The
+ * second refused what it could not read and was broken by a subtler class —
+ * text it read **wrongly while believing it had read it**. An ordinary string
+ * containing `/*`, such as a cache key `'reports/*'`, opened a comment that
+ * swallowed the routes below it; a base class in another file carried routes
+ * belonging to a controller that extended it; a second `@Controller` in one file
+ * gave its routes the first one's base path. No quantity of added refusals
+ * reaches that class, because a scanner has no way to notice.
  *
- * **The ledger's unit is the individual route**, `METHOD /api/v1/path`, rather
- * than a family of them. It is the finer of the two and it cannot under-cover:
- * a family entry would let a route join an existing group unnoticed, which is
- * the failure this exists to catch, one level down.
+ * `typescript` is already a `web` devDependency, so the compiler's own parser
+ * costs nothing new. It is syntax-only — `createSourceFile`, no program and no
+ * type checker — so a string is a string, a comment is a comment, and a
+ * decorator is a decorator, decided by the same code that compiles the API.
  *
- * **It fails in both directions.** A route the ledger does not mention is the
- * case above. A ledger entry naming no route is a lie of the opposite kind — the
- * route was renamed or removed and the ledger still claims to cover it — and a
- * ledger that is allowed to drift stops being evidence of anything. Comments are
- * stripped before anything is read, so a route commented out is a route removed;
- * it was not, and a block-commented route stayed "covered".
+ * **What it still cannot resolve, it refuses**, and those are now real
+ * unknowables rather than gaps in a regex: a path that is not a literal, a
+ * `@Controller` on a class this check cannot place, routing decorators on a
+ * class with no `@Controller` (the inheritance shape), `RequestMapping`, a
+ * global prefix or versioning call it cannot read, and a duplicate route.
+ *
+ * **It fails in both directions.** A route the ledger does not mention is one
+ * half. A ledger entry naming no route is the other — the route was renamed or
+ * removed and the ledger still claims to cover it — and a ledger allowed to
+ * drift stops being evidence of anything.
  *
  * **A waiver is permitted and is not a defeat.** Shipping API-only is what the
  * API-first constraint asks for (`SKILL.md` §2), and twenty-one waivers is what
@@ -52,116 +54,44 @@
  * a waiver with a distant stage on it. The liveness probe is called by the
  * deployment platform and never by a person, and waiving it to a stage would be
  * a claim nobody intends to honour — a ledger full of those is how the whole
- * file becomes a rubber stamp. It carries a reason for the same purpose a
- * waiver does: nothing can check either, so the reason is all a reader has.
+ * file becomes a rubber stamp.
  *
- * **A named screen must be a file inside `web/`**, so `screen` is a
- * repository-relative path and nothing else; anything more a reader needs goes
- * in `note`. Existence alone was not enough — a directory, `.` and `../..` all
- * satisfied it, so a coverage claim could be backed by the repository root.
+ * **A named screen must be a file inside `web/`.** Existence alone was not
+ * enough: a directory, `.` and `../..` all satisfied it, so a coverage claim
+ * could be backed by the repository root.
  */
 import { readdir, readFile, stat } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import process from 'node:process';
+import tsModule from 'typescript';
+
+const ts = tsModule.default ?? tsModule;
 
 const WEB = fileURLToPath(new URL('..', import.meta.url));
 const REPO = path.resolve(WEB, '..');
 const API = path.join(REPO, 'api', 'src');
-const BOOTSTRAP = path.join(API, 'bootstrap.ts');
 const LEDGER = path.join(WEB, 'screen-coverage.json');
 
-/** Every decorator NestJS routes with, not only the five this API uses today. */
-const METHODS = ['Get', 'Post', 'Put', 'Patch', 'Delete', 'All', 'Head', 'Options'];
+/**
+ * Every routing decorator `@nestjs/common` exports, read off
+ * `decorators/http/request-mapping.decorator.d.ts` rather than remembered. An
+ * earlier version listed eight of them and `@Search` — the documented decorator
+ * for a search endpoint, which this API is the kind to acquire — was invisible.
+ * `RequestMapping` is the generic form and takes an options object; it is
+ * refused rather than parsed, because nothing uses it.
+ */
+const ROUTING = new Set([
+  'Get', 'Post', 'Put', 'Patch', 'Delete', 'All', 'Options', 'Head',
+  'Search', 'QueryMethod', 'Propfind', 'Proppatch', 'Mkcol', 'Copy',
+  'Move', 'Lock', 'Unlock',
+]);
+const GENERIC_ROUTING = 'RequestMapping';
 
 const failures = [];
 
-/**
- * A repository-relative path with forward slashes, so a failure reads the same
- * on Windows as on the CI runner. A path in an error message is something
- * somebody pastes into an editor.
- */
-function relative(target) {
-  return path.relative(REPO, target).split(path.sep).join('/');
-}
-
-/**
- * Blanks comments while preserving every newline and offset, so line numbers
- * and indices still point where they did. A route inside a comment is not a
- * route, and a `@Controller` named in a docblock is not a base path.
- */
-function stripComments(source) {
-  let out = '';
-  let i = 0;
-  while (i < source.length) {
-    const two = source.slice(i, i + 2);
-    if (two === '//') {
-      while (i < source.length && source[i] !== '\n') {
-        out += ' ';
-        i += 1;
-      }
-    } else if (two === '/*') {
-      while (i < source.length && source.slice(i, i + 2) !== '*/') {
-        out += source[i] === '\n' ? '\n' : ' ';
-        i += 1;
-      }
-      out += '  ';
-      i += 2;
-    } else {
-      out += source[i];
-      i += 1;
-    }
-  }
-  return out;
-}
-
-const lineOf = (source, index) => source.slice(0, index).split('\n').length;
-
-/**
- * The single argument of a decorator, when it is a plain quoted string or
- * absent. Returns `null` for anything else — a template literal, a constant, an
- * object — which the caller turns into a failure rather than a skip.
- */
-function simpleArgument(source, openParen) {
-  const close = source.indexOf(')', openParen);
-  if (close === -1) {
-    return null;
-  }
-  const raw = source.slice(openParen + 1, close).trim().replace(/,$/, '').trim();
-  if (raw === '') {
-    return { value: '', end: close };
-  }
-  const quoted = /^(['"])([^'"]*)\1$/.exec(raw);
-  return quoted === null ? null : { value: quoted[2], end: close };
-}
-
-/** `api/src/bootstrap.ts` sets one prefix for every route in the application. */
-async function globalPrefix() {
-  const source = stripComments(await readFile(BOOTSTRAP, 'utf8'));
-
-  // A second argument to setGlobalPrefix carries `exclude`, which would serve a
-  // route somewhere the ledger does not name. Versioning moves every path.
-  if (/enableVersioning\s*\(/.test(source)) {
-    failures.push(
-      `${relative(BOOTSTRAP)} enables versioning, which this check does not model`,
-    );
-  }
-
-  const match = /setGlobalPrefix\s*\(/.exec(source);
-  if (match === null) {
-    failures.push(`${relative(BOOTSTRAP)} calls no \`setGlobalPrefix\``);
-    return '';
-  }
-  const argument = simpleArgument(source, match.index + match[0].length - 1);
-  if (argument === null) {
-    failures.push(
-      `${relative(BOOTSTRAP)} calls \`setGlobalPrefix\` with something this check ` +
-        'cannot read — a variable, or an options object carrying `exclude`',
-    );
-    return '';
-  }
-  return argument.value;
-}
+/** A repository-relative path with forward slashes, identical on every host. */
+const relative = (target) => path.relative(REPO, target).split(path.sep).join('/');
 
 function join(...segments) {
   const parts = segments
@@ -171,20 +101,54 @@ function join(...segments) {
   return `/${parts.join('/')}`;
 }
 
+/** The decorators on a node, under the TypeScript 5 accessor. */
+const decoratorsOf = (node) =>
+  (ts.canHaveDecorators(node) ? ts.getDecorators(node) : undefined) ?? [];
+
+/** `@Name(...)` — the decorator's name and its argument list, or null. */
+function decoratorCall(decorator) {
+  const expression = decorator.expression;
+  if (!ts.isCallExpression(expression) || !ts.isIdentifier(expression.expression)) {
+    return null;
+  }
+  return { name: expression.expression.text, args: expression.arguments };
+}
+
+/**
+ * The path or paths a routing decorator declares. NestJS accepts a string or an
+ * array of them; anything else — a template literal, a constant, an options
+ * object — cannot be resolved here and is refused by the caller.
+ */
+function literalPaths(args) {
+  if (args.length === 0) {
+    return [''];
+  }
+  if (args.length > 1) {
+    return null;
+  }
+  const [argument] = args;
+  if (ts.isStringLiteral(argument)) {
+    return [argument.text];
+  }
+  if (ts.isArrayLiteralExpression(argument) && argument.elements.length > 0) {
+    return argument.elements.every((element) => ts.isStringLiteral(element))
+      ? argument.elements.map((element) => element.text)
+      : null;
+  }
+  return null;
+}
+
 async function* typeScriptFiles(directory) {
   let entries;
   try {
     entries = await readdir(directory, { withFileTypes: true });
   } catch (error) {
     if (error.code === 'ENOENT') {
-      // Distinguished from "an API with no routes", which it is not: every
-      // ledger entry would otherwise be reported as a route since removed.
       failures.push(`${relative(directory)} does not exist, so no route can be derived`);
       return;
     }
     throw error;
   }
-
   for (const entry of entries) {
     const full = path.join(directory, entry.name);
     if (entry.isDirectory()) {
@@ -195,61 +159,169 @@ async function* typeScriptFiles(directory) {
   }
 }
 
-/** Every route the controllers declare, as `METHOD /api/v1/path`. */
-async function declaredRoutes(prefix) {
-  const routes = new Map();
+/**
+ * One pass over `api/src`: the routes every controller declares, and the calls
+ * that would move every one of them. Versioning and the global prefix are
+ * looked for in **every** file rather than in `bootstrap.ts` alone — `main.ts`
+ * configures the application too, and a check scoped to one of the two would
+ * not see `enableVersioning` in the other.
+ */
+async function readApi() {
+  // Routes are collected without their prefix and composed once the pass ends.
+  // Composing them as they were found made every route in a file the walk
+  // reached before `bootstrap.ts` carry no prefix at all -- fifteen of the
+  // thirty-five, decided by alphabetical order.
+  const pending = [];
+  let prefix = null;
+  let prefixSeenIn = null;
 
   for await (const file of typeScriptFiles(API)) {
-    const source = stripComments(await readFile(file, 'utf8'));
-    const controller = /@Controller\s*\(/.exec(source);
+    const source = ts.createSourceFile(
+      file,
+      await readFile(file, 'utf8'),
+      ts.ScriptTarget.Latest,
+      true,
+    );
+    const at = (node) =>
+      `${relative(file)}:${source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1}`;
 
-    if (controller === null) {
-      continue;
-    }
-
-    // The naming convention is what this check scans by, so a controller that
-    // breaks it must say so rather than disappear.
-    if (!file.endsWith('.controller.ts')) {
-      failures.push(
-        `${relative(file)}:${lineOf(source, controller.index)} declares a \`@Controller\` ` +
-          'and is not named `*.controller.ts`',
-      );
-      continue;
-    }
-
-    const base = simpleArgument(source, controller.index + controller[0].length - 1);
-    if (base === null) {
-      failures.push(
-        `${relative(file)}:${lineOf(source, controller.index)} declares a \`@Controller\` ` +
-          'this check cannot read — a template literal, a constant, or the ' +
-          '`{ path }` object form',
-      );
-      continue;
-    }
-
-    const decorator = new RegExp(`@(${METHODS.join('|')})\\s*\\(`, 'g');
-    for (const match of source.matchAll(decorator)) {
-      const line = lineOf(source, match.index);
-      const argument = simpleArgument(source, match.index + match[0].length - 1);
-      if (argument === null) {
-        failures.push(
-          `${relative(file)}:${line} declares \`@${match[1]}\` with an argument this ` +
-            'check cannot read — a template literal, a constant, or an options object',
-        );
-        continue;
+    const visit = (node) => {
+      if (ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression)) {
+        const called = node.expression.name.text;
+        if (called === 'enableVersioning') {
+          failures.push(`${at(node)} enables versioning, which this check does not model`);
+        }
+        if (called === 'setGlobalPrefix') {
+          const paths = literalPaths(node.arguments);
+          if (paths === null || paths.length !== 1) {
+            failures.push(
+              `${at(node)} calls \`setGlobalPrefix\` with something this check cannot ` +
+                'read — a variable, or an options object carrying `exclude`',
+            );
+          } else if (prefix !== null && prefix !== paths[0]) {
+            failures.push(
+              `${at(node)} sets the global prefix to \`${paths[0]}\`, and ` +
+                `${prefixSeenIn} sets it to \`${prefix}\``,
+            );
+          } else {
+            prefix = paths[0];
+            prefixSeenIn = at(node);
+          }
+        }
       }
-      const route = `${match[1].toUpperCase()} ${join(prefix, base.value, argument.value)}`;
-      const already = routes.get(route);
-      if (already !== undefined) {
-        failures.push(
-          `\`${route}\` is declared twice — ${already} and ${relative(file)}:${line}`,
-        );
-        continue;
+
+      if (ts.isClassDeclaration(node)) {
+        collectClass(node, file, at);
       }
-      routes.set(route, `${relative(file)}:${line}`);
-    }
+      ts.forEachChild(node, visit);
+    };
+
+    const collectClass = (node, file, at) => {
+      let base = null;
+      let isController = false;
+
+      for (const decorator of decoratorsOf(node)) {
+        const call = decoratorCall(decorator);
+        if (call === null || call.name !== 'Controller') {
+          continue;
+        }
+        isController = true;
+        const paths = literalPaths(call.args);
+        if (paths === null || paths.length !== 1) {
+          failures.push(
+            `${at(decorator)} declares a \`@Controller\` this check cannot read — a ` +
+              'template literal, a constant, several paths, or the `{ path }` object form',
+          );
+          return;
+        }
+        [base] = paths;
+      }
+
+      const methods = node.members.filter((member) => ts.isMethodDeclaration(member));
+      const routed = methods.filter((member) =>
+        decoratorsOf(member).some((decorator) => {
+          const call = decoratorCall(decorator);
+          return call !== null && (ROUTING.has(call.name) || call.name === GENERIC_ROUTING);
+        }),
+      );
+
+      if (!isController) {
+        // A class carrying routing decorators without `@Controller` is a base
+        // class a controller extends, and its routes are served under the
+        // subclass's path. Nothing here can resolve that, so it refuses rather
+        // than passing over it: this shape used to be invisible.
+        if (routed.length > 0) {
+          failures.push(
+            `${at(node)} declares routing decorators and no \`@Controller\` — a base ` +
+              'class whose routes this check cannot place',
+          );
+        }
+        return;
+      }
+
+      // The naming convention is not what the scan keys on any more, but a
+      // controller outside it is still worth saying aloud: every tool that
+      // looks for controllers by filename would miss it.
+      if (!file.endsWith('.controller.ts')) {
+        failures.push(
+          `${at(node)} declares a \`@Controller\` and is not named \`*.controller.ts\``,
+        );
+      }
+
+      for (const member of routed) {
+        for (const decorator of decoratorsOf(member)) {
+          const call = decoratorCall(decorator);
+          if (call === null) {
+            continue;
+          }
+          if (call.name === GENERIC_ROUTING) {
+            failures.push(
+              `${at(decorator)} uses \`@${GENERIC_ROUTING}\`, whose options object this ` +
+                'check does not read',
+            );
+            continue;
+          }
+          if (!ROUTING.has(call.name)) {
+            continue;
+          }
+          const paths = literalPaths(call.args);
+          if (paths === null) {
+            failures.push(
+              `${at(decorator)} declares \`@${call.name}\` with an argument this check ` +
+                'cannot read — a template literal, a constant, or an options object',
+            );
+            continue;
+          }
+          for (const routePath of paths) {
+            pending.push({
+              method: call.name.toUpperCase(),
+              base,
+              routePath,
+              where: at(decorator),
+            });
+          }
+        }
+      }
+    };
+
+    ts.forEachChild(source, visit);
   }
 
+  if (prefix === null) {
+    failures.push('no `setGlobalPrefix` was found in `api/src`, so no route path is known');
+    return new Map();
+  }
+
+  const routes = new Map();
+  for (const { method, base, routePath, where } of pending) {
+    const route = `${method} ${join(prefix, base, routePath)}`;
+    const already = routes.get(route);
+    if (already !== undefined) {
+      failures.push(`\`${route}\` is declared twice — ${already} and ${where}`);
+      continue;
+    }
+    routes.set(route, where);
+  }
   return routes;
 }
 
@@ -267,7 +339,6 @@ async function readLedger() {
     }
     throw error;
   }
-
   try {
     return JSON.parse(contents);
   } catch (error) {
@@ -282,7 +353,7 @@ async function screenIsAFileInWeb(screen) {
     return 'uses a backslash, which is a separator on Windows and a filename character on Linux';
   }
   const resolved = path.resolve(REPO, screen);
-  if (resolved !== WEB.replace(/[\\/]$/, '') && !resolved.startsWith(WEB)) {
+  if (!resolved.startsWith(WEB)) {
     return 'is outside `web/`';
   }
   try {
@@ -295,8 +366,7 @@ async function screenIsAFileInWeb(screen) {
   return null;
 }
 
-const prefix = await globalPrefix();
-const routes = await declaredRoutes(prefix);
+const routes = await readApi();
 const ledger = await readLedger();
 const entries = Array.isArray(ledger.routes) ? ledger.routes : [];
 
@@ -344,7 +414,7 @@ for (const entry of entries) {
     continue;
   }
 
-  // Counted by the same predicates that validate, so the printed figures cannot
+  // Counted by the predicates that validate, so the printed figures cannot
   // disagree with what passed. They did: `waived` was once counted by `typeof
   // entry.waived_to === 'string'`, which an empty string satisfies, so an entry
   // with a valid screen and `"waived_to": ""` moved the banner and failed nothing.
