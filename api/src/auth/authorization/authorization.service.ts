@@ -325,11 +325,21 @@ export class AuthorizationService {
       throw new CapabilityDeniedError(`You do not hold ${capability}.`, { capability });
     }
 
-    let coveredNothing = false;
+    // **Two ways a grant can cover no record, and they need different words.** The first
+    // is section 7's single-scope rule. The second is a `NETWORK` grant of a capability
+    // that resolves as of a period: no dated Network resolution exists, so the route
+    // refuses it, and telling an administrator it is "not over this record" would send
+    // them looking for a record when the thing to fix is the grant.
+    let coveredNothing: 'whole-church-only' | 'undated-network' | null = null;
 
     for (const grant of grants) {
       if (grantCoversNothing(capability, grant.scope.type)) {
-        coveredNothing = true;
+        coveredNothing = 'whole-church-only';
+        continue;
+      }
+
+      if (target.kind === 'report_scope' && grant.scope.type === ScopeType.Network) {
+        coveredNothing = 'undated-network';
         continue;
       }
 
@@ -341,7 +351,7 @@ export class AuthorizationService {
       }
     }
 
-    if (coveredNothing) {
+    if (coveredNothing === 'whole-church-only') {
       // **A different message, because "not over this record" would be a lie.** It
       // says another target would work; for a capability section 7 gives at Whole
       // Church only, none would. An administrator reading the generic wording goes
@@ -349,6 +359,16 @@ export class AuthorizationService {
       throw new ScopeDeniedError(
         `You hold ${capability}, but section 7 grants it at Whole Church only and yours is narrower. It covers no record at all.`,
         { capability, required_scope: ScopeType.WholeChurch },
+      );
+    }
+
+    if (coveredNothing === 'undated-network') {
+      // Same lie, different cause. This one is temporary by construction: it goes away
+      // when the Stop Condition recorded in `CLAUDE.md` is settled, and the wording says
+      // so rather than implying the grant was a mistake.
+      throw new ScopeDeniedError(
+        `You hold ${capability} at Network scope, and this request resolves as of a past period. A Network grant has no dated resolution, so it covers no record here.`,
+        { capability, scope_type: ScopeType.Network },
       );
     }
 
@@ -571,6 +591,9 @@ export class AuthorizationService {
           { includeSelf: false },
         );
       case ScopeType.Network:
+        // Unreachable: `authorize` refuses a Network grant against this target above, so
+        // that the refusal can name the grant rather than the record. Kept for
+        // exhaustiveness, and `false` because fail-closed is the answer either way.
         return false;
       case ScopeType.WholeChurch:
         return true;

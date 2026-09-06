@@ -104,9 +104,31 @@ describe('GET /api/v1/reports/dcc/monthly (sections 7, 20 and 22)', () => {
       expect(response.body).not.toHaveProperty('uniquePeople');
     });
 
-    it('refuses a Leader a sibling branch', async () => {
+    it('refuses a Leader their own upline', async () => {
       const response = await get(
         `period=${OCTOBER}&scope=LEADER&leader_id=${raymond.id}`,
+        markAccount,
+      );
+
+      expect(response.status).toBe(403);
+      expect(response.body.error.code).toBe('SCOPE_DENIED');
+    });
+
+    /**
+     * **A disjoint branch, which the case above is not.** `raymond -> manuel -> mark` has
+     * no sibling, so asking Mark for Raymond tests the upline direction twice and the
+     * sideways direction never — and sideways is `CLAUDE.md`'s first authorization case.
+     */
+    it('refuses a Leader a branch disjoint from their own', async () => {
+      const sibling = await createPerson(db, {
+        firstName: 'Noel',
+        lastName: 'Fajardo',
+        network: 'MENS',
+      });
+      await assignTo(db, sibling.id, raymond.id);
+
+      const response = await get(
+        `period=${OCTOBER}&scope=LEADER&leader_id=${sibling.id}`,
         markAccount,
       );
 
@@ -225,6 +247,70 @@ describe('GET /api/v1/reports/dcc/monthly (sections 7, 20 and 22)', () => {
 
       expect(response.status).toBe(403);
       expect(response.body.error.code).toBe('SCOPE_DENIED');
+      // **The message names the grant, not the record.** No target works for a Network
+      // grant here, so "not over this record" would send an administrator looking for a
+      // record when the thing to fix is the grant -- the distinction §7 already draws for
+      // a capability granted too narrowly.
+      expect(response.body.error.message).toContain('Network');
+      expect(response.body.error.details.scope_type).toBe('NETWORK');
+    });
+  });
+
+  /**
+   * `SUBTREE_EXCL_SELF` reaches this route only through an explicit Admin grant -- no role
+   * default issues `reports.view_subtree` at that scope -- so without these two cases the
+   * branch deciding whether a leader may read *their own* figures never runs, and flipping
+   * `includeSelf` reddens nothing.
+   */
+  describe('a SUBTREE_EXCL_SELF grant excludes the actor themselves', () => {
+    let excluded: TestAccount;
+
+    beforeEach(async () => {
+      const holder = await createPerson(db, {
+        firstName: 'Grace',
+        lastName: 'Hilario',
+        network: 'MENS',
+      });
+      await assignTo(db, holder.id, raymond.id);
+
+      excluded = await createAccount(app, db, { person: holder, roles: [] });
+      await db
+        .insertInto('capability_grants')
+        .values({
+          account_id: excluded.id,
+          capability: 'reports.view_subtree',
+          scope_type: 'SUBTREE_EXCL_SELF',
+          read_only: true,
+          reason: 'Exercises the branch no role default reaches.',
+          granted_by: adminAccount.id,
+        })
+        .execute();
+    });
+
+    it('refuses the holder their own figures', async () => {
+      const response = await get(
+        `period=${OCTOBER}&scope=LEADER&leader_id=${excluded.personId}`,
+        excluded,
+      );
+
+      expect(response.status).toBe(403);
+      expect(response.body.error.code).toBe('SCOPE_DENIED');
+    });
+
+    it('admits somebody beneath them', async () => {
+      const beneath = await createPerson(db, {
+        firstName: 'Ivan',
+        lastName: 'Joson',
+        network: 'MENS',
+      });
+      await assignTo(db, beneath.id, excluded.personId);
+
+      const response = await get(
+        `period=${OCTOBER}&scope=LEADER&leader_id=${beneath.id}`,
+        excluded,
+      );
+
+      expect(response.status).toBe(200);
     });
   });
 
@@ -237,11 +323,14 @@ describe('GET /api/v1/reports/dcc/monthly (sections 7, 20 and 22)', () => {
       expect(response.body.error.details.field).toBe('query.period');
     });
 
-    it('refuses a scope it does not compute', async () => {
+    it('refuses a scope it does not compute, at the guard rather than the DTO', async () => {
       const response = await get(`period=${OCTOBER}&scope=NETWORK`, adminAccount);
 
       expect(response.status).toBe(422);
       expect(response.body.error.code).toBe('VALIDATION_FAILED');
+      // The guard reads `scope` before the DTO does, so its field name is the one a
+      // client sees. Asserting the code alone cannot tell the two refusals apart.
+      expect(response.body.error.details.field).toBe('query.scope');
     });
 
     it('refuses a leader_id sent with WHOLE_CHURCH rather than ignoring it', async () => {
@@ -269,5 +358,9 @@ describe('GET /api/v1/reports/dcc/monthly (sections 7, 20 and 22)', () => {
     const response = await get(`period=${OCTOBER}&scope=WHOLE_CHURCH`, grantless);
 
     expect(response.status).toBe(403);
+    // §22 makes the two 403s deliberately distinct: an administrator diagnosing this
+    // needs to know whether to add a capability or widen a scope. Asserting the status
+    // alone passes under either and would not notice them being swapped.
+    expect(response.body.error.code).toBe('CAPABILITY_DENIED');
   });
 });

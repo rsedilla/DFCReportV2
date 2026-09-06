@@ -191,6 +191,38 @@ describe('which scope resolution a capability gets (section 7)', () => {
    */
   const UNDATED_CELL_VIEWING: string[] = ['CellsController.members'];
 
+  /**
+   * The converse, for the third resolution decision 0214 added.
+   *
+   * **`report_scope` is dated by construction** — it carries the instant the figures use,
+   * and `reportScopeCovers` walks the tree as of it. So a route declaring a *recording*
+   * capability against one would silently receive a resolution as of a past period, which
+   * is the mirror of the defect this file was written for: section 7 names three viewing
+   * capabilities and the guard branches on the target's kind, never on the capability.
+   *
+   * The existing case above cannot catch it — it asks which capability a Cell-resolved
+   * target carries, and this kind is not Cell-resolved. Written when the third resolution
+   * landed rather than after something used it wrongly.
+   */
+  it('gives a report scope selector only a viewing capability (section 7)', async () => {
+    const offending = (await declaredRoutes()).filter(
+      (route) =>
+        route.requirement.target.kind === 'report_scope' &&
+        !VIEWING.includes(route.requirement.capability),
+    );
+
+    expect(offending.map((route) => `${route.where} (${route.requirement.capability})`)).toEqual(
+      [],
+    );
+
+    // And the run reached something: a filter matching no route at all would pass this
+    // vacuously, which is the shape this whole file refuses.
+    const selectors = (await declaredRoutes()).filter(
+      (route) => route.requirement.target.kind === 'report_scope',
+    );
+    expect(selectors.length).toBeGreaterThan(0);
+  });
+
   it('gives a Cell-resolved target no viewing capability but the undated reads named here', async () => {
     const offending = (await declaredRoutes()).filter(
       (route) =>

@@ -11,10 +11,16 @@ import { isCalendarDate, startOfManilaDay } from './manila';
  * place a November edge in October's tree. A millisecond rather than a microsecond, because
  * that is the resolution a `timestamptz` and a JavaScript `Date` share.
  *
- * **Here rather than in `common/time`, deliberately.** The arithmetic is generic and the
- * *rule* is not — which instant a period ends at is a reporting decision with a ruling
- * attached, and a reader looking for why it is 23:59:59.999 should meet that reasoning
- * rather than find a bare helper beside the calendar functions.
+ * **Here in `common/time`, and it was in `reporting` until the guard needed it.** The
+ * argument for keeping it beside the reports was that the arithmetic is generic and the
+ * *rule* is not, so a reader looking for why it is 23:59:59.999 should meet the reasoning
+ * rather than a bare helper. That reasoning is kept — it is the paragraph above — and what
+ * moved it is decision 0214: the capability guard resolves a report's scope at the same
+ * instant the figures use, and **the same** is a property of sharing one function rather
+ * than of two derivations agreeing. `auth` importing from `reporting` would have been the
+ * wrong direction, so the shared thing moved to where shared things live.
+ *
+ * *The paragraph this replaces argued against the move, in the commit that performed it.*
  */
 export interface ReportingPeriod {
   /** Midnight on the first of the month, Asia/Manila. */
