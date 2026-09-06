@@ -78,7 +78,7 @@ A hand-maintained list is a list somebody eventually forgets to extend, which is
 its invalidators. The Section 22 storability check is the instance that has already paid:
 it derives its own field list and found one nobody would have listed, `SearchPeopleDto.q`.
 
-So the ledger is compared against routes read out of `api/src/**/*.controller.ts`, and a
+So the ledger is compared against routes read out of every `.ts` under `api/src`, and a
 route the ledger does not mention fails the build. A new endpoint cannot merge without a
 line saying which screen reaches it, a waiver naming the stage that owes one and why, or
 a statement that no screen is owed at all.
@@ -94,10 +94,25 @@ covered, so nothing about the ledger looks short.
 
 A derivation that silently under-reads is **worse than the declared list it replaced**: it
 claims a completeness a declared list never claimed, and the claim is what a reader relies
-on. So the rule is that the check refuses what it cannot parse rather than passing over it,
-and that is a property of this mechanism rather than a detail of one script. It is recorded
-here because the paragraph above gives deriving as the reason to trust the gate, and on its
-own that reason does not hold.
+on. So the first rule is that the check refuses what it cannot parse rather than passing
+over it, and that is a property of this mechanism rather than a detail of one script.
+
+**Refusing was not enough either, and that is the part worth carrying to the next check
+somebody derives.** The second implementation refused what it could not read and was broken
+by a subtler class: text it read **wrongly while believing it had read it**. An ordinary
+string containing `/*` — a cache key, `'reports/*'` — opened a comment that swallowed every
+route below it; a base class in another file carried routes the controller extending it
+serves; a second `@Controller` in one file gave its routes the first one's base path. None
+of those is a shape the scanner knows it cannot parse, so no quantity of added refusals
+reaches them. It also began failing on `@Controller` written inside an error message, which
+no ledger edit could fix.
+
+**So the derivation parses the language rather than scanning it**, using the TypeScript
+compiler's own parser at syntax level. That is what makes "derived, never declared"
+load-bearing instead of decorative: a string is a string and a decorator is a decorator,
+decided by the same code that compiles the API. Where a check of this kind cannot afford a
+real parser, it should claim less rather than assert a completeness its method cannot
+deliver.
 
 ## Why the ledger starts with every route already in it
 
