@@ -338,14 +338,16 @@ export class AuthorizationService {
         continue;
       }
 
-      // **A leader-scoped selector only.** A Whole Church selector under a Network grant is
-      // refused by section 7's non-narrowing rule and has nothing to do with datedness, so
-      // routing it here would answer it with the wrong reason.
-      if (
-        target.kind === 'report_scope' &&
-        target.leaderPersonId !== null &&
-        grant.scope.type === ScopeType.Network
-      ) {
+      // **Either selector, because what covers nothing is the grant.** A Network grant
+      // reaches no report at all: a leader-scoped selector has no dated resolution
+      // (decision 0215), and a Whole Church one is never covered by a narrower grant.
+      //
+      // *This excluded the Whole Church selector for one commit, on the ground that its
+      // refusal is about narrowing rather than datedness. That is true of the reason and
+      // wrong about the locus -- excluded, it fell through to "not over this record",
+      // which is the lie section 7 draws this distinction to avoid, since no target works
+      // for this grant. The reason belongs in the message; the selector belongs here.*
+      if (target.kind === 'report_scope' && grant.scope.type === ScopeType.Network) {
         coveredNothing = 'undated-network';
         continue;
       }
@@ -375,7 +377,7 @@ export class AuthorizationService {
       // false of the open month, of a future one, and of the very test that pinned it.
       // What is true regardless is that a Network grant has no dated resolution at all.
       throw new ScopeDeniedError(
-        `You hold ${capability} at Network scope, and it resolves as of a period. A Network grant has no dated resolution, so it covers no record here.`,
+        `You hold ${capability} at Network scope, which covers no report: a leader-scoped request has no dated Network resolution, and a Whole Church one is never covered by a narrower grant.`,
         { capability, scope_type: ScopeType.Network },
       );
     }
@@ -566,9 +568,11 @@ export class AuthorizationService {
    * nothing about a scope type that cannot honour it. `CLAUDE.md` carries that as a Stop
    * Condition; decision 0215 settles only that the route refuses, and section 7 states it.
    *
-   * *Settling it removes two things rather than one: the branch below, and the clause in
-   * `authorize` that produces the message. A first version of this sentence said deleting
-   * the branch was the whole cost, and was made false by the commit that added the second.*
+   * *Settling it removes this branch **and** the Network handling in `authorize` -- the
+   * flag, its union member and the throw. A first version said deleting this branch was the
+   * whole cost and was falsified by the commit that added the rest; a second said "two
+   * things" and undercounted. It is stated without a number now, which is the only version
+   * of this sentence that cannot go stale.*
    */
   private async reportScopeCovers(
     executor: Db,

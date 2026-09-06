@@ -188,7 +188,7 @@ describe('the dated subtree walk (decision 0206)', () => {
    * date lands strictly inside or outside the instant and nothing sits *on* it --
    * `architecture-guardian` mutated both bounds of the predicate and all **thirteen** of
    * those cases stayed green. *Written as sixteen for one commit, which counts three cases
-   * added by the batch that fixed the finding -- two of them not boundary cases at all.* The boundary is what the method's docblock calls load-bearing, so
+   * added by the batch that fixed the finding, none of them boundary cases.* The boundary is what the method's docblock calls load-bearing, so
    * it is pinned where `subtreeAsOf`'s counterpart already is.
    */
   describe('the dated upward walk', () => {

@@ -19,9 +19,15 @@ resolution at all. What has no dated resolution is the **grant**, not the reques
 version argued only from the closed-month case and left the open one with no stated ground
 while the code refused it anyway, which is the shape this ruling exists to close.*
 
-**A Whole Church selector is outside this.** A `NETWORK` grant never covers Whole Church,
-dated or not — that is Section 7's non-narrowing rule — so it keeps that refusal and its
-own reason rather than being told the problem is datedness.
+**A Whole Church selector is inside this, for a different reason.** A `NETWORK` grant never
+covers Whole Church, dated or not — that is Section 7's non-narrowing rule — so no selector
+of either kind reaches a record under such a grant. Both reasons are carried in one message,
+because what the grant holder needs to know is that the grant reaches nothing.
+
+*A first version excluded the Whole Church selector, reasoning that its refusal is about
+narrowing rather than datedness. The reasoning was right and the consequence was not:
+excluded, it fell through to "not over this record" — the message this ruling exists to
+avoid, on a grant for which no target works.*
 
 **A `NETWORK` grant of a capability that resolves as of a period covers no record, and the
 request is refused.** Fail-closed, and refused where the grant is read rather than where the

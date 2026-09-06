@@ -223,6 +223,42 @@ describe('GET /api/v1/reports/dcc/monthly (sections 7, 20 and 22)', () => {
    * *ought* to mean as a Stop Condition; 0215 settles only that the route refuses.
    */
   describe('a NETWORK grant is refused rather than resolved (decision 0215)', () => {
+    /**
+     * **The Whole Church half, which nothing pinned while it was wrong twice.** It was
+     * first refused for the wrong reason (datedness, which is not why a Network grant
+     * misses Whole Church) and then excluded from the branch, which dropped it onto "not
+     * over this record" — the message §7 draws this distinction to avoid, on a grant for
+     * which no target works.
+     */
+    it('refuses a Whole Church selector by naming the grant, not the record', async () => {
+      const outsider = await createPerson(db, {
+        firstName: 'Perla',
+        lastName: 'Kalaw',
+        network: 'MENS',
+      });
+      await assignTo(db, outsider.id, raymond.id);
+      const grantee = await createAccount(app, db, { person: outsider, roles: [] });
+      await db
+        .insertInto('capability_grants')
+        .values({
+          account_id: grantee.id,
+          capability: 'reports.view_subtree',
+          scope_type: 'NETWORK',
+          scope_network: 'MENS',
+          read_only: true,
+          reason: 'A Network grant reaches no report of either kind.',
+          granted_by: adminAccount.id,
+        })
+        .execute();
+
+      const response = await get(`period=${OCTOBER}&scope=WHOLE_CHURCH`, grantee);
+
+      expect(response.status).toBe(403);
+      expect(response.body.error.code).toBe('SCOPE_DENIED');
+      expect(response.body.error.message).not.toContain('not over this record');
+      expect(response.body.error.details.scope_type).toBe('NETWORK');
+    });
+
     it('refuses a Network-scoped grant of reports.view_subtree', async () => {
       const outsider = await createPerson(db, {
         firstName: 'Noel',
@@ -252,7 +288,7 @@ describe('GET /api/v1/reports/dcc/monthly (sections 7, 20 and 22)', () => {
       // grant here, so "not over this record" would send an administrator looking for a
       // record when the thing to fix is the grant -- the distinction §7 already draws for
       // a capability granted too narrowly.
-      expect(response.body.error.message).toContain('no dated resolution');
+      expect(response.body.error.message).toContain('no dated Network resolution');
       // **Not "past period".** The first version of this message said so, and this very
       // case sends a month that has not happened yet.
       expect(response.body.error.message).not.toContain('past period');
