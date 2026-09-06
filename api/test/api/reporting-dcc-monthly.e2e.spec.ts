@@ -232,20 +232,24 @@ describe('GET /api/v1/reports/dcc/monthly (sections 7, 20 and 22)', () => {
   });
 
   /**
-   * **Decision 0215**, not 0214 — which says nothing about Networks at all.
-   * `NetworksService.currentNetwork` is undated, so resolving a `NETWORK` grant here would
-   * answer a dated request with a present Network. `CLAUDE.md` carries what such a grant
-   * *ought* to mean as a Stop Condition; 0215 settles only that the route refuses.
+   * A `NETWORK` grant resolves through `network_as_of` at the instant the target carries
+   * (decision 0217), which for this target is the period being reported.
+   *
+   * **The dated pair below is the point.** A grant naming the Men's Network must cover a
+   * leader who was in it *during the period reported*, whoever they are today — and
+   * `currentNetwork`, which this branch used to be refused for lacking, answers about now.
+   * Swapping the resolution back to it turns the first case red and leaves every other
+   * case in this block green.
+   *
+   * *These replace two cases pinning decision 0215's outright refusal, made earlier on this
+   * branch on the ground that no dated Network resolution existed. One did.*
    */
-  describe('a NETWORK grant is refused rather than resolved (decision 0215)', () => {
-    /**
-     * **The Whole Church half, which nothing pinned while it was wrong twice.** It was
-     * first refused for the wrong reason (datedness, which is not why a Network grant
-     * misses Whole Church) and then excluded from the branch, which dropped it onto "not
-     * over this record" — the message §7 draws this distinction to avoid, on a grant for
-     * which no target works.
-     */
-    it('refuses a Whole Church selector by naming the grant, not the record', async () => {
+  describe('a NETWORK grant resolves as of the period (decision 0217)', () => {
+    const SWITCHED_AT = new Date('2026-07-05T10:00:00+08:00');
+    const AFTER_THE_SWITCH = '2026-07-01';
+
+    /** An account holding `reports.view_subtree` at one Network and nothing else. */
+    const granteeFor = async (network: 'MENS' | 'WOMENS'): Promise<TestAccount> => {
       const outsider = await createPerson(db, {
         firstName: 'Perla',
         lastName: 'Kalaw',
@@ -259,41 +263,88 @@ describe('GET /api/v1/reports/dcc/monthly (sections 7, 20 and 22)', () => {
           account_id: grantee.id,
           capability: 'reports.view_subtree',
           scope_type: 'NETWORK',
-          scope_network: 'MENS',
+          scope_network: network,
           read_only: true,
-          reason: 'A Network grant reaches no report of either kind.',
+          reason: 'A Network-scoped reporting grant, resolved as of the period reported.',
           granted_by: adminAccount.id,
         })
         .execute();
 
-      const response = await get(`period=${REPORTED_MONTH}&scope=WHOLE_CHURCH`, grantee);
+      return grantee;
+    };
+
+    /**
+     * Somebody in the Men's Network for the reported month who is in the Women's Network
+     * now. Written straight to `network_assignments` because section 4 reaches this state
+     * only through `people.correct_sex`, and the correction endpoint is not what is under
+     * test. They hold no pastoral edge, so nothing here is cross-Network.
+     */
+    const switcher = async (): Promise<TestPerson> => {
+      const person = await createPerson(db, {
+        firstName: 'Rosa',
+        lastName: 'Limbaga',
+        network: 'MENS',
+      });
+
+      await db
+        .updateTable('network_assignments')
+        .set({ ended_at: SWITCHED_AT })
+        .where('person_id', '=', person.id)
+        .execute();
+      await db
+        .insertInto('network_assignments')
+        .values({
+          person_id: person.id,
+          network: 'WOMENS',
+          reason: 'A fixture standing in for a section 4 correction.',
+          actor_id: null,
+          started_at: SWITCHED_AT,
+        })
+        .execute();
+
+      return person;
+    };
+
+    it('admits a leader in the granted Network during the period, though not now', async () => {
+      const person = await switcher();
+      const grantee = await granteeFor('MENS');
+
+      const response = await get(
+        `period=${REPORTED_MONTH}&scope=LEADER&leader_id=${person.id}`,
+        grantee,
+      );
+
+      // Under `currentNetwork` this is a 403: as of now, `person` is in the Women's
+      // Network. This is the case the whole ruling turns on.
+      expect(response.status).toBe(200);
+    });
+
+    it('refuses the same leader for a period after they left the granted Network', async () => {
+      const person = await switcher();
+      const grantee = await granteeFor('MENS');
+
+      const response = await get(
+        `period=${AFTER_THE_SWITCH}&scope=LEADER&leader_id=${person.id}`,
+        grantee,
+      );
 
       expect(response.status).toBe(403);
       expect(response.body.error.code).toBe('SCOPE_DENIED');
-      expect(response.body.error.message).not.toContain('not over this record');
-      expect(response.body.error.details.scope_type).toBe('NETWORK');
     });
 
-    it('refuses a Network-scoped grant of reports.view_subtree', async () => {
-      const outsider = await createPerson(db, {
-        firstName: 'Noel',
-        lastName: 'Fajardo',
-        network: 'MENS',
-      });
-      await assignTo(db, outsider.id, raymond.id);
-      const grantee = await createAccount(app, db, { person: outsider, roles: [] });
-      await db
-        .insertInto('capability_grants')
-        .values({
-          account_id: grantee.id,
-          capability: 'reports.view_subtree',
-          scope_type: 'NETWORK',
-          scope_network: 'MENS',
-          read_only: true,
-          reason: 'A Network-scoped reporting grant, which has no dated resolution.',
-          granted_by: adminAccount.id,
-        })
-        .execute();
+    it('admits a leader whose Network never changed', async () => {
+      const grantee = await granteeFor('MENS');
+
+      const response = await get(
+        `period=${REPORTED_MONTH}&scope=LEADER&leader_id=${mark.id}`,
+        grantee,
+      );
+
+      expect(response.status).toBe(200);
+    });
+
+    it('refuses a leader of the other Network', async () => {
+      const grantee = await granteeFor('WOMENS');
 
       const response = await get(
         `period=${REPORTED_MONTH}&scope=LEADER&leader_id=${mark.id}`,
@@ -302,15 +353,22 @@ describe('GET /api/v1/reports/dcc/monthly (sections 7, 20 and 22)', () => {
 
       expect(response.status).toBe(403);
       expect(response.body.error.code).toBe('SCOPE_DENIED');
-      // **The message names the grant, not the record.** No target works for a Network
-      // grant here, so "not over this record" would send an administrator looking for a
-      // record when the thing to fix is the grant -- the distinction §7 already draws for
-      // a capability granted too narrowly.
-      expect(response.body.error.message).toContain('no dated Network resolution');
-      // **Not "past period".** The first version of this message said so, and this very
-      // case sends a month that has not happened yet.
-      expect(response.body.error.message).not.toContain('past period');
-      expect(response.body.error.details.scope_type).toBe('NETWORK');
+    });
+
+    /**
+     * **Whole Church is not narrowed to the Network**, which is section 7's non-narrowing
+     * rule rather than anything about dates. The generic message is correct here and was
+     * not under decision 0215: a Network grant now does cover records, so "another target
+     * would work" is true.
+     */
+    it('refuses a Whole Church selector without narrowing it to the Network', async () => {
+      const grantee = await granteeFor('MENS');
+
+      const response = await get(`period=${REPORTED_MONTH}&scope=WHOLE_CHURCH`, grantee);
+
+      expect(response.status).toBe(403);
+      expect(response.body.error.code).toBe('SCOPE_DENIED');
+      expect(response.body).not.toHaveProperty('uniquePeople');
     });
   });
 
