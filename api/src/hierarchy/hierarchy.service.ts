@@ -75,6 +75,71 @@ export class HierarchyService {
   }
 
   /**
+   * The person's leaders as of an instant, nearest first.
+   *
+   * `ancestorsOf`'s dated counterpart, and the walk section 7's report authorization
+   * needs (decision 0214). That one filters `ended_at IS NULL` and so answers about
+   * **now**, which refuses a leader asking for October's figures about somebody who left
+   * their subtree in November -- exactly what decision 0207 says must not happen.
+   *
+   * **The predicate is `subtreeAsOf`'s, and deliberately the same one**: a row is in
+   * force over `[started_at, ended_at)`, so an assignment beginning exactly at the
+   * instant counts and one ending exactly at it does not. The two walks read the same
+   * tree from opposite ends, and answering differently would mean a leader could be
+   * outside a subtree that contains them.
+   *
+   * **Cycle-safe, because section 5 requires it of every walk of the tree** and this one
+   * is no exception -- a cycle is a data defect that must surface as an error rather than
+   * as a query that never returns.
+   */
+  async ancestorsAsOf(executor: Db, personId: string, at: Date): Promise<string[]> {
+    const result = await sql<{ leader_id: string | null; depth: number; is_cycle: boolean }>`
+      WITH RECURSIVE upline AS (
+        SELECT pa.person_id, pa.leader_id, 1 AS depth
+          FROM pastoral_assignments pa
+         WHERE pa.person_id = ${personId}::uuid
+           AND pa.started_at <= ${at}
+           AND (pa.ended_at IS NULL OR pa.ended_at > ${at})
+        UNION ALL
+        SELECT pa.person_id, pa.leader_id, u.depth + 1
+          FROM pastoral_assignments pa
+          JOIN upline u ON pa.person_id = u.leader_id
+         WHERE pa.started_at <= ${at}
+           AND (pa.ended_at IS NULL OR pa.ended_at > ${at})
+      ) CYCLE person_id SET is_cycle USING path
+      SELECT leader_id, depth, is_cycle FROM upline ORDER BY depth
+    `.execute(executor);
+
+    this.rejectCycle(result.rows, personId);
+
+    return result.rows
+      .map((row) => row.leader_id)
+      .filter((leaderId): leaderId is string => leaderId !== null);
+  }
+
+  /**
+   * Whether `personId` fell inside `rootPersonId`'s subtree at `at`.
+   *
+   * `isWithinSubtree`'s dated counterpart, and the same walk-up-from-the-target shape:
+   * the answer is the same as materializing the root's subtree, and the walk is bounded
+   * by the depth of the tree rather than by the size of a branch.
+   */
+  async isWithinSubtreeAsOf(
+    executor: Db,
+    rootPersonId: string,
+    personId: string,
+    at: Date,
+    options: { includeSelf: boolean },
+  ): Promise<boolean> {
+    if (sameId(rootPersonId, personId)) {
+      return options.includeSelf;
+    }
+
+    const ancestors = await this.ancestorsAsOf(executor, personId, at);
+    return ancestors.some((ancestorId) => sameId(ancestorId, rootPersonId));
+  }
+
+  /**
    * The person's pastoral path, root first, ending with the person themselves
    * (section 8: "when an authorized user opens a person, show their pastoral
    * path").

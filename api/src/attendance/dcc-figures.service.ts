@@ -1,10 +1,9 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { sql } from 'kysely';
 
-import { ValidationFailedError } from '../common/errors/api-error';
 import { DATABASE, type Db } from '../database/database.module';
-import { isCalendarDate } from '../common/time/manila';
 import { windowClosesAt } from '../common/time/submission-window';
+import { assertReportingMonth } from '../common/time/reporting-period';
 
 /**
  * One person's DCC attendance, reduced to the two numbers a monthly report needs.
@@ -213,62 +212,5 @@ export class DccFiguresService {
           lifetimeThroughMonth: Number(row.lifetime_through_month),
         })),
     };
-  }
-}
-
-/**
- * A reporting month is the first of a month, which is this repository's existing spelling
- * of one (`submission-window.ts`). Anything else is refused rather than answered.
- *
- * **The month comparison in the query is a string comparison and its correctness rests on
- * the shape.** `to_char` zero-pads, so a `YYYY-MM` prefix sorts lexicographically exactly
- * as it sorts chronologically — but only against a well-formed argument. A month written
- * `2027-1` matches nothing and sorts *before* `2027-10`, so a malformed value would yield a
- * plausible, understated report rather than an error. That is the shape decision 0185
- * refuses for a date-only field and decision 0200 for a format validator, and an
- * understated report is worse than a refused one because nobody can see it is wrong.
- *
- * **It composes `isCalendarDate` rather than writing a fifth regex**, which is section 22's
- * one-predicate rule: "One rather than several, because the alternative is what this system
- * actually had: three conventions for a single rule." A hand-written
- * `\d{4}-(0[1-9]|1[0-2])-01` admitted `0026-01-01`, which `isCalendarDate` refuses and
- * documents why — `Date.UTC(26, ...)` applies the legacy two-digit-year mapping, so that
- * month's window would have been computed from 1926. No wrong answer was producible, since
- * every such year is past and `open` is false either way; it is the class of divergence the
- * rule exists to stop.
- *
- * **The refusal names the field**, which section 22 requires because it is what a client
- * needs in order to fix it, and which every other `ValidationFailedError` in this
- * application does.
- *
- * `ValidationFailedError` rather than a plain `Error`: `reportingMonthOf` records why, in
- * this same domain. The exception filter renders an unrecognised `Error` as
- * `INTERNAL_ERROR`, so a refusal thrown as one turns a client's bad month into a 500.
- *
- * **Exported, because this is no longer the first thing to touch the value.** Leader scope
- * derives a period's bounds before any figure is read, and deriving them from an unvalidated
- * month produced a refusal naming `date` and quoting a month the caller never sent — decision
- * 0185's shape, one call earlier. Whoever touches a reporting month first calls this.
- */
-export function assertReportingMonth(reportingMonth: string): void {
-  if (!isCalendarDate(reportingMonth) || !reportingMonth.endsWith('-01')) {
-    throw new ValidationFailedError('A reporting month is the first of a month, as YYYY-MM-01.', {
-      field: 'period',
-      value: reportingMonth,
-    });
-  }
-
-  // **December 9999 is refused here, and it is the last month this format can express.**
-  // Every date in this system is `YYYY-MM-DD` with a four-digit year, so `9999-12` is the
-  // only month whose *successor* is not writable — and a period's end is derived from that
-  // successor. Left to reach the derivation it threw naming `date` and quoting
-  // `10000-01-01`, a month no caller sent: decision 0185's shape, and the identical
-  // signature to the `2020-13-01` case this function was reordered to close. Refused where
-  // the field is still `period`, rather than closed one call later where it is not.
-  if (reportingMonth.startsWith('9999-12')) {
-    throw new ValidationFailedError(
-      'A reporting month must be before December 9999, which is the last month this date format can express.',
-      { field: 'period', value: reportingMonth },
-    );
   }
 }

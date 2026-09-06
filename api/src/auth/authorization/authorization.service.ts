@@ -325,11 +325,31 @@ export class AuthorizationService {
       throw new CapabilityDeniedError(`You do not hold ${capability}.`, { capability });
     }
 
-    let coveredNothing = false;
+    // **Two ways a grant can cover no record, and they need different words.** The first
+    // is section 7's single-scope rule. The second is a `NETWORK` grant against a report
+    // scope selector, which reaches no report of either kind -- the branch below carries
+    // both of its reasons, and neither is that the actor asked about the wrong record.
+    // Telling an administrator it is "not over this record" would send them looking for a
+    // record when the thing to fix is the grant.
+    let coveredNothing: 'whole-church-only' | 'undated-network' | null = null;
 
     for (const grant of grants) {
       if (grantCoversNothing(capability, grant.scope.type)) {
-        coveredNothing = true;
+        coveredNothing = 'whole-church-only';
+        continue;
+      }
+
+      // **Either selector, because what covers nothing is the grant.** A Network grant
+      // reaches no report at all: a leader-scoped selector has no dated resolution
+      // (decision 0215), and a Whole Church one is never covered by a narrower grant.
+      //
+      // *This excluded the Whole Church selector for one commit, on the ground that its
+      // refusal is about narrowing rather than datedness. That is true of the reason and
+      // wrong about the locus -- excluded, it fell through to "not over this record",
+      // which is the lie section 7 draws this distinction to avoid, since no target works
+      // for this grant. The reason belongs in the message; the selector belongs here.*
+      if (target.kind === 'report_scope' && grant.scope.type === ScopeType.Network) {
+        coveredNothing = 'undated-network';
         continue;
       }
 
@@ -341,7 +361,7 @@ export class AuthorizationService {
       }
     }
 
-    if (coveredNothing) {
+    if (coveredNothing === 'whole-church-only') {
       // **A different message, because "not over this record" would be a lie.** It
       // says another target would work; for a capability section 7 gives at Whole
       // Church only, none would. An administrator reading the generic wording goes
@@ -349,6 +369,17 @@ export class AuthorizationService {
       throw new ScopeDeniedError(
         `You hold ${capability}, but section 7 grants it at Whole Church only and yours is narrower. It covers no record at all.`,
         { capability, required_scope: ScopeType.WholeChurch },
+      );
+    }
+
+    if (coveredNothing === 'undated-network') {
+      // Same lie, different cause (decision 0215). **It says nothing about which period
+      // was asked for**: a first version said "resolves as of a past period", which was
+      // false of the open month, of a future one, and of the very test that pinned it.
+      // What is true regardless is that a Network grant has no dated resolution at all.
+      throw new ScopeDeniedError(
+        `You hold ${capability} at Network scope, which covers no report: a leader-scoped request has no dated Network resolution, and a Whole Church one is never covered by a narrower grant.`,
+        { capability, scope_type: ScopeType.Network },
       );
     }
 
@@ -497,6 +528,10 @@ export class AuthorizationService {
       return false;
     }
 
+    if (target.kind === 'report_scope') {
+      return this.reportScopeCovers(executor, scope, target, actor);
+    }
+
     const personId = await this.personBehind(executor, target);
     if (personId === null) {
       return false;
@@ -523,10 +558,69 @@ export class AuthorizationService {
     }
   }
 
+  /**
+   * A report scope selector, resolved as of the period being reported (decision 0207)
+   * through the pastoral tree in force at that instant (decision 0214).
+   *
+   * **A `NETWORK` grant is refused rather than resolved**, and that is a deliberate
+   * fail-closed answer rather than an oversight. `currentNetwork` is undated, so
+   * resolving one here would authorize an October report against the leader's
+   * **November** Network -- and section 7 fixes datedness to the capability while saying
+   * nothing about a scope type that cannot honour it. `CLAUDE.md` carries that as a Stop
+   * Condition; decision 0215 settles only that the route refuses, and section 7 states it.
+   *
+   * *Settling it removes this branch and the Network handling in `authorize`. Two earlier
+   * versions of this sentence enumerated what that is and were wrong both times -- once by
+   * naming only this branch, once by naming a flag that survives, since `coveredNothing`
+   * also carries section 7's single-scope refusal. An enumeration here is a count in words;
+   * `grep` for the union member instead.*
+   */
+  private async reportScopeCovers(
+    executor: Db,
+    scope: Scope,
+    target: Extract<Target, { kind: 'report_scope' }>,
+    actor: Actor,
+  ): Promise<boolean> {
+    // Whole Church is reached only by a Whole Church grant, which `scopeCovers` has
+    // already answered above. Anything narrower does not cover it, and section 7 refuses
+    // rather than narrowing the request to the scope the actor does hold.
+    if (target.leaderPersonId === null) {
+      return false;
+    }
+
+    switch (scope.type) {
+      case ScopeType.OwnSubtree:
+        return this.hierarchy.isWithinSubtreeAsOf(
+          executor,
+          actor.personId,
+          target.leaderPersonId,
+          target.at,
+          { includeSelf: true },
+        );
+      case ScopeType.SubtreeExclSelf:
+        return this.hierarchy.isWithinSubtreeAsOf(
+          executor,
+          actor.personId,
+          target.leaderPersonId,
+          target.at,
+          { includeSelf: false },
+        );
+      case ScopeType.Network:
+        // **Not dead, and not the primary enforcement either.** `authorize` refuses this
+        // above so the refusal can name the grant rather than the record (decision 0215),
+        // but `coversWith` is a second public entry that reaches here without passing
+        // that clause. No caller hands it a `report_scope` target today, and this is what
+        // makes that an accident of the call graph rather than a hole.
+        return false;
+      case ScopeType.WholeChurch:
+        return true;
+    }
+  }
+
   /** An Account resolves through its Person; a Person is already one (section 7). */
   private async personBehind(
     executor: Db,
-    target: Exclude<Target, { kind: 'church' }>,
+    target: Exclude<Target, { kind: 'church' } | { kind: 'report_scope' }>,
   ): Promise<string | null> {
     if (target.kind === 'person') {
       return target.personId;

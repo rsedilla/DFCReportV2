@@ -14,10 +14,11 @@
     "requirement is satisfied by any non-empty string. `no_screen_owed` is for a route no",
     "person ever reaches. The latter two carry a reason, because nothing can check either.",
     "",
-    "Thirteen of the thirty-five are reached by a screen today; twenty-one are waived and",
-    "one owes none. That is the interface debt Stage 3 and Stage 4 accumulated with",
-    "nothing recording it (ruling of 2026-09-06), written down rather than discovered at",
-    "the pilot. The check prints these three numbers, so they are read rather than trusted."
+    "The check prints the three counts on every run, so read them there rather than here:",
+    "a number written in this comment is one nobody updates. It said thirteen of thirty-five",
+    "with twenty-one waived, and was stale the moment the first reporting route landed.",
+    "What the counts describe is the interface debt Stage 3 and Stage 4 accumulated with",
+    "nothing recording it (ruling of 2026-09-06), written down rather than found at the pilot."
   ],
   "stages": [
     "screens block",
@@ -181,6 +182,11 @@
       "route": "POST /api/v1/cells/leadership-requests/:request_id/decline",
       "waived_to": "after the pilot — Admin screens",
       "reason": "The other outcome of the queue, and a decision is final (decision 0147)."
+    },
+    {
+      "route": "GET /api/v1/reports/dcc/monthly",
+      "waived_to": "screens block",
+      "reason": "The DCC figures a leader reads (§9, §12, §20). Dashboard is the screen in that block which shows them, and it does not exist yet; the route lands first so the dated authorization walk it needs is reviewed once rather than alongside eight screens. Network Summary would be the drill-down and is deliberately not named here — the roadmap defers it past the pilot, outside this block."
     },
     {
       "route": "GET /api/v1/health",
