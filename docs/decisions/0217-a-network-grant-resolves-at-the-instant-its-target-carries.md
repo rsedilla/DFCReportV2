@@ -71,9 +71,11 @@ no answer in practice. That is an argument for getting it right cheaply, not for
 ## A Network unknown at that instant covers nothing
 
 `network_as_of` returns null for an instant before the person was encoded, and Section 4 is
-deliberate about that: "The system is authoritative for network history from each person's
-encoding date forward. Do not attempt to reconstruct or infer network history from before the
-person was encoded."
+deliberate about that. It forbids the reconstruction — "Do not attempt to reconstruct or infer
+network history from before the person was encoded" — and then states the positive half, that
+"the system is authoritative for network history from each person's encoding date forward".
+*Quoted in that order, which is Section 4's. A first version ran the two together as one
+continuous quotation with the halves reversed.*
 
 A null is therefore a real answer and not a missing one, and it covers nothing. The comparison
 stays `network !== null && network === scope.network`, which is what the undated branch

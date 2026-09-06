@@ -69,8 +69,15 @@ the guard's predicate through `isReportingMonth`, which runs synchronously in
 clock in the guard or an async validator in a synchronous path. It bounds the *shape* and
 the two bounds that need no clock, which is what its callers need of it.
 
-**So the refusal is in `ReportingService.dccMonthly`, inside the report's transaction**, and
-first within it, so that no tree walk is performed for a period that will be refused.
+**So the refusal is in `reporting`, inside the report's transaction**, and first within it,
+so that no tree walk is performed for a period that will be refused.
+
+It sits in `ReportingService.overPeriod`, the private seam that opens that transaction, and
+not in the one report method. `architecture-guardian` found it shipped with a single call
+site: Section 22 names five report routes, one is built, and nothing would have reddened for
+the second omitting this rule — or the shape validation, or the isolation level, which were
+three statements at the top of one method. A report cannot now open its transaction without
+passing all three, because the seam is what owns the transaction.
 
 ## Authorization is answered first, and that is not incidental
 
@@ -80,9 +87,11 @@ next month for a leader outside their subtree is answered `SCOPE_DENIED`, not
 the right answer for free rather than by a second mechanism. What a request may be told
 about its own content is answered after whether the actor may ask it at all.
 
-The guard still resolves scope at a future instant for such a request, and the answer is
-discarded. That is accepted: refusing in the guard instead would put a host-clock month
-comparison in the one place this ruling has just moved it out of.
+The guard still resolves scope at a future instant for every such request, including the one
+it goes on to admit — and for that one the work is thrown away when the service refuses. That
+is accepted: refusing in the guard instead would put a host-clock month comparison in the one
+place this ruling has just moved it out of. *A first version said the answer is discarded, in
+a paragraph whose example is a request whose guard answer is the response.*
 
 ## What this costs
 

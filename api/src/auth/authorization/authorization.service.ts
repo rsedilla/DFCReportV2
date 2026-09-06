@@ -329,10 +329,11 @@ export class AuthorizationService {
     // single-scope rule is the one case: telling an administrator it is "not over this
     // record" would send them looking for a record when the thing to fix is the grant.
     //
-    // *A `NETWORK` grant against a report scope selector was a second such case for two
-    // days (decision 0215), on the ground that no dated Network resolution existed. One
-    // did, and decision 0217 resolves such a grant through `network_as_of` at the instant
-    // the target carries -- so it covers records again and needs no message of its own.*
+    // *A `NETWORK` grant against a report scope selector was a second such case earlier on
+    // this branch (decision 0215), on the ground that no dated Network resolution existed.
+    // One did, and decision 0217 resolves such a grant through `network_as_of` at the
+    // instant the target carries -- so it covers records again and needs no message of its
+    // own.*
     let coveredNothing = false;
 
     for (const grant of grants) {

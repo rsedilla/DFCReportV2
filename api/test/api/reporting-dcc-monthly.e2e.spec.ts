@@ -1,7 +1,7 @@
 import request from 'supertest';
 
-import { manilaDayOf, startOfNextManilaMonth } from '../../src/common/time/manila';
-import { reportingMonthOf } from '../../src/common/time/submission-window';
+import { startOfNextManilaMonth } from '../../src/common/time/manila';
+import { currentReportingMonth, databaseNow } from '../../src/common/time/submission-window';
 import { createTestDb, truncateAll } from '../setup/database';
 import { assignTo, createAccount, createPerson, createTestApp } from '../setup/fixtures';
 
@@ -54,8 +54,10 @@ describe('GET /api/v1/reports/dcc/monthly (sections 7, 20 and 22)', () => {
    * what it does in the test cannot drift past the clock unnoticed.
    *
    * Fixed dates rather than clock-relative ones, because the tree these cases build is
-   * dated and a moving period would move the assertions with it. The two cases that pin
-   * the boundary itself are the ones that read the clock, and they are the only ones.
+   * dated and a moving period would move the assertions with it. The cases that pin the
+   * boundary itself read the clock instead, and they are confined to one block — which is
+   * a fact a reader can check by grepping that block's name, rather than a count that goes
+   * stale the next time one is added. *It was a count, and was wrong one commit later.*
    */
   const REPORTED_MONTH = '2026-06-01';
   const IN_PERIOD = new Date('2026-06-05T10:00:00+08:00');
@@ -236,7 +238,8 @@ describe('GET /api/v1/reports/dcc/monthly (sections 7, 20 and 22)', () => {
    * (decision 0217), which for this target is the period being reported.
    *
    * **The dated pair below is the point.** A grant naming the Men's Network must cover a
-   * leader who was in it *during the period reported*, whoever they are today — and
+   * leader who was in it **at the instant the period resolves at** — its last millisecond,
+   * not any point within it — whoever they are today, and
    * `currentNetwork`, which this branch used to be refused for lacking, answers about now.
    * Swapping the resolution back to it turns the first case red and leaves every other
    * case in this block green.
@@ -447,7 +450,12 @@ describe('GET /api/v1/reports/dcc/monthly (sections 7, 20 and 22)', () => {
    */
   describe('a period that has not begun (decision 0216)', () => {
     it('reports the current month, whose start is behind the clock and whose end is not', async () => {
-      const thisMonth = reportingMonthOf(manilaDayOf(new Date()));
+      // **The database's clock, not this process's.** The rule under test compares against
+      // `databaseNow`; deriving the month from `new Date()` would let a host clock a
+      // millisecond ahead at a Manila month boundary ask for a month the service says has
+      // not begun. That is the split decision 0160 names, and `currentReportingMonth` is
+      // this repository's own answer to it.
+      const thisMonth = await currentReportingMonth(db);
 
       const response = await get(`period=${thisMonth}&scope=WHOLE_CHURCH`, adminAccount);
 
@@ -459,7 +467,7 @@ describe('GET /api/v1/reports/dcc/monthly (sections 7, 20 and 22)', () => {
     });
 
     it('refuses the next month', async () => {
-      const nextMonth = startOfNextManilaMonth(new Date());
+      const nextMonth = startOfNextManilaMonth(await databaseNow(db));
 
       const response = await get(`period=${nextMonth}&scope=WHOLE_CHURCH`, adminAccount);
 
@@ -480,7 +488,7 @@ describe('GET /api/v1/reports/dcc/monthly (sections 7, 20 and 22)', () => {
      * would silently turn this 403 into a 422.
      */
     it('answers SCOPE_DENIED, not VALIDATION_FAILED, for a scope the actor does not hold', async () => {
-      const nextMonth = startOfNextManilaMonth(new Date());
+      const nextMonth = startOfNextManilaMonth(await databaseNow(db));
 
       const response = await get(`period=${nextMonth}&scope=WHOLE_CHURCH`, markAccount);
 

@@ -2,11 +2,15 @@ import { Inject, Injectable } from '@nestjs/common';
 
 import { DccFiguresService, type DccPersonFigures } from '../attendance/dcc-figures.service';
 import { DATABASE, type Db } from '../database/database.module';
+import type { Database } from '../database/schema';
 import { HierarchyService } from '../hierarchy/hierarchy.service';
+
+import type { Transaction } from 'kysely';
 import {
   assertReportingMonth,
   assertReportingPeriodHasBegun,
   reportingPeriodBounds,
+  type ReportingPeriod,
 } from '../common/time/reporting-period';
 
 /**
@@ -110,6 +114,59 @@ export class ReportingService {
    * events: nobody could attend, so there is nothing to bucket rather than a row of zeroes.
    */
   async dccMonthly(scope: ReportScope, period: string): Promise<DccMonthlyReport> {
+    return this.overPeriod(period, async (trx, { start, end }) => {
+      // The placement graph, walked by the module that owns `pastoral_assignments`
+      // (section 2, decision 0206). `undefined` rather than a list is Whole Church, and
+      // the difference from an empty list is load-bearing: a leader with nobody beneath
+      // them reports zero, which is not the same question as "everybody".
+      const personIds =
+        scope.kind === 'LEADER'
+          ? await this.hierarchy.reportingSubtree(trx, scope.personId, start, end)
+          : undefined;
+
+      const figures = await this.dccFigures.monthFigures(period, { executor: trx, personIds });
+
+      return {
+        scope,
+        period,
+        open: figures.open,
+        n: figures.n,
+        removedEvents: figures.removed,
+        uniquePeople: figures.people.length,
+        classification: classify(figures.people),
+        buckets: bucket(figures.people, figures.n),
+      };
+    });
+  }
+
+  /**
+   * The one way a report reads the database, and the reason it is a seam rather than a
+   * convention.
+   *
+   * **Every rule a report owes its period is applied here, once.** A report validates the
+   * month's shape (decision 0185), refuses a period that has not begun (decision 0216), and
+   * computes inside a single `READ ONLY REPEATABLE READ` transaction (decision 0210). Those
+   * were three statements at the top of the one report that exists, which made each of them
+   * a thing the *next* report route has to remember -- and section 22 names five report
+   * routes, of which one is built. Nothing would have reddened for the second route
+   * omitting any of the three: not a test, not a derivation, not a type.
+   *
+   * That is the one-rule-one-path shape `CLAUDE.md` records against this project more often
+   * than any other, and it is closed structurally rather than by a checklist: a report
+   * cannot open its transaction without coming through here, because this is what owns the
+   * transaction. Adding a report route gets all three by construction.
+   *
+   * *Found by `architecture-guardian` on decision 0216, which had shipped the rule with one
+   * call site and nothing able to fail on a second.*
+   *
+   * The bounds are handed to the callback rather than re-derived inside it, so the tree walk
+   * and the guard's scope resolution cannot drift apart -- decision 0214 makes **the same**
+   * instant a property of sharing one derivation.
+   */
+  private async overPeriod<T>(
+    period: string,
+    compute: (trx: Transaction<Database>, bounds: ReportingPeriod) => Promise<T>,
+  ): Promise<T> {
     // **Refused before anything is derived from it.** `reportingPeriodBounds` validates
     // nothing and will happily build `2020-14-01` out of `2020-13-01`, so a malformed month
     // reaching it is answered by the *date* helper, naming a field the caller never sent and
@@ -117,14 +174,14 @@ export class ReportingService {
     // client needs in order to fix it, and that field is `period`.
     assertReportingMonth(period);
 
-    const { start, end } = reportingPeriodBounds(period);
+    const bounds = reportingPeriodBounds(period);
 
     return this.db
       .transaction()
       .setIsolationLevel('repeatable read')
       .setAccessMode('read only')
       .execute(async (trx) => {
-        // **First in the transaction, before the tree is walked** (decision 0216). A period
+        // **First in the transaction, before anything is walked** (decision 0216). A period
         // that has not begun can hold no attendance record (section 9), and answering it
         // would return a complete report saying nobody attended anything -- the calendar
         // runs thirteen months ahead, so `n` and the coverage denominator are real. The
@@ -133,27 +190,7 @@ export class ReportingService {
         // not hold is still answered `SCOPE_DENIED` first (section 7, decision 0193).
         await assertReportingPeriodHasBegun(trx, period);
 
-        // The placement graph, walked by the module that owns `pastoral_assignments`
-        // (section 2, decision 0206). `undefined` rather than a list is Whole Church, and
-        // the difference from an empty list is load-bearing: a leader with nobody beneath
-        // them reports zero, which is not the same question as "everybody".
-        const personIds =
-          scope.kind === 'LEADER'
-            ? await this.hierarchy.reportingSubtree(trx, scope.personId, start, end)
-            : undefined;
-
-        const figures = await this.dccFigures.monthFigures(period, { executor: trx, personIds });
-
-        return {
-          scope,
-          period,
-          open: figures.open,
-          n: figures.n,
-          removedEvents: figures.removed,
-          uniquePeople: figures.people.length,
-          classification: classify(figures.people),
-          buckets: bucket(figures.people, figures.n),
-        };
+        return compute(trx, bounds);
       });
   }
 }

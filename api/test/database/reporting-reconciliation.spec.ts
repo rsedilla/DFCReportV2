@@ -8,8 +8,7 @@ import { DccFiguresService } from '../../src/attendance/dcc-figures.service';
 import { HierarchyService } from '../../src/hierarchy/hierarchy.service';
 import { ReportingService } from '../../src/reporting/reporting.service';
 import { ValidationFailedError } from '../../src/common/errors/api-error';
-import { manilaDayOf } from '../../src/common/time/manila';
-import { reportingMonthOf } from '../../src/common/time/submission-window';
+import { currentReportingMonth } from '../../src/common/time/submission-window';
 import { createTestDb, truncateAll } from '../setup/database';
 import { assignTo, createPerson } from '../setup/fixtures';
 
@@ -369,7 +368,9 @@ describe('section 20 reconciliation, DCC monthly (Stage 5 Done-when)', () => {
     // fixture and always was: its window closes on the 8th of the month after, so it is
     // open at every instant within it, and unlike 2099 it is a month somebody could
     // actually ask for.
-    const thisMonth = reportingMonthOf(manilaDayOf(new Date()));
+    // The database's clock, for the reason `reporting-dcc-monthly.e2e.spec.ts` gives at the
+    // same call: the rule under test is decided on it (decision 0160).
+    const thisMonth = await currentReportingMonth(db);
     const open = await reporting.dccMonthly({ kind: 'WHOLE_CHURCH' }, thisMonth);
     expect(open.open).toBe(true);
     expect(open.n).toBe(0);
