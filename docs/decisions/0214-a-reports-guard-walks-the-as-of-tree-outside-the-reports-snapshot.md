@@ -7,9 +7,17 @@ inside the report's own snapshot, which graph it walks, and the dated upward wal
 **One ruling, because one change owes all three and they meet at one seam.** That is the
 opposite of the mistake decision 0211 made and is worth stating as such: 0211 was withdrawn
 because it was drafted **early and separately**, which coupled it to 0210 at a seam neither
-ruling owned. These three are owed by a single route, they are being settled with that
-route's code in hand rather than predicted, and answering any one of them alone leaves the
-other two undecidable.
+ruling owned. These three are owed by a single route, and answering any one alone leaves
+the other two undecidable.
+
+**No route exists yet, and this ruling does not pretend otherwise.** What is in hand is the
+service the route will call, the guard it will pass through, and the walk it will need —
+`ReportingService.dccMonthly`, `AuthorizationService.covers`, `HierarchyService.ancestorsOf`
+— all of which were read before this was written. That is a weaker claim than settling a
+ruling against a built route and a stronger one than 0211's, which was drafted with none of
+it. *A first version of this paragraph said the three were "settled with that route's code
+in hand", which was false in the plainest way: the route is what this ruling exists to make
+buildable.*
 
 ## The route this is about
 
@@ -23,25 +31,38 @@ resolves as of the period being reported.
 **Outside**, in its own read, on the pooled connection — which is where every guard in this
 application already runs.
 
-This is the answer that changes nothing rather than the answer that is merely safer, and
-that is the argument for it. `AuthorizationService.covers` **deliberately takes no
-executor** — a signature accepting one "would invite exactly the call this method exists to
-make possible, and would silently fail to deliver it" — and the docblock on it states the
-seam this question is asking about:
+`AuthorizationService.covers` **deliberately takes no executor** — a signature accepting one
+"would invite exactly the call this method exists to make possible, and would silently fail
+to deliver it" — and its sibling `coversWith` takes one so that a caller already inside a
+transaction can decide there.
 
-> The split is along the right seam rather than a convenient one. An account's grants are a
-> fact about the account and cannot change under a tree write, so reading them before the
-> transaction costs nothing in correctness; *scope* is a fact about the tree, and that is
-> the half that has to see the transaction.
+**Sixteen call sites across seven services take `coversWith`, and they are not taking it for
+liveness alone.** Two say so in terms. `people.reassignment.service.ts` takes it "inside its
+own transaction, **after the lock**: a coverage test over the pool would answer from the
+state the request arrived with, which is the staleness the lock exists to remove";
+`cells.closure.service.ts` takes it because "*whether to ask* depends on an instant only the
+transaction has". Those are consistency reasons.
 
-**And `coversWith` exists for liveness, not for snapshot consistency**, which is worth
-checking rather than assuming — its own docblock says it "exists so that a caller inside a
-transaction touches the pool exactly never", because a pooled read taken while holding a
-transaction asks a bounded pool for a second connection, which Section 24 names as a
-liveness hazard. Its callers are the two attendance write paths, and both take it for that
-reason. So **no caller in this application re-decides authorization inside a transaction in
-order to see a consistent snapshot**; they do it to avoid a second connection. A report that
-authorizes before it opens its transaction has neither problem.
+*This ruling's first version said `coversWith` exists for liveness and not for snapshot
+consistency, that its callers were "the two attendance write paths", and that no caller in
+this application re-decides authorization inside a transaction to see a consistent snapshot.
+All three were false, and the paragraph making them had announced itself as "worth checking
+rather than assuming". They are recorded rather than deleted because the corrected reading
+is what carries the answer, and a reader who checks the code will find the pattern this
+ruling declines to follow.*
+
+**The discriminator is the lock, and it is the discriminator in every one of those cases.**
+Each of those callers takes a lock and re-decides *after* it, because taking the lock is
+what changed the state the decision rests on — that is Section 24's lock-then-decide shape,
+used correctly. **A report takes no row or advisory lock and writes nothing**, so nothing
+changes under it: there is no post-lock state for a second read to see that the pooled read
+did not. The pattern is inapplicable rather than merely unfashionable.
+
+*The seam docblock on `coversWith` says "*scope* is a fact about the tree, and that is the
+half that has to see the transaction", which read alone points the other way. It is
+describing a caller that has taken a lock — the half that has to see **that** transaction is
+the half the lock changed. It is quoted here because a reader will meet it, not because it
+supports the conclusion.*
 
 `ReportingService.dccMonthly` opens its `READ ONLY` `REPEATABLE READ` transaction *inside
 itself*, after the guard has already decided. So "outside" is the architecture as it stands,
@@ -53,26 +74,43 @@ isolation exception on three clauses — no row or advisory lock, writes nothing
 authorization — and says the third is "a fact about the system as it stands rather than a
 property of reporting", adding that "a change that measures an actor's reach against the
 same snapshot a report is computed from would falsify it". This ruling is the change that
-arrives at that sentence, and it declines to falsify it. Section 24 needs no amendment
-beyond deleting its own "no reporting route exists" observation, which this slice makes
-untrue.
+arrives at that sentence, and it declines to falsify it. Section 24's observation that "no
+reporting route exists" is **replaced by a rule rather than by a fact**: the clause holds
+because a report's authorization is decided before its transaction opens, which this ruling
+fixes, and not because a route has appeared. None has.
 
 **Inside would be Section 24's own hazard with the lock removed.** All three mechanisms
 Section 24 protects are *lock, then decide*, and the failure it names three times is
 deciding on a pre-lock snapshot. Authorizing from a tree fixed before the decision is that
 shape exactly, minus the lock that would at least have serialized it.
 
-**What outside costs, and why the cost is bounded rather than argued away.** The guard and
-the figures then read at two instants. For a **closed** month that difference cannot matter:
-both resolve as of the period's end, which is fixed history, so both read the same rows
-whenever each of them reads — the one exception being a concurrent backdate, which Section
-20's invalidation list already names as invalidating every period the date reaches into. For
-an **open** period, "as of the period's end" is now (decision 0205), so a reassignment
-committing between the guard and the snapshot gives two answers. That does not widen what
-the actor may see: the guard's question is whether the **selector** is within reach, and a
-subtree scope covers whoever is beneath that selector at the instant the figure is computed.
-A person moving under `L` after the guard ran is a person the actor was already authorized
-to see by virtue of being authorized over `L`.
+**What outside costs, stated in both directions.** The guard and the figures read at two
+instants, and three cases follow.
+
+For a **closed** month both resolve against fixed history, so both read the same rows
+whenever each of them reads. The exception is a **concurrent backdate**, which can move a
+closed period's tree between the two reads. *This ruling first said Section 20's
+invalidation list "already covers" that; it does not. That list governs when a stored figure
+must be recomputed rather than served, and recomputing a snapshot does not make two reads on
+two connections agree.* The residual is an actor authorized against a tree a backdate has
+just moved, for the duration of one request. It is left as a residual rather than described
+as covered.
+
+For an **open** period the two can differ by a reassignment committing between them, and the
+direction matters. A person moving **under** `L` after the guard ran is someone the actor was
+already authorized to see by virtue of being authorized over `L`, so that direction widens
+nothing. **`L` moving out of the actor's subtree between the guard and the snapshot is the
+other direction, and it is decide-then-read staleness**: the guard passed, and the figures
+are returned to an actor no longer authorized over `L`. It is bounded by one request and is
+the same property any in-flight request has when authority changes underneath it — but it is
+the mirror of the shape this ruling invokes against "inside", and saying so is the point of
+stating a cost.
+
+*One correction to the instant, which is not "now".* `reportingPeriodBounds` returns the
+last millisecond of the month's final day, which for an **open** month is a **future**
+instant. It behaves as "now" only because no write path produces a future `started_at` —
+an accident of the data rather than a construction, and the guard inherits it by using the
+same instant the figures use, which is the property that matters here.
 
 ## The guard walks the as-of tree, not the placement graph
 
@@ -91,7 +129,10 @@ an additivity requirement, and none of it from a question about who may see whom
 **Decision 0209 treats the very condition that widens the graph as a defect to be
 surfaced**, not as a relationship. Where a person's pastoral leader is archived, Section 20
 requires them on an attention list shown to the upline who can act, on Section 15's terms,
-"so the fix does not hide the gap". A visibility grant measured on that same graph would
+because "a report that quietly reconstructs the chain removes the pressure to reassign
+anybody, so the transient state it accommodates would stop being transient". *Quoted as "so
+the fix does not hide the gap" in a first version, which is `CLAUDE.md`'s paraphrase of
+decision 0209 and appears nowhere in `SKILL.md`.* A visibility grant measured on that same graph would
 read the identical fact as a licence: the arrangement the specification calls a gap
 requiring repair would become the arrangement that grants access.
 
@@ -105,14 +146,46 @@ Decision 0207 also reasons about "the October tree" throughout, which is decisio
 `subtreeAsOf` and not the placement graph. This ruling makes explicit what that reasoning
 assumed.
 
-**What the division costs.** A leader-scoped aggregate is computed over the placement graph,
-so it can contain people the actor could not reach one at a time. That is accepted **on this
-route and on this route only**, because this route discloses no identity: `DccMonthlyReport`
+**What the division costs, and it costs in both directions.**
+
+**The aggregate is wider than the reach.** A leader-scoped total is computed over the
+placement graph, so it can cover people the actor could not reach one at a time. Accepted
+**on this route and on this route only**, because the payload names nobody: `DccMonthlyReport`
 carries the scope, the period, whether the month is open, `n`, the removed events, a count of
-unique people, the classification and the buckets — and no person identifier anywhere.
-Section 20's
-identities still hold, because the population the figures are computed over is unchanged —
-what this ruling fixes is who may ask for them.
+unique people, the classification and the buckets. *Its `scope` does carry a person
+identifier for a `LEADER` report — the caller's own input echoed back, so no new disclosure,
+but "no person identifier anywhere" was wrong as written.*
+
+**Naming nobody is not the same property as publishing no per-person figure**, and the
+difference is worth stating rather than resting on. An actor holding `OWN_SUBTREE` may
+request a report for any selector inside their as-of subtree, so they may request their own
+and each child's and subtract; where the residual is one person, that person's counts and
+buckets are isolated, unnamed but structurally located. Every hierarchy aggregate is
+differenceable in that way and this ruling does not treat it as disqualifying — it is
+recorded because the acceptance above would otherwise read as resting on a stronger property
+than the payload actually has.
+
+**The reach is narrower than the aggregate, and that is the cost this ruling nearly failed to
+state.** Take a leader `L` archived on 15 October whose last in-period leader was `A`.
+`reportingSubtree`'s within-period tier selects `L`'s row, so `L` and everyone beneath them
+sit inside `A`'s October total; the dated upward walk runs at the period's end, where `L`
+holds no row, so `A` is refused `L` as a selector. `A` therefore sees a total containing
+`L`'s subtree and cannot ask for the breakdown that explains it — which is, on the graph
+axis, the defect decision 0207 removed on the date axis, and in that ruling's own words:
+"authorizing undated would show a figure while refusing the breakdown that explains it,
+against Section 20's additivity — on the actor's own screen rather than in the arithmetic".
+
+It is accepted here because the alternative is worse and is the case this section is about:
+measuring reach on the placement graph lets a leader read the figures of somebody whose only
+connection is a chain through a person who left years ago. But it is not free, it reaches
+every leader archived or unassigned mid-period — the population Section 3 forbids filtering
+out of a period-based report — and **whether that refusal should stand is recorded as open in
+`CLAUDE.md`** rather than settled by the fact that the alternative is worse.
+
+Section 20's two reconciliation identities are untouched either way: the population the
+figures are computed over is unchanged, and what this ruling fixes is who may ask for them.
+What the paragraph above concerns is Section 20's cross-level drill-down additivity, which is
+a different claim and is the one at risk.
 
 ## The dated upward walk
 
