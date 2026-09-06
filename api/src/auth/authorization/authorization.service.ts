@@ -497,6 +497,10 @@ export class AuthorizationService {
       return false;
     }
 
+    if (target.kind === 'report_scope') {
+      return this.reportScopeCovers(executor, scope, target, actor);
+    }
+
     const personId = await this.personBehind(executor, target);
     if (personId === null) {
       return false;
@@ -523,10 +527,60 @@ export class AuthorizationService {
     }
   }
 
+  /**
+   * A report scope selector, resolved as of the period being reported (decision 0207)
+   * through the pastoral tree in force at that instant (decision 0214).
+   *
+   * **A `NETWORK` grant is refused rather than resolved**, and that is a deliberate
+   * fail-closed answer rather than an oversight. `currentNetwork` is undated, so
+   * resolving one here would authorize an October report against the leader's
+   * **November** Network -- and section 7 fixes datedness to the capability while saying
+   * nothing about a scope type that cannot honour it. `CLAUDE.md` carries that as a Stop
+   * Condition; until it is settled this declines to authorize where no rule exists, which
+   * is what section 7's fail-closed default already requires. Deleting this branch is the
+   * whole of what settling it costs.
+   */
+  private async reportScopeCovers(
+    executor: Db,
+    scope: Scope,
+    target: Extract<Target, { kind: 'report_scope' }>,
+    actor: Actor,
+  ): Promise<boolean> {
+    // Whole Church is reached only by a Whole Church grant, which `scopeCovers` has
+    // already answered above. Anything narrower does not cover it, and section 7 refuses
+    // rather than narrowing the request to the scope the actor does hold.
+    if (target.leaderPersonId === null) {
+      return false;
+    }
+
+    switch (scope.type) {
+      case ScopeType.OwnSubtree:
+        return this.hierarchy.isWithinSubtreeAsOf(
+          executor,
+          actor.personId,
+          target.leaderPersonId,
+          target.at,
+          { includeSelf: true },
+        );
+      case ScopeType.SubtreeExclSelf:
+        return this.hierarchy.isWithinSubtreeAsOf(
+          executor,
+          actor.personId,
+          target.leaderPersonId,
+          target.at,
+          { includeSelf: false },
+        );
+      case ScopeType.Network:
+        return false;
+      case ScopeType.WholeChurch:
+        return true;
+    }
+  }
+
   /** An Account resolves through its Person; a Person is already one (section 7). */
   private async personBehind(
     executor: Db,
-    target: Exclude<Target, { kind: 'church' }>,
+    target: Exclude<Target, { kind: 'church' } | { kind: 'report_scope' }>,
   ): Promise<string | null> {
     if (target.kind === 'person') {
       return target.personId;

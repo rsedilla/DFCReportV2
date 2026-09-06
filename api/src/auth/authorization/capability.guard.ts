@@ -14,6 +14,10 @@ import {
 } from '../../common/errors/api-error';
 import { isUuid, NIL_UUID } from '../../common/identifiers';
 import { isCalendarDate } from '../../common/time/manila';
+import {
+  isReportingMonth,
+  reportingPeriodBounds,
+} from '../../common/time/reporting-period';
 
 import {
   AUTHENTICATED_ONLY_METADATA,
@@ -103,6 +107,54 @@ export class CapabilityGuard implements CanActivate {
     return true;
   }
 
+  /**
+   * A report scope selector: which scope, the leader it names, and the instant it
+   * resolves at (SKILL.md section 7, decisions 0207 and 0214).
+   *
+   * **Refused here rather than deeper**, because a selector the guard cannot read is not
+   * a scope the actor failed to hold -- it is a malformed request, and section 22 asks a
+   * refusal to name the field a client needs in order to fix it.
+   *
+   * **The instant comes from `reportingPeriodBounds`, which is the function the figures
+   * use.** Decision 0214 fixes that the guard and the report resolve the tree at the same
+   * instant; deriving it a second way here is exactly what that rule forbids, which is why
+   * the helper sits in `common/time` rather than in `reporting`.
+   */
+  private resolveReportScope(
+    spec: Extract<TargetSpec, { kind: 'report_scope' }>,
+    request: AuthenticatedRequest,
+  ): Target {
+    const period = readPath(request, spec.periodFrom);
+    if (typeof period !== 'string' || !isReportingMonth(period)) {
+      throw new ValidationFailedError(`${spec.periodFrom} must be a reporting month, as YYYY-MM-01.`, {
+        field: spec.periodFrom,
+      });
+    }
+    const at = reportingPeriodBounds(period).end;
+
+    const scope = readPath(request, spec.scopeFrom);
+    if (scope === 'WHOLE_CHURCH') {
+      return { kind: 'report_scope', leaderPersonId: null, at };
+    }
+
+    if (scope !== 'LEADER') {
+      throw new ValidationFailedError(
+        `${spec.scopeFrom} must be WHOLE_CHURCH or LEADER.`,
+        { field: spec.scopeFrom },
+      );
+    }
+
+    const leaderId = readPath(request, spec.leaderFrom);
+    if (typeof leaderId !== 'string' || !isUuid(leaderId)) {
+      throw new ValidationFailedError(
+        `${spec.leaderFrom} must be a UUID naming the leader the report is scoped to.`,
+        { field: spec.leaderFrom },
+      );
+    }
+
+    return { kind: 'report_scope', leaderPersonId: leaderId, at };
+  }
+
   private async resolveTarget(
     spec: TargetSpec,
     request: AuthenticatedRequest,
@@ -114,6 +166,10 @@ export class CapabilityGuard implements CanActivate {
 
     if (spec.kind === 'actor') {
       return { kind: 'person', personId: actor.personId };
+    }
+
+    if (spec.kind === 'report_scope') {
+      return this.resolveReportScope(spec, request);
     }
 
     const value = readPath(request, spec.from);

@@ -183,6 +183,11 @@
       "reason": "The other outcome of the queue, and a decision is final (decision 0147)."
     },
     {
+      "route": "GET /api/v1/reports/dcc/monthly",
+      "waived_to": "screens block",
+      "reason": "The DCC figures a leader reads (§9, §12, §20). Dashboard shows the totals and Network Summary the breakdown, and neither screen exists; the route lands first so the authorization walk it needs is reviewed once rather than beside the screens."
+    },
+    {
       "route": "GET /api/v1/health",
       "no_screen_owed": true,
       "reason": "The liveness probe (§24). It is called by the deployment platform and never by a person, so no stage will ever owe it a screen."

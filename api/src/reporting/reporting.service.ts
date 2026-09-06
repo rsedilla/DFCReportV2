@@ -2,12 +2,14 @@ import { Inject, Injectable } from '@nestjs/common';
 
 import {
   DccFiguresService,
-  assertReportingMonth,
   type DccPersonFigures,
 } from '../attendance/dcc-figures.service';
 import { DATABASE, type Db } from '../database/database.module';
 import { HierarchyService } from '../hierarchy/hierarchy.service';
-import { reportingPeriodBounds } from './reporting-period';
+import {
+  assertReportingMonth,
+  reportingPeriodBounds,
+} from '../common/time/reporting-period';
 
 /**
  * Which population a report covers. Section 20 enumerates four; two exist.
