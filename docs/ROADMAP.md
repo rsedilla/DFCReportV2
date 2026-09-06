@@ -220,6 +220,10 @@ recorded in `CLAUDE.md`, and each outside the route this stage's last branch own
   notification
 - Materialized closed months (§20)
 
+**What is inside this stage's exit criterion and what is past it, stated because the two diverge deliberately.** The criterion below is classification at every scope and monthly-attendance buckets at Cell scope, and nothing else. Coverage, the reporting routes, Network Summary, the role-specific dashboards, notifications and materialized closed months are scope this stage carries — they are not conditions of its completion.
+
+That divergence is what the ruling of 2026-09-06 is about. A stage's bullet list is scope and its "Done when" is the exit criterion, and where the two part the bullets lapse with nothing recording it. So this stage's own lapse is written down rather than left to be found: **it ships the reporting API with no interface, and owes the screens block below.** Network Summary, the notifications, and the materialized closed months are deferred past the pilot — a stored figure nobody can yet read buys nothing, and a single branch running one month is a scale at which every figure is computed live.
+
 **Done when:** the reconciliation tests pass and run in CI — classification at every scope, and monthly-attendance buckets at Cell scope, each summing to the same unique-people total (`SKILL.md` §20).
 
 **Why it matters:** this is where §20 stops being prose and becomes something enforced. A reconciliation failure is a data-integrity defect, not a rounding issue.
@@ -228,15 +232,50 @@ recorded in `CLAUDE.md`, and each outside the route this stage's last branch own
 
 ---
 
+## Screens — the interface the pilot is conducted through
+
+**Not a numbered stage**, deliberately: Stage 7 is cited by number in decision 0120 and renumbering would falsify that reference. It sits between Stage 5 and the pilot, and the pilot does not begin without it.
+
+**Why it exists as its own block.** Two completed stages shipped no interface. Stage 3 delivered Cells, Stage 4 delivered attendance, and `web/app` reaches neither — ten screens, all of them authentication, the home page, or People, against thirty-five route decorators. Nothing recorded that as owed, which is the failure the ruling of 2026-09-06 closes.
+
+**Eight screens.** Section 19's Leader sidebar, minus Network Summary, plus the Cell meetings screen Stage 4 shipped without:
+
+- **Dashboard** — outstanding work above the numbers (§19), with what it counts, the value, the scope and the period on every tile, and current-state tiles never interleaved with period-based ones
+- **My People** (§3, §8)
+- **My Network** — the arbitrary-depth tree (§5)
+- **DCC Attendance** — the roster and the checklist (§9)
+- **Cell Attendance** — the grid (§12)
+- **Cell Meetings** — recording, the four transitions, and the meeting roster (§13)
+- **Cell Leaders** — the attention lists, filtered and never ranked (§15)
+- **Search** (§8)
+
+Network Summary is deferred past the pilot and is deliberately absent — it is the one sidebar item a pilot on a single branch can be conducted without. It is also not one screen: the Stage 5 bullet above names five views for it, of which §16's recommended-tabs list carries four — Participation is a section of §16 rather than a tab there. Either way, deferring it defers several screens rather than one.
+
+**No screen ranks, scores, or colour-grades a leader** (§13, and §17, §19 and §22 where they restate it for scope, for the dashboard and for the response). The prohibition is easy to omit and hard to remove once leaders have seen a leaderboard, which is why it is stated here rather than only in the stage that computes the figures. §13 is the canonical home and is the widest for two of the three limbs — its rank positions and composite scores carry no qualification, where §17 qualifies to `NOT_HELD`, coverage "or any figure derived from them" — and it alone forbids an ordered leaderboard **as a default or landing view** and side-by-side comparison of leaders who do not oversee one another **offered as a feature**, which are the two most screen-shaped clauses in the specification. §17, §15 and §19 all defer to it by name. *This cited §13, §19 and Principle 8, which was incomplete; the fix replaced them with §17 alone on the ground that §13 was narrower, which inverted the actual widths and dropped the two clauses above. §17 is widest only for the colour limb, which is what §1's own precision paragraph compares. Both errors are recorded because the second was introduced by the correction of the first.*
+
+**Eight open items in `CLAUDE.md` are deferred to these screens** and are settled here rather than rediscovered. Count them rather than remembering: `awk '/^### Open — awaiting a ruling/,0' CLAUDE.md | grep '^- \*\*' | grep -cE 'first screens|first screen that|Decide it with them|screens block|no dashboard'`.
+
+**`web/scripts/check-screen-coverage.mjs` lands before this block, and before the Definition of Done clause that names it.** It parses every `.ts` under `api/src` with the TypeScript compiler — syntax only, and `typescript` is already a `web` devDependency — and compares the routes it finds against a checked-in ledger mapping each **individual route** to the screen that reaches it, to a waiver naming the stage that owes one, or to a statement that no screen is owed at all. The liveness probe is the last of those: it is called by the platform and never by a person, and waiving it to a stage would be a promise nobody intends to keep.
+
+It fails on a route the ledger does not mention, on a ledger entry no controller declares, on a waiver naming a stage the ledger does not declare, on a named screen that is not a file inside `web/`, and on anything in a controller it cannot parse. **It never reads this file**, so the per-route waiver is enforced and the paragraph naming the screens stays prose — the Definition of Done says which half is which rather than leaving the two to look alike. The unit is the route rather than a family of them, because a family entry would let a new route join an existing group unnoticed, which is this check's own failure one level down. It ships pre-populated for all thirty-five existing routes — thirteen reached by a screen, twenty-one waived, one owing none — so it is green on the day it lands and red the moment an unledgered route arrives, including during this block, when new routes appear fastest.
+
+**Done when:** a leader can complete one month's recording — Cell meetings and DCC — and read their own subtree's figures, without touching the API directly; every screen is keyboard operable with focus visible and never obscured, meets the 24-by-24 target minimum, and passes axe-core in both engines (§23); and the coverage ledger carries no waiver for a route these eight screens cover.
+
+**Risk:** building them against fixtures. The spine is thirty real people and the depth below it is encoded by each leader in turn, so the arbitrary-depth screens — §5's tree and §13's grid — are the two most likely to be built against something tidier than what a pilot will hand them.
+
+---
+
 ## Stage 6 — Pilot
 
 **One branch only.** A single Senior Pastor's direct leader and their subtree — on the order of twenty to thirty Cells — running for **one full month cycle**, including the close on the 7th.
 
-**Done when:** a month closes with real data, and the figures survive contact with people who already know what they should be.
+**Done when:** a month closes with real data **recorded and read through the interface**, and the figures survive contact with people who already know what they should be.
+
+The interface clause is part of the criterion rather than an assumption behind it (ruling of 2026-09-06). A month closed through `curl` demonstrates that the API is correct, which Stage 4 already demonstrated; it says nothing about the question this stage exists to ask.
 
 **Why a pilot rather than a launch:** the largest risk in this project is not technical. It is whether several hundred leaders will record every week. The pilot is where that becomes visible, at a scale where the design can still change.
 
-**Risk:** piloting without Stage 5. Recording without reporting gives a pastor nothing, and a pilot that shows no value will not survive contact with a busy leader.
+**Risk:** piloting without the screens. The risk recorded here was "piloting without Stage 5" — recording without reporting gives a pastor nothing, and a pilot that shows no value will not survive contact with a busy leader. That stops being the live risk the moment Stage 5 exists, and the one that replaces it is narrower and easier to miss: the figures are computed, the API is correct, and a leader still has nothing to open. Whether leaders will record every week is a question about the interface, so a pilot without one cannot answer it.
 
 ---
 
@@ -257,12 +296,12 @@ recorded in `CLAUDE.md`, and each outside the route this stage's last branch own
 
 Against the same `/api/v1`. The client framework is not chosen and is not settled here — a stack decision is recorded in `CLAUDE.md` and amended into `SKILL.md` §2, never in a roadmap.
 
-Nothing in Stages 1 through 7 should need to change. That is what the API-first constraint and the separate deployables were bought for — if a mobile client forces an API change, something in the earlier stages was built as a web feature rather than as an API.
+Nothing built before Mobile should need to change — Stages 1 through 7, and the unnumbered screens block among them, which this sentence enumerated past until that block existed. That is what the API-first constraint and the separate deployables were bought for — if a mobile client forces an API change, something in the earlier stages was built as a web feature rather than as an API.
 
 ---
 
 ## Two things worth holding onto
 
-**Stages 1 through 4 are not shippable on their own.** Recording without reporting gives pastors nothing to act on. Plan Stage 5 before scheduling any pilot.
+**Stages 1 through 5 are not shippable on their own.** Recording without reporting gives pastors nothing to act on, and reporting with no interface gives them nothing either. *This read "Stages 1 through 4" and named only the first half, which was true while Stage 5 was unbuilt and stopped being the whole of it when the screens block was scheduled between Stage 5 and the pilot (ruling of 2026-09-06).* Plan Stage 5 **and the screens** before scheduling any pilot.
 
 **The order is load-bearing.** Authorization before features, because a guard retrofitted across forty endpoints leaves gaps. Tests before endpoints, because they are derived from the specification and cost nothing to write early. Real data before reporting, because fixtures are always tidier than a real pastoral tree.
