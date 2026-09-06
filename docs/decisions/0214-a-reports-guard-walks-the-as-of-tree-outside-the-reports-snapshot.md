@@ -51,18 +51,35 @@ rather than assuming". They are recorded rather than deleted because the correct
 is what carries the answer, and a reader who checks the code will find the pattern this
 ruling declines to follow.*
 
-**The discriminator is the lock, and it is the discriminator in every one of those cases.**
-Each of those callers takes a lock and re-decides *after* it, because taking the lock is
-what changed the state the decision rests on — that is Section 24's lock-then-decide shape,
-used correctly. **A report takes no row or advisory lock and writes nothing**, so nothing
-changes under it: there is no post-lock state for a second read to see that the pooled read
-did not. The pattern is inapplicable rather than merely unfashionable.
+**The discriminator is that the caller's transaction holds something a pooled read cannot
+see**, and it takes three forms across those sixteen. A **post-lock state**, which is the
+reassignment path above. An **instant only the transaction has** —
+`cells.closure.service.ts` says exactly that: "*whether to ask* depends on an instant only
+the transaction has… so the decision cannot precede the locks, and the check has to follow
+it." And, in two sites, the opposite of a transaction: `assertMayCorrect` and the DCC
+correction check are handed the **pool**, because "`lostRaceAnswer` runs on the pool after
+its transaction rolled back, and section 22 requires that re-read to see *committed* state,
+which a doomed transaction's own view does not."
+
+**A report's transaction holds none of the three.** It takes no row or advisory lock, so
+there is no post-lock state; it derives no instant of its own, taking the period's from its
+argument; and it never needs to see past its own view, because it commits nothing that could
+be rolled back. So the pattern is inapplicable rather than merely unfashionable.
+
+*A first version of this paragraph said the lock was "the discriminator in every one of
+those cases". It is not: nine of the sixteen take no lock before the call and two hold no
+transaction at all. That is the **second** false ground this one paragraph has been given,
+the first having been corrected in the commit that introduced this one — which is the
+argument for stating a discriminator the code exhibits rather than one that would be tidy.*
 
 *The seam docblock on `coversWith` says "*scope* is a fact about the tree, and that is the
-half that has to see the transaction", which read alone points the other way. It is
-describing a caller that has taken a lock — the half that has to see **that** transaction is
-the half the lock changed. It is quoted here because a reader will meet it, not because it
-supports the conclusion.*
+half that has to see the transaction", which read alone points the other way. It describes
+the general split — grants are account facts and readable on the pool, scope is a tree fact
+— and names no caller and no lock. It is quoted here because a reader will meet it, not
+because it supports the conclusion; what answers it is the paragraph above, which says what
+those callers' transactions actually hold. *A first version glossed it as "describing a
+caller that has taken a lock", which replaced a misquotation with a false reading of the
+correct quotation.**
 
 `ReportingService.dccMonthly` opens its `READ ONLY` `REPEATABLE READ` transaction *inside
 itself*, after the guard has already decided. So "outside" is the architecture as it stands,
