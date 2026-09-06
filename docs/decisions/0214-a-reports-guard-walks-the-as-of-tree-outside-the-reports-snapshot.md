@@ -51,35 +51,32 @@ rather than assuming". They are recorded rather than deleted because the correct
 is what carries the answer, and a reader who checks the code will find the pattern this
 ruling declines to follow.*
 
-**The discriminator is that the caller's transaction holds something a pooled read cannot
-see**, and it takes three forms across those sixteen. A **post-lock state**, which is the
-reassignment path above. An **instant only the transaction has** —
-`cells.closure.service.ts` says exactly that: "*whether to ask* depends on an instant only
-the transaction has… so the decision cannot precede the locks, and the check has to follow
-it." And, in two sites, the opposite of a transaction: `assertMayCorrect` and the DCC
-correction check are handed the **pool**, because "`lostRaceAnswer` runs on the pool after
-its transaction rolled back, and section 22 requires that re-read to see *committed* state,
-which a doomed transaction's own view does not."
+**The sixteen have mixed reasons, and no single discriminator fits them.** Roughly: six
+re-decide after taking a lock, because the lock changed what the decision rests on; two are
+handed the **pool** rather than a transaction, because a re-read after a rolled-back
+transaction has to see committed state; three pass a Whole Church target, which `coversWith`
+answers before it reads anything at all; and the rest take a transaction for the plainest
+reason of all — Section 24 forbids reaching the pool from inside one, so a caller already in
+a transaction must pass it. `cells.closure.service.ts` says exactly that: `coversWith`
+"rather than `authorize`, which reads the account's grants on the pool and would be the
+liveness hazard section 24 names if called while holding a connection."
 
-**A report's transaction holds none of the three.** It takes no row or advisory lock, so
-there is no post-lock state; it derives no instant of its own, taking the period's from its
-argument; and it never needs to see past its own view, because it commits nothing that could
-be rolled back. So the pattern is inapplicable rather than merely unfashionable.
+**So the question is not why the others re-decide inside; it is whether a report needs to.**
+It does not, and each of those reasons says why. Liveness does not arise: **the guard runs
+before the reporting transaction exists**, so it is never a pooled read taken while holding
+a connection. There is no lock, so no post-lock state. There is no instant only the
+transaction has — `reportingPeriodBounds` derives the period's bounds from the request's own
+argument, before the transaction opens. And nothing is rolled back, because nothing is
+written.
 
-*A first version of this paragraph said the lock was "the discriminator in every one of
-those cases". It is not: nine of the sixteen take no lock before the call and two hold no
-transaction at all. That is the **second** false ground this one paragraph has been given,
-the first having been corrected in the commit that introduced this one — which is the
-argument for stating a discriminator the code exhibits rather than one that would be tidy.*
-
-*The seam docblock on `coversWith` says "*scope* is a fact about the tree, and that is the
-half that has to see the transaction", which read alone points the other way. It describes
-the general split — grants are account facts and readable on the pool, scope is a tree fact
-— and names no caller and no lock. It is quoted here because a reader will meet it, not
-because it supports the conclusion; what answers it is the paragraph above, which says what
-those callers' transactions actually hold. *A first version glossed it as "describing a
-caller that has taken a lock", which replaced a misquotation with a false reading of the
-correct quotation.**
+*This paragraph has been given three grounds and the first two were false. It said
+`coversWith` exists for liveness and not consistency; then that the lock was "the
+discriminator in every one of those cases"; and `architecture-guardian` refuted both against
+the call sites. Nine of the sixteen take no lock before the call, `assertMayCorrect` is
+handed the pool on one of its three paths and `dcc-attendance.service.ts:1303` on its only
+one, and three never reach the executor. The lesson is the one this file keeps recording in
+other people's work: the tidy unifying claim was the thing to stop reaching for, and what
+carries the answer is the last paragraph, which asks only about a report.*
 
 `ReportingService.dccMonthly` opens its `READ ONLY` `REPEATABLE READ` transaction *inside
 itself*, after the guard has already decided. So "outside" is the architecture as it stands,
@@ -123,11 +120,12 @@ the same property any in-flight request has when authority changes underneath it
 the mirror of the shape this ruling invokes against "inside", and saying so is the point of
 stating a cost.
 
-*One correction to the instant, which is not "now".* `reportingPeriodBounds` returns the
-last millisecond of the month's final day, which for an **open** month is a **future**
-instant. It behaves as "now" only because no write path produces a future `started_at` —
-an accident of the data rather than a construction, and the guard inherits it by using the
-same instant the figures use, which is the property that matters here.
+*And the instant is not "now", whatever Section 20's first sentence says.*
+`reportingPeriodBounds` returns the last millisecond of the month's final day, which for an
+**open** month is a **future** instant, behaving as "now" only because no write path produces
+a future `started_at`. That is an accident of the data rather than a construction. It does
+not disturb anything here, because the guard inherits whichever instant the figures use —
+which is the property that matters, and is the half this ruling fixes.
 
 ## The guard walks the as-of tree, not the placement graph
 
@@ -217,9 +215,16 @@ NULL OR ended_at > at)` — with the same `CYCLE` clause and the same refusal, b
 Section 5 requires cycle detection of every walk of the tree and this one is no exception.
 It belongs in `hierarchy`, which owns `pastoral_assignments` (Section 2).
 
-**The instant is `endOfManilaDay` of the period's final day**, which decision 0208 already
-fixes for every reporting tree walk. The guard does not derive a second answer to that
-question.
+**The rule this ruling fixes is that the guard uses the same instant the figures use** — not
+which instant that is. That much is required for the guard and the population to describe one
+tree, and it is settled here. **Which instant Section 20 means for an *open* period is not**,
+and is escalated: Section 20 says "an open period therefore resolves as of now" and, three
+lines later, that "the instant is the last millisecond of the period's final day". Both are
+Section 20's, they differ for every open month, and they agree today only because no writer
+produces a future `started_at`. `reportingPeriodBounds` implements the second. The guard
+inherits whichever the report uses, so this ruling stays correct under either answer and
+invents neither. *A first version of this sentence fixed the instant at `endOfManilaDay` of
+the period's final day, settling in a ruling the thing the open list beside it escalates.*
 
 **Datedness is keyed to the capability, not to the route or the method.** Section 7 names a
 closed list of three capabilities that resolve as of the period being viewed —
