@@ -3,7 +3,11 @@ import { Inject, Injectable } from '@nestjs/common';
 import { DccFiguresService, type DccPersonFigures } from '../attendance/dcc-figures.service';
 import { DATABASE, type Db } from '../database/database.module';
 import { HierarchyService } from '../hierarchy/hierarchy.service';
-import { assertReportingMonth, reportingPeriodBounds } from '../common/time/reporting-period';
+import {
+  assertReportingMonth,
+  assertReportingPeriodHasBegun,
+  reportingPeriodBounds,
+} from '../common/time/reporting-period';
 
 /**
  * Which population a report covers. Section 20 enumerates four; two exist.
@@ -120,6 +124,15 @@ export class ReportingService {
       .setIsolationLevel('repeatable read')
       .setAccessMode('read only')
       .execute(async (trx) => {
+        // **First in the transaction, before the tree is walked** (decision 0216). A period
+        // that has not begun can hold no attendance record (section 9), and answering it
+        // would return a complete report saying nobody attended anything -- the calendar
+        // runs thirteen months ahead, so `n` and the coverage denominator are real. The
+        // clock is the database's, which is where every month boundary in this system is
+        // decided. Authorization has already run in the guard, so a scope the actor does
+        // not hold is still answered `SCOPE_DENIED` first (section 7, decision 0193).
+        await assertReportingPeriodHasBegun(trx, period);
+
         // The placement graph, walked by the module that owns `pastoral_assignments`
         // (section 2, decision 0206). `undefined` rather than a list is Whole Church, and
         // the difference from an empty list is load-bearing: a leader with nobody beneath

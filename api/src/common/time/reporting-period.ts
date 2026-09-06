@@ -1,5 +1,10 @@
 import { ValidationFailedError } from '../errors/api-error';
 import { isCalendarDate, startOfManilaDay } from './manila';
+import { databaseNow } from './submission-window';
+
+import type { Db } from '../../database/database.module';
+import type { Database } from '../../database/schema';
+import type { Transaction } from 'kysely';
 
 /**
  * The instants a reporting period spans, in Asia/Manila (SKILL.md section 20).
@@ -137,5 +142,48 @@ export function isReportingMonth(value: string): boolean {
     return true;
   } catch {
     return false;
+  }
+}
+
+/**
+ * A report may not name a period that has not begun (decision 0216, SKILL.md section 20).
+ *
+ * **Section 9 already refuses the write in these words** — "an event whose Manila day has
+ * not begun takes no attendance record" — and a period that can hold no record is a period
+ * there is nothing to report on. What makes the read worth refusing rather than answering
+ * is that the answer is not blank: the DCC calendar runs thirteen months ahead, so a future
+ * month carries a real `n` and a populated coverage denominator, and the report comes back
+ * complete, well-formed, and saying that nobody in the church attended anything.
+ * `assertReportingMonth` above makes the same argument about a malformed month — an
+ * understated report is worse than a refused one, because nobody can see it is wrong.
+ *
+ * **The clock is the database's, never this process's.** A period's beginning is a month
+ * boundary, and `databaseNow` carries the convention for every one of those: decision 0160
+ * settled that a caller able to pass its own instant is a caller that will.
+ *
+ * **Separate from `assertReportingMonth` rather than folded into it**, because that
+ * function is the capability guard's predicate through `isReportingMonth`, which runs
+ * synchronously in `resolveReportScope` with no executor in reach. Folding this in would
+ * mean either the host clock in the guard or an async validator in a synchronous path.
+ * That function bounds the shape and the two bounds that need no clock; this one needs one.
+ *
+ * The comparison is against the period's **start**, which is the rule written out.
+ * `currentReportingMonth` would give the exactly equivalent `period > currentMonth`; the
+ * alternative is noted in decision 0216 so it is not read as an oversight.
+ *
+ * `reportingMonth` is the caller's to validate, as it is for every function in this file —
+ * `startOfManilaDay` refuses a malformed value naming `date`, which is the wrong field.
+ */
+export async function assertReportingPeriodHasBegun(
+  executor: Db | Transaction<Database>,
+  reportingMonth: string,
+): Promise<void> {
+  const now = await databaseNow(executor);
+
+  if (startOfManilaDay(reportingMonth).getTime() > now.getTime()) {
+    throw new ValidationFailedError(
+      'A report covers a period that has begun. This one has not started yet.',
+      { field: 'period', value: reportingMonth },
+    );
   }
 }

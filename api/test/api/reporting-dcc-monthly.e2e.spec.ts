@@ -1,5 +1,7 @@
 import request from 'supertest';
 
+import { manilaDayOf, startOfNextManilaMonth } from '../../src/common/time/manila';
+import { reportingMonthOf } from '../../src/common/time/submission-window';
 import { createTestDb, truncateAll } from '../setup/database';
 import { assignTo, createAccount, createPerson, createTestApp } from '../setup/fixtures';
 
@@ -19,10 +21,10 @@ import type { TestAccount, TestPerson } from '../setup/fixtures';
  *
  * **The dated cases are the point of the slice.** `ancestorsOf` filters
  * `ended_at IS NULL`, so before this the guard could only answer about *now* — and
- * decision 0207 requires a leader to be able to read October's figures for somebody who
- * left their subtree in November. The two cases that pin that are `left in November` and
- * `joined in November`, and they are the ones that fail if the walk is swapped back to the
- * undated one.
+ * decision 0207 requires a leader to be able to read the reported month's figures for
+ * somebody who left their subtree after it. The two cases that pin that are `left after the
+ * period` and `joined only after the period`, and they are the ones that fail if the walk is
+ * swapped back to the undated one.
  *
  * The tree is `raymond -> manuel -> mark`, which is `CLAUDE.md`'s example tree, and
  * `drifter`, who moves between subtrees. Fixture names and email addresses are invented
@@ -41,10 +43,23 @@ describe('GET /api/v1/reports/dcc/monthly (sections 7, 20 and 22)', () => {
   let markAccount: TestAccount;
   let adminAccount: TestAccount;
 
-  /** October 2026 is the reported month throughout; November is where people move. */
-  const OCTOBER = '2026-10-01';
-  const IN_OCTOBER = new Date('2026-10-05T10:00:00+08:00');
-  const IN_NOVEMBER = new Date('2026-11-05T10:00:00+08:00');
+  /**
+   * The reported month throughout, and the month after it is where people move.
+   *
+   * **Both are in the past, and named for their role rather than for a month** (decision
+   * 0216). They were `2026-10-01` and November, written on 2026-09-07 — so every case in
+   * this file asked for a period that had not begun, through four review passes, and
+   * nothing could see it because no rule existed for anything to fail on. A month named
+   * `OCTOBER` is a month somebody has to check the calendar to date; a month named for
+   * what it does in the test cannot drift past the clock unnoticed.
+   *
+   * Fixed dates rather than clock-relative ones, because the tree these cases build is
+   * dated and a moving period would move the assertions with it. The two cases that pin
+   * the boundary itself are the ones that read the clock, and they are the only ones.
+   */
+  const REPORTED_MONTH = '2026-06-01';
+  const IN_PERIOD = new Date('2026-06-05T10:00:00+08:00');
+  const AFTER_PERIOD = new Date('2026-07-05T10:00:00+08:00');
 
   const get = (query: string, account: TestAccount) =>
     request(app.getHttpServer())
@@ -85,17 +100,17 @@ describe('GET /api/v1/reports/dcc/monthly (sections 7, 20 and 22)', () => {
   describe('the scope selector is the target (section 7)', () => {
     it('lets a Leader read their own subtree', async () => {
       const response = await get(
-        `period=${OCTOBER}&scope=LEADER&leader_id=${mark.id}`,
+        `period=${REPORTED_MONTH}&scope=LEADER&leader_id=${mark.id}`,
         raymondAccount,
       );
 
       expect(response.status).toBe(200);
       expect(response.body.scope).toEqual({ kind: 'LEADER', personId: mark.id });
-      expect(response.body.period).toBe(OCTOBER);
+      expect(response.body.period).toBe(REPORTED_MONTH);
     });
 
     it('refuses a Leader a scope above them, and does not narrow it', async () => {
-      const response = await get(`period=${OCTOBER}&scope=WHOLE_CHURCH`, markAccount);
+      const response = await get(`period=${REPORTED_MONTH}&scope=WHOLE_CHURCH`, markAccount);
 
       expect(response.status).toBe(403);
       expect(response.body.error.code).toBe('SCOPE_DENIED');
@@ -106,7 +121,7 @@ describe('GET /api/v1/reports/dcc/monthly (sections 7, 20 and 22)', () => {
 
     it('refuses a Leader their own upline', async () => {
       const response = await get(
-        `period=${OCTOBER}&scope=LEADER&leader_id=${raymond.id}`,
+        `period=${REPORTED_MONTH}&scope=LEADER&leader_id=${raymond.id}`,
         markAccount,
       );
 
@@ -128,7 +143,7 @@ describe('GET /api/v1/reports/dcc/monthly (sections 7, 20 and 22)', () => {
       await assignTo(db, sibling.id, raymond.id);
 
       const response = await get(
-        `period=${OCTOBER}&scope=LEADER&leader_id=${sibling.id}`,
+        `period=${REPORTED_MONTH}&scope=LEADER&leader_id=${sibling.id}`,
         markAccount,
       );
 
@@ -137,7 +152,7 @@ describe('GET /api/v1/reports/dcc/monthly (sections 7, 20 and 22)', () => {
     });
 
     it('lets Admin read Whole Church', async () => {
-      const response = await get(`period=${OCTOBER}&scope=WHOLE_CHURCH`, adminAccount);
+      const response = await get(`period=${REPORTED_MONTH}&scope=WHOLE_CHURCH`, adminAccount);
 
       expect(response.status).toBe(200);
       expect(response.body.scope).toEqual({ kind: 'WHOLE_CHURCH' });
@@ -146,21 +161,21 @@ describe('GET /api/v1/reports/dcc/monthly (sections 7, 20 and 22)', () => {
 
   /**
    * The half decision 0207 requires and the undated walk refused. Both cases move
-   * `drifter` in **November** and ask about **October**, so the answer turns entirely on
-   * which tree the guard walks.
+   * `drifter` **after the reported period** and ask about the period, so the answer turns
+   * entirely on which tree the guard walks.
    */
   describe('the selector resolves as of the period reported (decision 0207)', () => {
-    it('admits somebody who was in the subtree in October and left in November', async () => {
-      await assignTo(db, drifter.id, mark.id, IN_OCTOBER);
+    it('admits somebody who was in the subtree during the period and left after it', async () => {
+      await assignTo(db, drifter.id, mark.id, IN_PERIOD);
       await db
         .updateTable('pastoral_assignments')
-        .set({ ended_at: IN_NOVEMBER })
+        .set({ ended_at: AFTER_PERIOD })
         .where('person_id', '=', drifter.id)
         .execute();
-      await assignTo(db, drifter.id, raymond.id, IN_NOVEMBER);
+      await assignTo(db, drifter.id, raymond.id, AFTER_PERIOD);
 
       const response = await get(
-        `period=${OCTOBER}&scope=LEADER&leader_id=${drifter.id}`,
+        `period=${REPORTED_MONTH}&scope=LEADER&leader_id=${drifter.id}`,
         markAccount,
       );
 
@@ -170,25 +185,25 @@ describe('GET /api/v1/reports/dcc/monthly (sections 7, 20 and 22)', () => {
 
     /**
      * **The case `started_at` alone cannot decide**, and the reason this is here: in the
-     * two cases either side, the November row's `started_at` is already past the period's
+     * two cases either side, the later row's `started_at` is already past the period's
      * end, so the walk excludes it whether or not `ended_at` is consulted. A mutation
      * dropping the `ended_at` half of the predicate survived both of them.
      *
      * Here both rows begin *before* the period ends, so only `ended_at` separates them.
      */
     it('refuses somebody who left the subtree before the period began', async () => {
-      const LEFT_IN_SEPTEMBER = new Date('2026-09-10T10:00:00+08:00');
+      const LEFT_BEFORE_PERIOD = new Date('2026-05-10T10:00:00+08:00');
 
       await assignTo(db, drifter.id, mark.id, new Date('2026-01-05T10:00:00+08:00'));
       await db
         .updateTable('pastoral_assignments')
-        .set({ ended_at: LEFT_IN_SEPTEMBER })
+        .set({ ended_at: LEFT_BEFORE_PERIOD })
         .where('person_id', '=', drifter.id)
         .execute();
-      await assignTo(db, drifter.id, raymond.id, LEFT_IN_SEPTEMBER);
+      await assignTo(db, drifter.id, raymond.id, LEFT_BEFORE_PERIOD);
 
       const response = await get(
-        `period=${OCTOBER}&scope=LEADER&leader_id=${drifter.id}`,
+        `period=${REPORTED_MONTH}&scope=LEADER&leader_id=${drifter.id}`,
         markAccount,
       );
 
@@ -196,17 +211,17 @@ describe('GET /api/v1/reports/dcc/monthly (sections 7, 20 and 22)', () => {
       expect(response.body.error.code).toBe('SCOPE_DENIED');
     });
 
-    it('refuses somebody who joined the subtree only in November', async () => {
-      await assignTo(db, drifter.id, raymond.id, IN_OCTOBER);
+    it('refuses somebody who joined the subtree only after the period', async () => {
+      await assignTo(db, drifter.id, raymond.id, IN_PERIOD);
       await db
         .updateTable('pastoral_assignments')
-        .set({ ended_at: IN_NOVEMBER })
+        .set({ ended_at: AFTER_PERIOD })
         .where('person_id', '=', drifter.id)
         .execute();
-      await assignTo(db, drifter.id, mark.id, IN_NOVEMBER);
+      await assignTo(db, drifter.id, mark.id, AFTER_PERIOD);
 
       const response = await get(
-        `period=${OCTOBER}&scope=LEADER&leader_id=${drifter.id}`,
+        `period=${REPORTED_MONTH}&scope=LEADER&leader_id=${drifter.id}`,
         markAccount,
       );
 
@@ -251,7 +266,7 @@ describe('GET /api/v1/reports/dcc/monthly (sections 7, 20 and 22)', () => {
         })
         .execute();
 
-      const response = await get(`period=${OCTOBER}&scope=WHOLE_CHURCH`, grantee);
+      const response = await get(`period=${REPORTED_MONTH}&scope=WHOLE_CHURCH`, grantee);
 
       expect(response.status).toBe(403);
       expect(response.body.error.code).toBe('SCOPE_DENIED');
@@ -280,7 +295,10 @@ describe('GET /api/v1/reports/dcc/monthly (sections 7, 20 and 22)', () => {
         })
         .execute();
 
-      const response = await get(`period=${OCTOBER}&scope=LEADER&leader_id=${mark.id}`, grantee);
+      const response = await get(
+        `period=${REPORTED_MONTH}&scope=LEADER&leader_id=${mark.id}`,
+        grantee,
+      );
 
       expect(response.status).toBe(403);
       expect(response.body.error.code).toBe('SCOPE_DENIED');
@@ -329,7 +347,7 @@ describe('GET /api/v1/reports/dcc/monthly (sections 7, 20 and 22)', () => {
 
     it('refuses the holder their own figures', async () => {
       const response = await get(
-        `period=${OCTOBER}&scope=LEADER&leader_id=${excluded.personId}`,
+        `period=${REPORTED_MONTH}&scope=LEADER&leader_id=${excluded.personId}`,
         excluded,
       );
 
@@ -346,11 +364,70 @@ describe('GET /api/v1/reports/dcc/monthly (sections 7, 20 and 22)', () => {
       await assignTo(db, beneath.id, excluded.personId);
 
       const response = await get(
-        `period=${OCTOBER}&scope=LEADER&leader_id=${beneath.id}`,
+        `period=${REPORTED_MONTH}&scope=LEADER&leader_id=${beneath.id}`,
         excluded,
       );
 
       expect(response.status).toBe(200);
+    });
+  });
+
+  /**
+   * A report may not name a period that has not begun (decision 0216, SKILL.md section 20).
+   *
+   * **These are the only clock-relative cases in the file, and they are the boundary
+   * itself.** Every other case uses a fixed past month, which is what keeps the dated tree
+   * assertions stable; a fixed *future* month would pin this rule against a calendar that
+   * eventually catches up with it, which is the drift that made the rule necessary.
+   *
+   * **The accepted case is the one that does the work.** Refusing next month is satisfied by
+   * almost any comparison, including several wrong ones — a mutation comparing the period's
+   * **end** to the clock refuses next month correctly and also refuses the *current* month,
+   * whose end has not arrived either. Only asking for the current month can tell those
+   * apart, and the current month is the boundary: its start is behind the clock and its end
+   * is ahead of it.
+   */
+  describe('a period that has not begun (decision 0216)', () => {
+    it('reports the current month, whose start is behind the clock and whose end is not', async () => {
+      const thisMonth = reportingMonthOf(manilaDayOf(new Date()));
+
+      const response = await get(`period=${thisMonth}&scope=WHOLE_CHURCH`, adminAccount);
+
+      expect(response.status).toBe(200);
+      expect(response.body.period).toBe(thisMonth);
+      // Section 17: an open month says so. Named here because it is the fact that makes
+      // the current month legitimately reportable while the next one is not.
+      expect(response.body.open).toBe(true);
+    });
+
+    it('refuses the next month', async () => {
+      const nextMonth = startOfNextManilaMonth(new Date());
+
+      const response = await get(`period=${nextMonth}&scope=WHOLE_CHURCH`, adminAccount);
+
+      expect(response.status).toBe(422);
+      expect(response.body.error.code).toBe('VALIDATION_FAILED');
+      expect(response.body.error.details.field).toBe('period');
+      // Not a report of zeroes. The calendar runs thirteen months ahead, so the body this
+      // refusal replaces would have carried a real `n` and said nobody attended anything.
+      expect(response.body).not.toHaveProperty('uniquePeople');
+    });
+
+    /**
+     * **Authorization is answered first** (section 7's contents-ordering rule, decision
+     * 0193), and decision 0216 relies on that rather than restating it: the refusal lives
+     * in the service, so the guard has already run. Without this case the ordering is an
+     * accident of where the check was put, and moving the check into the guard — which
+     * decision 0216 rejects, because it would put a host-clock month comparison there —
+     * would silently turn this 403 into a 422.
+     */
+    it('answers SCOPE_DENIED, not VALIDATION_FAILED, for a scope the actor does not hold', async () => {
+      const nextMonth = startOfNextManilaMonth(new Date());
+
+      const response = await get(`period=${nextMonth}&scope=WHOLE_CHURCH`, markAccount);
+
+      expect(response.status).toBe(403);
+      expect(response.body.error.code).toBe('SCOPE_DENIED');
     });
   });
 
@@ -364,7 +441,7 @@ describe('GET /api/v1/reports/dcc/monthly (sections 7, 20 and 22)', () => {
     });
 
     it('refuses a scope it does not compute, at the guard rather than the DTO', async () => {
-      const response = await get(`period=${OCTOBER}&scope=NETWORK`, adminAccount);
+      const response = await get(`period=${REPORTED_MONTH}&scope=NETWORK`, adminAccount);
 
       expect(response.status).toBe(422);
       expect(response.body.error.code).toBe('VALIDATION_FAILED');
@@ -375,7 +452,7 @@ describe('GET /api/v1/reports/dcc/monthly (sections 7, 20 and 22)', () => {
 
     it('refuses a leader_id sent with WHOLE_CHURCH rather than ignoring it', async () => {
       const response = await get(
-        `period=${OCTOBER}&scope=WHOLE_CHURCH&leader_id=${mark.id}`,
+        `period=${REPORTED_MONTH}&scope=WHOLE_CHURCH&leader_id=${mark.id}`,
         adminAccount,
       );
 
@@ -385,7 +462,7 @@ describe('GET /api/v1/reports/dcc/monthly (sections 7, 20 and 22)', () => {
     });
 
     it('refuses LEADER with no leader_id', async () => {
-      const response = await get(`period=${OCTOBER}&scope=LEADER`, adminAccount);
+      const response = await get(`period=${REPORTED_MONTH}&scope=LEADER`, adminAccount);
 
       expect(response.status).toBe(422);
       expect(response.body.error.code).toBe('VALIDATION_FAILED');
@@ -395,7 +472,7 @@ describe('GET /api/v1/reports/dcc/monthly (sections 7, 20 and 22)', () => {
   it('is closed to an account holding no reporting capability', async () => {
     const grantless = await createAccount(app, db, { person: drifter, roles: [] });
 
-    const response = await get(`period=${OCTOBER}&scope=WHOLE_CHURCH`, grantless);
+    const response = await get(`period=${REPORTED_MONTH}&scope=WHOLE_CHURCH`, grantless);
 
     expect(response.status).toBe(403);
     // §22 makes the two 403s deliberately distinct: an administrator diagnosing this

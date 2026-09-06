@@ -3833,6 +3833,28 @@ Asia/Manila observes no daylight saving time, so the offset is a constant +08:00
 
 This is not a formatting preference. A Cell meeting belongs to the week its schedule placed it in, and `cell_meetings.week_starting` records which — so the week boundary decides which meetings fall in which week, and a rescheduled meeting's week is the week it was scheduled in, not the week it moved to. *An earlier version said Section 13 makes the week "the unit of a Cell's identity". It does not: the identity is the Cell and the scheduled date, because a week straddling a month boundary can hold two scheduled meetings. The week is what a meeting reports in, which is what this rule decides.* A Sunday-start convention is common locally and will be somebody's default, which is why the rule is fixed here rather than left to the calendar library.
 
+### A period that has not begun is not reportable
+
+**A report may not name a period that has not begun** (ruling of 2026-09-07). Where the
+first instant of the period is later than now, the request is refused as
+`VALIDATION_FAILED` naming the period field. The comparison is against the period's
+**start**, so the current month reports and the next one does not.
+
+Section 9 already refuses the write in the same words — "an event whose Manila day has not
+begun takes no attendance record" — and a period that can hold no record is a period there
+is nothing to report on.
+
+The alternative is worse than a blank page rather than equivalent to one. The DCC calendar
+runs thirteen months ahead (Section 9), so a future month carries a real `n` and a
+populated coverage denominator: the report comes back complete, well-formed, and saying
+that nobody in the church attended anything. Section 17's open-or-closed flag cannot
+correct it, because that flag distinguishes a month still being recorded from one that has
+shut, and says nothing about a month that has not started.
+
+**The instant is read from the database**, as every other month boundary in this system is
+(Section 24, decision 0160). A period's beginning is a month boundary, and the host clock is
+not the authority for one.
+
 ### Which tree a report walks, and what attributes a figure to a scope
 
 **Where a report resolves the pastoral tree, it resolves it as of the end of the period
