@@ -119,11 +119,21 @@ jobs:
       - name: Install
         run: npm ci
 
-      # `lint` runs three checks beyond ESLint, each holding a rule the
+      # `lint` runs five checks beyond ESLint, each holding a rule the
       # specification states and review would not catch: no API routes or server
       # actions (SKILL.md section 2), no design-system component framework
-      # (section 2), and WCAG 2.2 AA contrast with no judgement-named token
-      # (section 23, and sections 13, 17 and 19).
+      # (section 2), WCAG 2.2 AA contrast with no judgement-named token
+      # (section 23, and sections 13, 17 and 19), no responsive breakpoint above
+      # `sm` (which is what makes the 1024px accessibility scan cover every wider
+      # display), and every API route reaching a screen or carrying a waiver
+      # naming the stage that owes one (ruling of 2026-09-06).
+      #
+      # It said "three" while four existed. check-breakpoints.mjs arrived on
+      # 2026-08-28 in a9bc12b, which edited this very file twice over and left
+      # this comment at three -- the count-in-the-sentence-whose-job-is-the-count
+      # error recorded throughout CLAUDE.md, committed against a comment nothing
+      # reads until it is already wrong. Adding a check means editing this number
+      # in the same commit.
       - name: Lint
         run: npm run lint
 
