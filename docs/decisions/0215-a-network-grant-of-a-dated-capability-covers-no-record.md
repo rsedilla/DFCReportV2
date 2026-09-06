@@ -7,9 +7,11 @@ Decision 0214 supplied the dated walk those need for `OWN_SUBTREE` and
 `SUBTREE_EXCL_SELF`, and supplied nothing for `NETWORK`.
 
 `scopeCovers` resolves a `NETWORK` grant through `NetworksService.currentNetwork`, which is
-undated. So a report for a closed month authorized that way would be measured against the
-leader's **current** Network, and Section 4 lets a Network change — reached through
-`people.correct_sex` — move it.
+undated. Left to resolve that way, a report for a closed month **would have been** measured
+against the leader's current Network, and Section 4 lets a Network change — reached through
+`people.correct_sex` — move it. *Past tense deliberately: a report scope selector no longer
+reaches that switch, and under this ruling `authorize` refuses before either. The sentence
+describes what is being prevented rather than what happens.*
 
 **The refusal is not conditional on the period, and the ground is wider than that example.**
 For an open month Section 20 says the selector resolves "as of now", which is what

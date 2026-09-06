@@ -326,10 +326,11 @@ export class AuthorizationService {
     }
 
     // **Two ways a grant can cover no record, and they need different words.** The first
-    // is section 7's single-scope rule. The second is a `NETWORK` grant of a capability
-    // that resolves as of a period: no dated Network resolution exists, so the route
-    // refuses it, and telling an administrator it is "not over this record" would send
-    // them looking for a record when the thing to fix is the grant.
+    // is section 7's single-scope rule. The second is a `NETWORK` grant against a report
+    // scope selector, which reaches no report of either kind -- the branch below carries
+    // both of its reasons, and neither is that the actor asked about the wrong record.
+    // Telling an administrator it is "not over this record" would send them looking for a
+    // record when the thing to fix is the grant.
     let coveredNothing: 'whole-church-only' | 'undated-network' | null = null;
 
     for (const grant of grants) {
@@ -568,11 +569,11 @@ export class AuthorizationService {
    * nothing about a scope type that cannot honour it. `CLAUDE.md` carries that as a Stop
    * Condition; decision 0215 settles only that the route refuses, and section 7 states it.
    *
-   * *Settling it removes this branch **and** the Network handling in `authorize` -- the
-   * flag, its union member and the throw. A first version said deleting this branch was the
-   * whole cost and was falsified by the commit that added the rest; a second said "two
-   * things" and undercounted. It is stated without a number now, which is the only version
-   * of this sentence that cannot go stale.*
+   * *Settling it removes this branch and the Network handling in `authorize`. Two earlier
+   * versions of this sentence enumerated what that is and were wrong both times -- once by
+   * naming only this branch, once by naming a flag that survives, since `coveredNothing`
+   * also carries section 7's single-scope refusal. An enumeration here is a count in words;
+   * `grep` for the union member instead.*
    */
   private async reportScopeCovers(
     executor: Db,
