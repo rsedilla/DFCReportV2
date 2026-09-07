@@ -152,16 +152,31 @@ export class ReportingService {
    * omitting any of the three: not a test, not a derivation, not a type.
    *
    * That is the one-rule-one-path shape `CLAUDE.md` records against this project more often
-   * than any other, and it is closed structurally rather than by a checklist: a report
-   * cannot open its transaction without coming through here, because this is what owns the
-   * transaction. Adding a report route gets all three by construction.
+   * than any other, and it is closed by something that fails rather than by a convention:
+   * `test/unit/reporting-transaction-seam.spec.ts` parses this module and asserts it opens
+   * exactly one transaction, touches the pool in exactly one place, and applies all three
+   * rules here. A second report method opening its own transaction compiles clean, breaks
+   * no existing test, and reddens that one.
    *
-   * *Found by `architecture-guardian` on decision 0216, which had shipped the rule with one
-   * call site and nothing able to fail on a second.*
+   * **What that does not reach**, so the paragraph above is not read as wider than it is: a
+   * callback is handed `trx` and nothing compels it to use it. `DccFiguresService`'s
+   * executor is optional and falls back to the pool, so a report ignoring `trx` would take
+   * two snapshots and lose decision 0210's identity -- which is the defect that shipped once
+   * already, under two docblocks claiming "by construction" over code that did not have it.
    *
-   * The bounds are handed to the callback rather than re-derived inside it, so the tree walk
-   * and the guard's scope resolution cannot drift apart -- decision 0214 makes **the same**
-   * instant a property of sharing one derivation.
+   * *Found by `architecture-guardian` on decision 0216, which shipped the rule with one call
+   * site and nothing able to fail on a second -- and again on the fix, whose first version
+   * claimed a report "cannot" bypass the seam while nothing stopped one.*
+   *
+   * The bounds are handed to the callback rather than re-derived inside it, which keeps this
+   * method and its callback from drifting apart. It buys nothing against the **guard**, which
+   * never receives them: the guard calls `reportingPeriodBounds` itself, on its own
+   * connection, before this transaction opens. What makes those two the same instant is that
+   * both import one function from `common/time` -- which is what decision 0214 means by
+   * **the same** being a property of sharing one derivation rather than of two agreeing.
+   *
+   * *A first version of this sentence credited the hand-off with the guard's agreement. Had
+   * the callback re-derived the bounds with the same helper, the value would be identical.*
    */
   private async overPeriod<T>(
     period: string,

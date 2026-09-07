@@ -238,8 +238,8 @@ describe('GET /api/v1/reports/dcc/monthly (sections 7, 20 and 22)', () => {
    * (decision 0217), which for this target is the period being reported.
    *
    * **The dated pair below is the point.** A grant naming the Men's Network must cover a
-   * leader who was in it **at the instant the period resolves at** — its last millisecond,
-   * not any point within it — whoever they are today, and
+   * leader who was in it **at the instant the period resolves at** — one instant, not any
+   * point within the period — whoever they are today, and
    * `currentNetwork`, which this branch used to be refused for lacking, answers about now.
    * Swapping the resolution back to it turns the first case red and leaves every other
    * case in this block green.

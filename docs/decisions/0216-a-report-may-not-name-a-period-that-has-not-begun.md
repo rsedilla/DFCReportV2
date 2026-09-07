@@ -76,8 +76,20 @@ It sits in `ReportingService.overPeriod`, the private seam that opens that trans
 not in the one report method. `architecture-guardian` found it shipped with a single call
 site: Section 22 names five report routes, one is built, and nothing would have reddened for
 the second omitting this rule — or the shape validation, or the isolation level, which were
-three statements at the top of one method. A report cannot now open its transaction without
-passing all three, because the seam is what owns the transaction.
+three statements at the top of one method.
+
+**The seam alone was not enough, and the second review said so.** A private method leaves
+`this.db` in scope for every other method of the class and is unreachable from a second
+provider in the same module, so "a report cannot open its own transaction" was a conformance
+claim with nothing able to fail — written into the fix for a rule that had shipped with
+nothing able to fail. `test/unit/reporting-transaction-seam.spec.ts` now parses the module
+and asserts it: one transaction opening, one pool reference, all three rules inside the seam.
+It parses rather than greps, because a regular expression cannot distinguish a call from the
+same text in a comment and a check that skips what it cannot read claims a completeness it
+never had.
+
+It still does not compel a callback to *use* the transaction it is handed, and that is stated
+in the seam's docblock rather than left for a reader to discover.
 
 ## Authorization is answered first, and that is not incidental
 
