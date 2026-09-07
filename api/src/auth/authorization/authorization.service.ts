@@ -564,11 +564,11 @@ export class AuthorizationService {
     }
 
     // **A Network selector is covered by a `NETWORK` grant naming it, and by no subtree
-    // grant** (decision 0219). Not a second rule: section 20 makes a Network's population
-    // its *membership*, and its residual -- somebody no leader discipled, who still holds a
-    // Network row -- is the proof that a subtree is never a Network. So a subtree holder
-    // never holds a whole one, at a Network root included. A Whole Church grant reached
-    // `scopeCovers`' own branch above and never arrives here.
+    // grant** (decision 0219). Not a second rule, and not contingent on anybody sitting
+    // outside the tree: a Network selector names **no Person**, so there is no containment
+    // for a subtree grant to be tested against, and section 20 makes a Network's population
+    // its *membership* rather than any subtree. A Whole Church grant reached `scopeCovers`'
+    // own branch above and never arrives here.
     if (selector.kind === 'NETWORK') {
       return scope.type === ScopeType.Network && scope.network === selector.network;
     }

@@ -245,10 +245,16 @@ export class HierarchyService {
    * **That difference is why this method is not, by itself, Section 20's person
    * key.** A person with no open assignment at the instant asked about is absent
    * from this result and must be placed by that fallback; one who held none at any
-   * instant of the period belongs in the Whole Church total alone. Neither is this
-   * method's to do, and a caller that treats `subtreeAsOf(root, periodEnd)` as a
-   * Network total will be short by exactly those people. *A first version said
-   * "the same graph", which invited precisely that reading.*
+   * instant of the period belongs in no leader's figures. Neither is this method's
+   * to do.
+   *
+   * **Nor is a walk from a root a Network total** (decision 0219): a Network's
+   * population is its membership, and this is short by everybody whose chain
+   * terminates outside the tree — which is a wider set than the two above, and the
+   * one that is actually reachable, since Section 9 refuses a DCC record to a
+   * Person holding no assignment at all. *A first version said "the same graph",
+   * which invited that reading; the correction that replaced it named the wrong
+   * set, which is why the set is now named rather than gestured at.*
    */
   async subtreeAsOf(executor: Db, personId: string, at: Date): Promise<string[]> {
     const result = await sql<{ person_id: string; depth: number; is_cycle: boolean }>`

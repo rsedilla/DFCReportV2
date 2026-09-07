@@ -97,10 +97,17 @@ export class NetworksService {
    *
    * **A Network's population is its membership, never its root's subtree.** Section 4
    * requires the relationship to be stored "rather than deriving it on every query", and
-   * walking the tree from a root is deriving it. The two differ by section 20's residual:
-   * somebody no leader discipled in the period still holds a row here, so a subtree
-   * excludes them and this does not — which is what makes Men's + Women's equal the Whole
-   * Church total, and section 17's drill-down add up.
+   * walking the tree from a root is deriving it. The two differ by anybody whose pastoral
+   * chain terminates outside the tree — an administrator holds no assignment, and
+   * `assertLeaderIsAssignable` does not require one of a leader — so a walk from the root
+   * excludes them and this does not.
+   *
+   * **That is what makes Men's + Women's equal the Whole Church total, wherever every
+   * person holds exactly one Network row at the instant.** Nothing enforces that:
+   * `network_assignments_one_open` is partial over open rows, so a historical overlap would
+   * count somebody in both. Unreachable through any write path today, and recorded as an
+   * open Stop Condition in `CLAUDE.md` with a constraint as the remedy — stated here rather
+   * than left to be inferred from the identity holding.
    *
    * **Here rather than in `reporting`, because `networks` owns this table** (section 2,
    * decision 0206). `reporting` roots no query in another module's tables and composes what

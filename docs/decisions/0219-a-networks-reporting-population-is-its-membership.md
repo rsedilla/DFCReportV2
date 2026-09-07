@@ -32,22 +32,30 @@ settled 0217.
 
 ## Why the subtree reading is wrong rather than merely different
 
-**A subtree is never a Network, and Section 20 already says so.** Its residual: "Where a
-person held no open assignment at **any** instant of the period, and none before it either,
-they appear in the Whole Church total alone." Such a person holds a `network_assignments` row
-— every encoded Person does, from their encoding date — so they are in a Network and in no
-leader's subtree.
+**A subtree is never a Network.** Somebody whose pastoral chain terminates anywhere other
+than a Network root is in no walk from that root, and still holds a `network_assignments`
+row — every encoded Person does, from their encoding date. Under the subtree reading they
+would be in **neither** Network while sitting in the Whole Church total, so Men's + Women's
+would not equal Whole Church. Section 17's drill-down runs Whole Church → Network → Leader,
+and that is the level at which it would stop adding up.
 
-Under the subtree reading they would be in **neither** Network while sitting in the Whole
-Church total, so Men's + Women's would not equal Whole Church. Section 17's drill-down runs
-Whole Church → Network → Leader, and that is the level at which it would stop adding up.
+**This ruling moves Section 20's residual, and amends it in the same change.** That section
+said such a person appears "in the Whole Church total alone", which was true while Whole
+Church and a leader were the only two scopes; a Network is a membership, so they are in one.
+Section 20 now says they appear in no *leader's* figures.
 
-**Section 20 tolerates a residual between a Network and a leader, and this ruling leaves it
-exactly there.** It says a drill-down "adds up to the level above except for the residual",
-and that exception is about people no leader discipled. Under the membership reading the
-residual appears once, between Network and Leader, where Section 20 puts it. Under the
-subtree reading it would appear twice — once above the Networks and again below them — and
-the second occurrence is invented rather than stated.
+*A first version of this ruling cited that sentence as **support**, saying Section 20
+"already" put the residual between Network and Leader. It did not — this ruling puts it
+there. It was corrected in the specification first and here a commit later, which is the
+leg of `CLAUDE.md`'s three-legged rule that got left behind.*
+
+**The residual is not the class that makes this reachable, and that matters for the evidence
+rather than for the answer.** Section 9 refuses a DCC record to a Person with no open
+assignment row, so Section 20's residual never appears in a DCC population at all. The
+reachable case is a chain terminating outside the tree — an administrator holds no assignment
+of their own, and `assertLeaderIsAssignable` does not require one of a leader. Both produce
+the same Network → Leader gap, and Section 20 names only the first; that is recorded as open
+in `CLAUDE.md`.
 
 ## What this does not change
 
@@ -69,12 +77,16 @@ Section 7 makes the scope selector the target, so this follows from the populati
 than being decided separately: a **Whole Church** grant covers it, a **`NETWORK`** grant
 covers the Network it names, and **no subtree grant covers one at all**.
 
-The last is the same fact as above, read from the authorization side. A subtree is not a
-Network — Section 20's residual is the proof — so a holder of `OWN_SUBTREE` or
-`SUBTREE_EXCL_SELF` never holds a whole Network, including at a Network root, whose subtree
-still excludes the residual. Nobody is affected in practice: both Senior Pastors hold Whole
-Church (Section 4), which is what makes the two Network selectors Section 17 offers them
-work.
+The last is the same fact as above, read from the authorization side, and it does not depend
+on anybody actually sitting outside the tree: a `NETWORK` selector names **no Person**, so
+there is no containment for a subtree grant to be tested against. Nobody is affected in
+practice: both Senior Pastors hold Whole Church (Section 4), which is what makes the two
+Network selectors Section 17 offers them work.
+
+*A first version argued it from the gap — that a root's subtree "still excludes" somebody —
+which is a fact about the rows on a given day. With nobody outside the tree a root's subtree
+and the Network's membership coincide, and that argument would evaporate while the rule
+stayed right.*
 
 ## What was rejected, and what it would have cost
 

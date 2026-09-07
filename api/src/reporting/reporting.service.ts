@@ -25,9 +25,11 @@ export type ReportScope =
   | { kind: 'WHOLE_CHURCH' }
   /**
    * A Network, whose population is its **membership** and never its root's subtree
-   * (decision 0219). Section 4 requires the relationship to be stored rather than derived,
-   * and the two readings differ by section 20's residual — so this is what makes
-   * Men's + Women's equal Whole Church.
+   * (decision 0219). Section 4 requires the relationship to be stored rather than derived;
+   * the two readings differ by anybody whose pastoral chain terminates outside the tree,
+   * and it is that difference which makes Men's + Women's equal Whole Church — while every
+   * person holds one Network row at the instant, which is an open question rather than a
+   * constraint (`CLAUDE.md`).
    */
   | { kind: 'NETWORK'; network: NetworkName }
   | { kind: 'LEADER'; personId: string };

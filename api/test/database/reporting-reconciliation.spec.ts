@@ -569,83 +569,105 @@ describe('section 20 reconciliation, DCC monthly (Stage 5 Done-when)', () => {
   });
 
   /**
-   * The population is read **at the period's instant**, which is its final millisecond
-   * (decisions 0218 and 0219).
+   * The population is read at **one instant — the period's final millisecond** — and from
+   * `network_assignments` alone (decisions 0218 and 0219).
    *
-   * **Nothing pinned this, and it is what the two rulings are jointly about.** Every other
-   * fixture's Network row starts at `EPOCH` and is never closed, so passing the period's
-   * *start*, or `new Date()`, or dropping the date predicates from
-   * `peopleInNetworkAsOf` altogether, left every assertion green. Section 4 states the
-   * reason the history exists in exactly this case: "every Network-scoped report for a
-   * closed period depends on that answer."
+   * **Three people who move at three different times, because one mover pins only one
+   * wrong answer.** A first version had a single person who moved *after* the month, which
+   * fails an implementation reading "now" and passes three others. `architecture-guardian`
+   * ran them: reading the period's **start**, dropping the `ended_at` half of the predicate,
+   * and deriving the Network from `persons.sex` all stayed green — and that third is the
+   * derivation section 4 forbids in the one sentence decision 0219 cites as its whole
+   * ground. Each person below exists to redden one of them.
    *
-   * Somebody who was in the Men's Network for October and is in the Women's Network now.
-   * Written straight to `network_assignments`, because section 4 reaches this state only
-   * through `people.correct_sex` and that endpoint is not what is under test.
+   * | moves | in force at period end | what it catches |
+   * | --- | --- | --- |
+   * | after the month | Men's | reading `now`, and deriving from `sex` |
+   * | inside the month | Women's | reading the period's `start` |
+   * | before the month | Women's | dropping the `ended_at` predicate |
    *
-   * *Raised by `architecture-guardian`: the authorization half already had this fixture and
-   * the population half had no counterpart.*
+   * **`persons.sex` is updated with the Network, as `correctSex` writes it.** The fixture
+   * left it alone before, which is not the state the application produces — and that gap is
+   * exactly what let a `sex`-derived population pass.
+   *
+   * Written straight to the tables because section 4 reaches this state only through
+   * `people.correct_sex`, which is not what is under test — but as section 4's **atomic
+   * pair**: the Network change and the pastoral reassignment share one instant and one
+   * transaction. The database refuses the Network half alone, which this fixture met on its
+   * first run.
    */
-  it('reads the population as of the period, not as of now', async () => {
-    const root = await createPerson(db, { firstName: 'Oriel', network: 'MENS' });
-    await assignTo(db, root.id, null);
-
-    const moved = await createPerson(db, { firstName: 'Rosa', network: 'MENS' });
-    await assignTo(db, moved.id, root.id);
-
-    recorder = await accountFor(root.id);
-    await attend(await event(OCT_4), moved.id, root.id);
-
+  it("reads the population at the period's end, from rows in force then", async () => {
+    const mensRoot = await createPerson(db, { firstName: 'Oriel', network: 'MENS' });
+    await assignTo(db, mensRoot.id, null);
     const womensRoot = await createPerson(db, { firstName: 'Geraldine', network: 'WOMENS' });
     await assignTo(db, womensRoot.id, null);
 
-    // **Men's for October, Women's from November — as section 4's atomic pair.** The
-    // Network change and the pastoral reassignment share one instant and one transaction:
-    // the same-Network trigger is deferred to commit, and a Network change that left the
-    // old edge open is refused, which is what this fixture met on its first run. Section 4:
-    // "neither can validly precede the other, since each alone leaves the tree in an
-    // invalid state."
-    const afterTheMonth = new Date('2020-11-05T10:00:00+08:00');
-    await db.transaction().execute(async (trx) => {
-      await trx
-        .updateTable('network_assignments')
-        .set({ ended_at: afterTheMonth })
-        .where('person_id', '=', moved.id)
-        .where('ended_at', 'is', null)
-        .execute();
-      await trx
-        .insertInto('network_assignments')
-        .values({
-          person_id: moved.id,
-          network: 'WOMENS',
-          reason: 'A fixture standing in for a section 4 correction.',
-          actor_id: null,
-          started_at: afterTheMonth,
-        })
-        .execute();
-      await trx
-        .updateTable('pastoral_assignments')
-        .set({ ended_at: afterTheMonth })
-        .where('person_id', '=', moved.id)
-        .where('ended_at', 'is', null)
-        .execute();
-      await trx
-        .insertInto('pastoral_assignments')
-        .values({
-          person_id: moved.id,
-          leader_id: womensRoot.id,
-          started_at: afterTheMonth,
-        })
-        .execute();
-    });
+    /** Section 4's atomic pair, plus the `sex` the correction would have written. */
+    const moveToWomens = async (personId: string, at: Date): Promise<void> => {
+      await db.transaction().execute(async (trx) => {
+        await trx
+          .updateTable('network_assignments')
+          .set({ ended_at: at })
+          .where('person_id', '=', personId)
+          .where('ended_at', 'is', null)
+          .execute();
+        await trx
+          .insertInto('network_assignments')
+          .values({
+            person_id: personId,
+            network: 'WOMENS',
+            reason: 'A fixture standing in for a section 4 correction.',
+            actor_id: null,
+            started_at: at,
+          })
+          .execute();
+        await trx
+          .updateTable('pastoral_assignments')
+          .set({ ended_at: at })
+          .where('person_id', '=', personId)
+          .where('ended_at', 'is', null)
+          .execute();
+        await trx
+          .insertInto('pastoral_assignments')
+          .values({ person_id: personId, leader_id: womensRoot.id, started_at: at })
+          .execute();
+        await trx
+          .updateTable('persons')
+          .set({ sex: 'FEMALE' })
+          .where('id', '=', personId)
+          .execute();
+      });
+    };
+
+    const movedAfter = await createPerson(db, { firstName: 'Rosa', network: 'MENS' });
+    const movedDuring = await createPerson(db, { firstName: 'Imelda', network: 'MENS' });
+    const movedBefore = await createPerson(db, { firstName: 'Corazon', network: 'MENS' });
+    await assignTo(db, movedAfter.id, mensRoot.id);
+    await assignTo(db, movedDuring.id, mensRoot.id);
+    await assignTo(db, movedBefore.id, mensRoot.id);
+
+    // Before the month, so their Men's row is closed *and started* before the period —
+    // the only person here whose closed row an `ended_at`-blind query would still match.
+    await moveToWomens(movedBefore.id, new Date('2020-09-15T10:00:00+08:00'));
+
+    recorder = await accountFor(mensRoot.id);
+    const october = await event(OCT_4);
+    await attend(october, movedAfter.id, mensRoot.id);
+    await attend(october, movedBefore.id, womensRoot.id);
+
+    // Mid-month, after the attendance above and before the period ends.
+    await moveToWomens(movedDuring.id, new Date('2020-10-15T10:00:00+08:00'));
+    await attend(october, movedDuring.id, womensRoot.id);
+
+    await moveToWomens(movedAfter.id, new Date('2020-11-05T10:00:00+08:00'));
 
     const mens = await reporting.dccMonthly({ kind: 'NETWORK', network: 'MENS' }, MONTH);
     const womens = await reporting.dccMonthly({ kind: 'NETWORK', network: 'WOMENS' }, MONTH);
+    const wholeChurch = await reporting.dccMonthly({ kind: 'WHOLE_CHURCH' }, MONTH);
 
-    // October's figures are October's. Reading the population as of *now* puts them in the
-    // Women's total instead, and reading it as of the period's start would too if they had
-    // moved mid-month.
+    // Only `movedAfter` is still in the Men's Network at the last millisecond of October.
     expect(mens.uniquePeople).toBe(1);
-    expect(womens.uniquePeople).toBe(0);
+    expect(womens.uniquePeople).toBe(2);
+    expect(mens.uniquePeople + womens.uniquePeople).toBe(wholeChurch.uniquePeople);
   });
 });
