@@ -153,20 +153,28 @@ export class ReportingService {
    *
    * That is the one-rule-one-path shape `CLAUDE.md` records against this project more often
    * than any other, and it is closed by something that fails rather than by a convention:
-   * `test/unit/reporting-transaction-seam.spec.ts` parses this module and asserts it opens
-   * exactly one transaction, touches the pool in exactly one place, and applies all three
-   * rules here. A second report method opening its own transaction compiles clean, breaks
-   * no existing test, and reddens that one.
+   * `test/unit/reporting-transaction-seam.spec.ts` parses this module and asserts that
+   * **every public method of every provider in it routes through here**, that the module
+   * opens one transaction and touches the pool once, and that all three rules are applied
+   * here.
    *
-   * **What that does not reach**, so the paragraph above is not read as wider than it is: a
-   * callback is handed `trx` and nothing compels it to use it. `DccFiguresService`'s
-   * executor is optional and falls back to the pool, so a report ignoring `trx` would take
-   * two snapshots and lose decision 0210's identity -- which is the defect that shipped once
-   * already, under two docblocks claiming "by construction" over code that did not have it.
+   * **The public-surface claim is the load-bearing one**, and the transaction ones are not
+   * enough on their own. The idiomatic second report method opens no transaction and names
+   * no pool at all -- `reporting` composes what the owning modules compute (decision 0206),
+   * so it calls a figures service whose executor is optional and defaults to the pool. Such
+   * a method applies none of the three rules, compiles clean, and left the transaction
+   * assertions green when `architecture-guardian` ran them against one.
+   *
+   * **What still is not reached**, so this is not read as wider than it is: a callback is
+   * handed `trx` and nothing compels it to use it, for that same reason. A report ignoring
+   * `trx` would take two snapshots and lose decision 0210's identity -- the defect that
+   * shipped once already, under two docblocks claiming "by construction" over code that did
+   * not have it.
    *
    * *Found by `architecture-guardian` on decision 0216, which shipped the rule with one call
-   * site and nothing able to fail on a second -- and again on the fix, whose first version
-   * claimed a report "cannot" bypass the seam while nothing stopped one.*
+   * site and nothing able to fail on a second; again on the fix, which claimed a report
+   * "cannot" bypass the seam while nothing stopped one; and again on the check written to
+   * close that, which only ever saw a report that opened a transaction.*
    *
    * The bounds are handed to the callback rather than re-derived inside it, which keeps this
    * method and its callback from drifting apart. It buys nothing against the **guard**, which

@@ -242,9 +242,13 @@ rewritten to remove that language, because resolving each by inference is how a
 false cross-reference gets introduced, and this log records enough of those
 already. Each file carries previous/next links instead, so a positional reference
 resolves exactly as well as it did in the single file and no better. *Checked on
-2026-09-07: of 214 files, 213 carry `Previous:`, 181 carry `Next:`, and 180 carry both
-on one line — recounted rather than incremented. 0213, 0214 and 0215 each moved the first
-two and neither of the others, none of them carrying a `Next:`. The forward half was
+2026-09-07, and **recounted after** two rulings landed the same day and left this sentence
+stale: of 216 files, 215 carry `Previous:`, 181 carry `Next:`, and 180 carry both on one
+line. 0213 through 0217 each moved the first two and neither of the others, none of them
+carrying a `Next:`. The one file with no `Previous:` is 0001, which has nothing before it.
+*The stale figures said 214 and 213, and were left by the commits adding 0216 and 0217 —
+in the paragraph whose instruction is to recount rather than increment, which is why the
+recount is dated and the trigger named rather than the numbers simply being replaced.* The forward half was
 dropped after 0182 and 0173 never had one, so the chain is walkable backward
 throughout and forward only as far as 0182 — worth repairing, not worth
 restating the rule over. A batch on 2026-09-05 "corrected" this sentence to claim

@@ -27,10 +27,16 @@ changing". A future month would be labelled open, which is true of its submissio
 and false of what Section 17 means by it — the figure is not still changing, it has not
 started. Section 17's sentence is about a month in progress.
 
-**Section 20 would resolve the tree at an instant no assignment has reached.** A report
-resolves the pastoral tree at the last millisecond of its period's final day (decision
-0208), and for a future period that is an instant in the future. Nothing is wrong with the
-arithmetic; there is simply no tree there yet to be the answer.
+*A fourth argument stood here and is **cut** rather than qualified: that Section 20 would
+resolve the tree at an instant no assignment has reached, since decision 0208 makes it the
+last millisecond of the period's final day. That is true of the code and takes one side of a
+labelled Stop Condition — Section 20 also says an open period "resolves as of now", and this
+ruling itself says four lines above that a future month would be labelled open, which under
+that reading gives an instant every assignment has reached and the argument evaporates. It is
+cut rather than made conditional because a conditional version has to be re-derived the day
+that question settles, and the three arguments above do not depend on the answer.
+`architecture-guardian` found it as the fourth instance on this branch of that same
+assertion, after a sweep that had cleared this one as sound.*
 
 ## The boundary is "has not begun", not "is later than this month"
 
@@ -83,10 +89,18 @@ three statements at the top of one method.
 provider in the same module, so "a report cannot open its own transaction" was a conformance
 claim with nothing able to fail — written into the fix for a rule that had shipped with
 nothing able to fail. `test/unit/reporting-transaction-seam.spec.ts` now parses the module
-and asserts it: one transaction opening, one pool reference, all three rules inside the seam.
-It parses rather than greps, because a regular expression cannot distinguish a call from the
-same text in a comment and a check that skips what it cannot read claims a completeness it
-never had.
+and asserts it. It parses rather than greps, because a regular expression cannot distinguish
+a call from the same text in a comment, and a check that skips what it cannot read claims a
+completeness it never had.
+
+**Its first version checked the wrong property, and the third review caught that too.** It
+asserted one transaction opening and one pool reference — which only ever sees a report that
+*opens a transaction*. The idiomatic second report opens none: this module composes what the
+owning modules compute (decision 0206), so it calls a figures service whose executor is
+optional, applies none of the three rules, and left every case green when
+`architecture-guardian` ran them against exactly such a method. What binds is therefore a
+claim about the module's **public surface** — every public method of every provider routes
+through the seam — and the transaction assertions are kept beside it rather than relied on.
 
 It still does not compel a callback to *use* the transaction it is handed, and that is stated
 in the seam's docblock rather than left for a reader to discover.

@@ -221,11 +221,18 @@ export class HierarchyService {
    * successor rather than to both. That property is what stops a reassignment
    * duplicating a person into two subtrees for the instant it happens.
    *
-   * **Which instant a report passes is not decided here**, and deliberately:
-   * Section 20 fixes the *period*, and the instant within its last day is recorded
-   * as open in `CLAUDE.md`. This method answers about whatever instant it is given,
-   * which is the same contract `directChildrenAsOf` and `assignmentsAsOf` already
-   * have.
+   * **Which instant a report passes is not decided here**, and deliberately.
+   * Section 20 fixes the *period*; decision 0208 fixes the instant within its last
+   * day, and what is still open in `CLAUDE.md` is narrower than this once said --
+   * which instant an **open** period resolves at, where Section 20 states both that
+   * and "as of now" three lines apart. This method answers about whatever instant it
+   * is given, which is the same contract `directChildrenAsOf` and `assignmentsAsOf`
+   * already have.
+   *
+   * *It read "the instant within its last day is recorded as open", which decision
+   * 0208 had settled -- so a reader following it landed on a closed question. Found
+   * by `architecture-guardian` sweeping for that same conflation, which this branch
+   * has now produced four times.*
    *
    * **Cycle-safe, and that is not decoration here.** Section 5 requires it of any
    * recursive walk, and a dated walk can meet a cycle the *active* tree never had:
