@@ -52,9 +52,16 @@ describe('a closed Cell meeting resolves per record (section 7)', () => {
 
   const CREATED = new Date('2024-01-06T10:00:00+08:00');
 
-  /** Two Saturdays inside the open window: Mark's, then Nestor's. */
+  /**
+   * Two consecutive meetings inside the open submission window: Mark's, then Nestor's.
+   *
+   * Not Saturdays, and the weekday is not a detail: a meeting exists only on a day its
+   * Cell's schedule names (section 13), so **every Cell in this file takes `scheduleDay`**
+   * rather than a literal. The derivation is in `beforeEach`.
+   */
   let marksMeeting: string;
   let nestorsMeeting: string;
+  let scheduleDay: number;
 
   beforeAll(async () => {
     db = createTestDb();
@@ -72,25 +79,60 @@ describe('a closed Cell meeting resolves per record (section 7)', () => {
     nestor = await createPerson(db, { firstName: 'Nestor', network: 'MENS' });
     await assignTo(db, nestor.id, root.id);
 
-    cell = await createCell(db, { leader: mark, dayOfWeek: 6, createdAt: CREATED });
-    markAccount = await createAccount(app, db, { person: mark, roles: ['LEADER'] });
-    nestorAccount = await createAccount(app, db, { person: nestor, roles: ['LEADER'] });
-
-    // Two consecutive Saturdays that have already happened, from the database's clock —
-    // the same clock the window comparison uses. A fixed pair would start failing on the
-    // day the month it names closes.
-    const days = await sql<{ recent: string; earlier: string }>`
-      SELECT to_char(saturday, 'YYYY-MM-DD')                     AS recent,
-             to_char(saturday - interval '7 days', 'YYYY-MM-DD') AS earlier
+    // **Two consecutive meetings inside a month whose submission window is still open**,
+    // anchored on the *first day of that month* rather than on the most recent Saturday.
+    //
+    // Section 7's exception covers "recording or correcting a Cell meeting whose month's
+    // submission window is still open", and once the window shuts "that too resolves
+    // through nobody". So both dates have to sit in an open month, and a month closes at
+    // the end of the 7th of the next one (sections 9 and 13, decision 0170).
+    //
+    // **The previous version took the two most recent Saturdays and was red for four days
+    // of every month.** On the 8th the earlier Saturday is still in the month that shut the
+    // night before, so section 7 correctly resolved it through nobody and five cases here
+    // asserted 200 against a 403. Its own comment said a fixed pair "would start failing on
+    // the day the month it names closes" -- which is the right worry, and the clock-relative
+    // pair inherited it by crossing the same boundary.
+    //
+    // The floor of the open window is the first of the previous month through the 7th, and
+    // the first of the current month from the 8th. Anchoring there gives two dates seven
+    // days apart that are both past and both open, on every day of every month:
+    //
+    // - on the 8th, the window is exactly eight days old, so days 1 and 8 are the only pair
+    //   that fits -- which is why the anchor is the floor and not today;
+    // - through the 7th, the previous month supplies both with weeks to spare.
+    //
+    // **The weekday follows from the anchor rather than being chosen**, because a meeting is
+    // identified by its Cell and its scheduled date (section 13) and only exists on a day the
+    // Cell's schedule names. Saturday cannot be assumed: days 1 and 8 are whatever weekday
+    // the month opened on.
+    const days = await sql<{ earlier: string; recent: string; iso_dow: number }>`
+      SELECT to_char(opens, 'YYYY-MM-DD')                     AS earlier,
+             to_char(opens + interval '7 days', 'YYYY-MM-DD') AS recent,
+             EXTRACT(ISODOW FROM opens)::int                  AS iso_dow
         FROM (
-          SELECT (now() AT TIME ZONE 'Asia/Manila')::date
-                   - ((EXTRACT(ISODOW FROM (now() AT TIME ZONE 'Asia/Manila')::date)::int + 1) % 7)
-                 AS saturday
+          SELECT date_trunc(
+                   'month',
+                   CASE
+                     WHEN EXTRACT(DAY FROM today)::int <= 7 THEN today - interval '1 month'
+                     ELSE today
+                   END
+                 )::date AS opens
+            FROM (SELECT (now() AT TIME ZONE 'Asia/Manila')::date AS today) AS t
         ) AS s
     `.execute(db);
 
     marksMeeting = days.rows[0].earlier;
     nestorsMeeting = days.rows[0].recent;
+    scheduleDay = days.rows[0].iso_dow;
+
+    cell = await createCell(db, {
+      leader: mark,
+      dayOfWeek: scheduleDay,
+      createdAt: CREATED,
+    });
+    markAccount = await createAccount(app, db, { person: mark, roles: ['LEADER'] });
+    nestorAccount = await createAccount(app, db, { person: nestor, roles: ['LEADER'] });
 
     // Mark leads until the **day after** his meeting; Nestor from then; the Cell closes
     // after Nestor's. Every instant is derived from the two dates, so the whole fixture
@@ -344,7 +386,11 @@ describe('a closed Cell meeting resolves per record (section 7)', () => {
     const successor = await createPerson(db, { firstName: 'Teodoro', network: 'MENS' });
     await assignTo(db, successor.id, root.id);
 
-    const active = await createCell(db, { leader: owner, dayOfWeek: 6, createdAt: CREATED });
+    const active = await createCell(db, {
+      leader: owner,
+      dayOfWeek: scheduleDay,
+      createdAt: CREATED,
+    });
     const ownerAccount = await createAccount(app, db, { person: owner, roles: ['LEADER'] });
 
     const handover = new Date(`${marksMeeting}T23:00:00+08:00`);
