@@ -65,8 +65,9 @@ export type Target =
    *
    * `at` is the instant the figures are computed against, handed in rather than derived
    * here. Decision 0214 fixes that the guard uses **the same** instant the report does,
-   * and deliberately does not fix which instant that is: section 20 states two, three
-   * lines apart, and `CLAUDE.md` carries that as open.
+   * and deliberately does not fix which instant that is. Section 20 does, and since
+   * decision 0218 it does so once: the period's final millisecond, open or closed.
+   * *It stated two, three lines apart, until then.*
    */
   | { kind: 'report_scope'; leaderPersonId: string | null; at: Date };
 

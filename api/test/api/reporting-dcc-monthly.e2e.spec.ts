@@ -1,6 +1,7 @@
 import request from 'supertest';
 
 import { startOfNextManilaMonth } from '../../src/common/time/manila';
+import { reportingPeriodBounds } from '../../src/common/time/reporting-period';
 import { currentReportingMonth, databaseNow } from '../../src/common/time/submission-window';
 import { createTestDb, truncateAll } from '../setup/database';
 import { assignTo, createAccount, createPerson, createTestApp } from '../setup/fixtures';
@@ -429,6 +430,50 @@ describe('GET /api/v1/reports/dcc/monthly (sections 7, 20 and 22)', () => {
         excluded,
       );
 
+      expect(response.status).toBe(200);
+    });
+  });
+
+  /**
+   * An **open** period resolves at the period's final millisecond, not at now (decision
+   * 0218, SKILL.md section 20).
+   *
+   * **One case, because there is exactly one state the two readings disagree about.** A row
+   * in force at both instants is admitted either way, and one in force at neither is refused
+   * either way; the whole of the difference is a row in force at the period's **end** and
+   * not yet at **now**, which for an open month means a `started_at` later today or later
+   * this month.
+   *
+   * **The fixture writes that row directly, and no application path would.** Section 5's
+   * reassignment and Section 4's sex correction both refuse a future effective date, and
+   * every other writer stamps `new Date()` — which is exactly why decision 0218 says the
+   * remedy for a future-dated row is to refuse the write rather than to bend the reporting
+   * instant, and why this case pins the consequence rather than endorsing the row.
+   *
+   * Asking as Raymond for a leader who joins his subtree later in the open month: admitted
+   * under the period's end, refused under `new Date()`.
+   */
+  describe('an open period resolves at its end, not at now (decision 0218)', () => {
+    it('admits a leader whose assignment begins later in the open month', async () => {
+      const thisMonth = await currentReportingMonth(db);
+      // The period's own final millisecond. It is ahead of the clock at every instant of
+      // the month except the last one, which no run can realistically land on.
+      const laterThisMonth = reportingPeriodBounds(thisMonth).end;
+
+      const newcomer = await createPerson(db, {
+        firstName: 'Ligaya',
+        lastName: 'Mercado',
+        network: 'MENS',
+      });
+      await assignTo(db, newcomer.id, mark.id, laterThisMonth);
+
+      const response = await get(
+        `period=${thisMonth}&scope=LEADER&leader_id=${newcomer.id}`,
+        raymondAccount,
+      );
+
+      // Under an "as of now" reading `newcomer` holds no assignment yet, so they are in
+      // nobody's subtree and this is a 403. That is the reading decision 0218 removed.
       expect(response.status).toBe(200);
     });
   });
