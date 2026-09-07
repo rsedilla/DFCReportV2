@@ -5,6 +5,7 @@ import { AppConfigModule } from '../../src/config/config.module';
 import { DatabaseModule } from '../../src/database/database.module';
 import { DccFiguresService } from '../../src/attendance/dcc-figures.service';
 import { HierarchyService } from '../../src/hierarchy/hierarchy.service';
+import { NetworksService } from '../../src/networks/networks.service';
 import { ReportingService } from '../../src/reporting/reporting.service';
 import { createTestDb, truncateAll } from '../setup/database';
 import { assignTo, createPerson } from '../setup/fixtures';
@@ -57,7 +58,11 @@ describe('a leader-scoped DCC monthly report (decisions 0206, 0210)', () => {
 
     const moduleRef = await Test.createTestingModule({
       imports: [AppConfigModule, DatabaseModule],
-      providers: [ReportingService, DccFiguresService, HierarchyService],
+      // `NetworksService` is here for Network scope (decision 0219), which this file never
+      // asks for: every scope goes through one constructor, so a provider is owed by the
+      // class rather than by the cases. Two hand-built test modules needed it and the
+      // second was found by the full suite rather than by the file being changed.
+      providers: [ReportingService, DccFiguresService, HierarchyService, NetworksService],
     }).compile();
 
     app = moduleRef.createNestApplication();

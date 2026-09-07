@@ -474,6 +474,7 @@ one, in the paragraph whose subject is false cross-references, and
 - 2026-09-07 — [A report may not name a period that has not begun](docs/decisions/0216-a-report-may-not-name-a-period-that-has-not-begun.md)
 - 2026-09-07 — [A Network grant resolves at the instant its target carries](docs/decisions/0217-a-network-grant-resolves-at-the-instant-its-target-carries.md)
 - 2026-09-07 — [A report resolves at the period's final millisecond, open or closed](docs/decisions/0218-a-report-resolves-at-the-periods-final-millisecond-open-or-closed.md)
+- 2026-09-07 — [A Network's reporting population is its membership](docs/decisions/0219-a-networks-reporting-population-is-its-membership.md)
 
 ### Open — awaiting a ruling
 

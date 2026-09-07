@@ -6,6 +6,7 @@ import { AppConfigModule } from '../../src/config/config.module';
 import { DatabaseModule } from '../../src/database/database.module';
 import { DccFiguresService } from '../../src/attendance/dcc-figures.service';
 import { HierarchyService } from '../../src/hierarchy/hierarchy.service';
+import { NetworksService } from '../../src/networks/networks.service';
 import { ReportingService } from '../../src/reporting/reporting.service';
 import { ValidationFailedError } from '../../src/common/errors/api-error';
 import { currentReportingMonth } from '../../src/common/time/submission-window';
@@ -92,12 +93,14 @@ describe('section 20 reconciliation, DCC monthly (Stage 5 Done-when)', () => {
     // module resolves is asserted where it belongs, in `module-graph.spec.ts`, which
     // compiles the whole of `AppModule`.
     //
-    // `HierarchyService` joined the list when leader scope arrived: `ReportingService`
-    // composes the placement graph now (decision 0206), and every scope goes through the
-    // same constructor. This file still asks only for Whole Church, which needs no walk.
+    // `HierarchyService` joined the list when leader scope arrived and `NetworksService`
+    // when Network scope did: `ReportingService` composes the placement graph and the
+    // Network's membership (decisions 0206 and 0219), and every scope goes through the
+    // same constructor — so a provider is needed here even by a case that never asks for
+    // that scope.
     const moduleRef = await Test.createTestingModule({
       imports: [AppConfigModule, DatabaseModule],
-      providers: [DccFiguresService, HierarchyService, ReportingService],
+      providers: [DccFiguresService, HierarchyService, NetworksService, ReportingService],
     }).compile();
 
     app = moduleRef.createNestApplication();
@@ -490,5 +493,57 @@ describe('section 20 reconciliation, DCC monthly (Stage 5 Done-when)', () => {
     expect(report.buckets).toEqual([]);
     expect(report.removedEvents).toEqual([]);
     expect(Object.values(report.classification).reduce((a, b) => a + b, 0)).toBe(0);
+  });
+
+  /**
+   * A Network's population is its **membership**, not its root's subtree (decision 0219).
+   *
+   * **This is the case the API-level cases cannot make.** There, every fixture total is
+   * zero, so admitting a Network request proves it was scoped and not what it was scoped
+   * *to*. Here the attendance is real, and the two readings give different numbers.
+   *
+   * Section 20's residual is the whole of the difference: somebody who held no pastoral
+   * assignment in the period is in the Whole Church total alone — no leader's subtree
+   * contains them — while every encoded Person holds a `network_assignments` row from their
+   * encoding date, so the Network's membership does.
+   */
+  it("counts a Network's members, including one no leader discipled", async () => {
+    const root = await createPerson(db, { firstName: 'Oriel', network: 'MENS' });
+    await assignTo(db, root.id, null);
+    const discipled = await createPerson(db, { firstName: 'Cely', network: 'MENS' });
+    await assignTo(db, discipled.id, root.id);
+
+    // Encoded, in the Men's Network, under nobody. Section 20 places them in the Whole
+    // Church total alone.
+    const residual = await createPerson(db, { firstName: 'Editha', network: 'MENS' });
+
+    // In the other Network, so the Men's figure must exclude them however it is computed.
+    const otherNetwork = await createPerson(db, { firstName: 'Luzviminda', network: 'WOMENS' });
+
+    recorder = await accountFor(root.id);
+
+    const october = await event(OCT_4);
+    await attend(october, discipled.id, root.id);
+    await attend(october, residual.id, root.id);
+    await attend(october, otherNetwork.id, root.id);
+
+    const mens = await reporting.dccMonthly({ kind: 'NETWORK', network: 'MENS' }, MONTH);
+    const womens = await reporting.dccMonthly({ kind: 'NETWORK', network: 'WOMENS' }, MONTH);
+    const wholeChurch = await reporting.dccMonthly({ kind: 'WHOLE_CHURCH' }, MONTH);
+
+    // **Two, not one.** A walk from the Men's root reaches `discipled` and never
+    // `residual`, so the subtree reading answers 1 here and the identity below fails.
+    expect(mens.uniquePeople).toBe(2);
+    expect(womens.uniquePeople).toBe(1);
+
+    // Section 17's drill-down: Whole Church → Network → Leader. This is the level at which
+    // the subtree reading would stop adding up.
+    expect(mens.uniquePeople + womens.uniquePeople).toBe(wholeChurch.uniquePeople);
+
+    // Section 20's reconciliation still holds inside the Network scope.
+    const classified = Object.values(mens.classification).reduce((a, b) => a + b, 0);
+    const bucketed = mens.buckets.reduce((total, bucket) => total + bucket.people, 0);
+    expect(classified).toBe(mens.uniquePeople);
+    expect(bucketed).toBe(mens.uniquePeople);
   });
 });

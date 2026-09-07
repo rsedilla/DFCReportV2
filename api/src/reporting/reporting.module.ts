@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 
 import { AttendanceModule } from '../attendance/attendance.module';
 import { HierarchyModule } from '../hierarchy/hierarchy.module';
+import { NetworksModule } from '../networks/networks.module';
 import { ReportingController } from './reporting.controller';
 import { ReportingService } from './reporting.service';
 
@@ -21,7 +22,7 @@ import { ReportingService } from './reporting.service';
  * the placement graph walked by the module that owns `pastoral_assignments`.
  */
 @Module({
-  imports: [AttendanceModule, HierarchyModule],
+  imports: [AttendanceModule, HierarchyModule, NetworksModule],
   controllers: [ReportingController],
   providers: [ReportingService],
   exports: [ReportingService],

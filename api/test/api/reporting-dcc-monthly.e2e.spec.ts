@@ -435,6 +435,88 @@ describe('GET /api/v1/reports/dcc/monthly (sections 7, 20 and 22)', () => {
   });
 
   /**
+   * A Network's population is its **membership**, not its root's subtree (decision 0219,
+   * SKILL.md section 20).
+   *
+   * **The residual is the whole of the difference, so it is what these cases build.**
+   * Section 20 puts somebody who held no pastoral assignment in the period into the Whole
+   * Church total alone — they are in no leader's subtree. They still hold a
+   * `network_assignments` row, because every encoded Person does, so membership contains
+   * them. Swap the population to a walk from the Network root and the Men's total loses
+   * exactly that person while Whole Church keeps them, and the two stop summing.
+   *
+   * Authorization is the same fact from the other side: a subtree is never a Network, so no
+   * subtree grant covers a `NETWORK` selector.
+   */
+  describe("a Network's population is its membership (decision 0219)", () => {
+    /** Encoded, in the Men's Network, and under no pastoral leader — section 20's residual. */
+    const unassigned = async (): Promise<TestPerson> =>
+      createPerson(db, { firstName: 'Editha', lastName: 'Nueva', network: 'MENS' });
+
+    it('counts somebody in the Network whom no leader discipled', async () => {
+      const residual = await unassigned();
+
+      const network = await get(
+        `period=${REPORTED_MONTH}&scope=NETWORK&network=MENS`,
+        adminAccount,
+      );
+      const wholeChurch = await get(`period=${REPORTED_MONTH}&scope=WHOLE_CHURCH`, adminAccount);
+
+      expect(network.status).toBe(200);
+      expect(network.body.scope).toEqual({ kind: 'NETWORK', network: 'MENS' });
+
+      // Nobody attended anything in the fixture, so both totals are zero and the figures
+      // cannot carry the claim. What is asserted is that the request is admitted and
+      // scoped -- the population itself is pinned by the service-level case below, which
+      // can see the person list rather than a total that happens to be empty.
+      expect(wholeChurch.status).toBe(200);
+      expect(residual.id).toBeDefined();
+    });
+
+    it('refuses a leader-scoped grant a Network selector', async () => {
+      // Raymond is the Men's root and holds LEADER, so his grant is a subtree one. A
+      // subtree excludes the residual above, which is why it is not a Network.
+      const response = await get(
+        `period=${REPORTED_MONTH}&scope=NETWORK&network=MENS`,
+        raymondAccount,
+      );
+
+      expect(response.status).toBe(403);
+      expect(response.body.error.code).toBe('SCOPE_DENIED');
+      expect(response.body).not.toHaveProperty('uniquePeople');
+    });
+
+    it('admits a NETWORK grant naming that Network, and refuses it the other one', async () => {
+      const outsider = await createPerson(db, {
+        firstName: 'Teofilo',
+        lastName: 'Ordonez',
+        network: 'MENS',
+      });
+      await assignTo(db, outsider.id, raymond.id);
+      const grantee = await createAccount(app, db, { person: outsider, roles: [] });
+      await db
+        .insertInto('capability_grants')
+        .values({
+          account_id: grantee.id,
+          capability: 'reports.view_subtree',
+          scope_type: 'NETWORK',
+          scope_network: 'MENS',
+          read_only: true,
+          reason: 'A Network-scoped reporting grant covers the Network it names.',
+          granted_by: adminAccount.id,
+        })
+        .execute();
+
+      const own = await get(`period=${REPORTED_MONTH}&scope=NETWORK&network=MENS`, grantee);
+      const other = await get(`period=${REPORTED_MONTH}&scope=NETWORK&network=WOMENS`, grantee);
+
+      expect(own.status).toBe(200);
+      expect(other.status).toBe(403);
+      expect(other.body.error.code).toBe('SCOPE_DENIED');
+    });
+  });
+
+  /**
    * An **open** period resolves at the period's final millisecond, not at now (decision
    * 0218, SKILL.md section 20).
    *
@@ -551,14 +633,50 @@ describe('GET /api/v1/reports/dcc/monthly (sections 7, 20 and 22)', () => {
       expect(response.body.error.details.field).toBe('query.period');
     });
 
+    /**
+     * *This sent `scope=NETWORK` until decision 0219 made that a scope the service does
+     * compute. `CELL` is the remaining member of section 20's enumeration with no
+     * implementation, so it is what the case now sends — the assertion is about a named
+     * scope nothing computes, not about Networks.*
+     */
     it('refuses a scope it does not compute, at the guard rather than the DTO', async () => {
-      const response = await get(`period=${REPORTED_MONTH}&scope=NETWORK`, adminAccount);
+      const response = await get(`period=${REPORTED_MONTH}&scope=CELL`, adminAccount);
 
       expect(response.status).toBe(422);
       expect(response.body.error.code).toBe('VALIDATION_FAILED');
       // The guard reads `scope` before the DTO does, so its field name is the one a
       // client sees. Asserting the code alone cannot tell the two refusals apart.
       expect(response.body.error.details.field).toBe('query.scope');
+    });
+
+    it('refuses NETWORK with no network named', async () => {
+      const response = await get(`period=${REPORTED_MONTH}&scope=NETWORK`, adminAccount);
+
+      expect(response.status).toBe(422);
+      expect(response.body.error.code).toBe('VALIDATION_FAILED');
+      expect(response.body.error.details.field).toBe('query.network');
+    });
+
+    it('refuses a network sent with WHOLE_CHURCH rather than ignoring it', async () => {
+      const response = await get(
+        `period=${REPORTED_MONTH}&scope=WHOLE_CHURCH&network=MENS`,
+        adminAccount,
+      );
+
+      expect(response.status).toBe(422);
+      expect(response.body.error.code).toBe('VALIDATION_FAILED');
+      expect(response.body.error.details.field).toBe('network');
+    });
+
+    it('refuses a network that is not one of the two', async () => {
+      const response = await get(
+        `period=${REPORTED_MONTH}&scope=NETWORK&network=YOUTH`,
+        adminAccount,
+      );
+
+      expect(response.status).toBe(422);
+      expect(response.body.error.code).toBe('VALIDATION_FAILED');
+      expect(response.body.error.details.field).toBe('query.network');
     });
 
     it('refuses a leader_id sent with WHOLE_CHURCH rather than ignoring it', async () => {
