@@ -8,6 +8,7 @@ import { DccFiguresService } from '../../src/attendance/dcc-figures.service';
 import { HierarchyService } from '../../src/hierarchy/hierarchy.service';
 import { ReportingService } from '../../src/reporting/reporting.service';
 import { ValidationFailedError } from '../../src/common/errors/api-error';
+import { currentReportingMonth } from '../../src/common/time/submission-window';
 import { createTestDb, truncateAll } from '../setup/database';
 import { assignTo, createPerson } from '../setup/fixtures';
 
@@ -354,13 +355,23 @@ describe('section 20 reconciliation, DCC monthly (Stage 5 Done-when)', () => {
   it('says an open month is open, which is the other half of section 17', async () => {
     // **The half that had nothing able to fail.** Every other case here uses October 2020,
     // so `open` was only ever asserted as `false` -- replace the whole comparison with
-    // `false AS open` and the suite stayed green. A future month needs no events and no
-    // attendance to pin the other branch.
+    // `false AS open` and the suite stayed green. This needs no events and no attendance to
+    // pin the other branch, only a month whose window has not shut.
     //
     // Section 17 requires the marker because an open month's figures are still changing,
     // and it is load-bearing beside an N that counts calendar rows whether or not their day
     // has passed (section 9).
-    const open = await reporting.dccMonthly({ kind: 'WHOLE_CHURCH' }, '2099-01-01');
+    //
+    // **The current month, not a future one.** This read `2099-01-01` until decision 0216,
+    // which refuses a period that has not begun -- so the case that pinned `open` was
+    // itself asking about a period no report may name. The current month is the right
+    // fixture and always was: its window closes on the 8th of the month after, so it is
+    // open at every instant within it, and unlike 2099 it is a month somebody could
+    // actually ask for.
+    // The database's clock, for the reason `reporting-dcc-monthly.e2e.spec.ts` gives at the
+    // same call: the rule under test is decided on it (decision 0160).
+    const thisMonth = await currentReportingMonth(db);
+    const open = await reporting.dccMonthly({ kind: 'WHOLE_CHURCH' }, thisMonth);
     expect(open.open).toBe(true);
     expect(open.n).toBe(0);
 

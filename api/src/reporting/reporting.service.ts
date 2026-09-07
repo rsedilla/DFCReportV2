@@ -1,13 +1,17 @@
 import { Inject, Injectable } from '@nestjs/common';
 
-import {
-  DccFiguresService,
-  assertReportingMonth,
-  type DccPersonFigures,
-} from '../attendance/dcc-figures.service';
+import { DccFiguresService, type DccPersonFigures } from '../attendance/dcc-figures.service';
 import { DATABASE, type Db } from '../database/database.module';
+import type { Database } from '../database/schema';
 import { HierarchyService } from '../hierarchy/hierarchy.service';
-import { reportingPeriodBounds } from './reporting-period';
+
+import type { Transaction } from 'kysely';
+import {
+  assertReportingMonth,
+  assertReportingPeriodHasBegun,
+  reportingPeriodBounds,
+  type ReportingPeriod,
+} from '../common/time/reporting-period';
 
 /**
  * Which population a report covers. Section 20 enumerates four; two exist.
@@ -110,6 +114,87 @@ export class ReportingService {
    * events: nobody could attend, so there is nothing to bucket rather than a row of zeroes.
    */
   async dccMonthly(scope: ReportScope, period: string): Promise<DccMonthlyReport> {
+    return this.overPeriod(period, async (trx, { start, end }) => {
+      // The placement graph, walked by the module that owns `pastoral_assignments`
+      // (section 2, decision 0206). `undefined` rather than a list is Whole Church, and
+      // the difference from an empty list is load-bearing: a leader with nobody beneath
+      // them reports zero, which is not the same question as "everybody".
+      const personIds =
+        scope.kind === 'LEADER'
+          ? await this.hierarchy.reportingSubtree(trx, scope.personId, start, end)
+          : undefined;
+
+      const figures = await this.dccFigures.monthFigures(period, { executor: trx, personIds });
+
+      return {
+        scope,
+        period,
+        open: figures.open,
+        n: figures.n,
+        removedEvents: figures.removed,
+        uniquePeople: figures.people.length,
+        classification: classify(figures.people),
+        buckets: bucket(figures.people, figures.n),
+      };
+    });
+  }
+
+  /**
+   * The one way a report reads the database, and the reason it is a seam rather than a
+   * convention.
+   *
+   * **Every rule a report owes its period is applied here, once.** A report validates the
+   * month's shape (decision 0185), refuses a period that has not begun (decision 0216), and
+   * computes inside a single `READ ONLY REPEATABLE READ` transaction (decision 0210). Those
+   * were three statements at the top of the one report that exists, which made each of them
+   * a thing the *next* report route has to remember -- and section 22 names five report
+   * routes, of which one is built. Nothing would have reddened for the second route
+   * omitting any of the three: not a test, not a derivation, not a type.
+   *
+   * That is the one-rule-one-path shape `CLAUDE.md` records against this project more often
+   * than any other, and it is closed by something that fails rather than by a convention:
+   * `test/unit/reporting-transaction-seam.spec.ts` parses this module and asserts that
+   * **every public member of every class in it that is not a `@Controller` calls this
+   * method on its own body**, that the module opens one transaction and touches the pool
+   * once, and that all three rules are applied here. Members rather than methods, and a
+   * call rather than a mention: three earlier versions of that check missed an arrow-valued
+   * field, a provider carrying no `@Injectable`, and a seam call appearing only in a
+   * comment. It carries a fixture for each.
+   *
+   * **The public-surface claim is the load-bearing one**, and the transaction ones are not
+   * enough on their own. The idiomatic second report method opens no transaction and names
+   * no pool at all -- `reporting` composes what the owning modules compute (decision 0206),
+   * so it calls a figures service whose executor is optional and defaults to the pool. Such
+   * a method applies none of the three rules, compiles clean, and left the transaction
+   * assertions green when `architecture-guardian` ran them against one.
+   *
+   * **What still is not reached**, so this is not read as wider than it is: a callback is
+   * handed `trx` and nothing compels it to use it, for that same reason. A report ignoring
+   * `trx` would take two snapshots and lose decision 0210's identity -- the defect that
+   * shipped once already, under two docblocks claiming "by construction" over code that did
+   * not have it.
+   *
+   * *Found by `architecture-guardian` on decision 0216, which shipped the rule with one call
+   * site and nothing able to fail on a second; again on the fix, which claimed a report
+   * "cannot" bypass the seam while nothing stopped one; again on the check written to close
+   * that, which only ever saw a report that opened a transaction; and again on the check
+   * written to close **that**, which asked whether the method's text contained the seam's
+   * name. Four passes, each finding the previous fix had reproduced the shape it removed.*
+   *
+   * The bounds are handed to the callback rather than re-derived inside it, which keeps this
+   * method and its callback from drifting apart. It buys nothing against the **guard**, which
+   * never receives them: the guard calls `reportingPeriodBounds` itself, on its own
+   * connection, before this transaction opens. What makes those two the same instant is that
+   * both import one function from `common/time` -- which is what decision 0214 means by
+   * **the same** being a property of sharing one derivation rather than of two agreeing.
+   *
+   * *A first version of this sentence credited the hand-off with the guard's agreement. Had
+   * the callback re-derived the bounds with the same helper, the value would be identical.*
+   */
+  private async overPeriod<T>(
+    period: string,
+    compute: (trx: Transaction<Database>, bounds: ReportingPeriod) => Promise<T>,
+  ): Promise<T> {
     // **Refused before anything is derived from it.** `reportingPeriodBounds` validates
     // nothing and will happily build `2020-14-01` out of `2020-13-01`, so a malformed month
     // reaching it is answered by the *date* helper, naming a field the caller never sent and
@@ -117,34 +202,23 @@ export class ReportingService {
     // client needs in order to fix it, and that field is `period`.
     assertReportingMonth(period);
 
-    const { start, end } = reportingPeriodBounds(period);
+    const bounds = reportingPeriodBounds(period);
 
     return this.db
       .transaction()
       .setIsolationLevel('repeatable read')
       .setAccessMode('read only')
       .execute(async (trx) => {
-        // The placement graph, walked by the module that owns `pastoral_assignments`
-        // (section 2, decision 0206). `undefined` rather than a list is Whole Church, and
-        // the difference from an empty list is load-bearing: a leader with nobody beneath
-        // them reports zero, which is not the same question as "everybody".
-        const personIds =
-          scope.kind === 'LEADER'
-            ? await this.hierarchy.reportingSubtree(trx, scope.personId, start, end)
-            : undefined;
+        // **First in the transaction, before anything is walked** (decision 0216). A period
+        // that has not begun can hold no attendance record (section 9), and answering it
+        // would return a complete report saying nobody attended anything -- the calendar
+        // runs thirteen months ahead, so `n` and the coverage denominator are real. The
+        // clock is the database's, which is where every month boundary in this system is
+        // decided. Authorization has already run in the guard, so a scope the actor does
+        // not hold is still answered `SCOPE_DENIED` first (section 7, decision 0193).
+        await assertReportingPeriodHasBegun(trx, period);
 
-        const figures = await this.dccFigures.monthFigures(period, { executor: trx, personIds });
-
-        return {
-          scope,
-          period,
-          open: figures.open,
-          n: figures.n,
-          removedEvents: figures.removed,
-          uniquePeople: figures.people.length,
-          classification: classify(figures.people),
-          buckets: bucket(figures.people, figures.n),
-        };
+        return compute(trx, bounds);
       });
   }
 }

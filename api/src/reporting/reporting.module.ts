@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 
 import { AttendanceModule } from '../attendance/attendance.module';
 import { HierarchyModule } from '../hierarchy/hierarchy.module';
+import { ReportingController } from './reporting.controller';
 import { ReportingService } from './reporting.service';
 
 /**
@@ -21,6 +22,7 @@ import { ReportingService } from './reporting.service';
  */
 @Module({
   imports: [AttendanceModule, HierarchyModule],
+  controllers: [ReportingController],
   providers: [ReportingService],
   exports: [ReportingService],
 })

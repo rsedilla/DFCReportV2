@@ -325,6 +325,15 @@ export class AuthorizationService {
       throw new CapabilityDeniedError(`You do not hold ${capability}.`, { capability });
     }
 
+    // **A grant that covers no record needs different words**, and section 7's
+    // single-scope rule is the one case: telling an administrator it is "not over this
+    // record" would send them looking for a record when the thing to fix is the grant.
+    //
+    // *A `NETWORK` grant against a report scope selector was a second such case earlier on
+    // this branch (decision 0215), on the ground that no dated Network resolution existed.
+    // One did, and decision 0217 resolves such a grant through `network_as_of` at the
+    // instant the target carries -- so it covers records again and needs no message of its
+    // own.*
     let coveredNothing = false;
 
     for (const grant of grants) {
@@ -497,6 +506,10 @@ export class AuthorizationService {
       return false;
     }
 
+    if (target.kind === 'report_scope') {
+      return this.reportScopeCovers(executor, scope, target, actor);
+    }
+
     const personId = await this.personBehind(executor, target);
     if (personId === null) {
       return false;
@@ -523,10 +536,77 @@ export class AuthorizationService {
     }
   }
 
+  /**
+   * A report scope selector, resolved as of the period being reported (decision 0207)
+   * through the pastoral tree in force at that instant (decision 0214).
+   *
+   * **A `NETWORK` grant resolves through `networkAsOf` at `target.at`** (decision 0217),
+   * which is the same instant the subtree branches above resolve at. Section 7 binds this
+   * to every dated capability rather than to this target: a request naming no period is
+   * asking about now, and `currentNetwork` is that same read taken at now.
+   *
+   * *It was refused outright earlier on this branch (decision 0215), on the ground that no dated
+   * Network resolution existed. `networkAsOf` did, and was already called from `cells`, `people` and `networks`.*
+   */
+  private async reportScopeCovers(
+    executor: Db,
+    scope: Scope,
+    target: Extract<Target, { kind: 'report_scope' }>,
+    actor: Actor,
+  ): Promise<boolean> {
+    // Whole Church is reached only by a Whole Church grant, which `scopeCovers` has
+    // already answered above. Anything narrower does not cover it, and section 7 refuses
+    // rather than narrowing the request to the scope the actor does hold.
+    if (target.leaderPersonId === null) {
+      return false;
+    }
+
+    switch (scope.type) {
+      case ScopeType.OwnSubtree:
+        return this.hierarchy.isWithinSubtreeAsOf(
+          executor,
+          actor.personId,
+          target.leaderPersonId,
+          target.at,
+          { includeSelf: true },
+        );
+      case ScopeType.SubtreeExclSelf:
+        return this.hierarchy.isWithinSubtreeAsOf(
+          executor,
+          actor.personId,
+          target.leaderPersonId,
+          target.at,
+          { includeSelf: false },
+        );
+      case ScopeType.Network: {
+        if (scope.network === null) {
+          // The database requires a Network to be named on a NETWORK grant. An unnamed
+          // one covers nothing rather than covering everything, as in `scopeCovers`.
+          return false;
+        }
+
+        // **`networkAsOf` at the target's instant, not `currentNetwork`** (decision 0217).
+        // Section 4 states why the history exists in exactly this case: "every
+        // Network-scoped report for a closed period depends on that answer". Resolving
+        // the subtree dated and the Network undated would have made the two axes of one
+        // request disagree.
+        //
+        // **A null covers nothing, and is a real answer rather than a missing one.**
+        // Section 4 is authoritative for a person's Network only from their encoding date
+        // forward and forbids inferring anything before it, so a report for a month
+        // predating the person is refused rather than guessed at.
+        const network = await this.networks.networkAsOf(executor, target.leaderPersonId, target.at);
+        return network !== null && network === scope.network;
+      }
+      case ScopeType.WholeChurch:
+        return true;
+    }
+  }
+
   /** An Account resolves through its Person; a Person is already one (section 7). */
   private async personBehind(
     executor: Db,
-    target: Exclude<Target, { kind: 'church' }>,
+    target: Exclude<Target, { kind: 'church' } | { kind: 'report_scope' }>,
   ): Promise<string | null> {
     if (target.kind === 'person') {
       return target.personId;

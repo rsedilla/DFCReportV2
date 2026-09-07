@@ -135,9 +135,10 @@ describe('the dated subtree walk (decision 0206)', () => {
     // "distinct people in the pastoral subtree" -- reached through section 20's person
     // key, and a subtree total that excluded the leader would be short by one at every
     // level. *A first version justified it by section 7's `OWN_SUBTREE` including the
-    // actor and by "every caller of this method": there are no callers, and scope
-    // resolution goes through `isWithinSubtree`, an undated upward walk, rather than
-    // through this.*
+    // actor and by "every caller of this method": there are no callers. Scope resolution
+    // went through `isWithinSubtree`, an undated upward walk -- and since decision 0214 a
+    // report's goes through `isWithinSubtreeAsOf`, the dated one covered at the end of
+    // this file. Neither is this method; what the two owe each other is agreement.*
     const raymond = await createPerson(db, { firstName: 'Raymond', network: 'MENS' });
     const mark = await createPerson(db, { firstName: 'Mark', network: 'MENS' });
 
@@ -177,5 +178,113 @@ describe('the dated subtree walk (decision 0206)', () => {
     `.execute(db);
 
     await expect(hierarchy.subtreeAsOf(db, manuel.id, MID_OCTOBER)).rejects.toThrow(/cycle/i);
+  });
+
+  /**
+   * The dated **upward** walk (decision 0214), which is what authorizes a report.
+   *
+   * **It is here rather than beside the route, because the property is this walk's.** The
+   * route's own suite moves people in months either side of the period, so every fixture
+   * date lands strictly inside or outside the instant and nothing sits *on* it --
+   * `architecture-guardian` mutated both bounds of the predicate and all **thirteen** of
+   * those cases stayed green. *Written as sixteen for one commit, which counts three cases
+   * added by the batch that fixed the finding, none of them boundary cases.* The boundary is what the method's docblock calls load-bearing, so
+   * it is pinned where `subtreeAsOf`'s counterpart already is.
+   */
+  describe('the dated upward walk', () => {
+    it('includes a row starting exactly at the instant', async () => {
+      const raymond = await createPerson(db, { firstName: 'Raymond', network: 'MENS' });
+      const mark = await createPerson(db, { firstName: 'Mark', network: 'MENS' });
+
+      await assignTo(db, raymond.id, null, OCTOBER);
+      await assignTo(db, mark.id, raymond.id, NOVEMBER);
+
+      // `[started_at, ended_at)`: the instant a row begins at is inside it.
+      await expect(hierarchy.ancestorsAsOf(db, mark.id, NOVEMBER)).resolves.toEqual([raymond.id]);
+      await expect(hierarchy.ancestorsAsOf(db, mark.id, MID_OCTOBER)).resolves.toEqual([]);
+    });
+
+    it('excludes a row ending exactly at the instant', async () => {
+      const raymond = await createPerson(db, { firstName: 'Raymond', network: 'MENS' });
+      const manuel = await createPerson(db, { firstName: 'Manuel', network: 'MENS' });
+      const ben = await createPerson(db, { firstName: 'Ben', network: 'MENS' });
+      const mark = await createPerson(db, { firstName: 'Mark', network: 'MENS' });
+
+      await assignTo(db, raymond.id, null, OCTOBER);
+      await assignTo(db, manuel.id, raymond.id, OCTOBER);
+      await assignTo(db, ben.id, raymond.id, OCTOBER);
+      const marksFirst = await assignTo(db, mark.id, manuel.id, OCTOBER);
+
+      await closeAt(marksFirst, NOVEMBER);
+      await assignTo(db, mark.id, ben.id, NOVEMBER);
+
+      // Exactly one leader at the shared instant -- the same half-open property the
+      // downward walk is held to, and the reason a leader cannot be outside a subtree
+      // that contains them.
+      await expect(hierarchy.ancestorsAsOf(db, mark.id, NOVEMBER)).resolves.toEqual([
+        ben.id,
+        raymond.id,
+      ]);
+    });
+
+    it('agrees with the downward walk, at an instant where the undated walk would not', async () => {
+      const raymond = await createPerson(db, { firstName: 'Raymond', network: 'MENS' });
+      const manuel = await createPerson(db, { firstName: 'Manuel', network: 'MENS' });
+      const ben = await createPerson(db, { firstName: 'Ben', network: 'MENS' });
+      const mark = await createPerson(db, { firstName: 'Mark', network: 'MENS' });
+
+      await assignTo(db, raymond.id, null, OCTOBER);
+      await assignTo(db, manuel.id, raymond.id, OCTOBER);
+      await assignTo(db, ben.id, raymond.id, OCTOBER);
+
+      // **Mark moves, which is what makes this about datedness.** A first version opened
+      // every row at OCTOBER and closed none, so the undated walk answered identically at
+      // every node and delegating to it would have survived the case.
+      const marksFirst = await assignTo(db, mark.id, manuel.id, OCTOBER);
+      await closeAt(marksFirst, NOVEMBER);
+      await assignTo(db, mark.id, ben.id, NOVEMBER);
+
+      for (const at of [MID_OCTOBER, DECEMBER]) {
+        const beneathManuel = await hierarchy.subtreeAsOf(db, manuel.id, at);
+        const beneathBen = await hierarchy.subtreeAsOf(db, ben.id, at);
+
+        for (const [root, beneath] of [
+          [manuel, beneathManuel],
+          [ben, beneathBen],
+        ] as const) {
+          for (const person of [raymond, manuel, ben, mark]) {
+            await expect(
+              hierarchy.isWithinSubtreeAsOf(db, root.id, person.id, at, { includeSelf: true }),
+            ).resolves.toBe(beneath.includes(person.id));
+          }
+        }
+      }
+
+      // And the two instants genuinely disagree, so the loop above is not asserting one
+      // answer twice.
+      await expect(
+        hierarchy.isWithinSubtreeAsOf(db, manuel.id, mark.id, MID_OCTOBER, { includeSelf: true }),
+      ).resolves.toBe(true);
+      await expect(
+        hierarchy.isWithinSubtreeAsOf(db, manuel.id, mark.id, DECEMBER, { includeSelf: true }),
+      ).resolves.toBe(false);
+    });
+
+    it('refuses a cycle rather than walking it for ever', async () => {
+      const manuel = await createPerson(db, { firstName: 'Manuel', network: 'MENS' });
+      const mark = await createPerson(db, { firstName: 'Mark', network: 'MENS' });
+
+      await assignTo(db, manuel.id, null, OCTOBER);
+      await assignTo(db, mark.id, manuel.id, OCTOBER);
+
+      // Written past the trigger, as the downward walk's own cycle case is: section 5
+      // requires every walk of the tree to detect one, and this walk is no exception.
+      await sql`
+        UPDATE pastoral_assignments SET leader_id = ${mark.id}::uuid, root_network = NULL
+         WHERE person_id = ${manuel.id}::uuid
+      `.execute(db);
+
+      await expect(hierarchy.ancestorsAsOf(db, mark.id, MID_OCTOBER)).rejects.toThrow(/cycle/i);
+    });
   });
 });

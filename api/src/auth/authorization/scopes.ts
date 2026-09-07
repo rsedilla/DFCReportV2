@@ -49,6 +49,25 @@ export type Target =
   /** An Account. Scope resolves through its Person. */
   | { kind: 'account'; accountId: string }
   /** A church-wide object, a setting being the example. Whole Church only. */
-  | { kind: 'church' };
+  | { kind: 'church' }
+  /**
+   * A **report scope selector**, which section 7 makes the target itself.
+   *
+   * It did become a member of this union where a Cell did not, and the reason is the
+   * instant. A Cell resolves through a leader the guard can ask a port for and hand on
+   * as a `person`; a report scope selector resolves through the pastoral tree **in force
+   * at the period's end** (decision 0214), and a `person` target carries no instant, so
+   * flattening it to one would silently resolve the wrong tree.
+   *
+   * `leaderPersonId` is `null` for a Whole Church selector, which is covered by a Whole
+   * Church grant and refused otherwise -- section 7: `SCOPE_DENIED`, "never silently
+   * narrowed to what they do hold".
+   *
+   * `at` is the instant the figures are computed against, handed in rather than derived
+   * here. Decision 0214 fixes that the guard uses **the same** instant the report does,
+   * and deliberately does not fix which instant that is: section 20 states two, three
+   * lines apart, and `CLAUDE.md` carries that as open.
+   */
+  | { kind: 'report_scope'; leaderPersonId: string | null; at: Date };
 
 export type TargetKind = Target['kind'];

@@ -37,6 +37,21 @@ export type TargetSpec =
    */
   | { kind: 'cell_meeting'; from: string; onFrom: string }
   | { kind: 'church' }
+  /**
+   * A **report scope selector** (SKILL.md section 7), which is the target itself.
+   *
+   * Three paths rather than one, because the selector is three values: which scope is
+   * asked for, the leader it names where that scope is `LEADER`, and the period, which
+   * decision 0207 makes the instant the selector resolves at.
+   *
+   * **The period comes from the request, and that is correct here where it would not be
+   * on a write.** Section 7 refuses authority resolved as of an effective date the actor
+   * chooses, because an actor could reach back into their own past tenure and recover it.
+   * Decision 0207 states in terms that this "moves no write": a viewing capability
+   * confers none, and a reported period is one that already happened rather than a date
+   * an actor picks to act at.
+   */
+  | { kind: 'report_scope'; scopeFrom: string; leaderFrom: string; periodFrom: string }
   | { kind: 'actor' };
 
 export interface CapabilityRequirement {
