@@ -5,6 +5,7 @@ import { AppConfigModule } from '../../src/config/config.module';
 import { DatabaseModule } from '../../src/database/database.module';
 import { DccFiguresService } from '../../src/attendance/dcc-figures.service';
 import { HierarchyService } from '../../src/hierarchy/hierarchy.service';
+import { NetworksService } from '../../src/networks/networks.service';
 import { ReportingService } from '../../src/reporting/reporting.service';
 import { createTestDb, truncateAll } from '../setup/database';
 import { assignTo, createPerson } from '../setup/fixtures';
@@ -25,10 +26,19 @@ import type { Database } from '../../src/database/schema';
  *
  * **The fixture is built so a wrong query fails rather than so it is tidy.** Mark is archived
  * mid-October, so a report resolving the tree with `subtreeAsOf` at the period's end loses him
- * and Manuel's total silently drops by one. Nena holds no assignment at any instant, so she is
- * section 20's residual and belongs to the Whole Church total alone -- which makes the root's
- * total deliberately *smaller* than the church's, and a report that quietly equated them
- * would pass a weaker fixture.
+ * and Manuel's total silently drops by one. Nena is discipled by somebody outside the pastoral
+ * tree, so no walk from the root reaches her -- which makes the root's total deliberately
+ * *smaller* than the church's, and a report that quietly equated them would pass a weaker
+ * fixture.
+ *
+ * *Nena held **no** assignment at any instant until 2026-09-07, as section 20's residual. That
+ * state cannot occur: section 9 refuses a DCC record to a Person with no open assignment row,
+ * "because there is no responsible leader to record it against", so the residual is never in a
+ * DCC population and the gap this fixture needs had to come from somewhere reachable.
+ * `assertLeaderIsAssignable` checks that a leader is unmerged, unarchived and in the same
+ * Network, and does not ask whether they hold an assignment of their own -- and section 6
+ * creates exactly such a Person, an administrator outside the structure. Found by
+ * `architecture-guardian` in the sibling spec first; this file was not swept.*
  *
  * Dates are fixed and in the past; names are invented (CLAUDE.md, Secrets).
  */
@@ -50,6 +60,7 @@ describe('a leader-scoped DCC monthly report (decisions 0206, 0210)', () => {
   let mark: { id: string };
   let tessa: { id: string };
   let nena: { id: string };
+  let outsideTheTree: { id: string };
   let recorder: string;
 
   beforeAll(async () => {
@@ -57,7 +68,11 @@ describe('a leader-scoped DCC monthly report (decisions 0206, 0210)', () => {
 
     const moduleRef = await Test.createTestingModule({
       imports: [AppConfigModule, DatabaseModule],
-      providers: [ReportingService, DccFiguresService, HierarchyService],
+      // `NetworksService` is here for Network scope (decision 0219), which this file never
+      // asks for: every scope goes through one constructor, so a provider is owed by the
+      // class rather than by the cases. Two hand-built test modules needed it and the
+      // second was found by the full suite rather than by the file being changed.
+      providers: [ReportingService, DccFiguresService, HierarchyService, NetworksService],
     }).compile();
 
     app = moduleRef.createNestApplication();
@@ -77,13 +92,16 @@ describe('a leader-scoped DCC monthly report (decisions 0206, 0210)', () => {
     //        /  \
     //   manuel   ben
     //      |      |
-    //    mark   tessa          nena: no assignment, ever
+    //    mark   tessa          nena -> ludivina (no assignment of her own)
     root = await createPerson(db, { firstName: 'Oriel', network: 'MENS' });
     manuel = await createPerson(db, { firstName: 'Manuel', network: 'MENS' });
     ben = await createPerson(db, { firstName: 'Ben', network: 'MENS' });
     mark = await createPerson(db, { firstName: 'Mark', network: 'MENS' });
     tessa = await createPerson(db, { firstName: 'Tessa', network: 'MENS' });
     nena = await createPerson(db, { firstName: 'Nena', network: 'MENS' });
+    // An administrator: in a Network, outside the pastoral tree (sections 5 and 6). Nena is
+    // discipled by her, so Nena may attend and no walk from the root reaches either of them.
+    outsideTheTree = await createPerson(db, { firstName: 'Ludivina', network: 'MENS' });
     // `dcc_attendance.recorded_by` references an **account**, not a Person. Inserted
     // directly rather than through `createAccount`, which needs the auth graph this file
     // does not build.
@@ -102,6 +120,9 @@ describe('a leader-scoped DCC monthly report (decisions 0206, 0210)', () => {
     await assignTo(db, manuel.id, root.id, SEPTEMBER);
     await assignTo(db, ben.id, root.id, SEPTEMBER);
     await assignTo(db, tessa.id, ben.id, SEPTEMBER);
+    // Nena has a leader, so section 9 lets her attend; her leader has none, so her chain
+    // terminates outside the tree and no walk from the root arrives at her.
+    await assignTo(db, nena.id, outsideTheTree.id, SEPTEMBER);
 
     // Mark is archived on the 20th: his assignment closes and his lifecycle moves, both at
     // that instant. Decision 0206's fallback then places him under Manuel, whom he was under
@@ -227,10 +248,13 @@ describe('a leader-scoped DCC monthly report (decisions 0206, 0210)', () => {
     expect(atRoot.uniquePeople).toBe(1 + atManuel.uniquePeople + atBen.uniquePeople);
     expect(atRoot.uniquePeople).toBe(4);
 
-    // **And the church is larger than the root by exactly the residual** -- Nena, who held
-    // no open assignment at any instant of the period and is therefore in no leader's
-    // subtree. Section 20 puts her in the Whole Church total alone, so this is the one
-    // place the drill-down deliberately does not sum.
+    // **And the church is larger than the root by exactly one** -- Nena, whose chain
+    // terminates at an administrator rather than at the root, so no walk from the root
+    // reaches her. This is the one place the drill-down deliberately does not sum.
+    //
+    // *Section 20 names the gap it accepts as its residual, who cannot appear in a DCC
+    // population at all (section 9). This is a second class producing the same gap, and
+    // that section 20 names one is recorded as open in `CLAUDE.md`.*
     expect(wholeChurch.uniquePeople).toBe(5);
     expect(wholeChurch.uniquePeople - atRoot.uniquePeople).toBe(1);
   });
@@ -286,7 +310,7 @@ describe('a leader-scoped DCC monthly report (decisions 0206, 0210)', () => {
     expect(atTessa.uniquePeople).toBe(1);
     expect(atTessa.classification.vip).toBe(1);
 
-    // Nena leads nobody and is in no leader's subtree, but a walk always returns its own
+    // Nena leads nobody and no walk from the root reaches her, but a walk always returns its own
     // seed -- which is what makes the drill-down sum, since a leader's own attendance has to
     // land somewhere. So her report is her own attendance: one person, not the church's five.
     const atNena = await leader(nena.id);

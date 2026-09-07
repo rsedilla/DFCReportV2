@@ -554,11 +554,23 @@ export class AuthorizationService {
     target: Extract<Target, { kind: 'report_scope' }>,
     actor: Actor,
   ): Promise<boolean> {
+    const selector = target.selector;
+
     // Whole Church is reached only by a Whole Church grant, which `scopeCovers` has
     // already answered above. Anything narrower does not cover it, and section 7 refuses
     // rather than narrowing the request to the scope the actor does hold.
-    if (target.leaderPersonId === null) {
+    if (selector.kind === 'WHOLE_CHURCH') {
       return false;
+    }
+
+    // **A Network selector is covered by a `NETWORK` grant naming it, and by no subtree
+    // grant** (decision 0219). Not a second rule, and not contingent on anybody sitting
+    // outside the tree: a Network selector names **no Person**, so there is no containment
+    // for a subtree grant to be tested against, and section 20 makes a Network's population
+    // its *membership* rather than any subtree. A Whole Church grant reached `scopeCovers`'
+    // own branch above and never arrives here.
+    if (selector.kind === 'NETWORK') {
+      return scope.type === ScopeType.Network && scope.network === selector.network;
     }
 
     switch (scope.type) {
@@ -566,7 +578,7 @@ export class AuthorizationService {
         return this.hierarchy.isWithinSubtreeAsOf(
           executor,
           actor.personId,
-          target.leaderPersonId,
+          selector.personId,
           target.at,
           { includeSelf: true },
         );
@@ -574,7 +586,7 @@ export class AuthorizationService {
         return this.hierarchy.isWithinSubtreeAsOf(
           executor,
           actor.personId,
-          target.leaderPersonId,
+          selector.personId,
           target.at,
           { includeSelf: false },
         );
@@ -595,7 +607,7 @@ export class AuthorizationService {
         // Section 4 is authoritative for a person's Network only from their encoding date
         // forward and forbids inferring anything before it, so a report for a month
         // predating the person is refused rather than guessed at.
-        const network = await this.networks.networkAsOf(executor, target.leaderPersonId, target.at);
+        const network = await this.networks.networkAsOf(executor, selector.personId, target.at);
         return network !== null && network === scope.network;
       }
       case ScopeType.WholeChurch:

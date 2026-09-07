@@ -51,7 +51,13 @@ export type TargetSpec =
    * confers none, and a reported period is one that already happened rather than a date
    * an actor picks to act at.
    */
-  | { kind: 'report_scope'; scopeFrom: string; leaderFrom: string; periodFrom: string }
+  | {
+      kind: 'report_scope';
+      scopeFrom: string;
+      leaderFrom: string;
+      networkFrom: string;
+      periodFrom: string;
+    }
   | { kind: 'actor' };
 
 export interface CapabilityRequirement {

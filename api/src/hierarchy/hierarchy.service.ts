@@ -222,17 +222,16 @@ export class HierarchyService {
    * duplicating a person into two subtrees for the instant it happens.
    *
    * **Which instant a report passes is not decided here**, and deliberately.
-   * Section 20 fixes the *period*; decision 0208 fixes the instant within its last
-   * day, and what is still open in `CLAUDE.md` is narrower than this once said --
-   * which instant an **open** period resolves at, where Section 20 states both that
-   * and "as of now" three lines apart. This method answers about whatever instant it
-   * is given, which is the same contract `directChildrenAsOf` and `assignmentsAsOf`
-   * already have.
+   * Section 20 fixes the *period*, decision 0208 the instant within its last day, and
+   * decision 0218 that an open period resolves at that same instant rather than at
+   * now. This method answers about whatever instant it is given, which is the same
+   * contract `directChildrenAsOf` and `assignmentsAsOf` already have.
    *
-   * *It read "the instant within its last day is recorded as open", which decision
-   * 0208 had settled -- so a reader following it landed on a closed question. Found
-   * by `architecture-guardian` sweeping for that same conflation, which this branch
-   * has now produced four times.*
+   * *Two earlier versions pointed a reader at an open question. The first said the
+   * instant within the last day was unsettled, which decision 0208 had closed; the
+   * second said the open-period instant was, which decision 0218 has now closed. The
+   * claim was asserted or mis-cited four times across one branch before it was
+   * ruled on.*
    *
    * **Cycle-safe, and that is not decoration here.** Section 5 requires it of any
    * recursive walk, and a dated walk can meet a cycle the *active* tree never had:
@@ -246,10 +245,16 @@ export class HierarchyService {
    * **That difference is why this method is not, by itself, Section 20's person
    * key.** A person with no open assignment at the instant asked about is absent
    * from this result and must be placed by that fallback; one who held none at any
-   * instant of the period belongs in the Whole Church total alone. Neither is this
-   * method's to do, and a caller that treats `subtreeAsOf(root, periodEnd)` as a
-   * Network total will be short by exactly those people. *A first version said
-   * "the same graph", which invited precisely that reading.*
+   * instant of the period belongs in no leader's figures. Neither is this method's
+   * to do.
+   *
+   * **Nor is a walk from a root a Network total** (decision 0219): a Network's
+   * population is its membership, and this is short by everybody whose chain
+   * terminates outside the tree — which is a wider set than the two above, and the
+   * one that is actually reachable, since Section 9 refuses a DCC record to a
+   * Person holding no assignment at all. *A first version said "the same graph",
+   * which invited that reading; the correction that replaced it named the wrong
+   * set, which is why the set is now named rather than gestured at.*
    */
   async subtreeAsOf(executor: Db, personId: string, at: Date): Promise<string[]> {
     const result = await sql<{ person_id: string; depth: number; is_cycle: boolean }>`

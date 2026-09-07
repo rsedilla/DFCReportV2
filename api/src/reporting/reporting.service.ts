@@ -2,8 +2,9 @@ import { Inject, Injectable } from '@nestjs/common';
 
 import { DccFiguresService, type DccPersonFigures } from '../attendance/dcc-figures.service';
 import { DATABASE, type Db } from '../database/database.module';
-import type { Database } from '../database/schema';
+import type { Database, NetworkName } from '../database/schema';
 import { HierarchyService } from '../hierarchy/hierarchy.service';
+import { NetworksService } from '../networks/networks.service';
 
 import type { Transaction } from 'kysely';
 import {
@@ -20,7 +21,18 @@ import {
  * subtree (decision 0206), not the tree in force at any one instant — which is a different
  * and wider set, and using the wrong one is a silent wrong total rather than an error.
  */
-export type ReportScope = { kind: 'WHOLE_CHURCH' } | { kind: 'LEADER'; personId: string };
+export type ReportScope =
+  | { kind: 'WHOLE_CHURCH' }
+  /**
+   * A Network, whose population is its **membership** and never its root's subtree
+   * (decision 0219). Section 4 requires the relationship to be stored rather than derived;
+   * the two readings differ by anybody whose pastoral chain terminates outside the tree,
+   * and it is that difference which makes Men's + Women's equal Whole Church — while every
+   * person holds one Network row at the instant, which is an open question rather than a
+   * constraint (`CLAUDE.md`).
+   */
+  | { kind: 'NETWORK'; network: NetworkName }
+  | { kind: 'LEADER'; personId: string };
 
 /** The five buckets of section 9's classification, in the order that section lists them. */
 export interface DccClassification {
@@ -84,6 +96,7 @@ export class ReportingService {
     @Inject(DATABASE) private readonly db: Db,
     private readonly dccFigures: DccFiguresService,
     private readonly hierarchy: HierarchyService,
+    private readonly networks: NetworksService,
   ) {}
 
   /**
@@ -115,14 +128,24 @@ export class ReportingService {
    */
   async dccMonthly(scope: ReportScope, period: string): Promise<DccMonthlyReport> {
     return this.overPeriod(period, async (trx, { start, end }) => {
-      // The placement graph, walked by the module that owns `pastoral_assignments`
-      // (section 2, decision 0206). `undefined` rather than a list is Whole Church, and
-      // the difference from an empty list is load-bearing: a leader with nobody beneath
-      // them reports zero, which is not the same question as "everybody".
+      // **Each narrower scope is computed by the module that owns the rows it reads**
+      // (section 2, decision 0206): `hierarchy` walks the placement graph for a leader,
+      // `networks` reads membership for a Network. `reporting` composes and roots no query
+      // of its own.
+      //
+      // `undefined` rather than a list is Whole Church, and the difference from an empty
+      // list is load-bearing: a scope holding nobody reports zero, which is not the same
+      // question as "everybody".
+      //
+      // **A Network takes `end` and not the period**, because its population is membership
+      // at an instant rather than a graph collapsed over a span (decision 0219). The two
+      // arguments differ in kind for that reason, not by oversight.
       const personIds =
         scope.kind === 'LEADER'
           ? await this.hierarchy.reportingSubtree(trx, scope.personId, start, end)
-          : undefined;
+          : scope.kind === 'NETWORK'
+            ? await this.networks.peopleInNetworkAsOf(trx, scope.network, end)
+            : undefined;
 
       const figures = await this.dccFigures.monthFigures(period, { executor: trx, personIds });
 

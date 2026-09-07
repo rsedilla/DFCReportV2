@@ -41,6 +41,7 @@ export class ReportingController {
     kind: 'report_scope',
     scopeFrom: 'query.scope',
     leaderFrom: 'query.leader_id',
+    networkFrom: 'query.network',
     periodFrom: 'query.period',
   })
   async dccMonthly(@Query() query: DccMonthlyReportDto): Promise<DccMonthlyReport> {
@@ -55,6 +56,21 @@ export class ReportingController {
  * reason its DTO gives: the request is asking for two different things.
  */
 function scopeOf(query: DccMonthlyReportDto): ReportScope {
+  // **Each argument is refused wherever it is not meaningful, in both directions.** The
+  // three scopes take three different arguments, so a request carrying the wrong one is
+  // asking for something other than what it named.
+  if (query.scope !== 'LEADER' && query.leader_id !== undefined) {
+    throw new ValidationFailedError('leader_id is only meaningful where scope is LEADER.', {
+      field: 'leader_id',
+    });
+  }
+
+  if (query.scope !== 'NETWORK' && query.network !== undefined) {
+    throw new ValidationFailedError('network is only meaningful where scope is NETWORK.', {
+      field: 'network',
+    });
+  }
+
   if (query.scope === 'LEADER') {
     // The DTO requires it under this scope, so this is a type narrowing rather than a
     // second check -- and it is written as one so the non-null assertion is not.
@@ -67,10 +83,14 @@ function scopeOf(query: DccMonthlyReportDto): ReportScope {
     return { kind: 'LEADER', personId: query.leader_id };
   }
 
-  if (query.leader_id !== undefined) {
-    throw new ValidationFailedError('leader_id is only meaningful where scope is LEADER.', {
-      field: 'leader_id',
-    });
+  if (query.scope === 'NETWORK') {
+    if (query.network === undefined) {
+      throw new ValidationFailedError('network is required where scope is NETWORK.', {
+        field: 'network',
+      });
+    }
+
+    return { kind: 'NETWORK', network: query.network };
   }
 
   return { kind: 'WHOLE_CHURCH' };

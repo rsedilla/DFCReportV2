@@ -6,6 +6,7 @@ import { AppConfigModule } from '../../src/config/config.module';
 import { DatabaseModule } from '../../src/database/database.module';
 import { DccFiguresService } from '../../src/attendance/dcc-figures.service';
 import { HierarchyService } from '../../src/hierarchy/hierarchy.service';
+import { NetworksService } from '../../src/networks/networks.service';
 import { ReportingService } from '../../src/reporting/reporting.service';
 import { ValidationFailedError } from '../../src/common/errors/api-error';
 import { currentReportingMonth } from '../../src/common/time/submission-window';
@@ -92,12 +93,14 @@ describe('section 20 reconciliation, DCC monthly (Stage 5 Done-when)', () => {
     // module resolves is asserted where it belongs, in `module-graph.spec.ts`, which
     // compiles the whole of `AppModule`.
     //
-    // `HierarchyService` joined the list when leader scope arrived: `ReportingService`
-    // composes the placement graph now (decision 0206), and every scope goes through the
-    // same constructor. This file still asks only for Whole Church, which needs no walk.
+    // `HierarchyService` joined the list when leader scope arrived and `NetworksService`
+    // when Network scope did: `ReportingService` composes the placement graph and the
+    // Network's membership (decisions 0206 and 0219), and every scope goes through the
+    // same constructor — so a provider is needed here even by a case that never asks for
+    // that scope.
     const moduleRef = await Test.createTestingModule({
       imports: [AppConfigModule, DatabaseModule],
-      providers: [DccFiguresService, HierarchyService, ReportingService],
+      providers: [DccFiguresService, HierarchyService, NetworksService, ReportingService],
     }).compile();
 
     app = moduleRef.createNestApplication();
@@ -490,5 +493,181 @@ describe('section 20 reconciliation, DCC monthly (Stage 5 Done-when)', () => {
     expect(report.buckets).toEqual([]);
     expect(report.removedEvents).toEqual([]);
     expect(Object.values(report.classification).reduce((a, b) => a + b, 0)).toBe(0);
+  });
+
+  /**
+   * A Network's population is its **membership**, not its root's subtree (decision 0219).
+   *
+   * **This is the case the API-level cases cannot make.** There, every fixture total is
+   * zero, so admitting a Network request shows it was scoped and not what it was scoped
+   * *to*. Here the attendance is real, and the two readings give different numbers.
+   *
+   * **The person who separates them is discipled by somebody outside the tree, and that
+   * matters because section 20's residual cannot be one.** Section 9: "A Person with no open
+   * assignment row cannot have DCC attendance recorded" — so a DCC attendee always held an
+   * assignment inside the period, and §20's residual, who held none at any instant, is never
+   * in a DCC population. A first version of this case built one anyway, by direct insert,
+   * and was green under both readings once restricted to states the application can write.
+   *
+   * What is reachable is a chain that terminates somewhere other than a Network root.
+   * `assertLeaderIsAssignable` checks that a leader is unmerged, unarchived and in the same
+   * Network, and does **not** require them to hold an assignment of their own — and
+   * `createSystemAdministratorWithin` creates exactly such a Person, in a Network and
+   * outside the pastoral tree (section 5 permits it). Somebody they disciple has an
+   * assignment, so they may attend; a walk from the Network root never reaches them.
+   *
+   * *Found by `architecture-guardian`, which reproduced the §9 objection and then named this
+   * case.*
+   */
+  it("counts a Network's members, including one the root's subtree cannot reach", async () => {
+    const root = await createPerson(db, { firstName: 'Oriel', network: 'MENS' });
+    await assignTo(db, root.id, null);
+    const discipled = await createPerson(db, { firstName: 'Cely', network: 'MENS' });
+    await assignTo(db, discipled.id, root.id);
+
+    // In the Men's Network and outside the pastoral tree, as an administrator is.
+    const administrator = await createPerson(db, { firstName: 'Editha', network: 'MENS' });
+
+    // Discipled by them, so they hold an assignment and may attend — and their chain
+    // terminates at somebody who is not the Men's root.
+    const strayed = await createPerson(db, { firstName: 'Bayani', network: 'MENS' });
+    await assignTo(db, strayed.id, administrator.id);
+
+    // The other Network, with a root of its own, because section 5 refuses a cross-Network
+    // edge.
+    const womensRoot = await createPerson(db, { firstName: 'Geraldine', network: 'WOMENS' });
+    await assignTo(db, womensRoot.id, null);
+    const womensMember = await createPerson(db, { firstName: 'Luzviminda', network: 'WOMENS' });
+    await assignTo(db, womensMember.id, womensRoot.id);
+
+    recorder = await accountFor(root.id);
+
+    const october = await event(OCT_4);
+    await attend(october, discipled.id, root.id);
+    await attend(october, strayed.id, administrator.id);
+    await attend(october, womensMember.id, womensRoot.id);
+
+    const mens = await reporting.dccMonthly({ kind: 'NETWORK', network: 'MENS' }, MONTH);
+    const womens = await reporting.dccMonthly({ kind: 'NETWORK', network: 'WOMENS' }, MONTH);
+    const wholeChurch = await reporting.dccMonthly({ kind: 'WHOLE_CHURCH' }, MONTH);
+
+    // **Two, not one.** A walk from the Men's root reaches `discipled` and never `strayed`,
+    // so the subtree reading answers 1 here and the identity below fails.
+    expect(mens.uniquePeople).toBe(2);
+    expect(womens.uniquePeople).toBe(1);
+
+    // Section 17's drill-down: Whole Church → Network → Leader. This is the level at which
+    // the subtree reading would stop adding up.
+    expect(wholeChurch.uniquePeople).toBe(3);
+    expect(mens.uniquePeople + womens.uniquePeople).toBe(wholeChurch.uniquePeople);
+
+    // Section 20's reconciliation still holds inside the Network scope.
+    const classified = Object.values(mens.classification).reduce((a, b) => a + b, 0);
+    const bucketed = mens.buckets.reduce((total, bucket) => total + bucket.people, 0);
+    expect(classified).toBe(mens.uniquePeople);
+    expect(bucketed).toBe(mens.uniquePeople);
+  });
+
+  /**
+   * The population is read at **one instant — the period's final millisecond** — and from
+   * `network_assignments` alone (decisions 0218 and 0219).
+   *
+   * **Three people who move at three different times, because one mover pins only one
+   * wrong answer.** A first version had a single person who moved *after* the month, which
+   * fails an implementation reading "now" and passes three others. `architecture-guardian`
+   * ran them: reading the period's **start**, dropping the `ended_at` half of the predicate,
+   * and deriving the Network from `persons.sex` all stayed green — and that third is the
+   * derivation section 4 forbids in the one sentence decision 0219 cites as its whole
+   * ground. Each person below exists to redden one of them.
+   *
+   * | moves | in force at period end | what it catches |
+   * | --- | --- | --- |
+   * | after the month | Men's | reading `now`, and deriving from `sex` |
+   * | inside the month | Women's | reading the period's `start` |
+   * | before the month | Women's | dropping the `ended_at` predicate |
+   *
+   * **`persons.sex` is updated with the Network, as `correctSex` writes it.** The fixture
+   * left it alone before, which is not the state the application produces — and that gap is
+   * exactly what let a `sex`-derived population pass.
+   *
+   * Written straight to the tables because section 4 reaches this state only through
+   * `people.correct_sex`, which is not what is under test — but as section 4's **atomic
+   * pair**: the Network change and the pastoral reassignment share one instant and one
+   * transaction. The database refuses the Network half alone, which this fixture met on its
+   * first run.
+   */
+  it("reads the population at the period's end, from rows in force then", async () => {
+    const mensRoot = await createPerson(db, { firstName: 'Oriel', network: 'MENS' });
+    await assignTo(db, mensRoot.id, null);
+    const womensRoot = await createPerson(db, { firstName: 'Geraldine', network: 'WOMENS' });
+    await assignTo(db, womensRoot.id, null);
+
+    /** Section 4's atomic pair, plus the `sex` the correction would have written. */
+    const moveToWomens = async (personId: string, at: Date): Promise<void> => {
+      await db.transaction().execute(async (trx) => {
+        await trx
+          .updateTable('network_assignments')
+          .set({ ended_at: at })
+          .where('person_id', '=', personId)
+          .where('ended_at', 'is', null)
+          .execute();
+        await trx
+          .insertInto('network_assignments')
+          .values({
+            person_id: personId,
+            network: 'WOMENS',
+            reason: 'A fixture standing in for a section 4 correction.',
+            actor_id: null,
+            started_at: at,
+          })
+          .execute();
+        await trx
+          .updateTable('pastoral_assignments')
+          .set({ ended_at: at })
+          .where('person_id', '=', personId)
+          .where('ended_at', 'is', null)
+          .execute();
+        await trx
+          .insertInto('pastoral_assignments')
+          .values({ person_id: personId, leader_id: womensRoot.id, started_at: at })
+          .execute();
+        await trx
+          .updateTable('persons')
+          .set({ sex: 'FEMALE' })
+          .where('id', '=', personId)
+          .execute();
+      });
+    };
+
+    const movedAfter = await createPerson(db, { firstName: 'Rosa', network: 'MENS' });
+    const movedDuring = await createPerson(db, { firstName: 'Imelda', network: 'MENS' });
+    const movedBefore = await createPerson(db, { firstName: 'Corazon', network: 'MENS' });
+    await assignTo(db, movedAfter.id, mensRoot.id);
+    await assignTo(db, movedDuring.id, mensRoot.id);
+    await assignTo(db, movedBefore.id, mensRoot.id);
+
+    // Before the month, so their Men's row is closed *and started* before the period —
+    // the only person here whose closed row an `ended_at`-blind query would still match.
+    await moveToWomens(movedBefore.id, new Date('2020-09-15T10:00:00+08:00'));
+
+    recorder = await accountFor(mensRoot.id);
+    const october = await event(OCT_4);
+    await attend(october, movedAfter.id, mensRoot.id);
+    await attend(october, movedBefore.id, womensRoot.id);
+
+    // Mid-month, after the attendance above and before the period ends.
+    await moveToWomens(movedDuring.id, new Date('2020-10-15T10:00:00+08:00'));
+    await attend(october, movedDuring.id, womensRoot.id);
+
+    await moveToWomens(movedAfter.id, new Date('2020-11-05T10:00:00+08:00'));
+
+    const mens = await reporting.dccMonthly({ kind: 'NETWORK', network: 'MENS' }, MONTH);
+    const womens = await reporting.dccMonthly({ kind: 'NETWORK', network: 'WOMENS' }, MONTH);
+    const wholeChurch = await reporting.dccMonthly({ kind: 'WHOLE_CHURCH' }, MONTH);
+
+    // Only `movedAfter` is still in the Men's Network at the last millisecond of October.
+    expect(mens.uniquePeople).toBe(1);
+    expect(womens.uniquePeople).toBe(2);
+    expect(mens.uniquePeople + womens.uniquePeople).toBe(wholeChurch.uniquePeople);
   });
 });

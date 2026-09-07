@@ -59,15 +59,31 @@ export type Target =
    * at the period's end** (decision 0214), and a `person` target carries no instant, so
    * flattening it to one would silently resolve the wrong tree.
    *
-   * `leaderPersonId` is `null` for a Whole Church selector, which is covered by a Whole
-   * Church grant and refused otherwise -- section 7: `SCOPE_DENIED`, "never silently
-   * narrowed to what they do hold".
+   * **The selector is a discriminated union rather than nullable fields.** It was
+   * `leaderPersonId: string | null`, where `null` meant Whole Church; adding `NETWORK`
+   * would have made two nullable fields encode a three-way choice, with the invariant
+   * "at most one is set" enforced by nothing. Section 7 answers differently for each of
+   * the three, so each is named.
    *
    * `at` is the instant the figures are computed against, handed in rather than derived
    * here. Decision 0214 fixes that the guard uses **the same** instant the report does,
-   * and deliberately does not fix which instant that is: section 20 states two, three
-   * lines apart, and `CLAUDE.md` carries that as open.
+   * and deliberately does not fix which instant that is. Section 20 does, and since
+   * decision 0218 it does so once: the period's final millisecond, open or closed.
+   * *It stated two, three lines apart, until then.*
    */
-  | { kind: 'report_scope'; leaderPersonId: string | null; at: Date };
+  | { kind: 'report_scope'; selector: ReportScopeSelector; at: Date };
+
+/**
+ * Which population a report covers, as the guard sees it (SKILL.md section 7).
+ *
+ * Whole Church is covered by a Whole Church grant and refused otherwise -- section 7:
+ * `SCOPE_DENIED`, "never silently narrowed to what they do hold". A Network is covered by
+ * a Whole Church grant or a `NETWORK` grant naming it, and **by no subtree grant**, because
+ * a Network is its membership rather than any subtree (decision 0219).
+ */
+export type ReportScopeSelector =
+  | { kind: 'WHOLE_CHURCH' }
+  | { kind: 'NETWORK'; network: NetworkName }
+  | { kind: 'LEADER'; personId: string };
 
 export type TargetKind = Target['kind'];

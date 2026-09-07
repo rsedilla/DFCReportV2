@@ -92,6 +92,45 @@ export class NetworksService {
   }
 
   /**
+   * Everyone in a Network at an instant — a Network-scoped report's population
+   * (SKILL.md section 20, decision 0219).
+   *
+   * **A Network's population is its membership, never its root's subtree.** Section 4
+   * requires the relationship to be stored "rather than deriving it on every query", and
+   * walking the tree from a root is deriving it. The two differ by anybody whose pastoral
+   * chain terminates outside the tree — an administrator holds no assignment, and
+   * `assertLeaderIsAssignable` does not require one of a leader — so a walk from the root
+   * excludes them and this does not.
+   *
+   * **That is what makes Men's + Women's equal the Whole Church total, wherever every
+   * person holds exactly one Network row at the instant.** Nothing enforces that:
+   * `network_assignments_one_open` is partial over open rows, so a historical overlap would
+   * count somebody in both. Unreachable through any write path today, and recorded as an
+   * open Stop Condition in `CLAUDE.md` with a constraint as the remedy — stated here rather
+   * than left to be inferred from the identity holding.
+   *
+   * **Here rather than in `reporting`, because `networks` owns this table** (section 2,
+   * decision 0206). `reporting` roots no query in another module's tables and composes what
+   * the owning modules compute; this is the same seam `hierarchy` fills for a leader.
+   *
+   * The instant is the caller's, as `networkAsOf` takes it — the period's final millisecond
+   * for a report (decision 0218). Ordered so a caller's population is stable between two
+   * reads of the same period, which nothing yet requires and which costs nothing to give.
+   */
+  async peopleInNetworkAsOf(executor: Db, network: NetworkName, at: Date): Promise<string[]> {
+    const rows = await executor
+      .selectFrom('network_assignments')
+      .select('person_id')
+      .where('network', '=', network)
+      .where('started_at', '<=', at)
+      .where((eb) => eb.or([eb('ended_at', 'is', null), eb('ended_at', '>', at)]))
+      .orderBy('person_id')
+      .execute();
+
+    return rows.map((row) => row.person_id);
+  }
+
+  /**
    * Opens a Network assignment inside a caller's transaction.
    *
    * Here rather than in `people` because `networks` owns this table (section 2,

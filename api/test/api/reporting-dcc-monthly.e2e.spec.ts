@@ -1,6 +1,7 @@
 import request from 'supertest';
 
 import { startOfNextManilaMonth } from '../../src/common/time/manila';
+import { reportingPeriodBounds } from '../../src/common/time/reporting-period';
 import { currentReportingMonth, databaseNow } from '../../src/common/time/submission-window';
 import { createTestDb, truncateAll } from '../setup/database';
 import { assignTo, createAccount, createPerson, createTestApp } from '../setup/fixtures';
@@ -434,6 +435,131 @@ describe('GET /api/v1/reports/dcc/monthly (sections 7, 20 and 22)', () => {
   });
 
   /**
+   * A Network's population is its **membership**, not its root's subtree (decision 0219,
+   * SKILL.md section 20).
+   *
+   * **The residual is the whole of the difference, so it is what these cases build.**
+   * Section 20 puts somebody who held no pastoral assignment in the period into the Whole
+   * Church total alone — they are in no leader's subtree. They still hold a
+   * `network_assignments` row, because every encoded Person does, so membership contains
+   * them. Swap the population to a walk from the Network root and the Men's total loses
+   * exactly that person while Whole Church keeps them, and the two stop summing.
+   *
+   * Authorization is the same fact from the other side: a subtree is never a Network, so no
+   * subtree grant covers a `NETWORK` selector.
+   */
+  describe("a Network's population is its membership (decision 0219)", () => {
+    /**
+     * **What this file can assert about a Network scope, and what it cannot.** No fixture
+     * here records attendance, so every total is zero and no case below can tell one
+     * population from another. The population is pinned in `reporting-reconciliation.spec.ts`,
+     * where the attendance is real; what is pinned here is the controller's mapping and the
+     * authorization rule.
+     *
+     * *A case named "counts somebody in the Network whom no leader discipled" stood here and
+     * counted nobody — its assertions were two 200s and `expect(person.id).toBeDefined()`,
+     * which is true of every `createPerson`. `architecture-guardian` found the title was the
+     * only false part; it is replaced by one that claims what it checks.*
+     */
+    it('maps the selector onto the scope the service is given', async () => {
+      const response = await get(
+        `period=${REPORTED_MONTH}&scope=NETWORK&network=MENS`,
+        adminAccount,
+      );
+
+      expect(response.status).toBe(200);
+      expect(response.body.scope).toEqual({ kind: 'NETWORK', network: 'MENS' });
+      expect(response.body.period).toBe(REPORTED_MONTH);
+    });
+
+    it('refuses a leader-scoped grant a Network selector', async () => {
+      // Raymond is the Men's root and holds LEADER, so his grant is a subtree one. A
+      // subtree excludes the residual above, which is why it is not a Network.
+      const response = await get(
+        `period=${REPORTED_MONTH}&scope=NETWORK&network=MENS`,
+        raymondAccount,
+      );
+
+      expect(response.status).toBe(403);
+      expect(response.body.error.code).toBe('SCOPE_DENIED');
+      expect(response.body).not.toHaveProperty('uniquePeople');
+    });
+
+    it('admits a NETWORK grant naming that Network, and refuses it the other one', async () => {
+      const outsider = await createPerson(db, {
+        firstName: 'Teofilo',
+        lastName: 'Ordonez',
+        network: 'MENS',
+      });
+      await assignTo(db, outsider.id, raymond.id);
+      const grantee = await createAccount(app, db, { person: outsider, roles: [] });
+      await db
+        .insertInto('capability_grants')
+        .values({
+          account_id: grantee.id,
+          capability: 'reports.view_subtree',
+          scope_type: 'NETWORK',
+          scope_network: 'MENS',
+          read_only: true,
+          reason: 'A Network-scoped reporting grant covers the Network it names.',
+          granted_by: adminAccount.id,
+        })
+        .execute();
+
+      const own = await get(`period=${REPORTED_MONTH}&scope=NETWORK&network=MENS`, grantee);
+      const other = await get(`period=${REPORTED_MONTH}&scope=NETWORK&network=WOMENS`, grantee);
+
+      expect(own.status).toBe(200);
+      expect(other.status).toBe(403);
+      expect(other.body.error.code).toBe('SCOPE_DENIED');
+    });
+  });
+
+  /**
+   * An **open** period resolves at the period's final millisecond, not at now (decision
+   * 0218, SKILL.md section 20).
+   *
+   * **One case, because there is exactly one state the two readings disagree about.** A row
+   * in force at both instants is admitted either way, and one in force at neither is refused
+   * either way; the whole of the difference is a row in force at the period's **end** and
+   * not yet at **now**, which for an open month means a `started_at` later today or later
+   * this month.
+   *
+   * **The fixture writes that row directly, and no application path would.** Section 5's
+   * reassignment and Section 4's sex correction both refuse a future effective date, and
+   * every other writer stamps `new Date()` — which is exactly why decision 0218 says the
+   * remedy for a future-dated row is to refuse the write rather than to bend the reporting
+   * instant, and why this case pins the consequence rather than endorsing the row.
+   *
+   * Asking as Raymond for a leader who joins his subtree later in the open month: admitted
+   * under the period's end, refused under `new Date()`.
+   */
+  describe('an open period resolves at its end, not at now (decision 0218)', () => {
+    it('admits a leader whose assignment begins later in the open month', async () => {
+      const thisMonth = await currentReportingMonth(db);
+      // The period's own final millisecond. It is ahead of the clock at every instant of
+      // the month except the last one, which no run can realistically land on.
+      const laterThisMonth = reportingPeriodBounds(thisMonth).end;
+
+      const newcomer = await createPerson(db, {
+        firstName: 'Ligaya',
+        lastName: 'Mercado',
+        network: 'MENS',
+      });
+      await assignTo(db, newcomer.id, mark.id, laterThisMonth);
+
+      const response = await get(
+        `period=${thisMonth}&scope=LEADER&leader_id=${newcomer.id}`,
+        raymondAccount,
+      );
+
+      // Under an "as of now" reading `newcomer` holds no assignment yet, so they are in
+      // nobody's subtree and this is a 403. That is the reading decision 0218 removed.
+      expect(response.status).toBe(200);
+    });
+  });
+
+  /**
    * A report may not name a period that has not begun (decision 0216, SKILL.md section 20).
    *
    * **These are the only clock-relative cases in the file, and they are the boundary
@@ -506,14 +632,50 @@ describe('GET /api/v1/reports/dcc/monthly (sections 7, 20 and 22)', () => {
       expect(response.body.error.details.field).toBe('query.period');
     });
 
+    /**
+     * *This sent `scope=NETWORK` until decision 0219 made that a scope the service does
+     * compute. `CELL` is the remaining member of section 20's enumeration with no
+     * implementation, so it is what the case now sends — the assertion is about a named
+     * scope nothing computes, not about Networks.*
+     */
     it('refuses a scope it does not compute, at the guard rather than the DTO', async () => {
-      const response = await get(`period=${REPORTED_MONTH}&scope=NETWORK`, adminAccount);
+      const response = await get(`period=${REPORTED_MONTH}&scope=CELL`, adminAccount);
 
       expect(response.status).toBe(422);
       expect(response.body.error.code).toBe('VALIDATION_FAILED');
       // The guard reads `scope` before the DTO does, so its field name is the one a
       // client sees. Asserting the code alone cannot tell the two refusals apart.
       expect(response.body.error.details.field).toBe('query.scope');
+    });
+
+    it('refuses NETWORK with no network named', async () => {
+      const response = await get(`period=${REPORTED_MONTH}&scope=NETWORK`, adminAccount);
+
+      expect(response.status).toBe(422);
+      expect(response.body.error.code).toBe('VALIDATION_FAILED');
+      expect(response.body.error.details.field).toBe('query.network');
+    });
+
+    it('refuses a network sent with WHOLE_CHURCH rather than ignoring it', async () => {
+      const response = await get(
+        `period=${REPORTED_MONTH}&scope=WHOLE_CHURCH&network=MENS`,
+        adminAccount,
+      );
+
+      expect(response.status).toBe(422);
+      expect(response.body.error.code).toBe('VALIDATION_FAILED');
+      expect(response.body.error.details.field).toBe('network');
+    });
+
+    it('refuses a network that is not one of the two', async () => {
+      const response = await get(
+        `period=${REPORTED_MONTH}&scope=NETWORK&network=YOUTH`,
+        adminAccount,
+      );
+
+      expect(response.status).toBe(422);
+      expect(response.body.error.code).toBe('VALIDATION_FAILED');
+      expect(response.body.error.details.field).toBe('query.network');
     });
 
     it('refuses a leader_id sent with WHOLE_CHURCH rather than ignoring it', async () => {

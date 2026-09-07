@@ -11,7 +11,10 @@ import { IsManilaCalendarDate } from '../../common/time/is-manila-calendar-date'
  * Whole Church one would be told nothing, and section 7 refuses a scope the actor does not
  * hold rather than narrowing it — the same courtesy is owed to a scope nothing computes.
  */
-export const REPORT_SCOPES = ['WHOLE_CHURCH', 'LEADER'] as const;
+export const REPORT_SCOPES = ['WHOLE_CHURCH', 'NETWORK', 'LEADER'] as const;
+
+/** The two Networks (SKILL.md section 4). Closed, as the column is. */
+export const REPORT_NETWORKS = ['MENS', 'WOMENS'] as const;
 
 export type ReportScopeSelector = (typeof REPORT_SCOPES)[number];
 
@@ -52,4 +55,17 @@ export class DccMonthlyReportDto {
   @ValidateIf((dto: DccMonthlyReportDto) => dto.scope === 'LEADER')
   @IsUUID()
   leader_id?: string;
+
+  /**
+   * The Network the report is scoped to. Required where `scope` is `NETWORK`.
+   *
+   * **A Network's population is its membership, not its root's subtree** (decision 0219),
+   * so this names a Network rather than a Person and there is no leader to supply instead.
+   * Sent under any other scope it is refused in the controller for the reason `leader_id`
+   * is: a request naming both is asking for two different things, and answering one of them
+   * silently is how a client comes to believe it asked for the other.
+   */
+  @ValidateIf((dto: DccMonthlyReportDto) => dto.scope === 'NETWORK')
+  @IsIn(REPORT_NETWORKS)
+  network?: (typeof REPORT_NETWORKS)[number];
 }

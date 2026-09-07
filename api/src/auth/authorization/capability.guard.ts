@@ -134,13 +134,26 @@ export class CapabilityGuard implements CanActivate {
 
     const scope = readPath(request, spec.scopeFrom);
     if (scope === 'WHOLE_CHURCH') {
-      return { kind: 'report_scope', leaderPersonId: null, at };
+      return { kind: 'report_scope', selector: { kind: 'WHOLE_CHURCH' }, at };
+    }
+
+    if (scope === 'NETWORK') {
+      const network = readPath(request, spec.networkFrom);
+      if (network !== 'MENS' && network !== 'WOMENS') {
+        throw new ValidationFailedError(
+          `${spec.networkFrom} must be MENS or WOMENS where ${spec.scopeFrom} is NETWORK.`,
+          { field: spec.networkFrom },
+        );
+      }
+
+      return { kind: 'report_scope', selector: { kind: 'NETWORK', network }, at };
     }
 
     if (scope !== 'LEADER') {
-      throw new ValidationFailedError(`${spec.scopeFrom} must be WHOLE_CHURCH or LEADER.`, {
-        field: spec.scopeFrom,
-      });
+      throw new ValidationFailedError(
+        `${spec.scopeFrom} must be WHOLE_CHURCH, NETWORK or LEADER.`,
+        { field: spec.scopeFrom },
+      );
     }
 
     const leaderId = readPath(request, spec.leaderFrom);
@@ -151,7 +164,7 @@ export class CapabilityGuard implements CanActivate {
       );
     }
 
-    return { kind: 'report_scope', leaderPersonId: leaderId, at };
+    return { kind: 'report_scope', selector: { kind: 'LEADER', personId: leaderId }, at };
   }
 
   private async resolveTarget(
