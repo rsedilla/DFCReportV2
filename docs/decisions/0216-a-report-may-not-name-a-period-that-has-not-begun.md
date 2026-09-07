@@ -99,8 +99,18 @@ asserted one transaction opening and one pool reference — which only ever sees
 owning modules compute (decision 0206), so it calls a figures service whose executor is
 optional, applies none of the three rules, and left every case green when
 `architecture-guardian` ran them against exactly such a method. What binds is therefore a
-claim about the module's **public surface** — every public method of every provider routes
-through the seam — and the transaction assertions are kept beside it rather than relied on.
+claim about the module's **public surface**: every public member of every class that is not
+a `@Controller` calls the seam on its own body. The transaction assertions are kept beside
+it rather than relied on.
+
+*That claim took three attempts, each refuted by the pass after it. It began as a substring
+search for `this.overPeriod(`, which a mention in a comment, in a string, or in a closure
+that never runs all satisfied; it collected only methods, so an arrow-valued field was
+invisible; and it admitted only classes carrying `@Injectable()`, which a provider taking
+every constructor parameter through `@Inject(TOKEN)` does not need. It is now an AST
+predicate over every non-controller class, carrying a fixture for each of those gaps — which
+is what the three earlier versions lacked, and the reason every one of them was found by a
+reviewer rather than by the suite.*
 
 It still does not compel a callback to *use* the transaction it is handed, and that is stated
 in the seam's docblock rather than left for a reader to discover.

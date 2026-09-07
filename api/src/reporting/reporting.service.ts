@@ -154,9 +154,12 @@ export class ReportingService {
    * That is the one-rule-one-path shape `CLAUDE.md` records against this project more often
    * than any other, and it is closed by something that fails rather than by a convention:
    * `test/unit/reporting-transaction-seam.spec.ts` parses this module and asserts that
-   * **every public method of every provider in it routes through here**, that the module
-   * opens one transaction and touches the pool once, and that all three rules are applied
-   * here.
+   * **every public member of every class in it that is not a `@Controller` calls this
+   * method on its own body**, that the module opens one transaction and touches the pool
+   * once, and that all three rules are applied here. Members rather than methods, and a
+   * call rather than a mention: three earlier versions of that check missed an arrow-valued
+   * field, a provider carrying no `@Injectable`, and a seam call appearing only in a
+   * comment. It carries a fixture for each.
    *
    * **The public-surface claim is the load-bearing one**, and the transaction ones are not
    * enough on their own. The idiomatic second report method opens no transaction and names
@@ -173,8 +176,10 @@ export class ReportingService {
    *
    * *Found by `architecture-guardian` on decision 0216, which shipped the rule with one call
    * site and nothing able to fail on a second; again on the fix, which claimed a report
-   * "cannot" bypass the seam while nothing stopped one; and again on the check written to
-   * close that, which only ever saw a report that opened a transaction.*
+   * "cannot" bypass the seam while nothing stopped one; again on the check written to close
+   * that, which only ever saw a report that opened a transaction; and again on the check
+   * written to close **that**, which asked whether the method's text contained the seam's
+   * name. Four passes, each finding the previous fix had reproduced the shape it removed.*
    *
    * The bounds are handed to the callback rather than re-derived inside it, which keeps this
    * method and its callback from drifting apart. It buys nothing against the **guard**, which
