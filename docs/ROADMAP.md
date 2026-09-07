@@ -236,7 +236,7 @@ That divergence is what the ruling of 2026-09-06 is about. A stage's bullet list
 
 **Not a numbered stage**, deliberately: Stage 7 is cited by number in decision 0120 and renumbering would falsify that reference. It sits between Stage 5 and the pilot, and the pilot does not begin without it.
 
-**Why it exists as its own block.** Two completed stages shipped no interface. Stage 3 delivered Cells, Stage 4 delivered attendance, and `web/app` reaches neither — ten screens, all of them authentication, the home page, or People, against thirty-five route decorators. Nothing recorded that as owed, which is the failure the ruling of 2026-09-06 closes.
+**Why it exists as its own block.** Two completed stages shipped no interface. Stage 3 delivered Cells, Stage 4 delivered attendance, and `web/app` reaches neither — ten screens, all of them authentication, the home page, or People, against the thirty-seven routes the ledger now derives -- a figure to read off `web/scripts/check-screen-coverage.mjs`, which prints all three counts on every run, rather than off this sentence, which has been stale twice. Nothing recorded that as owed, which is the failure the ruling of 2026-09-06 closes.
 
 **Eight screens.** Section 19's Leader sidebar, minus Network Summary, plus the Cell meetings screen Stage 4 shipped without:
 
@@ -244,7 +244,7 @@ That divergence is what the ruling of 2026-09-06 is about. A stage's bullet list
 - **My People** (§3, §8)
 - **My Network** — the arbitrary-depth tree (§5)
 - **DCC Attendance** — the roster and the checklist (§9)
-- **Cell Attendance** — the grid (§12), and the **coverage line beside it**. `GET /api/v1/reports/cells/monthly` returns classification and the Cell-scope buckets and does not return coverage, whose denominator is derived from the Cell's schedule against the calendar rather than from anything submitted. §12 requires the two on the same screen, and decision 0202 makes coverage the figure an aggregate view leads with — so this screen is not discharged by rendering what that route returns
+- **Cell Attendance** — the grid (§12), and the **coverage line beside it**. `GET /api/v1/reports/cells/monthly` returns classification and the Cell-scope buckets and does not return coverage, whose denominator is derived from the Cell's schedule against the calendar rather than from anything submitted. §12 requires the two on the same screen, and decision 0202 makes coverage the figure an aggregate view leads with — so this screen is not discharged by rendering what that route returns. **The sharpest case for that is N = 0**, where §12 asks for "the coverage line alone and no buckets": the route answers `n: 0` with an empty bucket list, so a screen rendering only what it returns shows a Cell that recorded nothing as literally nothing, where the one figure that would explain it is the one still missing
 - **Cell Meetings** — recording, the four transitions, and the meeting roster (§13)
 - **Cell Leaders** — the attention lists, filtered and never ranked (§15)
 - **Search** (§8)

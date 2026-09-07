@@ -51,14 +51,29 @@ It fires **only where the instant finds nobody**, which is three states and no o
 - **The period the closure falls in** — the case above, and the reason for the ruling.
 - **Before the Cell existed** — a Cell created in June, asked about March. Empty.
 
-A **handover** is not among them. A Cell held by A until June and by B after it resolves each
-past period to whoever held it at that period's end, because the instant finds somebody; the
-fallback never arises and B is not handed A's periods. The dated half does that work, and the
-fallback only covers the periods no leader held at all.
+The enumeration is exhaustive because leadership is **contiguous**, and that is a database
+property rather than an application one: migration 0009's `cell_leaderships_stay_in_network`
+trigger raises `check_violation` unless each row starts exactly where its predecessor ended,
+so a gap — which would be a fourth state reaching the fallback — cannot be committed.
 
-**The accepted cost is stated rather than left to be found**: the last leader can read every
-period after the closure and every period before the Cell existed. All of them are empty, and
-all of them concern a Cell that person led.
+A **handover** does not invoke the fallback. A Cell held by A until June and by B after
+resolves each past period to whoever held it at that period's end, because the instant finds
+somebody; the fallback never arises.
+
+**But that sentence is about the fallback, and it is not the whole of what a handover does.**
+The instant — decision 0218's, not this ruling's — hands the month a handover *falls in* to
+the incoming leader alone, and refuses it to the outgoing leader and their upline. That month
+is the exact mirror of the closure month this ruling turns on: non-empty, and holding rows the
+outgoing leader recorded. **The argument below applies to it symmetrically, at half strength**,
+and an earlier version of this ruling stated one of the two costs while promising to state
+them. What that decides is left open in `CLAUDE.md` rather than settled here, and §13's own
+answer one unit down — decision 0187, which gives a meeting on the handover *day* to the
+**outgoing** leader — is the reasoning nothing has carried up to a period.
+
+**The accepted costs are stated rather than left to be found**, both of them: the last leader
+can read every period after the closure and every period before the Cell existed, all empty
+and all concerning a Cell that person led; and the incoming leader of a handover holds the
+whole of the month it fell in, including the half somebody else recorded.
 
 ## Which grants cover a `CELL` selector
 
@@ -76,9 +91,19 @@ saying so.** It rests on a `NETWORK` selector naming **no Person**, so there is 
 to test. A `CELL` selector names one as soon as it is resolved. The two selectors therefore
 differ on this and it is not an inconsistency.
 
-**A Cell that does not exist resolves through nobody and is refused as `SCOPE_DENIED`**,
-which is the same answer an out-of-scope Cell gets and the idiom `common/identifiers.ts`
-already carries for a target the caller cannot be shown to exist.
+**A Cell that does not exist resolves through nobody, so every grant narrower than Whole
+Church refuses it as `SCOPE_DENIED`** — the same answer an out-of-scope Cell gets, and the
+idiom `common/identifiers.ts` already carries for a target the caller cannot be shown to
+exist.
+
+**A Whole Church grant is the exception, and stating it unqualified was wrong.**
+`scopeCovers` returns true at Whole Church *before* the target is read, so such an actor
+receives a well-formed report of zeroes rather than a refusal. That is not this rule failing:
+it is the open question about a scope selector naming somebody who does not exist, which
+`CLAUDE.md` already records for a `LEADER` selector and which now reaches a second target
+kind. Nothing is disclosed either way — the payload is zeroes — and the sentence is narrowed
+here rather than the behaviour changed, because changing it would settle that question by
+implementation.
 
 ## What was rejected
 

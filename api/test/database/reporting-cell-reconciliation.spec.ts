@@ -49,6 +49,29 @@ import type { TestPerson } from '../setup/fixtures';
  * classification, because section 12 makes the journey a Cell-ministry history rather than
  * a per-Cell one.
  *
+ * **Where these rows diverge from what the application would write, and why that is
+ * tolerated here.** The sentence above is about what each element *measures*; it is not a
+ * claim that every row is reachable, and the previous branch's defect was exactly a fixture
+ * building a state the application cannot produce. Stated rather than left to be found:
+ *
+ * - `submitted_by` and `submitted_at` are null, where `CellMeetingsService` sets both on
+ *   every insert; `facilitated_by` is null, where the service defaults it to the
+ *   responsible leader.
+ * - One meeting is written straight to `RESCHEDULED` with `version = 1` and no
+ *   `cell_meeting_changes` row. Section 13 reaches that status only through a transition,
+ *   and `LEGAL_TRANSITIONS` refuses it as a first submission.
+ *
+ * **None of the four columns is read by the query under test**, which selects on `status`,
+ * `reporting_month`, `cell_id` and `responsible_leader_id` alone -- so no figure here
+ * depends on the divergence, and writing these rows through the service would add a
+ * submission path to a test about arithmetic. What would *not* be tolerable is a divergence
+ * in a column the query reads, and there is none.
+ *
+ * The rows are otherwise states the application can produce: every attendee holds a
+ * membership started before the month (decision 0031), every meeting date is a Saturday
+ * matching its Cell's schedule, and `week_starting` and `reporting_month` are computed by
+ * the database rather than asserted here.
+ *
  * Fixture names are invented (`CLAUDE.md`, Secrets).
  */
 describe('section 20 reconciliation, Cell monthly (Stage 5 Done-when)', () => {

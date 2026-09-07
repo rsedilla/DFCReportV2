@@ -268,6 +268,31 @@ describe('GET /api/v1/reports/cells/monthly (sections 7, 12, 20 and 22)', () => 
       expect(response.status).toBe(403);
       expect(response.body.error.code).toBe('SCOPE_DENIED');
     });
+
+    /**
+     * **The other half of the case above, and it answers the opposite way.**
+     *
+     * `scopeCovers` returns true at Whole Church *before* the target is read, so a Whole
+     * Church holder is never refused a selector -- an absent Cell included -- and receives
+     * a report of zeroes. Decision 0220 and section 7 both asserted the refusal
+     * unqualified for one commit, and the case above is the half where it holds, because
+     * it uses a subtree grant.
+     *
+     * Pinned rather than fixed. It is the open question about a selector naming somebody
+     * who does not exist (`CLAUDE.md`) arriving at a second target kind, and answering it
+     * by changing this route would settle it by implementation. Nothing is disclosed: the
+     * payload is zeroes whether or not the Cell exists.
+     */
+    it('answers a Whole Church holder zeroes for a Cell that does not exist', async () => {
+      const absent = '00000000-0000-4000-8000-000000000000';
+
+      const response = await get(`period=${JUNE}&scope=CELL&cell_id=${absent}`, adminAccount);
+
+      expect(response.status).toBe(200);
+      expect(response.body.uniquePeople).toBe(0);
+      expect(response.body.n).toBe(0);
+      expect(response.body.buckets).toEqual([]);
+    });
   });
 
   describe('what the route refuses', () => {
