@@ -48,7 +48,6 @@ export class ReportingController {
     scopeFrom: 'query.scope',
     leaderFrom: 'query.leader_id',
     networkFrom: 'query.network',
-    cellFrom: 'query.cell_id',
     periodFrom: 'query.period',
   })
   async dccMonthly(@Query() query: DccMonthlyReportDto): Promise<DccMonthlyReport> {
@@ -82,7 +81,6 @@ export class ReportingController {
     kind: 'report_scope',
     scopeFrom: 'query.scope',
     leaderFrom: 'query.leader_id',
-    networkFrom: 'query.network',
     cellFrom: 'query.cell_id',
     periodFrom: 'query.period',
   })

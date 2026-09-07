@@ -55,16 +55,26 @@ export type TargetSpec =
       kind: 'report_scope';
       scopeFrom: string;
       leaderFrom: string;
-      networkFrom: string;
       /**
-       * Where the Cell identifier is read from, for a `CELL` scope (decision 0220).
+       * Where a `NETWORK` scope reads its Network, and where a `CELL` scope reads its Cell.
        *
-       * Declared by every report route rather than only the ones offering the scope, for
-       * the reason `networkFrom` is: the guard places the request in the tree and the
-       * route's DTO says which scopes it offers, so a scope a route does not offer is
-       * refused after authorization rather than instead of it (section 7, decision 0193).
+       * **Optional, and their presence is what says the route offers that scope.** Section
+       * 20 enumerates four scope types and the two report families take different subsets:
+       * DCC excludes `CELL` because it attributes by the person, and the Cell report
+       * excludes `NETWORK` pending a ruling. Declaring the field is how a route says which
+       * it serves, so the guard refuses the rest naming `scopeFrom` -- before it resolves
+       * anything, because there is nothing to place in the tree.
+       *
+       * *An earlier version made `cellFrom` required on every report route, so the guard
+       * admitted all four scopes and each route's DTO refused what it did not serve. That
+       * moved the refusal after authorization and consumed a property the DCC route's own
+       * suite pins: a scope the route does not compute is refused **at the guard**, naming
+       * `query.scope` rather than a field the client did not send. Two statements of a
+       * route's scope set is what made that possible; the decorator is now the one that
+       * decides.*
        */
-      cellFrom: string;
+      networkFrom?: string;
+      cellFrom?: string;
       periodFrom: string;
     }
   | { kind: 'actor' };

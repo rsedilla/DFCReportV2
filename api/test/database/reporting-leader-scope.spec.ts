@@ -3,6 +3,7 @@ import { sql } from 'kysely';
 
 import { AppConfigModule } from '../../src/config/config.module';
 import { DatabaseModule } from '../../src/database/database.module';
+import { CellFiguresService } from '../../src/attendance/cell-figures.service';
 import { DccFiguresService } from '../../src/attendance/dcc-figures.service';
 import { HierarchyService } from '../../src/hierarchy/hierarchy.service';
 import { NetworksService } from '../../src/networks/networks.service';
@@ -72,7 +73,13 @@ describe('a leader-scoped DCC monthly report (decisions 0206, 0210)', () => {
       // asks for: every scope goes through one constructor, so a provider is owed by the
       // class rather than by the cases. Two hand-built test modules needed it and the
       // second was found by the full suite rather than by the file being changed.
-      providers: [ReportingService, DccFiguresService, HierarchyService, NetworksService],
+      providers: [
+        ReportingService,
+        CellFiguresService,
+        DccFiguresService,
+        HierarchyService,
+        NetworksService,
+      ],
     }).compile();
 
     app = moduleRef.createNestApplication();

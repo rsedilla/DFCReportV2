@@ -271,11 +271,16 @@ describe('GET /api/v1/reports/cells/monthly (sections 7, 12, 20 and 22)', () => 
   });
 
   describe('what the route refuses', () => {
-    it('refuses a NETWORK scope, which this report does not offer', async () => {
+    it('refuses a NETWORK scope at the guard, naming the field the client sent', async () => {
       const response = await get(`period=${JUNE}&scope=NETWORK&network=MENS`, adminAccount);
 
       expect(response.status).toBe(422);
       expect(response.body.error.code).toBe('VALIDATION_FAILED');
+      // This route declares no `networkFrom`, which is how it says it does not serve the
+      // scope -- so the guard refuses it before resolving anything, and names `scope`
+      // rather than a field the client did not send. The DCC route's own suite pins the
+      // mirror of this for `CELL`.
+      expect(response.body.error.details.field).toBe('query.scope');
     });
 
     it('refuses a cell_id sent under another scope', async () => {

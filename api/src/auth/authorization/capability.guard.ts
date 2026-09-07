@@ -137,7 +137,7 @@ export class CapabilityGuard implements CanActivate {
       return { kind: 'report_scope', selector: { kind: 'WHOLE_CHURCH' }, at };
     }
 
-    if (scope === 'NETWORK') {
+    if (scope === 'NETWORK' && spec.networkFrom !== undefined) {
       const network = readPath(request, spec.networkFrom);
       if (network !== 'MENS' && network !== 'WOMENS') {
         throw new ValidationFailedError(
@@ -149,7 +149,7 @@ export class CapabilityGuard implements CanActivate {
       return { kind: 'report_scope', selector: { kind: 'NETWORK', network }, at };
     }
 
-    if (scope === 'CELL') {
+    if (scope === 'CELL' && spec.cellFrom !== undefined) {
       const cellId = readPath(request, spec.cellFrom);
       if (typeof cellId !== 'string' || !isUuid(cellId)) {
         throw new ValidationFailedError(
@@ -187,8 +187,21 @@ export class CapabilityGuard implements CanActivate {
     }
 
     if (scope !== 'LEADER') {
+      // **The scopes this route offers, derived from the fields it declared.** A scope no
+      // route serves and a scope *this* route does not serve are the same refusal to a
+      // client, and both are refused here rather than by the DTO -- so the field named is
+      // the one they actually sent. Section 20 enumerates four; a report family takes a
+      // subset, and saying which is what declaring `networkFrom` and `cellFrom` does.
+      const offered = [
+        'WHOLE_CHURCH',
+        ...(spec.networkFrom === undefined ? [] : ['NETWORK']),
+        'LEADER',
+        ...(spec.cellFrom === undefined ? [] : ['CELL']),
+      ];
+      const last = offered[offered.length - 1];
+
       throw new ValidationFailedError(
-        `${spec.scopeFrom} must be WHOLE_CHURCH, NETWORK, LEADER or CELL.`,
+        `${spec.scopeFrom} must be ${offered.slice(0, -1).join(', ')} or ${last}.`,
         { field: spec.scopeFrom },
       );
     }

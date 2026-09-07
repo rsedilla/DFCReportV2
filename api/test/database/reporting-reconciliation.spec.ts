@@ -4,6 +4,7 @@ import { Test } from '@nestjs/testing';
 
 import { AppConfigModule } from '../../src/config/config.module';
 import { DatabaseModule } from '../../src/database/database.module';
+import { CellFiguresService } from '../../src/attendance/cell-figures.service';
 import { DccFiguresService } from '../../src/attendance/dcc-figures.service';
 import { HierarchyService } from '../../src/hierarchy/hierarchy.service';
 import { NetworksService } from '../../src/networks/networks.service';
@@ -98,9 +99,22 @@ describe('section 20 reconciliation, DCC monthly (Stage 5 Done-when)', () => {
     // Network's membership (decisions 0206 and 0219), and every scope goes through the
     // same constructor — so a provider is needed here even by a case that never asks for
     // that scope.
+    //
+    // **`CellFiguresService` joined with the Cell monthly report, and is the sharpest
+    // instance of that clause**: this file computes no Cell figure anywhere, and without
+    // the provider every case in it fails to construct. It was missed by the commit that
+    // added the dependency and found by the full suite rather than by this file's own run
+    // — the second time that has happened here, which is why the cost of hand-building the
+    // module is written down beside the reason for doing it.
     const moduleRef = await Test.createTestingModule({
       imports: [AppConfigModule, DatabaseModule],
-      providers: [DccFiguresService, HierarchyService, NetworksService, ReportingService],
+      providers: [
+        CellFiguresService,
+        DccFiguresService,
+        HierarchyService,
+        NetworksService,
+        ReportingService,
+      ],
     }).compile();
 
     app = moduleRef.createNestApplication();
