@@ -499,45 +499,66 @@ describe('section 20 reconciliation, DCC monthly (Stage 5 Done-when)', () => {
    * A Network's population is its **membership**, not its root's subtree (decision 0219).
    *
    * **This is the case the API-level cases cannot make.** There, every fixture total is
-   * zero, so admitting a Network request proves it was scoped and not what it was scoped
+   * zero, so admitting a Network request shows it was scoped and not what it was scoped
    * *to*. Here the attendance is real, and the two readings give different numbers.
    *
-   * Section 20's residual is the whole of the difference: somebody who held no pastoral
-   * assignment in the period is in the Whole Church total alone — no leader's subtree
-   * contains them — while every encoded Person holds a `network_assignments` row from their
-   * encoding date, so the Network's membership does.
+   * **The person who separates them is discipled by somebody outside the tree, and that
+   * matters because section 20's residual cannot be one.** Section 9: "A Person with no open
+   * assignment row cannot have DCC attendance recorded" — so a DCC attendee always held an
+   * assignment inside the period, and §20's residual, who held none at any instant, is never
+   * in a DCC population. A first version of this case built one anyway, by direct insert,
+   * and was green under both readings once restricted to states the application can write.
+   *
+   * What is reachable is a chain that terminates somewhere other than a Network root.
+   * `assertLeaderIsAssignable` checks that a leader is unmerged, unarchived and in the same
+   * Network, and does **not** require them to hold an assignment of their own — and
+   * `createSystemAdministratorWithin` creates exactly such a Person, in a Network and
+   * outside the pastoral tree (section 5 permits it). Somebody they disciple has an
+   * assignment, so they may attend; a walk from the Network root never reaches them.
+   *
+   * *Found by `architecture-guardian`, which reproduced the §9 objection and then named this
+   * case.*
    */
-  it("counts a Network's members, including one no leader discipled", async () => {
+  it("counts a Network's members, including one the root's subtree cannot reach", async () => {
     const root = await createPerson(db, { firstName: 'Oriel', network: 'MENS' });
     await assignTo(db, root.id, null);
     const discipled = await createPerson(db, { firstName: 'Cely', network: 'MENS' });
     await assignTo(db, discipled.id, root.id);
 
-    // Encoded, in the Men's Network, under nobody. Section 20 places them in the Whole
-    // Church total alone.
-    const residual = await createPerson(db, { firstName: 'Editha', network: 'MENS' });
+    // In the Men's Network and outside the pastoral tree, as an administrator is.
+    const administrator = await createPerson(db, { firstName: 'Editha', network: 'MENS' });
 
-    // In the other Network, so the Men's figure must exclude them however it is computed.
-    const otherNetwork = await createPerson(db, { firstName: 'Luzviminda', network: 'WOMENS' });
+    // Discipled by them, so they hold an assignment and may attend — and their chain
+    // terminates at somebody who is not the Men's root.
+    const strayed = await createPerson(db, { firstName: 'Bayani', network: 'MENS' });
+    await assignTo(db, strayed.id, administrator.id);
+
+    // The other Network, with a root of its own, because section 5 refuses a cross-Network
+    // edge.
+    const womensRoot = await createPerson(db, { firstName: 'Geraldine', network: 'WOMENS' });
+    await assignTo(db, womensRoot.id, null);
+    const womensMember = await createPerson(db, { firstName: 'Luzviminda', network: 'WOMENS' });
+    await assignTo(db, womensMember.id, womensRoot.id);
 
     recorder = await accountFor(root.id);
 
     const october = await event(OCT_4);
     await attend(october, discipled.id, root.id);
-    await attend(october, residual.id, root.id);
-    await attend(october, otherNetwork.id, root.id);
+    await attend(october, strayed.id, administrator.id);
+    await attend(october, womensMember.id, womensRoot.id);
 
     const mens = await reporting.dccMonthly({ kind: 'NETWORK', network: 'MENS' }, MONTH);
     const womens = await reporting.dccMonthly({ kind: 'NETWORK', network: 'WOMENS' }, MONTH);
     const wholeChurch = await reporting.dccMonthly({ kind: 'WHOLE_CHURCH' }, MONTH);
 
-    // **Two, not one.** A walk from the Men's root reaches `discipled` and never
-    // `residual`, so the subtree reading answers 1 here and the identity below fails.
+    // **Two, not one.** A walk from the Men's root reaches `discipled` and never `strayed`,
+    // so the subtree reading answers 1 here and the identity below fails.
     expect(mens.uniquePeople).toBe(2);
     expect(womens.uniquePeople).toBe(1);
 
     // Section 17's drill-down: Whole Church → Network → Leader. This is the level at which
     // the subtree reading would stop adding up.
+    expect(wholeChurch.uniquePeople).toBe(3);
     expect(mens.uniquePeople + womens.uniquePeople).toBe(wholeChurch.uniquePeople);
 
     // Section 20's reconciliation still holds inside the Network scope.
@@ -545,5 +566,86 @@ describe('section 20 reconciliation, DCC monthly (Stage 5 Done-when)', () => {
     const bucketed = mens.buckets.reduce((total, bucket) => total + bucket.people, 0);
     expect(classified).toBe(mens.uniquePeople);
     expect(bucketed).toBe(mens.uniquePeople);
+  });
+
+  /**
+   * The population is read **at the period's instant**, which is its final millisecond
+   * (decisions 0218 and 0219).
+   *
+   * **Nothing pinned this, and it is what the two rulings are jointly about.** Every other
+   * fixture's Network row starts at `EPOCH` and is never closed, so passing the period's
+   * *start*, or `new Date()`, or dropping the date predicates from
+   * `peopleInNetworkAsOf` altogether, left every assertion green. Section 4 states the
+   * reason the history exists in exactly this case: "every Network-scoped report for a
+   * closed period depends on that answer."
+   *
+   * Somebody who was in the Men's Network for October and is in the Women's Network now.
+   * Written straight to `network_assignments`, because section 4 reaches this state only
+   * through `people.correct_sex` and that endpoint is not what is under test.
+   *
+   * *Raised by `architecture-guardian`: the authorization half already had this fixture and
+   * the population half had no counterpart.*
+   */
+  it('reads the population as of the period, not as of now', async () => {
+    const root = await createPerson(db, { firstName: 'Oriel', network: 'MENS' });
+    await assignTo(db, root.id, null);
+
+    const moved = await createPerson(db, { firstName: 'Rosa', network: 'MENS' });
+    await assignTo(db, moved.id, root.id);
+
+    recorder = await accountFor(root.id);
+    await attend(await event(OCT_4), moved.id, root.id);
+
+    const womensRoot = await createPerson(db, { firstName: 'Geraldine', network: 'WOMENS' });
+    await assignTo(db, womensRoot.id, null);
+
+    // **Men's for October, Women's from November — as section 4's atomic pair.** The
+    // Network change and the pastoral reassignment share one instant and one transaction:
+    // the same-Network trigger is deferred to commit, and a Network change that left the
+    // old edge open is refused, which is what this fixture met on its first run. Section 4:
+    // "neither can validly precede the other, since each alone leaves the tree in an
+    // invalid state."
+    const afterTheMonth = new Date('2020-11-05T10:00:00+08:00');
+    await db.transaction().execute(async (trx) => {
+      await trx
+        .updateTable('network_assignments')
+        .set({ ended_at: afterTheMonth })
+        .where('person_id', '=', moved.id)
+        .where('ended_at', 'is', null)
+        .execute();
+      await trx
+        .insertInto('network_assignments')
+        .values({
+          person_id: moved.id,
+          network: 'WOMENS',
+          reason: 'A fixture standing in for a section 4 correction.',
+          actor_id: null,
+          started_at: afterTheMonth,
+        })
+        .execute();
+      await trx
+        .updateTable('pastoral_assignments')
+        .set({ ended_at: afterTheMonth })
+        .where('person_id', '=', moved.id)
+        .where('ended_at', 'is', null)
+        .execute();
+      await trx
+        .insertInto('pastoral_assignments')
+        .values({
+          person_id: moved.id,
+          leader_id: womensRoot.id,
+          started_at: afterTheMonth,
+        })
+        .execute();
+    });
+
+    const mens = await reporting.dccMonthly({ kind: 'NETWORK', network: 'MENS' }, MONTH);
+    const womens = await reporting.dccMonthly({ kind: 'NETWORK', network: 'WOMENS' }, MONTH);
+
+    // October's figures are October's. Reading the population as of *now* puts them in the
+    // Women's total instead, and reading it as of the period's start would too if they had
+    // moved mid-month.
+    expect(mens.uniquePeople).toBe(1);
+    expect(womens.uniquePeople).toBe(0);
   });
 });

@@ -449,28 +449,27 @@ describe('GET /api/v1/reports/dcc/monthly (sections 7, 20 and 22)', () => {
    * subtree grant covers a `NETWORK` selector.
    */
   describe("a Network's population is its membership (decision 0219)", () => {
-    /** Encoded, in the Men's Network, and under no pastoral leader — section 20's residual. */
-    const unassigned = async (): Promise<TestPerson> =>
-      createPerson(db, { firstName: 'Editha', lastName: 'Nueva', network: 'MENS' });
-
-    it('counts somebody in the Network whom no leader discipled', async () => {
-      const residual = await unassigned();
-
-      const network = await get(
+    /**
+     * **What this file can assert about a Network scope, and what it cannot.** No fixture
+     * here records attendance, so every total is zero and no case below can tell one
+     * population from another. The population is pinned in `reporting-reconciliation.spec.ts`,
+     * where the attendance is real; what is pinned here is the controller's mapping and the
+     * authorization rule.
+     *
+     * *A case named "counts somebody in the Network whom no leader discipled" stood here and
+     * counted nobody — its assertions were two 200s and `expect(person.id).toBeDefined()`,
+     * which is true of every `createPerson`. `architecture-guardian` found the title was the
+     * only false part; it is replaced by one that claims what it checks.*
+     */
+    it('maps the selector onto the scope the service is given', async () => {
+      const response = await get(
         `period=${REPORTED_MONTH}&scope=NETWORK&network=MENS`,
         adminAccount,
       );
-      const wholeChurch = await get(`period=${REPORTED_MONTH}&scope=WHOLE_CHURCH`, adminAccount);
 
-      expect(network.status).toBe(200);
-      expect(network.body.scope).toEqual({ kind: 'NETWORK', network: 'MENS' });
-
-      // Nobody attended anything in the fixture, so both totals are zero and the figures
-      // cannot carry the claim. What is asserted is that the request is admitted and
-      // scoped -- the population itself is pinned by the service-level case below, which
-      // can see the person list rather than a total that happens to be empty.
-      expect(wholeChurch.status).toBe(200);
-      expect(residual.id).toBeDefined();
+      expect(response.status).toBe(200);
+      expect(response.body.scope).toEqual({ kind: 'NETWORK', network: 'MENS' });
+      expect(response.body.period).toBe(REPORTED_MONTH);
     });
 
     it('refuses a leader-scoped grant a Network selector', async () => {
