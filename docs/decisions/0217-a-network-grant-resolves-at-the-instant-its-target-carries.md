@@ -36,8 +36,16 @@ period being viewed" means: "**A viewing request that names no period is asking 
 
 So there is one rule with two spellings of one instant:
 
-- A **report scope selector** carries the period being reported (decision 0207), and resolves
-  at the last millisecond of its final day (decision 0208). `network_as_of` is read there.
+- A **report scope selector** carries the period being reported (decision 0207).
+  `network_as_of` is read at whatever instant that selector resolves at, and this ruling does
+  not fix which — for a **closed** period decision 0208 makes it the last millisecond of the
+  final day, and for an **open** one Section 20 says both that and "as of now", three lines
+  apart. That disagreement is recorded as an open Stop Condition and nothing here settles it:
+  the Network axis follows the subtree axis to the same instant, whichever it turns out to be.
+  *A first version asserted the last millisecond unconditionally. `architecture-guardian`
+  caught the identical assertion in Section 7 and it was corrected there and in the route's
+  suite — and not here, in the ruling both of those amend, which is the one-rule-one-path
+  shape this branch has now produced three times.*
 - Every other target carries no instant, so the instant is now, and `currentNetwork` — which
   *is* `network_as_of` at now — answers it.
 
