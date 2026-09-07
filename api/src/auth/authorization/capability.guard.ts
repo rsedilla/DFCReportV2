@@ -117,10 +117,10 @@ export class CapabilityGuard implements CanActivate {
    * instant; deriving it a second way here is exactly what that rule forbids, which is why
    * the helper sits in `common/time` rather than in `reporting`.
    */
-  private resolveReportScope(
+  private async resolveReportScope(
     spec: Extract<TargetSpec, { kind: 'report_scope' }>,
     request: AuthenticatedRequest,
-  ): Target {
+  ): Promise<Target> {
     const period = readPath(request, spec.periodFrom);
     if (typeof period !== 'string' || !isReportingMonth(period)) {
       throw new ValidationFailedError(
@@ -149,9 +149,46 @@ export class CapabilityGuard implements CanActivate {
       return { kind: 'report_scope', selector: { kind: 'NETWORK', network }, at };
     }
 
+    if (scope === 'CELL') {
+      const cellId = readPath(request, spec.cellFrom);
+      if (typeof cellId !== 'string' || !isUuid(cellId)) {
+        throw new ValidationFailedError(
+          `${spec.cellFrom} must be a UUID naming the Cell the report is scoped to.`,
+          { field: spec.cellFrom },
+        );
+      }
+
+      if (!this.cellScope) {
+        // The same deployment fault the `cell` target below names, and the same answer:
+        // no binding closes every Cell-scoped endpoint rather than opening one.
+        throw new CapabilityDeniedError(
+          'This deployment cannot resolve a Cell scope, so the endpoint is closed.',
+          { target: 'cell' },
+        );
+      }
+
+      // **`leaderForScopeAsOf` rather than `leaderForScope`, and that is decision 0220.**
+      // A `CELL` selector resolves through the leader in force at the instant the period
+      // resolves at, falling back to the Cell's last leader where nobody held it then —
+      // so a handover does not hand the incoming leader a period that preceded them, and
+      // the month a closure falls in stays readable by the leader who recorded it. The
+      // undated method beside it is the right answer for a request naming no period
+      // (decision 0204) and the wrong one here.
+      const leaderId = await this.cellScope.leaderForScopeAsOf(cellId, at);
+
+      // A Cell nothing can place becomes a target nothing covers, which is the idiom the
+      // `cell` target below sets out at length: an unknown Cell and an out-of-scope one
+      // answer identically, because the nil UUID is a Person nothing can be.
+      return {
+        kind: 'report_scope',
+        selector: { kind: 'CELL', personId: leaderId ?? NIL_UUID },
+        at,
+      };
+    }
+
     if (scope !== 'LEADER') {
       throw new ValidationFailedError(
-        `${spec.scopeFrom} must be WHOLE_CHURCH, NETWORK or LEADER.`,
+        `${spec.scopeFrom} must be WHOLE_CHURCH, NETWORK, LEADER or CELL.`,
         { field: spec.scopeFrom },
       );
     }

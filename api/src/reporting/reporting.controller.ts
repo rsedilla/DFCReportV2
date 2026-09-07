@@ -4,8 +4,14 @@ import { RequiresCapability } from '../auth/authorization/authorization.decorato
 import { Capability } from '../auth/authorization/capabilities';
 import { ValidationFailedError } from '../common/errors/api-error';
 
-import { DccMonthlyReportDto } from './dto/reporting.dto';
-import { ReportingService, type DccMonthlyReport, type ReportScope } from './reporting.service';
+import { CellMonthlyReportDto, DccMonthlyReportDto } from './dto/reporting.dto';
+import {
+  ReportingService,
+  type CellMonthlyReport,
+  type CellReportScope,
+  type DccMonthlyReport,
+  type DccReportScope,
+} from './reporting.service';
 
 /**
  * The aggregate reporting surface (SKILL.md section 22).
@@ -34,7 +40,7 @@ export class ReportingController {
    *
    * The guard has already read `period` and `scope` off this query to place the request
    * in the tree, so by the time this method runs the month is a reporting month and the
-   * scope is one of the two this service computes.
+   * scope is one the service computes.
    */
   @Get('dcc/monthly')
   @RequiresCapability(Capability.ReportsViewSubtree, {
@@ -42,10 +48,46 @@ export class ReportingController {
     scopeFrom: 'query.scope',
     leaderFrom: 'query.leader_id',
     networkFrom: 'query.network',
+    cellFrom: 'query.cell_id',
     periodFrom: 'query.period',
   })
   async dccMonthly(@Query() query: DccMonthlyReportDto): Promise<DccMonthlyReport> {
     return this.reporting.dccMonthly(scopeOf(query), query.period);
+  }
+
+  /**
+   * Cell classification, and monthly-attendance buckets where section 12 permits them
+   * (sections 12 and 20).
+   *
+   * **The buckets are in the response at `CELL` scope and absent at every other**, which
+   * is section 12's structural rule rather than a rendering choice: `N` belongs to a Cell,
+   * so an aggregate `Completed` would mean "attended everything their own Cell happened to
+   * record" and would be inflated by exactly the Cells that recorded least. Decision 0202
+   * settles that nothing replaces them.
+   *
+   * **`cell_id` is dated at the guard** (decision 0220), which is the one thing about this
+   * route that is not shared with the DCC one above: a Cell resolves through the leader in
+   * force at the period's final millisecond, falling back to its last leader where nobody
+   * held it then.
+   *
+   * **Coverage is not here yet.** Section 12 requires every Cell monthly attendance *view*
+   * to show recording coverage beside the buckets, and decision 0202 makes coverage the
+   * figure an aggregate view leads with. Its denominator is the Cell's scheduled meetings
+   * derived from the schedule against the calendar, which is a separate computation and a
+   * separate slice; this route ships the two figures section 20 reconciles. The screen that
+   * renders either owes the coverage line, and `docs/ROADMAP.md` carries that debt.
+   */
+  @Get('cells/monthly')
+  @RequiresCapability(Capability.ReportsViewSubtree, {
+    kind: 'report_scope',
+    scopeFrom: 'query.scope',
+    leaderFrom: 'query.leader_id',
+    networkFrom: 'query.network',
+    cellFrom: 'query.cell_id',
+    periodFrom: 'query.period',
+  })
+  async cellsMonthly(@Query() query: CellMonthlyReportDto): Promise<CellMonthlyReport> {
+    return this.reporting.cellMonthly(cellScopeOf(query), query.period);
   }
 }
 
@@ -55,7 +97,7 @@ export class ReportingController {
  * A `leader_id` sent with `WHOLE_CHURCH` is refused here rather than dropped, for the
  * reason its DTO gives: the request is asking for two different things.
  */
-function scopeOf(query: DccMonthlyReportDto): ReportScope {
+function scopeOf(query: DccMonthlyReportDto): DccReportScope {
   // **Each argument is refused wherever it is not meaningful, in both directions.** The
   // three scopes take three different arguments, so a request carrying the wrong one is
   // asking for something other than what it named.
@@ -91,6 +133,53 @@ function scopeOf(query: DccMonthlyReportDto): ReportScope {
     }
 
     return { kind: 'NETWORK', network: query.network };
+  }
+
+  return { kind: 'WHOLE_CHURCH' };
+}
+
+/**
+ * The Cell report's selector as the service takes it.
+ *
+ * The same shape as `scopeOf` above and deliberately not shared with it: the two routes
+ * offer different scopes, so a common function would have to take the admissible set as an
+ * argument and would refuse `NETWORK` here by a condition rather than by its type. Section
+ * 22's ordering means each refusal names the field a client needs in order to fix it, and
+ * the fields differ.
+ */
+function cellScopeOf(query: CellMonthlyReportDto): CellReportScope {
+  // Each argument is refused wherever it is not meaningful, in both directions, as the DCC
+  // selector's own comment sets out.
+  if (query.scope !== 'LEADER' && query.leader_id !== undefined) {
+    throw new ValidationFailedError('leader_id is only meaningful where scope is LEADER.', {
+      field: 'leader_id',
+    });
+  }
+
+  if (query.scope !== 'CELL' && query.cell_id !== undefined) {
+    throw new ValidationFailedError('cell_id is only meaningful where scope is CELL.', {
+      field: 'cell_id',
+    });
+  }
+
+  if (query.scope === 'LEADER') {
+    if (query.leader_id === undefined) {
+      throw new ValidationFailedError('leader_id is required where scope is LEADER.', {
+        field: 'leader_id',
+      });
+    }
+
+    return { kind: 'LEADER', personId: query.leader_id };
+  }
+
+  if (query.scope === 'CELL') {
+    if (query.cell_id === undefined) {
+      throw new ValidationFailedError('cell_id is required where scope is CELL.', {
+        field: 'cell_id',
+      });
+    }
+
+    return { kind: 'CELL', cellId: query.cell_id };
   }
 
   return { kind: 'WHOLE_CHURCH' };

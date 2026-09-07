@@ -80,10 +80,28 @@ export type Target =
  * `SCOPE_DENIED`, "never silently narrowed to what they do hold". A Network is covered by
  * a Whole Church grant or a `NETWORK` grant naming it, and **by no subtree grant**, because
  * a Network is its membership rather than any subtree (decision 0219).
+ * A Cell is covered by whatever covers the Person it resolves through -- a subtree grant
+ * included, which is the clause that distinguishes it from a Network (decision 0220).
  */
 export type ReportScopeSelector =
   | { kind: 'WHOLE_CHURCH' }
   | { kind: 'NETWORK'; network: NetworkName }
-  | { kind: 'LEADER'; personId: string };
+  | { kind: 'LEADER'; personId: string }
+  /**
+   * A Cell, carried as **the Person it resolves through** rather than as its identifier
+   * (decision 0220).
+   *
+   * Section 7 resolves a Cell through its leader, and `cells` owns `cell_leaderships`
+   * (section 2) — so the guard asks `CELL_SCOPE_PORT` and hands the resolver a Person,
+   * exactly as it already does for a `cell` target. What is dated is which leader: the
+   * one in force at the instant the period resolves at, falling back to the Cell's last
+   * leader where nobody held it then.
+   *
+   * **This is why decision 0219's clause about `NETWORK` does not reach here.** That
+   * clause refuses a subtree grant because a `NETWORK` selector names no Person at all.
+   * A `CELL` selector names one, so every branch below applies to it unchanged, and the
+   * two selectors differing on this is the rule rather than an inconsistency.
+   */
+  | { kind: 'CELL'; personId: string };
 
 export type TargetKind = Target['kind'];

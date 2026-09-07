@@ -56,6 +56,15 @@ export type TargetSpec =
       scopeFrom: string;
       leaderFrom: string;
       networkFrom: string;
+      /**
+       * Where the Cell identifier is read from, for a `CELL` scope (decision 0220).
+       *
+       * Declared by every report route rather than only the ones offering the scope, for
+       * the reason `networkFrom` is: the guard places the request in the tree and the
+       * route's DTO says which scopes it offers, so a scope a route does not offer is
+       * refused after authorization rather than instead of it (section 7, decision 0193).
+       */
+      cellFrom: string;
       periodFrom: string;
     }
   | { kind: 'actor' };

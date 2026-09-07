@@ -41,10 +41,14 @@ export interface CellScopePort {
    * expressible here. This method is the undated case rather than a claim that dates
    * do not matter, and `CELL_MEETING_SCOPE_PORT` carries the dated one — added for
    * section 7's closed-Cell exception, and moved out of this interface by decision
-   * 0188, which put its answer in a table `cells` does not own. **Neither is the first
-   * dated *read*: a dated resolution serving a *recording* capability is not a read in
-   * section 7's sense (decision 0186), and the audit-log question that waits on the
-   * first dated read still waits.**
+   * 0188, which put its answer in a table `cells` does not own. **Neither of those two was
+   * the first dated *read*: a dated resolution serving a *recording* capability is not a
+   * read in section 7's sense (decision 0186). `leaderForScopeAsOf` below is, arriving
+   * with the Cell monthly report (decision 0220) — and it retires nothing else by doing
+   * so. The audit-log question is often described as waiting on "the first dated read";
+   * it does not, and `CLAUDE.md` says so in terms: what settles it is the first
+   * `audit.view` route, because a report resolves no audit entry and cannot decide how a
+   * Cell-targeted one is dated.**
    *
    * **This method serves a viewing capability since decision 0204**, which moved
    * `GET /api/v1/cells/{id}/members` onto `cell.view_subtree`. That does not make it
@@ -59,4 +63,30 @@ export interface CellScopePort {
    * that commit's licence while asserting the thing did not exist.*
    */
   leaderForScope(cellId: string): Promise<string | null>;
+
+  /**
+   * The Person a Cell's scope resolves through **at an instant**, or null where the
+   * Cell has never had a leader at all.
+   *
+   * **Section 7's dated case, and the first read in this system that asks for it**
+   * (decision 0220). A `CELL` report scope selector resolves at the instant the period
+   * resolves at — the period's final millisecond, open or closed (decision 0218) — so
+   * the leader who held the Cell *then* is the one the scope is measured against, and a
+   * handover does not move who may read a period that preceded it.
+   *
+   * **The closed-Cell fallback reaches this, and that is the whole of decision 0220.**
+   * Where the instant finds nobody the answer is the Cell's last leader, exactly as the
+   * undated method above answers. Three states reach it — after a closure, in the period
+   * a closure falls in, and before the Cell existed — and only the second is non-empty:
+   * a Cell closed on the 15th holds no leadership at the month's final millisecond while
+   * that month holds real recorded attendance, and section 12 says in terms that such a
+   * month is reportable. A handover is not among the three, because the instant finds
+   * somebody.
+   *
+   * Distinct from `CELL_MEETING_SCOPE_PORT`, which is also dated and answers a different
+   * question: that port resolves one *meeting* through its own frozen responsible leader
+   * (decision 0188) and serves a recording capability, where this resolves the *Cell* and
+   * serves a viewing one.
+   */
+  leaderForScopeAsOf(cellId: string, at: Date): Promise<string | null>;
 }

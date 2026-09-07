@@ -189,6 +189,11 @@
       "reason": "The DCC figures a leader reads (§9, §12, §20). Dashboard is the screen in that block which shows them, and it does not exist yet; the route lands first so the dated authorization walk it needs is reviewed once rather than alongside eight screens. Network Summary would be the drill-down and is deliberately not named here — the roadmap defers it past the pilot, outside this block."
     },
     {
+      "route": "GET /api/v1/reports/cells/monthly",
+      "waived_to": "screens block",
+      "reason": "Cell classification, and the monthly-attendance buckets §12 puts at Cell scope only. Cell Attendance is the screen in that block which shows them, and it does not exist yet. The screen owes more than this route returns: §12 requires the coverage line beside the buckets, and coverage is its own slice — so this waiver is not discharged by a screen that renders the buckets alone."
+    },
+    {
       "route": "GET /api/v1/health",
       "no_screen_owed": true,
       "reason": "The liveness probe (§24). It is called by the deployment platform and never by a person, so no stage will ever owe it a screen."
