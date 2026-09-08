@@ -3941,9 +3941,24 @@ in the second bullet and had been transplanted onto the headline.*
   version gave DCC its numerator and left the Cell one to be inferred.*
 
 It follows that a monthly report resolves the tree at **more than one instant**: the
-period's end for the person key, and each event or meeting date for coverage. That is not
-an exception to the rule above but the scope of it — the rule governs where a report places
-a *person*, and coverage places an *obligation*.
+period's end for the person key, the same instant for the responsible-leader key, and each
+event or meeting date for coverage. That is not an exception to the rule above but the scope
+of it — the rule governs where a report places a *person*, and coverage places an
+*obligation*. *This sentence named two of the three keys and omitted the middle one from the
+day it was written, which is what made the ruling below necessary.*
+
+**The responsible-leader key is placed by the placement graph below, over the period being
+reported** (ruling of 2026-09-08) — the same graph, with the same fallbacks, that the person
+key uses. The bullet above fixes *which* leader a Cell figure is attributed through, frozen as
+of the meeting date; **placing** that leader in a subtree is a second question, and this is its
+answer. The placement rules below are written about resolving *somebody* into a subtree rather
+than about who is being counted, and a responsible leader is somebody — reading them as
+available only to the counted person would leave this key with no rule at all. Placing the
+leader once for the period also keeps a Cell's month whole, which Section 12 asks for in
+putting a Cell report under the Cell's leader rather than under whoever ran each week. *The
+alternative with the strongest symmetry — resolving at each meeting's date, as coverage does —
+was rejected for that reason, and its cost is real rather than nominal: a Cell handed over
+mid-period genuinely had two people running it, and this places its month under one of them.*
 
 A Network root shows the keys are genuinely different rather than three names for one:
 Section 9 excludes roots from coverage denominators and keeps them in every unique-people
@@ -3958,6 +3973,8 @@ total.
 **A person whose pastoral leader is archived appears on an attention list**, shown to the upline who can act, on Section 15's terms — filtered, never ranked. Required rather than advisable: a report that quietly reconstructs the chain removes the pressure to reassign anybody, so the transient state it accommodates would stop being transient.
 
 Where a person held no open assignment at **any** instant of the period, and none before it either, they appear in **no leader's** figures — in the Whole Church total, and in their Network's (below), and in no subtree. No leader discipled them in that period, and attributing them to one would invent a pastoral relationship the tree never held. *This said "in the Whole Church total alone" until 2026-09-07, which was true while Whole Church and a leader were the only two scopes and became false the moment `NETWORK` arrived — a Network is a membership, and such a person holds one.*
+
+**There is a second residual, and it is about a different party** (ruling of 2026-09-08). The sentence above concerns the person being *counted*. Because the responsible-leader key is placed by the same graph, a **responsible leader** in that state takes the attendees of their meetings out of every leader's Cell figure, while the Whole Church total keeps them — the attendees may each be perfectly placeable, and what is unplaceable is the leader their meetings are attributed through. It is stated because the paragraph above reads as exhaustive and covers one of the two, which is the shape the ruling of 2026-09-05 was written to close and which reappeared the moment a second key acquired a placement rule.
 
 **A `NETWORK` scope is the exception to all of this, because a Network is not a subtree** (ruling of 2026-09-07). Its population is the Network's **membership** — everyone whose `network_assignments` row names it at the instant the period resolves at — and never the walk from its root. Section 4 requires the relationship to be stored "rather than deriving it on every query", and deriving it from the pastoral tree is what the other reading does; Section 4 effective-dates it for this exact reason, saying that "every Network-scoped report for a closed period depends on that answer".
 
