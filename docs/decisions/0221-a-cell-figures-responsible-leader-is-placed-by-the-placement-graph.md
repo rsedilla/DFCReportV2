@@ -103,12 +103,19 @@ attributed through.
 
 **This residual is not exhaustive, and what it leaves out is recorded as open in `CLAUDE.md`
 rather than settled here.** A responsible leader who held an assignment **before** the period,
-none within it, and **none of whose disciples is itself placed**, is also dropped from every
-subtree above — the `departed` tier is recursive, admitting a leader who leads somebody already
-placed and then a leader who leads one of those, so leading somebody is not enough — and she is
-outside the class above, because she held an assignment before the period. *This said "who
-leads nobody" for one commit, which is too narrow: a leader whose only disciples are themselves
-unplaced departed leaders leads somebody and is dropped just the same.* Stating the residual over the wider class
+none within it, and **whom no edge of the placement graph names as leader**, is also dropped
+from every subtree above, and she is outside the class above because she held an assignment
+before the period.
+
+*The condition is stated as the graph's own because three English paraphrases each failed
+differently. "Leads nobody" missed that the `departed` tier is recursive — it admits a leader
+who leads somebody already placed, then a leader who leads one of those — so leading somebody
+is not sufficient. "None of whose disciples is itself placed" then failed in **both**
+directions: a leader whose former disciple has since moved to another leader is dropped while
+that disciple is placed, and a leader whose disciple's own disciple holds an open row is placed
+while nobody sits under her within the period; it is also circular for a mutual pre-period
+pair. The tier admits exactly a leader whom some edge names as leader, so the class is that
+condition's complement, and saying so is both shorter and checkable against the query.* Stating the residual over the wider class
 would have covered her by wording alone, which is how a question comes to be recorded as open
 while a shipped ruling answers it; it would also have been **false** of the neighbouring
 sub-class, a leader in the same position who *does* lead somebody, whom the `departed` tier

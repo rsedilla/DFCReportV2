@@ -300,9 +300,17 @@ describe("where a Cell figure's responsible leader is placed (decision 0221)", (
    * **The class the second residual does *not* cover, pinned as the behaviour the code has
    * today rather than as behaviour anybody has ruled on.** Recorded as an open Stop Condition
    * in `CLAUDE.md`: a responsible leader who held an assignment **before** the period, none
-   * **within** it, and who **leads nobody**. `reportingSubtree`'s `departed` tier seeds only
-   * from people who lead somebody, so she is dropped exactly as the always-unassigned leader
-   * is — while section 20's residual sentence describes only the latter.
+   * **within** it, and **whom no edge of the placement graph names as leader**. She is dropped
+   * exactly as the always-unassigned leader is, while section 20's residual sentence describes
+   * only the latter.
+   *
+   * *The condition is the `departed` tier's own, complemented, rather than an English
+   * paraphrase. This file said "leads nobody" and that the tier "seeds only from people who
+   * lead somebody" — both wrong, and wrong in the file whose purpose is to pin this class:
+   * the tier is **recursive**, admitting a leader whom some edge already names as leader, so
+   * leading somebody is necessary and not sufficient. A second paraphrase, "none of whose
+   * disciples is itself placed", failed in both directions. This wording was corrected in
+   * three other homes one commit before it was corrected here.*
    *
    * **Imelda is deliberately moved under the root here**, so the attendee is perfectly
    * placeable and sits inside the root's own subtree. The root's Cell figure is still 0. That
@@ -315,11 +323,12 @@ describe("where a Cell figure's responsible leader is placed (decision 0221)", (
    * the point of pinning it — it follows `reporting-subtree.spec.ts`, which pins its own two
    * miss cases so that settling them cannot forget them.
    */
-  it('drops a responsible leader who left before the period and leads nobody (open, not endorsed)', async () => {
+  it('drops a departed responsible leader no edge names as leader (open, not endorsed)', async () => {
     const ENDED_BEFORE = new Date('2020-09-20T00:00:00+08:00');
 
-    // Lourdes led somebody until before the period; move Imelda to the root so she leads
-    // nobody, which is what keeps her out of the `departed` tier.
+    // Lourdes led somebody until before the period; move Imelda to the root so that no edge
+    // of the placement graph names Lourdes as leader, which is what keeps her out of the
+    // `departed` tier. Leading nobody is one way to reach that state and is not the condition.
     await db
       .updateTable('pastoral_assignments')
       .set({ ended_at: ENDED_BEFORE })
