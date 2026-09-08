@@ -3984,9 +3984,12 @@ about the person key, which is what makes this sentence true of the text.
 
 **Coverage is not settled by that generalisation, and is deliberately left where it stands.**
 Widening the fallbacks to *a person being placed* was done so they reach the responsible-leader
-key; coverage places its own party at its own instant — for DCC the responsible leaders **as of
-the event date**, above — and this ruling touches neither that instant nor those fallbacks'
-application to it. Stated because the generalised wording would otherwise read onto coverage's
+key; coverage places its own party at its own instant, and **both domains are named here rather
+than one** — for DCC the responsible leaders **as of the event date**, and for Cells the leader
+who led the Cell **on the scheduled date**, both as the coverage bullet above states them. This
+ruling touches neither instant, nor those fallbacks' application to either. *Naming DCC alone
+was the first version of this paragraph, which is the very shape the coverage bullet above
+already carries a correction for.* Stated because the generalised wording would otherwise read onto coverage's
 placement by its own terms, and the coverage slice is the next thing built: what it must not do
 is derive a **third** answer from a key whose placement had none.
 
@@ -3996,10 +3999,15 @@ than at an instant. *The alternative with the strongest symmetry — resolving a
 date, as coverage does — was rejected because it would place a leader at instants before their
 own assignment began, and supplies no fallback for that. A Cell that changes hands mid-period is
 **not** what separates the two answers: it splits its meetings between two leaders under either
-reading, because the responsible leader is frozen per meeting (Section 13, decision 0163). No
-exhaustive statement of what does separate them is made here, two attempts having been refuted —
-the readings diverge wherever the responsible leader's **own** placement moves within the period,
-and that is stated as a direction rather than as a closed list.*
+reading, because the responsible leader is frozen per meeting (Section 13, decision 0163).
+**No characterisation of what does separate the two readings is stated here.** Three have been
+written and each was refuted: a Cell changing hands; a mid-period reassignment of the
+responsible leader "and nothing else"; and, weaker, that the readings diverge wherever that
+leader's own placement moves within the period — which is neither sufficient (a leader
+reassigned mid-period whose meetings all fall after the move is placed identically by both) nor
+necessary (a leader whose last assignment ended before the period separates them while her
+placement never moves within it). The rule above does not rest on such a characterisation, and
+one is not needed to apply it.*
 
 A Network root shows the keys are genuinely different rather than three names for one:
 Section 9 excludes roots from coverage denominators and keeps them in every unique-people
@@ -4009,13 +4017,15 @@ total.
 
 **Where any person holds more than one edge in that graph, every figure computed from it refuses, on the same terms as a cycle** (ruling of 2026-09-05). The closed-component argument above holds only while each person has one out-edge, and **two `pastoral_assignments` rows in force at the period's end** break it two ways: a cycle member with a second, grounded edge grounds the whole cycle and is not detected, and a person reached by two paths is returned twice, which Principle 10 forbids of any total of people. Detection is therefore a property of the edge set rather than of a walk, exactly as it is for a cycle. **Refusing only the walk that sees a duplicate was tried and is wrong**, and the case is recorded because it looks proportionate: where one person sits under two sibling leaders, each sibling's walk holds them once and neither refuses, while every total above holds them twice — so the narrow rule publishes two figures that look correct and cannot both be, breaking Section 25's eleventh rule — never count duplicate people twice when aggregating multiple Cells or branches — across the aggregation a drill-down performs. A duplicate is invisible from below and corrupting from above, where a cycle is the reverse; neither is contained by the walk that meets it. **Choosing between the two rows is refused rather than automated**, because it decides which of two leaders the person belongs to for that period, permanently, and nothing here decides that. **An overlap that opens and closes inside the period is not reached by this rule**, and that is stated rather than implied: the fallback selects one row per person, so such an overlap yields one edge, the graph stays functional and nothing refuses — while the row it selects is the later-*starting* one, which may not be the one the person was actually under for most of the period. What a report owes that case is recorded as open in `CLAUDE.md`. Whether two rows may overlap at all is a Section 5 question recorded as open there too, with a database constraint as its remedy — and both of these stop being reachable when that constraint exists.
 
-**Where the chain reaches a leader who held no assignment within the period, it continues from that leader's last assignment, whenever it was** (ruling of 2026-09-05). Two rules rather than one: the fallback for the person *being placed* stays inside the period, as above; what extends past it is the resolution of a *leader who has already left*. Without it, somebody holding an open assignment under a leader archived before the period began sits in no subtree at all — and the residual below does not cover them, since they held an assignment throughout — so the additivity claim above is false with nothing detecting it. The data holds the answer, and the chain is reproducible because assignment history is never deleted (Section 5).
+**Where the chain reaches a leader who held no assignment within the period, it continues from that leader's last assignment, whenever it was** (ruling of 2026-09-05). Two rules rather than one: the fallback for the person *being placed* stays inside the period, as above; what extends past it is the resolution of a *leader who has already left*. Without it, somebody holding an open assignment under a leader archived before the period began sits in no subtree at all — and none of the residuals below covers them, since they held an assignment throughout — so the additivity claim above is false with nothing detecting it. The data holds the answer, and the chain is reproducible because assignment history is never deleted (Section 5).
 
 **A person whose pastoral leader is archived appears on an attention list**, shown to the upline who can act, on Section 15's terms — filtered, never ranked. Required rather than advisable: a report that quietly reconstructs the chain removes the pressure to reassign anybody, so the transient state it accommodates would stop being transient.
 
 Where a person held no open assignment at **any** instant of the period, and none before it either, they appear in **no leader's** figures — in the Whole Church total, and in their Network's (below), and in no subtree. No leader discipled them in that period, and attributing them to one would invent a pastoral relationship the tree never held. *This said "in the Whole Church total alone" until 2026-09-07, which was true while Whole Church and a leader were the only two scopes and became false the moment `NETWORK` arrived — a Network is a membership, and such a person holds one.*
 
 **There is a second residual, and it is about a different party** (ruling of 2026-09-08). The sentence above concerns the person being *counted*. Because the responsible-leader key is placed by the same graph, a **responsible leader** in that state takes the attendees of their meetings out of every subtree **above** them, while the Whole Church total keeps them — their own `LEADER`-scoped figure still contains them, because the walk seeds at the leader named and they are in their own subtree at depth zero — the attendees may each be perfectly placeable, and what is unplaceable is the leader their meetings are attributed through. It is stated because the paragraph above reads as exhaustive and covers one of the two, which is the shape the ruling of 2026-09-05 was written to close and which reappeared the moment a second key acquired a placement rule.
+
+**Neither residual is exhaustive, and the class they omit is recorded as open in `CLAUDE.md`** — a responsible leader who held an assignment **before** the period, none within it, and who **leads nobody**, whom the placement graph drops from every subtree above while the Whole Church total keeps them. She falls outside both sentences above: the first two because she held an assignment before the period, and the placement rule itself because the departed-leader fallback reaches only a leader who leads somebody. *This marker is here because the paragraph above failed in exactly this way — a residual stated as though it were the whole of the gap — and because a reader building the coverage slice reads this section rather than the open list.*
 
 **A `NETWORK` scope is the exception to all of this, because a Network is not a subtree** (ruling of 2026-09-07). Its population is the Network's **membership** — everyone whose `network_assignments` row names it at the instant the period resolves at — and never the walk from its root. Section 4 requires the relationship to be stored "rather than deriving it on every query", and deriving it from the pastoral tree is what the other reading does; Section 4 effective-dates it for this exact reason, saying that "every Network-scoped report for a closed period depends on that answer".
 

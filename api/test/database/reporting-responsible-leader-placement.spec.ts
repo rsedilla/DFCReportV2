@@ -42,6 +42,13 @@ import type { TestPerson } from '../setup/fixtures';
  * nothing able to fail on it; the fourth pins the class that residual does **not** cover, which
  * is an open Stop Condition rather than a settled rule. Each says so where it is written.
  *
+ * *The third was verified by mutation too, though against a rival **claim** rather than a rival
+ * implementation: adding `WHERE subtree.depth > 0` to `reportingSubtree`'s final select — which
+ * is what "out of **every** leader's Cell figure" would mean if it were true — compiles and
+ * reddens this case alone, on `toLito`, which is the assertion that carries the claim. Recorded
+ * here rather than only in a commit message, because the next reader of this file reads the
+ * file.*
+ *
  * **The first two cases were mutation-verified against the actual rival implementations**, each
  * alone on a restored tree, each confirmed to compile first — *with the now-unused `start`/`end`
  * dropped from the destructuring, without which the substitution fails `TS6133` before any test
