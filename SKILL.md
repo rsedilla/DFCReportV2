@@ -2016,6 +2016,12 @@ DCC coverage is shaped differently from Cell coverage. A Cell has one leader and
 
 Report that figure at every scope, as a single line, on the same terms as Cell coverage: factual, no ranking of leaders by it, and no derived score (Section 13).
 
+**Over a month, that single line is the number of leader-events with a record over the number of leader-events owed** (ruling of 2026-09-09), summed across the month's events. Both terms are reported and the figure is never divided into a percentage. Section 20 attributes coverage "by the obligation rather than by the record", and this is that sentence made arithmetic: a leader owes one record for each event they were the responsible leader at, and coverage is the fraction of those obligations discharged. It inherits the instant Section 20 already fixes — the denominator is the responsible leaders **as of the event date** — so a leader assigned in the third week owes records from that date and not before it, with nothing further needed to make a mid-month arrival correct.
+
+*The mean of the per-event ratios was rejected: it weights every Sunday equally however many leaders it involved, so a sparse event moves the month as much as a full one, and the line comes to depend on the shape of the calendar rather than on what was recorded. Counting only leaders who recorded for **every** event was rejected too — it measures per-leader completeness rather than whether records exist, and one missed Sunday removes a leader from the numerator entirely.*
+
+**Where no leader owed a record for any event in the month, the figure is `0 of 0` and is shown** — not an error, not a gap, and not omitted. Section 5 already names `0 of 0` as a real state for the other domain, "the coverage line being the evidence that its leader reported nothing", and a scope with nobody responsible for anybody has nothing to report and says so. *Whether a month with a calendar **gap** is reportable at all is a different question, recorded as open in `CLAUDE.md` and untouched by this rule: this fixes how per-event figures combine, not whether the month should have been reportable.*
+
 ```text
 dcc_events
 - id
