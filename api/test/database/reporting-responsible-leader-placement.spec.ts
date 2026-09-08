@@ -29,15 +29,23 @@ import type { TestPerson } from '../setup/fixtures';
  * same set. `architecture-guardian` found that, and it is the Definition of Done's
  * "domain rules added or changed in `SKILL.md` have corresponding tests" with teeth.
  *
- * **Both cases turn on the responsible leader's *own* pastoral assignment moving**, because
- * that is the only thing separating the three readings. A Cell changing hands does not:
+ * **The first two cases turn on the responsible leader's *own* placement moving**, which is the
+ * direction the readings diverge in. *No claim is made here that it is the **only** such thing:
+ * two attempts to state an exhaustive discriminator were refuted, and section 20 and decision
+ * 0221 now record a direction rather than a closed list.* A Cell changing hands does not:
  * section 13 freezes the responsible leader per meeting and the figures query selects on that
  * frozen column, so a handover splits a month between two leaders under every reading. *An
  * earlier version of decision 0221 named the handover as its discriminator and offered the
  * split month as the chosen answer's cost. It is the cost of neither.*
  *
- * **Both cases were mutation-verified against the actual rival implementations**, each alone
- * on a restored tree, each confirmed to compile first:
+ * **The third case pins section 20's second residual**, which decision 0221 added as prose with
+ * nothing able to fail on it; the fourth pins the class that residual does **not** cover, which
+ * is an open Stop Condition rather than a settled rule. Each says so where it is written.
+ *
+ * **The first two cases were mutation-verified against the actual rival implementations**, each
+ * alone on a restored tree, each confirmed to compile first — *with the now-unused `start`/`end`
+ * dropped from the destructuring, without which the substitution fails `TS6133` before any test
+ * runs, so "confirmed to compile" holds only with that adjustment*:
  *
  * - `hierarchy.subtreeAsOf(trx, leader, end)` — the dated walk decision 0214 uses to
  *   *authorize* a report. Caught by the second case.
@@ -247,6 +255,86 @@ describe("where a Cell figure's responsible leader is placed (decision 0221)", (
     expect(toAlma.unique_people).toBe(1);
     // The identity the fallback exists for: what a leader's figure holds is not lost from the
     // church's, and here it is not lost from the leader's either.
+    expect(church.unique_people).toBe(1);
+  });
+
+  /**
+   * **Section 20's second residual, both halves** (decision 0221). The ruling shipped it as
+   * prose with nothing able to fail on it, on the branch whose own subject is a rule that
+   * shipped that way; `architecture-guardian` found that and this is the answer.
+   *
+   * Lourdes holds no assignment at any instant of the period **and none before it**, which is
+   * the state the residual names. She is therefore placed in no subtree above her, and the
+   * attendees of her meetings leave every such figure while the Whole Church total keeps them.
+   *
+   * The second half is the correction this branch had to make twice: her **own** `LEADER`
+   * figure still holds them, because the walk seeds at the leader named and she is in her own
+   * subtree at depth zero. Section 20 and decision 0221 both said "every leader's Cell figure",
+   * which is false of exactly one leader — her.
+   */
+  it('places an always-unassigned responsible leader in no subtree above, but keeps her own', async () => {
+    await attend(await meeting(OCT_3, lito.id), member.id);
+
+    const toLito = await leaderScoped(lito.id);
+    const toRoot = await leaderScoped(root.id);
+    const church = await reporting.cellMonthly({ kind: 'WHOLE_CHURCH' }, MONTH);
+
+    // Out of every subtree above her — the root's included, and the root is above everyone.
+    expect(toRoot.unique_people).toBe(0);
+    // And kept by her own, which is the half "every leader's Cell figure" got wrong.
+    expect(toLito.unique_people).toBe(1);
+    expect(church.unique_people).toBe(1);
+  });
+
+  /**
+   * **The class the second residual does *not* cover, pinned as the behaviour the code has
+   * today rather than as behaviour anybody has ruled on.** Recorded as an open Stop Condition
+   * in `CLAUDE.md`: a responsible leader who held an assignment **before** the period, none
+   * **within** it, and who **leads nobody**. `reportingSubtree`'s `departed` tier seeds only
+   * from people who lead somebody, so she is dropped exactly as the always-unassigned leader
+   * is — while section 20's residual sentence describes only the latter.
+   *
+   * **Imelda is deliberately moved under the root here**, so the attendee is perfectly
+   * placeable and sits inside the root's own subtree. The root's Cell figure is still 0. That
+   * is what makes this different in consequence from the person-key version of the same class,
+   * which `CLAUDE.md` closes with "the behaviour is already right": what goes missing is not
+   * an unplaceable person from a figure counting them, but *other people's* attendance from a
+   * leader who does disciple them.
+   *
+   * This case goes red when that Stop Condition is settled in the other direction, which is
+   * the point of pinning it — it follows `reporting-subtree.spec.ts`, which pins its own two
+   * miss cases so that settling them cannot forget them.
+   */
+  it('drops a responsible leader who left before the period and leads nobody (open, not endorsed)', async () => {
+    const ENDED_BEFORE = new Date('2020-09-20T00:00:00+08:00');
+
+    // Lourdes led somebody until before the period; move Imelda to the root so she leads
+    // nobody, which is what keeps her out of the `departed` tier.
+    await db
+      .updateTable('pastoral_assignments')
+      .set({ ended_at: ENDED_BEFORE })
+      .where('person_id', '=', member.id)
+      .where('ended_at', 'is', null)
+      .execute();
+    await assignTo(db, member.id, root.id, ENDED_BEFORE);
+
+    await assignTo(db, lito.id, alma.id, BEFORE);
+    await db
+      .updateTable('pastoral_assignments')
+      .set({ ended_at: ENDED_BEFORE })
+      .where('person_id', '=', lito.id)
+      .where('ended_at', 'is', null)
+      .execute();
+
+    await attend(await meeting(OCT_3, lito.id), member.id);
+
+    const toAlma = await leaderScoped(alma.id);
+    const toRoot = await leaderScoped(root.id);
+    const church = await reporting.cellMonthly({ kind: 'WHOLE_CHURCH' }, MONTH);
+
+    expect(toAlma.unique_people).toBe(0);
+    // The attendee is inside the root's subtree and the root's Cell figure is still empty.
+    expect(toRoot.unique_people).toBe(0);
     expect(church.unique_people).toBe(1);
   });
 });

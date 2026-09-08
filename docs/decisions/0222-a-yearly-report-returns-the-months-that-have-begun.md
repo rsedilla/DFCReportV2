@@ -45,12 +45,20 @@ changing", and this is the same obligation over a longer period.
 **Which months a *closed* year contains** is not in question and is unchanged: all twelve.
 
 **Whether a yearly figure is a sum of monthly ones** is a separate question this ruling does
-not reach, and the answer for classification is no. The ladder is a lifetime count truncated at
-the **month's** end (Section 12), so a year's classification is December's value rather than a
-sum: somebody who was a VIP in March and a Regular by December belongs in one bucket for the
-year, and adding twelve monthly reports would place them in two. *The double-counting that
-produces is the ordinary unique-people rule Section 20 already states, not a classification
-effect — what is peculiar to classification is which month's bucket the year carries.*
+not reach. One half of it is settled by Section 12 alone and is stated here because it needs no
+ruling: classification cannot be obtained by **adding** the months, the ladder being a lifetime
+count truncated at the **month's** end, so somebody who was a VIP in March and a Regular by
+December belongs in one bucket for the year and summing would place them in two. *That
+double-counting is Principle 10's rule against counting one person twice, reaching a unit
+Section 20's own wording — "across multiple weeks or multiple Cells" — does not name, rather
+than a classification effect.*
+
+**Which month's classification a year carries is not settled here**, and is recorded as open in
+`CLAUDE.md`. *An earlier version of this ruling answered "December's value", and the fix batch
+of 2026-09-08 wrote the same answer into Section 20. It contradicts the rule this ruling exists
+to state: a year in progress omits the months that have not begun, and December is among them,
+so the answer names a month the report does not cover. It is withdrawn rather than reformulated,
+and the question is escalated.*
 
 **A yearly figure also has nowhere to be stored.** `report_snapshots` carries a `period`
 documented as "the reporting month" and no yearly one (Section 20), and this ruling makes a

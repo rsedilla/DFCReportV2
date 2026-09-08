@@ -3883,13 +3883,15 @@ open, so this is that obligation over a longer period rather than a new mechanis
 
 **A year's classification is not the sum of its months' classifications**, and the yearly
 slice owes its own reconciliation rather than inheriting the monthly one. Classification is a
-lifetime count truncated at the end of the reporting month (Section 12), so a year's classification is
-**December's value and not a sum**: somebody who was a VIP in March and a Regular by December
-belongs in one bucket for the year, and adding the twelve monthly reports would place them in
-two. *The double-counting that produces is the ordinary unique-people rule this section already
-states — never inflate a total by summing the same person across periods — rather than anything
-peculiar to classification; what is peculiar to classification is which month's bucket the year
-carries.* Both are named rather than settled: they are the first things the yearly slice meets
+lifetime count truncated at the end of the reporting month (Section 12), so the twelve monthly
+reports cannot be added: somebody who was a VIP in March and a Regular by December belongs in
+one bucket for the year, and summing would place them in two. **Which month's classification a
+year carries is not settled here**, and is recorded as open in `CLAUDE.md`. Naming December
+would state an answer the rule above forbids for a year in progress, whose December is among
+the months that report omits. *The double-counting that summing produces is Principle 10's
+rule against counting one person twice, reaching a unit this section's own wording — "across
+multiple weeks or multiple Cells" — does not name, rather than anything peculiar to
+classification.* Both are named rather than settled: they are the first things the yearly slice meets
 after the rule above, together with the fact that `report_snapshots` below carries a `period`
 documented as a reporting month and has no yearly one, so a stored yearly figure has nowhere
 to go and cannot be composed from stored monthly ones either.
@@ -3980,14 +3982,24 @@ of the meeting date; **placing** that leader in a subtree is a second question, 
 answer. Both fallbacks below are therefore stated about *a person being placed* rather than
 about the person key, which is what makes this sentence true of the text.
 
+**Coverage is not settled by that generalisation, and is deliberately left where it stands.**
+Widening the fallbacks to *a person being placed* was done so they reach the responsible-leader
+key; coverage places its own party at its own instant — for DCC the responsible leaders **as of
+the event date**, above — and this ruling touches neither that instant nor those fallbacks'
+application to it. Stated because the generalised wording would otherwise read onto coverage's
+placement by its own terms, and the coverage slice is the next thing built: what it must not do
+is derive a **third** answer from a key whose placement had none.
+
 Placement once per period is what the rest of this section already assumes: the departed-leader
 fallback reaches back before the period, and the additivity claim is stated over a period rather
 than at an instant. *The alternative with the strongest symmetry — resolving at each meeting's
 date, as coverage does — was rejected because it would place a leader at instants before their
-own assignment began, and supplies no fallback for that. **What separates the two answers is a
-mid-period reassignment of the responsible leader and nothing else**: a Cell that changes hands
-mid-period splits its meetings between two leaders under either reading, because the responsible
-leader is frozen per meeting.*
+own assignment began, and supplies no fallback for that. A Cell that changes hands mid-period is
+**not** what separates the two answers: it splits its meetings between two leaders under either
+reading, because the responsible leader is frozen per meeting (Section 13, decision 0163). No
+exhaustive statement of what does separate them is made here, two attempts having been refuted —
+the readings diverge wherever the responsible leader's **own** placement moves within the period,
+and that is stated as a direction rather than as a closed list.*
 
 A Network root shows the keys are genuinely different rather than three names for one:
 Section 9 excludes roots from coverage denominators and keeps them in every unique-people
@@ -4007,7 +4019,7 @@ Where a person held no open assignment at **any** instant of the period, and non
 
 **A `NETWORK` scope is the exception to all of this, because a Network is not a subtree** (ruling of 2026-09-07). Its population is the Network's **membership** — everyone whose `network_assignments` row names it at the instant the period resolves at — and never the walk from its root. Section 4 requires the relationship to be stored "rather than deriving it on every query", and deriving it from the pastoral tree is what the other reading does; Section 4 effective-dates it for this exact reason, saying that "every Network-scoped report for a closed period depends on that answer".
 
-**The residual above is what makes the two readings differ, and it is why this one is right.** Somebody no leader discipled in the period still holds a Network row, because every encoded Person does from their encoding date. So a Network's membership contains them and no leader's subtree does, and the residual therefore appears between **Network and Leader** rather than between Whole Church and Network — which is what the sentence above now says, and did not before this ruling amended it. Under the other reading it would sit outside both Networks as well, and Section 17's Whole Church → Network → Leader drill-down would stop adding up a level higher.
+**The counted-person residual — the first of the two above, not the second — is what makes the two readings differ, and it is why this one is right.** *Named rather than left positional: it read "the residual above" while there was one, and the second residual was inserted between it and this sentence without moving it.* Somebody no leader discipled in the period still holds a Network row, because every encoded Person does from their encoding date. So a Network's membership contains them and no leader's subtree does, and the residual therefore appears between **Network and Leader** rather than between Whole Church and Network — which is what the sentence above now says, and did not before this ruling amended it. Under the other reading it would sit outside both Networks as well, and Section 17's Whole Church → Network → Leader drill-down would stop adding up a level higher.
 
 **Men's + Women's equals the Whole Church total wherever every person in it holds exactly one Network row at the instant, and nothing yet enforces that.** `network_assignments_one_open` constrains only *open* rows, so two rows overlapping historically would count one person in both Networks, and closing a person's only open row without a replacement would drop them from both while Whole Church keeps them. Neither is reachable through any write path today — Section 4's change is a close-and-open pair sharing one instant — and both are recorded as open in `CLAUDE.md`, with a database constraint as the remedy. Until it exists this identity is a property of the data rather than of the schema, which is stated here rather than left for a reader to infer from its holding.
 

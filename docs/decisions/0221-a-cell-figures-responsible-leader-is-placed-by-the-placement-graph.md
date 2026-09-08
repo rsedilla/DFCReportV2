@@ -39,9 +39,10 @@ both.
 **The tree in force at the period's end** — the dated walk decision 0214 uses to *authorize* a
 report. It is the wrong instrument here for the reason 0214 gives for using it there: the
 narrow graph authorizes and the wide graph computes. Using the narrow one to compute would
-drop the attendees of a departed leader's meetings out of every leader's figure while the
-Whole Church total keeps them, which is the additivity failure decision 0206 exists to
-prevent.
+drop the attendees of a departed leader's meetings out of every subtree **above** that leader
+while the Whole Church total keeps them, which is the additivity failure decision 0206 exists
+to prevent. *It said "every leader's figure", which is false of the leader themselves: both
+walks seed at the leader named, so that leader's own figure keeps them at depth zero.*
 
 **The tree in force at each meeting's date**, which is what coverage does and is the reading
 with the strongest internal symmetry — Section 20 already resolves the third key that way, and
@@ -51,8 +52,17 @@ month run by somebody assigned in the third week has no placement at its own dat
 per-meeting reading supplies no fallback for that, where the period reading places them from
 the assignment they hold within it.
 
-**What separates the two answers is a mid-period reassignment of the *responsible leader*, and
-nothing else.** *An earlier version of this ruling said the discriminator was a Cell changing
+**No exhaustive statement of what separates the two answers is made here.** Two have been
+written and both were refuted: a Cell changing hands mid-period, and then a mid-period
+*reassignment* of the responsible leader "and nothing else" — the second falsified by a
+mid-period **closure with no replacement**, which Section 5 permits and which is not a
+reassignment, and by a leader whose last assignment ended before the period, who separates them
+through the departed tier. The readings diverge wherever the responsible leader's **own**
+placement moves within the period; that is recorded as a direction rather than as a closed list,
+because a third formulation of a sentence two reviews have refuted is what this project's own
+rule against rewriting twice-refuted prose exists to prevent.
+
+*An earlier version of this ruling said the discriminator was a Cell changing
 hands mid-period, and offered the resulting split month as the chosen answer's accepted cost.
 Both were wrong: the responsible leader is frozen **per meeting** (Section 13, decision 0163)
 and the figures query selects meetings by that frozen column, so a Cell handed over mid-period
@@ -68,9 +78,16 @@ sentence is about the **counted person**.
 
 Applying the placement graph to the responsible-leader key creates a second one, about a
 different party: **a responsible leader who held no assignment at any instant of the period
-takes the attendees of their meetings out of every leader's Cell figure**, while the Whole
-Church total keeps them. The attendees themselves may be perfectly well placed; what is
-unplaceable is the leader their meetings are attributed through.
+takes the attendees of their meetings out of every subtree above them**, while the Whole
+Church total keeps them — their own `LEADER`-scoped figure still contains them, because the
+walk seeds at the leader named and they are in their own subtree at depth zero. The attendees
+themselves may be perfectly well placed; what is unplaceable is the leader their meetings are
+attributed through.
+
+*This said "every leader's Cell figure" in both places above. The fix batch of 2026-09-08
+listed the correction as made and applied it to Section 20 alone, leaving the ruling asserting
+the thing the specification had just stopped asserting — one rule, two homes, corrected in one,
+which is the shape this project records against itself more than any other.*
 
 It is named here and amended into Section 20 because the residual sentence there reads as
 exhaustive and is not. Both residuals have the same remedy and neither is reachable by
