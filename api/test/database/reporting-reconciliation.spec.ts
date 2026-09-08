@@ -4,6 +4,7 @@ import { Test } from '@nestjs/testing';
 
 import { AppConfigModule } from '../../src/config/config.module';
 import { DatabaseModule } from '../../src/database/database.module';
+import { CellFiguresService } from '../../src/attendance/cell-figures.service';
 import { DccFiguresService } from '../../src/attendance/dcc-figures.service';
 import { HierarchyService } from '../../src/hierarchy/hierarchy.service';
 import { NetworksService } from '../../src/networks/networks.service';
@@ -98,9 +99,22 @@ describe('section 20 reconciliation, DCC monthly (Stage 5 Done-when)', () => {
     // Network's membership (decisions 0206 and 0219), and every scope goes through the
     // same constructor — so a provider is needed here even by a case that never asks for
     // that scope.
+    //
+    // **`CellFiguresService` joined with the Cell monthly report, and is the sharpest
+    // instance of that clause**: this file computes no Cell figure anywhere, and without
+    // the provider every case in it fails to construct. It was missed by the commit that
+    // added the dependency and found by the full suite rather than by this file's own run
+    // — the second time that has happened here, which is why the cost of hand-building the
+    // module is written down beside the reason for doing it.
     const moduleRef = await Test.createTestingModule({
       imports: [AppConfigModule, DatabaseModule],
-      providers: [DccFiguresService, HierarchyService, NetworksService, ReportingService],
+      providers: [
+        CellFiguresService,
+        DccFiguresService,
+        HierarchyService,
+        NetworksService,
+        ReportingService,
+      ],
     }).compile();
 
     app = moduleRef.createNestApplication();
@@ -292,21 +306,21 @@ describe('section 20 reconciliation, DCC monthly (Stage 5 Done-when)', () => {
 
     // Section 9 requires the removal to be visible, so that a month showing three where
     // the calendar shows four is explained rather than merely odd.
-    expect(report.removedEvents).toEqual([OCT_25]);
+    expect(report.removed_events).toEqual([OCT_25]);
 
     // Section 17: a report says whether its period is still open. October 2020 is not.
     expect(report.open).toBe(false);
 
     // Ana, Ben, Cely, Elmo. Dino is absent from the population, not a zero in it.
-    expect(report.uniquePeople).toBe(4);
+    expect(report.unique_people).toBe(4);
 
     const classificationTotal = Object.values(report.classification).reduce((a, b) => a + b, 0);
     const bucketTotal = report.buckets.reduce((sum, bucket) => sum + bucket.people, 0);
 
     // Section 20's two identities. Asserted against the same number rather than against
     // each other, so that both being wrong the same way still fails.
-    expect(classificationTotal).toBe(report.uniquePeople);
-    expect(bucketTotal).toBe(report.uniquePeople);
+    expect(classificationTotal).toBe(report.unique_people);
+    expect(bucketTotal).toBe(report.unique_people);
 
     // And the distribution itself, so a query that reconciles by putting everybody in one
     // bucket does not pass.
@@ -314,9 +328,9 @@ describe('section 20 reconciliation, DCC monthly (Stage 5 Done-when)', () => {
     // deliberate -- a fixture where everybody lands in the same bucket checks less.
     expect(report.classification).toEqual({
       vip: 2,
-      secondTimer: 0,
-      thirdTimer: 1,
-      fourthTimer: 1,
+      second_timer: 0,
+      third_timer: 1,
+      fourth_timer: 1,
       regular: 0,
     });
     expect(report.buckets).toEqual([
@@ -351,7 +365,7 @@ describe('section 20 reconciliation, DCC monthly (Stage 5 Done-when)', () => {
 
     const after = await reporting.dccMonthly({ kind: 'WHOLE_CHURCH' }, MONTH);
     expect(after.classification.vip).toBe(1);
-    expect(after.classification.thirdTimer).toBe(0);
+    expect(after.classification.third_timer).toBe(0);
     expect(after).toEqual(before);
   });
 
@@ -489,9 +503,9 @@ describe('section 20 reconciliation, DCC monthly (Stage 5 Done-when)', () => {
     const report = await reporting.dccMonthly({ kind: 'WHOLE_CHURCH' }, MONTH);
 
     expect(report.n).toBe(0);
-    expect(report.uniquePeople).toBe(0);
+    expect(report.unique_people).toBe(0);
     expect(report.buckets).toEqual([]);
-    expect(report.removedEvents).toEqual([]);
+    expect(report.removed_events).toEqual([]);
     expect(Object.values(report.classification).reduce((a, b) => a + b, 0)).toBe(0);
   });
 
@@ -553,19 +567,19 @@ describe('section 20 reconciliation, DCC monthly (Stage 5 Done-when)', () => {
 
     // **Two, not one.** A walk from the Men's root reaches `discipled` and never `strayed`,
     // so the subtree reading answers 1 here and the identity below fails.
-    expect(mens.uniquePeople).toBe(2);
-    expect(womens.uniquePeople).toBe(1);
+    expect(mens.unique_people).toBe(2);
+    expect(womens.unique_people).toBe(1);
 
     // Section 17's drill-down: Whole Church → Network → Leader. This is the level at which
     // the subtree reading would stop adding up.
-    expect(wholeChurch.uniquePeople).toBe(3);
-    expect(mens.uniquePeople + womens.uniquePeople).toBe(wholeChurch.uniquePeople);
+    expect(wholeChurch.unique_people).toBe(3);
+    expect(mens.unique_people + womens.unique_people).toBe(wholeChurch.unique_people);
 
     // Section 20's reconciliation still holds inside the Network scope.
     const classified = Object.values(mens.classification).reduce((a, b) => a + b, 0);
     const bucketed = mens.buckets.reduce((total, bucket) => total + bucket.people, 0);
-    expect(classified).toBe(mens.uniquePeople);
-    expect(bucketed).toBe(mens.uniquePeople);
+    expect(classified).toBe(mens.unique_people);
+    expect(bucketed).toBe(mens.unique_people);
   });
 
   /**
@@ -666,8 +680,8 @@ describe('section 20 reconciliation, DCC monthly (Stage 5 Done-when)', () => {
     const wholeChurch = await reporting.dccMonthly({ kind: 'WHOLE_CHURCH' }, MONTH);
 
     // Only `movedAfter` is still in the Men's Network at the last millisecond of October.
-    expect(mens.uniquePeople).toBe(1);
-    expect(womens.uniquePeople).toBe(2);
-    expect(mens.uniquePeople + womens.uniquePeople).toBe(wholeChurch.uniquePeople);
+    expect(mens.unique_people).toBe(1);
+    expect(womens.unique_people).toBe(2);
+    expect(mens.unique_people + womens.unique_people).toBe(wholeChurch.unique_people);
   });
 });

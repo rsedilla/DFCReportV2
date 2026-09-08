@@ -573,6 +573,13 @@ export class AuthorizationService {
       return scope.type === ScopeType.Network && scope.network === selector.network;
     }
 
+    // **`LEADER` and `CELL` reach here and are answered identically, which is decision
+    // 0220 rather than an omission.** A `CELL` selector arrives already resolved to the
+    // Person the Cell's scope runs through -- dated to this same instant, with the
+    // closed-Cell fallback applied -- so what is left to decide is the question the
+    // `LEADER` branch already asks: is that Person within the actor's reach at
+    // `target.at`. Handling them apart would be two paths for one rule, and the rule is
+    // the resolution rather than the containment.
     switch (scope.type) {
       case ScopeType.OwnSubtree:
         return this.hierarchy.isWithinSubtreeAsOf(

@@ -1,6 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 
-import { DccFiguresService, type DccPersonFigures } from '../attendance/dcc-figures.service';
+import { CellFiguresService, type CellFiguresPopulation } from '../attendance/cell-figures.service';
+import { DccFiguresService } from '../attendance/dcc-figures.service';
 import { DATABASE, type Db } from '../database/database.module';
 import type { Database, NetworkName } from '../database/schema';
 import { HierarchyService } from '../hierarchy/hierarchy.service';
@@ -15,7 +16,7 @@ import {
 } from '../common/time/reporting-period';
 
 /**
- * Which population a report covers. Section 20 enumerates four; two exist.
+ * Which population a report covers. Section 20 enumerates four, and all four now exist.
  *
  * `LEADER` names a Person, and the people it covers are that person's **placement**
  * subtree (decision 0206), not the tree in force at any one instant — which is a different
@@ -32,14 +33,48 @@ export type ReportScope =
    * constraint (`CLAUDE.md`).
    */
   | { kind: 'NETWORK'; network: NetworkName }
-  | { kind: 'LEADER'; personId: string };
+  | { kind: 'LEADER'; person_id: string }
+  /**
+   * One Cell. The only scope at which section 12 permits monthly-attendance buckets, and
+   * the reason that section exists in the shape it does.
+   */
+  | { kind: 'CELL'; cell_id: string };
 
-/** The five buckets of section 9's classification, in the order that section lists them. */
-export interface DccClassification {
+/**
+ * The scopes each domain's monthly report admits, as types rather than as a check.
+ *
+ * **Section 20's enumeration is one list and the two domains take different subsets of
+ * it**, so a route handing the wrong scope to the wrong report fails to compile rather
+ * than being refused at runtime by a DTO nobody has to keep in step.
+ *
+ * **DCC excludes `CELL`**: section 20 attributes every DCC figure by the *person*, and a
+ * Cell is not a population that key runs over — `report_snapshots.scope_type` enumerates
+ * `CELL` for the Cell domain, and section 12 puts the bucket views it exists for there.
+ *
+ * **Cells exclude `NETWORK`**, and that is a deferral rather than a rule. Section 20 says
+ * a Network narrows "which people the *person* key runs over"; the Cell domain does not
+ * use that key, attributing instead by the meeting's responsible leader — so what a
+ * `NETWORK`-scoped *Cell* figure narrows is genuinely unstated, and it is recorded as open
+ * in `CLAUDE.md` rather than decided here. The DCC route shipped without `NETWORK` for the
+ * same reason and gained it with decision 0219.
+ */
+export type DccReportScope = Exclude<ReportScope, { kind: 'CELL' }>;
+export type CellReportScope = Exclude<ReportScope, { kind: 'NETWORK' }>;
+
+/**
+ * The five classification buckets, in the order sections 9 and 12 list them.
+ *
+ * **One type for both domains because the ladder is identical** — first attendance is a
+ * VIP, fifth and beyond is a Regular — while the *journeys* are separate and are counted
+ * separately: section 12 says a person may be "DCC Regular and Cell 2nd Timer, or vice
+ * versa". What is shared is the mapping from a lifetime count to a bucket, and it would
+ * stop being shareable the moment either section changed its own ladder.
+ */
+export interface Classification {
   vip: number;
-  secondTimer: number;
-  thirdTimer: number;
-  fourthTimer: number;
+  second_timer: number;
+  third_timer: number;
+  fourth_timer: number;
   regular: number;
 }
 
@@ -47,16 +82,17 @@ export interface DccClassification {
  * One monthly-attendance bucket. `completed` is `times === n`, carried rather than left
  * for a caller to recompute — section 9 is explicit that `Completed` means every
  * applicable event and is never a fixed number, and a client comparing against 4 or 5
- * would be the mistake it warns about.
+ * would be the mistake it warns about. Section 12 says the same of a Cell in its own
+ * words: "Never label buckets from the calendar count."
  */
-export interface DccBucket {
+export interface AttendanceBucket {
   times: number;
   people: number;
   completed: boolean;
 }
 
 export interface DccMonthlyReport {
-  scope: ReportScope;
+  scope: DccReportScope;
   /** The reporting month, as the first of it — this repository's one spelling of a month. */
   period: string;
   /**
@@ -76,11 +112,51 @@ export interface DccMonthlyReport {
    * month showing four events where the calendar shows five is explained rather than merely
    * odd". `n` on its own cannot explain itself.
    */
-  removedEvents: string[];
-  uniquePeople: number;
-  classification: DccClassification;
-  buckets: DccBucket[];
+  removed_events: string[];
+  unique_people: number;
+  classification: Classification;
+  buckets: AttendanceBucket[];
 }
+
+/** What every Cell monthly report carries, whatever its scope (sections 12 and 20). */
+interface CellMonthlyCommon {
+  /** The reporting month, as the first of it — this repository's one spelling of a month. */
+  period: string;
+  /**
+   * Whether the month is still open for submission (sections 13 and 17).
+   *
+   * Section 17 requires a report to say so. It matters more here than for DCC: a Cell's
+   * `n` counts what has been *recorded*, so mid-month it grows as leaders submit, and a
+   * bucket labelled `Completed (2/2)` on the 10th is not the same claim as one labelled
+   * `Completed (4/4)` on the 8th of the following month.
+   */
+  open: boolean;
+  unique_people: number;
+  classification: Classification;
+}
+
+/**
+ * A Cell monthly report, shaped so that section 12's one hard structural rule cannot be
+ * broken by a caller: **bucket views exist at Cell scope only**.
+ *
+ * The aggregate arm carries no `n` and no `buckets` at all, rather than carrying empty
+ * ones. Section 12 gives the reason at length — `N` belongs to a Cell, so an aggregate
+ * `Completed` would mean "attended everything their own Cell happened to record" and is
+ * inflated by exactly the Cells that recorded least — and decision 0202 settles that
+ * nothing replaces them: unique people, classification and coverage are the whole of an
+ * aggregate view. Coverage is not computed yet and is the figure that view leads with, so
+ * what ships here is two of the three.
+ */
+export type CellMonthlyReport =
+  | (CellMonthlyCommon & {
+      scope: Extract<CellReportScope, { kind: 'CELL' }>;
+      /** The meetings actually recorded for this Cell in the month (section 12). */
+      n: number;
+      buckets: AttendanceBucket[];
+    })
+  | (CellMonthlyCommon & {
+      scope: Exclude<CellReportScope, { kind: 'CELL' }>;
+    });
 
 /**
  * Composes what the owning modules compute (decision 0206).
@@ -95,6 +171,7 @@ export class ReportingService {
   constructor(
     @Inject(DATABASE) private readonly db: Db,
     private readonly dccFigures: DccFiguresService,
+    private readonly cellFigures: CellFiguresService,
     private readonly hierarchy: HierarchyService,
     private readonly networks: NetworksService,
   ) {}
@@ -126,7 +203,7 @@ export class ReportingService {
    * every person satisfies is not a bucket, and the same reasoning governs a month with no
    * events: nobody could attend, so there is nothing to bucket rather than a row of zeroes.
    */
-  async dccMonthly(scope: ReportScope, period: string): Promise<DccMonthlyReport> {
+  async dccMonthly(scope: DccReportScope, period: string): Promise<DccMonthlyReport> {
     return this.overPeriod(period, async (trx, { start, end }) => {
       // **Each narrower scope is computed by the module that owns the rows it reads**
       // (section 2, decision 0206): `hierarchy` walks the placement graph for a leader,
@@ -142,7 +219,7 @@ export class ReportingService {
       // arguments differ in kind for that reason, not by oversight.
       const personIds =
         scope.kind === 'LEADER'
-          ? await this.hierarchy.reportingSubtree(trx, scope.personId, start, end)
+          ? await this.hierarchy.reportingSubtree(trx, scope.person_id, start, end)
           : scope.kind === 'NETWORK'
             ? await this.networks.peopleInNetworkAsOf(trx, scope.network, end)
             : undefined;
@@ -154,10 +231,91 @@ export class ReportingService {
         period,
         open: figures.open,
         n: figures.n,
-        removedEvents: figures.removed,
-        uniquePeople: figures.people.length,
+        removed_events: figures.removed,
+        unique_people: figures.people.length,
         classification: classify(figures.people),
         buckets: bucket(figures.people, figures.n),
+      };
+    });
+  }
+
+  /**
+   * The Cell monthly report for a scope and a month (SKILL.md sections 12 and 20).
+   *
+   * **Its population is attributed differently from the DCC report beside it, and that is
+   * section 20 rather than an implementation choice.** DCC attributes by the *person*,
+   * placed in the tree as of the period's end. A Cell figure attributes by "the meeting's
+   * responsible leader, frozen as of the meeting date" — so a leader-scoped Cell report
+   * selects the *meetings* run by anyone in their subtree, and then counts whoever attended
+   * those meetings, whatever each attendee's own pastoral placement is. Section 12 states
+   * the same rule from the other side: a Cell report "is not resolved through the pastoral
+   * leader of each individual member, who may differ".
+   *
+   * The consequence is worth naming because it looks like a bug: a leader's Cell report can
+   * contain people who are in no part of that leader's subtree. That is correct. Cell
+   * membership need not mirror pastoral assignment (section 10), and the report is about
+   * the meetings that leader is answerable for.
+   *
+   * **Both section 20 identities hold, and the second only at Cell scope.** Classification
+   * sums to the unique-people total at every scope, because it carries no denominator.
+   * The buckets sum to it only where they exist, which is Cell scope — the return type
+   * carries that rather than a comment, since an aggregate arm with no `n` cannot be
+   * bucketed by anybody.
+   *
+   * **One `READ ONLY REPEATABLE READ` transaction, through the same seam** (decision 0210):
+   * a leader-scoped report walks the tree in `hierarchy` and counts in `attendance`, which
+   * is two statements by construction (section 2), and at section 24's `READ COMMITTED`
+   * they would otherwise describe two states of the database.
+   */
+  async cellMonthly(scope: CellReportScope, period: string): Promise<CellMonthlyReport> {
+    return this.overPeriod(period, async (trx, { start, end }) => {
+      // **The owning module computes and `reporting` composes** (section 2, decision 0206).
+      // `hierarchy` walks the placement graph for a leader; the Cell and Whole Church
+      // scopes need no walk at all, because `cell_meetings` carries both the Cell and the
+      // frozen responsible leader as its own columns.
+      //
+      // **The subtree is handed over as `RESPONSIBLE_LEADERS` rather than as a population**,
+      // which is the whole difference from `dccMonthly` above: the same walk, feeding a
+      // different key.
+      //
+      // **Cell scope returns from its own branch** rather than from a check on what came
+      // back, so `n` and the buckets exist exactly where the scope asked for them. The
+      // figures service is overloaded on the population, which is what makes that a
+      // compiler guarantee rather than a convention here.
+      if (scope.kind === 'CELL') {
+        const figures = await this.cellFigures.monthFigures(
+          period,
+          { kind: 'CELL', cellId: scope.cell_id },
+          { executor: trx },
+        );
+
+        return {
+          scope,
+          period,
+          open: figures.open,
+          n: figures.n,
+          unique_people: figures.people.length,
+          classification: classify(figures.people),
+          buckets: bucket(figures.people, figures.n),
+        };
+      }
+
+      const population: Exclude<CellFiguresPopulation, { kind: 'CELL' }> =
+        scope.kind === 'LEADER'
+          ? {
+              kind: 'RESPONSIBLE_LEADERS',
+              personIds: await this.hierarchy.reportingSubtree(trx, scope.person_id, start, end),
+            }
+          : { kind: 'EVERY_CELL' };
+
+      const figures = await this.cellFigures.monthFigures(period, population, { executor: trx });
+
+      return {
+        scope,
+        period,
+        open: figures.open,
+        unique_people: figures.people.length,
+        classification: classify(figures.people),
       };
     });
   }
@@ -253,12 +411,12 @@ export class ReportingService {
  * never zero and no sixth bucket is reachable — which is what makes the five sum to the
  * total rather than merely tend to.
  */
-function classify(figures: readonly DccPersonFigures[]): DccClassification {
-  const counts: DccClassification = {
+function classify(figures: readonly { lifetimeThroughMonth: number }[]): Classification {
+  const counts: Classification = {
     vip: 0,
-    secondTimer: 0,
-    thirdTimer: 0,
-    fourthTimer: 0,
+    second_timer: 0,
+    third_timer: 0,
+    fourth_timer: 0,
     regular: 0,
   };
 
@@ -268,13 +426,13 @@ function classify(figures: readonly DccPersonFigures[]): DccClassification {
         counts.vip += 1;
         break;
       case 2:
-        counts.secondTimer += 1;
+        counts.second_timer += 1;
         break;
       case 3:
-        counts.thirdTimer += 1;
+        counts.third_timer += 1;
         break;
       case 4:
-        counts.fourthTimer += 1;
+        counts.fourth_timer += 1;
         break;
       default:
         counts.regular += 1;
@@ -297,12 +455,12 @@ function classify(figures: readonly DccPersonFigures[]): DccClassification {
  * count of applicable events in the month cannot exceed the number the month holds — and
  * that reasoning only holds because both figures are read in one statement.
  */
-function bucket(figures: readonly DccPersonFigures[], n: number): DccBucket[] {
+function bucket(figures: readonly { timesInMonth: number }[], n: number): AttendanceBucket[] {
   if (n === 0) {
     return [];
   }
 
-  const buckets: DccBucket[] = [];
+  const buckets: AttendanceBucket[] = [];
   for (let times = 1; times <= n; times += 1) {
     buckets.push({
       times,

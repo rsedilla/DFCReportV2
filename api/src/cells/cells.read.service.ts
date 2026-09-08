@@ -73,6 +73,31 @@ export class CellsReadService implements CellScopePort, CellRelationshipsPort {
   }
 
   /**
+   * `leaderForScope`'s dated case: the leader in force at `at`, falling back to the
+   * Cell's last leader where nobody held it then (decision 0220).
+   *
+   * **Two reads rather than one query with an `OR`, and deliberately.** The fallback is
+   * a *different question* — "who led this Cell last" rather than "who led it at this
+   * instant" — and the two answered in one statement would need a synthetic ordering key
+   * that makes the in-force row win, which is a third rule nobody stated. Written as a
+   * coalesce, each half is the method that already answers its own question and the
+   * ordering between them is the ruling rather than a `CASE` expression.
+   *
+   * **The fallback is not reached by a handover**, which is the property worth stating
+   * because it is what makes the ruling narrow: at any instant while the Cell was
+   * running, `leaderAsOfWithin` finds somebody, so each past period resolves to whoever
+   * held it then and the second read never runs.
+   *
+   * On the pool, for the reason `leaderForScope` gives: the guard runs outside any
+   * transaction.
+   */
+  async leaderForScopeAsOf(cellId: string, at: Date): Promise<string | null> {
+    const inForce = await this.leaderAsOfWithin(this.db, cellId, at);
+
+    return inForce ?? (await this.leaderForScopeWithin(this.db, cellId));
+  }
+
+  /**
    * The people who were members of this Cell on a given Manila **date**.
    *
    * Section 12: "The roster for a meeting is exactly the people holding an active
