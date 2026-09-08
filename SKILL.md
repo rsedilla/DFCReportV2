@@ -3859,14 +3859,42 @@ shut, and says nothing about a month that has not started.
 (Section 24, decision 0160). A period's beginning is a month boundary, and the host clock is
 not the authority for one.
 
-**This is stated of a month, and what a *yearly* report owes is recorded as open in
-`CLAUDE.md` rather than settled here.** Section 18 offers January through December for a
-selected year, so a yearly view of the current year is a report whose period has begun and
-whose months may not all have begun. *Stated as a possibility rather than a proportion: the
-proportion changes through the year and is zero in December, and the question exists the
-moment any one month of the selected year has not begun.* Nothing can reach it — neither yearly route exists — and it is
-named here so the yearly slice meets the question rather than deriving an answer from this
-paragraph.
+**This is stated of a month, and a *yearly* report is settled separately** (ruling of
+2026-09-08). Section 18 offers January through December for a selected year, so a yearly view
+of the current year is a report whose period has begun and whose months may not all have
+begun. *Stated as a possibility rather than a proportion: the proportion changes through the
+year and is zero in December, and the question exists the moment any one month of the
+selected year has not begun.*
+
+**A yearly report returns the months of the selected year that have begun, and omits the
+rest. The response names the months it covers.** Refusing the whole year was rejected: it
+would make Section 18's view unavailable for eleven months of every twelve and available for
+the twelfth, which is not what that section describes — and the rule above refuses a period
+that has *not begun*, which a year in progress has. A third, not-yet-begun period state was
+also rejected, because the paragraph above declined to invent one for a month and inventing it
+one unit up would make that reasoning wrong about its own case.
+
+**Naming the months covered is what keeps omission from becoming the failure this section
+refuses.** The argument above is that a future month comes back "complete, well-formed, and
+saying that nobody in the church attended anything"; a yearly report that silently returned
+eleven months and a gap would reproduce exactly that one unit up, and a reader would see a
+year that looks whole and is not. Section 17 already requires a report to say its period is
+open, so this is that obligation over a longer period rather than a new mechanism.
+
+**A year's classification is not the sum of its months' classifications**, and the yearly
+slice owes its own reconciliation rather than inheriting the monthly one. Classification is a
+lifetime count truncated at the end of the reporting month (Section 12), so the twelve monthly
+reports cannot be added: somebody who was a VIP in March and a Regular by December belongs in
+one bucket for the year, and summing would place them in two. **Which month's classification a
+year carries is not settled here**, and is recorded as open in `CLAUDE.md`. Naming December
+would state an answer the rule above forbids for a year in progress, whose December is among
+the months that report omits. *The double-counting that summing produces is Principle 10's
+rule against counting one person twice, reaching a unit this section's own wording — "across
+multiple weeks or multiple Cells" — does not name, rather than anything peculiar to
+classification.* Both are named rather than settled: they are the first things the yearly slice meets
+after the rule above, together with the fact that `report_snapshots` below carries a `period`
+documented as a reporting month and has no yearly one, so a stored yearly figure has nowhere
+to go and cannot be composed from stored monthly ones either.
 
 ### Which tree a report walks, and what attributes a figure to a scope
 
@@ -3941,27 +3969,69 @@ in the second bullet and had been transplanted onto the headline.*
   version gave DCC its numerator and left the Cell one to be inferred.*
 
 It follows that a monthly report resolves the tree at **more than one instant**: the
-period's end for the person key, and each event or meeting date for coverage. That is not
-an exception to the rule above but the scope of it — the rule governs where a report places
-a *person*, and coverage places an *obligation*.
+period's end for the person key, the same for the responsible-leader key, and each
+event or meeting date for coverage. That is not an exception to the rule above but the scope
+of it — the rule governs where a report places a *person*, and coverage places an
+*obligation*. *This sentence named two of the three keys and omitted the middle one from the
+day it was written, which is what made the ruling below necessary.*
+
+**The responsible-leader key is placed by the placement graph below, over the period being
+reported** (ruling of 2026-09-08) — the same graph, with the same fallbacks, that the person
+key uses. The bullet above fixes *which* leader a Cell figure is attributed through, frozen as
+of the meeting date; **placing** that leader in a subtree is a second question, and this is its
+answer. Both fallbacks below are therefore stated about *a person being placed* rather than
+about the person key, which is what makes this sentence true of the text.
+
+**Coverage is not settled by that generalisation, and is deliberately left where it stands.**
+Widening the fallbacks to *a person being placed* was done so they reach the responsible-leader
+key; coverage places its own party at its own instant, and **both domains are named here rather
+than one** — for DCC the responsible leaders **as of the event date**, and for Cells the leader
+who led the Cell **on the scheduled date**, both as the coverage bullet above states them. This
+ruling touches neither instant, nor those fallbacks' application to either. *Naming DCC alone
+was the first version of this paragraph, which is the very shape the coverage bullet above
+already carries a correction for.* Stated because the generalised wording would otherwise read onto coverage's
+placement by its own terms, and the coverage slice is the next thing built: what it must not do
+is derive a **third** answer from a key whose placement had none.
+
+Placement once per period is what the rest of this section already assumes: the departed-leader
+fallback reaches back before the period, and the additivity claim is stated over a period rather
+than at an instant. *The alternative with the strongest symmetry — resolving at each meeting's
+date, as coverage does — was rejected because it would place a leader at instants before their
+own assignment began, and supplies no fallback for that. A Cell that changes hands mid-period is
+**not** what separates the two answers: it splits its meetings between two leaders under either
+reading, because the responsible leader is frozen per meeting (Section 13, decision 0163).
+**No characterisation of what does separate the two readings is stated here.** Three have been
+written and each was refuted: a Cell changing hands; a mid-period reassignment of the
+responsible leader "and nothing else"; and, weaker, that the readings diverge wherever that
+leader's own placement moves within the period — which is neither sufficient (a leader
+reassigned mid-period whose meetings all fall after the move is placed identically by both) nor
+necessary (a leader whose last assignment ended before the period, **and whom the departed tier
+places**, separates them while her placement never moves within it — the qualifier matters,
+because a departed leader the tier does *not* place is dropped under both readings and
+separates nothing). The rule above does not rest on such a characterisation, and
+one is not needed to apply it.*
 
 A Network root shows the keys are genuinely different rather than three names for one:
 Section 9 excludes roots from coverage denominators and keeps them in every unique-people
 total.
 
-**Where the person key finds no open assignment at the period's end, it uses the last open assignment that person held at any instant within the period** (ruling of 2026-09-05). Section 5 makes zero open assignments legitimate for an archived Person, one encoded but not yet assigned, and an administrator, while Section 3 forbids filtering a period-based report by current lifecycle state — so without this such a person's real recorded attendance would sit in the Whole Church total and in no leader's, and Section 16's drill-down and Section 17's chain would lose people between two levels. The fallback keeps them in exactly one subtree, so both identities below still sum, and every level of a drill-down adds up to the level above **except for the residual named in the next paragraph**. It is reproducible because assignment history is never deleted (Section 5). **The fallback applies up the chain**: where the leader it lands on is themselves unassigned at the period's end, theirs resolves the same way — which is what makes the additivity claim hold, rather than hold one level at a time. **It is resolved with cycle detection, as Section 5 requires of any walk of the pastoral tree**, and that is not a formality here: the graph it walks is *last open assignment held at any instant within the period*, which collapses rows from different instants into one edge set, and Section 5 invariant 2 constrains the **active** tree at write time rather than that collapsed map. Two people can each end a period unassigned having each been under the other earlier in it, from writes that were legal when made. A detected cycle is a data-integrity defect and the figure refuses rather than silently truncating the chain. **That detection is over the whole graph rather than over what a walk reached**, because a cycle in this map is a *closed component*: no member is the child of a non-member, so a walk seeded at a leader above never enters it, and scoping detection to the walk returns a figure that is silently short.
+**Where a person being placed holds no open assignment at the period's end, they are placed by the last open assignment they held at any instant within the period** (ruling of 2026-09-05). Section 5 makes zero open assignments legitimate for an archived Person, one encoded but not yet assigned, and an administrator, while Section 3 forbids filtering a period-based report by current lifecycle state — so without this such a person's real recorded attendance would sit in the Whole Church total and in no leader's, and Section 16's drill-down and Section 17's chain would lose people between two levels. The fallback keeps them in exactly one subtree, so both identities below still sum, and every level of a drill-down adds up to the level above **except for the residuals named below and the further omitted class recorded with them**. It is reproducible because assignment history is never deleted (Section 5). **The fallback applies up the chain**: where the leader it lands on is themselves unassigned at the period's end, theirs resolves the same way — which is what makes the additivity claim hold, rather than hold one level at a time. **It is resolved with cycle detection, as Section 5 requires of any walk of the pastoral tree**, and that is not a formality here: the graph it walks is *last open assignment held at any instant within the period*, which collapses rows from different instants into one edge set, and Section 5 invariant 2 constrains the **active** tree at write time rather than that collapsed map. Two people can each end a period unassigned having each been under the other earlier in it, from writes that were legal when made. A detected cycle is a data-integrity defect and the figure refuses rather than silently truncating the chain. **That detection is over the whole graph rather than over what a walk reached**, because a cycle in this map is a *closed component*: no member is the child of a non-member, so a walk seeded at a leader above never enters it, and scoping detection to the walk returns a figure that is silently short.
 
 **Where any person holds more than one edge in that graph, every figure computed from it refuses, on the same terms as a cycle** (ruling of 2026-09-05). The closed-component argument above holds only while each person has one out-edge, and **two `pastoral_assignments` rows in force at the period's end** break it two ways: a cycle member with a second, grounded edge grounds the whole cycle and is not detected, and a person reached by two paths is returned twice, which Principle 10 forbids of any total of people. Detection is therefore a property of the edge set rather than of a walk, exactly as it is for a cycle. **Refusing only the walk that sees a duplicate was tried and is wrong**, and the case is recorded because it looks proportionate: where one person sits under two sibling leaders, each sibling's walk holds them once and neither refuses, while every total above holds them twice — so the narrow rule publishes two figures that look correct and cannot both be, breaking Section 25's eleventh rule — never count duplicate people twice when aggregating multiple Cells or branches — across the aggregation a drill-down performs. A duplicate is invisible from below and corrupting from above, where a cycle is the reverse; neither is contained by the walk that meets it. **Choosing between the two rows is refused rather than automated**, because it decides which of two leaders the person belongs to for that period, permanently, and nothing here decides that. **An overlap that opens and closes inside the period is not reached by this rule**, and that is stated rather than implied: the fallback selects one row per person, so such an overlap yields one edge, the graph stays functional and nothing refuses — while the row it selects is the later-*starting* one, which may not be the one the person was actually under for most of the period. What a report owes that case is recorded as open in `CLAUDE.md`. Whether two rows may overlap at all is a Section 5 question recorded as open there too, with a database constraint as its remedy — and both of these stop being reachable when that constraint exists.
 
-**Where the chain reaches a leader who held no assignment within the period, it continues from that leader's last assignment, whenever it was** (ruling of 2026-09-05). Two rules rather than one: the fallback for the *person* stays inside the period, as above; what extends past it is the resolution of a *leader who has already left*. Without it, somebody holding an open assignment under a leader archived before the period began sits in no subtree at all — and the residual below does not cover them, since they held an assignment throughout — so the additivity claim above is false with nothing detecting it. The data holds the answer, and the chain is reproducible because assignment history is never deleted (Section 5).
+**Where the chain reaches a leader who held no assignment within the period, it continues from that leader's last assignment, whenever it was** (ruling of 2026-09-05). Two rules rather than one: the fallback for the person *being placed* stays inside the period, as above; what extends past it is the resolution of a *leader who has already left*. Without it, somebody holding an open assignment under a leader archived before the period began sits in no subtree at all — and none of the residuals below covers them, since they held an assignment throughout — so the additivity claim above is false with nothing detecting it. The data holds the answer, and the chain is reproducible because assignment history is never deleted (Section 5).
 
 **A person whose pastoral leader is archived appears on an attention list**, shown to the upline who can act, on Section 15's terms — filtered, never ranked. Required rather than advisable: a report that quietly reconstructs the chain removes the pressure to reassign anybody, so the transient state it accommodates would stop being transient.
 
 Where a person held no open assignment at **any** instant of the period, and none before it either, they appear in **no leader's** figures — in the Whole Church total, and in their Network's (below), and in no subtree. No leader discipled them in that period, and attributing them to one would invent a pastoral relationship the tree never held. *This said "in the Whole Church total alone" until 2026-09-07, which was true while Whole Church and a leader were the only two scopes and became false the moment `NETWORK` arrived — a Network is a membership, and such a person holds one.*
 
+**There is a second residual, and it is about a different party** (ruling of 2026-09-08). The sentence above concerns the person being *counted*. Because the responsible-leader key is placed by the same graph, a **responsible leader** in that state takes the attendees of their meetings out of every subtree **above** them, while the Whole Church total keeps them — their own `LEADER`-scoped figure still contains them, because the walk seeds at the leader named and they are in their own subtree at depth zero — the attendees may each be perfectly placeable, and what is unplaceable is the leader their meetings are attributed through. It is stated because the paragraph above reads as exhaustive and covers one of the two, which is the shape the ruling of 2026-09-05 was written to close and which reappeared the moment a second key acquired a placement rule.
+
+**Neither residual is exhaustive, and a further class they omit is recorded as open in `CLAUDE.md`** — a responsible leader who held an assignment **before** the period, none within it, and **whom no edge of the placement graph names as leader**, whom the graph therefore drops from every subtree above while the Whole Church total keeps them. She falls outside the two residuals above because she held an assignment before the period. *The condition is stated as the graph's own rather than in English, after three paraphrases each failed differently. "Leads nobody" missed that the departed-leader fallback is **recursive**, admitting a leader who leads somebody already placed and then a leader who leads one of those. "None of whose disciples is itself placed" fails in both directions: a leader whose former disciple has since moved to another leader is dropped while that disciple is placed, and a leader whose disciple's own disciple holds an open row is placed while nobody sits under her within the period. The fallback admits exactly a leader some edge names as leader, so the class is that condition's complement and is best written as such.* *Stated as "a further class" rather than "the class": the definite article would be an exhaustiveness claim, which this section has already made twice.* *The marker is here because the paragraph above failed in exactly this way — a residual stated as though it were the whole of the gap — and because a reader building the coverage slice reads this section rather than the open list.*
+
 **A `NETWORK` scope is the exception to all of this, because a Network is not a subtree** (ruling of 2026-09-07). Its population is the Network's **membership** — everyone whose `network_assignments` row names it at the instant the period resolves at — and never the walk from its root. Section 4 requires the relationship to be stored "rather than deriving it on every query", and deriving it from the pastoral tree is what the other reading does; Section 4 effective-dates it for this exact reason, saying that "every Network-scoped report for a closed period depends on that answer".
 
-**The residual above is what makes the two readings differ, and it is why this one is right.** Somebody no leader discipled in the period still holds a Network row, because every encoded Person does from their encoding date. So a Network's membership contains them and no leader's subtree does, and the residual therefore appears between **Network and Leader** rather than between Whole Church and Network — which is what the sentence above now says, and did not before this ruling amended it. Under the other reading it would sit outside both Networks as well, and Section 17's Whole Church → Network → Leader drill-down would stop adding up a level higher.
+**The counted-person residual — the first of the two above, not the second — is what makes the two readings differ, and it is why this one is right.** *Named rather than left positional: it read "the residual above" while there was one, and the second residual was inserted between it and this sentence without moving it.* Somebody no leader discipled in the period still holds a Network row, because every encoded Person does from their encoding date. So a Network's membership contains them and no leader's subtree does, and the residual therefore appears between **Network and Leader** rather than between Whole Church and Network — which is what the sentence above now says, and did not before this ruling amended it. Under the other reading it would sit outside both Networks as well, and Section 17's Whole Church → Network → Leader drill-down would stop adding up a level higher.
 
 **Men's + Women's equals the Whole Church total wherever every person in it holds exactly one Network row at the instant, and nothing yet enforces that.** `network_assignments_one_open` constrains only *open* rows, so two rows overlapping historically would count one person in both Networks, and closing a person's only open row without a replacement would drop them from both while Whole Church keeps them. Neither is reachable through any write path today — Section 4's change is a close-and-open pair sharing one instant — and both are recorded as open in `CLAUDE.md`, with a database constraint as the remedy. Until it exists this identity is a property of the data rather than of the schema, which is stated here rather than left for a reader to infer from its holding.
 
