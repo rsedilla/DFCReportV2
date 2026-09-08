@@ -1,3 +1,14 @@
+// **Before anything reads `process.env`**, which `AppModule`'s config factory does at
+// construction. Every other entry point in this repository already does this -- the four
+// scripts in `api/scripts`, and `test/setup/env.ts` for the suite -- and the server was
+// the one that did not, so `npm run start:dev` died on `JWT_SECRET is required` with a
+// populated `api/.env` sitting beside it. CLAUDE.md documents that command as the way to
+// run the API, so the documented path was the only one that did not work.
+//
+// `dotenv` never overwrites a variable already present in the environment, so a real
+// deployment's configuration still wins over any file that reaches the image.
+import 'dotenv/config';
+
 import { Logger } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 
