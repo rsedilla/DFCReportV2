@@ -397,9 +397,11 @@ type CellMeetingSubmissionResponse = {
  * **The scheduled meetings are derived and the recorded ones are stored, and the
  * listing is the join of the two.** Section 13: "A row is written by the first
  * submission. There is none before it" -- so a month's meetings are not a table
- * scan. The scheduled set comes from `cell_schedules` run against the calendar,
- * and each entry carries the `cell_meetings` row that reports it, or null where
- * the leader has not reported yet.
+ * scan. The scheduled set comes from `cell_schedules` run against the
+ * calendar -- derived by `CellsReadService.scheduledMeetingsIn`, because Section 2
+ * assigns the Cell coverage denominator to `cells` by name -- and each entry carries
+ * the `cell_meetings` row that reports it, or null where the leader has not reported
+ * yet.
  *
  * That null is the "meeting awaiting a record" of sections 13 and 19, and it is
  * deliberately not a status: section 13 keeps the statuses at exactly three, and
@@ -412,7 +414,10 @@ type CellMeetingSubmissionResponse = {
  * generated ahead for every scheduled date.
  *
  * **This module reads `cells`' tables through `CellsReadService` and never
- * directly** (section 2). `attendance` owns `cell_meetings`, `cell_attendance` and
+ * directly** (section 2). *That was false in this file until 2026-09-08: the
+ * scheduled-set query ran here and joined `cell_schedules` from a statement rooted in
+ * `generate_series`, so it was neither an owned read nor Section 2's single exemption --
+ * with this sentence two paragraphs below it saying otherwise.* `attendance` owns `cell_meetings`, `cell_attendance` and
  * `cell_meeting_changes`; `cells` owns `cell_schedules`, `cell_leaderships` and
  * `cell_memberships`.
  *
@@ -457,7 +462,7 @@ export class CellMeetingsService {
       throw new NotFoundError('No such Cell.', { cell_id: cellId });
     }
 
-    const scheduled = await this.scheduledDatesIn(cellId, reportingMonth);
+    const scheduled = await this.cells.scheduledMeetingsIn(this.db, cellId, reportingMonth);
     const recorded = await this.recordedIn(cellId, reportingMonth);
 
     const meetings = scheduled.map((entry) => {
@@ -541,7 +546,11 @@ export class CellMeetingsService {
       throw new NotFoundError('No such Cell.', { cell_id: cellId });
     }
 
-    const scheduled = await this.scheduledDatesIn(cellId, reportingMonthOf(meetingId));
+    const scheduled = await this.cells.scheduledMeetingsIn(
+      this.db,
+      cellId,
+      reportingMonthOf(meetingId),
+    );
     const entry = scheduled.find((candidate) => candidate.scheduledDate === meetingId);
     if (entry === undefined) {
       throw new NotFoundError('This Cell was not scheduled to meet on that date.', {
@@ -737,7 +746,7 @@ export class CellMeetingsService {
       // The meeting must be one the Cell's schedule derives. Checked before anything
       // about the body, because a date naming no meeting is not a bad submission — it
       // is a request about something that does not exist.
-      const scheduled = await this.scheduledDatesIn(cellId, reportingMonth, trx);
+      const scheduled = await this.cells.scheduledMeetingsIn(trx, cellId, reportingMonth);
       const entry = scheduled.find((candidate) => candidate.scheduledDate === meetingId);
       if (entry === undefined) {
         throw new NotFoundError('This Cell was not scheduled to meet on that date.', {
@@ -2328,71 +2337,6 @@ export class CellMeetingsService {
       .executeTakeFirst();
 
     return this.personNameFor(executor, account?.person_id ?? null);
-  }
-
-  /**
-   * The dates this Cell was scheduled to meet in a month, with the time in force.
-   *
-   * **Every boundary here is a Manila calendar date, and the arithmetic is the
-   * database's.** Section 20 names the zone for every period boundary; section 10
-   * stores `day_of_week` as an ISO day number "because every use of it is arithmetic
-   * against a calendar", and this is that use -- `EXTRACT(ISODOW ...)` against the
-   * generated series, which is the comparison section 10 names.
-   *
-   * **A schedule row governs a date when it is in force on that date, compared as
-   * dates rather than as instants.** Section 10 makes a change take effect at the
-   * start of a month, so within a month the comparison decides nothing at all: the
-   * cases it does decide are the partial months section 12 names, where the row opens
-   * at approval or ends at a closure part-way through.
-   *
-   * At the closing edge that is section 13's rule rather than a convenience: a
-   * closure ends the schedule row *on* the closure date, and a meeting dated that day
-   * "reads the Cell as it stood that day", so an instant comparison would drop a
-   * meeting the Cell actually held. Comparing dates gives that meeting its schedule.
-   *
-   * At the opening edge the same comparison admits a meeting on the approval date
-   * itself, which section 10 does not address -- a Cell approved on a Saturday
-   * afternoon whose schedule is Saturday gets a scheduled meeting that day. That is
-   * recorded as a question rather than defended: it is the reading that loses no
-   * meeting a leader believes they held, which is the direction section 13 takes at
-   * the other edge, and the opposite reading would refuse a record for a meeting that
-   * happened.
-   */
-  private async scheduledDatesIn(
-    cellId: string,
-    reportingMonth: string,
-    executor: Db | Transaction<Database> = this.db,
-  ): Promise<{ scheduledDate: string; scheduledTime: string; weekStarting: string }[]> {
-    const result = await sql<{
-      scheduled_date: string;
-      scheduled_time: string;
-      week_starting: string;
-    }>`
-      SELECT to_char(day, 'YYYY-MM-DD')                        AS scheduled_date,
-             to_char(schedule.time_of_day, 'HH24:MI')          AS scheduled_time,
-             -- Section 20: a calendar week begins on Monday. date_trunc('week') is
-             -- ISO and therefore Monday-based, which is the same authority
-             -- day_of_week is stored under.
-             to_char(date_trunc('week', day), 'YYYY-MM-DD')    AS week_starting
-        FROM generate_series(
-               ${reportingMonth}::date,
-               (${reportingMonth}::date + interval '1 month' - interval '1 day')::date,
-               interval '1 day'
-             ) AS day
-        JOIN cell_schedules AS schedule
-          ON schedule.cell_id = ${cellId}::uuid
-         AND (schedule.started_at AT TIME ZONE 'Asia/Manila')::date <= day
-         AND (schedule.ended_at IS NULL
-              OR (schedule.ended_at AT TIME ZONE 'Asia/Manila')::date >= day)
-       WHERE EXTRACT(ISODOW FROM day) = schedule.day_of_week
-       ORDER BY day
-    `.execute(executor);
-
-    return result.rows.map((row) => ({
-      scheduledDate: row.scheduled_date,
-      scheduledTime: row.scheduled_time,
-      weekStarting: row.week_starting,
-    }));
   }
 
   /**

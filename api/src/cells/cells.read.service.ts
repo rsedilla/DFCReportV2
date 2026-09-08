@@ -123,6 +123,96 @@ export class CellsReadService implements CellScopePort, CellRelationshipsPort {
    * creation-day question `CLAUDE.md` records rather than being asserted here.
    */
   /**
+   * The dates one Cell is scheduled to meet in one reporting month.
+   *
+   * **Here because Section 2 puts it here, by name.** That section assigns "`cells` the
+   * Cell coverage denominator, whose every input (`cell_schedules`, `cells`,
+   * `cell_leaderships`) it owns", and records that an earlier version of itself had
+   * directed `attendance` at those same three tables — "the rule this paragraph exists to
+   * uphold, broken inside it". This query was the code's instance of that: it ran in
+   * `attendance`, joining `cell_schedules` from a statement rooted in `generate_series`,
+   * so it qualified for neither Section 2's ownership rule nor its single exemption, which
+   * covers "a read joined onto a query rooted in a table the reading module owns" and says
+   * "nothing else qualifies today". Its own file's docblock said the module read `cells`'
+   * tables "through `CellsReadService` and never directly", which the query refuted.
+   *
+   * **The scheduled set is derived and never stored** (Section 13, decision 0162): a
+   * meeting has no row until it is reported, so the count a coverage line is read against
+   * has to come from the schedule run against the calendar. That is what makes
+   * `recorded out of scheduled` two figures arrived at two ways rather than one figure
+   * compared with itself.
+   *
+   * **Both ends of the in-force comparison are Manila dates** (ruling of 2026-09-01), which
+   * Section 13 requires at the closing edge — a meeting compared as an instant falls
+   * outside every row, finds an empty roster and becomes unrecordable though the Cell held
+   * it — and which the opening edge takes too, because a bound granular one way at one end
+   * and the other way at the other is two rules wearing one name.
+   *
+   * **Section 10 stores `day_of_week` as an ISO day number** "because every use of it is
+   * arithmetic against a calendar", and this is that use: `EXTRACT(ISODOW ...)` against the
+   * generated series is the comparison Section 10 names. Section 20 names the zone for every
+   * period boundary, and `date_trunc('week')` is ISO and therefore Monday-based, which is the
+   * same authority.
+   *
+   * **Within a month the in-force comparison decides nothing**, because Section 10 makes a
+   * schedule change take effect at the start of a month. The cases it does decide are the
+   * partial months Section 12 names, where the row opens at approval or ends at a closure
+   * part-way through.
+   *
+   * At the closing edge that is Section 13's rule rather than a convenience: a closure ends
+   * the schedule row *on* the closure date, and a meeting dated that day "reads the Cell as it
+   * stood that day", so an instant comparison would drop a meeting the Cell actually held. At
+   * the opening edge the same comparison admits a meeting on the approval date itself, which
+   * Section 10 does not address. *That edge is recorded as a question rather than defended: it
+   * is the reading that loses no meeting a leader believes they held, and the opposite reading
+   * would refuse a record for a meeting that happened.*
+   *
+   * **A Cell with no schedule row in force over any day of the month yields no rows.** What a
+   * coverage line then reads is **not decided here and is recorded as open in `CLAUDE.md`**.
+   * *An earlier version of this docblock said "and therefore no coverage denominator for that
+   * month (Section 12)", which Section 12 does not state and comes close to contradicting: it
+   * requires "the coverage line alone and no buckets" where N is zero, and Section 5 names
+   * `0 of 0` as a real state whose loss it treats as harm. A rule about a zero denominator
+   * living in a docblock is the shape `CLAUDE.md` records against this project.*
+   */
+  async scheduledMeetingsIn(
+    executor: Db | Transaction<Database>,
+    cellId: string,
+    reportingMonth: string,
+  ): Promise<{ scheduledDate: string; scheduledTime: string; weekStarting: string }[]> {
+    const result = await sql<{
+      scheduled_date: string;
+      scheduled_time: string;
+      week_starting: string;
+    }>`
+      SELECT to_char(day, 'YYYY-MM-DD')                        AS scheduled_date,
+             to_char(schedule.time_of_day, 'HH24:MI')          AS scheduled_time,
+             -- Section 20: a calendar week begins on Monday. date_trunc('week') is
+             -- ISO and therefore Monday-based, which is the same authority
+             -- day_of_week is stored under.
+             to_char(date_trunc('week', day), 'YYYY-MM-DD')    AS week_starting
+        FROM generate_series(
+               ${reportingMonth}::date,
+               (${reportingMonth}::date + interval '1 month' - interval '1 day')::date,
+               interval '1 day'
+             ) AS day
+        JOIN cell_schedules AS schedule
+          ON schedule.cell_id = ${cellId}::uuid
+         AND (schedule.started_at AT TIME ZONE 'Asia/Manila')::date <= day
+         AND (schedule.ended_at IS NULL
+              OR (schedule.ended_at AT TIME ZONE 'Asia/Manila')::date >= day)
+       WHERE EXTRACT(ISODOW FROM day) = schedule.day_of_week
+       ORDER BY day
+    `.execute(executor);
+
+    return result.rows.map((row) => ({
+      scheduledDate: row.scheduled_date,
+      scheduledTime: row.scheduled_time,
+      weekStarting: row.week_starting,
+    }));
+  }
+
+  /**
    * Who led this Cell on a Manila **date**, or null where nobody did.
    *
    * The leadership half of the pair section 13 requires to move together with
