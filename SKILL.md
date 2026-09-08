@@ -3859,14 +3859,34 @@ shut, and says nothing about a month that has not started.
 (Section 24, decision 0160). A period's beginning is a month boundary, and the host clock is
 not the authority for one.
 
-**This is stated of a month, and what a *yearly* report owes is recorded as open in
-`CLAUDE.md` rather than settled here.** Section 18 offers January through December for a
-selected year, so a yearly view of the current year is a report whose period has begun and
-whose months may not all have begun. *Stated as a possibility rather than a proportion: the
-proportion changes through the year and is zero in December, and the question exists the
-moment any one month of the selected year has not begun.* Nothing can reach it — neither yearly route exists — and it is
-named here so the yearly slice meets the question rather than deriving an answer from this
-paragraph.
+**This is stated of a month, and a *yearly* report is settled separately** (ruling of
+2026-09-08). Section 18 offers January through December for a selected year, so a yearly view
+of the current year is a report whose period has begun and whose months may not all have
+begun. *Stated as a possibility rather than a proportion: the proportion changes through the
+year and is zero in December, and the question exists the moment any one month of the
+selected year has not begun.*
+
+**A yearly report returns the months of the selected year that have begun, and omits the
+rest. The response names the months it covers.** Refusing the whole year was rejected: it
+would make Section 18's view unavailable for eleven months of every twelve and available for
+the twelfth, which is not what that section describes — and the rule above refuses a period
+that has *not begun*, which a year in progress has. A third, not-yet-begun period state was
+also rejected, because the paragraph above declined to invent one for a month and inventing it
+one unit up would make that reasoning wrong about its own case.
+
+**Naming the months covered is what keeps omission from becoming the failure this section
+refuses.** The argument above is that a future month comes back "complete, well-formed, and
+saying that nobody in the church attended anything"; a yearly report that silently returned
+eleven months and a gap would reproduce exactly that one unit up, and a reader would see a
+year that looks whole and is not. Section 17 already requires a report to say its period is
+open, so this is that obligation over a longer period rather than a new mechanism.
+
+**A year's classification is not the sum of its months' classifications**, and the yearly
+slice owes its own reconciliation rather than inheriting the monthly one. Classification is a
+lifetime count truncated at the end of the reporting month (Section 12), so somebody who was a
+VIP in March and a Regular by December is in a different bucket in each — summing twelve
+monthly reports would double-count them and would reconcile while doing it. This is named
+rather than settled: it is the first thing the yearly slice meets after the rule above.
 
 ### Which tree a report walks, and what attributes a figure to a scope
 
