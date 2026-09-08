@@ -304,18 +304,26 @@ describe('Cell leadership approval (section 10)', () => {
         await waitForBlockedBy(pid);
 
         // Read after the approval is demonstrably stuck, so it precedes any instant the
-        // approval can go on to take — **on the assumption that this process and
-        // PostgreSQL share a clock**, which is a host clock compared against a database
-        // one. True locally and in CI, and unbounded in general: CLAUDE.md carries the
-        // multi-instance skew question as open.
+        // approval can go on to take.
         //
-        // **`toBeGreaterThanOrEqual` is about resolution, not skew**, and an earlier
-        // version of this comment said skew. `>=` differs from `>` by admitting exact
-        // equality and nothing else, so it tolerates no skew in either direction; what
-        // it admits is a correct run whose two instants land in the same millisecond,
-        // `released` being a host `Date` and the driver truncating `timestamptz` to
-        // milliseconds.
-        const released = new Date();
+        // **Both instants come from PostgreSQL.** The Cell's `created_at` is
+        // `clock_timestamp()` (`insert-cell.ts`), and the earlier version of this case
+        // compared it against a host `Date` — two clocks, on the one assumption this
+        // repository has no bound for. It failed in CI by 17ms while passing in
+        // isolation, which is a defect in the measurement rather than in the ordering.
+        // `clock_timestamp()` advances inside a transaction, unlike `now()`, so reading
+        // it on the blocker's own connection here yields an instant strictly before the
+        // ROLLBACK below.
+        //
+        // **As an epoch rather than as a timestamp**, so nothing depends on `DateStyle`:
+        // this is a raw `Client` on the server default, while the pool pins ISO
+        // (decision 0156), and a text timestamp would be round-tripped between the two.
+        // `::text` on the numeric keeps microsecond precision, which a float would lose.
+        const released = (
+          await blocker.query<{ t: string }>(
+            'SELECT extract(epoch from clock_timestamp())::text AS t',
+          )
+        ).rows[0].t;
         await blocker.query('ROLLBACK');
 
         // `pending` is a promise rather than a supertest `Test` once `.then` has been
@@ -323,13 +331,20 @@ describe('Cell leadership approval (section 10)', () => {
         const response = await pending;
         expect(response.status).toBe(200);
 
-        const cell = await db
-          .selectFrom('cells')
-          .select('created_at')
-          .where('id', '=', response.body.cell_uuid as string)
-          .executeTakeFirstOrThrow();
+        // **The comparison is made in the database, at full precision**, because the
+        // driver truncates `timestamptz` to milliseconds on the way into a JavaScript
+        // `Date` — which is what forced the earlier version to admit equality. Both
+        // sides are microsecond-resolution numerics from one clock, so `>` is exact and
+        // says what the case is about: the stamp strictly follows the release, which is
+        // only true if it follows the lock.
+        const ordering = await sql<{ stamped_after_release: boolean }>`
+          SELECT extract(epoch from created_at)::numeric > ${released}::numeric
+                 AS stamped_after_release
+            FROM cells
+           WHERE id = ${response.body.cell_uuid as string}::uuid
+        `.execute(db);
 
-        expect(cell.created_at.getTime()).toBeGreaterThanOrEqual(released.getTime());
+        expect(ordering.rows[0].stamped_after_release).toBe(true);
       } finally {
         try {
           await blocker.query('ROLLBACK');
