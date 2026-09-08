@@ -3000,6 +3000,24 @@ prevent. The actual date is also where the meeting's **roster** comes from, so t
 and the people are read at one instant rather than two. A `NOT_HELD` meeting has no
 actual date and uses the scheduled one.
 
+**The roster carries each member's recorded mark, or null where they have none** (ruling
+of 2026-09-09). A `HELD` submission requires the whole roster — every member, present or
+not, because Section 20 needs an absent row and a row marked absent to be different facts
+— so a correction resubmits marks a client had no way to read: the roster named the people
+and not what was recorded for them, and no route exposed `cell_attendance` at all. A
+correction screen would then have rendered every member unmarked and overwritten the rest
+with blanks. Section 7's accepted disclosure reaches it, and this route is already resolved
+against the meeting's frozen responsible leader, so it adds no reader. It is decision 0194's
+rule for the DCC roster — a leader marking a checklist must see who is already marked —
+applied to the domain that asks for more, not a new one.
+
+**The mark carries no per-person version**, which is where a copy of the DCC line would
+have gone wrong: a Cell submission carries **the meeting's** version and the server compares
+that (decision 0164), while `cell_attendance.version` "orders one person's chain and is not
+compared" (decision 0190). Offering it on a roster line would hand a client a number it must
+not send back, beside the fields it must. The meeting's version is on the roster's `meeting`
+object, which is the one a correction carries.
+
 For a `RESCHEDULED` meeting that consequently means the leader may be read from a
 different calendar week than the one the meeting reports in. That is already true of its
 roster, and it is the right way round: the meeting's reporting period is a fact about
