@@ -123,39 +123,6 @@ export class CellsReadService implements CellScopePort, CellRelationshipsPort {
    * creation-day question `CLAUDE.md` records rather than being asserted here.
    */
   /**
-   * Who led this Cell on a Manila **date**, or null where nobody did.
-   *
-   * The leadership half of the pair section 13 requires to move together with
-   * `membersAsOfWithin`: "the leader is the one who was leading when the Cell met, and
-   * the roster is the people who were members then... Both halves or neither."
-   * Extending one alone gives a meeting a responsible leader and nobody to record
-   * present, which is worse than refusing it.
-   *
-   * Distinct from `leaderAsOfWithin`, which takes an instant and is what a write inside
-   * a transaction asks. This takes a date, because a meeting is dated rather than
-   * timed for the purpose of these lookups, and because a closure ends the leadership
-   * row *on* the closure date — so an instant comparison finds nobody for a meeting the
-   * Cell held that day.
-   *
-   * Null is a real answer and section 13 makes it a refusal rather than a default: "a
-   * meeting with no responsible leader is a record nothing rolls up." Refusing is this
-   * method's caller's job; a read service answers questions.
-   *
-   * **Where two leadership rows both cover the date, this answers with the earliest-
-   * starting one** (section 13, decision 0187). That is a handover landing on a meeting's
-   * own day, which the date comparison cannot otherwise decide, and which fixes both the
-   * meeting's scope and the `responsible_leader_id` its first submission freezes.
-   *
-   * *"Earliest-starting covering row", not "in force when the day began", and the ruling's
-   * first version used the second as a gloss. A row is in force over `[started_at,
-   * ended_at)`, so a handover at exactly 00:00 leaves the outgoing row covering none of
-   * the day while its `ended_at` still falls on that date — and this gives that meeting to
-   * the outgoing leader where the gloss would not. Unreachable: a handover takes the
-   * instant it is approved, and the only midnight boundary anything writes is a backdated
-   * closure, which opens no successor. Section 13 names it for whoever builds a backdated
-   * handover.*
-   */
-  /**
    * The dates one Cell is scheduled to meet in one reporting month.
    *
    * **Here because Section 2 puts it here, by name.** That section assigns "`cells` the
@@ -181,8 +148,32 @@ export class CellsReadService implements CellScopePort, CellRelationshipsPort {
    * it — and which the opening edge takes too, because a bound granular one way at one end
    * and the other way at the other is two rules wearing one name.
    *
-   * A Cell with no schedule row in force over any day of the month yields no rows, and
-   * therefore no coverage denominator for that month (Section 12).
+   * **Section 10 stores `day_of_week` as an ISO day number** "because every use of it is
+   * arithmetic against a calendar", and this is that use: `EXTRACT(ISODOW ...)` against the
+   * generated series is the comparison Section 10 names. Section 20 names the zone for every
+   * period boundary, and `date_trunc('week')` is ISO and therefore Monday-based, which is the
+   * same authority.
+   *
+   * **Within a month the in-force comparison decides nothing**, because Section 10 makes a
+   * schedule change take effect at the start of a month. The cases it does decide are the
+   * partial months Section 12 names, where the row opens at approval or ends at a closure
+   * part-way through.
+   *
+   * At the closing edge that is Section 13's rule rather than a convenience: a closure ends
+   * the schedule row *on* the closure date, and a meeting dated that day "reads the Cell as it
+   * stood that day", so an instant comparison would drop a meeting the Cell actually held. At
+   * the opening edge the same comparison admits a meeting on the approval date itself, which
+   * Section 10 does not address. *That edge is recorded as a question rather than defended: it
+   * is the reading that loses no meeting a leader believes they held, and the opposite reading
+   * would refuse a record for a meeting that happened.*
+   *
+   * **A Cell with no schedule row in force over any day of the month yields no rows.** What a
+   * coverage line then reads is **not decided here and is recorded as open in `CLAUDE.md`**.
+   * *An earlier version of this docblock said "and therefore no coverage denominator for that
+   * month (Section 12)", which Section 12 does not state and comes close to contradicting: it
+   * requires "the coverage line alone and no buckets" where N is zero, and Section 5 names
+   * `0 of 0` as a real state whose loss it treats as harm. A rule about a zero denominator
+   * living in a docblock is the shape `CLAUDE.md` records against this project.*
    */
   async scheduledMeetingsIn(
     executor: Db | Transaction<Database>,
@@ -221,6 +212,39 @@ export class CellsReadService implements CellScopePort, CellRelationshipsPort {
     }));
   }
 
+  /**
+   * Who led this Cell on a Manila **date**, or null where nobody did.
+   *
+   * The leadership half of the pair section 13 requires to move together with
+   * `membersAsOfWithin`: "the leader is the one who was leading when the Cell met, and
+   * the roster is the people who were members then... Both halves or neither."
+   * Extending one alone gives a meeting a responsible leader and nobody to record
+   * present, which is worse than refusing it.
+   *
+   * Distinct from `leaderAsOfWithin`, which takes an instant and is what a write inside
+   * a transaction asks. This takes a date, because a meeting is dated rather than
+   * timed for the purpose of these lookups, and because a closure ends the leadership
+   * row *on* the closure date — so an instant comparison finds nobody for a meeting the
+   * Cell held that day.
+   *
+   * Null is a real answer and section 13 makes it a refusal rather than a default: "a
+   * meeting with no responsible leader is a record nothing rolls up." Refusing is this
+   * method's caller's job; a read service answers questions.
+   *
+   * **Where two leadership rows both cover the date, this answers with the earliest-
+   * starting one** (section 13, decision 0187). That is a handover landing on a meeting's
+   * own day, which the date comparison cannot otherwise decide, and which fixes both the
+   * meeting's scope and the `responsible_leader_id` its first submission freezes.
+   *
+   * *"Earliest-starting covering row", not "in force when the day began", and the ruling's
+   * first version used the second as a gloss. A row is in force over `[started_at,
+   * ended_at)`, so a handover at exactly 00:00 leaves the outgoing row covering none of
+   * the day while its `ended_at` still falls on that date — and this gives that meeting to
+   * the outgoing leader where the gloss would not. Unreachable: a handover takes the
+   * instant it is approved, and the only midnight boundary anything writes is a backdated
+   * closure, which opens no successor. Section 13 names it for whoever builds a backdated
+   * handover.*
+   */
   async leaderOnDateWithin(
     executor: Db | Transaction<Database>,
     cellId: string,

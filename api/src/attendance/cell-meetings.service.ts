@@ -2340,34 +2340,6 @@ export class CellMeetingsService {
   }
 
   /**
-   * The dates this Cell was scheduled to meet in a month, with the time in force.
-   *
-   * **Every boundary here is a Manila calendar date, and the arithmetic is the
-   * database's.** Section 20 names the zone for every period boundary; section 10
-   * stores `day_of_week` as an ISO day number "because every use of it is arithmetic
-   * against a calendar", and this is that use -- `EXTRACT(ISODOW ...)` against the
-   * generated series, which is the comparison section 10 names.
-   *
-   * **A schedule row governs a date when it is in force on that date, compared as
-   * dates rather than as instants.** Section 10 makes a change take effect at the
-   * start of a month, so within a month the comparison decides nothing at all: the
-   * cases it does decide are the partial months section 12 names, where the row opens
-   * at approval or ends at a closure part-way through.
-   *
-   * At the closing edge that is section 13's rule rather than a convenience: a
-   * closure ends the schedule row *on* the closure date, and a meeting dated that day
-   * "reads the Cell as it stood that day", so an instant comparison would drop a
-   * meeting the Cell actually held. Comparing dates gives that meeting its schedule.
-   *
-   * At the opening edge the same comparison admits a meeting on the approval date
-   * itself, which section 10 does not address -- a Cell approved on a Saturday
-   * afternoon whose schedule is Saturday gets a scheduled meeting that day. That is
-   * recorded as a question rather than defended: it is the reading that loses no
-   * meeting a leader believes they held, which is the direction section 13 takes at
-   * the other edge, and the opposite reading would refuse a record for a meeting that
-   * happened.
-   */
-  /**
    * The meetings actually recorded for this Cell in a month, by scheduled date.
    *
    * Keyed on `scheduled_date` because that is the meeting's identity (section 13):
