@@ -385,27 +385,27 @@ describe('section 20 reconciliation, Cell monthly (Stage 5 Done-when)', () => {
 
   describe('Cell scope', () => {
     it('sums both views to the same unique-people total', async () => {
-      const report = await reporting.cellMonthly({ kind: 'CELL', cellId: cellA }, MONTH);
+      const report = await reporting.cellMonthly({ kind: 'CELL', cell_id: cellA }, MONTH);
 
       if (!('buckets' in report)) {
         throw new Error('a CELL scope must return the arm carrying n and the buckets');
       }
 
-      const { classification, buckets, uniquePeople } = report;
+      const { classification, buckets, unique_people } = report;
 
-      expect(uniquePeople).toBe(3);
+      expect(unique_people).toBe(3);
       expect(
         classification.vip +
-          classification.secondTimer +
-          classification.thirdTimer +
-          classification.fourthTimer +
+          classification.second_timer +
+          classification.third_timer +
+          classification.fourth_timer +
           classification.regular,
-      ).toBe(uniquePeople);
-      expect(buckets.reduce((total, one) => total + one.people, 0)).toBe(uniquePeople);
+      ).toBe(unique_people);
+      expect(buckets.reduce((total, one) => total + one.people, 0)).toBe(unique_people);
     });
 
     it('counts N as the meetings recorded, excluding NOT_HELD and the unreported one', async () => {
-      const report = await reporting.cellMonthly({ kind: 'CELL', cellId: cellA }, MONTH);
+      const report = await reporting.cellMonthly({ kind: 'CELL', cell_id: cellA }, MONTH);
 
       if (!('buckets' in report)) {
         throw new Error('a CELL scope must return the arm carrying n and the buckets');
@@ -418,7 +418,7 @@ describe('section 20 reconciliation, Cell monthly (Stage 5 Done-when)', () => {
     });
 
     it('places each attendee in the bucket their October attendance earns', async () => {
-      const report = await reporting.cellMonthly({ kind: 'CELL', cellId: cellA }, MONTH);
+      const report = await reporting.cellMonthly({ kind: 'CELL', cell_id: cellA }, MONTH);
 
       if (!('buckets' in report)) {
         throw new Error('a CELL scope must return the arm carrying n and the buckets');
@@ -430,22 +430,22 @@ describe('section 20 reconciliation, Cell monthly (Stage 5 Done-when)', () => {
     });
 
     it('classifies from the whole Cell-ministry history, truncated at the month end', async () => {
-      const report = await reporting.cellMonthly({ kind: 'CELL', cellId: cellA }, MONTH);
+      const report = await reporting.cellMonthly({ kind: 'CELL', cell_id: cellA }, MONTH);
 
       // Ana: three in October and one in September is four -- her November attendance is
       // after the period and must not reach this. Carl: two in October and one at **Cell B**
       // in September is three, which a per-Cell journey would score as two. Ben: one.
       expect(report.classification).toEqual({
         vip: 1,
-        secondTimer: 0,
-        thirdTimer: 1,
-        fourthTimer: 1,
+        second_timer: 0,
+        third_timer: 1,
+        fourth_timer: 1,
         regular: 0,
       });
     });
 
     it('emits no buckets where the Cell recorded no meetings', async () => {
-      const report = await reporting.cellMonthly({ kind: 'CELL', cellId: cellC }, MONTH);
+      const report = await reporting.cellMonthly({ kind: 'CELL', cell_id: cellC }, MONTH);
 
       if (!('buckets' in report)) {
         throw new Error('a CELL scope must return the arm carrying n and the buckets');
@@ -454,12 +454,12 @@ describe('section 20 reconciliation, Cell monthly (Stage 5 Done-when)', () => {
       // Section 12: with no meetings there is nothing to complete, and a bucket every
       // person satisfies is not a bucket. So no `Completed (0/0)` row.
       expect(report.n).toBe(0);
-      expect(report.uniquePeople).toBe(0);
+      expect(report.unique_people).toBe(0);
       expect(report.buckets).toEqual([]);
     });
 
     it('reports a closed month as closed', async () => {
-      const report = await reporting.cellMonthly({ kind: 'CELL', cellId: cellA }, MONTH);
+      const report = await reporting.cellMonthly({ kind: 'CELL', cell_id: cellA }, MONTH);
 
       expect(report.open).toBe(false);
       expect(report.period).toBe(MONTH);
@@ -469,22 +469,22 @@ describe('section 20 reconciliation, Cell monthly (Stage 5 Done-when)', () => {
   describe('aggregate scopes', () => {
     it('sums classification to the unique-people total at Whole Church', async () => {
       const report = await reporting.cellMonthly({ kind: 'WHOLE_CHURCH' }, MONTH);
-      const { classification, uniquePeople } = report;
+      const { classification, unique_people } = report;
 
       // Ana, Ben and Carl from Cell A, and Gina and Hugo from Cell B.
-      expect(uniquePeople).toBe(5);
+      expect(unique_people).toBe(5);
       expect(
         classification.vip +
-          classification.secondTimer +
-          classification.thirdTimer +
-          classification.fourthTimer +
+          classification.second_timer +
+          classification.third_timer +
+          classification.fourth_timer +
           classification.regular,
-      ).toBe(uniquePeople);
+      ).toBe(unique_people);
     });
 
     it('carries no buckets, at any scope but a Cell', async () => {
       const church = await reporting.cellMonthly({ kind: 'WHOLE_CHURCH' }, MONTH);
-      const leader = await reporting.cellMonthly({ kind: 'LEADER', personId: manuel.id }, MONTH);
+      const leader = await reporting.cellMonthly({ kind: 'LEADER', person_id: manuel.id }, MONTH);
 
       // Section 12: bucket views exist at Cell scope only, because `N` belongs to a Cell.
       // The absence is structural rather than an empty array, so nothing can be summed.
@@ -495,7 +495,7 @@ describe('section 20 reconciliation, Cell monthly (Stage 5 Done-when)', () => {
     });
 
     it("attributes by the meeting's responsible leader and not by the attendee", async () => {
-      const report = await reporting.cellMonthly({ kind: 'LEADER', personId: manuel.id }, MONTH);
+      const report = await reporting.cellMonthly({ kind: 'LEADER', person_id: manuel.id }, MONTH);
 
       // The meetings Manuel's subtree ran are Cell A's and Cell C's, and not Cell B's.
       //
@@ -504,27 +504,27 @@ describe('section 20 reconciliation, Cell monthly (Stage 5 Done-when)', () => {
       // subtree, and attends Mark's Cell. Gina and Hugo sit pastorally under Mark, inside
       // it, and attend Onofre's. A query written with the person key answers four here
       // rather than three, and four is as plausible a number as three.
-      expect(report.uniquePeople).toBe(3);
+      expect(report.unique_people).toBe(3);
     });
 
     it('reaches every Cell of a subtree that runs more than one', async () => {
-      const report = await reporting.cellMonthly({ kind: 'LEADER', personId: raymond.id }, MONTH);
+      const report = await reporting.cellMonthly({ kind: 'LEADER', person_id: raymond.id }, MONTH);
 
       // Raymond is above both branches, so his figure is the Whole Church one.
-      expect(report.uniquePeople).toBe(5);
+      expect(report.unique_people).toBe(5);
     });
 
     it('reports zero for a leader whose subtree runs no Cell', async () => {
-      const report = await reporting.cellMonthly({ kind: 'LEADER', personId: ana.id }, MONTH);
+      const report = await reporting.cellMonthly({ kind: 'LEADER', person_id: ana.id }, MONTH);
 
       // Ana leads nobody. An empty population is a real answer and not the same question as
       // Whole Church, which is what the figures service's own comment turns on.
-      expect(report.uniquePeople).toBe(0);
+      expect(report.unique_people).toBe(0);
       expect(report.classification).toEqual({
         vip: 0,
-        secondTimer: 0,
-        thirdTimer: 0,
-        fourthTimer: 0,
+        second_timer: 0,
+        third_timer: 0,
+        fourth_timer: 0,
         regular: 0,
       });
     });
@@ -536,9 +536,9 @@ describe('section 20 reconciliation, Cell monthly (Stage 5 Done-when)', () => {
       // counted twice for attending more than one meeting, which is Principle 10.
       expect(report.classification).toEqual({
         vip: 2,
-        secondTimer: 1,
-        thirdTimer: 1,
-        fourthTimer: 1,
+        second_timer: 1,
+        third_timer: 1,
+        fourth_timer: 1,
         regular: 0,
       });
     });

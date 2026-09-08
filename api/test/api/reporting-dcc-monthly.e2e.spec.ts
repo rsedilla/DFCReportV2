@@ -108,7 +108,7 @@ describe('GET /api/v1/reports/dcc/monthly (sections 7, 20 and 22)', () => {
       );
 
       expect(response.status).toBe(200);
-      expect(response.body.scope).toEqual({ kind: 'LEADER', personId: mark.id });
+      expect(response.body.scope).toEqual({ kind: 'LEADER', person_id: mark.id });
       expect(response.body.period).toBe(REPORTED_MONTH);
     });
 
@@ -119,7 +119,7 @@ describe('GET /api/v1/reports/dcc/monthly (sections 7, 20 and 22)', () => {
       expect(response.body.error.code).toBe('SCOPE_DENIED');
       // Section 7: never silently narrowed to what they do hold. A body carrying Mark's
       // own figures under a Whole Church heading is the failure this pins.
-      expect(response.body).not.toHaveProperty('uniquePeople');
+      expect(response.body).not.toHaveProperty('unique_people');
     });
 
     it('refuses a Leader their own upline', async () => {
@@ -372,7 +372,7 @@ describe('GET /api/v1/reports/dcc/monthly (sections 7, 20 and 22)', () => {
 
       expect(response.status).toBe(403);
       expect(response.body.error.code).toBe('SCOPE_DENIED');
-      expect(response.body).not.toHaveProperty('uniquePeople');
+      expect(response.body).not.toHaveProperty('unique_people');
     });
   });
 
@@ -482,7 +482,7 @@ describe('GET /api/v1/reports/dcc/monthly (sections 7, 20 and 22)', () => {
 
       expect(response.status).toBe(403);
       expect(response.body.error.code).toBe('SCOPE_DENIED');
-      expect(response.body).not.toHaveProperty('uniquePeople');
+      expect(response.body).not.toHaveProperty('unique_people');
     });
 
     it('admits a NETWORK grant naming that Network, and refuses it the other one', async () => {
@@ -602,7 +602,7 @@ describe('GET /api/v1/reports/dcc/monthly (sections 7, 20 and 22)', () => {
       expect(response.body.error.details.field).toBe('period');
       // Not a report of zeroes. The calendar runs thirteen months ahead, so the body this
       // refusal replaces would have carried a real `n` and said nobody attended anything.
-      expect(response.body).not.toHaveProperty('uniquePeople');
+      expect(response.body).not.toHaveProperty('unique_people');
     });
 
     /**

@@ -33,12 +33,12 @@ export type ReportScope =
    * constraint (`CLAUDE.md`).
    */
   | { kind: 'NETWORK'; network: NetworkName }
-  | { kind: 'LEADER'; personId: string }
+  | { kind: 'LEADER'; person_id: string }
   /**
    * One Cell. The only scope at which section 12 permits monthly-attendance buckets, and
    * the reason that section exists in the shape it does.
    */
-  | { kind: 'CELL'; cellId: string };
+  | { kind: 'CELL'; cell_id: string };
 
 /**
  * The scopes each domain's monthly report admits, as types rather than as a check.
@@ -72,9 +72,9 @@ export type CellReportScope = Exclude<ReportScope, { kind: 'NETWORK' }>;
  */
 export interface Classification {
   vip: number;
-  secondTimer: number;
-  thirdTimer: number;
-  fourthTimer: number;
+  second_timer: number;
+  third_timer: number;
+  fourth_timer: number;
   regular: number;
 }
 
@@ -112,8 +112,8 @@ export interface DccMonthlyReport {
    * month showing four events where the calendar shows five is explained rather than merely
    * odd". `n` on its own cannot explain itself.
    */
-  removedEvents: string[];
-  uniquePeople: number;
+  removed_events: string[];
+  unique_people: number;
   classification: Classification;
   buckets: AttendanceBucket[];
 }
@@ -131,7 +131,7 @@ interface CellMonthlyCommon {
    * `Completed (4/4)` on the 8th of the following month.
    */
   open: boolean;
-  uniquePeople: number;
+  unique_people: number;
   classification: Classification;
 }
 
@@ -219,7 +219,7 @@ export class ReportingService {
       // arguments differ in kind for that reason, not by oversight.
       const personIds =
         scope.kind === 'LEADER'
-          ? await this.hierarchy.reportingSubtree(trx, scope.personId, start, end)
+          ? await this.hierarchy.reportingSubtree(trx, scope.person_id, start, end)
           : scope.kind === 'NETWORK'
             ? await this.networks.peopleInNetworkAsOf(trx, scope.network, end)
             : undefined;
@@ -231,8 +231,8 @@ export class ReportingService {
         period,
         open: figures.open,
         n: figures.n,
-        removedEvents: figures.removed,
-        uniquePeople: figures.people.length,
+        removed_events: figures.removed,
+        unique_people: figures.people.length,
         classification: classify(figures.people),
         buckets: bucket(figures.people, figures.n),
       };
@@ -285,7 +285,7 @@ export class ReportingService {
       if (scope.kind === 'CELL') {
         const figures = await this.cellFigures.monthFigures(
           period,
-          { kind: 'CELL', cellId: scope.cellId },
+          { kind: 'CELL', cellId: scope.cell_id },
           { executor: trx },
         );
 
@@ -294,7 +294,7 @@ export class ReportingService {
           period,
           open: figures.open,
           n: figures.n,
-          uniquePeople: figures.people.length,
+          unique_people: figures.people.length,
           classification: classify(figures.people),
           buckets: bucket(figures.people, figures.n),
         };
@@ -304,7 +304,7 @@ export class ReportingService {
         scope.kind === 'LEADER'
           ? {
               kind: 'RESPONSIBLE_LEADERS',
-              personIds: await this.hierarchy.reportingSubtree(trx, scope.personId, start, end),
+              personIds: await this.hierarchy.reportingSubtree(trx, scope.person_id, start, end),
             }
           : { kind: 'EVERY_CELL' };
 
@@ -314,7 +314,7 @@ export class ReportingService {
         scope,
         period,
         open: figures.open,
-        uniquePeople: figures.people.length,
+        unique_people: figures.people.length,
         classification: classify(figures.people),
       };
     });
@@ -414,9 +414,9 @@ export class ReportingService {
 function classify(figures: readonly { lifetimeThroughMonth: number }[]): Classification {
   const counts: Classification = {
     vip: 0,
-    secondTimer: 0,
-    thirdTimer: 0,
-    fourthTimer: 0,
+    second_timer: 0,
+    third_timer: 0,
+    fourth_timer: 0,
     regular: 0,
   };
 
@@ -426,13 +426,13 @@ function classify(figures: readonly { lifetimeThroughMonth: number }[]): Classif
         counts.vip += 1;
         break;
       case 2:
-        counts.secondTimer += 1;
+        counts.second_timer += 1;
         break;
       case 3:
-        counts.thirdTimer += 1;
+        counts.third_timer += 1;
         break;
       case 4:
-        counts.fourthTimer += 1;
+        counts.fourth_timer += 1;
         break;
       default:
         counts.regular += 1;

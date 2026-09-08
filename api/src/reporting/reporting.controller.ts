@@ -16,6 +16,24 @@ import {
 /**
  * The aggregate reporting surface (SKILL.md section 22).
  *
+ * **Every field of every response here is `snake_case`, which section 22 requires of the
+ * whole boundary**: "Names are `snake_case`", and "`camelCase` is not used at this
+ * boundary". Both routes returned `uniquePeople`, `removedEvents`, `secondTimer` and a
+ * `scope` carrying `personId` or `cellId` until 2026-09-08 — this module was the only one
+ * in the repository that did, while `person_id`, `next_cursor` and `full_name` are the
+ * shape everywhere else.
+ *
+ * **What made it worth fixing rather than noting** is that it broke section 22's other
+ * naming rule inside a single route: "One concept carries one field name across every
+ * endpoint." A client sent `cell_id` and was answered `cellId`. The identifier cases are
+ * also the ones section 22 warns about by name — an identifier spelled `camelCase` "is not
+ * canonicalized, which is a defect that shows up as an authorization comparison quietly
+ * answering on a spelling" — and while nothing here compares one, the next route to echo a
+ * selector back would inherit the spelling.
+ *
+ * No client existed to break: the screens are unbuilt, and both routes are waived in
+ * `web/screen-coverage.json`.
+ *
  * **`reports.view_subtree` guards everything here, and never substitutes for
  * `dcc.view_subtree` or `cell.view_subtree`** — section 7 states that in both directions.
  * A leader granted the domain capability may read the records; reading the church's
@@ -120,7 +138,7 @@ function scopeOf(query: DccMonthlyReportDto): DccReportScope {
       });
     }
 
-    return { kind: 'LEADER', personId: query.leader_id };
+    return { kind: 'LEADER', person_id: query.leader_id };
   }
 
   if (query.scope === 'NETWORK') {
@@ -167,7 +185,7 @@ function cellScopeOf(query: CellMonthlyReportDto): CellReportScope {
       });
     }
 
-    return { kind: 'LEADER', personId: query.leader_id };
+    return { kind: 'LEADER', person_id: query.leader_id };
   }
 
   if (query.scope === 'CELL') {
@@ -177,7 +195,7 @@ function cellScopeOf(query: CellMonthlyReportDto): CellReportScope {
       });
     }
 
-    return { kind: 'CELL', cellId: query.cell_id };
+    return { kind: 'CELL', cell_id: query.cell_id };
   }
 
   return { kind: 'WHOLE_CHURCH' };

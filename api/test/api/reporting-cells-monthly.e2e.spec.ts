@@ -171,8 +171,8 @@ describe('GET /api/v1/reports/cells/monthly (sections 7, 12, 20 and 22)', () => 
         period: JUNE,
         open: false,
         n: 1,
-        uniquePeople: 1,
-        classification: { vip: 1, secondTimer: 0, thirdTimer: 0, fourthTimer: 0, regular: 0 },
+        unique_people: 1,
+        classification: { vip: 1, second_timer: 0, third_timer: 0, fourth_timer: 0, regular: 0 },
         buckets: [{ times: 1, people: 1, completed: true }],
       });
     });
@@ -181,7 +181,7 @@ describe('GET /api/v1/reports/cells/monthly (sections 7, 12, 20 and 22)', () => 
       const response = await get(`period=${JUNE}&scope=WHOLE_CHURCH`, adminAccount);
 
       expect(response.status).toBe(200);
-      expect(response.body.uniquePeople).toBe(1);
+      expect(response.body.unique_people).toBe(1);
       // Bucket views exist at Cell scope only, so the fields are absent rather than empty.
       expect(response.body).not.toHaveProperty('buckets');
       expect(response.body).not.toHaveProperty('n');
@@ -224,7 +224,7 @@ describe('GET /api/v1/reports/cells/monthly (sections 7, 12, 20 and 22)', () => 
 
       expect(response.status).toBe(200);
       expect(response.body.n).toBe(1);
-      expect(response.body.uniquePeople).toBe(1);
+      expect(response.body.unique_people).toBe(1);
     });
 
     it('gives a month the outgoing leader held to the outgoing leader', async () => {
@@ -289,7 +289,7 @@ describe('GET /api/v1/reports/cells/monthly (sections 7, 12, 20 and 22)', () => 
       const response = await get(`period=${JUNE}&scope=CELL&cell_id=${absent}`, adminAccount);
 
       expect(response.status).toBe(200);
-      expect(response.body.uniquePeople).toBe(0);
+      expect(response.body.unique_people).toBe(0);
       expect(response.body.n).toBe(0);
       expect(response.body.buckets).toEqual([]);
     });

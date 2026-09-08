@@ -232,7 +232,7 @@ describe('a leader-scoped DCC monthly report (decisions 0206, 0210)', () => {
     await attend(first, nena.id, root.id);
   };
 
-  const leader = (personId: string) => reporting.dccMonthly({ kind: 'LEADER', personId }, PERIOD);
+  const leader = (person_id: string) => reporting.dccMonthly({ kind: 'LEADER', person_id }, PERIOD);
   const church = () => reporting.dccMonthly({ kind: 'WHOLE_CHURCH' }, PERIOD);
 
   it('adds up: each leader plus their siblings equals the level above', async () => {
@@ -247,13 +247,13 @@ describe('a leader-scoped DCC monthly report (decisions 0206, 0210)', () => {
 
     // Manuel's subtree is Manuel and Mark, both of whom attended. Ben's is Ben and Tessa,
     // and only Tessa attended.
-    expect(atManuel.uniquePeople).toBe(2);
-    expect(atBen.uniquePeople).toBe(1);
+    expect(atManuel.unique_people).toBe(2);
+    expect(atBen.unique_people).toBe(1);
 
     // The general form: the level above is its own people plus its children's. The root
     // attended once himself, so a query that only ever summed children would read 3 here.
-    expect(atRoot.uniquePeople).toBe(1 + atManuel.uniquePeople + atBen.uniquePeople);
-    expect(atRoot.uniquePeople).toBe(4);
+    expect(atRoot.unique_people).toBe(1 + atManuel.unique_people + atBen.unique_people);
+    expect(atRoot.unique_people).toBe(4);
 
     // **And the church is larger than the root by exactly one** -- Nena, whose chain
     // terminates at an administrator rather than at the root, so no walk from the root
@@ -262,8 +262,8 @@ describe('a leader-scoped DCC monthly report (decisions 0206, 0210)', () => {
     // *Section 20 names the gap it accepts as its residual, who cannot appear in a DCC
     // population at all (section 9). This is a second class producing the same gap, and
     // that section 20 names one is recorded as open in `CLAUDE.md`.*
-    expect(wholeChurch.uniquePeople).toBe(5);
-    expect(wholeChurch.uniquePeople - atRoot.uniquePeople).toBe(1);
+    expect(wholeChurch.unique_people).toBe(5);
+    expect(wholeChurch.unique_people - atRoot.unique_people).toBe(1);
   });
 
   it('keeps a person archived mid-period in their leader figures', async () => {
@@ -276,7 +276,7 @@ describe('a leader-scoped DCC monthly report (decisions 0206, 0210)', () => {
     // current lifecycle state, which is what that would amount to.
     const atManuel = await leader(manuel.id);
 
-    expect(atManuel.uniquePeople).toBe(2);
+    expect(atManuel.unique_people).toBe(2);
     expect(atManuel.buckets.find((b) => b.times === 2)?.people).toBe(1);
   });
 
@@ -286,10 +286,10 @@ describe('a leader-scoped DCC monthly report (decisions 0206, 0210)', () => {
     const report = await leader(manuel.id);
     const { classification: c } = report;
 
-    expect(c.vip + c.secondTimer + c.thirdTimer + c.fourthTimer + c.regular).toBe(
-      report.uniquePeople,
+    expect(c.vip + c.second_timer + c.third_timer + c.fourth_timer + c.regular).toBe(
+      report.unique_people,
     );
-    expect(report.buckets.reduce((sum, b) => sum + b.people, 0)).toBe(report.uniquePeople);
+    expect(report.buckets.reduce((sum, b) => sum + b.people, 0)).toBe(report.unique_people);
   });
 
   it('measures a leader against the month N, not against their own people', async () => {
@@ -314,18 +314,18 @@ describe('a leader-scoped DCC monthly report (decisions 0206, 0210)', () => {
     // wrong answer, and one that looks plausible on every screen.
     const atTessa = await leader(tessa.id);
 
-    expect(atTessa.uniquePeople).toBe(1);
+    expect(atTessa.unique_people).toBe(1);
     expect(atTessa.classification.vip).toBe(1);
 
     // Nena leads nobody and no walk from the root reaches her, but a walk always returns its own
     // seed -- which is what makes the drill-down sum, since a leader's own attendance has to
     // land somewhere. So her report is her own attendance: one person, not the church's five.
     const atNena = await leader(nena.id);
-    expect(atNena.uniquePeople).toBe(1);
+    expect(atNena.unique_people).toBe(1);
 
     const gale = await createPerson(db, { firstName: 'Gale', network: 'WOMENS' });
     const atGale = await leader(gale.id);
-    expect(atGale.uniquePeople).toBe(0);
+    expect(atGale.unique_people).toBe(0);
     expect(atGale.buckets.every((b) => b.people === 0)).toBe(true);
   });
 
@@ -401,7 +401,7 @@ describe('a leader-scoped DCC monthly report (decisions 0206, 0210)', () => {
       // count. Both identities still hold over the population the walk chose.
       expect(during.n).toBe(2);
       expect(during.buckets.find((b) => b.times === 2)?.people).toBe(1);
-      expect(during.buckets.reduce((sum, b) => sum + b.people, 0)).toBe(during.uniquePeople);
+      expect(during.buckets.reduce((sum, b) => sum + b.people, 0)).toBe(during.unique_people);
     } finally {
       figures.monthFigures = original;
       await other.destroy();
