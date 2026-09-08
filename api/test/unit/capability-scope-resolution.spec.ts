@@ -56,15 +56,18 @@ import type { CapabilityRequirement } from '../../src/auth/authorization/authori
  * allowlist case below is the first **`cell`-targeted** viewing route, which decision 0186
  * names correctly and two paraphrases of it did not.
  *
- * **The prediction that followed was wrong in both halves and is worth keeping as one.**
- * It said a Stage 5 report would leave this file green "while the dated resolution goes on
- * not existing". The file did stay green — and the resolution now exists, because a
- * `report_scope` selector can name a **Cell** (decision 0220) and the guard resolves it
- * through `CELL_SCOPE_PORT`. So `report_scope` became a third Cell-resolved kind while the
- * model below named two, and the file stayed green for the wrong reason: not because
- * nothing Cell-resolved carries a viewing capability, but because the new kind was outside
- * what it looked at. A green test whose premise has changed underneath it is the failure
- * this file exists to prevent, arriving in the file itself.
+ * **The prediction that followed got the outcome right and the reason wrong**, which is the
+ * more useful half to keep. It said a Stage 5 report would leave this file green "while the
+ * dated resolution goes on not existing". The file did stay green; the resolution now
+ * exists, because a `report_scope` selector can name a **Cell** (decision 0220) and the
+ * guard resolves it through `CELL_SCOPE_PORT`. So `report_scope` became a third
+ * Cell-resolved kind while the model below named two, and the file stayed green **for the
+ * wrong reason**: not because nothing Cell-resolved carries a viewing capability, but
+ * because the new kind was outside what it looked at. A green test whose premise has
+ * changed underneath it is the failure this file exists to prevent, arriving in the file
+ * itself. *A first correction called the prediction "wrong in both halves" and then argued
+ * in its next sentence that one half held — a false count in the paragraph whose subject is
+ * a false claim.*
  *
  * **Two rules, not one, since 2026-09-03.** The cases above are about which *resolution* a
  * capability gets. The last case is about a declaration's *shape* — that two named routes
@@ -211,10 +214,20 @@ describe('which scope resolution a capability gets (section 7)', () => {
    *
    * **The teeth are in the allowlist being exhaustive.** Any other `cell`-targeted viewing
    * route reddens this and its author has to say which period it asks about — and if the
-   * answer is a past month, the route is declared wrongly: the dated viewing resolution now
-   * exists (`leaderForScopeAsOf`, decision 0220) and is reached through a `report_scope`
-   * target rather than through this one. *This sentence said that resolution "still does
-   * not exist" until the branch that built it.*
+   * answer is a past month, **that route has to supply a dated resolution for a `cell`
+   * target, because none exists**. Section 7 states exactly that obligation and names this
+   * file as what states it: "every other target kind reaches an undated branch with no
+   * instant in reach, so a dated route at either of the other two capabilities has to
+   * supply one."
+   *
+   * *This said the resolution "still does not exist", which the branch that built
+   * `leaderForScopeAsOf` falsified — and the first correction over-shot, telling such an
+   * author their declaration was wrong and pointing them at `report_scope`. That target
+   * cannot serve them: its spec requires a `periodFrom`, and the guard refuses any value
+   * there that is not a reporting month, so a roster read asking about an arbitrary date
+   * has no way to be declared through it. The old sentence was wrong about the mechanism
+   * and right about the obligation; the correction was right about the mechanism and
+   * dropped the obligation. Section 7 wins.*
    */
   const UNDATED_CELL_VIEWING: string[] = ['CellsController.members'];
 
@@ -233,6 +246,25 @@ describe('which scope resolution a capability gets (section 7)', () => {
    * reason the two cases stay separate survived the change and the wording did not.*
    * Written when the third resolution landed rather than after something used it wrongly.
    */
+  it('gives a report scope selector only a viewing capability (section 7)', async () => {
+    const offending = (await declaredRoutes()).filter(
+      (route) =>
+        route.requirement.target.kind === 'report_scope' &&
+        !VIEWING.includes(route.requirement.capability),
+    );
+
+    expect(offending.map((route) => `${route.where} (${route.requirement.capability})`)).toEqual(
+      [],
+    );
+
+    // And the run reached something: a filter matching no route at all would pass this
+    // vacuously, which is the shape this whole file refuses.
+    const selectors = (await declaredRoutes()).filter(
+      (route) => route.requirement.target.kind === 'report_scope',
+    );
+    expect(selectors.length).toBeGreaterThan(0);
+  });
+
   /**
    * A route's admissible scopes are written **twice**, and this is what keeps them equal.
    *
@@ -247,12 +279,26 @@ describe('which scope resolution a capability gets (section 7)', () => {
    * the set was "written once, in the decorator". It is written once *decisively*, which is
    * a different thing, and this case is what makes the second statement safe.
    *
-   * Derived from the validator rather than from a third list: each scope value is run
-   * through the real DTO and kept if `scope` itself raises nothing, so the expectation is
-   * the decorator's fields and the evidence is class-validator's own answer.
+   * **It is an assertion about class-validator's *metadata*, not about class-validator's
+   * answer**, and the difference is worth stating because the first version of this
+   * paragraph claimed the stronger one. No DTO is instantiated and `validate` is never
+   * called: the case reads the `@IsIn` list off the metadata storage and asks which scopes
+   * it contains. So it is sound for a membership rule and would misread a rule whose
+   * `constraints[0]` means something else — `@IsNotIn` would be read backwards, and
+   * `@Matches` or `@MaxLength` would put a RegExp or a number there and throw rather than
+   * report. It requires a membership rule for that reason, rather than tolerating whatever
+   * it finds.
+   *
+   * **What it does not reach**, so the next reader does not over-trust it: it takes
+   * section 20's four scope names as the universe, so a fifth value a DTO admitted would be
+   * invisible; and it compares the *set of scopes*, never checking that `leaderFrom`,
+   * `networkFrom` and `cellFrom` name properties the DTO actually validates — a decorator
+   * reading `query.cell` against a DTO property `cell_id` would refuse naming a field the
+   * client did not send, which is the same defect class one paragraph up.
    */
   it('offers exactly the scopes its decorator declares (section 22)', async () => {
     const SCOPES = ['WHOLE_CHURCH', 'NETWORK', 'LEADER', 'CELL'] as const;
+    let checked = 0;
 
     for (const route of await declaredRoutes()) {
       const target = route.requirement.target;
@@ -275,38 +321,42 @@ describe('which scope resolution a capability gets (section 7)', () => {
       const rules = getMetadataStorage()
         .getTargetValidationMetadatas(dto as never, '', false, false)
         .filter((metadata) => metadata.propertyName === 'scope');
-      expect(rules.length).toBeGreaterThan(0);
 
-      const accepted = SCOPES.filter((scope) =>
-        rules.every(
-          (rule) => rule.constraints === undefined || rule.constraints[0].includes(scope),
-        ),
+      // **A membership rule specifically, not merely some rule.** `rules.length > 0` is
+      // satisfied by an `@IsString()`, under which every scope is "accepted" and the
+      // comparison below passes green against a DTO admitting anything.
+      const membership = rules.filter(
+        (rule) => Array.isArray(rule.constraints) && Array.isArray(rule.constraints[0]),
       );
+      expect({ where: route.where, membershipRules: membership.length }).toEqual({
+        where: route.where,
+        membershipRules: 1,
+      });
+
+      const allowed = membership[0].constraints[0] as string[];
+      const accepted = SCOPES.filter((scope) => allowed.includes(scope));
+
+      // Every value the DTO admits is one of section 20's four, so the comparison below is
+      // over the same universe on both sides.
+      expect({
+        where: route.where,
+        unknown: allowed.filter((scope) => !SCOPES.includes(scope as never)),
+      }).toEqual({
+        where: route.where,
+        unknown: [],
+      });
 
       expect({ where: route.where, accepted: [...accepted].sort() }).toEqual({
         where: route.where,
         accepted: [...declared].sort(),
       });
+
+      checked += 1;
     }
-  });
 
-  it('gives a report scope selector only a viewing capability (section 7)', async () => {
-    const offending = (await declaredRoutes()).filter(
-      (route) =>
-        route.requirement.target.kind === 'report_scope' &&
-        !VIEWING.includes(route.requirement.capability),
-    );
-
-    expect(offending.map((route) => `${route.where} (${route.requirement.capability})`)).toEqual(
-      [],
-    );
-
-    // And the run reached something: a filter matching no route at all would pass this
-    // vacuously, which is the shape this whole file refuses.
-    const selectors = (await declaredRoutes()).filter(
-      (route) => route.requirement.target.kind === 'report_scope',
-    );
-    expect(selectors.length).toBeGreaterThan(0);
+    // The loop `continue`s past every other target kind, so with no reporting route it
+    // would assert nothing at all — the vacuity every sibling case in this file guards.
+    expect(checked).toBeGreaterThan(0);
   });
 
   it('gives a Cell-resolved target no viewing capability but the undated reads named here', async () => {
