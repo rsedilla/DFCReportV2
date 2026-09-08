@@ -103,9 +103,12 @@ attributed through.
 
 **This residual is not exhaustive, and what it leaves out is recorded as open in `CLAUDE.md`
 rather than settled here.** A responsible leader who held an assignment **before** the period,
-none within it, and who **leads nobody** is also dropped from every subtree above — the
-`departed` tier admits only a leader who leads somebody — and she is outside the class above,
-because she held an assignment before the period. Stating the residual over the wider class
+none within it, and **none of whose disciples is itself placed**, is also dropped from every
+subtree above — the `departed` tier is recursive, admitting a leader who leads somebody already
+placed and then a leader who leads one of those, so leading somebody is not enough — and she is
+outside the class above, because she held an assignment before the period. *This said "who
+leads nobody" for one commit, which is too narrow: a leader whose only disciples are themselves
+unplaced departed leaders leads somebody and is dropped just the same.* Stating the residual over the wider class
 would have covered her by wording alone, which is how a question comes to be recorded as open
 while a shipped ruling answers it; it would also have been **false** of the neighbouring
 sub-class, a leader in the same position who *does* lead somebody, whom the `departed` tier

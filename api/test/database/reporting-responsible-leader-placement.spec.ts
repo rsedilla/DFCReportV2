@@ -29,10 +29,13 @@ import type { TestPerson } from '../setup/fixtures';
  * same set. `architecture-guardian` found that, and it is the Definition of Done's
  * "domain rules added or changed in `SKILL.md` have corresponding tests" with teeth.
  *
- * **The first two cases turn on the responsible leader's *own* placement moving**, which is the
- * direction the readings diverge in. *No claim is made here that it is the **only** such thing:
- * two attempts to state an exhaustive discriminator were refuted, and section 20 and decision
- * 0221 now record a direction rather than a closed list.* A Cell changing hands does not:
+ * **The first two cases each turn on the responsible leader's own placement moving within the
+ * period**, and are known to distinguish the readings because the mutations below were run
+ * against them. *That is a fact about these two fixtures, not a rule about which cases
+ * distinguish the readings in general: three attempts to state such a rule have each been
+ * refuted, and section 20 and decision 0221 now state none. The sentence that stood here
+ * claimed they did state one, which was false of both files from the commit that wrote it.*
+ * A Cell changing hands does not:
  * section 13 freezes the responsible leader per meeting and the figures query selects on that
  * frozen column, so a handover splits a month between two leaders under every reading. *An
  * earlier version of decision 0221 named the handover as its discriminator and offered the
