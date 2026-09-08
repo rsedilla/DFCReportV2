@@ -51,29 +51,47 @@ It fires **only where the instant finds nobody**, which is three states and no o
 - **The period the closure falls in** — the case above, and the reason for the ruling.
 - **Before the Cell existed** — a Cell created in June, asked about March. Empty.
 
-The enumeration is exhaustive because leadership is **contiguous**, and that is a database
-property rather than an application one: migration 0009's `cell_leaderships_stay_in_network`
-trigger raises `check_violation` unless each row starts exactly where its predecessor ended,
-so a gap — which would be a fourth state reaching the fallback — cannot be committed.
+The enumeration is exhaustive because leadership is **contiguous**, and that is a property of
+the schema rather than of the application — so a gap, which would be a fourth state reaching
+the fallback, cannot be committed. **Three constraints deliver it and no one of them is
+sufficient**, which migration 0009 says of itself rather than being inferred here: its
+`cell_leaderships_stay_in_network` trigger refuses a row that does not start exactly where its
+predecessor ended, and the migration's own comment then enumerates "the two writes the
+contiguity rule above cannot reach" — an INSERT of an already-closed row, which it records as
+probed and committed, and a later UPDATE of a closed row's end. Those are closed by
+`cell_leadership_is_opened_open` and `cell_leaderships_one_open_per_cell`. *An earlier version
+of this paragraph credited the first trigger alone, which would have told a later reader that
+contiguity survives removing either of the other two — and the migration records that it does
+not.*
 
 A **handover** does not invoke the fallback. A Cell held by A until June and by B after
 resolves each past period to whoever held it at that period's end, because the instant finds
 somebody; the fallback never arises.
 
 **But that sentence is about the fallback, and it is not the whole of what a handover does.**
-The instant — decision 0218's, not this ruling's — hands the month a handover *falls in* to
-the incoming leader alone, and refuses it to the outgoing leader and their upline. That month
-is the exact mirror of the closure month this ruling turns on: non-empty, and holding rows the
-outgoing leader recorded. **The argument below applies to it symmetrically, at half strength**,
-and an earlier version of this ruling stated one of the two costs while promising to state
-them. What that decides is left open in `CLAUDE.md` rather than settled here, and §13's own
-answer one unit down — decision 0187, which gives a meeting on the handover *day* to the
-**outgoing** leader — is the reasoning nothing has carried up to a period.
+The instant — decision 0218's, not this ruling's — resolves the month a handover *falls in*
+through the **incoming** leader, so the outgoing leader loses a month whose first half they
+recorded. That month is the mirror of the closure month this ruling turns on: non-empty, and
+holding rows the outgoing leader recorded. **The argument below applies to it symmetrically, at
+half strength**, and an earlier version of this ruling stated one of the two costs while
+promising to state them. What that decides is left open in `CLAUDE.md` rather than settled
+here, and §13's own answer one unit down — decision 0187, which gives a meeting on the handover
+*day* to the **outgoing** leader — is the reasoning nothing has carried up to a period.
+
+**Who actually loses it is narrower than "the outgoing leader and their upline", and stating it
+that way was the correction over-shooting.** §7's rule is containment, not an allocation between
+two parties: `report_scope` resolves to a Person and a subtree grant asks whether that Person is
+within the actor's subtree at the instant. So the month is refused to the outgoing leader and to
+their upline **only below the point where the two branches diverge**; every common ancestor of
+both leaders still reads it, as does any Whole Church grant and any `NETWORK` grant naming the
+Cell's Network. The branch's own fixture shows exactly this and no more — Manuel, below the
+divergence, is refused; Raymond, above both, is not, and is not exercised.
 
 **The accepted costs are stated rather than left to be found**, both of them: the last leader
 can read every period after the closure and every period before the Cell existed, all empty
 and all concerning a Cell that person led; and the incoming leader of a handover holds the
-whole of the month it fell in, including the half somebody else recorded.
+whole of the month it fell in, including the half somebody else recorded, while the outgoing
+leader's own branch below the divergence loses it.
 
 ## Which grants cover a `CELL` selector
 

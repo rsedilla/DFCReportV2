@@ -26,11 +26,17 @@ import type { CapabilityRequirement } from '../../src/auth/authorization/authori
  * in the application would notice.
  *
  * That is the gap this file closes, and it is here rather than as a guard branch for a
- * reason: **neither resolution the guard has is the viewing one.** `leaderForScope` is
- * the undated current-or-last leader and says so in its own docblock;
- * `leaderForMeetingScope` is the dated resolution serving a *recording* capability. A
- * resolution "as of the period being viewed" does not exist yet, and the first
- * Cell-targeted viewing route is what owes it.
+ * reason: **two of the guard's three Cell resolutions are not the viewing one.**
+ * `leaderForScope` is the undated current-or-last leader and says so in its own docblock;
+ * `leaderForMeetingScope` is the dated resolution serving a *recording* capability.
+ *
+ * **The third is, and it arrived on 2026-09-08** with the Cell monthly report:
+ * `CellsReadService.leaderForScopeAsOf` resolves a Cell as of an instant, falling back to
+ * its last leader (decision 0220), and the guard takes it for a `report_scope` selector
+ * naming a Cell. *This paragraph said the viewing resolution "does not exist yet" and that
+ * the first Cell-targeted viewing route is what owes it. Both stopped being true on the
+ * branch that added it, and this file — which section 7 cites as the enforcement — was not
+ * swept with the sibling claim in `cell-scope.port.ts`, which was.*
  *
  * **So the rule that can fail is the narrow one**: no route declares a viewing capability
  * against a Cell-resolved target except the undated reads named in the allowlist below. The
@@ -45,12 +51,20 @@ import type { CapabilityRequirement } from '../../src/auth/authorization/authori
  *
  * **That is a narrower trigger than "the first Stage 5 reporting read", which is what an
  * earlier version of this paragraph and of `cell-scope.port.ts` claimed.** Section 7 makes
- * a report's target a *scope selector* rather than a Cell, and section 22's reporting
- * routes are aggregate — so a Stage 5 report will most likely declare
- * `reports.view_subtree` against a scope selector, a `church` or an `actor` target, and
- * this file will stay green while the dated resolution goes on not existing. What
- * reddens it is the first **Cell-targeted** viewing route, which decision 0186 names
- * correctly and two paraphrases of it did not.
+ * a report's target a *scope selector* rather than a Cell, so a report declares
+ * `reports.view_subtree` against `report_scope` and not against `cell`. What reddens the
+ * allowlist case below is the first **`cell`-targeted** viewing route, which decision 0186
+ * names correctly and two paraphrases of it did not.
+ *
+ * **The prediction that followed was wrong in both halves and is worth keeping as one.**
+ * It said a Stage 5 report would leave this file green "while the dated resolution goes on
+ * not existing". The file did stay green — and the resolution now exists, because a
+ * `report_scope` selector can name a **Cell** (decision 0220) and the guard resolves it
+ * through `CELL_SCOPE_PORT`. So `report_scope` became a third Cell-resolved kind while the
+ * model below named two, and the file stayed green for the wrong reason: not because
+ * nothing Cell-resolved carries a viewing capability, but because the new kind was outside
+ * what it looked at. A green test whose premise has changed underneath it is the failure
+ * this file exists to prevent, arriving in the file itself.
  *
  * **Two rules, not one, since 2026-09-03.** The cases above are about which *resolution* a
  * capability gets. The last case is about a declaration's *shape* — that two named routes
@@ -72,7 +86,17 @@ describe('which scope resolution a capability gets (section 7)', () => {
     Capability.AuditView,
   ];
 
-  /** The two target kinds the guard resolves through a Cell's leadership. */
+  /**
+   * The target kinds the guard resolves through a Cell's leadership **with a resolution
+   * that is not the viewing one** — `leaderForScope`, which is undated, and
+   * `leaderForMeetingScope`, which is dated and serves a recording capability.
+   *
+   * **`report_scope` is a third Cell-resolved kind and is deliberately not here.** Since
+   * decision 0220 a selector may name a Cell, and the guard resolves it through
+   * `leaderForScopeAsOf` — the dated *viewing* resolution section 7 asks for. A viewing
+   * capability against it is therefore correct rather than suspect, which is the whole
+   * distinction this list draws. It has its own case below.
+   */
   const CELL_RESOLVED = ['cell', 'cell_meeting'];
 
   interface DeclaredRoute {
@@ -185,9 +209,12 @@ describe('which scope resolution a capability gets (section 7)', () => {
    * earlier form of this case refused it on a trigger that conflated "declares a viewing
    * capability" with "asks about a past period".
    *
-   * **The teeth are in the allowlist being exhaustive.** Any other Cell-targeted viewing
+   * **The teeth are in the allowlist being exhaustive.** Any other `cell`-targeted viewing
    * route reddens this and its author has to say which period it asks about — and if the
-   * answer is a past month, the dated resolution it owes still does not exist.
+   * answer is a past month, the route is declared wrongly: the dated viewing resolution now
+   * exists (`leaderForScopeAsOf`, decision 0220) and is reached through a `report_scope`
+   * target rather than through this one. *This sentence said that resolution "still does
+   * not exist" until the branch that built it.*
    */
   const UNDATED_CELL_VIEWING: string[] = ['CellsController.members'];
 
@@ -200,10 +227,69 @@ describe('which scope resolution a capability gets (section 7)', () => {
    * is the mirror of the defect this file was written for: section 7 names three viewing
    * capabilities and the guard branches on the target's kind, never on the capability.
    *
-   * The existing case above cannot catch it — it asks which capability a Cell-resolved
-   * target carries, and this kind is not Cell-resolved. Written when the third resolution
-   * landed rather than after something used it wrongly.
+   * The `CELL_RESOLVED` case below cannot catch it — that list is the kinds whose
+   * resolution is *not* the viewing one, and this kind's is. *This said "this kind is not
+   * Cell-resolved", which was true until decision 0220 let a selector name a Cell; the
+   * reason the two cases stay separate survived the change and the wording did not.*
+   * Written when the third resolution landed rather than after something used it wrongly.
    */
+  /**
+   * A route's admissible scopes are written **twice**, and this is what keeps them equal.
+   *
+   * The decorator names where each argument is read from — declaring `networkFrom` or
+   * `cellFrom` is how a route says it serves that scope, and the guard refuses the rest
+   * before resolving anything. The DTO states the same set again as an `@IsIn` list.
+   *
+   * **They can disagree, and the failure is quiet in one direction.** A DTO list *narrower*
+   * than its decorator refuses after authorization has already run, naming a field the
+   * client did send — which is a weaker form of the defect the decorator arrangement was
+   * introduced to remove. Nothing detected that, and the commit that introduced it claimed
+   * the set was "written once, in the decorator". It is written once *decisively*, which is
+   * a different thing, and this case is what makes the second statement safe.
+   *
+   * Derived from the validator rather than from a third list: each scope value is run
+   * through the real DTO and kept if `scope` itself raises nothing, so the expectation is
+   * the decorator's fields and the evidence is class-validator's own answer.
+   */
+  it('offers exactly the scopes its decorator declares (section 22)', async () => {
+    const SCOPES = ['WHOLE_CHURCH', 'NETWORK', 'LEADER', 'CELL'] as const;
+
+    for (const route of await declaredRoutes()) {
+      const target = route.requirement.target;
+      if (target.kind !== 'report_scope') {
+        continue;
+      }
+
+      const declared = [
+        'WHOLE_CHURCH',
+        ...(target.networkFrom === undefined ? [] : ['NETWORK']),
+        'LEADER',
+        ...(target.cellFrom === undefined ? [] : ['CELL']),
+      ];
+
+      const dto = route.paramTypes.find(
+        (paramType): paramType is new () => object => typeof paramType === 'function',
+      );
+      expect(dto).toBeDefined();
+
+      const rules = getMetadataStorage()
+        .getTargetValidationMetadatas(dto as never, '', false, false)
+        .filter((metadata) => metadata.propertyName === 'scope');
+      expect(rules.length).toBeGreaterThan(0);
+
+      const accepted = SCOPES.filter((scope) =>
+        rules.every(
+          (rule) => rule.constraints === undefined || rule.constraints[0].includes(scope),
+        ),
+      );
+
+      expect({ where: route.where, accepted: [...accepted].sort() }).toEqual({
+        where: route.where,
+        accepted: [...declared].sort(),
+      });
+    }
+  });
+
   it('gives a report scope selector only a viewing capability (section 7)', async () => {
     const offending = (await declaredRoutes()).filter(
       (route) =>
