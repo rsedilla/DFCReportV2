@@ -155,6 +155,72 @@ export class CellsReadService implements CellScopePort, CellRelationshipsPort {
    * closure, which opens no successor. Section 13 names it for whoever builds a backdated
    * handover.*
    */
+  /**
+   * The dates one Cell is scheduled to meet in one reporting month.
+   *
+   * **Here because Section 2 puts it here, by name.** That section assigns "`cells` the
+   * Cell coverage denominator, whose every input (`cell_schedules`, `cells`,
+   * `cell_leaderships`) it owns", and records that an earlier version of itself had
+   * directed `attendance` at those same three tables — "the rule this paragraph exists to
+   * uphold, broken inside it". This query was the code's instance of that: it ran in
+   * `attendance`, joining `cell_schedules` from a statement rooted in `generate_series`,
+   * so it qualified for neither Section 2's ownership rule nor its single exemption, which
+   * covers "a read joined onto a query rooted in a table the reading module owns" and says
+   * "nothing else qualifies today". Its own file's docblock said the module read `cells`'
+   * tables "through `CellsReadService` and never directly", which the query refuted.
+   *
+   * **The scheduled set is derived and never stored** (Section 13, decision 0162): a
+   * meeting has no row until it is reported, so the count a coverage line is read against
+   * has to come from the schedule run against the calendar. That is what makes
+   * `recorded out of scheduled` two figures arrived at two ways rather than one figure
+   * compared with itself.
+   *
+   * **Both ends of the in-force comparison are Manila dates** (ruling of 2026-09-01), which
+   * Section 13 requires at the closing edge — a meeting compared as an instant falls
+   * outside every row, finds an empty roster and becomes unrecordable though the Cell held
+   * it — and which the opening edge takes too, because a bound granular one way at one end
+   * and the other way at the other is two rules wearing one name.
+   *
+   * A Cell with no schedule row in force over any day of the month yields no rows, and
+   * therefore no coverage denominator for that month (Section 12).
+   */
+  async scheduledMeetingsIn(
+    executor: Db | Transaction<Database>,
+    cellId: string,
+    reportingMonth: string,
+  ): Promise<{ scheduledDate: string; scheduledTime: string; weekStarting: string }[]> {
+    const result = await sql<{
+      scheduled_date: string;
+      scheduled_time: string;
+      week_starting: string;
+    }>`
+      SELECT to_char(day, 'YYYY-MM-DD')                        AS scheduled_date,
+             to_char(schedule.time_of_day, 'HH24:MI')          AS scheduled_time,
+             -- Section 20: a calendar week begins on Monday. date_trunc('week') is
+             -- ISO and therefore Monday-based, which is the same authority
+             -- day_of_week is stored under.
+             to_char(date_trunc('week', day), 'YYYY-MM-DD')    AS week_starting
+        FROM generate_series(
+               ${reportingMonth}::date,
+               (${reportingMonth}::date + interval '1 month' - interval '1 day')::date,
+               interval '1 day'
+             ) AS day
+        JOIN cell_schedules AS schedule
+          ON schedule.cell_id = ${cellId}::uuid
+         AND (schedule.started_at AT TIME ZONE 'Asia/Manila')::date <= day
+         AND (schedule.ended_at IS NULL
+              OR (schedule.ended_at AT TIME ZONE 'Asia/Manila')::date >= day)
+       WHERE EXTRACT(ISODOW FROM day) = schedule.day_of_week
+       ORDER BY day
+    `.execute(executor);
+
+    return result.rows.map((row) => ({
+      scheduledDate: row.scheduled_date,
+      scheduledTime: row.scheduled_time,
+      weekStarting: row.week_starting,
+    }));
+  }
+
   async leaderOnDateWithin(
     executor: Db | Transaction<Database>,
     cellId: string,
