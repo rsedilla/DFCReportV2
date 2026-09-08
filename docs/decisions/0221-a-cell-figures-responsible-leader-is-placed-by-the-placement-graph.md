@@ -16,16 +16,23 @@ period being reported** — the same graph, with the same fallbacks, that the pe
 
 ## Why this rather than the two alternatives
 
-**Section 20's placement rules are stated about placing a person, and a responsible leader is
-one.** The section's fallbacks are written as "where the person key finds no open assignment
-at the period's end" and "where the chain reaches a leader who held no assignment within the
-period" — both are rules about resolving *somebody* into a subtree, and neither is specific to
-who is being counted. Reading them as available only to the counted person leaves the second
-key with no rule at all, which is the state this ruling ends.
+**One of Section 20's two fallbacks is already generic, and this ruling makes the other one
+so.** "Where the chain reaches a leader who held no assignment within the period, it continues
+from that leader's last assignment" is written about *a leader being placed* and never about
+who is being counted — so it applies to this key as it stands. The other begins "Where **the
+person key** finds no open assignment at the period's end", which is specific by its own
+words. Section 20 is amended in this change to state that one about a person being placed
+rather than about the person key, because that is what makes "the same fallbacks" true of the
+text rather than only of the intention.
 
-**It keeps a Cell's month whole.** Section 12 says a Cell report "belongs to the Cell's
-leader", and a Cell handed over mid-period has one month of meetings. Placing the responsible
-leader once for the period puts that month in one subtree.
+*An earlier version of this ruling claimed **neither** fallback was specific, and quoted the
+one containing the words "the person key" as its evidence. Reading the quotation refutes the
+sentence it was quoted in.*
+
+**Placement once per period is what the rest of Section 20 already assumes.** The
+departed-leader fallback reaches back before the period, and the additivity claim is stated
+over a period rather than over an instant. A key placed per meeting date would sit outside
+both.
 
 ## What was rejected
 
@@ -38,11 +45,20 @@ prevent.
 
 **The tree in force at each meeting's date**, which is what coverage does and is the reading
 with the strongest internal symmetry — Section 20 already resolves the third key that way, and
-Section 13 already freezes the responsible leader per meeting. It is rejected because it
-splits one Cell's month between two leaders' subtrees when the Cell changes hands mid-period,
-and Section 12 puts a Cell report under the Cell's leader rather than under whoever ran each
-week. *That is a real cost of the ruling and not an argument against the alternative: a
-handover genuinely does mean two people ran the month, and this places it under one of them.*
+Section 13 already freezes the responsible leader per meeting. It is rejected because it would
+place a leader at instants before their own assignment began: a meeting in the first week of a
+month run by somebody assigned in the third week has no placement at its own date, and the
+per-meeting reading supplies no fallback for that, where the period reading places them from
+the assignment they hold within it.
+
+**What separates the two answers is a mid-period reassignment of the *responsible leader*, and
+nothing else.** *An earlier version of this ruling said the discriminator was a Cell changing
+hands mid-period, and offered the resulting split month as the chosen answer's accepted cost.
+Both were wrong: the responsible leader is frozen **per meeting** (Section 13, decision 0163)
+and the figures query selects meetings by that frozen column, so a Cell handed over mid-period
+puts its meetings under two leaders under **either** reading. The split is a property of the
+value key, which this ruling does not touch, and the scenario named as the discriminator was
+the one scenario both answers treat identically.*
 
 ## The second residual, which Section 20 names nowhere
 

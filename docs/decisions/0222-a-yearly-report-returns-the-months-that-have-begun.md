@@ -45,11 +45,18 @@ changing", and this is the same obligation over a longer period.
 **Which months a *closed* year contains** is not in question and is unchanged: all twelve.
 
 **Whether a yearly figure is a sum of monthly ones** is a separate question this ruling does
-not reach. Section 20's identities are stated per period, and a yearly view that aggregates
-twelve months owes its own reconciliation — the classification ladder is a lifetime count
-truncated at a month's end (Section 12), so a year's classification is not the sum of its
-months' classifications and must not be computed that way. Recorded here as the first thing
-the yearly slice meets after this one.
+not reach, and the answer for classification is no. The ladder is a lifetime count truncated at
+the **month's** end (Section 12), so a year's classification is December's value rather than a
+sum: somebody who was a VIP in March and a Regular by December belongs in one bucket for the
+year, and adding twelve monthly reports would place them in two. *The double-counting that
+produces is the ordinary unique-people rule Section 20 already states, not a classification
+effect — what is peculiar to classification is which month's bucket the year carries.*
+
+**A yearly figure also has nowhere to be stored.** `report_snapshots` carries a `period`
+documented as "the reporting month" and no yearly one (Section 20), and this ruling makes a
+yearly classification uncomposable from stored monthly ones. The yearly slice meets that at the
+same moment it meets the reconciliation question above; both are named here rather than settled,
+so neither is invented at a keyboard.
 
 **Nothing can reach any of it today.** Neither yearly route exists, and
 `assertReportingPeriodHasBegun` takes a month rather than a year.
