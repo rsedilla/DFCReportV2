@@ -435,10 +435,14 @@ export class ReportingService {
     period: string,
     scope: CellReportScope,
   ): Promise<CellCoverage> {
-    const [pairs, recorded] = await Promise.all([
-      this.cells.scheduledMeetingsWithLeaderIn(trx, period),
-      this.cellFigures.recordedScheduledDatesIn(trx, period),
-    ]);
+    // Sequential rather than `Promise.all`, matching the DCC line. The two reads are
+    // inside the report's own transaction (decision 0210), which is one connection, so
+    // there is nothing to win and the driver would serialise them anyway. The paragraph
+    // above records what a `Promise.all` cost this module once, on a *pooled* connection
+    // where it really was two snapshots; writing it the same way here would invite a
+    // reader to check whether this is that mistake again.
+    const pairs = await this.cells.scheduledMeetingsWithLeaderIn(trx, period);
+    const recorded = await this.cellFigures.recordedScheduledDatesIn(trx, period);
 
     const inScope = await this.scheduledPairsInScope(trx, pairs, scope);
 
