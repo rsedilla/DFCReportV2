@@ -1282,10 +1282,17 @@ export class CellMeetingsService implements RecordedMeetingsPort {
     // on the ground that recovering N people costs 2^N submissions and that the actor
     // holds the capability that records this meeting: `cell.submit_on_behalf` is settled
     // above, so every actor reaching the early return may file this meeting outright.
-    // A `VERSION_CONFLICT` carries the
-    // stored present count and the submitter's name (section 22), which
-    // `GET .../roster` does not — so an actor holding `cell.take_attendance` and not
+    // A `VERSION_CONFLICT` carries the stored present count and the submitter's name
+    // (section 22), so an actor holding `cell.take_attendance` and not
     // `cell.correct_subtree` could read the record out of a refusal.
+    //
+    // **The ground for that sentence used to be "which `GET .../roster` does not", and
+    // the ruling of 2026-09-09 made it false**: that roster returns the submitter and now
+    // carries each member's mark, so the same actor fetches both in one `GET`. The gate
+    // stays because it is right — a refusal must not answer what the capability withholds,
+    // whatever some other route happens to publish — but it no longer rests on this being
+    // the only door. Which capability may read those marks is recorded as open in
+    // `CLAUDE.md`, and settling it settles what this comment should say.
     //
     // *The previous batch moved the numeric-version door behind this check and left the
     // null-version one in front of it, then claimed in its own message to have closed
@@ -2031,8 +2038,11 @@ export class CellMeetingsService implements RecordedMeetingsPort {
     // replayed the refusal permanently, while `RESOURCE_BUSY` is a 503 and releases it.
     //
     // Below the comparison, it still runs before anything of the record is disclosed: a
-    // `VERSION_CONFLICT` carries the stored present count and the submitter's name, which
-    // `GET .../roster` does not.
+    // `VERSION_CONFLICT` carries the stored present count and the submitter's name.
+    //
+    // *That used to read "which `GET .../roster` does not", which the ruling of 2026-09-09
+    // falsified — the roster carries the marks now. The gate is unmoved and unchanged; what
+    // is gone is the claim that this refusal is the only way to those figures.*
     try {
       const authority = await this.authorization.authorityFor(actor.accountId);
       await this.assertMayCorrect(this.db, {

@@ -24,8 +24,18 @@ DCC one does, because it demands the *whole* roster rather than the lines being 
 
 Section 7's accepted disclosure reaches it: a leader authorized to record a meeting is
 authorized to know what was recorded for it. The route is already guarded by
-`cell.take_attendance` resolved against the meeting's frozen responsible leader
-(decisions 0186, 0188, 0192), so this adds no reader.
+`cell.take_attendance` resolved against the meeting (decisions 0186, 0188, 0192), so this
+adds no reader.
+
+> **Two corrections, from the review of the implementation on the same day.** This
+> paragraph said "resolved against the meeting's **frozen** responsible leader", which is
+> the closed-Cell case alone — Section 7 resolves an `ACTIVE` Cell's meeting through its
+> **current** leader, whatever any record says. And "adds no reader" is true of the route
+> and was read as more: an actor holding `cell.take_attendance` without
+> `cell.correct_subtree` may now **read** a mark they may not change, which Section 7 had
+> already made and withdrawn as a claim for DCC. Under which capability those marks may be
+> read is recorded as open in `CLAUDE.md`; this ruling settles that the roster carries them
+> and does not settle that.
 
 ## What it prevents
 

@@ -3104,9 +3104,14 @@ describe('recording a Cell meeting (sections 12, 13 and 14)', () => {
       // **`lostRaceAnswer` was written downstream of `assertMayCorrect` and the new caller
       // skipped it** (decision 0100: reusing a shape requires re-deriving why it has that
       // shape). A `VERSION_CONFLICT` carries the stored present count and the submitter's
-      // name, which `GET .../roster` does not — so this actor read the record out of a
-      // lost race, having been refused 403 for the identical body sent sequentially.
-      // Timing decided which answer they got.
+      // name, so this actor read the record out of a lost race, having been refused 403
+      // for the identical body sent sequentially. Timing decided which answer they got.
+      //
+      // *This said "which `GET .../roster` does not". Since the ruling of 2026-09-09 that
+      // roster carries each member's mark, so the figures are reachable in one `GET` by
+      // this same actor — which does not excuse a refusal answering what the capability
+      // withholds, and does remove the ground this case used to give. What the case pins
+      // is that the two answers to one body agree, and that is unchanged.*
       const one = await member('Aurelio');
       const actor = await granted(['cell.take_attendance', 'cell.submit_on_behalf']);
       const holder = await winnerHolding([{ personId: one.id, present: true }]);
