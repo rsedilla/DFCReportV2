@@ -424,8 +424,7 @@ type CellMeetingSubmissionResponse = {
  *
  * *No port, and the first draft of decision 0181 said there would be one.* A port
  * is what section 2 reserves for a dependency that **would be a cycle**, as
- * `networks -> cells` is. Nothing imports `AttendanceModule` except `AppModule`,
- * `CellsModule` imports no attendance, and `CellsModule` already exports
+ * `networks -> cells` is. `CellsModule` imports no attendance, and it already exports
  * `CellsReadService` -- so this is section 2's ordinary cross-module route, an
  * import and a service call, and declaring a port here would buy an indirection, a
  * binding module and a fail-closed branch for nothing.

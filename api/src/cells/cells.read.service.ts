@@ -1072,7 +1072,7 @@ export class CellsReadService implements CellScopePort, CellRelationshipsPort {
    * Section 20 attributes: the denominator is "the Cell's scheduled meetings, **each
    * appearing for the leader who led the Cell on the scheduled date**". A Cell handed over
    * mid-month therefore splits its meetings between two leaders, and a per-Cell count
-   * could not express that. `scheduledCountsIn` above answers the per-Cell question the
+   * could not express that. {@link scheduledCountsIn} answers the per-Cell question the
    * index asks and is not this one.
    *
    * **Two derivations are duplicated here and both are named rather than discovered.** The
@@ -1091,9 +1091,11 @@ export class CellsReadService implements CellScopePort, CellRelationshipsPort {
    * closure, so a day with a schedule in force has a leadership in force. An inner join
    * would be shorter and would make a data defect *shrink the denominator*, which is
    * exactly the direction Section 12 says a coverage figure must never move — recording
-   * less must never look better. So the row survives with no leader, the caller counts it
-   * church-wide and in no subtree, and it reads as the residual Section 20 already
-   * describes for a person nothing can place.
+   * less must never look better. So the row survives with no leader, and the caller counts
+   * it at Cell and Whole Church scope and in no leader's. *Section 12 is the whole of the
+   * ground: an earlier version also cited a Section 20 residual, which that section
+   * declines to lend — it says of its own generalised fallbacks that "coverage is not
+   * settled by that generalisation".*
    *
    * A closed Cell needs no filter: it has no schedule row in force after its closure, so
    * it produces no pairs (decision 0225).

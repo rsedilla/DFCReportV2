@@ -38,9 +38,17 @@ import { DccController } from './dcc.controller';
  * domain module does. The reason is `AccountsRepository`: section 9 routes a
  * submission to "the nearest upline leader who does" hold an account, so the
  * checklist is decided by a fact about `accounts`, and `auth` owns that table. There
- * is no cycle — `auth -> cells` and nothing imports `attendance` — but the edge is
+ * is no cycle — `auth -> cells`, and `auth` is reached from nothing this module is
+ * reached from — but the edge is
  * named here because it is the one place a domain module depends on authentication
  * rather than on authorization, and a reader is entitled to know it was deliberate.
+ *
+ * *This read "nothing imports `attendance`", which was true when written and is not:
+ * `AppModule`, `RecordedMeetingsBindingModule` and `ReportingModule` all do. The
+ * conclusion is unaffected — what makes each of these edges safe is that the module on
+ * the other end reaches nothing that reaches back — but a comment asserting this module
+ * is a graph leaf is one a reader would check an `attendance -> reporting` edge against
+ * and be told there was nothing to worry about.*
  */
 @Module({
   imports: [
@@ -52,8 +60,9 @@ import { DccController } from './dcc.controller';
     CellsModule,
     // Decision 0230: a `NETWORK`-scoped DCC coverage denominator is narrowed by Network
     // membership at the event date, and section 4 puts that relationship in `networks`.
-    // Not a cycle -- `networks` imports `hierarchy` alone, and nothing imports
-    // `attendance`.
+    // Not a cycle, and the reason is `networks` rather than this module: `NetworksModule`
+    // imports `HierarchyModule` alone and `HierarchyModule` imports nothing, so no chain
+    // from `networks` reaches back here.
     NetworksModule,
   ],
   controllers: [DccController, CellMeetingsController],

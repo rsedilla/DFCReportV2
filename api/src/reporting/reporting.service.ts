@@ -177,8 +177,16 @@ interface CellMonthlyCommon {
    * DCC line's `met` and `owed` because they are a different figure, counting scheduled
    * meetings rather than obligations.
    *
-   * A Cell that scheduled nothing contributes zero to both terms and is not dropped
-   * (decision 0225).
+   * **A Cell that scheduled nothing contributes zero to both terms** (decision 0225), and
+   * that is the whole of what these two figures can carry. It produces no scheduled pair
+   * at all, so it is not *in* the set this is computed over — which is arithmetically
+   * indistinguishable from being in it and contributing zero, and is why nothing here can
+   * tell the two apart. **Decision 0225's other half is not implemented and is not
+   * implementable in a two-figure aggregate**: it asks that the denominator's
+   * *membership* name every Cell a leader holds rather than every Cell that happened to
+   * have a schedule, "so a figure and the list that explains it are over the same set".
+   * There is no list here. The first per-Cell breakdown placed beside this figure is what
+   * owes that, and it is the surface that will have to name such a Cell explicitly.
    */
   coverage: CellCoverage;
 }
@@ -427,8 +435,15 @@ export class ReportingService {
    * **A pair whose leader is null counts church-wide and in no subtree.** It should not
    * arise — a Cell's schedule and leadership open and close together — and it is carried
    * rather than dropped because dropping it would shrink the denominator, which section 12
-   * says a coverage figure must never do. It reads as the residual section 20 already
-   * describes for a person nothing can place.
+   * says a coverage figure must never do. It is counted at `CELL` and `WHOLE_CHURCH`
+   * scope and in no `LEADER` one.
+   *
+   * *No section 20 residual is cited for it, and an earlier version cited one. Section 20
+   * generalised its two fallbacks to reach the responsible-leader key and then said in
+   * terms that "coverage is not settled by that generalisation", touching "neither
+   * instant, nor those fallbacks' application to either" — so borrowing a residual from
+   * there is borrowing a rule that section declines to lend. What this branch rests on is
+   * section 12 alone: never shrink the denominator.*
    */
   private async cellCoverage(
     trx: Transaction<Database>,
