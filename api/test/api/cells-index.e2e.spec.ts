@@ -475,15 +475,25 @@ describe('the Cells index (sections 10, 12 and 22)', () => {
     expect(await scheduledFor(cell.id)).toBe(5);
   });
 
-  it('carries no coverage line for a month that has not begun', async () => {
-    // The reading `DccCoverageService` takes for a Sunday whose day has not begun, applied
-    // to the sibling route shipped in the same commit: `0 of 5` for next month says a
-    // leader has recorded none of five meetings that have not happened.
-    const nextMonth = `${new Date(Date.UTC(2026, 9, 1)).toISOString().slice(0, 7)}-01`;
-    const response = await list(markAccount, { month: nextMonth });
+  it('refuses a month that has not begun', async () => {
+    // Section 20 has a rule for this class and it is a refusal: "a report may not name a
+    // period that has not begun" (decision 0216), `VALIDATION_FAILED` naming the period
+    // field. A first version of this route answered `200` with a null coverage line, which
+    // is a third answer to a settled question — and left the response saying `open: true`
+    // about a month that had not started, the state section 20 names as the one its own
+    // flag cannot correct.
+    //
+    // **Derived from the database's day rather than written down.** The first version of
+    // this case hard-coded `2026-10-01` as "next month", which stops being next month on
+    // 1 October and would then go red for a reason unrelated to any change.
+    const now = await databaseNow(db);
+    const month = manilaDayOf(new Date(now.getTime() + 40 * 24 * 60 * 60 * 1000));
+    const notBegun = `${month.slice(0, 7)}-01`;
 
-    expect(response.status).toBe(200);
-    expect(response.body.data[0].coverage).toBeNull();
+    const response = await list(markAccount, { month: notBegun });
+
+    expect(response.status).toBe(422);
+    expect(response.body.error.code).toBe('VALIDATION_FAILED');
   });
 
   it('reports the schedule in force now, not a change queued for next month', async () => {

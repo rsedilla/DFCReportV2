@@ -167,6 +167,15 @@ export class CellsReadService implements CellScopePort, CellRelationshipsPort {
    * is the reading that loses no meeting a leader believes they held, and the opposite reading
    * would refuse a record for a meeting that happened.*
    *
+   * **This derivation gates three Stage 4 surfaces**, so a change to it re-values what is
+   * already recorded: the meetings listing, the meeting roster and the submit transaction
+   * each refuse a date this does not derive. A `cell_meetings` row written on a boundary
+   * day the old derivation produced and this one does not becomes unreachable — invisible
+   * in the listing and `404` on the roster — while `recordedCountsIn` counts rows by
+   * `reporting_month` and would then publish `recorded` above `scheduled`. Not reachable
+   * on a fresh database, and named because section 20 asks that a total for a reported
+   * period not move and nothing in the gate set would see this one.
+   *
    * **Exactly one schedule row governs a day, and the weekday is tested against that
    * one.** Section 10: a schedule change takes effect at the start of the following month,
    * so "a month therefore has exactly one schedule throughout". Testing the weekday inside
@@ -192,10 +201,17 @@ export class CellsReadService implements CellScopePort, CellRelationshipsPort {
    * `0 of 1` for a month it could not have met in — the artefact Section 13 exists to keep
    * honest, arriving from the other side.
    *
-   * **The closure boundary is untouched.** Section 13 needs a meeting dated on the closure
-   * date to be derivable, and at a closure the surviving row is the one that ended that
-   * day, so it is the governing row and its weekday decides. The `>=` is what delivers
-   * that and it is unchanged.
+   * **The closure boundary is untouched, with one case named rather than glossed.**
+   * Section 13 needs a meeting dated on the closure date to be derivable, and at a closure
+   * the surviving row is the one that ended that day, so it is the governing row and its
+   * weekday decides; the `>=` delivers that and is unchanged. The exception is a closure
+   * effective at exactly the instant the Cell's only schedule row started —
+   * `endConfigurationWithin` writes `GREATEST`, so that row is zero-length and the inert
+   * filter drops it, losing the closure-date meeting. It needs a Cell created at exactly
+   * 00:00 Manila, because the closure floor is the latest leadership start and an
+   * effective date is a Manila midnight. Reproduced by `architecture-guardian` and left
+   * standing: excluding inert rows is what section 5 says an inert row means, and the
+   * alternative is a carve-out for one instant.
    *
    * **A Cell with no schedule row in force over any day of the month yields no rows.** What a
    * coverage line then reads is **not decided here and is recorded as open in `CLAUDE.md`**.
@@ -935,9 +951,18 @@ export class CellsReadService implements CellScopePort, CellRelationshipsPort {
    *
    * **A row that is in force is not the same as a row that is open**, and only the
    * leadership join may use the second. Migration 0009 gives an `ACTIVE` Cell exactly one
-   * open leadership row and a handover writes no future-dated one, so open and current
-   * coincide there. They do not for a schedule or a category, whose change paths write the
-   * replacement open with a **future** start — so those two are joined on the instant.
+   * open leadership row, and both leadership writers open at or before now — a handover
+   * takes the instant it is approved — so open and current coincide there.
+   *
+   * **A schedule does not, and a category is joined on the instant for a different
+   * reason.** `changeSchedule` writes the replacement open with a **future** start,
+   * because section 10 makes a schedule change take effect at the start of the following
+   * month; that is the state where the open row is the pending one. `changeCategory` opens
+   * at the instant it is made, so its open row *is* in force — it is joined the same way
+   * for consistency and because nothing guarantees a future-dated category can never be
+   * written. *A first version of this paragraph named the two together and gave the
+   * schedule's mechanism for both, in the sentence that decides which join may keep
+   * `ended_at is null`.*
    * That is why this needs none of `leaderForScope`'s ordering — the fallback that
    * method implements exists for a closed Cell, and there are none here.
    *
@@ -1073,7 +1098,11 @@ export class CellsReadService implements CellScopePort, CellRelationshipsPort {
 
     const result = await sql<{ cell_id: string; scheduled: string }>`
       SELECT asked.cell_id AS cell_id, count(*) AS scheduled
-        FROM unnest(${sql.val(cellIds)}::uuid[]) AS asked(cell_id)
+        -- DISTINCT on the input, because unnest multiplies where = ANY(...) did not: a
+        -- repeated identifier doubled that Cell's denominator. The caller passes a page's
+        -- ids, which are unique while the listing cannot duplicate a Cell, and this does
+        -- not depend on that holding.
+        FROM (SELECT DISTINCT unnest(${sql.val(cellIds)}::uuid[]) AS cell_id) AS asked
         CROSS JOIN generate_series(
                ${reportingMonth}::date,
                (${reportingMonth}::date + interval '1 month' - interval '1 day')::date,

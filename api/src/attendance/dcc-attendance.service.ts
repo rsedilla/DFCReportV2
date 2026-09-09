@@ -68,7 +68,7 @@ interface LiveRecord {
 }
 
 /** Why an event takes no record. Null where it takes one. */
-type NotRecordable = 'REMOVED' | 'NOT_YET_HELD' | 'MONTH_CLOSED';
+export type NotRecordable = 'REMOVED' | 'NOT_YET_HELD' | 'MONTH_CLOSED';
 
 interface EventForRecording {
   id: string;

@@ -85,12 +85,18 @@ export class NetworksService {
       .where('person_id', '=', personId)
       .where('started_at', '<=', at)
       .where((eb) => eb.or([eb('ended_at', 'is', null), eb('ended_at', '>', at)]))
-      // **`id DESC` after the instant, so this is total.** `started_at` is not unique:
-      // a section 4 correction closes a row at its own start and opens the replacement at
-      // the same instant, so two rows can share it. Without a second key the row chosen
-      // is the plan's, and `peopleWhoseNetworkIs` — which exists to give this same answer
-      // set-wise — would resolve the tie independently. The two agree by construction only
-      // if both are total.
+      // **`id DESC` after the instant, so this ordering is total** — and the reason is
+      // agreement rather than a reachable tie. `peopleWhoseNetworkIs` exists to give this
+      // same answer set-wise, and two statements of different shapes resolve an untotal
+      // ordering by their own plans; the claim that they agree by construction is only
+      // true if both are total.
+      //
+      // *No write path produces a tie, and a first version of this comment said one did.
+      // Section 4 refuses a correction dated at or before the moment the Network it
+      // corrects took effect, precisely so the live row is never closed at its own start —
+      // and such a row would be zero-length, which the predicate above excludes before the
+      // ordering runs. The key is worth having anyway: it costs nothing and it is what
+      // makes the sibling method's docblock honest.*
       .orderBy('started_at', 'desc')
       .orderBy('id', 'desc')
       .limit(1)
@@ -160,10 +166,10 @@ export class NetworksService {
    *
    * `DISTINCT ON (person_id) … ORDER BY person_id, started_at DESC, id DESC` is
    * `networkAsOf`'s own ordering applied per person. **Both carry the `id` key and neither
-   * did at first**: `started_at` is not unique, so on a tie the two statements — different
-   * shapes, therefore different plans — resolved independently, and the agreement this
-   * paragraph claims was an agreement two queries happened to reach. A tie is exactly the
-   * class this method exists for, so the claim had to be made true rather than narrowed.
+   * did at first**, so "by construction" was an agreement two statements of different
+   * shapes happened to reach. No write path produces a shared `started_at` — section 4
+   * refuses the correction that would, and such a row would be zero-length and excluded
+   * anyway — so the key buys a true claim rather than a reachable fix.
    */
   async peopleWhoseNetworkIs(executor: Db, network: NetworkName, at: Date): Promise<string[]> {
     const result = await sql<{ person_id: string }>`

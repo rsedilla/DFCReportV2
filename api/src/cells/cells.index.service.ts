@@ -7,7 +7,7 @@ import {
 } from '../auth/authorization/authorization.service';
 import { Capability } from '../auth/authorization/capabilities';
 import { canonicalId } from '../common/identifiers';
-import { startOfManilaDay } from '../common/time/manila';
+import { assertReportingPeriodHasBegun } from '../common/time/reporting-period';
 import { databaseNow, reportingMonthOf, windowClosesAt } from '../common/time/submission-window';
 import { DATABASE, type Db } from '../database/database.module';
 import { PeopleReadService } from '../people/people.read.service';
@@ -82,6 +82,25 @@ export class CellsIndexService {
     query: { month: string; ledBy?: 'me'; limit?: number; cursor?: string },
   ): Promise<Record<string, unknown>> {
     const reportingMonth = reportingMonthOf(query.month);
+
+    // **A period that has not begun is refused rather than answered** (section 20, decision
+    // 0216). A first version of this route answered `200` with a null coverage line, which
+    // is a third answer to a question section 20 already settles — and it left the response
+    // saying `open: true` about a month that had not started, which section 20 names as the
+    // state its own flag cannot correct.
+    //
+    // *Whether this route is a "report" in section 20's sense is the part nobody has ruled
+    // on, and it is recorded as a Stop Condition in `CLAUDE.md`: section 15 states two
+    // figures per row with no alternative, section 20 refuses the request outright, and
+    // this list sits between them. The refusal is the conservative arm — it publishes
+    // nothing rather than publishing a figure no rule authorises.*
+    //
+    // The DCC events index deliberately does **not** do this: section 9 runs its calendar
+    // thirteen months ahead and wants a future Sunday visible, so that route lists the
+    // event and gives it no coverage. The figures differ in kind — a Cell's denominator is
+    // a schedule count, which section 17 licenses moving within an open month, and a DCC
+    // one is a count of obligations, which do not exist until the service has happened.
+    await assertReportingPeriodHasBegun(this.db, reportingMonth);
     const limit = query.limit ?? DEFAULT_PAGE;
     const after = decodeCellIndexCursor(query.cursor);
 
@@ -120,15 +139,6 @@ export class CellsIndexService {
 
     const open = now.getTime() < windowClosesAt(reportingMonth).getTime();
 
-    // **A month that has not begun carries no coverage line**, and the null is the answer
-    // rather than a zero. `0 of 5` for next month says a leader has recorded none of five
-    // meetings that have not happened, which is the accusation section 13 exists to
-    // prevent arriving as arithmetic — the identical reading `DccCoverageService` takes
-    // for a Sunday whose day has not begun, and the two routes shipped in one commit must
-    // not answer it differently. The denominator itself is still derivable and is not
-    // published alone: a figure with one half missing is worse than none.
-    const begun = startOfManilaDay(reportingMonth).getTime() <= now.getTime();
-
     const last = visible.at(-1);
 
     return {
@@ -151,9 +161,10 @@ export class CellsIndexService {
           },
           // Two figures, never divided (section 12, section 13). A Cell that scheduled
           // nothing reads `0 of 0`, is shown, and is not dropped (decision 0225).
-          coverage: begun
-            ? { recorded: recorded.get(row.id) ?? 0, scheduled: scheduled.get(row.id) ?? 0 }
-            : null,
+          coverage: {
+            recorded: recorded.get(row.id) ?? 0,
+            scheduled: scheduled.get(row.id) ?? 0,
+          },
         };
       }),
       next_cursor:

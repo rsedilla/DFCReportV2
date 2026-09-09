@@ -16,13 +16,11 @@ import { DATABASE, type Db } from '../database/database.module';
 import { HierarchyService } from '../hierarchy/hierarchy.service';
 import { PeopleReadService } from '../people/people.read.service';
 
+import { type NotRecordable } from './dcc-attendance.service';
 import { recordingInstant } from './recording-instant';
 
 /** Section 22: `limit` defaults to 50. The DTO bounds it at 200. */
 const DEFAULT_PAGE = 50;
-
-/** Why an event takes no record, in the vocabulary the roster route already answers in. */
-type NotRecordable = 'REMOVED' | 'NOT_YET_HELD' | 'MONTH_CLOSED';
 
 interface EventRow {
   id: string;
@@ -380,6 +378,13 @@ export class DccCoverageService {
  * safeguard while delivering none: a new member of the union would have silently answered
  * `false`, which is how `NOT_YET_HELD` came to be answered `0 of N` in the first place.
  * The `never` binding is what makes the compiler refuse a fourth.
+ *
+ * **It guards the union `DccAttendanceService` declares, which is now the only one.**
+ * This file carried a second copy of `NotRecordable`, so a member added to the first would
+ * never have reached this switch — a `never` binding over a local copy of a type is a
+ * safeguard against nobody. The type is imported rather than restated; the `describe`
+ * method above is still a second implementation of the *rule*, which is named where it
+ * sits.
  */
 function coverable(event: EventRow): boolean {
   switch (event.notRecordable) {
