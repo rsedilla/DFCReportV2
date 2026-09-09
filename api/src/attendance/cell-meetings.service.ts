@@ -29,6 +29,7 @@ import {
 } from '../auth/authorization/authorization.service';
 import { Capability } from '../auth/authorization/capabilities';
 import { CellsReadService } from '../cells/cells.read.service';
+import { type RecordedMeetingsPort } from '../cells/recorded-meetings.port';
 import { CellMeetingsScopeService } from './cell-meetings.scope.service';
 import { IdempotencyService } from '../common/idempotency/idempotency.service';
 
@@ -430,7 +431,7 @@ type CellMeetingSubmissionResponse = {
  * binding module and a fail-closed branch for nothing.
  */
 @Injectable()
-export class CellMeetingsService {
+export class CellMeetingsService implements RecordedMeetingsPort {
   constructor(
     @Inject(DATABASE) private readonly db: Db,
     private readonly cells: CellsReadService,
@@ -2337,6 +2338,54 @@ export class CellMeetingsService {
       .executeTakeFirst();
 
     return this.personNameFor(executor, account?.person_id ?? null);
+  }
+
+  /**
+   * `RecordedMeetingsPort`. How many meetings each of these Cells has recorded in a
+   * month — the numerator of Section 12's coverage line, for a page of Cells at once.
+   *
+   * **Here because `attendance` owns `cell_meetings`** (Section 2). `cells` derives the
+   * denominator from tables it owns and asks this for the other half, through
+   * `RECORDED_MEETINGS_PORT`, because a dependency from `cells` to this module would be
+   * a cycle — this module imports `CellsModule`.
+   *
+   * **Deliberately adjacent to {@link recordedIn}, which is the same set counted rather
+   * than listed.** That method keys the month's rows by scheduled date so the listing can
+   * join them onto derived dates; this counts them. One definition of "recorded", two
+   * readings of it, and they are neighbours so that a change to what counts as a record
+   * cannot be made to one and missed on the other. Both select on `reporting_month`,
+   * which Section 13 fixes at creation and a reschedule never moves.
+   *
+   * **Every status counts.** A `NOT_HELD` meeting is a record: the leader filed it, and
+   * Section 13 makes reporting honestly that a Cell could not meet the reason that status
+   * exists. What is not a record is a meeting with no row — Section 13's "outstanding
+   * task, shown to the responsible leader as a meeting awaiting a record", which is an
+   * absence of data. So `recordedIn`'s caller counts entries whose `meeting` is not null
+   * and this counts rows, and the two agree because there is exactly one row per recorded
+   * meeting.
+   *
+   * A Cell that recorded nothing is absent from the map rather than present as zero, and
+   * the caller reads a missing key as zero — the port's own contract says so, because a
+   * shape that omitted the Cell would tempt a caller into omitting the row, and Section
+   * 12 requires the line precisely for the Cell that recorded nothing.
+   */
+  async recordedCountsIn(
+    cellIds: readonly string[],
+    reportingMonth: string,
+  ): Promise<Map<string, number>> {
+    if (cellIds.length === 0) {
+      return new Map();
+    }
+
+    const rows = await this.db
+      .selectFrom('cell_meetings')
+      .select(({ fn }) => ['cell_id', fn.countAll<string>().as('recorded')])
+      .where('cell_id', 'in', [...cellIds])
+      .where('reporting_month', '=', reportingMonth)
+      .groupBy('cell_id')
+      .execute();
+
+    return new Map(rows.map((row) => [row.cell_id, Number(row.recorded)]));
   }
 
   /**

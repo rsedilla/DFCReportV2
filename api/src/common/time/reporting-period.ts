@@ -173,17 +173,28 @@ export function isReportingMonth(value: string): boolean {
  *
  * `reportingMonth` is the caller's to validate, as it is for every function in this file —
  * `startOfManilaDay` refuses a malformed value naming `date`, which is the wrong field.
+ *
+ * **The refusal names the caller's own field and quotes the caller's own value**, which
+ * `named` supplies. It defaulted to `period` and to the normalised month, which is right
+ * for `reporting` — its DTOs carry a field called `period` and hand this the value they
+ * received — and became wrong the moment a second caller arrived: `GET /api/v1/cells`
+ * carries `month` and normalises it first, so `?month=2026-11-15` was refused as
+ * `{ field: 'period', value: '2026-11-01' }`, naming a field the request does not have
+ * and quoting a month nobody sent. Section 22 asks a refusal to name the field "which is
+ * what a client needs in order to fix it", and this file's own neighbour records the same
+ * shape one call earlier.
  */
 export async function assertReportingPeriodHasBegun(
   executor: Db | Transaction<Database>,
   reportingMonth: string,
+  named: { field: string; value: string } = { field: 'period', value: reportingMonth },
 ): Promise<void> {
   const now = await databaseNow(executor);
 
   if (startOfManilaDay(reportingMonth).getTime() > now.getTime()) {
     throw new ValidationFailedError(
       'A report covers a period that has begun. This one has not started yet.',
-      { field: 'period', value: reportingMonth },
+      { field: named.field, value: named.value },
     );
   }
 }

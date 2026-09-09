@@ -962,6 +962,56 @@ export class HierarchyService {
   }
 
   /**
+   * Every pastoral edge in force at an instant, optionally narrowed to a set of
+   * leaders — the input Section 20 needs to place a coverage **obligation**.
+   *
+   * **It answers about edges rather than about people, because coverage does.** Section
+   * 20: coverage "attributes by the obligation rather than by the record, because
+   * coverage exists to surface the records that are *missing* and a missing record has no
+   * responsible leader frozen on it". A leader owes a record for an event when somebody
+   * was their disciple on its date, so the denominator is derived from the edges in force
+   * and never from the attendance rows.
+   *
+   * **`leaderIds` narrows and never authorizes.** `null` is no narrowing — the caller
+   * holds a Whole Church grant — and an empty array is a caller in scope for nobody,
+   * which this answers with no edges. Section 7 decides which of the two a caller gets;
+   * a read service answers questions.
+   *
+   * **A root is a leader here and is not a disciple.** A root's own row names no leader,
+   * so it contributes no edge and the root never appears as a `personId` — which is
+   * Section 9's "roots are excluded from coverage denominators" falling out of the shape
+   * rather than being filtered for. A root with disciples does appear as a `leaderId`,
+   * because they owe records for those disciples like any other leader.
+   *
+   * **Half-open at both ends**, the same `[started_at, ended_at)` every dated read in
+   * this file uses: a row ending exactly at `at` is not in force at `at`, so a
+   * close-and-open pair sharing one instant yields the successor's edge alone rather than
+   * both.
+   */
+  async edgesAsOf(
+    executor: Db,
+    at: Date,
+    leaderIds: readonly string[] | null,
+  ): Promise<{ leaderId: string; personId: string }[]> {
+    if (leaderIds !== null && leaderIds.length === 0) {
+      return [];
+    }
+
+    const rows = await executor
+      .selectFrom('pastoral_assignments')
+      .select(['leader_id', 'person_id'])
+      .where('leader_id', 'is not', null)
+      .where('started_at', '<=', at)
+      .where((eb) => eb.or([eb('ended_at', 'is', null), eb('ended_at', '>', at)]))
+      .$if(leaderIds !== null, (query) =>
+        query.where('leader_id', 'in', leaderIds as readonly string[]),
+      )
+      .execute();
+
+    return rows.map((row) => ({ leaderId: row.leader_id as string, personId: row.person_id }));
+  }
+
+  /**
    * The Network roots as of an instant — the people holding a row with no leader
    * above them (section 5, Network roots).
    *

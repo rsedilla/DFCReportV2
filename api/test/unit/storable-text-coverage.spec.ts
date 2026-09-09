@@ -42,8 +42,15 @@ describe('storable text is refused at the edge, on every field that takes text',
    * cannot keep cannot be resolved. `refresh_token` and `token` are compared against a
    * sha256 hash computed in the application, so the value as sent reaches no statement.
    * `password` likewise, and section 6 is explicit that it is never stored at all.
+   *
+   * *The two added on 2026-09-09 were checked against the criterion rather than added
+   * because they are spelled `cursor`. `decodeCellIndexCursor` asks `isStorableText` of
+   * the one key it carries, and `DccCoverageGapsDto` uses `decodeRosterCursor`, which asks
+   * it of all three — so both decode paths refuse before any key reaches a comparison.*
    */
   const NEVER_STORED = new Set([
+    'CellIndexDto.cursor',
+    'DccCoverageGapsDto.cursor',
     'DccRosterDto.cursor',
     'LeadershipRequestQueueDto.cursor',
     'CellMembersDto.cursor',
