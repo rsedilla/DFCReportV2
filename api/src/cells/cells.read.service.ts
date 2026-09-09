@@ -167,6 +167,21 @@ export class CellsReadService implements CellScopePort, CellRelationshipsPort {
    * is the reading that loses no meeting a leader believes they held, and the opposite reading
    * would refuse a record for a meeting that happened.*
    *
+   * **One row per day, whichever schedule rows cover it**, and that is a correction rather
+   * than a tidying. A schedule change writes `old.ended_at = effectiveFrom` and
+   * `new.started_at = effectiveFrom`; both comparisons above are inclusive on a Manila
+   * date, so **both rows match the boundary day**. Where that day is the scheduled weekday
+   * and the change kept the day — a time-only change, which Section 10 permits — the day
+   * was emitted twice, and October with five Thursdays derived six meetings. Section 12's
+   * coverage line is read against this count, so the Cell was answered `1 of 6` for a month
+   * holding five. Reproduced by `architecture-guardian` against the database.
+   *
+   * `DISTINCT ON (day) ... ORDER BY day, started_at DESC` takes the **incoming** row's
+   * time on that day, which is what Section 10 says a schedule change does: it "takes
+   * effect at the start of next month". Nothing else moves — at a closure only one row
+   * covers the closure date, so the `>=` this file needs for Section 13's boundary is
+   * untouched.
+   *
    * **A Cell with no schedule row in force over any day of the month yields no rows.** What a
    * coverage line then reads is **not decided here and is recorded as open in `CLAUDE.md`**.
    * *An earlier version of this docblock said "and therefore no coverage denominator for that
@@ -185,7 +200,8 @@ export class CellsReadService implements CellScopePort, CellRelationshipsPort {
       scheduled_time: string;
       week_starting: string;
     }>`
-      SELECT to_char(day, 'YYYY-MM-DD')                        AS scheduled_date,
+      SELECT DISTINCT ON (day)
+             to_char(day, 'YYYY-MM-DD')                        AS scheduled_date,
              to_char(schedule.time_of_day, 'HH24:MI')          AS scheduled_time,
              -- Section 20: a calendar week begins on Monday. date_trunc('week') is
              -- ISO and therefore Monday-based, which is the same authority
@@ -202,7 +218,9 @@ export class CellsReadService implements CellScopePort, CellRelationshipsPort {
          AND (schedule.ended_at IS NULL
               OR (schedule.ended_at AT TIME ZONE 'Asia/Manila')::date >= day)
        WHERE EXTRACT(ISODOW FROM day) = schedule.day_of_week
-       ORDER BY day
+       -- DISTINCT ON (day), with the incoming schedule row first: a Cell meets once on
+       -- a day it is scheduled, whichever schedule rows cover it. See the docblock.
+       ORDER BY day, schedule.started_at DESC
     `.execute(executor);
 
     return result.rows.map((row) => ({
@@ -998,8 +1016,12 @@ export class CellsReadService implements CellScopePort, CellRelationshipsPort {
     }
 
     const result = await sql<{ cell_id: string; scheduled: string }>`
-      SELECT schedule.cell_id                AS cell_id,
-             count(*)                        AS scheduled
+      SELECT cell_id, count(*) AS scheduled
+        FROM (
+          -- One row per Cell per scheduled day, for the reason scheduledMeetingsIn
+          -- gives: two schedule rows cover the boundary day of a schedule change, and a
+          -- Cell meets once on a day it is scheduled.
+          SELECT DISTINCT schedule.cell_id AS cell_id, day
         FROM generate_series(
                ${reportingMonth}::date,
                (${reportingMonth}::date + interval '1 month' - interval '1 day')::date,
@@ -1011,7 +1033,8 @@ export class CellsReadService implements CellScopePort, CellRelationshipsPort {
          AND (schedule.ended_at IS NULL
               OR (schedule.ended_at AT TIME ZONE 'Asia/Manila')::date >= day)
        WHERE EXTRACT(ISODOW FROM day) = schedule.day_of_week
-       GROUP BY schedule.cell_id
+        ) AS scheduled_days
+       GROUP BY cell_id
     `.execute(executor);
 
     return new Map(result.rows.map((row) => [row.cell_id, Number(row.scheduled)]));

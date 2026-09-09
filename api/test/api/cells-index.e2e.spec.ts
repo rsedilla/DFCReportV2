@@ -160,6 +160,79 @@ describe('the Cells index (sections 10, 12 and 22)', () => {
     expect(response.body.data).toEqual([]);
   });
 
+  it('lists under a NETWORK grant exactly what the per-Cell guard admits', async () => {
+    // **The enumeration and the guard are one rule read two ways, and they diverged.**
+    // `scopeCovers` resolves a person's Network with `ORDER BY started_at DESC LIMIT 1`;
+    // a first version of `scopeMembership` asked `peopleInNetworkAsOf`, which fans out
+    // over *every* row in force. `network_assignments_one_open` is partial over open rows,
+    // so a closed `MENS` row ending in the future beside an open `WOMENS` one satisfies
+    // every constraint — and the list carried a Cell the roster route then refused.
+    //
+    // The overlap is unreachable through any write path and is a Stop Condition recorded
+    // in `CLAUDE.md`; it is staged here because it is the one state that tells the two
+    // readings apart, and because the list failing **open** is the wrong direction.
+    // **`MENS` themselves, because the guard's target is the actor.** A `NETWORK` grant
+    // covers the caller only where the caller resolves to that Network, so a `WOMENS`
+    // observer holding a `MENS` grant is refused the route outright and never reaches the
+    // narrowing this case is about.
+    const observerPerson = await createPerson(db, { firstName: 'Owen', network: 'MENS' });
+    await assignTo(db, observerPerson.id, raymond.id);
+    const observer = await createAccount(app, db, { person: observerPerson, roles: [] });
+
+    await db
+      .insertInto('capability_grants')
+      .values({
+        account_id: observer.id,
+        capability: 'cell.view_subtree',
+        scope_type: 'NETWORK',
+        scope_network: 'MENS',
+        read_only: true,
+        reason: 'Invented for this case (CLAUDE.md, Secrets).',
+        granted_by: admin.id,
+      })
+      .execute();
+
+    // **The overlapping Person holds no pastoral edge**, which section 5 permits and which
+    // is what makes the state stageable at all: `assert_network_change_keeps_edges` refuses
+    // a Network change that would leave an edge crossing, and a Cell with no members trips
+    // no leadership-Network trigger either. They lead a Cell, which is all this list needs.
+    const drifting = await createPerson(db, { firstName: 'Dominic', network: 'MENS' });
+    const driftingCell = await createCell(db, {
+      leader: drifting,
+      dayOfWeek: 6,
+      createdAt: CREATED,
+    });
+
+    // Mark is `MENS` and resolves `MENS`, so both readings admit his Cell.
+    expect(cellIdsOf(await list(observer))).toContain(markCell.id);
+    expect(cellIdsOf(await list(observer))).toContain(driftingCell.id);
+
+    // A second row: the open `MENS` one is closed in the future and a `WOMENS` row opens
+    // now, so `networkAsOf` resolves `WOMENS` while a fan-out over rows in force still
+    // names `MENS`.
+    await db
+      .updateTable('network_assignments')
+      .set({ ended_at: new Date('2099-01-01T00:00:00Z') })
+      .where('person_id', '=', drifting.id)
+      .where('ended_at', 'is', null)
+      .execute();
+
+    await db
+      .insertInto('network_assignments')
+      .values({ person_id: drifting.id, network: 'WOMENS', started_at: new Date() })
+      .execute();
+
+    const listed = cellIdsOf(await list(observer));
+    const roster = await request(app.getHttpServer())
+      .get(`/api/v1/cells/${driftingCell.id}/members`)
+      .set('Authorization', `Bearer ${observer.accessToken}`);
+
+    // Whatever the two readings would each say, the list and the guard must say it
+    // together: a Cell the list carries is one the per-Cell route serves.
+    expect(listed.includes(driftingCell.id)).toBe(roster.status === 200);
+    expect(roster.status).toBe(403);
+  });
+
   it('refuses an account holding no capability at all', async () => {
     // A Person with an account and no role holds no `cell.view_subtree`, so the guard
     // refuses before any narrowing runs. Section 7: an endpoint declaring a capability is
@@ -280,6 +353,54 @@ describe('the Cells index (sections 10, 12 and 22)', () => {
 
     expect(row).toBeDefined();
     expect(row?.coverage).toEqual({ recorded: 0, scheduled: 0 });
+  });
+
+  it('counts a schedule-change boundary day once, not once per schedule row', async () => {
+    // **Reproduced by `architecture-guardian` before this case existed.** A schedule change
+    // writes `old.ended_at = effectiveFrom` and `new.started_at = effectiveFrom`, and the
+    // in-force comparison is inclusive on a Manila date at both edges — so both rows cover
+    // the boundary day. Where that day is the scheduled weekday and only the *time*
+    // changed, the day was derived twice and October with five Thursdays answered `of 6`.
+    // Section 12 reads the coverage line against this count.
+    const changed = await createPerson(db, { firstName: 'Caleb', network: 'MENS' });
+    await assignTo(db, changed.id, manuel.id);
+
+    // Thursday, and 2026-10-01 is itself a Thursday — which is what makes the boundary day
+    // a scheduled day and the defect reachable.
+    const cell = await createCell(db, {
+      leader: changed,
+      dayOfWeek: 4,
+      timeOfDay: '19:00',
+      createdAt: CREATED,
+    });
+
+    const effectiveFrom = new Date('2026-09-30T16:00:00Z');
+    await db.transaction().execute(async (trx) => {
+      await trx
+        .updateTable('cell_schedules')
+        .set({ ended_at: effectiveFrom })
+        .where('cell_id', '=', cell.id)
+        .where('ended_at', 'is', null)
+        .execute();
+
+      await trx
+        .insertInto('cell_schedules')
+        .values({
+          cell_id: cell.id,
+          day_of_week: 4,
+          time_of_day: '20:00',
+          started_at: effectiveFrom,
+        })
+        .execute();
+    });
+
+    const response = await list(manuelAccount, { month: '2026-10-01' });
+    const row = (response.body.data as { id: string; coverage: { scheduled: number } }[]).find(
+      (entry) => entry.id === cell.id,
+    );
+
+    // October 2026 holds five Thursdays: the 1st, 8th, 15th, 22nd and 29th.
+    expect(row?.coverage.scheduled).toBe(5);
   });
 
   it('omits a closed Cell', async () => {

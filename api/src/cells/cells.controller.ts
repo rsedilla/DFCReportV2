@@ -112,12 +112,30 @@ export class CellsController {
    * who is every leader the route exists for. The DCC routes record the identical
    * mistake one domain over.
    *
-   * **`cell.view_subtree` is a viewing capability, and this route asks about now.**
-   * Section 7 gives its dated resolution to a viewing read asking about a *past period*;
-   * the `month` here dates the coverage figure on each row and not the membership of the
-   * list. That is the reading `GET /api/v1/cells/{id}/meetings` already has — it takes a
-   * month and resolves its Cell through the undated `leaderForScope` — and the two must
-   * agree, or the index lists Cells whose detail route refuses.
+   * **`cell.view_subtree` is a viewing capability, and this route resolves undated —
+   * which is not what section 7's text says, and is recorded as open rather than
+   * defended.** Section 7 makes this one of the three capabilities resolving "as of the
+   * period being viewed" and says a viewing read "asking about a past month" owes a
+   * resolution as of that period. This route takes a required `month`. What section 7 has
+   * never contemplated is a *collection* whose period dates the figure on each row while
+   * the membership of the list is a separate question — and section 3 draws exactly that
+   * line elsewhere, between period-based figures and "current-state inventory metrics",
+   * among which it names Cell Groups.
+   *
+   * **The reason it ships undated is reachability, not classification.** The index must
+   * list exactly the Cells whose detail routes the caller can reach:
+   * `GET /api/v1/cells/{id}/meetings` takes the same `month` and resolves undated, so a
+   * dated index would hide from a leader a month the detail route serves them, which is
+   * worse than either reading alone. *That neighbour carries a **recording** capability,
+   * which section 7 puts in the other resolution class — so it is evidence about what a
+   * caller can reach and not about which resolution section 7 assigns here. A first
+   * version of this paragraph leaned on it as though it were the second, and
+   * `architecture-guardian` refuted that.*
+   *
+   * **The cost is real and was reproduced**: a Cell handed over on 1 September lists for
+   * the incoming leader when August is asked for, carrying that month's coverage line,
+   * while the leader who oversaw all of August cannot reach it. `CLAUDE.md` carries the
+   * question and the three defensible readings.
    *
    * *This route declares no `cell`-shaped target, so it is outside the allowlist in
    * `capability-scope-resolution.spec.ts` rather than an addition to it. That file

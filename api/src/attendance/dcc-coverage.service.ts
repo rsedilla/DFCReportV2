@@ -70,13 +70,12 @@ interface Coverage {
  * records for them like any other leader. Both fall out of `edgesAsOf` answering about
  * edges — section 9's "roots are excluded from coverage denominators" needs no filter.
  *
- * **A disciple who cannot be recorded is not an obligation.** The roster drops an
- * archived and a merged Person, and the submission refuses both, so counting them would
- * leave a leader whose only disciples are archived permanently in the denominator with no
- * act available that could move them out of it — which is the one thing section 15 says
- * an attention list must never be, a list whose entries cannot be resolved. The
- * lifecycle read is the current one, matching the roster's, so the figure and what a
- * leader can actually do agree.
+ * **A figure this publishes is period-based, so nothing here reads a current state.**
+ * Section 3 forbids it in terms: a period's total must not move when somebody is archived
+ * today, and period-based figures are "never filtered by current lifecycle state". That
+ * is why an archived disciple's edge still counts as an obligation, and why whether it
+ * *should* — the argument being that such a leader can record nothing — is recorded as
+ * open in `CLAUDE.md` rather than settled in this file.
  *
  * **Nothing here is ranked, ordered by coverage, or colour-graded** (sections 13, 17 and
  * 19). The events are ordered by date, which is what a calendar is; the gap list is
@@ -128,10 +127,19 @@ export class DccCoverageService {
     const rendered = await Promise.all(
       events.map(async (event) => ({
         event,
-        // **A removed event carries no coverage, and the null is the answer rather than a
-        // zero** (decision 0227): nobody owes a record for a service that was not held,
-        // and `0 of 0` would say the obligations were all discharged.
-        coverage: event.removedAt === null ? await this.coverageOf(event, membership) : null,
+        // **An event nobody could yet have recorded carries no coverage, and the null is
+        // the answer rather than a zero.** Decision 0227 gives that reading for a removed
+        // Sunday — nobody owes a record for a service that was not held, and `0 of 0`
+        // would say the obligations were all discharged. A Sunday whose Manila day has
+        // not begun is the same sentence with the more damaging falsehood on the other
+        // side: `0 of 8` says eight leaders have failed to record a service that has not
+        // happened, and section 9 defines the gap only for "an event that did take
+        // place".
+        //
+        // **A closed month is not in this branch and must not be.** Its coverage is the
+        // frozen historical figure sections 13 and 20 require a report to keep showing;
+        // withholding it would hide the month the window closed on.
+        coverage: coverable(event) ? await this.coverageOf(event, membership) : null,
       })),
     );
 
@@ -190,10 +198,12 @@ export class DccCoverageService {
     const event = this.describe(String(row.event_date), row, now);
     const membership = await this.authorization.scopeMembership(actor, Capability.DccViewSubtree);
 
-    const owing =
-      event.removedAt === null
-        ? (await this.obligations(event, membership)).owing
-        : new Set<string>();
+    // The same rule the index applies to the figure: an event nobody could have recorded
+    // yet owes nobody, and naming leaders for one would put an entry on a section 15
+    // attention list that no act can resolve.
+    const owing = coverable(event)
+      ? (await this.obligations(event, membership)).owing
+      : new Set<string>();
 
     // Names, so a leader recognises who they are being asked about — and the ordering
     // key, which is section 8's directory order and the key three other collections in
@@ -263,10 +273,26 @@ export class DccCoverageService {
    * Who owes a record for this event within the actor's scope, and which of them have
    * not filed one.
    *
-   * **The denominator is the leaders holding a recordable disciple at the event's
-   * instant.** That instant is `recordingInstant`, the same one the roster and the
-   * submission resolve a responsible leader at — so a leader who appears here is a leader
-   * some roster names, and the two cannot disagree about who was responsible.
+   * **The denominator is the leaders holding a pastoral edge at the event's instant**,
+   * and nothing else narrows it. That instant is `recordingInstant`, the same one the
+   * roster and the submission resolve a responsible leader at — so a leader who appears
+   * here is a leader some roster names, and the two cannot disagree about who was
+   * responsible.
+   *
+   * **No lifecycle filter, and that is section 3 rather than a simplification.** A first
+   * version dropped an edge whose disciple was archived or merged, on the argument that a
+   * leader whose only disciples are archived can record nothing and would sit in the
+   * denominator with no act available to move them out of it. The argument is real and it
+   * is not a rule: section 9 names exactly one exclusion from a coverage denominator, and
+   * it is the Network roots. What settles the code is section 3, which the filter broke
+   * outright — "archiving someone today must never change the total shown for a period
+   * before their archive date", and period-based figures are "never filtered by current
+   * lifecycle state". `forDecisionsWithin` reads the **current** lifecycle row, so
+   * archiving one disciple moved a past Sunday's figure from `1 of 1` to `0 of 0`.
+   *
+   * *Whether such an edge should be an obligation at all — and if so, at which instant
+   * lifecycle is read — is recorded as open in `CLAUDE.md`. Both directions are writable
+   * once it is settled; what could not stand is the third answer, which is neither.*
    *
    * **The numerator is a live row naming them**, `superseded_at IS NULL`, because a
    * correction supersedes rather than overwrites (section 14) and a superseded row is not
@@ -281,19 +307,7 @@ export class DccCoverageService {
     const leaderIds = membership.kind === 'WHOLE_CHURCH' ? null : [...membership.personIds];
     const edges = await this.hierarchy.edgesAsOf(this.db, event.at, leaderIds);
 
-    // The disciples decide which edges are obligations, so their lifecycle is read once
-    // for the whole event rather than per leader.
-    const identities = await this.people.forDecisionsWithin(this.db, [
-      ...new Set(edges.map((edge) => edge.personId)),
-    ]);
-
-    const owed = new Set<string>();
-    for (const edge of edges) {
-      const identity = identities.get(edge.personId);
-      if (identity !== undefined && !identity.isArchived && identity.mergedIntoId === null) {
-        owed.add(edge.leaderId);
-      }
-    }
+    const owed = new Set(edges.map((edge) => edge.leaderId));
 
     const recorded = await this.db
       .selectFrom('dcc_attendance')
@@ -343,6 +357,21 @@ export class DccCoverageService {
               : null,
     };
   }
+}
+
+/**
+ * Whether this event has a coverage figure at all.
+ *
+ * Two of the three `NotRecordable` reasons mean nobody owes a record: the service was not
+ * held, or its day has not begun. The third, `MONTH_CLOSED`, is the opposite — the
+ * obligations were real, the window has shut on them, and the figure is the frozen record
+ * of what was and was not filed.
+ *
+ * Written over the reason rather than over `removedAt` so that a fourth reason cannot be
+ * added without deciding this, which is how `NOT_YET_HELD` came to be answered `0 of N`.
+ */
+function coverable(event: EventRow): boolean {
+  return event.notRecordable === null || event.notRecordable === 'MONTH_CLOSED';
 }
 
 /** The first of the month after this one, as a `YYYY-MM-01` Manila date. */

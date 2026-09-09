@@ -1,4 +1,5 @@
 import { Inject, Injectable, Optional } from '@nestjs/common';
+import { sql } from 'kysely';
 
 import { ApiError, InvariantViolationError, ResourceBusyError } from '../common/errors/api-error';
 import { manilaDayAfter, startOfManilaDay } from '../common/time/manila';
@@ -128,6 +129,47 @@ export class NetworksService {
       .execute();
 
     return rows.map((row) => row.person_id);
+  }
+
+  /**
+   * Everyone **whose Network resolves to** this one at an instant — `networkAsOf`
+   * inverted over the whole membership, rather than every row naming the Network.
+   *
+   * **A second method rather than a filter on the one above, because the two answer
+   * different questions and only one of them can decide an authorization.**
+   * `peopleInNetworkAsOf` fans out over every row in force, which is what a Network's
+   * *population* is (decision 0219); `networkAsOf` takes the latest-starting row and is
+   * what `AuthorizationService.scopeCovers` compares a `NETWORK` grant against. Where a
+   * person holds two rows in force at one instant the two disagree, and a caller
+   * enumerating scope must get the guard's answer — a list built from the wider one shows
+   * rows the per-target route then refuses.
+   *
+   * *That divergence is not hypothetical and was reproduced against the database:
+   * `network_assignments_one_open` is partial over open rows, so a closed `MENS` row
+   * ending in the future beside an open `WOMENS` one satisfies every constraint. Whether
+   * two rows may be in force at one instant is a Stop Condition recorded in `CLAUDE.md`
+   * with an exclusion constraint as its remedy; until that exists, the two readings both
+   * have callers and each must ask for the one it means.*
+   *
+   * `DISTINCT ON (person_id) … ORDER BY person_id, started_at DESC` is `networkAsOf`'s
+   * `ORDER BY started_at DESC LIMIT 1` applied per person, so the agreement is by
+   * construction rather than by two queries happening to match.
+   */
+  async peopleWhoseNetworkIs(executor: Db, network: NetworkName, at: Date): Promise<string[]> {
+    const result = await sql<{ person_id: string }>`
+      SELECT person_id
+        FROM (
+          SELECT DISTINCT ON (person_id) person_id, network
+            FROM network_assignments
+           WHERE started_at <= ${at}
+             AND (ended_at IS NULL OR ended_at > ${at})
+           ORDER BY person_id, started_at DESC
+        ) AS resolved
+       WHERE network = ${network}
+       ORDER BY person_id
+    `.execute(executor);
+
+    return result.rows.map((row) => row.person_id);
   }
 
   /**

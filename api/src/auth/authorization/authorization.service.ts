@@ -514,13 +514,23 @@ export class AuthorizationService {
    * recursive subtree query per row — and a page that filtered *after* paging would
    * return short pages whose `next_cursor` says nothing about how many rows remain.
    *
-   * **It is here, beside {@link scopeCovers}, and that placement is the whole safeguard.**
-   * The two are one rule read two ways: `scopeCovers` asks whether a person is in scope,
-   * this asks who is. They must agree, and they can only be kept in agreement by being
-   * read together — a set-builder written in the module that consumes it is a second
-   * implementation of authorization, which is the arrangement section 7 exists to
-   * prevent. Both switch exhaustively over the same closed enum, so a fifth scope value
-   * fails to compile in both places rather than silently defaulting in one.
+   * **It is here, beside {@link scopeCovers}, because the two are one rule read two
+   * ways**: that one asks whether a person is in scope, this asks who is. A set-builder
+   * written in the module that consumes it would be a second implementation of
+   * authorization, which is what section 7 exists to prevent, and switching over the same
+   * closed enum means a fifth scope value fails to compile in both places rather than
+   * defaulting in one.
+   *
+   * **Adjacency is not what keeps them equal, and a first version of this paragraph said
+   * it was.** `architecture-guardian` reproduced two divergences on that claim. The
+   * `NETWORK` branch reached a *wider* population than `scopeCovers` resolves, which is
+   * fixed below by asking the resolving question rather than the population one. And the
+   * subtree branches walk **down** where `scopeCovers` walks **up**, so a cycle inside the
+   * actor's own subtree refuses this while the per-target routes still answer — that one
+   * is fail-closed and is left standing, stated rather than repaired, because section 5
+   * requires every recursive walk to detect a cycle and the two walks meet different edge
+   * sets by construction. What holds the pair together is the cases that exercise both,
+   * not the fact that they are on one screen.
    *
    * **`WHOLE_CHURCH` is a sentinel and never an enumeration.** Answering it as a set of
    * every Person would make the widest grant the slowest, and would make a caller's
@@ -581,10 +591,15 @@ export class AuthorizationService {
             break;
           }
 
-          // `peopleInNetworkAsOf` at now, which is what `currentNetwork` is —
-          // `scopeCovers` compares a person's current Network against the grant's, and
-          // this is that comparison inverted over the whole membership.
-          for (const personId of await this.networks.peopleInNetworkAsOf(
+          // **`peopleWhoseNetworkIs`, not `peopleInNetworkAsOf`, and the difference is an
+          // authorization one.** `scopeCovers` below compares `currentNetwork`, which
+          // resolves a person to their latest-starting row in force; the population method
+          // fans out over every such row, so a person holding two at one instant is in it
+          // under both Networks. This enumeration would then carry rows the per-target
+          // guard refuses — reproduced against the database as a `200` from the list
+          // beside a `403` from the Cell it had just listed. The two questions are
+          // separate and this one wants the guard's.
+          for (const personId of await this.networks.peopleWhoseNetworkIs(
             this.db,
             grant.scope.network,
             new Date(),

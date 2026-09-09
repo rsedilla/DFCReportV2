@@ -512,12 +512,11 @@ export class CellIndexDto {
    * the month still open for records and the month the calendar is in — and a client that
    * meant March would silently be answered April.
    *
-   * **It dates the figures on each row and not the rows themselves.** The membership of
-   * this list is the actor's scope now, which is the resolution `GET
-   * /api/v1/cells/{id}/meetings` already has while taking this same parameter. Section 7
-   * owes its dated resolution to a viewing read asking about a past period, and dating
-   * the membership here would make the index list Cells whose detail route refuses and
-   * hide Cells whose detail route serves.
+   * **It dates the figures on each row and not the rows themselves, and whether that is
+   * right is recorded as open in `CLAUDE.md`.** Section 7 owes a dated resolution to a
+   * viewing read asking about a past period, and this route carries a viewing capability
+   * and names a period — so the reading shipped here is the one the controller's docblock
+   * argues for on reachability grounds, not the one section 7's text states.
    */
   @IsManilaCalendarDate({
     message: 'month must be a YYYY-MM-DD Asia/Manila date that exists (SKILL.md section 22).',

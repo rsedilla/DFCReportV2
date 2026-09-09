@@ -330,6 +330,76 @@ describe('the DCC events index and its coverage gaps (sections 9, 15 and 22)', (
     });
   });
 
+  it('does not move a past event’s figure when a disciple is archived today', async () => {
+    // Section 3: "archiving someone today must never change the total shown for a period
+    // before their archive date, no matter when the report is re-run", and period-based
+    // figures are "never filtered by current lifecycle state". A first version of this
+    // service dropped an archived disciple's edge from the denominator, reading the
+    // **current** lifecycle row against a dated edge set — so this figure went from
+    // `1 of 1` to `0 of 0` on an archive performed today.
+    const sunday = await recentSunday();
+    const eventId = await createEvent(sunday);
+    await record(eventId, timothy.id, mark.id, markAccount);
+
+    const before = (await events(markAccount, monthOf(sunday))).body.data[0].coverage;
+    expect(before).toEqual({ met: 1, owed: 1 });
+
+    // `person_lifecycle` is effective-dated and holds one open row per Person (section 3),
+    // so archiving is a close-and-open pair at one instant rather than an insert.
+    const archivedAt = new Date();
+    await db.transaction().execute(async (trx) => {
+      await trx
+        .updateTable('person_lifecycle')
+        .set({ ended_at: archivedAt })
+        .where('person_id', '=', timothy.id)
+        .where('ended_at', 'is', null)
+        .execute();
+
+      await trx
+        .insertInto('person_lifecycle')
+        .values({
+          person_id: timothy.id,
+          state: 'ARCHIVED',
+          reason: 'NO_LONGER_IN_CURRENT_NETWORK',
+          started_at: archivedAt,
+        })
+        .execute();
+    });
+
+    const after = (await events(markAccount, monthOf(sunday))).body.data[0].coverage;
+    expect(after).toEqual(before);
+  });
+
+  it('gives an event whose day has not begun no coverage figure', async () => {
+    // Section 9 defines the gap for "an event that did take place". `0 of 8` for next
+    // Sunday says eight leaders have failed to record a service that has not happened,
+    // which is the accusation section 13 exists to prevent, manufactured by arithmetic.
+    const now = await today();
+    const dayOfWeek = isoDayOf(now);
+    const upcoming = shift(now, dayOfWeek === 0 ? 7 : 7 - dayOfWeek);
+    await createEvent(upcoming);
+
+    const response = await events(manuelAccount, monthOf(upcoming));
+    const row = (response.body.data as { event_date: string; coverage: unknown }[]).find(
+      (entry) => entry.event_date === upcoming,
+    );
+
+    expect(row?.coverage).toBeNull();
+  });
+
+  it('names nobody as owing a record for an event whose day has not begun', async () => {
+    // Section 15: each entry on an attention list "offers the actions that resolve it".
+    // Nothing resolves a record for a service that has not happened.
+    const now = await today();
+    const dayOfWeek = isoDayOf(now);
+    const upcoming = shift(now, dayOfWeek === 0 ? 7 : 7 - dayOfWeek);
+    const eventId = await createEvent(upcoming);
+
+    const response = await gaps(manuelAccount, eventId);
+
+    expect(response.body.data).toEqual([]);
+  });
+
   it('never divides the two figures', async () => {
     const sunday = await recentSunday();
     await createEvent(sunday);
