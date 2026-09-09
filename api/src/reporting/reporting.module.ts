@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 
 import { AttendanceModule } from '../attendance/attendance.module';
+import { CellsModule } from '../cells/cells.module';
 import { HierarchyModule } from '../hierarchy/hierarchy.module';
 import { NetworksModule } from '../networks/networks.module';
 import { ReportingController } from './reporting.controller';
@@ -22,7 +23,9 @@ import { ReportingService } from './reporting.service';
  * the placement graph walked by the module that owns `pastoral_assignments`.
  */
 @Module({
-  imports: [AttendanceModule, HierarchyModule, NetworksModule],
+  // `CellsModule` arrives with the Cell coverage denominator, which section 2 assigns to
+  // that module by name. Not a cycle: `cells` imports neither `attendance` nor this.
+  imports: [AttendanceModule, CellsModule, HierarchyModule, NetworksModule],
   controllers: [ReportingController],
   providers: [ReportingService],
   exports: [ReportingService],

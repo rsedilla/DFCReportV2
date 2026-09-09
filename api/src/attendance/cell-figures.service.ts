@@ -5,6 +5,9 @@ import { DATABASE, type Db } from '../database/database.module';
 import { windowClosesAt } from '../common/time/submission-window';
 import { assertReportingMonth } from '../common/time/reporting-period';
 
+import type { Database } from '../database/schema';
+import type { Transaction } from 'kysely';
+
 /**
  * One person's Cell attendance, reduced to what classification needs.
  *
@@ -108,6 +111,50 @@ export interface CellMonthFiguresOptions {
 @Injectable()
 export class CellFiguresService {
   constructor(@Inject(DATABASE) private readonly db: Db) {}
+
+  /**
+   * Every `(Cell, scheduled date)` pair carrying a record in the month — the
+   * **numerator** of an aggregate coverage figure (SKILL.md sections 12, 13 and 20).
+   *
+   * **Keyed on the pair rather than counted per Cell**, because section 20 makes the
+   * numerator "those with a record" — *those* being the scheduled meetings the
+   * denominator enumerates. So the caller intersects rather than compares two counts,
+   * and both terms are attributed by the denominator's own scheduled-date leader. Two
+   * independent counts could disagree about which meetings they were counting; an
+   * intersection cannot, and it is what makes `recorded` at most `scheduled` by
+   * construction rather than by argument.
+   *
+   * `scheduled_date` is the key because that is a meeting's identity (section 13): a
+   * reschedule moves `actual_date` and leaves it alone, so a rescheduled meeting still
+   * answers for the day it was scheduled — which is the day the denominator derived.
+   *
+   * **Every status counts**, on the reading `CellMeetingsService.recordedCountsIn`
+   * states: a `NOT_HELD` meeting is a record, because the leader filed it, and section 13
+   * makes reporting honestly that a Cell could not meet the whole point of that status.
+   * What is not recorded is a scheduled date with no row at all (decision 0162).
+   *
+   * **Here rather than on `CellMeetingsService`, which owns the write path for this
+   * table.** This is a figure, and it needs a database and nothing else; that service
+   * needs audit, idempotency, authorization and meeting scope in order to exist, none of
+   * which a count of rows has any use for. The first version put it there and made four
+   * hand-built test modules pull that whole chain in to compute one integer.
+   *
+   * Church-wide rather than for a page of Cells: an aggregate report ranges over every
+   * Cell its scope reaches, and which those are is decided by the leader on each
+   * scheduled date rather than by a list the caller could supply in advance.
+   */
+  async recordedScheduledDatesIn(
+    executor: Db | Transaction<Database>,
+    reportingMonth: string,
+  ): Promise<Set<string>> {
+    const rows = await executor
+      .selectFrom('cell_meetings')
+      .select(['cell_id', 'scheduled_date'])
+      .where('reporting_month', '=', reportingMonth)
+      .execute();
+
+    return new Set(rows.map((row) => `${row.cell_id}|${String(row.scheduled_date)}`));
+  }
 
   /**
    * Every figure a Cell monthly report needs, from one statement.
