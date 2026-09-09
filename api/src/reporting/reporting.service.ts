@@ -1,6 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 
 import { CellFiguresService, type CellFiguresPopulation } from '../attendance/cell-figures.service';
+import { DccCoverageService, type DccCoverageScope } from '../attendance/dcc-coverage.service';
 import { DccFiguresService } from '../attendance/dcc-figures.service';
 import { DATABASE, type Db } from '../database/database.module';
 import type { Database, NetworkName } from '../database/schema';
@@ -116,6 +117,30 @@ export interface DccMonthlyReport {
   unique_people: number;
   classification: Classification;
   buckets: AttendanceBucket[];
+  /**
+   * The month's recording coverage: obligations met over obligations owed, summed across
+   * the month's events (section 9, decision 0224).
+   *
+   * **Two figures, never divided into a percentage or a score** (section 13). They are
+   * carried separately for that reason rather than for the caller's convenience — a ratio
+   * is a leader's score, and section 13 forbids one.
+   *
+   * **It is not a property of the population above.** Classification and the buckets
+   * attribute by the *person*, placed as of the period's end; coverage attributes by the
+   * *obligation*, placed at each event date (section 20). So a leader whose subtree
+   * attended nothing still owes records, and the two halves of this response answer
+   * different questions about different parties. Neither section 20 identity ranges over
+   * coverage.
+   *
+   * `0 of 0` is a real answer and is rendered rather than suppressed (decision 0224).
+   */
+  coverage: Coverage;
+}
+
+/** Obligations met over obligations owed (section 9, decision 0224). Never divided. */
+export interface Coverage {
+  met: number;
+  owed: number;
 }
 
 /** What every Cell monthly report carries, whatever its scope (sections 12 and 20). */
@@ -171,6 +196,7 @@ export class ReportingService {
   constructor(
     @Inject(DATABASE) private readonly db: Db,
     private readonly dccFigures: DccFiguresService,
+    private readonly dccCoverage: DccCoverageService,
     private readonly cellFigures: CellFiguresService,
     private readonly hierarchy: HierarchyService,
     private readonly networks: NetworksService,
@@ -226,6 +252,17 @@ export class ReportingService {
 
       const figures = await this.dccFigures.monthFigures(period, { executor: trx, personIds });
 
+      // **Coverage takes the scope rather than `personIds`, and that is section 20 rather
+      // than an inconsistency.** The population above is the placement graph collapsed
+      // over the period, which is where a *person* is counted; a coverage denominator is
+      // a subtree walked at each event date, which is where an *obligation* sits. Handing
+      // `personIds` here would measure this month's obligations against the tree as it
+      // stood at the period's end, and a leader assigned in the third week would owe
+      // records for the first two.
+      const coverage = await this.dccCoverage.monthCoverage(period, coverageScopeOf(scope), {
+        executor: trx,
+      });
+
       return {
         scope,
         period,
@@ -235,6 +272,7 @@ export class ReportingService {
         unique_people: figures.people.length,
         classification: classify(figures.people),
         buckets: bucket(figures.people, figures.n),
+        coverage,
       };
     });
   }
@@ -401,6 +439,35 @@ export class ReportingService {
 
         return compute(trx, bounds);
       });
+  }
+}
+
+/**
+ * A report's DCC selector as the coverage denominator narrows by (decision 0230).
+ *
+ * **A translation rather than a shared type**, because the two mean different things by
+ * the same three words. A report's selector is resolved once, for authorization, at the
+ * period's end; a coverage scope is resolved again at every event date. Writing this out
+ * is what keeps the second resolution visible instead of implied by a cast.
+ *
+ * **Exhaustive, so a fourth report scope cannot reach coverage without deciding what it
+ * narrows.** That is not hypothetical: `NETWORK` reached this route with the person key
+ * settled and its coverage narrowing unstated, which is the gap decision 0230 was
+ * escalated to fill. The `never` binding makes the compiler ask the question next time.
+ */
+function coverageScopeOf(scope: DccReportScope): DccCoverageScope {
+  switch (scope.kind) {
+    case 'WHOLE_CHURCH':
+      return { kind: 'WHOLE_CHURCH' };
+    case 'NETWORK':
+      return { kind: 'NETWORK', network: scope.network };
+    case 'LEADER':
+      return { kind: 'LEADER', personId: scope.person_id };
+    default: {
+      const unreached: never = scope;
+
+      return unreached;
+    }
   }
 }
 

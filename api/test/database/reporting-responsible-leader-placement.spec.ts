@@ -4,7 +4,10 @@ import { sql } from 'kysely';
 import { AppConfigModule } from '../../src/config/config.module';
 import { DatabaseModule } from '../../src/database/database.module';
 import { CellFiguresService } from '../../src/attendance/cell-figures.service';
+import { DccCoverageService } from '../../src/attendance/dcc-coverage.service';
 import { DccFiguresService } from '../../src/attendance/dcc-figures.service';
+import { AuthorizationService } from '../../src/auth/authorization/authorization.service';
+import { PeopleReadService } from '../../src/people/people.read.service';
 import { HierarchyService } from '../../src/hierarchy/hierarchy.service';
 import { NetworksService } from '../../src/networks/networks.service';
 import { ReportingService } from '../../src/reporting/reporting.service';
@@ -105,6 +108,9 @@ describe("where a Cell figure's responsible leader is placed (decision 0221)", (
       providers: [
         CellFiguresService,
         DccFiguresService,
+        DccCoverageService,
+        AuthorizationService,
+        PeopleReadService,
         HierarchyService,
         NetworksService,
         ReportingService,

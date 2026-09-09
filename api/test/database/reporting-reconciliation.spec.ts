@@ -5,7 +5,10 @@ import { Test } from '@nestjs/testing';
 import { AppConfigModule } from '../../src/config/config.module';
 import { DatabaseModule } from '../../src/database/database.module';
 import { CellFiguresService } from '../../src/attendance/cell-figures.service';
+import { DccCoverageService } from '../../src/attendance/dcc-coverage.service';
 import { DccFiguresService } from '../../src/attendance/dcc-figures.service';
+import { AuthorizationService } from '../../src/auth/authorization/authorization.service';
+import { PeopleReadService } from '../../src/people/people.read.service';
 import { HierarchyService } from '../../src/hierarchy/hierarchy.service';
 import { NetworksService } from '../../src/networks/networks.service';
 import { ReportingService } from '../../src/reporting/reporting.service';
@@ -104,13 +107,24 @@ describe('section 20 reconciliation, DCC monthly (Stage 5 Done-when)', () => {
     // instance of that clause**: this file computes no Cell figure anywhere, and without
     // the provider every case in it fails to construct. It was missed by the commit that
     // added the dependency and found by the full suite rather than by this file's own run
-    // — the second time that has happened here, which is why the cost of hand-building the
-    // module is written down beside the reason for doing it.
+    // — which is why the cost of hand-building the module is written down beside the
+    // reason for doing it.
+    //
+    // **It has now happened three times**, the third being `DccCoverageService` with the
+    // coverage line (decision 0224), which also brought `AuthorizationService` and
+    // `PeopleReadService` in behind it — this file measures no coverage and authorizes
+    // nobody, and needs all three to construct. *This comment said "the second time" and
+    // was made stale by the commit that read it, which is the failure it is about.* The
+    // count is not incremented from here: it is what `git log -S DccCoverageService` and
+    // its two predecessors show.
     const moduleRef = await Test.createTestingModule({
       imports: [AppConfigModule, DatabaseModule],
       providers: [
         CellFiguresService,
         DccFiguresService,
+        DccCoverageService,
+        AuthorizationService,
+        PeopleReadService,
         HierarchyService,
         NetworksService,
         ReportingService,

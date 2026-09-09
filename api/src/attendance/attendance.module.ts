@@ -5,6 +5,7 @@ import { AuthModule } from '../auth/auth.module';
 import { AuthorizationModule } from '../auth/authorization/authorization.module';
 import { CellsModule } from '../cells/cells.module';
 import { HierarchyModule } from '../hierarchy/hierarchy.module';
+import { NetworksModule } from '../networks/networks.module';
 import { PeopleModule } from '../people/people.module';
 
 import { CellMeetingsController } from './cell-meetings.controller';
@@ -49,6 +50,11 @@ import { DccController } from './dcc.controller';
     AuthorizationModule,
     AuditModule,
     CellsModule,
+    // Decision 0230: a `NETWORK`-scoped DCC coverage denominator is narrowed by Network
+    // membership at the event date, and section 4 puts that relationship in `networks`.
+    // Not a cycle -- `networks` imports `hierarchy` alone, and nothing imports
+    // `attendance`.
+    NetworksModule,
   ],
   controllers: [DccController, CellMeetingsController],
   providers: [
@@ -76,6 +82,10 @@ import { DccController } from './dcc.controller';
     CellMeetingsService,
     DccFiguresService,
     CellFiguresService,
+    // The month's coverage line, for `reporting` to compose (decision 0224). The same
+    // service the two DCC calendar routes use, so a report's denominator and a leader's
+    // gap list cannot disagree about who owed a record.
+    DccCoverageService,
   ],
 })
 export class AttendanceModule {}

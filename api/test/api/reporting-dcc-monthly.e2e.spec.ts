@@ -697,6 +697,204 @@ describe('GET /api/v1/reports/dcc/monthly (sections 7, 20 and 22)', () => {
     });
   });
 
+  /**
+   * The month's coverage line (SKILL.md sections 9, 13 and 20; decisions 0224 and 0230).
+   *
+   * **The fixture's denominator is two and that is a property of the tree rather than of
+   * the people.** Coverage counts *leaders holding an edge*: `raymond` leads `manuel` and
+   * `manuel` leads `mark`, so both owe a record for every event, while `mark` leads nobody
+   * and owes none. That is what makes `mark`'s own report the `0 of 0` case without any
+   * special fixture — section 9's denominator is obligations, not people.
+   *
+   * June 2026 holds four Sundays: the 7th, 14th, 21st and 28th. The month is closed, so
+   * every one of them is coverable and none is excluded for not having happened.
+   */
+  describe("the month's coverage is obligations met over obligations owed (decision 0224)", () => {
+    const SUNDAYS = ['2026-06-07', '2026-06-14', '2026-06-21', '2026-06-28'];
+
+    const addEvent = async (eventDate: string, removed = false): Promise<string> => {
+      const row = await db
+        .insertInto('dcc_events')
+        .values({
+          event_date: eventDate,
+          removed_at: removed ? new Date() : null,
+          removed_by: removed ? adminAccount.id : null,
+          removal_reason: removed ? 'No service was held.' : null,
+        })
+        .returning('id')
+        .executeTakeFirstOrThrow();
+
+      return row.id;
+    };
+
+    const record = async (eventId: string, personId: string, leaderId: string): Promise<void> => {
+      await db
+        .insertInto('dcc_attendance')
+        .values({
+          dcc_event_id: eventId,
+          person_id: personId,
+          present: true,
+          responsible_leader_id: leaderId,
+          recorded_by: adminAccount.id,
+        })
+        .execute();
+    };
+
+    it('sums both terms across the month and never divides them', async () => {
+      const ids = [];
+      for (const sunday of SUNDAYS) {
+        ids.push(await addEvent(sunday));
+      }
+
+      // Two of the eight obligations discharged: `manuel` filed for `mark` on the first
+      // two Sundays. Section 9 measures whether the record exists and never who entered
+      // it, so recording on behalf would count identically.
+      await record(ids[0], mark.id, manuel.id);
+      await record(ids[1], mark.id, manuel.id);
+
+      const response = await get(`period=${REPORTED_MONTH}&scope=WHOLE_CHURCH`, adminAccount);
+
+      expect(response.status).toBe(200);
+      // Four events times two owing leaders. Both terms, and no ratio anywhere in the
+      // body — section 13 forbids dividing them into a score.
+      expect(response.body.coverage).toEqual({ met: 2, owed: 8 });
+      expect(JSON.stringify(response.body)).not.toContain('percent');
+    });
+
+    it('leaves a removed Sunday out of both terms rather than counting it as unmet', async () => {
+      for (const sunday of SUNDAYS.slice(0, 3)) {
+        await addEvent(sunday);
+      }
+      await addEvent(SUNDAYS[3], true);
+
+      const response = await get(`period=${REPORTED_MONTH}&scope=WHOLE_CHURCH`, adminAccount);
+
+      expect(response.status).toBe(200);
+      // Three events rather than four. `0 of 8` would say eight leaders failed to record
+      // a service that was never held, which is the falsehood decision 0227 refuses.
+      expect(response.body.coverage).toEqual({ met: 0, owed: 6 });
+    });
+
+    it('answers 0 of 0 for a leader who owes nothing, and shows the line', async () => {
+      for (const sunday of SUNDAYS) {
+        await addEvent(sunday);
+      }
+
+      const response = await get(
+        `period=${REPORTED_MONTH}&scope=LEADER&leader_id=${mark.id}`,
+        markAccount,
+      );
+
+      expect(response.status).toBe(200);
+      // Decision 0224: not an error, not a gap, and not omitted. A scope with nobody
+      // responsible for anybody has nothing to report and says so.
+      expect(response.body.coverage).toEqual({ met: 0, owed: 0 });
+      expect(response.body.coverage).not.toBeNull();
+    });
+
+    it('owes a mid-month arrival records from their assignment and not before it', async () => {
+      const ids = [];
+      for (const sunday of SUNDAYS) {
+        ids.push(await addEvent(sunday));
+      }
+
+      // `mark` becomes a leader on the 15th, so he owes for the 21st and the 28th and for
+      // neither of the first two. Decision 0224 requires no rule of its own for this: the
+      // per-event denominator is resolved at the event date and summing inherits it.
+      await assignTo(db, drifter.id, mark.id, new Date('2026-06-15T00:00:00+08:00'));
+
+      const response = await get(`period=${REPORTED_MONTH}&scope=WHOLE_CHURCH`, adminAccount);
+
+      expect(response.status).toBe(200);
+      // Eight from raymond and manuel across four Sundays, plus two from mark.
+      expect(response.body.coverage).toEqual({ met: 0, owed: 10 });
+    });
+
+    it('narrows a NETWORK scope by membership at the event date (decision 0230)', async () => {
+      const ids = [];
+      for (const sunday of SUNDAYS) {
+        ids.push(await addEvent(sunday));
+      }
+
+      // The one shape that tells the two readings apart, and decision 0082 is why it is
+      // this shape: a Network change is refused while a person leads anyone, so reaching
+      // the divergence takes a leader who held a disciple on an early Sunday, lost them,
+      // and only then changed Network.
+      //
+      // `drifter` leads one disciple from the 1st to the 10th, so he owes a record for
+      // the 7th as a MENS leader. He moves to WOMENS on the 20th. Under the ruling he is
+      // counted in MENS for the 7th; under the rejected reading — membership at the
+      // period's end — that obligation would be attributed to WOMENS.
+      //
+      // **`drifter` is given no leader of his own**, which is deliberate: section 4
+      // validates a Network change forward from its effective date, so an open edge to
+      // the MENS `raymond` would refuse the move to WOMENS on grounds unrelated to what
+      // this case is about. Whether a Person outside the pastoral structure may acquire
+      // disciples is itself recorded as open in `CLAUDE.md`; nothing here rests on the
+      // answer, because the obligation is an edge he holds *as leader*.
+      const disciple = await createPerson(db, {
+        firstName: 'Nestor',
+        lastName: 'Fabian',
+        network: 'MENS',
+      });
+      await assignTo(db, disciple.id, drifter.id, new Date('2026-06-01T00:00:00+08:00'));
+      await db
+        .updateTable('pastoral_assignments')
+        .set({ ended_at: new Date('2026-06-10T00:00:00+08:00') })
+        .where('person_id', '=', disciple.id)
+        .where('ended_at', 'is', null)
+        .execute();
+
+      await db
+        .updateTable('network_assignments')
+        .set({ ended_at: new Date('2026-06-20T00:00:00+08:00') })
+        .where('person_id', '=', drifter.id)
+        .where('ended_at', 'is', null)
+        .execute();
+      await db
+        .insertInto('network_assignments')
+        .values({
+          person_id: drifter.id,
+          network: 'WOMENS',
+          started_at: new Date('2026-06-20T00:00:00+08:00'),
+        })
+        .execute();
+
+      const mens = await get(`period=${REPORTED_MONTH}&scope=NETWORK&network=MENS`, adminAccount);
+      const womens = await get(
+        `period=${REPORTED_MONTH}&scope=NETWORK&network=WOMENS`,
+        adminAccount,
+      );
+
+      expect(mens.status).toBe(200);
+      expect(womens.status).toBe(200);
+
+      // The 7th is the deciding event: raymond, manuel and drifter all owe, in MENS.
+      // The 14th, 21st and 28th carry raymond and manuel alone, drifter having lost his
+      // only disciple on the 10th.
+      expect(mens.body.coverage).toEqual({ met: 0, owed: 9 });
+      // Nobody is a WOMENS leader at any event date. Drifter's WOMENS row opens on the
+      // 20th, by which time he owes nothing — which is the whole point of resolving the
+      // membership at the event rather than at the month's end.
+      expect(womens.body.coverage).toEqual({ met: 0, owed: 0 });
+    });
+
+    it('publishes no coverage to an actor refused the scope', async () => {
+      for (const sunday of SUNDAYS) {
+        await addEvent(sunday);
+      }
+
+      const response = await get(`period=${REPORTED_MONTH}&scope=WHOLE_CHURCH`, markAccount);
+
+      expect(response.status).toBe(403);
+      expect(response.body.error.code).toBe('SCOPE_DENIED');
+      // The figure is refused with the report rather than alongside it. A coverage line
+      // computed before the guard would be a church-wide figure handed to a leader who
+      // may not read the report it belongs to.
+      expect(response.body.coverage).toBeUndefined();
+    });
+  });
+
   it('is closed to an account holding no reporting capability', async () => {
     const grantless = await createAccount(app, db, { person: drifter, roles: [] });
 

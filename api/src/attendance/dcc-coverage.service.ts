@@ -13,7 +13,9 @@ import { startOfManilaDay } from '../common/time/manila';
 import { assertReportingMonth } from '../common/time/reporting-period';
 import { databaseNow, reportingMonthOf, windowClosesAt } from '../common/time/submission-window';
 import { DATABASE, type Db } from '../database/database.module';
+import type { NetworkName } from '../database/schema';
 import { HierarchyService } from '../hierarchy/hierarchy.service';
+import { NetworksService } from '../networks/networks.service';
 import { PeopleReadService } from '../people/people.read.service';
 
 import { type NotRecordable } from './dcc-attendance.service';
@@ -36,6 +38,20 @@ interface Coverage {
   met: number;
   owed: number;
 }
+
+/**
+ * Which population a monthly coverage figure is measured over (section 20).
+ *
+ * **Deliberately not `DccReportScope`.** That type is `reporting`'s and carries the wire
+ * spelling of a selector; this one names what the denominator is narrowed by, and the two
+ * differ where it matters — a report's `LEADER` is a *selector* resolved for
+ * authorization at the period's end, while this one is a subtree walked at each event
+ * date. Sharing a type would make the two look like one decision.
+ */
+export type DccCoverageScope =
+  | { kind: 'WHOLE_CHURCH' }
+  | { kind: 'NETWORK'; network: NetworkName }
+  | { kind: 'LEADER'; personId: string };
 
 /**
  * The DCC calendar as a leader reads it, and the gap behind each coverage figure
@@ -88,6 +104,7 @@ export class DccCoverageService {
     @Inject(DATABASE) private readonly db: Db,
     private readonly hierarchy: HierarchyService,
     private readonly people: PeopleReadService,
+    private readonly networks: NetworksService,
     private readonly authorization: AuthorizationService,
   ) {}
 
@@ -137,7 +154,9 @@ export class DccCoverageService {
         // **A closed month is not in this branch and must not be.** Its coverage is the
         // frozen historical figure sections 13 and 20 require a report to keep showing;
         // withholding it would hide the month the window closed on.
-        coverage: coverable(event) ? await this.coverageOf(event, membership) : null,
+        coverage: coverable(event)
+          ? await this.coverageOf(this.db, event, leadersOf(membership))
+          : null,
       })),
     );
 
@@ -202,7 +221,7 @@ export class DccCoverageService {
     // yet owes nobody, and naming leaders for one would put an entry on a section 15
     // attention list that no act can resolve.
     const owing = coverable(event)
-      ? (await this.obligations(event, membership)).owing
+      ? (await this.obligations(this.db, event, leadersOf(membership))).owing
       : new Set<string>();
 
     // Names, so a leader recognises who they are being asked about — and the ordering
@@ -263,10 +282,121 @@ export class DccCoverageService {
    * drill-down's list are the same set by construction rather than by two queries
    * agreeing.
    */
-  private async coverageOf(event: EventRow, membership: ScopeMembership): Promise<Coverage> {
-    const { owed, owing } = await this.obligations(event, membership);
+  private async coverageOf(
+    executor: Db,
+    event: EventRow,
+    leaderIds: readonly string[] | null,
+  ): Promise<Coverage> {
+    const { owed, owing } = await this.obligations(executor, event, leaderIds);
 
     return { met: owed.size - owing.size, owed: owed.size };
+  }
+
+  /**
+   * `GET /api/v1/reports/dcc/monthly`'s coverage line — the month's obligations met over
+   * the month's obligations owed (SKILL.md sections 9 and 20; decisions 0224 and 0230).
+   *
+   * **Summed across the month's events, and never divided** (section 13). Decision 0224
+   * settles that a month's figure is the number of leader-events with a record over the
+   * number owed, rather than the mean of the per-event ratios — which would weight a
+   * holiday Sunday involving two leaders as heavily as a full one, making the line a
+   * property of the calendar's shape rather than of what was recorded.
+   *
+   * **The narrowing is resolved per event, at that event's own instant**, which is what
+   * makes a mid-month arrival correct without a rule of its own: section 20 fixes
+   * coverage's instant as the event date and decision 0221 declined to move it, so a
+   * leader assigned in the third week is absent from the first two weeks' denominators
+   * and nothing has to subtract them. It is deliberately **not**
+   * `HierarchyService.reportingSubtree`, which is section 20's placement graph collapsed
+   * over the period and is what the person key and the responsible-leader key use. Two
+   * different walks in one response is what section 20 requires in terms: "a monthly
+   * report resolves the tree at more than one instant".
+   *
+   * **A `NETWORK` scope resolves membership at the event date too** (decision 0230), for
+   * the same reason and by the same instant. `peopleInNetworkAsOf` is the population
+   * reading rather than `networkAsOf`'s latest-row one, which is what decision 0219 makes
+   * a Network's population mean.
+   *
+   * **An event nobody could have recorded contributes to neither term**, on the same
+   * predicate the index applies to a per-event figure: a removed Sunday and one whose
+   * Manila day has not begun owe nobody, so they add zero to both. A closed month is not
+   * in that class and its obligations are real.
+   *
+   * **`0 of 0` is an answer rather than an absence** (decision 0224). A scope with nobody
+   * responsible for anybody has nothing to report and says so, and the caller renders the
+   * line rather than suppressing it.
+   *
+   * Sequentially rather than with `Promise.all`, because the caller hands this the
+   * report's own transaction (decision 0210) and a transaction is one connection.
+   */
+  async monthCoverage(
+    reportingMonth: string,
+    scope: DccCoverageScope,
+    options: { executor?: Db } = {},
+  ): Promise<Coverage> {
+    assertReportingMonth(reportingMonth);
+
+    const executor = options.executor ?? this.db;
+    const now = await databaseNow(executor);
+
+    const rows = await executor
+      .selectFrom('dcc_events')
+      .select(['id', 'event_date', 'removed_at', 'removal_reason'])
+      .where('event_date', '>=', reportingMonth)
+      .where('event_date', '<', nextMonth(reportingMonth))
+      .orderBy('event_date')
+      .execute();
+
+    let met = 0;
+    let owed = 0;
+
+    for (const row of rows) {
+      const event = this.describe(String(row.event_date), row, now);
+
+      if (!coverable(event)) {
+        continue;
+      }
+
+      const coverage = await this.coverageOf(
+        executor,
+        event,
+        await this.leadersAt(executor, scope, event.at),
+      );
+
+      met += coverage.met;
+      owed += coverage.owed;
+    }
+
+    return { met, owed };
+  }
+
+  /**
+   * The leaders a coverage denominator is narrowed to at one instant, or `null` for no
+   * narrowing at all.
+   *
+   * `null` and `[]` are different arguments, exactly as they are on the Cells index:
+   * `null` is Whole Church and narrows nothing, while an empty list is a scope holding
+   * nobody and must measure nothing. `edgesAsOf` answers both correctly and the
+   * difference is not left to it.
+   */
+  private async leadersAt(
+    executor: Db,
+    scope: DccCoverageScope,
+    at: Date,
+  ): Promise<readonly string[] | null> {
+    switch (scope.kind) {
+      case 'WHOLE_CHURCH':
+        return null;
+      case 'LEADER':
+        return this.hierarchy.subtreeAsOf(executor, scope.personId, at);
+      case 'NETWORK':
+        return this.networks.peopleInNetworkAsOf(executor, scope.network, at);
+      default: {
+        const unreached: never = scope;
+
+        return unreached;
+      }
+    }
   }
 
   /**
@@ -306,15 +436,15 @@ export class DccCoverageService {
    * exactly as one who recorded them present.
    */
   private async obligations(
+    executor: Db,
     event: EventRow,
-    membership: ScopeMembership,
+    leaderIds: readonly string[] | null,
   ): Promise<{ owed: Set<string>; owing: Set<string> }> {
-    const leaderIds = membership.kind === 'WHOLE_CHURCH' ? null : [...membership.personIds];
-    const edges = await this.hierarchy.edgesAsOf(this.db, event.at, leaderIds);
+    const edges = await this.hierarchy.edgesAsOf(executor, event.at, leaderIds);
 
     const owed = new Set(edges.map((edge) => edge.leaderId));
 
-    const recorded = await this.db
+    const recorded = await executor
       .selectFrom('dcc_attendance')
       .select('responsible_leader_id')
       .where('dcc_event_id', '=', event.id)
@@ -400,6 +530,19 @@ function coverable(event: EventRow): boolean {
       return unreached;
     }
   }
+}
+
+/**
+ * A capability grant's membership as a leader narrowing.
+ *
+ * The two route methods narrow by what the actor may *see*, and the report narrows by the
+ * scope it was asked for — so the narrowing is a parameter and this is the routes' half of
+ * it. `null` is Whole Church and narrows nothing; an empty set is a caller in scope for
+ * nobody, which measures nothing. The distinction is the same one `leadersToList` draws on
+ * the Cells index, for the same reason.
+ */
+function leadersOf(membership: ScopeMembership): readonly string[] | null {
+  return membership.kind === 'WHOLE_CHURCH' ? null : [...membership.personIds];
 }
 
 /** The first of the month after this one, as a `YYYY-MM-01` Manila date. */
