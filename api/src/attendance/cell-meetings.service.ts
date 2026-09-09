@@ -627,14 +627,18 @@ export class CellMeetingsService implements RecordedMeetingsPort {
         //
         // Null is a member with no live row — not yet recorded, or recorded and then
         // superseded with nothing replacing them. A nullable object rather than a boolean
-        // defaulting to false, because a screen rendering `present: false` for a member
-        // who has no row would resubmit them absent — which is the data loss this field
-        // exists to prevent, arriving through the field itself.
+        // defaulting to false, because `false` would tell a client the leader marked this
+        // member absent when nobody marked them at all. Section 13 has a meeting's
+        // attendance **declared** rather than inferred, and a read that manufactures a
+        // declaration is the one thing a correction screen must not be handed.
         //
-        // *This cited section 20 as needing the two to be different facts. Section 20 says
-        // nothing of the kind and `CellFiguresService` counts attendees, so they
-        // contribute identically to every figure that exists; the reason is the round
-        // trip, not a reconciliation.*
+        // *The ground given here first was that resubmitting `false` for such a member
+        // loses data. It does not, and this comment refuted itself two lines down: a
+        // missing row and a row marked absent contribute identically to every figure. Nor
+        // is it avoidable — `assertAttendanceMatchesRoster` refuses a submission that
+        // omits a member, so a correction must send one or the other. The data loss
+        // decision 0223 names is a different case: overwriting a `present: true` mark with
+        // a blank.*
         record: marks.get(member.personId) ?? null,
       })),
     };
@@ -1227,7 +1231,7 @@ export class CellMeetingsService implements RecordedMeetingsPort {
     // back was refused as naming a non-member, and submitting the scheduled date's roster
     // instead succeeded and left the meeting holding three live rows for a Cell with two
     // members on either date. Section 13's "every member exactly once" broken silently,
-    // and section 20's reconciliation with it.*
+    // and the roster rule with it.*
     const rosterDate = await this.actualDateOf(trx, existing.id);
     const members = await this.cells.membersAsOfWithin(trx, cellId, rosterDate);
     const attendance = assertAttendanceMatchesRoster(body, members, { cellId, meetingId });
@@ -2538,12 +2542,21 @@ export class CellMeetingsService implements RecordedMeetingsPort {
  * `HELD` with zero attendance. It counts in the denominator, and every member is
  * recorded as not having attended."
  *
- * Absent rows and rows marked absent are different facts, and section 20's
- * reconciliation needs the second: classification buckets and monthly-attendance
- * buckets must each sum to the same unique-people total, and a roster with holes in it
- * cannot do that. Accepting a partial list would make the denominator depend on how
- * much of the roster a client happened to send -- a defect invisible until a month is
- * reported and impossible to correct once it closes.
+ * **Why the whole roster and not the attendees**, given that the two are
+ * indistinguishable in every figure this system computes: `CellFiguresService` counts
+ * attendees, so a missing row and a row marked absent contribute identically to both
+ * bucket views. The reason is section 13's own -- a meeting held with nobody there
+ * "counts in the denominator, and every member is recorded as not having attended",
+ * which is a statement about what a leader **declares** rather than about what a total
+ * needs -- and section 14's, that a correction "is an account of the whole meeting, sent
+ * as a roster". A partial list is a leader saying nothing about the members it omits, and
+ * this route cannot tell that from a leader saying they were absent.
+ *
+ * *This cited section 20's reconciliation and said a roster with holes "cannot" make the
+ * buckets sum. Both halves were false: section 20 says nothing about absent rows, and the
+ * two bucket views are computed from the same attendee set, so they reconcile whatever the
+ * roster omits. It also said a partial list would make the denominator depend on what a
+ * client sent, and that denominator is a count of meetings.*
  *
  * **A `NOT_HELD` meeting carries none** -- "No attendance is recorded", because the
  * meeting did not take place and there is nobody to have been absent from it. The
@@ -2602,7 +2615,7 @@ function assertAttendanceMatchesRoster(
   if (missing.length > 0) {
     throw new InvariantViolationError(
       'Every member on the meeting date must be recorded, present or not (SKILL.md ' +
-        'sections 13 and 20).',
+        'section 13).',
       { ...context, missing_person_ids: missing.map((member) => member.personId) },
     );
   }

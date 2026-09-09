@@ -19,7 +19,15 @@ disagrees, was answered `409 VERSION_CONFLICT` carrying **the stored value and t
 the account that recorded it**. The identical body sent sequentially is answered
 `403 dcc.correct_subtree`.
 
-The DCC roster publishes neither of those figures to that actor. So the ordering rule Section
+The DCC roster publishes neither of those figures to that actor.
+
+> **Corrected on 2026-09-09.** That sentence is false of the stored value: `GET
+> /api/v1/dcc/events/{id}/roster` returns each person's `present`, `version` and
+> `recorded_at` under `dcc.take_attendance`, which Section 7 states and decision 0194
+> settles as deliberate. Only the recording account's **name** is withheld. The ruling
+> stands on the ordering rule — a refusal must not answer what the capability withholds —
+> which never depended on this. Found when the Cell roster gained per-person marks and the
+> same premise was swept from Section 7, Section 22 and three code comments. So the ordering rule Section
 7 states — nothing the caller is told varies with the stored contents until the amendment
 capability is decided — was being obeyed on one route and not its twin, and **timing decided
 what somebody learned about another leader's record**.

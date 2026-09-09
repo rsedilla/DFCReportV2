@@ -9,8 +9,12 @@ leader's account of the whole meeting.
 > reconciliation needs an absent row and a row marked absent to be different facts".
 > Section 20 says nothing of the kind, and `CellFiguresService` counts attendees, so the
 > two contribute identically to every figure the system computes. The whole-roster
-> requirement is Section 13's on its own terms, and what makes this field nullable is the
-> round trip rather than a reconciliation.
+> requirement is Section 13's own — a meeting held with nobody there "counts in the
+> denominator, and every member is recorded as not having attended", a statement about what
+> a leader *declares* — and Section 14's, that a correction "is an account of the whole
+> meeting, sent as a roster". What makes the field nullable is that `present: false` would
+> assert a declaration nobody made, not that resubmitting one loses data: a missing row and
+> a row marked absent are indistinguishable in every figure this system computes.
 
 Nothing let a client read the marks it must resubmit.
 `GET /api/v1/cells/{id}/meetings/{meeting_id}/roster` returned each member as
