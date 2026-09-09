@@ -30,6 +30,8 @@ const LINKS = [
   { href: '/people', label: 'People' },
   { href: '/cells', label: 'Cell Leaders' },
   { href: '/dcc', label: 'DCC Attendance' },
+  { href: '/reports/cells', label: 'Cell Attendance' },
+  { href: '/reports/dcc', label: 'DCC Figures' },
   { href: '/session', label: 'Your session' },
 ];
 

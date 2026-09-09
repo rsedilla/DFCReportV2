@@ -17,6 +17,9 @@ import {
   mockCells,
   mockCellsEmpty,
   mockDccEvents,
+  mockCellReport,
+  mockCellReportForOneCell,
+  mockDccReport,
   mockDccRoster,
   mockMeetingRoster,
 } from './mock-attendance';
@@ -309,6 +312,53 @@ const SCANS = [
     },
   },
   {
+    // The aggregate arm: coverage leads, and no buckets, which section 12 makes a
+    // structural rule rather than a rendering choice.
+    name: 'cell attendance report',
+    route: '/reports/cells',
+    async before(page: import('@playwright/test').Page) {
+      await mockSignedIn(page);
+      await mockCells(page);
+      await mockCellReport(page);
+    },
+    async arrange(page: import('@playwright/test').Page) {
+      await expect(page.getByRole('heading', { name: 'Recording coverage' })).toBeVisible();
+      await expect(page.getByText('6 of 8 meetings recorded')).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'How often people came' })).toHaveCount(0);
+    },
+  },
+  {
+    // One Cell, which is where section 12 permits buckets. The completed column
+    // carries the API's own flag rather than a comparison against the calendar.
+    name: 'cell attendance report, one Cell',
+    route: '/reports/cells',
+    async before(page: import('@playwright/test').Page) {
+      await mockSignedIn(page);
+      await mockCells(page);
+      await mockCellReportForOneCell(page);
+    },
+    async arrange(page: import('@playwright/test').Page) {
+      await page.getByLabel('Figures for').selectOption('3f1b7c6e-0000-4000-8000-000000000101');
+      await expect(page.getByRole('heading', { name: 'How often people came' })).toBeVisible();
+      await expect(page.getByText('3 times — all of them')).toBeVisible();
+    },
+  },
+  {
+    // The removed Sunday is named, because section 9 requires a removal to be
+    // explained rather than left as a smaller number.
+    name: 'dcc figures report',
+    route: '/reports/dcc',
+    async before(page: import('@playwright/test').Page) {
+      await mockSignedIn(page);
+      await mockDccReport(page);
+    },
+    async arrange(page: import('@playwright/test').Page) {
+      await expect(page.getByRole('heading', { name: 'DCC Figures' })).toBeVisible();
+      await expect(page.getByText('12 of 18 records filed')).toBeVisible();
+      await expect(page.getByText(/No service was held on Sunday 14 June/)).toBeVisible();
+    },
+  },
+  {
     // One person already recorded and one not, which is what section 9 means by a
     // checklist whose lines mostly repeat what is already there.
     name: 'dcc checklist',
@@ -466,6 +516,24 @@ const TARGET_SWEEP = [
     minimum: 8,
   },
   {
+    // Two month controls and the scope select.
+    name: 'cell attendance report',
+    route: '/reports/cells',
+    settleRole: 'heading' as const,
+    settle: 'Recording coverage',
+    minimum: 3,
+  },
+  {
+    // Two month controls. The DCC report offers no scope select: section 20's
+    // NETWORK narrowing for this domain is settled, but a leader reads their own
+    // subtree and nothing here needs a second question.
+    name: 'dcc figures report',
+    route: '/reports/dcc',
+    settleRole: 'heading' as const,
+    settle: 'Recording coverage',
+    minimum: 2,
+  },
+  {
     // Back link, two radios per person across two people, and Save. Six rather
     // than the meeting screen's eight: a DCC event has no held-or-not question,
     // because section 9 records a person's attendance and never the event's status.
@@ -534,6 +602,13 @@ const TARGET_EXEMPT: { name: string; why: string }[] = [
       'the middle of a paragraph.',
   },
   {
+    name: 'cell attendance report, one Cell',
+    why:
+      'It renders the same three controls as "cell attendance report", which is measured, ' +
+      'and differs only in what the report returns. Measuring it would need a second mock on ' +
+      'the same URL to re-measure controls already covered.',
+  },
+  {
     name: 'cells, none in scope',
     why:
       'It renders the same two month controls and the same filter button as "cells", which is ' +
@@ -555,6 +630,8 @@ test('every interactive target meets the 24px minimum', async ({ page }) => {
   await mockDccEvents(page);
   await mockMeetingRoster(page);
   await mockDccRoster(page);
+  await mockCellReport(page);
+  await mockDccReport(page);
 
   for (const entry of TARGET_SWEEP) {
     const { route, settle, minimum } = entry;
