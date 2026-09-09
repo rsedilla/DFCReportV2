@@ -2016,6 +2016,12 @@ DCC coverage is shaped differently from Cell coverage. A Cell has one leader and
 
 Report that figure at every scope, as a single line, on the same terms as Cell coverage: factual, no ranking of leaders by it, and no derived score (Section 13).
 
+**Over a month, that single line is the number of leader-events with a record over the number of leader-events owed** (ruling of 2026-09-09), summed across the month's events. Both terms are reported and the figure is never divided into a percentage. Section 20 attributes coverage "by the obligation rather than by the record", and this is that sentence made arithmetic: a leader owes one record for each event they were the responsible leader at, and coverage is the fraction of those obligations discharged. It inherits the instant Section 20 already fixes — the denominator is the responsible leaders **as of the event date** — so a leader assigned in the third week owes records from that date and not before it, with nothing further needed to make a mid-month arrival correct.
+
+*The mean of the per-event ratios was rejected: it weights every Sunday equally however many leaders it involved, so a sparse event moves the month as much as a full one, and the line comes to depend on the shape of the calendar rather than on what was recorded. Counting only leaders who recorded for **every** event was rejected too — it measures per-leader completeness rather than whether records exist, and one missed Sunday removes a leader from the numerator entirely.*
+
+**Where no leader owed a record for any event in the month, the figure is `0 of 0` and is shown** — not an error, not a gap, and not omitted. Section 5 already names `0 of 0` as a real state for the other domain, "the coverage line being the evidence that its leader reported nothing", and a scope with nobody responsible for anybody has nothing to report and says so. *Whether a month with a calendar **gap** is reportable at all is a different question, recorded as open in `CLAUDE.md` and untouched by this rule: this fixes how per-event figures combine, not whether the month should have been reportable.*
+
 ```text
 dcc_events
 - id
@@ -2862,7 +2868,9 @@ Buckets are derived from N:
 
 `Completed` means attendance at every recorded meeting of this Cell in the month. Never label buckets from the calendar count.
 
-**Where N is zero**, the Cell recorded no meetings, so nobody attended and the population is empty. The view shows the coverage line alone and no buckets. Do not render a `Completed (0/0)` bucket: with no meetings there is nothing to complete, and a bucket whose condition every person satisfies is not a bucket.
+**Where N is zero**, the Cell recorded no meetings, so nobody attended and the population is empty. The view shows the coverage line alone and no buckets.
+
+**Where the *denominator* is zero — the Cell scheduled no meetings in the month — the line reads `0 of 0`, it is shown, and the Cell stays in an aggregate coverage denominator contributing zero to both terms** (ruling of 2026-09-09). It is reachable without any backdating: a month after the Cell's closure has no schedule row in force. Dropping such a Cell from the aggregate would break the ground this section gives for coverage leading — that its denominator is derived rather than submitted, so "recording less makes coverage worse, never better" — by making disappearance from the denominator a way of recording less and looking no worse. The arithmetic costs nothing, since adding zero to both terms changes no ratio; what it preserves is the denominator's **membership**, so a leader's aggregate names every Cell they hold rather than every Cell that happened to have a schedule. The line is shown rather than suppressed because Section 5 already treats `0 of 0` as evidence — "the coverage line being the evidence that its leader reported nothing" — and because suppressing it removes the one figure explaining a Cell that shows nothing. It is not an error state and carries no warning colour (Sections 13, 17 and 19): a Cell closed last month has done nothing wrong. *Listing such a Cell while excluding it from the figure was rejected: a figure and the list explaining it must be over the same set, or the rows do not add up to the total beside them.* Do not render a `Completed (0/0)` bucket: with no meetings there is nothing to complete, and a bucket whose condition every person satisfies is not a bucket.
 
 Every Cell monthly attendance view shows recording coverage beside the buckets, as a single line — for example `4 of 5 meetings recorded`. Coverage is never a bucket and never a status.
 
