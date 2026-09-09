@@ -21,7 +21,7 @@ export default function HomePage() {
   const router = useRouter();
 
   useEffect(() => {
-    router.replace(hasStoredSession() ? '/session' : '/sign-in');
+    router.replace(hasStoredSession() ? '/dashboard' : '/sign-in');
   }, [router]);
 
   return (

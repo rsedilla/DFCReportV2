@@ -80,13 +80,13 @@
     },
     {
       "route": "GET /api/v1/people/:id/pastoral-path",
-      "waived_to": "screens block",
-      "reason": "§8 asks for the chain when a profile is opened, and the profile screen does not request it yet. My Network is where it lands."
+      "reason": "§8 asks for the chain when a profile is opened, and the profile screen does not request it yet. My Network is where it lands.",
+      "screen": "web/app/people/[id]/network/page.tsx"
     },
     {
       "route": "PUT /api/v1/people/:id/pastoral-leader",
-      "waived_to": "screens block",
-      "reason": "Reassignment is the highest-risk authorization surface in the system (§5). My Network is the screen that performs it."
+      "reason": "Reassignment is the highest-risk authorization surface in the system (§5). My Network is the screen that performs it.",
+      "screen": "web/app/people/[id]/network/page.tsx"
     },
     {
       "route": "PUT /api/v1/people/:id/sex",
@@ -115,8 +115,8 @@
     },
     {
       "route": "GET /api/v1/dcc/events/:id/coverage-gaps",
-      "waived_to": "screens block",
-      "reason": "The attention list behind each event's coverage figure (decision 0228, §15). It belongs beside DCC Attendance and on Dashboard's outstanding work, and neither screen exists yet."
+      "reason": "The attention list behind each event's coverage figure (decision 0228, §15). It belongs beside DCC Attendance and on Dashboard's outstanding work, and neither screen exists yet.",
+      "screen": "web/app/dcc/[id]/gaps/page.tsx"
     },
     {
       "route": "GET /api/v1/cells/:id/members",

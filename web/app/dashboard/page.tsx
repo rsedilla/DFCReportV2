@@ -1,0 +1,344 @@
+'use client';
+
+import { useQueries, useQuery } from '@tanstack/react-query';
+import Link from 'next/link';
+
+import { AppShell, PAGE_WIDTH } from '@/components/app-shell';
+import { CoverageFigure } from '@/components/coverage-figure';
+import { FailureNotice } from '@/components/ui/failure-notice';
+import { listCellMeetings, listCells, type CellSummary } from '@/lib/cells';
+import { getMe } from '@/lib/me';
+import { describeFailure } from '@/lib/messages';
+import { getCellMonthlyReport, getDccMonthlyReport } from '@/lib/reports';
+import { dayLabel, monthLabel, reportingMonthOf } from '@/lib/reporting-month';
+
+/**
+ * Where a signed-in leader lands (SKILL.md section 19).
+ *
+ * **Outstanding work comes above the numbers, and that is the whole design.**
+ * Section 19 is blunt about it: "A dashboard of counts tells a leader nothing to
+ * act on." So the first thing on this screen is the meetings awaiting a record,
+ * each one a link to the form that resolves it, and the second is the Cells whose
+ * coverage line shows something missing. The figures follow.
+ *
+ * **Every tile carries what it counts, its value, its scope and its period**
+ * (section 19). A tile reading `12` and a tile reading `11,480` are the same tile
+ * for two different people, and a figure without its scope "cannot be discussed,
+ * screenshotted, or compared".
+ *
+ * **Current-state and period-based figures are in separate sections and never
+ * interleaved.** Section 3 draws that line and section 19 says a dashboard is
+ * where it is most easily lost: how many Cells you oversee is true today, and how
+ * many people attended is true of a month. Putting them in one row invites a
+ * reader to compare them.
+ *
+ * **An open month says so**, because the same tile on the 5th and the 31st shows
+ * very different numbers with nothing having happened (sections 17 and 19).
+ *
+ * **Attendance counts unique people and never occurrences** (section 19, principle
+ * 10). Both figures here come from the reporting routes, which count distinct
+ * people; nothing on this screen sums attendances.
+ *
+ * **Two of section 19's four outstanding-work lists have no route yet** and are
+ * named here rather than faked: people with no active Cell membership within the
+ * actor's scope, and the outcome of a Cell leadership request the actor
+ * submitted — the latter being a question `CLAUDE.md` records as open, since
+ * section 7 names no capability for such a read. A third is partly served: a
+ * **closed** Cell's meetings are not reachable, because the Cells index is
+ * `ACTIVE`-only and nothing supplies the identifier.
+ *
+ * **Nothing here is ranked or colour-graded** (sections 13, 17 and 19). The
+ * attention list is filtered rather than sorted, in the order the API returns.
+ */
+export default function DashboardPage() {
+  return (
+    <AppShell>
+      <Dashboard />
+    </AppShell>
+  );
+}
+
+function Dashboard() {
+  const month = reportingMonthOf();
+
+  const me = useQuery({ queryKey: ['me'], queryFn: ({ signal }) => getMe(signal) });
+
+  const mine = useQuery({
+    queryKey: ['cells', month, true],
+    queryFn: ({ signal }) => listCells({ month, ledBy: 'me' }, signal),
+  });
+
+  const scoped = useQuery({
+    queryKey: ['cells', month, false],
+    queryFn: ({ signal }) => listCells({ month }, signal),
+  });
+
+  // One request per Cell the actor leads, because a meeting awaiting a record is
+  // a property of a meeting rather than of the Cell — the index carries the two
+  // coverage figures and never which meetings are missing.
+  const meetings = useQueries({
+    queries: (mine.data?.data ?? []).map((cell) => ({
+      queryKey: ['cell-meetings', cell.id, month],
+      queryFn: ({ signal }: { signal: AbortSignal }) => listCellMeetings(cell.id, month, signal),
+    })),
+  });
+
+  const cellFigures = useQuery({
+    queryKey: ['cell-report', month, me.data?.person_id],
+    queryFn: ({ signal }) =>
+      getCellMonthlyReport(month, { kind: 'LEADER', person_id: me.data!.person_id }, signal),
+    enabled: me.data !== undefined,
+  });
+
+  const dccFigures = useQuery({
+    queryKey: ['dcc-report', month, me.data?.person_id],
+    queryFn: ({ signal }) =>
+      getDccMonthlyReport(month, { kind: 'LEADER', person_id: me.data!.person_id }, signal),
+    enabled: me.data !== undefined,
+  });
+
+  const awaiting = (mine.data?.data ?? []).flatMap((cell, index) => {
+    const entries = meetings[index]?.data?.meetings ?? [];
+
+    return entries
+      .filter((entry) => entry.meeting === null)
+      .map((entry) => ({ cell, date: entry.scheduled_date }));
+  });
+
+  const needingAttention = (scoped.data?.data ?? []).filter(
+    (cell) => cell.coverage.recorded < cell.coverage.scheduled,
+  );
+
+  const failure = mine.isError
+    ? describeFailure(mine.error)
+    : scoped.isError
+      ? describeFailure(scoped.error)
+      : me.isError
+        ? describeFailure(me.error)
+        : null;
+
+  return (
+    <main id="main" className={PAGE_WIDTH.INDEX}>
+      <h1 className="text-2xl font-semibold tracking-tight">
+        {me.data?.first_name ? `Welcome, ${me.data.first_name}` : 'Dashboard'}
+      </h1>
+      <p className="text-muted mt-2 max-w-2xl text-sm leading-relaxed">
+        What needs doing comes first. The figures below it are for{' '}
+        {monthLabel(month)} and cover the people you oversee.
+      </p>
+
+      <div className="mt-8">
+        <FailureNotice failure={failure} />
+      </div>
+
+      <section className="mt-8" aria-labelledby="awaiting-heading">
+        <h2 id="awaiting-heading" className="text-lg font-medium">
+          Meetings awaiting a record
+        </h2>
+        {mine.isPending ? (
+          <p className="text-muted mt-2 text-sm">Loading&hellip;</p>
+        ) : awaiting.length === 0 ? (
+          <p className="text-muted mt-2 max-w-2xl text-sm leading-relaxed">
+            Nothing outstanding for your own Cells this month.
+          </p>
+        ) : (
+          <ul className="mt-4 flex flex-col gap-3">
+            {awaiting.map(({ cell, date }) => (
+              <li key={`${cell.id}-${date}`} className="border-line rounded-lg border p-4">
+                {/*
+                  Each entry carries the action that resolves it (section 19),
+                  which is the recording form for that meeting rather than a
+                  count of how many are missing.
+                */}
+                <Link
+                  href={`/cells/${cell.id}/meetings/${date}`}
+                  className="focus-visible:outline-accent inline-flex min-h-6 items-center rounded-sm text-base font-medium underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2"
+                >
+                  {cell.cell_id} — {dayLabel(date)}
+                </Link>
+                <p className="text-muted mt-1 text-sm">Record who was there</p>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      <section className="mt-10" aria-labelledby="attention-heading">
+        <h2 id="attention-heading" className="text-lg font-medium">
+          Cells with meetings still to record
+        </h2>
+        <p className="text-muted mt-1 max-w-2xl text-sm leading-relaxed">
+          Within your scope, in no particular order. This is a filter, not a ranking.
+        </p>
+        {scoped.isPending ? (
+          <p className="text-muted mt-2 text-sm">Loading&hellip;</p>
+        ) : needingAttention.length === 0 ? (
+          <p className="text-muted mt-2 max-w-2xl text-sm leading-relaxed">
+            Every Cell in your scope has recorded all of this month&rsquo;s meetings.
+          </p>
+        ) : (
+          <ul className="mt-4 flex flex-col gap-3">
+            {needingAttention.map((cell) => (
+              <AttentionRow key={cell.id} cell={cell} month={month} />
+            ))}
+          </ul>
+        )}
+      </section>
+
+      {/*
+        Period-based figures, kept apart from the current-state section below.
+        Section 3 draws that line and section 19 says a dashboard is where it is
+        most easily lost.
+      */}
+      <section className="mt-12" aria-labelledby="period-heading">
+        <h2 id="period-heading" className="text-lg font-medium">
+          {monthLabel(month)}
+        </h2>
+        <div className="mt-4 grid gap-4 sm:grid-cols-2">
+          <Tile
+            counts="Cell attendance"
+            value={cellFigures.data ? String(cellFigures.data.unique_people) : '—'}
+            unit="people attended"
+            scope="People you oversee"
+            period={periodLabel(month, cellFigures.data?.open)}
+            href="/reports/cells"
+          />
+          <Tile
+            counts="DCC attendance"
+            value={dccFigures.data ? String(dccFigures.data.unique_people) : '—'}
+            unit="people attended"
+            scope="People you oversee"
+            period={periodLabel(month, dccFigures.data?.open)}
+            href="/reports/dcc"
+          />
+          <Tile
+            counts="Cell recording coverage"
+            value={
+              cellFigures.data ? (
+                <CoverageFigure
+                  recorded={cellFigures.data.coverage.recorded}
+                  scheduled={cellFigures.data.coverage.scheduled}
+                  unit="meetings recorded"
+                />
+              ) : (
+                '—'
+              )
+            }
+            scope="Cells you oversee"
+            period={periodLabel(month, cellFigures.data?.open)}
+            href="/reports/cells"
+          />
+          <Tile
+            counts="DCC recording coverage"
+            value={
+              dccFigures.data ? (
+                <CoverageFigure
+                  recorded={dccFigures.data.coverage.met}
+                  scheduled={dccFigures.data.coverage.owed}
+                  unit="records filed"
+                />
+              ) : (
+                '—'
+              )
+            }
+            scope="Leaders you oversee"
+            period={periodLabel(month, dccFigures.data?.open)}
+            href="/reports/dcc"
+          />
+        </div>
+      </section>
+
+      <section className="mt-10" aria-labelledby="current-heading">
+        <h2 id="current-heading" className="text-lg font-medium">
+          As things stand today
+        </h2>
+        <div className="mt-4 grid gap-4 sm:grid-cols-2">
+          <Tile
+            counts="Cells you lead"
+            value={mine.data ? String(mine.data.data.length) : '—'}
+            scope="Your own Cells"
+            period="As of today"
+            href="/cells?led_by=me"
+          />
+          <Tile
+            counts="Cells in your scope"
+            value={scoped.data ? String(scoped.data.data.length) : '—'}
+            scope="People you oversee"
+            period="As of today"
+            href="/cells"
+          />
+        </div>
+      </section>
+    </main>
+  );
+}
+
+/** Section 17: a period still open for submission is still changing. */
+function periodLabel(month: string, open: boolean | undefined): string {
+  if (open === undefined) {
+    return monthLabel(month);
+  }
+
+  return open ? `${monthLabel(month)} · still open` : `${monthLabel(month)} · closed`;
+}
+
+/**
+ * One tile, carrying the four things section 19 requires of every one.
+ *
+ * The scope and period are not decoration and are not optional props: a figure
+ * without them cannot be discussed or compared, which is that section's own
+ * reason. They are required by this component's type so a tile cannot be added
+ * without them.
+ */
+function Tile({
+  counts,
+  value,
+  unit,
+  scope,
+  period,
+  href,
+}: {
+  counts: string;
+  value: React.ReactNode;
+  unit?: string;
+  scope: string;
+  period: string;
+  href: string;
+}) {
+  return (
+    <Link
+      href={href}
+      className="border-line focus-visible:outline-accent block rounded-lg border p-4 focus-visible:outline-2 focus-visible:outline-offset-2"
+    >
+      <p className="text-muted text-sm">{counts}</p>
+      <p className="mt-1 text-2xl font-semibold tabular-nums">{value}</p>
+      {unit ? <p className="text-muted text-sm">{unit}</p> : null}
+      <p className="text-muted mt-3 text-sm">
+        {scope} · {period}
+      </p>
+    </Link>
+  );
+}
+
+function AttentionRow({ cell, month }: { cell: CellSummary; month: string }) {
+  return (
+    <li className="border-line rounded-lg border p-4">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+        <h3 className="text-base font-medium">
+          <Link
+            href={`/cells/${cell.id}/meetings?month=${month}`}
+            className="focus-visible:outline-accent inline-flex min-h-6 items-center rounded-sm underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2"
+          >
+            {cell.cell_id}
+          </Link>
+        </h3>
+        <CoverageFigure
+          recorded={cell.coverage.recorded}
+          scheduled={cell.coverage.scheduled}
+          unit="meetings recorded"
+        />
+      </div>
+      <p className="text-muted mt-2 text-sm">Led by {cell.leader.full_name}</p>
+    </li>
+  );
+}

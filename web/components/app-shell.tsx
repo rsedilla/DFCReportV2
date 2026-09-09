@@ -22,11 +22,14 @@ import { cn } from '@/lib/utils';
  * Stage 3 and later. Rendering them now, disabled or dead, teaches people that
  * the navigation lies, and that outlasts the stubs. It grows as routes arrive.
  *
- * There is deliberately no Dashboard entry yet: section 19 requires a dashboard
- * to lead with what needs doing, and nothing generates outstanding work until
- * Cells and attendance exist.
+ * **Dashboard is first, which section 19 requires**: it is "the first item in the
+ * sidebar and the screen every user lands on". *This paragraph said there was
+ * deliberately no Dashboard entry, on the ground that nothing generated
+ * outstanding work until Cells and attendance existed. Both now do, and the entry
+ * arrived with them.*
  */
 const LINKS = [
+  { href: '/dashboard', label: 'Dashboard' },
   { href: '/people', label: 'People' },
   { href: '/cells', label: 'Cell Leaders' },
   { href: '/dcc', label: 'DCC Attendance' },
