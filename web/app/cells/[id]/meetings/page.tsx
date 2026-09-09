@@ -65,6 +65,21 @@ function CellMeetings() {
         not happen.
       </p>
 
+      <p className="mt-4 flex flex-wrap gap-4">
+        <Link
+          href={`/cells/${params.id}/members`}
+          className="focus-visible:outline-accent inline-flex min-h-6 items-center rounded-sm text-sm underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2"
+        >
+          Members
+        </Link>
+        <Link
+          href={`/cells/${params.id}/schedule`}
+          className="focus-visible:outline-accent inline-flex min-h-6 items-center rounded-sm text-sm underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2"
+        >
+          Change when it meets
+        </Link>
+      </p>
+
       {/*
         No `open` flag here: this route does not return one. It is shown on the
         Cells index and on the reports, and claiming it from a clock this screen
