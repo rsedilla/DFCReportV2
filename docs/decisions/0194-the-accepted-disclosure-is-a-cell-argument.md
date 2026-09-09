@@ -58,8 +58,12 @@ version of this argument had said so.
 
 **The bound the Cell case rested on does not exist here.** A Cell submission must name every
 member exactly once and is answered as a whole, so recovering N figures **through that
-route** cost 2^N — the heading is past-tensed because the roster has since made the figures
-free, and this clause is about the shape of a submission, which is unchanged. DCC is
+route** costs 2^N. *Present tense against a past-tensed heading, and the two are about
+different things: the heading is past because the Cell case no longer **rests** on the
+bound, while this clause compares the shape of the two submissions, which no ruling has
+changed. A version that past-tensed this clause too was refuted by its own next words —
+a route-scoped cost that is still what it always was cannot be the thing that stopped
+being true.* DCC is
 recorded per line with per-line outcomes, so the same actor could recover N figures in N
 probes. The acceptance would be worth very little in this domain whether or not the roster
 published anything — publishing is not what makes the figures reachable, which is the

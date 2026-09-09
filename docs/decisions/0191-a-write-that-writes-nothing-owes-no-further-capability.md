@@ -148,9 +148,12 @@ recording capability gains a read they did not have, not whether the figures exi
 > 2026-09-09 (decision 0223), under `cell.take_attendance` — the capability this paragraph
 > named as the one it would *not* be. The question it framed is the one that matters, and
 > it is now answered: an actor holding `cell.take_attendance` without
-> `cell.correct_subtree` does gain a read they did not have. Section 7 re-derives the
-> acceptance on that footing, and which capability may read those marks is recorded as open
-> in `CLAUDE.md`.
+> `cell.correct_subtree` does gain a read they did not have. Section 7 re-derives on that
+> footing the acceptance of **publishing the marks**, which is a second acceptance and not
+> this ruling's — this one's survives on the two grounds above — and which capability may
+> read those marks is recorded as open in `CLAUDE.md`. *This note said "Section 7
+> re-derives **the** acceptance", which in this file names the bit and so contradicted the
+> blockquote above it.*
 
 ## What this binds
 

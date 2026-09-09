@@ -33,10 +33,16 @@ for exactly that reason. Nothing in that argument is about DCC — it is about a
 being asked to submit a list they cannot see — and the Cell route asks for more than the
 DCC one does, because it demands the *whole* roster rather than the lines being changed.
 
-Section 7's accepted disclosure reaches it: a leader authorized to record a meeting is
-authorized to know what was recorded for it. The route is already guarded by
-`cell.take_attendance` resolved against the meeting (decisions 0186, 0188, 0192), so this
-adds no reader.
+A leader authorized to record a meeting is authorized to know what was recorded for it. The
+route is already guarded by `cell.take_attendance` resolved against the meeting (decisions
+0186, 0188, 0192), so this adds no reader.
+
+*This began "Section 7's accepted disclosure reaches it", which grounded the field by
+inheritance from the confirmation-bit acceptance. Section 7 has since separated the two:
+publishing the marks is a second acceptance, re-derived there on three grounds of its own,
+and the bit's grounds were never this field's. The sentence above is left standing because
+it is a reason in its own right rather than a citation, and Section 7's re-derivation rests
+on that reason among its three.*
 
 > **Two corrections, from the review of the implementation on the same day.** This
 > paragraph said "resolved against the meeting's **frozen** responsible leader", which is
