@@ -7,9 +7,12 @@ Cell submission names every member at once and the answer covers the whole set �
 names what would change that: **"a route that reads per-person attendance"**.
 
 > **The bound is gone since 2026-09-09**, and this paragraph is context rather than
-> holding: decision 0223 gives the Cell roster each member's mark, Section 7 has re-derived
-> the acceptance on three grounds that do not include it, and what this ruling decides —
-> the DCC half, below — never rested on it.
+> holding: decision 0223 gives the Cell roster each member's mark, the acceptance described
+> here survives on the **two** grounds decision 0191 has left rather than on the bound, and
+> what this ruling decides — the DCC half, below — never rested on it. *This note said
+> "Section 7 has re-derived the acceptance on three grounds". Those three are Section 7's
+> grounds for **publishing the marks**, which is a second acceptance and not this one; the
+> two are distinguished at the point Section 7 retracts the bound.*
 
 That clause said *"which none does today"*, of the whole system, and was false when it was
 written. `GET /api/v1/dcc/events/{id}/roster` returns, for each person on the actor's
@@ -34,8 +37,10 @@ figures makes it free and revisits this.
 
 > **That trigger fired on 2026-09-09**, and this paragraph is now false in the present
 > tense. Decision 0223 gives the Cell roster each member's mark, so the bit is free and the
-> 2^N bound is gone; Section 7 has re-derived what the bound was supporting, on three
-> grounds that do not include it. **The DCC half of this ruling — which is what it decides
+> 2^N bound is gone; the acceptance it was supporting survives on the two grounds decision
+> 0191 has left, while Section 7's three re-derived grounds belong to a second acceptance,
+> publishing the marks. *This note gave those three as this acceptance's own.* **The DCC
+> half of this ruling — which is what it decides
 > — is untouched**, and decision 0223 cites it for its reason rather than for this
 > paragraph: a leader marking a checklist must see who is already marked, which is a
 > statement about a person being asked to submit a list they cannot see and was never about
@@ -52,7 +57,9 @@ Of the three fields the roster returns, this one is *required* to be published, 
 version of this argument had said so.
 
 **The bound the Cell case rested on does not exist here.** A Cell submission must name every
-member exactly once and is answered as a whole, so recovering N figures costs 2^N. DCC is
+member exactly once and is answered as a whole, so recovering N figures **through that
+route** cost 2^N — the heading is past-tensed because the roster has since made the figures
+free, and this clause is about the shape of a submission, which is unchanged. DCC is
 recorded per line with per-line outcomes, so the same actor could recover N figures in N
 probes. The acceptance would be worth very little in this domain whether or not the roster
 published anything — publishing is not what makes the figures reachable, which is the
@@ -80,9 +87,11 @@ eight lines above — where a record exists and disagrees, changing it needs
 `dcc.correct_subtree`.*
 
 **Accepting in both domains on one reason.** There is no single reason. The Cell case rested
-on a bound — gone since 2026-09-09, and re-derived in Section 7 on three grounds that
-replace it; the DCC case rests on the three grounds above, of which the mandatory version
-is the one that is not a judgement call. Collapsing them is what produced the withdrawn
+on a bound — gone since 2026-09-09, and the acceptance it carried now stands on the two
+grounds decision 0191 has left; the DCC case rests on the three grounds above, of which the
+mandatory version is the one that is not a judgement call. *This said the Cell case was
+"re-derived in Section 7 on three grounds that replace it", which named Section 7's grounds
+for publishing the marks — a different acceptance — as this one's replacement.* Collapsing them is what produced the withdrawn
 claim of 2026-09-03 that a Cell ground covered both paths.
 
 ## What this does not settle
