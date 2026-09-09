@@ -1,6 +1,7 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
+import Link from 'next/link';
 import { useState } from 'react';
 
 import { AppShell, PAGE_WIDTH } from '@/components/app-shell';
@@ -88,7 +89,14 @@ function EventRow({ event }: { event: DccEvent }) {
   return (
     <li className="border-line rounded-lg border p-4">
       <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-        <h2 className="text-base font-medium">{dayLabel(event.event_date)}</h2>
+        <h2 className="text-base font-medium">
+          <Link
+            href={`/dcc/${event.id}`}
+            className="focus-visible:outline-accent inline-flex min-h-6 items-center rounded-sm underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2"
+          >
+            {dayLabel(event.event_date)}
+          </Link>
+        </h2>
         <CoverageFigure
           recorded={event.coverage?.met ?? null}
           scheduled={event.coverage?.owed ?? null}

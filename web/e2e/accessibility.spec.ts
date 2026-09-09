@@ -17,6 +17,8 @@ import {
   mockCells,
   mockCellsEmpty,
   mockDccEvents,
+  mockDccRoster,
+  mockMeetingRoster,
 } from './mock-attendance';
 
 /**
@@ -290,6 +292,37 @@ const SCANS = [
       await expect(page.getByText('No records owed yet')).toBeVisible();
     },
   },
+  {
+    // The recording form, with a member nobody has marked. That row is the state
+    // worth scanning: it is a third state beside present and absent, and it must
+    // reach the leader as a choice rather than as a pre-selected Absent.
+    name: 'record a cell meeting',
+    route: '/cells/3f1b7c6e-0000-4000-8000-000000000101/meetings/2026-06-27',
+    pattern: '/cells/[id]/meetings/[date]',
+    async before(page: import('@playwright/test').Page) {
+      await mockSignedIn(page);
+      await mockMeetingRoster(page);
+    },
+    async arrange(page: import('@playwright/test').Page) {
+      await expect(page.getByRole('heading', { name: 'Saturday 27 June' })).toBeVisible();
+      await expect(page.getByText('2 members still to mark.')).toBeVisible();
+    },
+  },
+  {
+    // One person already recorded and one not, which is what section 9 means by a
+    // checklist whose lines mostly repeat what is already there.
+    name: 'dcc checklist',
+    route: '/dcc/3f1b7c6e-0000-4000-8000-000000000501',
+    pattern: '/dcc/[id]',
+    async before(page: import('@playwright/test').Page) {
+      await mockSignedIn(page);
+      await mockDccRoster(page);
+    },
+    async arrange(page: import('@playwright/test').Page) {
+      await expect(page.getByRole('heading', { name: 'Sunday 7 June' })).toBeVisible();
+      await expect(page.getByText('Not recorded yet')).toBeVisible();
+    },
+  },
 ] as const;
 
 for (const theme of THEMES) {
@@ -418,6 +451,30 @@ const TARGET_SWEEP = [
     settle: 'DCC Attendance',
     minimum: 2,
   },
+  {
+    // Back link, two status radios, two radios per member across two members, and
+    // Save.
+    //
+    // **Settled on the roster heading rather than the page heading**, which renders
+    // from the URL and is on screen before the roster arrives — so settling there
+    // counted the controls of a page that had not loaded its members yet, and the
+    // `minimum` caught it.
+    name: 'record a cell meeting',
+    route: '/cells/3f1b7c6e-0000-4000-8000-000000000101/meetings/2026-06-27',
+    settleRole: 'heading' as const,
+    settle: 'Who was there',
+    minimum: 8,
+  },
+  {
+    // Back link, two radios per person across two people, and Save. Six rather
+    // than the meeting screen's eight: a DCC event has no held-or-not question,
+    // because section 9 records a person's attendance and never the event's status.
+    name: 'dcc checklist',
+    route: '/dcc/3f1b7c6e-0000-4000-8000-000000000501',
+    settleRole: 'heading' as const,
+    settle: 'Sunday 7 June',
+    minimum: 6,
+  },
 ] as const;
 
 /**
@@ -496,6 +553,8 @@ test('every interactive target meets the 24px minimum', async ({ page }) => {
   await mockCells(page);
   await mockCellMeetings(page);
   await mockDccEvents(page);
+  await mockMeetingRoster(page);
+  await mockDccRoster(page);
 
   for (const entry of TARGET_SWEEP) {
     const { route, settle, minimum } = entry;

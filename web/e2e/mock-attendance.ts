@@ -201,3 +201,82 @@ export async function mockDccEvents(page: Page): Promise<void> {
     ),
   );
 }
+
+/**
+ * One meeting's roster, in the state a correction screen has to handle: some
+ * members marked, one not marked at all.
+ *
+ * The unmarked member is the point. Decision 0223 gives the roster each member's
+ * mark so a correction resubmits what is stored, and section 13 has the roster
+ * declared rather than inferred — so a member nobody has marked must reach the
+ * screen as `null` and not as `present: false`.
+ */
+export async function mockMeetingRoster(page: Page): Promise<void> {
+  await page.route('**/api/v1/cells/*/meetings/*/roster', (route) =>
+    route.fulfill(
+      json({
+        cell_id: 'C-0007',
+        meeting_id: '2026-06-27',
+        scheduled_date: '2026-06-27',
+        scheduled_time: '19:00',
+        week_starting: '2026-06-22',
+        reporting_month: '2026-06-01',
+        roster_date: '2026-06-27',
+        responsible_leader_id: LEADER_ID,
+        meeting: null,
+        members: [
+          {
+            person_id: '3f1b7c6e-0000-4000-8000-000000000601',
+            member_id: 'M-00701',
+            first_name: 'Rosalinda',
+            last_name: 'Ocampo',
+            record: null,
+          },
+          {
+            person_id: '3f1b7c6e-0000-4000-8000-000000000602',
+            member_id: 'M-00702',
+            first_name: 'Bienvenido',
+            last_name: 'Trinidad',
+            record: null,
+          },
+        ],
+      }),
+    ),
+  );
+}
+
+/** A leader's DCC checklist: one person recorded already, one not. */
+export async function mockDccRoster(page: Page): Promise<void> {
+  await page.route('**/api/v1/dcc/events/*/roster', (route) =>
+    route.fulfill(
+      json({
+        event: {
+          id: '3f1b7c6e-0000-4000-8000-000000000501',
+          event_date: '2026-06-07',
+          recordable: true,
+          not_recordable_reason: null,
+          removed: false,
+          removal_reason: null,
+          coverage: { met: 5, owed: 8 },
+        },
+        data: [
+          {
+            person_id: '3f1b7c6e-0000-4000-8000-000000000601',
+            member_id: 'M-00701',
+            full_name: 'Rosalinda Ocampo',
+            responsible_leader_id: LEADER_ID,
+            record: { present: true, version: 1, recorded_at: '2026-06-07T12:00:00.000Z' },
+          },
+          {
+            person_id: '3f1b7c6e-0000-4000-8000-000000000602',
+            member_id: 'M-00702',
+            full_name: 'Bienvenido Trinidad',
+            responsible_leader_id: LEADER_ID,
+            record: null,
+          },
+        ],
+        next_cursor: null,
+      }),
+    ),
+  );
+}

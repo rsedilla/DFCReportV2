@@ -145,23 +145,23 @@
     },
     {
       "route": "GET /api/v1/cells/:id/meetings/:meetingId/roster",
-      "waived_to": "screens block",
-      "reason": "Who there is to record (§13). Cell Meetings calls it before a submission."
+      "reason": "Who there is to record (§13). Cell Meetings calls it before a submission.",
+      "screen": "web/app/cells/[id]/meetings/[date]/page.tsx"
     },
     {
       "route": "POST /api/v1/cells/:id/meetings/:meetingId/submit",
-      "waived_to": "screens block",
-      "reason": "Recording a meeting is the thing the pilot exists to test — whether leaders record every week."
+      "reason": "Recording a meeting is the thing the pilot exists to test — whether leaders record every week.",
+      "screen": "web/app/cells/[id]/meetings/[date]/page.tsx"
     },
     {
       "route": "GET /api/v1/dcc/events/:id/roster",
-      "waived_to": "screens block",
-      "reason": "The DCC checklist (§9). A leader marking it must see who is already marked."
+      "reason": "The DCC checklist (§9). A leader marking it must see who is already marked.",
+      "screen": "web/app/dcc/[id]/page.tsx"
     },
     {
       "route": "POST /api/v1/dcc/events/:id/submit",
-      "waived_to": "screens block",
-      "reason": "DCC recording, the second half of the pilot's month cycle (§9)."
+      "reason": "DCC recording, the second half of the pilot's month cycle (§9).",
+      "screen": "web/app/dcc/[id]/page.tsx"
     },
     {
       "route": "POST /api/v1/cells",

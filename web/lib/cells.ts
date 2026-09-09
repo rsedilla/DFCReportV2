@@ -179,3 +179,85 @@ export async function listCellMeetings(
     { signal },
   );
 }
+
+/** One member as the meeting roster returns them (decision 0223). */
+export interface RosterMember {
+  person_id: string;
+  member_id: string;
+  first_name: string;
+  last_name: string;
+  /**
+   * The live mark, or `null` for a member nobody has marked.
+   *
+   * **Null is not `false`.** A missing row and a row marked absent contribute
+   * identically to every figure, but they are different declarations: section 13
+   * has a roster declared by its leader, and a screen that rendered an unmarked
+   * member as absent would manufacture a declaration nobody made. So a correction
+   * screen shows "not recorded" and makes the leader choose.
+   */
+  record: { present: boolean } | null;
+}
+
+export interface MeetingRoster {
+  cell_id: string;
+  meeting_id: string;
+  scheduled_date: string;
+  scheduled_time: string;
+  week_starting: string;
+  reporting_month: string;
+  /** The date the roster was read at — the actual date where the meeting moved. */
+  roster_date: string;
+  responsible_leader_id: string;
+  meeting: RecordedMeeting | null;
+  members: RosterMember[];
+}
+
+export interface CellSubmission {
+  status: CellMeetingStatus;
+  /**
+   * The meeting's version, or absent on a first submission (section 14).
+   *
+   * **The unit is the meeting, not the person.** A Cell submission is one leader's
+   * account of one meeting, so one version covers the whole roster — which is the
+   * opposite of the DCC side, where a church-wide event means two leaders recording
+   * different people must never conflict.
+   */
+  submitted_version?: number;
+  attendance?: { person_id: string; present: boolean }[];
+  correction_reason?: string;
+  not_held_reason?: string;
+  not_held_note?: string;
+}
+
+/** The roster a submission must name in full, and the marks already standing. */
+export async function getMeetingRoster(
+  cellId: string,
+  meetingId: string,
+  signal?: AbortSignal,
+): Promise<MeetingRoster> {
+  return authenticatedRequest<MeetingRoster>(
+    `/api/v1/cells/${cellId}/meetings/${meetingId}/roster`,
+    { signal },
+  );
+}
+
+/**
+ * Record or correct one meeting.
+ *
+ * **The idempotency key is the caller's**, because a key belongs to a body rather
+ * than to an attempt (decision 0127). A leader on a slow connection who presses
+ * Save twice must produce one record, and a retry of the same submission must
+ * replay rather than write again — which only holds if the key survives the retry
+ * and changes when the body does.
+ */
+export async function submitMeeting(
+  cellId: string,
+  meetingId: string,
+  submission: CellSubmission,
+  idempotencyKey: string,
+): Promise<RecordedMeeting> {
+  return authenticatedRequest<RecordedMeeting>(
+    `/api/v1/cells/${cellId}/meetings/${meetingId}/submit`,
+    { method: 'POST', body: submission, idempotencyKey },
+  );
+}

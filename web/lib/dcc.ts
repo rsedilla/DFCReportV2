@@ -75,3 +75,61 @@ export async function listDccEvents(month: string, signal?: AbortSignal): Promis
     signal,
   });
 }
+
+/** One person on a leader's checklist, and the record standing against them. */
+export interface DccRosterLine {
+  person_id: string;
+  member_id: string;
+  full_name: string;
+  responsible_leader_id: string;
+  /**
+   * The live record, or `null` for somebody nobody has recorded.
+   *
+   * The version is **per person**, because section 14 makes a DCC record's unit
+   * `(event, person)`. A DCC event is church-wide, so two leaders recording
+   * different people must never conflict — which is why this carries a version per
+   * line where a Cell submission carries one for the whole meeting.
+   */
+  record: { present: boolean; version: number; recorded_at: string } | null;
+}
+
+export interface DccRoster {
+  event: DccEvent;
+  data: DccRosterLine[];
+  next_cursor: string | null;
+}
+
+export interface DccRecordInput {
+  person_id: string;
+  present: boolean;
+  /** The version read for this person, or `null` for their first record. */
+  version: number | null;
+  correction_reason?: string;
+}
+
+/** A leader's whole checklist for one event. */
+export async function getDccRoster(
+  eventId: string,
+  signal?: AbortSignal,
+): Promise<DccRoster> {
+  return authenticatedRequest<DccRoster>(`/api/v1/dcc/events/${eventId}/roster`, { signal });
+}
+
+/**
+ * Record or correct attendance for one event.
+ *
+ * **The idempotency key is the caller's**, for the reason the Cell submission
+ * gives: a key belongs to a body rather than to an attempt (decision 0127), so it
+ * has to survive a retry and change when the body does.
+ */
+export async function submitDccAttendance(
+  eventId: string,
+  records: DccRecordInput[],
+  idempotencyKey: string,
+): Promise<unknown> {
+  return authenticatedRequest<unknown>(`/api/v1/dcc/events/${eventId}/submit`, {
+    method: 'POST',
+    body: { records },
+    idempotencyKey,
+  });
+}

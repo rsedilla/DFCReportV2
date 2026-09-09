@@ -1,6 +1,7 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
+import Link from 'next/link';
 import { useParams, useSearchParams } from 'next/navigation';
 import { useState } from 'react';
 
@@ -95,7 +96,7 @@ function CellMeetings() {
           ) : (
             <ul className="mt-6 flex flex-col gap-3">
               {meetings.data.meetings.map((entry) => (
-                <MeetingRow key={entry.scheduled_date} entry={entry} />
+                <MeetingRow key={entry.scheduled_date} entry={entry} cellId={params.id} />
               ))}
             </ul>
           )}
@@ -105,7 +106,7 @@ function CellMeetings() {
   );
 }
 
-function MeetingRow({ entry }: { entry: ScheduledMeeting }) {
+function MeetingRow({ entry, cellId }: { entry: ScheduledMeeting; cellId: string }) {
   const meeting = entry.meeting;
   const moved =
     meeting !== null && meeting.actual_date !== null && meeting.actual_date !== entry.scheduled_date;
@@ -114,7 +115,12 @@ function MeetingRow({ entry }: { entry: ScheduledMeeting }) {
     <li className="border-line rounded-lg border p-4">
       <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
         <h2 className="text-base font-medium">
-          {dayLabel(entry.scheduled_date)}
+          <Link
+            href={`/cells/${cellId}/meetings/${entry.scheduled_date}`}
+            className="focus-visible:outline-accent inline-flex min-h-6 items-center rounded-sm underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2"
+          >
+            {dayLabel(entry.scheduled_date)}
+          </Link>
           <span className="text-muted font-normal"> at {entry.scheduled_time}</span>
         </h2>
         {/*
