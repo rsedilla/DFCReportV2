@@ -6,6 +6,11 @@ accepts it on a bound — recovering N people's attendance costs 2^N submissions
 Cell submission names every member at once and the answer covers the whole set — and it
 names what would change that: **"a route that reads per-person attendance"**.
 
+> **The bound is gone since 2026-09-09**, and this paragraph is context rather than
+> holding: decision 0223 gives the Cell roster each member's mark, Section 7 has re-derived
+> the acceptance on three grounds that do not include it, and what this ruling decides —
+> the DCC half, below — never rested on it.
+
 That clause said *"which none does today"*, of the whole system, and was false when it was
 written. `GET /api/v1/dcc/events/{id}/roster` returns, for each person on the actor's
 checklist, `present`, `version` and `recorded_at`. It is guarded by `dcc.take_attendance`

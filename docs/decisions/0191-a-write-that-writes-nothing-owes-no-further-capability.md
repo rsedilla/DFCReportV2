@@ -94,8 +94,11 @@ state-changing call carrying its own idempotency key.
 
 > **Dead since 2026-09-09.** Decision 0223 gives the Cell roster each member's mark under
 > the *identical* capability and target declaration this route carries, so the figures cost
-> one `GET`. The acceptance survives on the second ground alone, which is the stronger of
-> the two and was never a cost argument: the actor is not a stranger to the record.
+> one `GET`. The acceptance survives on the **two grounds below**, neither of which is a
+> cost argument: the actor is not a stranger to the record, and requiring the correction
+> capability for an unchanged submission tells a leader they may not alter what they did
+> not alter. *This note said "the second ground alone … the stronger of the two", in a
+> section carrying three — a miscount in the sentence written to correct a claim.*
 
 **The actor is not a stranger to the record.** Every actor who reaches this point holds
 the capability that *records* this meeting and, under decision 0192, the right to record
@@ -140,6 +143,14 @@ written here so they find it stated.
 Stage 5's reporting reads are the likely first, and they carry `reports.view_subtree`
 rather than `cell.take_attendance` — so the question is whether an actor holding only the
 recording capability gains a read they did not have, not whether the figures exist.
+
+> **Wrong on the surface and right on the question.** The first was the meeting roster on
+> 2026-09-09 (decision 0223), under `cell.take_attendance` — the capability this paragraph
+> named as the one it would *not* be. The question it framed is the one that matters, and
+> it is now answered: an actor holding `cell.take_attendance` without
+> `cell.correct_subtree` does gain a read they did not have. Section 7 re-derives the
+> acceptance on that footing, and which capability may read those marks is recorded as open
+> in `CLAUDE.md`.
 
 ## What this binds
 

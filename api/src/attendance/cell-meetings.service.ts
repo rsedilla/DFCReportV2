@@ -1291,9 +1291,15 @@ export class CellMeetingsService implements RecordedMeetingsPort {
     // **The capability is checked before anything about the stored record is disclosed,
     // and that now includes the null-version case.** What the early return above still
     // answers — matched or did not match — is accepted as a disclosure by decision 0191,
-    // on the ground that recovering N people costs 2^N submissions and that the actor
-    // holds the capability that records this meeting: `cell.submit_on_behalf` is settled
-    // above, so every actor reaching the early return may file this meeting outright.
+    // on the ground that the actor holds the capability that records this meeting:
+    // `cell.submit_on_behalf` is settled above, so every actor reaching the early return
+    // may file this meeting outright.
+    //
+    // *That ruling's first ground was that recovering N people costs 2^N submissions, and
+    // it is dead since 2026-09-09: the roster carries each member's mark under the
+    // identical declaration. The acceptance stands on the ground above and on the third —
+    // requiring the correction capability for an unchanged submission tells a leader they
+    // may not alter what they did not alter.*
     // A `VERSION_CONFLICT` carries the stored present count and the submitter's name
     // (section 22), so an actor holding `cell.take_attendance` and not
     // `cell.correct_subtree` could read the record out of a refusal.
