@@ -16,6 +16,15 @@ is one command. A port is what §2 reserves for a dependency that **would be a c
 slice imports `CellsModule` and calls that service, which is §2's ordinary rule for
 cross-module access, and it declares no port at all.*
 
+> **"Nothing imports `AttendanceModule` except `AppModule`" stopped being true on
+> 2026-09-09.** `RecordedMeetingsBindingModule` and `ReportingModule` both import it. The
+> ruling is unaffected and the sentence is left standing as what was checked when it was
+> made: what decides whether a port is owed is that **`CellsModule` imports no attendance**,
+> which is the clause beside it and is still true. The leaf claim was never the load-bearing
+> half — it was a stronger fact that happened to hold, and a reader reaching for it to
+> justify a new edge would be reasoning from the wrong one. A cycle is decided by what the
+> module at the far end reaches, not by who reaches it.
+
 *The absence of the import was read as evidence that a port was needed, when it only
 meant nothing had needed the module yet. That is a claim about structure written from
 the two ports already in view rather than from the module graph — the defect this log

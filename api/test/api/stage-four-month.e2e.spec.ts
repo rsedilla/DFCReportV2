@@ -288,9 +288,11 @@ describe('Stage 4 exit criterion: a month, its close, and a conflict', () => {
       expect(notHeldRow?.actual_date).toBeNull();
     }
 
-    // **Every member is recorded at every meeting that took place, present or not.** This
-    // is what section 20's reconciliation rests on: a roster with holes cannot make the
-    // classification and monthly-attendance buckets sum to the same unique-people total.
+    // **Every member is recorded at every meeting that took place, present or not.** That
+    // is section 13's roster rule, and it is *not* what section 20's reconciliation rests
+    // on — an earlier version of this comment said it was. A roster with holes reconciles
+    // exactly as a complete one does, both bucket views being computed from the attendees;
+    // what holes break is the account the leader gave.
     const held = rows.filter((row) => row.status !== 'NOT_HELD');
     for (const row of held) {
       const lines = await db

@@ -207,13 +207,17 @@ export class SubmitCellMeetingDto {
   /**
    * Every member of the Cell on the meeting date, present or not.
    *
-   * **Required for `HELD`, and it is the whole roster rather than the people who
-   * came.** Section 13: a meeting where the leader was there and nobody else came "is
+   * **Required for a meeting that took place — `HELD` and `RESCHEDULED` alike — and it
+   * is the whole roster rather than the people who came.** *Stated of `HELD` alone until
+   * 2026-09-09, while `assertAttendanceMatchesRoster` has always bound both and decision
+   * 0195 makes the reschedule the case the rule matters most on.* Section 13: a meeting where the leader was there and nobody else came "is
    * `HELD` with zero attendance. It counts in the denominator, and **every member is
-   * recorded as not having attended**." Absent rows and rows marked absent are
-   * different facts, and section 20's reconciliation needs the second: classification
-   * and monthly-attendance buckets must sum to the same unique-people total, which a
-   * roster with holes in it cannot do.
+   * recorded as not having attended**." A partial list is a leader
+   * saying nothing about the members it omits, and this route cannot tell that from a
+   * leader saying they were absent — section 14 makes a correction "an account of the
+   * whole meeting, sent as a roster". *This cited section 20's reconciliation, which says
+   * nothing about absent rows and which both bucket views satisfy whatever the roster
+   * omits, since they are computed from the same attendee set.*
    *
    * Forbidden for `NOT_HELD`, which "carries no attendance" — the meeting did not
    * happen, so there is nobody to have been absent from it.

@@ -9,14 +9,25 @@ meeting in a state Section 13 says cannot exist.
 - **A rescheduled meeting's roster comes from the actual date** (Section 12), not the
   scheduled one: "Membership can change between the two, and the roster should be the
   people who could actually have been there."
-- **A submission must name every member of the meeting exactly once** (Section 13), which
-  is what Section 20's reconciliation depends on.
+- **A submission must name every member of the meeting exactly once** (Section 13).
+
+  > **Corrected on 2026-09-09.** This said the rule "is what Section 20's reconciliation
+  > depends on". It is not: both of Section 20's bucket views are computed from the
+  > attendees, so a roster with holes reconciles exactly as a complete one does. The rule
+  > is Section 13's on its own terms — a partial list is a leader saying nothing about the
+  > members it omits — and Section 13 now states it in its own words, which it did not when
+  > this ruling cited it. Nothing this ruling turns on moves.
 
 So the ordinary flow records attendance against the scheduled-date roster and then moves
 the roster out from under it. A person who joined between the two dates has no record and
 should have one; a person who left has a record for a meeting they were not a member of.
 Neither is refused by anything, and the meeting is left failing the "exactly once" rule
-silently — invisible until a month is reported.
+silently — invisible until somebody reads the meeting.
+
+> *"Invisible until a month is reported" until 2026-09-09. A month report never reveals
+> it: both of Section 20's bucket views are computed from the attendees, so a roster with
+> holes reconciles exactly as a complete one does. That makes the defect harder to find
+> rather than easier, which strengthens this ruling.*
 
 Raised while building slice 2c's transitions, and escalated rather than settled in code:
 this decides what a leader sees and what is counted, which is a pastoral question wearing a
@@ -36,16 +47,23 @@ the roster is written in the same transaction.
 
 **Re-derive the roster and leave the meeting incomplete until corrected.** This is the
 state Section 13 says cannot exist, held deliberately and for an unbounded time. Nothing
-would surface it: coverage counts recorded meetings, not complete ones, so a month would
-reconcile wrongly with every figure looking ordinary.
+would surface it: coverage counts recorded meetings, not complete ones, and no report
+reads the roster's completeness at all — so the meeting stays wrong with every figure
+looking ordinary. *This said "a month would reconcile wrongly", which is the withdrawn
+Section 20 ground; the meeting is simply never checked.*
 
 **Refuse a reschedule that would change the roster.** A leader whose member joined on
 Tuesday could not record that Saturday's move at all, for a reason they cannot fix and did
 not cause. It also makes a legitimate operation fail on the history of an unrelated
 membership.
 
-**Close the dropped rows and leave the added ones missing.** Half the defect, and the
-half that is left is the one that breaks reconciliation.
+**Close the dropped rows and leave the added ones missing.** Half the defect, and the half
+that is left is the one Section 13's roster rule forbids: a member who joined between the
+two dates is on the meeting's roster and has no line, so the leader's account of the
+meeting is silently incomplete. *The ground given here was "the half that breaks
+reconciliation", which is the withdrawn Section 20 claim — and it was the sole stated
+reason for rejecting this alternative, so the sound one is written in rather than left
+implied.*
 
 The operation is not a larger request than the alternatives: a submission already carries
 the whole roster, so this asks for exactly what the route already takes.

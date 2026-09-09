@@ -1,7 +1,11 @@
 import { Inject, Injectable } from '@nestjs/common';
 
 import { CellFiguresService, type CellFiguresPopulation } from '../attendance/cell-figures.service';
+import { DccCoverageService, type DccCoverageScope } from '../attendance/dcc-coverage.service';
 import { DccFiguresService } from '../attendance/dcc-figures.service';
+import { CellsReadService } from '../cells/cells.read.service';
+import { endOfManilaDay } from '../common/time/manila';
+import { canonicalId } from '../common/identifiers';
 import { DATABASE, type Db } from '../database/database.module';
 import type { Database, NetworkName } from '../database/schema';
 import { HierarchyService } from '../hierarchy/hierarchy.service';
@@ -116,6 +120,30 @@ export interface DccMonthlyReport {
   unique_people: number;
   classification: Classification;
   buckets: AttendanceBucket[];
+  /**
+   * The month's recording coverage: obligations met over obligations owed, summed across
+   * the month's events (section 9, decision 0224).
+   *
+   * **Two figures, never divided into a percentage or a score** (section 13). They are
+   * carried separately for that reason rather than for the caller's convenience — a ratio
+   * is a leader's score, and section 13 forbids one.
+   *
+   * **It is not a property of the population above.** Classification and the buckets
+   * attribute by the *person*, placed as of the period's end; coverage attributes by the
+   * *obligation*, placed at each event date (section 20). So a leader whose subtree
+   * attended nothing still owes records, and the two halves of this response answer
+   * different questions about different parties. Neither section 20 identity ranges over
+   * coverage.
+   *
+   * `0 of 0` is a real answer and is rendered rather than suppressed (decision 0224).
+   */
+  coverage: Coverage;
+}
+
+/** Obligations met over obligations owed (section 9, decision 0224). Never divided. */
+export interface Coverage {
+  met: number;
+  owed: number;
 }
 
 /** What every Cell monthly report carries, whatever its scope (sections 12 and 20). */
@@ -133,6 +161,41 @@ interface CellMonthlyCommon {
   open: boolean;
   unique_people: number;
   classification: Classification;
+  /**
+   * The month's recording coverage: meetings recorded over meetings scheduled
+   * (section 12, decisions 0202 and 0225).
+   *
+   * **Present at every scope, unlike the buckets.** Decision 0202 settles that unique
+   * people, classification and coverage are the whole of an aggregate view and that
+   * coverage *leads* it — the buckets are absent above Cell scope because `N` belongs to
+   * a Cell, and coverage has no such problem: its denominator is derived from the
+   * schedule rather than self-reported, which is section 12's own reason for putting it
+   * first.
+   *
+   * **Two figures, never divided** (section 13). Field names match the Cells index, so
+   * one concept keeps one field name across endpoints (section 22); they differ from the
+   * DCC line's `met` and `owed` because they are a different figure, counting scheduled
+   * meetings rather than obligations.
+   *
+   * **A Cell that scheduled nothing contributes zero to both terms** (decision 0225), and
+   * that is the whole of what these two figures can carry. It produces no scheduled pair
+   * at all, so it is not *in* the set this is computed over — which is arithmetically
+   * indistinguishable from being in it and contributing zero, and is why nothing here can
+   * tell the two apart. **Decision 0225's other half is not implemented and is not
+   * implementable in a two-figure aggregate**: it asks that the denominator's
+   * *membership* name every Cell a leader holds rather than every Cell that happened to
+   * have a schedule. Decision 0225 states the reason separately, under what it rejected:
+   * "A figure and the list that explains it must be over the same set."
+   * There is no list here. The first per-Cell breakdown placed beside this figure is what
+   * owes that, and it is the surface that will have to name such a Cell explicitly.
+   */
+  coverage: CellCoverage;
+}
+
+/** Meetings recorded over meetings scheduled (section 12). Never divided. */
+export interface CellCoverage {
+  recorded: number;
+  scheduled: number;
 }
 
 /**
@@ -144,8 +207,8 @@ interface CellMonthlyCommon {
  * `Completed` would mean "attended everything their own Cell happened to record" and is
  * inflated by exactly the Cells that recorded least — and decision 0202 settles that
  * nothing replaces them: unique people, classification and coverage are the whole of an
- * aggregate view. Coverage is not computed yet and is the figure that view leads with, so
- * what ships here is two of the three.
+ * aggregate view, and all three ship. Coverage is the one that view leads with, and it is
+ * the only one of the three that survives having no `N` to measure against.
  */
 export type CellMonthlyReport =
   | (CellMonthlyCommon & {
@@ -171,7 +234,14 @@ export class ReportingService {
   constructor(
     @Inject(DATABASE) private readonly db: Db,
     private readonly dccFigures: DccFiguresService,
+    private readonly dccCoverage: DccCoverageService,
     private readonly cellFigures: CellFiguresService,
+    /**
+     * The two halves of section 12's coverage line, from the two modules that own them
+     * (section 2): the denominator from `cells`, whose tables derive it, and the
+     * numerator from `attendance`, which owns `cell_meetings`.
+     */
+    private readonly cells: CellsReadService,
     private readonly hierarchy: HierarchyService,
     private readonly networks: NetworksService,
   ) {}
@@ -226,6 +296,17 @@ export class ReportingService {
 
       const figures = await this.dccFigures.monthFigures(period, { executor: trx, personIds });
 
+      // **Coverage takes the scope rather than `personIds`, and that is section 20 rather
+      // than an inconsistency.** The population above is the placement graph collapsed
+      // over the period, which is where a *person* is counted; a coverage denominator is
+      // a subtree walked at each event date, which is where an *obligation* sits. Handing
+      // `personIds` here would measure this month's obligations against the tree as it
+      // stood at the period's end, and a leader assigned in the third week would owe
+      // records for the first two.
+      const coverage = await this.dccCoverage.monthCoverage(period, coverageScopeOf(scope), {
+        executor: trx,
+      });
+
       return {
         scope,
         period,
@@ -235,6 +316,7 @@ export class ReportingService {
         unique_people: figures.people.length,
         classification: classify(figures.people),
         buckets: bucket(figures.people, figures.n),
+        coverage,
       };
     });
   }
@@ -297,6 +379,7 @@ export class ReportingService {
           unique_people: figures.people.length,
           classification: classify(figures.people),
           buckets: bucket(figures.people, figures.n),
+          coverage: await this.cellCoverage(trx, period, scope),
         };
       }
 
@@ -316,8 +399,109 @@ export class ReportingService {
         open: figures.open,
         unique_people: figures.people.length,
         classification: classify(figures.people),
+        // Decision 0202: coverage is the figure an aggregate view leads with, and the
+        // only one of the three that survives having no `N` to measure against.
+        coverage: await this.cellCoverage(trx, period, scope),
       };
     });
+  }
+
+  /**
+   * The month's Cell coverage over a scope: meetings recorded over meetings scheduled
+   * (SKILL.md sections 12, 13 and 20; decisions 0221 and 0225).
+   *
+   * **Composed rather than queried** (section 2, decision 0206). The denominator is
+   * `cells`' — section 2 assigns it there by name, "whose every input (`cell_schedules`,
+   * `cells`, `cell_leaderships`) it owns" — and the numerator is `attendance`'s, because
+   * `cell_meetings` is its table. Neither module may root a query in the other's, so what
+   * happens here is arithmetic over two sets, which is exactly what this class contributes.
+   *
+   * **Both terms are attributed by the same leader**, the one who led the Cell on the
+   * scheduled date, and the numerator is an *intersection* with the denominator rather
+   * than a second count. That is what makes `recorded` at most `scheduled` by
+   * construction: two independent counts could disagree about which meetings they were
+   * counting, and a coverage line whose numerator exceeded its denominator would be a
+   * defect a reader meets as `5 of 4`.
+   *
+   * **The subtree is walked once per scheduled date, and that is section 20 rather than
+   * an optimisation detail.** Coverage places its own party at its own instant — for a
+   * Cell "the leader who led the Cell on the scheduled date" — and decision 0221
+   * deliberately left that alone when it settled the neighbouring key. So this is
+   * `subtreeAsOf`, not `reportingSubtree`: the latter is the placement graph collapsed
+   * over the period, which is what the *unique people* figure in the same response uses.
+   * Two different walks in one report is what section 20 requires in terms, and using the
+   * period walk here would place a leader by where they ended the month rather than by
+   * where they stood when the meeting was due.
+   *
+   * **A pair whose leader is null counts church-wide and in no subtree.** It should not
+   * arise — a Cell's schedule and leadership open and close together — and it is carried
+   * rather than dropped because dropping it would shrink the denominator, which section 12
+   * says a coverage figure must never do. It is counted at `CELL` and `WHOLE_CHURCH`
+   * scope and in no `LEADER` one.
+   *
+   * *No section 20 residual is cited for it, and an earlier version cited one. Section 20
+   * generalised its two fallbacks to reach the responsible-leader key and then said in
+   * terms that "coverage is not settled by that generalisation", touching "neither
+   * instant, nor those fallbacks' application to either" — so borrowing a residual from
+   * there is borrowing a rule that section declines to lend. What this branch rests on is
+   * section 12 alone: never shrink the denominator.*
+   */
+  private async cellCoverage(
+    trx: Transaction<Database>,
+    period: string,
+    scope: CellReportScope,
+  ): Promise<CellCoverage> {
+    // Sequential rather than `Promise.all`, matching the DCC line. The two reads are
+    // inside the report's own transaction (decision 0210), which is one connection, so
+    // there is nothing to win and the driver would serialise them anyway. The paragraph
+    // above records what a `Promise.all` cost this module once, on a *pooled* connection
+    // where it really was two snapshots; writing it the same way here would invite a
+    // reader to check whether this is that mistake again.
+    const pairs = await this.cells.scheduledMeetingsWithLeaderIn(trx, period);
+    const recorded = await this.cellFigures.recordedScheduledDatesIn(trx, period);
+
+    const inScope = await this.scheduledPairsInScope(trx, pairs, scope);
+
+    return {
+      scheduled: inScope.length,
+      recorded: inScope.filter((pair) => recorded.has(`${pair.cellId}|${pair.scheduledDate}`))
+        .length,
+    };
+  }
+
+  /**
+   * The scheduled meetings a scope reaches.
+   *
+   * `CELL` narrows by the Cell itself, which makes section 20's attribution vacuous —
+   * every pair belongs to the one Cell asked for. `WHOLE_CHURCH` narrows nothing.
+   * `LEADER` narrows by whether the scheduled-date leader stood in the actor's subtree
+   * **on that date**, which is one walk per distinct date rather than one per pair.
+   */
+  private async scheduledPairsInScope(
+    trx: Transaction<Database>,
+    pairs: readonly { cellId: string; scheduledDate: string; leaderId: string | null }[],
+    scope: CellReportScope,
+  ): Promise<readonly { cellId: string; scheduledDate: string }[]> {
+    if (scope.kind === 'CELL') {
+      return pairs.filter((pair) => canonicalId(pair.cellId) === canonicalId(scope.cell_id));
+    }
+
+    if (scope.kind === 'WHOLE_CHURCH') {
+      return pairs;
+    }
+
+    const subtrees = new Map<string, Set<string>>();
+    for (const date of new Set(pairs.map((pair) => pair.scheduledDate))) {
+      const members = await this.hierarchy.subtreeAsOf(trx, scope.person_id, endOfManilaDay(date));
+
+      subtrees.set(date, new Set(members.map(canonicalId)));
+    }
+
+    return pairs.filter(
+      (pair) =>
+        pair.leaderId !== null &&
+        (subtrees.get(pair.scheduledDate)?.has(canonicalId(pair.leaderId)) ?? false),
+    );
   }
 
   /**
@@ -401,6 +585,35 @@ export class ReportingService {
 
         return compute(trx, bounds);
       });
+  }
+}
+
+/**
+ * A report's DCC selector as the coverage denominator narrows by (decision 0230).
+ *
+ * **A translation rather than a shared type**, because the two mean different things by
+ * the same three words. A report's selector is resolved once, for authorization, at the
+ * period's end; a coverage scope is resolved again at every event date. Writing this out
+ * is what keeps the second resolution visible instead of implied by a cast.
+ *
+ * **Exhaustive, so a fourth report scope cannot reach coverage without deciding what it
+ * narrows.** That is not hypothetical: `NETWORK` reached this route with the person key
+ * settled and its coverage narrowing unstated, which is the gap decision 0230 was
+ * escalated to fill. The `never` binding makes the compiler ask the question next time.
+ */
+function coverageScopeOf(scope: DccReportScope): DccCoverageScope {
+  switch (scope.kind) {
+    case 'WHOLE_CHURCH':
+      return { kind: 'WHOLE_CHURCH' };
+    case 'NETWORK':
+      return { kind: 'NETWORK', network: scope.network };
+    case 'LEADER':
+      return { kind: 'LEADER', personId: scope.person_id };
+    default: {
+      const unreached: never = scope;
+
+      return unreached;
+    }
   }
 }
 

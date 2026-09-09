@@ -424,8 +424,7 @@ type CellMeetingSubmissionResponse = {
  *
  * *No port, and the first draft of decision 0181 said there would be one.* A port
  * is what section 2 reserves for a dependency that **would be a cycle**, as
- * `networks -> cells` is. Nothing imports `AttendanceModule` except `AppModule`,
- * `CellsModule` imports no attendance, and `CellsModule` already exports
+ * `networks -> cells` is. `CellsModule` imports no attendance, and it already exports
  * `CellsReadService` -- so this is section 2's ordinary cross-module route, an
  * import and a service call, and declaring a port here would buy an indirection, a
  * binding module and a fail-closed branch for nothing.
@@ -584,6 +583,20 @@ export class CellMeetingsService implements RecordedMeetingsPort {
 
     const members = await this.cells.membersAsOfWithin(this.db, cellId, rosterDate);
 
+    // **The marks the caller is being asked to resubmit** (decision 0223). A `HELD`
+    // submission carries the whole roster rather than the lines being changed, so a
+    // correction screen that could not read what is recorded would render every member
+    // unmarked and overwrite every other member's mark with a blank one — silent data
+    // loss on the path section 13 exists to provide, reachable by a leader correcting
+    // one person. Decision 0194 settled the same thing one domain over: a leader marking
+    // a checklist must see who is already marked.
+    //
+    // Empty where the meeting has no row yet, which is the ordinary first submission.
+    const marks =
+      recorded === null
+        ? new Map<string, { present: boolean }>()
+        : await this.marksFor(recorded.id as string);
+
     return {
       cell_id: cell.cellId,
       meeting_id: meetingId,
@@ -602,8 +615,56 @@ export class CellMeetingsService implements RecordedMeetingsPort {
         member_id: member.memberId,
         first_name: member.firstName,
         last_name: member.lastName,
+        // **`present` alone, and no per-person version.** Decision 0164 has a Cell
+        // submission carry *the meeting's* version and decision 0190 states that
+        // `cell_attendance.version` "orders one person's chain and is not compared" — so
+        // a per-person version here would be a number the client must not send back,
+        // offered beside the fields it must. The version a correction carries is on the
+        // `meeting` object above. `recorded_at` is omitted for the same reason: nothing
+        // on this path compares one, and a field a client cannot act on is the shape
+        // decision 0223 refuses.
+        //
+        // Null is a member with no live row — not yet recorded, or recorded and then
+        // superseded with nothing replacing them. A nullable object rather than a boolean
+        // defaulting to false, because `false` would tell a client the leader marked this
+        // member absent when nobody marked them at all. Section 13 has a meeting's roster
+        // **declared** by its leader — the phrase "declared, never inferred" is that
+        // section's about a *status*, and the roster rule it now states carries the same
+        // idea one level down — and a read that manufactures a declaration is the one
+        // thing a correction screen must not be handed.
+        //
+        // *The ground given here first was that resubmitting `false` for such a member
+        // loses data. It does not, and this comment refuted itself two lines down: a
+        // missing row and a row marked absent contribute identically to every figure. Nor
+        // is it avoidable — `assertAttendanceMatchesRoster` refuses a submission that
+        // omits a member, so a correction must send one or the other. The data loss
+        // decision 0223 names is a different case: overwriting a `present: true` mark with
+        // a blank.*
+        record: marks.get(member.personId) ?? null,
       })),
     };
+  }
+
+  /**
+   * Each member's live attendance mark for one meeting, by Person (decision 0223).
+   *
+   * **`superseded_at IS NULL`, because a correction supersedes rather than overwrites**
+   * (section 14). Reading a superseded row would show a leader the mark they replaced and
+   * invite them to resubmit it, which is the failure this read exists to prevent, one
+   * correction later.
+   *
+   * `cell_attendance_one_live` permits one live row per person per meeting, so the map is
+   * total on what it returns rather than merely usually so.
+   */
+  private async marksFor(meetingRowId: string): Promise<Map<string, { present: boolean }>> {
+    const rows = await this.db
+      .selectFrom('cell_attendance')
+      .select(['person_id', 'present'])
+      .where('cell_meeting_id', '=', meetingRowId)
+      .where('superseded_at', 'is', null)
+      .execute();
+
+    return new Map(rows.map((row) => [row.person_id, { present: row.present }]));
   }
 
   /**
@@ -1171,7 +1232,7 @@ export class CellMeetingsService implements RecordedMeetingsPort {
     // back was refused as naming a non-member, and submitting the scheduled date's roster
     // instead succeeded and left the meeting holding three live rows for a Cell with two
     // members on either date. Section 13's "every member exactly once" broken silently,
-    // and section 20's reconciliation with it.*
+    // and the roster rule with it.*
     const rosterDate = await this.actualDateOf(trx, existing.id);
     const members = await this.cells.membersAsOfWithin(trx, cellId, rosterDate);
     const attendance = assertAttendanceMatchesRoster(body, members, { cellId, meetingId });
@@ -1229,13 +1290,26 @@ export class CellMeetingsService implements RecordedMeetingsPort {
     // **The capability is checked before anything about the stored record is disclosed,
     // and that now includes the null-version case.** What the early return above still
     // answers — matched or did not match — is accepted as a disclosure by decision 0191,
-    // on the ground that recovering N people costs 2^N submissions and that the actor
-    // holds the capability that records this meeting: `cell.submit_on_behalf` is settled
-    // above, so every actor reaching the early return may file this meeting outright.
-    // A `VERSION_CONFLICT` carries the
-    // stored present count and the submitter's name (section 22), which
-    // `GET .../roster` does not — so an actor holding `cell.take_attendance` and not
+    // on the ground that the actor holds the capability that records this meeting:
+    // `cell.submit_on_behalf` is settled above, so every actor reaching the early return
+    // may file this meeting outright.
+    //
+    // *That ruling's first ground was that recovering N people costs 2^N submissions, and
+    // it is dead since 2026-09-09: the roster carries each member's mark under the
+    // identical declaration. The acceptance stands on the ground above and on the third —
+    // requiring the correction capability for an unchanged submission tells a leader they
+    // may not alter what they did not alter.*
+    // A `VERSION_CONFLICT` carries the stored present count and the submitter's name
+    // (section 22), so an actor holding `cell.take_attendance` and not
     // `cell.correct_subtree` could read the record out of a refusal.
+    //
+    // **The ground for that sentence used to be "which `GET .../roster` does not", and
+    // the ruling of 2026-09-09 made it false**: that roster returns the submitter and now
+    // carries each member's mark, so the same actor fetches both in one `GET`. The gate
+    // stays because it is right — a refusal must not answer what the capability withholds,
+    // whatever some other route happens to publish — but it no longer rests on this being
+    // the only door. Which capability may read those marks is recorded as open in
+    // `CLAUDE.md`, and settling it settles what this comment should say.
     //
     // *The previous batch moved the numeric-version door behind this check and left the
     // null-version one in front of it, then claimed in its own message to have closed
@@ -1380,7 +1454,8 @@ export class CellMeetingsService implements RecordedMeetingsPort {
    * the ordinary flow records attendance against the scheduled-date roster and then moves
    * the roster out from under it, leaving the meeting failing section 13's "every member
    * exactly once" rule with nothing to surface it: coverage counts recorded meetings
-   * rather than complete ones, so the month reconciles wrongly and every figure looks
+   * rather than complete ones and no report reads a roster's completeness at all, so the
+   * meeting stays wrong and every figure looks
    * ordinary.
    *
    * **The identity, the month and the week never move.** `(cell_id, scheduled_date)` is
@@ -1981,8 +2056,11 @@ export class CellMeetingsService implements RecordedMeetingsPort {
     // replayed the refusal permanently, while `RESOURCE_BUSY` is a 503 and releases it.
     //
     // Below the comparison, it still runs before anything of the record is disclosed: a
-    // `VERSION_CONFLICT` carries the stored present count and the submitter's name, which
-    // `GET .../roster` does not.
+    // `VERSION_CONFLICT` carries the stored present count and the submitter's name.
+    //
+    // *That used to read "which `GET .../roster` does not", which the ruling of 2026-09-09
+    // falsified — the roster carries the marks now. The gate is unmoved and unchanged; what
+    // is gone is the claim that this refusal is the only way to those figures.*
     try {
       const authority = await this.authorization.authorityFor(actor.accountId);
       await this.assertMayCorrect(this.db, {
@@ -2472,12 +2550,21 @@ export class CellMeetingsService implements RecordedMeetingsPort {
  * `HELD` with zero attendance. It counts in the denominator, and every member is
  * recorded as not having attended."
  *
- * Absent rows and rows marked absent are different facts, and section 20's
- * reconciliation needs the second: classification buckets and monthly-attendance
- * buckets must each sum to the same unique-people total, and a roster with holes in it
- * cannot do that. Accepting a partial list would make the denominator depend on how
- * much of the roster a client happened to send -- a defect invisible until a month is
- * reported and impossible to correct once it closes.
+ * **Why the whole roster and not the attendees**, given that the two are
+ * indistinguishable in every figure this system computes: `CellFiguresService` counts
+ * attendees, so a missing row and a row marked absent contribute identically to both
+ * bucket views. The reason is section 13's own -- a meeting held with nobody there
+ * "counts in the denominator, and every member is recorded as not having attended",
+ * which is a statement about what a leader **declares** rather than about what a total
+ * needs -- and section 14's, that a correction "is an account of the whole meeting, sent
+ * as a roster". A partial list is a leader saying nothing about the members it omits, and
+ * this route cannot tell that from a leader saying they were absent.
+ *
+ * *This cited section 20's reconciliation and said a roster with holes "cannot" make the
+ * buckets sum. Both halves were false: section 20 says nothing about absent rows, and the
+ * two bucket views are computed from the same attendee set, so they reconcile whatever the
+ * roster omits. It also said a partial list would make the denominator depend on what a
+ * client sent, and that denominator is a count of meetings.*
  *
  * **A `NOT_HELD` meeting carries none** -- "No attendance is recorded", because the
  * meeting did not take place and there is nobody to have been absent from it. The
@@ -2536,7 +2623,7 @@ function assertAttendanceMatchesRoster(
   if (missing.length > 0) {
     throw new InvariantViolationError(
       'Every member on the meeting date must be recorded, present or not (SKILL.md ' +
-        'sections 13 and 20).',
+        'section 13).',
       { ...context, missing_person_ids: missing.map((member) => member.personId) },
     );
   }

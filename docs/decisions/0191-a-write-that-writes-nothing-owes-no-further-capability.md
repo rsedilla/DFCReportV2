@@ -16,6 +16,13 @@ correction capability gets `201` for a roster that matches and `403` for one tha
 not, so the pair of outcomes answers a question about stored attendance that no read route
 answers.
 
+> **Corrected on 2026-09-09.** A read route answers it now: decision 0223 gives
+> `GET /api/v1/cells/{id}/meetings/{meeting_id}/roster` each member's mark, under the
+> *identical* capability and target declaration this route carries. The disclosure this
+> ruling accepted is therefore redundant rather than novel, which strengthens the
+> acceptance and changes nothing about it — what the ruling turns on is that a write
+> writing nothing owes no amendment capability, not on where else the figure can be read.
+
 Raised by `architecture-guardian` as a Stop Condition on the second pass of that slice.
 Section 7 says a capability without a scope grant is not usable and Section 8 says what a
 search may disclose; neither says whether a write that writes nothing owes the capability
@@ -85,6 +92,14 @@ detail — so recovering N people's attendance costs 2^N submissions rather than
 Cell of twelve that is four thousand requests to learn twelve booleans, each one a
 state-changing call carrying its own idempotency key.
 
+> **Dead since 2026-09-09.** Decision 0223 gives the Cell roster each member's mark under
+> the *identical* capability and target declaration this route carries, so the figures cost
+> one `GET`. The acceptance survives on the **two grounds below**, neither of which is a
+> cost argument: the actor is not a stranger to the record, and requiring the correction
+> capability for an unchanged submission tells a leader they may not alter what they did
+> not alter. *This note said "the second ground alone … the stronger of the two", in a
+> section carrying three — a miscount in the sentence written to correct a claim.*
+
 **The actor is not a stranger to the record.** Every actor who reaches this point holds
 the capability that *records* this meeting and, under decision 0192, the right to record
 it for whoever leads it — they may file it, and one more grant lets them overwrite it
@@ -104,6 +119,13 @@ meeting's own row — its status, its versions, its submitter — and never who 
 present. So for a Cell meeting the bit this ruling accepts is, today, the only way to
 learn a per-person figure without the correction capability.
 
+> **This is the section that names the trigger, and the trigger fired on 2026-09-09.**
+> That roster now carries each member's mark (decision 0223), so the bit this ruling
+> accepts is no longer the only way to learn a per-person figure — it is a redundant one.
+> The holding does not move and is strengthened: what the ruling decides is that a write
+> writing nothing owes no amendment capability, and the disclosure it accepted has stopped
+> being novel.
+
 *This said "which none does today", of the whole system, and was false when written.*
 `GET /api/v1/dcc/events/{id}/roster` returns each person's `present`, `version` and
 `recorded_at` under `dcc.take_attendance` — so a DCC route has published per-person
@@ -121,6 +143,19 @@ written here so they find it stated.
 Stage 5's reporting reads are the likely first, and they carry `reports.view_subtree`
 rather than `cell.take_attendance` — so the question is whether an actor holding only the
 recording capability gains a read they did not have, not whether the figures exist.
+
+> **Wrong on the surface and right on the question.** The first was the meeting roster on
+> 2026-09-09 (decision 0223), under `cell.take_attendance` — the capability this paragraph
+> named as the one it would *not* be. The question it framed is the one that matters, and
+> it is now answered: an actor holding `cell.take_attendance` without
+> `cell.correct_subtree` does gain a read they did not have. Section 7 re-derives on that
+> footing the acceptance of **publishing the marks**, which is a second acceptance and not
+> this ruling's — this one's survives on the two grounds above — and which capability may
+> read those marks is recorded as open in `CLAUDE.md`. *This note said "Section 7
+> re-derives **the** acceptance", which in this file names the bit and so contradicted the
+> "Dead since 2026-09-09" note under **Why accepted rather than closed**, which says the
+> acceptance survives on the two grounds there. A version of this marker pointed at "the
+> blockquote above it", which resolves to the nearest one above and not to that.*
 
 ## What this binds
 

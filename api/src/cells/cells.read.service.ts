@@ -324,7 +324,7 @@ export class CellsReadService implements CellScopePort, CellRelationshipsPort {
         sql<boolean>`(ended_at IS NULL OR (ended_at AT TIME ZONE 'Asia/Manila')::date >= ${on}::date)`,
       )
       // **`started_at` ASC, and this is the one key that differs from
-      // `leaderForScopeWithin` above** (decision 0187). That method asks who leads the
+      // {@link leaderForScopeWithin}** (decision 0187). That method asks who leads the
       // Cell *now*, so the latest-starting row is the answer. This one asks who was
       // leading when the Cell met, and on a handover day the date comparison matches
       // both the outgoing and the incoming row — so the direction decides which of two
@@ -1060,6 +1060,113 @@ export class CellsReadService implements CellScopePort, CellRelationshipsPort {
       category: row.category,
       dayOfWeek: Number(row.day_of_week),
       timeOfDay: String(row.time_of_day).slice(0, 5),
+    }));
+  }
+
+  /**
+   * Every meeting the month has scheduled, church-wide, each with the leader who led its
+   * Cell on that date — the **denominator** of an aggregate coverage figure (SKILL.md
+   * sections 12, 13 and 20; decisions 0221 and 0225).
+   *
+   * **The unit is a (Cell, scheduled date) pair rather than a Cell**, because that is what
+   * Section 20 attributes: the denominator is "the Cell's scheduled meetings, **each
+   * appearing for the leader who led the Cell on the scheduled date**". A Cell handed over
+   * mid-month therefore splits its meetings between two leaders, and a per-Cell count
+   * could not express that. {@link scheduledCountsIn} answers the per-Cell question the
+   * index asks and is not this one.
+   *
+   * **Two derivations are duplicated here and both are named rather than discovered.** The
+   * schedule half is the day-by-day series {@link scheduledMeetingsIn} and
+   * {@link scheduledCountsIn} both perform; the leader half is
+   * {@link leaderOnDateWithin}'s three ordering keys, `started_at` **ascending** first —
+   * decision 0187, so a handover on the meeting's own day leaves the meeting with the
+   * **outgoing** leader, which is the only answer that does not depend on when the record
+   * was entered. A set-returning query cannot call a row-at-a-time method without one
+   * round trip per pair, which is why they are restated; a change to either rule is a
+   * change here too.
+   *
+   * **`test/database/cell-coverage-leader.spec.ts` pins two of the five things that could
+   * drift, and the other three are named rather than implied.** It compares this query's
+   * leader against {@link leaderOnDateWithin} for the same date, so it catches the
+   * `started_at` **direction** — decision 0187, which decides who a handover-day meeting
+   * belongs to — and the closing date bound. It does **not** catch the
+   * `ended_at DESC NULLS FIRST` tiebreak, the `id DESC` tiebreak, or any drift in the
+   * *schedule* half: the guard asks the canonical method about whatever dates this query
+   * returns, so a schedule that produced the wrong dates would be agreed with rather than
+   * caught. *Measured by mutation rather than reasoned: five of seven single-key
+   * mutations leave it green. An earlier version of this sentence said "the pair cannot
+   * drift silently", which is three keys and a whole derivation wider than the file.*
+   *
+   * **The leader is `LEFT JOIN`ed and may come back null.** It should not: a Cell's
+   * schedule and its leadership are opened together at creation and closed together at
+   * closure, so a day with a schedule in force has a leadership in force. An inner join
+   * would be shorter and would make a data defect *shrink the denominator*, which is
+   * exactly the direction Section 12 says a coverage figure must never move — recording
+   * less must never look better. So the row survives with no leader, and the caller counts
+   * it at Cell and Whole Church scope and in no leader's. *Section 12 is the whole of the
+   * ground: an earlier version also cited a Section 20 residual, which that section
+   * declines to lend — it says of its own generalised fallbacks that "coverage is not
+   * settled by that generalisation".*
+   *
+   * A closed Cell needs no filter: it has no schedule row in force after its closure, so
+   * it produces no pairs (decision 0225).
+   */
+  async scheduledMeetingsWithLeaderIn(
+    executor: Db | Transaction<Database>,
+    reportingMonth: string,
+  ): Promise<{ cellId: string; scheduledDate: string; leaderId: string | null }[]> {
+    const result = await sql<{
+      cell_id: string;
+      scheduled_date: string;
+      leader_id: string | null;
+    }>`
+      SELECT cell.id AS cell_id,
+             day::date AS scheduled_date,
+             leader.person_id AS leader_id
+        FROM cells AS cell
+        CROSS JOIN generate_series(
+               ${reportingMonth}::date,
+               (${reportingMonth}::date + interval '1 month' - interval '1 day')::date,
+               interval '1 day'
+             ) AS day
+        -- The identical derivation scheduledCountsIn performs: one governing schedule per
+        -- day, inert rows excluded, the weekday tested against the governing row alone.
+        CROSS JOIN LATERAL (
+          SELECT schedule.day_of_week
+            FROM cell_schedules AS schedule
+           WHERE schedule.cell_id = cell.id
+             AND schedule.ended_at IS DISTINCT FROM schedule.started_at
+             AND (schedule.started_at AT TIME ZONE 'Asia/Manila')::date <= day
+             AND (schedule.ended_at IS NULL
+                  OR (schedule.ended_at AT TIME ZONE 'Asia/Manila')::date >= day)
+           ORDER BY schedule.started_at DESC,
+                    schedule.ended_at DESC NULLS FIRST,
+                    schedule.id DESC
+           LIMIT 1
+        ) AS governing
+        -- leaderOnDateWithin's keys, and started_at ASC is decision 0187 rather than a
+        -- copy of the method above it: on a handover day the date comparison matches both
+        -- rows, and the outgoing leader is the answer that does not move with the clerk.
+        LEFT JOIN LATERAL (
+          SELECT held.person_id
+            FROM cell_leaderships AS held
+           WHERE held.cell_id = cell.id
+             AND (held.started_at AT TIME ZONE 'Asia/Manila')::date <= day
+             AND (held.ended_at IS NULL
+                  OR (held.ended_at AT TIME ZONE 'Asia/Manila')::date >= day)
+           ORDER BY held.started_at ASC,
+                    held.ended_at DESC NULLS FIRST,
+                    held.id DESC
+           LIMIT 1
+        ) AS leader ON true
+       WHERE EXTRACT(ISODOW FROM day) = governing.day_of_week
+       ORDER BY cell.id, day
+    `.execute(executor);
+
+    return result.rows.map((row) => ({
+      cellId: row.cell_id,
+      scheduledDate: String(row.scheduled_date),
+      leaderId: row.leader_id,
     }));
   }
 

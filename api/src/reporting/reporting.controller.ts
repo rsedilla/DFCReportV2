@@ -87,12 +87,16 @@ export class ReportingController {
    * force at the period's final millisecond, falling back to its last leader where nobody
    * held it then.
    *
-   * **Coverage is not here yet.** Section 12 requires every Cell monthly attendance *view*
-   * to show recording coverage beside the buckets, and decision 0202 makes coverage the
-   * figure an aggregate view leads with. Its denominator is the Cell's scheduled meetings
-   * derived from the schedule against the calendar, which is a separate computation and a
-   * separate slice; this route ships the two figures section 20 reconciles. The screen that
-   * renders either owes the coverage line, and `docs/ROADMAP.md` carries that debt.
+   * **Coverage ships at every scope, and it is the figure an aggregate view leads with**
+   * (section 12, decision 0202). Its denominator is derived from the Cell's schedule
+   * against the calendar rather than from anything submitted, which is section 12's own
+   * reason for putting it first — recording less makes coverage worse and never better.
+   * Each scheduled meeting is attributed to the leader who led that Cell on the scheduled
+   * date (section 20), so a Cell handed over mid-month splits between two leaders.
+   *
+   * *This said "Coverage is not here yet" and pointed at `docs/ROADMAP.md` for the debt,
+   * which the same change that added the figure left standing on the route's own
+   * docblock.*
    */
   @Get('cells/monthly')
   @RequiresCapability(Capability.ReportsViewSubtree, {

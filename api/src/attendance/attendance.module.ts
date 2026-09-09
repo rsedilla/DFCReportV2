@@ -5,6 +5,7 @@ import { AuthModule } from '../auth/auth.module';
 import { AuthorizationModule } from '../auth/authorization/authorization.module';
 import { CellsModule } from '../cells/cells.module';
 import { HierarchyModule } from '../hierarchy/hierarchy.module';
+import { NetworksModule } from '../networks/networks.module';
 import { PeopleModule } from '../people/people.module';
 
 import { CellMeetingsController } from './cell-meetings.controller';
@@ -37,9 +38,20 @@ import { DccController } from './dcc.controller';
  * domain module does. The reason is `AccountsRepository`: section 9 routes a
  * submission to "the nearest upline leader who does" hold an account, so the
  * checklist is decided by a fact about `accounts`, and `auth` owns that table. There
- * is no cycle — `auth -> cells` and nothing imports `attendance` — but the edge is
+ * is no cycle: `AuthModule` imports `AuditModule`, `AuthorizationModule`, `EmailModule`,
+ * `PeopleModule`, `CellsModule` and `JwtModule`, and no chain from any of those reaches
+ * back here. The edge is
  * named here because it is the one place a domain module depends on authentication
  * rather than on authorization, and a reader is entitled to know it was deliberate.
+ *
+ * *This read "nothing imports `attendance`", which was true when written and is not:
+ * `AppModule`, `RecordedMeetingsBindingModule` and `ReportingModule` all do. **A first
+ * correction replaced it with a claim about what reaches `auth`, which was both false —
+ * `AppModule` imports `auth` and this module alike — and the wrong predicate: a cycle is
+ * decided by what the module at the far end **reaches**, never by who reaches it, and
+ * `AppModule` is a predecessor of everything and closes no loop.** The forward walk above
+ * is the argument, and it is the one the `NetworksModule` note below already made
+ * correctly.*
  */
 @Module({
   imports: [
@@ -49,6 +61,12 @@ import { DccController } from './dcc.controller';
     AuthorizationModule,
     AuditModule,
     CellsModule,
+    // Decision 0230: a `NETWORK`-scoped DCC coverage denominator is narrowed by Network
+    // membership at the event date, and section 4 puts that relationship in `networks`.
+    // Not a cycle, and the reason is `networks` rather than this module: `NetworksModule`
+    // imports `HierarchyModule` alone and `HierarchyModule` imports nothing, so no chain
+    // from `networks` reaches back here.
+    NetworksModule,
   ],
   controllers: [DccController, CellMeetingsController],
   providers: [
@@ -76,6 +94,10 @@ import { DccController } from './dcc.controller';
     CellMeetingsService,
     DccFiguresService,
     CellFiguresService,
+    // The month's coverage line, for `reporting` to compose (decision 0224). The same
+    // service the two DCC calendar routes use, so a report's denominator and a leader's
+    // gap list cannot disagree about who owed a record.
+    DccCoverageService,
   ],
 })
 export class AttendanceModule {}

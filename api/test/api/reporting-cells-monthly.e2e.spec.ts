@@ -331,6 +331,134 @@ describe('GET /api/v1/reports/cells/monthly (sections 7, 12, 20 and 22)', () => 
   });
 
   /**
+   * The month's coverage line (SKILL.md sections 12, 13 and 20; decisions 0187, 0202,
+   * 0221 and 0225).
+   *
+   * **The Cell meets on Saturdays** — `createCell`'s default — so June 2020 schedules
+   * four meetings, on the 6th, 13th, 20th and 27th. Every count below is read against
+   * those four, and the 20th being a Saturday is what makes the handover cases work:
+   * one lands on a scheduled date and one does not.
+   */
+  describe("the month's coverage is recorded over scheduled (section 12)", () => {
+    /** Close one pastoral row and open the next at the same instant, as a move does. */
+    const reassign = async (personId: string, leaderId: string, at: Date) => {
+      await db.transaction().execute(async (trx) => {
+        await trx
+          .updateTable('pastoral_assignments')
+          .set({ ended_at: at })
+          .where('person_id', '=', personId)
+          .where('ended_at', 'is', null)
+          .execute();
+
+        await trx
+          .insertInto('pastoral_assignments')
+          .values({ person_id: personId, leader_id: leaderId, started_at: at })
+          .execute();
+      });
+    };
+
+    it('counts the meetings recorded against the meetings scheduled', async () => {
+      const response = await get(`period=${JUNE}&scope=WHOLE_CHURCH`, adminAccount);
+
+      expect(response.status).toBe(200);
+      // Four Saturdays derived from the schedule; one of them carries a row.
+      expect(response.body.coverage).toEqual({ recorded: 1, scheduled: 4 });
+      // Section 13: two figures, never a ratio.
+      expect(JSON.stringify(response.body)).not.toContain('percent');
+    });
+
+    it('carries the same line at CELL scope as the aggregate over that one Cell', async () => {
+      const scoped = await get(`period=${JUNE}&scope=CELL&cell_id=${cell}`, adminAccount);
+      const church = await get(`period=${JUNE}&scope=WHOLE_CHURCH`, adminAccount);
+
+      expect(scoped.status).toBe(200);
+      // The church holds one Cell, so the two must agree. They are computed by the same
+      // pair of reads and differ only in the narrowing, which is what this pins.
+      expect(scoped.body.coverage).toEqual({ recorded: 1, scheduled: 4 });
+      expect(church.body.coverage).toEqual(scoped.body.coverage);
+    });
+
+    it('leaves a Cell that scheduled nothing contributing zero to both terms', async () => {
+      // A Cell closed before the month has no schedule row in force in it, so it derives
+      // no scheduled meetings at all — decision 0225's case, reachable without any
+      // backdating.
+      const closed = (await createCell(db, { leader: stranger, createdAt: BEFORE })).id;
+      await closeCellDirectly(db, closed, {
+        reason: 'MEMBERS_DISPERSED',
+        at: new Date('2020-05-20T00:00:00+08:00'),
+      });
+
+      const response = await get(`period=${JUNE}&scope=WHOLE_CHURCH`, adminAccount);
+
+      expect(response.status).toBe(200);
+      // Unchanged by the closed Cell's presence. Decision 0225 keeps it in the
+      // denominator and it contributes zero to both terms, so the arithmetic costs
+      // nothing — which is that ruling's own argument for why it is the cheap answer as
+      // well as the right one. The membership claim is not separately observable in a
+      // two-figure aggregate, and that is the point rather than a gap in this case.
+      expect(response.body.coverage).toEqual({ recorded: 1, scheduled: 4 });
+    });
+
+    it('splits a handover month between the two leaders, per scheduled date', async () => {
+      // The Monday between the 13th and the 20th: the 6th and 13th stay with Mark, the
+      // 20th and 27th pass to Onofre, who sits in Raymond's subtree and not Manuel's.
+      await handOver(new Date('2020-06-15T00:00:00+08:00'));
+
+      const manuelsOwn = await get(
+        `period=${JUNE}&scope=LEADER&leader_id=${manuel.id}`,
+        manuelAccount,
+      );
+      const church = await get(`period=${JUNE}&scope=WHOLE_CHURCH`, adminAccount);
+
+      expect(manuelsOwn.status).toBe(200);
+      // Section 20 attributes each scheduled meeting to the leader who led the Cell on
+      // that date, so a per-Cell attribution could not express this at all.
+      expect(manuelsOwn.body.coverage).toEqual({ recorded: 1, scheduled: 2 });
+      // The church keeps all four: nothing is lost by the split, which is the additivity
+      // the two figures have to preserve.
+      expect(church.body.coverage).toEqual({ recorded: 1, scheduled: 4 });
+    });
+
+    it('leaves a meeting scheduled on the handover day with the outgoing leader', async () => {
+      // The 20th is itself a Saturday, so the date comparison matches both leadership
+      // rows and the ordering decides. Decision 0187 takes the outgoing leader, because
+      // that is the only answer that does not depend on when the handover was recorded.
+      await handOver(new Date('2020-06-20T00:00:00+08:00'));
+
+      const manuelsOwn = await get(
+        `period=${JUNE}&scope=LEADER&leader_id=${manuel.id}`,
+        manuelAccount,
+      );
+
+      expect(manuelsOwn.status).toBe(200);
+      // The 6th, 13th and 20th, with only the 27th passing to Onofre. Under the opposite
+      // ordering the scheduled count reads 2, and the meeting on the handover day would
+      // move between two leaders' figures depending on when the handover was filed.
+      expect(manuelsOwn.body.coverage).toEqual({ recorded: 1, scheduled: 3 });
+    });
+
+    it('walks the subtree at each scheduled date rather than at the end of the period', async () => {
+      // Mark moves out of Manuel's subtree mid-month. The Cell is his throughout, so
+      // every scheduled date attributes to Mark; what changes is whether Mark stood in
+      // Manuel's subtree on that date.
+      await reassign(mark.id, raymond.id, new Date('2020-06-15T00:00:00+08:00'));
+
+      const manuelsOwn = await get(
+        `period=${JUNE}&scope=LEADER&leader_id=${manuel.id}`,
+        manuelAccount,
+      );
+
+      expect(manuelsOwn.status).toBe(200);
+      // The 6th and the 13th. Section 20 places a coverage party at coverage's own
+      // instant, and decision 0221 deliberately left that alone when it settled the
+      // neighbouring key — so this is `subtreeAsOf` per date. Under the *period* walk the
+      // same figures list Mark under Raymond for the whole month and this reads
+      // `0 of 0`, which is the mutation that proves the case discriminates.
+      expect(manuelsOwn.body.coverage).toEqual({ recorded: 1, scheduled: 2 });
+    });
+  });
+
+  /**
    * Mark's leadership ends and Onofre's begins at one instant, which is the only shape
    * migration 0009 admits: the chain is contiguous, so a gap or an overlap is refused.
    */

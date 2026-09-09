@@ -28,10 +28,15 @@ import type { TestAccount, TestCell, TestPerson } from '../setup/fixtures';
  * change history covers — and is refused here rather than silently overwriting, which
  * section 14 forbids in terms.
  *
- * The cases that matter are the ones section 20 will reconcile against: a `HELD` meeting
- * carries a line for **every** member, present or not, so that classification and
- * monthly-attendance buckets can sum to the same unique-people total. A roster with
- * holes in it cannot do that, and the defect is invisible until a month is reported.
+ * The cases that matter are the ones section 13's roster rule governs: a meeting that took
+ * place carries a line for **every** member, present or not, because a partial list is a
+ * leader saying nothing about the members it omits and nothing distinguishes that from
+ * saying they were absent. The defect is invisible until somebody reads the meeting.
+ *
+ * *These were "the cases section 20 will reconcile against", holding that a roster with
+ * holes cannot make the buckets sum. Both are false: each bucket view is computed from the
+ * attendees, so a roster with holes reconciles exactly as a complete one does. What holes
+ * break is the account the leader gave.*
  *
  * The meeting is the version unit (section 14), which is the opposite of DCC.
  *
@@ -269,11 +274,14 @@ describe('recording a Cell meeting (sections 12, 13 and 14)', () => {
   });
 
   it('refuses a HELD meeting that leaves a member out', async () => {
-    // **The case section 20's reconciliation depends on.** Section 13: a meeting where
-    // nobody came "is HELD with zero attendance... every member is recorded as not
-    // having attended". Absent rows and rows marked absent are different facts, and
-    // accepting a partial list makes the denominator depend on how much of the roster a
-    // client happened to send.
+    // **The case section 13's roster rule exists for.** Section 13: a meeting where nobody
+    // came "is HELD with zero attendance... every member is recorded as not having
+    // attended". A partial list is a leader saying nothing about the members it omits, and
+    // this route cannot tell that from a leader saying they were absent.
+    //
+    // *This named it "the case section 20's reconciliation depends on" and said a partial
+    // list moves the denominator. Section 20 depends on neither, and that denominator is a
+    // count of meetings.*
     const one = await member('Aurelio');
     await member('Bartolome');
 
@@ -1146,9 +1154,17 @@ describe('recording a Cell meeting (sections 12, 13 and 14)', () => {
     it('checks the correction capability before disclosing the stored record', async () => {
       // **Ordering, and it is the hazard `DccAttendanceService` documents.** A
       // `VERSION_CONFLICT` carries the stored present count and the submitter's name
-      // (section 22), neither of which `GET .../roster` discloses — so raising it before
-      // the capability check lets an actor who may not correct this record read it out of
-      // the refusal, by sending any stale version.
+      // (section 22) — so raising it before the capability check lets an actor who may not
+      // correct this record read it out of the refusal, by sending any stale version.
+      //
+      // **The ground was "neither of which `GET .../roster` discloses", and the ruling of
+      // 2026-09-09 made it false on both halves**: decision 0223 gives the roster each
+      // member's mark, and it returns `submitted_by` on the meeting. The gate stays because
+      // it is right on its own terms — a refusal must not answer what the capability
+      // withholds, whatever another route publishes — rather than because this is the only
+      // door. `cell-meetings.service.ts` carries the same correction over the code this
+      // pins, and section 22 and the DCC sibling carry it too; this comment was the home
+      // that sweep did not reach, being a comment inside a test body.
       //
       // Under role defaults the residual sits inside the actor's own scope; it becomes a
       // section 8 disclosure under a grant section 7 explicitly permits, which is the
@@ -3104,9 +3120,14 @@ describe('recording a Cell meeting (sections 12, 13 and 14)', () => {
       // **`lostRaceAnswer` was written downstream of `assertMayCorrect` and the new caller
       // skipped it** (decision 0100: reusing a shape requires re-deriving why it has that
       // shape). A `VERSION_CONFLICT` carries the stored present count and the submitter's
-      // name, which `GET .../roster` does not — so this actor read the record out of a
-      // lost race, having been refused 403 for the identical body sent sequentially.
-      // Timing decided which answer they got.
+      // name, so this actor read the record out of a lost race, having been refused 403
+      // for the identical body sent sequentially. Timing decided which answer they got.
+      //
+      // *This said "which `GET .../roster` does not". Since the ruling of 2026-09-09 that
+      // roster carries each member's mark, so the figures are reachable in one `GET` by
+      // this same actor — which does not excuse a refusal answering what the capability
+      // withholds, and does remove the ground this case used to give. What the case pins
+      // is that the two answers to one body agree, and that is unchanged.*
       const one = await member('Aurelio');
       const actor = await granted(['cell.take_attendance', 'cell.submit_on_behalf']);
       const holder = await winnerHolding([{ personId: one.id, present: true }]);

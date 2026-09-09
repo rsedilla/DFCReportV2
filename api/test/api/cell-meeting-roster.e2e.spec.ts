@@ -1,3 +1,4 @@
+import { sql } from 'kysely';
 import request from 'supertest';
 
 import { createTestDb, truncateAll } from '../setup/database';
@@ -226,5 +227,144 @@ describe('a Cell meeting roster (sections 12 and 13)', () => {
     const response = await roster(markCell.id, '2026-09-12', stranger);
 
     expect(response.status).toBe(403);
+  });
+
+  // ---------------------------------------------------------------------------
+  // The recorded marks (decision 0223)
+  // ---------------------------------------------------------------------------
+
+  describe('the marks it asks to be resubmitted', () => {
+    /** A `HELD` meeting on 12 September, with the given marks already recorded. */
+    async function recordMeeting(marks: { person: TestPerson; present: boolean }[]): Promise<void> {
+      const meeting = await db
+        .insertInto('cell_meetings')
+        .values({
+          cell_id: markCell.id,
+          scheduled_date: '2026-09-12',
+          scheduled_time: '19:00',
+          week_starting: '2026-09-07',
+          reporting_month: '2026-09-01',
+          status: 'HELD',
+          responsible_leader_id: mark.id,
+          submitted_by: markAccount.id,
+          submitted_at: new Date(),
+        } as never)
+        .returning('id')
+        .executeTakeFirstOrThrow();
+
+      for (const mark_ of marks) {
+        await db
+          .insertInto('cell_attendance')
+          .values({
+            cell_meeting_id: meeting.id,
+            person_id: mark_.person.id,
+            present: mark_.present,
+            recorded_by: markAccount.id,
+          })
+          .execute();
+      }
+    }
+
+    it('carries each member’s mark, present and absent alike', async () => {
+      // **A nullable object rather than a boolean that defaults to false**, because
+      // `false` would tell a client the leader marked this member absent when nobody
+      // marked them at all. Section 13 has a meeting's roster **declared** by its
+      // leader — "declared, never inferred" is that section's phrase about a *status*, and
+      // the roster rule it now states carries the same idea one level down — and a read
+      // that manufactures a declaration is what a correction screen must not be handed. *Two earlier grounds were withdrawn: section 20 needing the
+      // two to be different facts, which it does not say and which no figure distinguishes;
+      // and resubmitting `false` being data loss, which it is not, and which the submit
+      // route makes unavoidable anyway by refusing a roster that omits a member.*
+      const attended = await member('Aaron', CREATED);
+      const missed = await member('Bea', CREATED);
+
+      await recordMeeting([
+        { person: attended, present: true },
+        { person: missed, present: false },
+      ]);
+
+      const response = await roster(markCell.id, '2026-09-12', markAccount);
+      const lines = response.body.members as { person_id: string; record: unknown }[];
+
+      expect(lines.find((line) => line.person_id === attended.id)?.record).toEqual({
+        present: true,
+      });
+      expect(lines.find((line) => line.person_id === missed.id)?.record).toEqual({
+        present: false,
+      });
+    });
+
+    it('carries null for a member with no record', async () => {
+      const recorded = await member('Aaron', CREATED);
+      const unrecorded = await member('Bea', CREATED);
+
+      await recordMeeting([{ person: recorded, present: true }]);
+
+      const response = await roster(markCell.id, '2026-09-12', markAccount);
+      const lines = response.body.members as { person_id: string; record: unknown }[];
+
+      expect(lines.find((line) => line.person_id === unrecorded.id)?.record).toBeNull();
+    });
+
+    it('carries null on a meeting nobody has recorded yet', async () => {
+      // The ordinary first submission: section 13 gives a meeting no row until it is
+      // reported, so there is nothing to show and the field is present and null rather
+      // than absent.
+      await member('Aaron', CREATED);
+
+      const response = await roster(markCell.id, '2026-09-12', markAccount);
+
+      expect(response.body.meeting).toBeNull();
+      expect((response.body.members as { record: unknown }[])[0].record).toBeNull();
+    });
+
+    it('carries null where a member’s only record was closed with nothing replacing it', async () => {
+      // **The deterministic case, and the reason the obvious one is not.** A correction
+      // supersedes rather than overwrites (section 14), and a member whose row was
+      // *replaced* has a live row either way — a test asserting the successor's value
+      // passes against a service reading both rows, because the map it builds happens to
+      // take the later one. A record closed with **nothing** replacing it leaves the
+      // member with no live row at all, so the filter is the only thing that can produce
+      // the null.
+      //
+      // Section 13 makes that a real state rather than a contrivance: decision 0183
+      // settles that such a record names itself as its own successor, and migration 0013
+      // exempts `cell_attendance` from the self-reference refusal for exactly this.
+      const withdrawn = await member('Aaron', CREATED);
+      await recordMeeting([{ person: withdrawn, present: true }]);
+
+      const row = await db
+        .selectFrom('cell_attendance')
+        .select('id')
+        .where('person_id', '=', withdrawn.id)
+        .executeTakeFirstOrThrow();
+
+      await db
+        .updateTable('cell_attendance')
+        .set({ superseded_at: sql<Date>`clock_timestamp()`, superseded_by: row.id })
+        .where('id', '=', row.id)
+        .execute();
+
+      const response = await roster(markCell.id, '2026-09-12', markAccount);
+      const lines = response.body.members as { person_id: string; record: unknown }[];
+
+      expect(lines.find((line) => line.person_id === withdrawn.id)?.record).toBeNull();
+    });
+
+    it('carries no per-person version', async () => {
+      // **The part a copy of the DCC roster would have got wrong.** Decision 0164 has a
+      // Cell submission carry *the meeting's* version, and decision 0190 states that
+      // `cell_attendance.version` orders one person's chain and is not compared — so a
+      // per-person version here would be a number the client must not send back, offered
+      // beside the fields it must. The version a correction carries is on `meeting`.
+      const attended = await member('Aaron', CREATED);
+      await recordMeeting([{ person: attended, present: true }]);
+
+      const response = await roster(markCell.id, '2026-09-12', markAccount);
+      const line = (response.body.members as { record: Record<string, unknown> }[])[0];
+
+      expect(Object.keys(line.record)).toEqual(['present']);
+      expect(response.body.meeting.version).toBe(1);
+    });
   });
 });

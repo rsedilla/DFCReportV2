@@ -2,8 +2,19 @@
 
 Section 13 and Section 14 provide for correcting a recorded meeting, and
 `SubmitCellMeetingDto.attendance` requires **the whole roster** on a `HELD` submission —
-"every member of the Cell on the meeting date, present or not" — because Section 20's
-reconciliation needs an absent row and a row marked absent to be different facts.
+"every member of the Cell on the meeting date, present or not" — because a submission is one
+leader's account of the whole meeting.
+
+> **Corrected on review the same day.** This gave the reason as "Section 20's
+> reconciliation needs an absent row and a row marked absent to be different facts".
+> Section 20 says nothing of the kind, and `CellFiguresService` counts attendees, so the
+> two contribute identically to every figure the system computes. The whole-roster
+> requirement is Section 13's own — a meeting held with nobody there "counts in the
+> denominator, and every member is recorded as not having attended", a statement about what
+> a leader *declares* — and Section 14's, that a correction "is an account of the whole
+> meeting, sent as a roster". What makes the field nullable is that `present: false` would
+> assert a declaration nobody made, not that resubmitting one loses data: a missing row and
+> a row marked absent are indistinguishable in every figure this system computes.
 
 Nothing let a client read the marks it must resubmit.
 `GET /api/v1/cells/{id}/meetings/{meeting_id}/roster` returned each member as
@@ -22,10 +33,28 @@ for exactly that reason. Nothing in that argument is about DCC — it is about a
 being asked to submit a list they cannot see — and the Cell route asks for more than the
 DCC one does, because it demands the *whole* roster rather than the lines being changed.
 
-Section 7's accepted disclosure reaches it: a leader authorized to record a meeting is
-authorized to know what was recorded for it. The route is already guarded by
-`cell.take_attendance` resolved against the meeting's frozen responsible leader
-(decisions 0186, 0188, 0192), so this adds no reader.
+A leader authorized to record a meeting is authorized to know what was recorded for it. The
+route is already guarded by `cell.take_attendance` resolved against the meeting (decisions
+0186, 0188, 0192), so this adds no reader.
+
+*This began "Section 7's accepted disclosure reaches it", which grounded the field by
+inheritance from the confirmation-bit acceptance. Section 7 has since separated the two:
+publishing the marks is a second acceptance, re-derived there on three grounds of its own,
+and the bit's grounds were never this field's. The sentence above is left standing as this
+ruling's own reason rather than as a citation of anything. It is not one of Section 7's
+three, and a version of this note said it was — which would have put a ground Section 7
+attributes to the bit inside the field's three, in the sentence after the one saying the two
+sets are separate.*
+
+> **Two corrections, from the review of the implementation on the same day.** This
+> paragraph said "resolved against the meeting's **frozen** responsible leader", which is
+> the closed-Cell case alone — Section 7 resolves an `ACTIVE` Cell's meeting through its
+> **current** leader, whatever any record says. And "adds no reader" is true of the route
+> and was read as more: an actor holding `cell.take_attendance` without
+> `cell.correct_subtree` may now **read** a mark they may not change, which Section 7 had
+> already made and withdrawn as a claim for DCC. Under which capability those marks may be
+> read is recorded as open in `CLAUDE.md`; this ruling settles that the roster carries them
+> and does not settle that.
 
 ## What it prevents
 
