@@ -27,7 +27,11 @@ The DCC roster publishes neither of those figures to that actor.
 > settles as deliberate. Only the recording account's **name** is withheld. The ruling
 > stands on the ordering rule — a refusal must not answer what the capability withholds —
 > which never depended on this. Found when the Cell roster gained per-person marks and the
-> same premise was swept from Section 7, Section 22 and three code comments. So the ordering rule Section
+> same premise was swept from Section 7, Section 22 and every code and test comment that
+> carried it — the sweep is a predicate rather than a list, because a list of homes is a
+> count and this project's log exists to record those going wrong.
+
+So the ordering rule Section
 7 states — nothing the caller is told varies with the stored contents until the amendment
 capability is decided — was being obeyed on one route and not its twin, and **timing decided
 what somebody learned about another leader's record**.

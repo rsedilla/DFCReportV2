@@ -1646,8 +1646,14 @@ describe('DCC recording (sections 9 and 14)', () => {
     it('refuses a disagreeing loser without dcc.correct_subtree, disclosing nothing', async () => {
       // **The half DCC was missing.** Section 7 decides every other capability before the
       // stored contents can change what the caller is told, and the `VERSION_CONFLICT`
-      // body carries the stored value *and the name of the account that recorded it* --
-      // neither of which the DCC roster publishes to this actor.
+      // body carries the stored value *and the name of the account that recorded it*.
+      //
+      // *This said "neither of which the DCC roster publishes to this actor", and it was
+      // false when written: `renderLine` returns each person's `present`, `version` and
+      // `recorded_at` under `dcc.take_attendance`, which section 7 states and decision 0194
+      // settles as deliberate. Only the account's name is withheld. What this case pins is
+      // the ordering rule — a refusal must not answer what the capability withholds — which
+      // never depended on where else a figure can be read.*
       //
       // The Cell route gates this branch; DCC did not, so the identical body answered
       // `403` sent sequentially and `409` with the disclosure when it lost a race. Timing

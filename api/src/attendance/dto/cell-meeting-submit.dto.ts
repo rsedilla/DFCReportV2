@@ -207,8 +207,10 @@ export class SubmitCellMeetingDto {
   /**
    * Every member of the Cell on the meeting date, present or not.
    *
-   * **Required for `HELD`, and it is the whole roster rather than the people who
-   * came.** Section 13: a meeting where the leader was there and nobody else came "is
+   * **Required for a meeting that took place — `HELD` and `RESCHEDULED` alike — and it
+   * is the whole roster rather than the people who came.** *Stated of `HELD` alone until
+   * 2026-09-09, while `assertAttendanceMatchesRoster` has always bound both and decision
+   * 0195 makes the reschedule the case the rule matters most on.* Section 13: a meeting where the leader was there and nobody else came "is
    * `HELD` with zero attendance. It counts in the denominator, and **every member is
    * recorded as not having attended**." A partial list is a leader
    * saying nothing about the members it omits, and this route cannot tell that from a

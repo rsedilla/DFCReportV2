@@ -268,9 +268,10 @@ describe('a Cell meeting roster (sections 12 and 13)', () => {
     it('carries each member’s mark, present and absent alike', async () => {
       // **A nullable object rather than a boolean that defaults to false**, because
       // `false` would tell a client the leader marked this member absent when nobody
-      // marked them at all. Section 13 has a meeting's attendance declared rather than
-      // inferred, and a read that manufactures a declaration is what a correction screen
-      // must not be handed. *Two earlier grounds were withdrawn: section 20 needing the
+      // marked them at all. Section 13 has a meeting's roster **declared** by its
+      // leader — "declared, never inferred" is that section's phrase about a *status*, and
+      // the roster rule it now states carries the same idea one level down — and a read
+      // that manufactures a declaration is what a correction screen must not be handed. *Two earlier grounds were withdrawn: section 20 needing the
       // two to be different facts, which it does not say and which no figure distinguishes;
       // and resubmitting `false` being data loss, which it is not, and which the submit
       // route makes unavoidable anyway by refusing a roster that omits a member.*

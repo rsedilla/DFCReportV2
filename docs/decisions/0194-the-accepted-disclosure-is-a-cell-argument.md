@@ -27,6 +27,15 @@ meeting's own row and never who was marked present, so the bit still costs 2^N a
 acceptance stands on the bound it was given. The first *Cell* surface that offers those
 figures makes it free and revisits this.
 
+> **That trigger fired on 2026-09-09**, and this paragraph is now false in the present
+> tense. Decision 0223 gives the Cell roster each member's mark, so the bit is free and the
+> 2^N bound is gone; Section 7 has re-derived what the bound was supporting, on three
+> grounds that do not include it. **The DCC half of this ruling — which is what it decides
+> — is untouched**, and decision 0223 cites it for its reason rather than for this
+> paragraph: a leader marking a checklist must see who is already marked, which is a
+> statement about a person being asked to submit a list they cannot see and was never about
+> DCC.
+
 **For DCC, the figures are the recording surface**, on three grounds. They are given in
 order of how much they rest on, because the first two are checkable and the third is an
 inference this ruling draws rather than a sentence Section 9 contains.

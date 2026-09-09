@@ -1449,7 +1449,8 @@ export class CellMeetingsService implements RecordedMeetingsPort {
    * the ordinary flow records attendance against the scheduled-date roster and then moves
    * the roster out from under it, leaving the meeting failing section 13's "every member
    * exactly once" rule with nothing to surface it: coverage counts recorded meetings
-   * rather than complete ones, so nothing surfaces it and every figure looks
+   * rather than complete ones and no report reads a roster's completeness at all, so the
+   * meeting stays wrong and every figure looks
    * ordinary.
    *
    * **The identity, the month and the week never move.** `(cell_id, scheduled_date)` is
