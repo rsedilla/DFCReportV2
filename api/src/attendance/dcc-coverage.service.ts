@@ -176,8 +176,10 @@ export class DccCoverageService {
    * per-person figures by design. This is the same fact one level up, over people the
    * actor may already see.
    *
-   * **A removed event has no gaps rather than every leader in it**, on the same reading
-   * the index takes: nobody owes a record for a service that was not held.
+   * **An event nobody could have recorded yet has no gaps rather than every leader in
+   * it**, on the same predicate the index uses: a removed Sunday and one whose Manila day
+   * has not begun both owe nothing. *This named the removed case alone for one commit,
+   * including the commit that added the second.*
    */
   async coverageGaps(
     eventId: string,
@@ -279,20 +281,25 @@ export class DccCoverageService {
    * here is a leader some roster names, and the two cannot disagree about who was
    * responsible.
    *
-   * **No lifecycle filter, and that is section 3 rather than a simplification.** A first
-   * version dropped an edge whose disciple was archived or merged, on the argument that a
-   * leader whose only disciples are archived can record nothing and would sit in the
-   * denominator with no act available to move them out of it. The argument is real and it
-   * is not a rule: section 9 names exactly one exclusion from a coverage denominator, and
-   * it is the Network roots. What settles the code is section 3, which the filter broke
-   * outright — "archiving someone today must never change the total shown for a period
-   * before their archive date", and period-based figures are "never filtered by current
-   * lifecycle state". `forDecisionsWithin` reads the **current** lifecycle row, so
-   * archiving one disciple moved a past Sunday's figure from `1 of 1` to `0 of 0`.
+   * **No lifecycle filter, and section 9 states both halves of why that is unsatisfying.**
+   * A first version dropped an edge whose disciple was archived or merged. What removed it
+   * is section 3, which that filter broke outright: it read the **current** lifecycle row
+   * through `forDecisionsWithin` against a dated edge set, so archiving one disciple today
+   * moved a past Sunday's figure from `1 of 1` to `0 of 0`, where section 3 says archiving
+   * "must never change the total shown for a period before their archive date".
    *
-   * *Whether such an edge should be an obligation at all — and if so, at which instant
-   * lifecycle is read — is recorded as open in `CLAUDE.md`. Both directions are writable
-   * once it is settled; what could not stand is the third answer, which is neither.*
+   * **What is left is not a clean reading of section 9, and saying so is the point.**
+   * Section 9 names exactly one exclusion from a coverage denominator, the Network roots,
+   * which this now follows. Section 9 *also* promises of this very route that "each entry
+   * offers the action that resolves it" — and a leader whose only disciple was archived is
+   * in `owed`, can never enter `met` because the roster omits that disciple and the
+   * submission refuses a line naming them, and therefore sits on the gap list with nothing
+   * that resolves it. The code follows one sentence and breaks the other; which sentence
+   * section 9 should keep is the Stop Condition recorded in `CLAUDE.md`.
+   *
+   * *Section 5 bears on it and is cited there rather than argued here: it describes an
+   * archived Person as one "whose assignment has ended", which would make most of this
+   * class unreachable once archival is built and may be why section 9 never addressed it.*
    *
    * **The numerator is a live row naming them**, `superseded_at IS NULL`, because a
    * correction supersedes rather than overwrites (section 14) and a superseded row is not
@@ -367,11 +374,27 @@ export class DccCoverageService {
  * obligations were real, the window has shut on them, and the figure is the frozen record
  * of what was and was not filed.
  *
- * Written over the reason rather than over `removedAt` so that a fourth reason cannot be
- * added without deciding this, which is how `NOT_YET_HELD` came to be answered `0 of N`.
+ * **An exhaustive switch rather than a boolean expression, so a fourth reason cannot be
+ * added without deciding this.** A first version was written as
+ * `notRecordable === null || notRecordable === 'MONTH_CLOSED'` and claimed exactly this
+ * safeguard while delivering none: a new member of the union would have silently answered
+ * `false`, which is how `NOT_YET_HELD` came to be answered `0 of N` in the first place.
+ * The `never` binding is what makes the compiler refuse a fourth.
  */
 function coverable(event: EventRow): boolean {
-  return event.notRecordable === null || event.notRecordable === 'MONTH_CLOSED';
+  switch (event.notRecordable) {
+    case null:
+    case 'MONTH_CLOSED':
+      return true;
+    case 'REMOVED':
+    case 'NOT_YET_HELD':
+      return false;
+    default: {
+      const unreached: never = event.notRecordable;
+
+      return unreached;
+    }
+  }
 }
 
 /** The first of the month after this one, as a `YYYY-MM-01` Manila date. */

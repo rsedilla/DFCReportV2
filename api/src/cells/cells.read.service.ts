@@ -167,20 +167,35 @@ export class CellsReadService implements CellScopePort, CellRelationshipsPort {
    * is the reading that loses no meeting a leader believes they held, and the opposite reading
    * would refuse a record for a meeting that happened.*
    *
-   * **One row per day, whichever schedule rows cover it**, and that is a correction rather
-   * than a tidying. A schedule change writes `old.ended_at = effectiveFrom` and
-   * `new.started_at = effectiveFrom`; both comparisons above are inclusive on a Manila
-   * date, so **both rows match the boundary day**. Where that day is the scheduled weekday
-   * and the change kept the day — a time-only change, which Section 10 permits — the day
-   * was emitted twice, and October with five Thursdays derived six meetings. Section 12's
-   * coverage line is read against this count, so the Cell was answered `1 of 6` for a month
-   * holding five. Reproduced by `architecture-guardian` against the database.
+   * **Exactly one schedule row governs a day, and the weekday is tested against that
+   * one.** Section 10: a schedule change takes effect at the start of the following month,
+   * so "a month therefore has exactly one schedule throughout". Testing the weekday inside
+   * the join instead let *any* covering row match, and a schedule change writes
+   * `old.ended_at = effectiveFrom` and `new.started_at = effectiveFrom` while both date
+   * comparisons here are inclusive — so both rows cover the boundary day and the month
+   * derived meetings from two schedules at once.
    *
-   * `DISTINCT ON (day) ... ORDER BY day, started_at DESC` takes the **incoming** row's
-   * time on that day, which is what Section 10 says a schedule change does: it "takes
-   * effect at the start of next month". Nothing else moves — at a closure only one row
-   * covers the closure date, so the `>=` this file needs for Section 13's boundary is
-   * untouched.
+   * *Two shapes of that, and the first fix closed only one.* A **time-only** change put
+   * the same day in twice, which a `DISTINCT ON (day)` removed. A **day-of-week** change
+   * put in two different days — the outgoing row's weekday on the boundary day plus every
+   * day of the incoming row's — which no deduplication reaches: Thursday to Friday
+   * effective on a Thursday derived six meetings in a month holding five Fridays.
+   * `architecture-guardian` reproduced both, the second against the docblock that had just
+   * claimed the class was closed.
+   *
+   * **A zero-length row is excluded rather than preferred against.** Section 5 makes such
+   * a row inert — no instant resolves to one — and both `changeSchedule` and a closure
+   * write them deliberately: a second schedule change inside one month closes the pending
+   * row at its own `started_at`, and `endConfigurationWithin` does the same with
+   * `GREATEST`. Because the comparisons are on dates, such a row still *covered its own
+   * day*, so a Cell closed in September derived a scheduled meeting in October and read
+   * `0 of 1` for a month it could not have met in — the artefact Section 13 exists to keep
+   * honest, arriving from the other side.
+   *
+   * **The closure boundary is untouched.** Section 13 needs a meeting dated on the closure
+   * date to be derivable, and at a closure the surviving row is the one that ended that
+   * day, so it is the governing row and its weekday decides. The `>=` is what delivers
+   * that and it is unchanged.
    *
    * **A Cell with no schedule row in force over any day of the month yields no rows.** What a
    * coverage line then reads is **not decided here and is recorded as open in `CLAUDE.md`**.
@@ -200,9 +215,8 @@ export class CellsReadService implements CellScopePort, CellRelationshipsPort {
       scheduled_time: string;
       week_starting: string;
     }>`
-      SELECT DISTINCT ON (day)
-             to_char(day, 'YYYY-MM-DD')                        AS scheduled_date,
-             to_char(schedule.time_of_day, 'HH24:MI')          AS scheduled_time,
+      SELECT to_char(day, 'YYYY-MM-DD')                        AS scheduled_date,
+             to_char(governing.time_of_day, 'HH24:MI')         AS scheduled_time,
              -- Section 20: a calendar week begins on Monday. date_trunc('week') is
              -- ISO and therefore Monday-based, which is the same authority
              -- day_of_week is stored under.
@@ -212,15 +226,32 @@ export class CellsReadService implements CellScopePort, CellRelationshipsPort {
                (${reportingMonth}::date + interval '1 month' - interval '1 day')::date,
                interval '1 day'
              ) AS day
-        JOIN cell_schedules AS schedule
-          ON schedule.cell_id = ${cellId}::uuid
-         AND (schedule.started_at AT TIME ZONE 'Asia/Manila')::date <= day
-         AND (schedule.ended_at IS NULL
-              OR (schedule.ended_at AT TIME ZONE 'Asia/Manila')::date >= day)
-       WHERE EXTRACT(ISODOW FROM day) = schedule.day_of_week
-       -- DISTINCT ON (day), with the incoming schedule row first: a Cell meets once on
-       -- a day it is scheduled, whichever schedule rows cover it. See the docblock.
-       ORDER BY day, schedule.started_at DESC
+        -- **One schedule governs a day, and the weekday is tested against that one.**
+        -- Section 10: "A month therefore has exactly one schedule throughout." Testing
+        -- the weekday inside the join instead let *any* covering row match, so a
+        -- Thursday-to-Friday change effective on a Thursday derived that Thursday from
+        -- the outgoing row and every Friday from the incoming one.
+        CROSS JOIN LATERAL (
+          SELECT schedule.day_of_week, schedule.time_of_day
+            FROM cell_schedules AS schedule
+           WHERE schedule.cell_id = ${cellId}::uuid
+             -- A zero-length row is inert: Section 5 says no instant resolves to one,
+             -- and both changeSchedule and a closure write them deliberately.
+             AND schedule.ended_at IS DISTINCT FROM schedule.started_at
+             AND (schedule.started_at AT TIME ZONE 'Asia/Manila')::date <= day
+             AND (schedule.ended_at IS NULL
+                  OR (schedule.ended_at AT TIME ZONE 'Asia/Manila')::date >= day)
+           -- The three keys leaderForScope uses, for the reason it gives: the
+           -- latest-starting row is the one in force, ended_at DESC NULLS FIRST decides
+           -- a shared start in favour of the row still open, and the id makes the
+           -- answer total.
+           ORDER BY schedule.started_at DESC,
+                    schedule.ended_at DESC NULLS FIRST,
+                    schedule.id DESC
+           LIMIT 1
+        ) AS governing
+       WHERE EXTRACT(ISODOW FROM day) = governing.day_of_week
+       ORDER BY day
     `.execute(executor);
 
     return result.rows.map((row) => ({
@@ -902,8 +933,11 @@ export class CellsReadService implements CellScopePort, CellRelationshipsPort {
    * attendance for that month and does not appear here, so the index is not the surface
    * that reaches it.
    *
-   * **The leadership joined is the open one**, which on an `ACTIVE` Cell is also the
-   * current one: migration 0009 gives an `ACTIVE` Cell exactly one open leadership row.
+   * **A row that is in force is not the same as a row that is open**, and only the
+   * leadership join may use the second. Migration 0009 gives an `ACTIVE` Cell exactly one
+   * open leadership row and a handover writes no future-dated one, so open and current
+   * coincide there. They do not for a schedule or a category, whose change paths write the
+   * replacement open with a **future** start — so those two are joined on the instant.
    * That is why this needs none of `leaderForScope`'s ordering — the fallback that
    * method implements exists for a closed Cell, and there are none here.
    *
@@ -922,6 +956,11 @@ export class CellsReadService implements CellScopePort, CellRelationshipsPort {
   async cellsInScope(
     executor: Db | Transaction<Database>,
     leaderIds: readonly string[] | null,
+    /**
+     * The instant the category and schedule are read at — the caller's `now`, taken once
+     * so that a page describes one state rather than one per join.
+     */
+    at: Date,
     page: { limit: number; after?: string | null },
   ): Promise<
     {
@@ -942,18 +981,35 @@ export class CellsReadService implements CellScopePort, CellRelationshipsPort {
           .onRef('cell_leaderships.cell_id', '=', 'cells.id')
           .on('cell_leaderships.ended_at', 'is', null),
       )
-      // The category and schedule in force now. Migration 0009 gives an `ACTIVE` Cell
-      // exactly one open row of each, so these are inner joins rather than lookups that
-      // might miss — a Cell without them cannot exist in this state.
+      // **The category and schedule in force *now*, which is not the open row.** A
+      // schedule change closes the row in force at a future instant and inserts the
+      // replacement already open with a future `started_at` — so between the change and
+      // the month it takes effect, the single open row is the **pending** one, and joining
+      // on `ended_at is null` reported next month's day and time as the Cell's schedule
+      // while the coverage line beside it was derived from the row actually in force.
+      // Reproduced by `architecture-guardian`; the comment that stood here said "in force
+      // now" and the join did not deliver it.
       .innerJoin('cell_categories', (join) =>
         join
           .onRef('cell_categories.cell_id', '=', 'cells.id')
-          .on('cell_categories.ended_at', 'is', null),
+          .on('cell_categories.started_at', '<=', at)
+          .on((eb) =>
+            eb.or([
+              eb('cell_categories.ended_at', 'is', null),
+              eb('cell_categories.ended_at', '>', at),
+            ]),
+          ),
       )
       .innerJoin('cell_schedules', (join) =>
         join
           .onRef('cell_schedules.cell_id', '=', 'cells.id')
-          .on('cell_schedules.ended_at', 'is', null),
+          .on('cell_schedules.started_at', '<=', at)
+          .on((eb) =>
+            eb.or([
+              eb('cell_schedules.ended_at', 'is', null),
+              eb('cell_schedules.ended_at', '>', at),
+            ]),
+          ),
       )
       .select([
         'cells.id as id',
@@ -1016,25 +1072,31 @@ export class CellsReadService implements CellScopePort, CellRelationshipsPort {
     }
 
     const result = await sql<{ cell_id: string; scheduled: string }>`
-      SELECT cell_id, count(*) AS scheduled
-        FROM (
-          -- One row per Cell per scheduled day, for the reason scheduledMeetingsIn
-          -- gives: two schedule rows cover the boundary day of a schedule change, and a
-          -- Cell meets once on a day it is scheduled.
-          SELECT DISTINCT schedule.cell_id AS cell_id, day
-        FROM generate_series(
+      SELECT asked.cell_id AS cell_id, count(*) AS scheduled
+        FROM unnest(${sql.val(cellIds)}::uuid[]) AS asked(cell_id)
+        CROSS JOIN generate_series(
                ${reportingMonth}::date,
                (${reportingMonth}::date + interval '1 month' - interval '1 day')::date,
                interval '1 day'
              ) AS day
-        JOIN cell_schedules AS schedule
-          ON schedule.cell_id = ANY(${sql.val(cellIds)}::uuid[])
-         AND (schedule.started_at AT TIME ZONE 'Asia/Manila')::date <= day
-         AND (schedule.ended_at IS NULL
-              OR (schedule.ended_at AT TIME ZONE 'Asia/Manila')::date >= day)
-       WHERE EXTRACT(ISODOW FROM day) = schedule.day_of_week
-        ) AS scheduled_days
-       GROUP BY cell_id
+        -- The identical derivation scheduledMeetingsIn performs, counted rather than
+        -- listed: one governing schedule per day, inert rows excluded, the weekday
+        -- tested against the governing row alone. A change to one is a change to both.
+        CROSS JOIN LATERAL (
+          SELECT schedule.day_of_week
+            FROM cell_schedules AS schedule
+           WHERE schedule.cell_id = asked.cell_id
+             AND schedule.ended_at IS DISTINCT FROM schedule.started_at
+             AND (schedule.started_at AT TIME ZONE 'Asia/Manila')::date <= day
+             AND (schedule.ended_at IS NULL
+                  OR (schedule.ended_at AT TIME ZONE 'Asia/Manila')::date >= day)
+           ORDER BY schedule.started_at DESC,
+                    schedule.ended_at DESC NULLS FIRST,
+                    schedule.id DESC
+           LIMIT 1
+        ) AS governing
+       WHERE EXTRACT(ISODOW FROM day) = governing.day_of_week
+       GROUP BY asked.cell_id
     `.execute(executor);
 
     return new Map(result.rows.map((row) => [row.cell_id, Number(row.scheduled)]));

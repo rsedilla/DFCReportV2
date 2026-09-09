@@ -355,52 +355,169 @@ describe('the Cells index (sections 10, 12 and 22)', () => {
     expect(row?.coverage).toEqual({ recorded: 0, scheduled: 0 });
   });
 
-  it('counts a schedule-change boundary day once, not once per schedule row', async () => {
-    // **Reproduced by `architecture-guardian` before this case existed.** A schedule change
-    // writes `old.ended_at = effectiveFrom` and `new.started_at = effectiveFrom`, and the
-    // in-force comparison is inclusive on a Manila date at both edges — so both rows cover
-    // the boundary day. Where that day is the scheduled weekday and only the *time*
-    // changed, the day was derived twice and October with five Thursdays answered `of 6`.
-    // Section 12 reads the coverage line against this count.
-    const changed = await createPerson(db, { firstName: 'Caleb', network: 'MENS' });
-    await assignTo(db, changed.id, manuel.id);
+  /**
+   * A Cell whose schedule changed effective the first of `JUNE`, staged directly.
+   *
+   * **June 2026 begins on a Monday**, which is what makes the boundary day itself a
+   * scheduled day and the whole class reachable. It holds five Mondays (1, 8, 15, 22, 29)
+   * and five Tuesdays (2, 9, 16, 23, 30), so both arms below expect five and a defect
+   * shows as six.
+   *
+   * **A past month, because a month that has not begun now carries no coverage line at
+   * all.** The first version of this case asked about October and asserted `scheduled: 5`
+   * — which was the `0 of 5` for a month that had not started that the DCC route was
+   * refusing to publish in the same commit.
+   */
+  const JUNE = '2026-06-01';
+  const JUNE_FIRST = new Date('2026-05-31T16:00:00Z');
 
-    // Thursday, and 2026-10-01 is itself a Thursday — which is what makes the boundary day
-    // a scheduled day and the defect reachable.
+  const cellWithScheduleChange = async (
+    from: { dayOfWeek: number; timeOfDay: string },
+    to: { dayOfWeek: number; timeOfDay: string } | null,
+  ): Promise<TestCell> => {
+    const leader = await createPerson(db, { firstName: 'Caleb', network: 'MENS' });
+    await assignTo(db, leader.id, manuel.id);
+
     const cell = await createCell(db, {
-      leader: changed,
-      dayOfWeek: 4,
+      leader,
+      dayOfWeek: from.dayOfWeek,
+      timeOfDay: from.timeOfDay,
+      createdAt: CREATED,
+    });
+
+    await db.transaction().execute(async (trx) => {
+      if (to !== null) {
+        await trx
+          .updateTable('cell_schedules')
+          .set({ ended_at: JUNE_FIRST })
+          .where('cell_id', '=', cell.id)
+          .where('ended_at', 'is', null)
+          .execute();
+      }
+
+      await trx
+        .insertInto('cell_schedules')
+        .values({
+          cell_id: cell.id,
+          day_of_week: (to ?? from).dayOfWeek,
+          time_of_day: (to ?? from).timeOfDay,
+          started_at: JUNE_FIRST,
+          // A superseded pending change: closed at its own start, which section 5 makes
+          // inert. `changeSchedule` writes exactly this when a leader corrects a queued
+          // change inside the same month.
+          ended_at: to === null ? JUNE_FIRST : null,
+        })
+        .execute();
+    });
+
+    return cell;
+  };
+
+  const scheduledFor = async (cellId: string): Promise<number | undefined> => {
+    const response = await list(manuelAccount, { month: JUNE });
+    const row = (response.body.data as { id: string; coverage: { scheduled: number } }[]).find(
+      (entry) => entry.id === cellId,
+    );
+
+    return row?.coverage.scheduled;
+  };
+
+  it('counts a time-only schedule change once on the boundary day', async () => {
+    // Both rows cover 1 June — the outgoing one ends on it and the incoming one starts on
+    // it — and both carry Monday, so the day was derived twice and June held six.
+    const cell = await cellWithScheduleChange(
+      { dayOfWeek: 1, timeOfDay: '19:00' },
+      { dayOfWeek: 1, timeOfDay: '20:00' },
+    );
+
+    expect(await scheduledFor(cell.id)).toBe(5);
+  });
+
+  it('counts a day-of-week change against the schedule governing each day', async () => {
+    // **The arm a deduplication does not reach**, and the one the first fix missed while
+    // its docblock said the class was closed. The outgoing Monday row still covers 1 June,
+    // which is a Monday, so that day was derived from a schedule no longer in force —
+    // alongside all five Tuesdays. Section 10: "a month therefore has exactly one schedule
+    // throughout".
+    const cell = await cellWithScheduleChange(
+      { dayOfWeek: 1, timeOfDay: '19:00' },
+      { dayOfWeek: 2, timeOfDay: '19:00' },
+    );
+
+    expect(await scheduledFor(cell.id)).toBe(5);
+  });
+
+  it('derives nothing from a zero-length schedule row', async () => {
+    // Section 5 makes a zero-length row inert — no instant resolves to one — and both a
+    // superseded schedule change and a closure write them. The comparisons here are on
+    // Manila dates, so such a row still covered its own day: a Monday row inert at 1 June
+    // added a sixth meeting to a Cell that meets on Tuesdays.
+    const leader = await createPerson(db, { firstName: 'Caleb', network: 'MENS' });
+    await assignTo(db, leader.id, manuel.id);
+    const cell = await createCell(db, {
+      leader,
+      dayOfWeek: 2,
       timeOfDay: '19:00',
       createdAt: CREATED,
     });
 
-    const effectiveFrom = new Date('2026-09-30T16:00:00Z');
+    await db
+      .insertInto('cell_schedules')
+      .values({
+        cell_id: cell.id,
+        day_of_week: 1,
+        time_of_day: '20:00',
+        started_at: JUNE_FIRST,
+        ended_at: JUNE_FIRST,
+      })
+      .execute();
+
+    expect(await scheduledFor(cell.id)).toBe(5);
+  });
+
+  it('carries no coverage line for a month that has not begun', async () => {
+    // The reading `DccCoverageService` takes for a Sunday whose day has not begun, applied
+    // to the sibling route shipped in the same commit: `0 of 5` for next month says a
+    // leader has recorded none of five meetings that have not happened.
+    const nextMonth = `${new Date(Date.UTC(2026, 9, 1)).toISOString().slice(0, 7)}-01`;
+    const response = await list(markAccount, { month: nextMonth });
+
+    expect(response.status).toBe(200);
+    expect(response.body.data[0].coverage).toBeNull();
+  });
+
+  it('reports the schedule in force now, not a change queued for next month', async () => {
+    // A schedule change closes the row in force at a future instant and inserts the
+    // replacement **already open** with a future start, so `cell_schedules_one_open` makes
+    // the single open row the pending one. Joining on `ended_at is null` therefore reported
+    // next month's day and time as the Cell's schedule, beside a coverage line derived from
+    // the row actually in force.
+    // A Manila month boundary, which migration 0010 requires of a schedule row's start —
+    // 16:00 UTC is 00:00 the next day in Manila.
+    const queuedFrom = new Date('2098-12-31T16:00:00Z');
+
     await db.transaction().execute(async (trx) => {
       await trx
         .updateTable('cell_schedules')
-        .set({ ended_at: effectiveFrom })
-        .where('cell_id', '=', cell.id)
+        .set({ ended_at: queuedFrom })
+        .where('cell_id', '=', markCell.id)
         .where('ended_at', 'is', null)
         .execute();
 
       await trx
         .insertInto('cell_schedules')
         .values({
-          cell_id: cell.id,
-          day_of_week: 4,
-          time_of_day: '20:00',
-          started_at: effectiveFrom,
+          cell_id: markCell.id,
+          day_of_week: 3,
+          time_of_day: '18:00',
+          started_at: queuedFrom,
         })
         .execute();
     });
 
-    const response = await list(manuelAccount, { month: '2026-10-01' });
-    const row = (response.body.data as { id: string; coverage: { scheduled: number } }[]).find(
-      (entry) => entry.id === cell.id,
-    );
+    const response = await list(markAccount);
 
-    // October 2026 holds five Thursdays: the 1st, 8th, 15th, 22nd and 29th.
-    expect(row?.coverage.scheduled).toBe(5);
+    expect(response.body.data[0].schedule).toEqual({ day_of_week: 6, time_of_day: '19:00' });
   });
 
   it('omits a closed Cell', async () => {

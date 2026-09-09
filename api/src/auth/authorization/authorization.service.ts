@@ -550,14 +550,21 @@ export class AuthorizationService {
    * from its own tables and a comparison decided on a spelling is the defect
    * `identifiers.ts` exists to remove.
    *
-   * **Undated, and every branch of it.** Section 7 gives its dated resolution to a
-   * *viewing read asking about a past period*, and the routes that call this name a
-   * month for the figures on each row rather than for the rows themselves — the same
-   * reading `GET /api/v1/cells/{id}/meetings` already has, which resolves its Cell
-   * through the undated `leaderForScope` while taking a `month`. An index that dated its
-   * membership would list Cells whose detail route then refused, and hide Cells whose
-   * detail route serves — two answers to one authorization question, which is worse than
-   * either answer alone.
+   * **Undated, and every branch of it — which is a shipped reading rather than a settled
+   * one.** Section 7 gives its dated resolution to a viewing read asking about a past
+   * period, and both routes calling this name a month. What that month dates is the figure
+   * on each row; whether it also dates the *membership* of the collection is a question
+   * section 7 has no sentence about, because its dated rule is stated per target kind and
+   * these routes declare `{ kind: 'actor' }`. It is recorded as a Stop Condition in
+   * `CLAUDE.md`, with the cost `architecture-guardian` reproduced against the database.
+   *
+   * *The argument for shipping it undated is reachability and not classification: an index
+   * must list exactly the Cells whose detail routes the caller can reach. A first version
+   * of this paragraph made it by pointing at `GET /api/v1/cells/{id}/meetings` as though
+   * that route's undated resolution were evidence about which resolution section 7 assigns
+   * here — it carries a **recording** capability, which section 7 puts in the other class.
+   * That retraction was written into `cells.controller.ts` and `cells.dto.ts` and left out
+   * of this file, which is the authorization seam a reader meets first.*
    */
   async scopeMembership(actor: Actor, capability: Capability): Promise<ScopeMembership> {
     const authority = await this.authorityFor(actor.accountId);

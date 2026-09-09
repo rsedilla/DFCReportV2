@@ -7,7 +7,8 @@ import {
 } from '../auth/authorization/authorization.service';
 import { Capability } from '../auth/authorization/capabilities';
 import { canonicalId } from '../common/identifiers';
-import { isMonthOpen, reportingMonthOf } from '../common/time/submission-window';
+import { startOfManilaDay } from '../common/time/manila';
+import { databaseNow, reportingMonthOf, windowClosesAt } from '../common/time/submission-window';
 import { DATABASE, type Db } from '../database/database.module';
 import { PeopleReadService } from '../people/people.read.service';
 
@@ -87,12 +88,18 @@ export class CellsIndexService {
     const membership = await this.authorization.scopeMembership(actor, Capability.CellViewSubtree);
     const leaderIds = leadersToList(membership, actor, query.ledBy === 'me');
 
+    // One instant for the whole page, read from the database rather than from this host
+    // (decision 0160): the category and schedule joins and the window decision below are
+    // one question about one moment, and two clock readings a few microseconds apart can
+    // straddle a month boundary.
+    const now = await databaseNow(this.db);
+
     // One more than asked for, so whether another page exists is answered by the read
     // rather than by a second count, and the extra row is dropped before it is returned.
     const rows =
       leaderIds !== null && leaderIds.length === 0
         ? []
-        : await this.cells.cellsInScope(this.db, leaderIds, {
+        : await this.cells.cellsInScope(this.db, leaderIds, now, {
             limit: limit + 1,
             after: after?.cellId ?? null,
           });
@@ -105,12 +112,22 @@ export class CellsIndexService {
     // from rows a leader wrote. That difference is the property section 13 depends on —
     // recording less makes coverage worse and never better — and it is why they are two
     // reads rather than one join.
-    const [scheduled, recorded, leaders, open] = await Promise.all([
+    const [scheduled, recorded, leaders] = await Promise.all([
       this.cells.scheduledCountsIn(this.db, cellIds, reportingMonth),
       this.recordedCounts(cellIds, reportingMonth),
       this.people.namesOf(visible.map((row) => row.leaderId)),
-      isMonthOpen(this.db, reportingMonth),
     ]);
+
+    const open = now.getTime() < windowClosesAt(reportingMonth).getTime();
+
+    // **A month that has not begun carries no coverage line**, and the null is the answer
+    // rather than a zero. `0 of 5` for next month says a leader has recorded none of five
+    // meetings that have not happened, which is the accusation section 13 exists to
+    // prevent arriving as arithmetic — the identical reading `DccCoverageService` takes
+    // for a Sunday whose day has not begun, and the two routes shipped in one commit must
+    // not answer it differently. The denominator itself is still derivable and is not
+    // published alone: a figure with one half missing is worse than none.
+    const begun = startOfManilaDay(reportingMonth).getTime() <= now.getTime();
 
     const last = visible.at(-1);
 
@@ -134,10 +151,9 @@ export class CellsIndexService {
           },
           // Two figures, never divided (section 12, section 13). A Cell that scheduled
           // nothing reads `0 of 0`, is shown, and is not dropped (decision 0225).
-          coverage: {
-            recorded: recorded.get(row.id) ?? 0,
-            scheduled: scheduled.get(row.id) ?? 0,
-          },
+          coverage: begun
+            ? { recorded: recorded.get(row.id) ?? 0, scheduled: scheduled.get(row.id) ?? 0 }
+            : null,
         };
       }),
       next_cursor:

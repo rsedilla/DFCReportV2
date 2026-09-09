@@ -85,7 +85,14 @@ export class NetworksService {
       .where('person_id', '=', personId)
       .where('started_at', '<=', at)
       .where((eb) => eb.or([eb('ended_at', 'is', null), eb('ended_at', '>', at)]))
+      // **`id DESC` after the instant, so this is total.** `started_at` is not unique:
+      // a section 4 correction closes a row at its own start and opens the replacement at
+      // the same instant, so two rows can share it. Without a second key the row chosen
+      // is the plan's, and `peopleWhoseNetworkIs` — which exists to give this same answer
+      // set-wise — would resolve the tie independently. The two agree by construction only
+      // if both are total.
       .orderBy('started_at', 'desc')
+      .orderBy('id', 'desc')
       .limit(1)
       .executeTakeFirst();
 
@@ -151,9 +158,12 @@ export class NetworksService {
    * with an exclusion constraint as its remedy; until that exists, the two readings both
    * have callers and each must ask for the one it means.*
    *
-   * `DISTINCT ON (person_id) … ORDER BY person_id, started_at DESC` is `networkAsOf`'s
-   * `ORDER BY started_at DESC LIMIT 1` applied per person, so the agreement is by
-   * construction rather than by two queries happening to match.
+   * `DISTINCT ON (person_id) … ORDER BY person_id, started_at DESC, id DESC` is
+   * `networkAsOf`'s own ordering applied per person. **Both carry the `id` key and neither
+   * did at first**: `started_at` is not unique, so on a tie the two statements — different
+   * shapes, therefore different plans — resolved independently, and the agreement this
+   * paragraph claims was an agreement two queries happened to reach. A tie is exactly the
+   * class this method exists for, so the claim had to be made true rather than narrowed.
    */
   async peopleWhoseNetworkIs(executor: Db, network: NetworkName, at: Date): Promise<string[]> {
     const result = await sql<{ person_id: string }>`
@@ -163,7 +173,7 @@ export class NetworksService {
             FROM network_assignments
            WHERE started_at <= ${at}
              AND (ended_at IS NULL OR ended_at > ${at})
-           ORDER BY person_id, started_at DESC
+           ORDER BY person_id, started_at DESC, id DESC
         ) AS resolved
        WHERE network = ${network}
        ORDER BY person_id
