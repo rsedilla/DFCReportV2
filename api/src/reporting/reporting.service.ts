@@ -184,7 +184,8 @@ interface CellMonthlyCommon {
    * tell the two apart. **Decision 0225's other half is not implemented and is not
    * implementable in a two-figure aggregate**: it asks that the denominator's
    * *membership* name every Cell a leader holds rather than every Cell that happened to
-   * have a schedule, "so a figure and the list that explains it are over the same set".
+   * have a schedule. Decision 0225 states the reason separately, under what it rejected:
+   * "A figure and the list that explains it must be over the same set."
    * There is no list here. The first per-Cell breakdown placed beside this figure is what
    * owes that, and it is the surface that will have to name such a Cell explicitly.
    */
@@ -206,8 +207,8 @@ export interface CellCoverage {
  * `Completed` would mean "attended everything their own Cell happened to record" and is
  * inflated by exactly the Cells that recorded least — and decision 0202 settles that
  * nothing replaces them: unique people, classification and coverage are the whole of an
- * aggregate view. Coverage is not computed yet and is the figure that view leads with, so
- * what ships here is two of the three.
+ * aggregate view, and all three ship. Coverage is the one that view leads with, and it is
+ * the only one of the three that survives having no `N` to measure against.
  */
 export type CellMonthlyReport =
   | (CellMonthlyCommon & {

@@ -10,7 +10,7 @@ import type { TestPerson } from '../setup/fixtures';
  * The drift guard for the Cell coverage denominator's leader (SKILL.md sections 12, 13 and
  * 20; decision 0187).
  *
- * **Two implementations of one rule, and this is what keeps them equal.**
+ * **Two implementations of one rule, and this pins part of what keeps them equal.**
  * `CellsReadService.leaderOnDateWithin` answers "who led this Cell on this date" a row at a
  * time, and is the canonical statement of it. `scheduledMeetingsWithLeaderIn` restates the
  * same three ordering keys inside a `LATERAL`, because a set-returning query cannot call a
@@ -18,6 +18,19 @@ import type { TestPerson } from '../setup/fixtures';
  * scheduled meeting to "the leader who led the Cell on the scheduled date", so the two
  * disagreeing is not a tidiness problem: it is a meeting counted under the wrong leader, in
  * a figure that still sums correctly and looks right.
+ *
+ * **What it catches, measured by mutation rather than asserted:** the `started_at`
+ * ordering **direction** and the closing date bound. Reversing either turns two of the four
+ * cases below red.
+ *
+ * **What it does not catch, named because the source docblock rests on this file:** the
+ * `ended_at DESC NULLS FIRST` tiebreak and the `id DESC` tiebreak — no case here builds two
+ * leadership rows sharing a `started_at`, which is the section 5 correction pair those keys
+ * exist for — the opening date bound's inclusive edge, the null-leader `LEFT JOIN` branch,
+ * the multi-Cell case, and **the whole schedule half**. That last one is structural rather
+ * than a missing case: this file asks the canonical method about whatever dates the query
+ * hands it, so a schedule derivation returning the wrong dates is agreed with rather than
+ * caught. Closing it needs a different oracle, not another fixture here.
  *
  * **It compares the two rather than asserting a number**, which is what makes it a guard
  * rather than a second copy of the expectation. A case asserting "the leader on the 20th is
@@ -159,8 +172,14 @@ describe('the Cell coverage denominator resolves the same leader as leaderOnDate
     const cell = (await createCell(db, { leader: outgoing, createdAt: BEFORE })).id;
 
     await handOver(cell, new Date('2020-06-13T00:00:00+08:00'));
-    // Back to the first leader, so a query that happened to take the *latest* row would
-    // agree with the canonical answer on a single handover and diverge here.
+    // Back to the first leader, so one scheduled date has three leadership rows covering
+    // it and the right answer is the *middle* one. That is what this case adds: the two
+    // handover cases above each have a correct answer at one end of the candidate list,
+    // so a query taking the first or the last row can be right for the wrong reason.
+    //
+    // *It said a latest-row query "would agree on a single handover and diverge here",
+    // which is false: reversing the ordering to take the latest row already reddens the
+    // handover-on-a-scheduled-date case above.*
     await db.transaction().execute(async (trx) => {
       await trx
         .updateTable('cell_leaderships')

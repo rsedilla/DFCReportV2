@@ -324,7 +324,7 @@ export class CellsReadService implements CellScopePort, CellRelationshipsPort {
         sql<boolean>`(ended_at IS NULL OR (ended_at AT TIME ZONE 'Asia/Manila')::date >= ${on}::date)`,
       )
       // **`started_at` ASC, and this is the one key that differs from
-      // `leaderForScopeWithin` above** (decision 0187). That method asks who leads the
+      // {@link leaderForScopeWithin}** (decision 0187). That method asks who leads the
       // Cell *now*, so the latest-starting row is the answer. This one asks who was
       // leading when the Cell met, and on a handover day the date comparison matches
       // both the outgoing and the incoming row — so the direction decides which of two
@@ -1083,8 +1083,19 @@ export class CellsReadService implements CellScopePort, CellRelationshipsPort {
    * **outgoing** leader, which is the only answer that does not depend on when the record
    * was entered. A set-returning query cannot call a row-at-a-time method without one
    * round trip per pair, which is why they are restated; a change to either rule is a
-   * change here too, and `cell-coverage-leader.spec.ts` pins this against
-   * `leaderOnDateWithin` on a handover date so the pair cannot drift silently.
+   * change here too.
+   *
+   * **`test/database/cell-coverage-leader.spec.ts` pins two of the five things that could
+   * drift, and the other three are named rather than implied.** It compares this query's
+   * leader against {@link leaderOnDateWithin} for the same date, so it catches the
+   * `started_at` **direction** — decision 0187, which decides who a handover-day meeting
+   * belongs to — and the closing date bound. It does **not** catch the
+   * `ended_at DESC NULLS FIRST` tiebreak, the `id DESC` tiebreak, or any drift in the
+   * *schedule* half: the guard asks the canonical method about whatever dates this query
+   * returns, so a schedule that produced the wrong dates would be agreed with rather than
+   * caught. *Measured by mutation rather than reasoned: five of seven single-key
+   * mutations leave it green. An earlier version of this sentence said "the pair cannot
+   * drift silently", which is three keys and a whole derivation wider than the file.*
    *
    * **The leader is `LEFT JOIN`ed and may come back null.** It should not: a Cell's
    * schedule and its leadership are opened together at creation and closed together at

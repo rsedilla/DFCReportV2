@@ -69,7 +69,8 @@ export interface CellScopedMonthFigures {
    * and an **unreported** meeting is excluded because it has no row at all (decision
    * 0162) -- an absence of data rather than a fact about attendance. Scheduled meetings
    * are not the denominator and never appear here; the count a coverage line is read
-   * against is a different figure and is not computed yet.
+   * against is a different figure, derived from the schedule by
+   * `CellsReadService.scheduledMeetingsWithLeaderIn` and composed in `reporting`.
    */
   n: number;
   open: boolean;
