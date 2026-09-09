@@ -105,13 +105,13 @@
     },
     {
       "route": "GET /api/v1/cells",
-      "waived_to": "screens block",
-      "reason": "The index every other Cell route depends on (decision 0226). Cell Leaders is the screen in that block which shows it, and Dashboard reads it with ?led_by=me for a leader's own Cells (§19). Neither exists yet. It is ACTIVE-only, so it does not by itself discharge §19's requirement that a closed Cell's meetings stay reachable while their month is open."
+      "reason": "The index every other Cell route depends on (decision 0226). Cell Leaders is the screen in that block which shows it, and Dashboard reads it with ?led_by=me for a leader's own Cells (§19). Neither exists yet. It is ACTIVE-only, so it does not by itself discharge §19's requirement that a closed Cell's meetings stay reachable while their month is open.",
+      "screen": "web/app/cells/page.tsx"
     },
     {
       "route": "GET /api/v1/dcc/events",
-      "waived_to": "screens block",
-      "reason": "The DCC calendar a leader picks an event from (decision 0227). DCC Attendance is the screen in that block which shows it; the roster below is unreachable without it."
+      "reason": "The DCC calendar a leader picks an event from (decision 0227). DCC Attendance is the screen in that block which shows it; the roster below is unreachable without it.",
+      "screen": "web/app/dcc/page.tsx"
     },
     {
       "route": "GET /api/v1/dcc/events/:id/coverage-gaps",
@@ -140,28 +140,28 @@
     },
     {
       "route": "GET /api/v1/cells/:id/meetings",
-      "waived_to": "screens block",
-      "reason": "Cell Meetings. §19 puts meetings awaiting a record above the numbers on every leader's dashboard."
+      "reason": "Cell Meetings. §19 puts meetings awaiting a record above the numbers on every leader's dashboard.",
+      "screen": "web/app/cells/[id]/meetings/page.tsx"
     },
     {
       "route": "GET /api/v1/cells/:id/meetings/:meetingId/roster",
-      "waived_to": "screens block",
-      "reason": "Who there is to record (§13). Cell Meetings calls it before a submission."
+      "reason": "Who there is to record (§13). Cell Meetings calls it before a submission.",
+      "screen": "web/app/cells/[id]/meetings/[date]/page.tsx"
     },
     {
       "route": "POST /api/v1/cells/:id/meetings/:meetingId/submit",
-      "waived_to": "screens block",
-      "reason": "Recording a meeting is the thing the pilot exists to test — whether leaders record every week."
+      "reason": "Recording a meeting is the thing the pilot exists to test — whether leaders record every week.",
+      "screen": "web/app/cells/[id]/meetings/[date]/page.tsx"
     },
     {
       "route": "GET /api/v1/dcc/events/:id/roster",
-      "waived_to": "screens block",
-      "reason": "The DCC checklist (§9). A leader marking it must see who is already marked."
+      "reason": "The DCC checklist (§9). A leader marking it must see who is already marked.",
+      "screen": "web/app/dcc/[id]/page.tsx"
     },
     {
       "route": "POST /api/v1/dcc/events/:id/submit",
-      "waived_to": "screens block",
-      "reason": "DCC recording, the second half of the pilot's month cycle (§9)."
+      "reason": "DCC recording, the second half of the pilot's month cycle (§9).",
+      "screen": "web/app/dcc/[id]/page.tsx"
     },
     {
       "route": "POST /api/v1/cells",

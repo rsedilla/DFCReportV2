@@ -1,0 +1,282 @@
+import type { Page } from '@playwright/test';
+
+/**
+ * The Cells index, one Cell's meetings, and the DCC calendar, as far as the
+ * accessibility sweep is concerned.
+ *
+ * A companion to `mock-api.ts` rather than part of it: those fixtures are
+ * authentication and People, these are attendance, and the two grow at different
+ * rates. Everything said there applies here — these are stand-ins for the
+ * transport and never for the rules.
+ *
+ * **The fixtures reach the states worth scanning rather than the tidy ones.**
+ * Each carries a row the screen has to handle specially: a Cell that scheduled
+ * nothing, which reads `0 of 0` and is shown rather than dropped (decision 0225);
+ * a scheduled meeting with no record, which sections 13 and 19 make outstanding
+ * work rather than a fourth status; a `NOT_HELD` meeting, which is a record and
+ * carries no warning colour; a rescheduled one, which keeps its place in the month
+ * because the scheduled date is the identity; a removed Sunday shown in its place
+ * with its reason (decision 0227); and a Sunday nobody could have recorded for,
+ * whose coverage figure is absent rather than zero (decision 0229).
+ *
+ * Names and identifiers are invented (`CLAUDE.md`, Secrets).
+ */
+
+function json(body: unknown, status = 200) {
+  return { status, contentType: 'application/json', body: JSON.stringify(body) };
+}
+
+const LEADER_ID = '3f1b7c6e-0000-4000-8000-000000000201';
+const SUBMITTER_ID = '3f1b7c6e-0000-4000-8000-000000000401';
+
+export const CELL_WITH_MEETINGS = {
+  id: '3f1b7c6e-0000-4000-8000-000000000101',
+  cell_id: 'C-0007',
+  category: 'YOUTH',
+  schedule: { day_of_week: 6, time_of_day: '19:00' },
+  leader: { person_id: LEADER_ID, member_id: 'M-00412', full_name: 'Teofilo Ramos' },
+  coverage: { recorded: 3, scheduled: 4 },
+};
+
+/** Decision 0225: it reads `0 of 0`, it is shown, and it is not dropped. */
+export const CELL_WITH_NO_SCHEDULE = {
+  id: '3f1b7c6e-0000-4000-8000-000000000102',
+  cell_id: 'C-0011',
+  category: 'COUPLE',
+  schedule: { day_of_week: 3, time_of_day: '20:00' },
+  leader: { person_id: '3f1b7c6e-0000-4000-8000-000000000202', member_id: 'M-00518', full_name: 'Herminia Lazaro' },
+  coverage: { recorded: 0, scheduled: 0 },
+};
+
+export async function mockCells(page: Page): Promise<void> {
+  await page.route('**/api/v1/cells?*', (route) =>
+    route.fulfill(
+      json({
+        reporting_month: '2026-06-01',
+        open: false,
+        data: [CELL_WITH_MEETINGS, CELL_WITH_NO_SCHEDULE],
+        next_cursor: null,
+      }),
+    ),
+  );
+}
+
+/** A leader who oversees no Cell this month, which is a sentence rather than an error. */
+export async function mockCellsEmpty(page: Page): Promise<void> {
+  await page.route('**/api/v1/cells?*', (route) =>
+    route.fulfill(json({ reporting_month: '2026-06-01', open: false, data: [], next_cursor: null })),
+  );
+}
+
+export async function mockCellMeetings(page: Page): Promise<void> {
+  await page.route('**/api/v1/cells/*/meetings?*', (route) =>
+    route.fulfill(
+      json({
+        cell_id: 'C-0007',
+        reporting_month: '2026-06-01',
+        scheduled_count: 4,
+        recorded_count: 3,
+        meetings: [
+          {
+            scheduled_date: '2026-06-06',
+            scheduled_time: '19:00',
+            week_starting: '2026-06-01',
+            reporting_month: '2026-06-01',
+            meeting: {
+              id: '3f1b7c6e-0000-4000-8000-000000000301',
+              status: 'HELD',
+              scheduled_date: '2026-06-06',
+              scheduled_time: '19:00',
+              actual_date: null,
+              actual_time: null,
+              not_held_reason: null,
+              not_held_note: null,
+              facilitated_by: null,
+              responsible_leader_id: LEADER_ID,
+              submitted_by: SUBMITTER_ID,
+              submitted_at: '2026-06-06T12:00:00.000Z',
+              version: 1,
+            },
+          },
+          {
+            scheduled_date: '2026-06-13',
+            scheduled_time: '19:00',
+            week_starting: '2026-06-08',
+            reporting_month: '2026-06-01',
+            meeting: {
+              id: '3f1b7c6e-0000-4000-8000-000000000302',
+              status: 'NOT_HELD',
+              scheduled_date: '2026-06-13',
+              scheduled_time: '19:00',
+              actual_date: null,
+              actual_time: null,
+              not_held_reason: 'OTHER',
+              not_held_note: 'The venue was unavailable that evening.',
+              facilitated_by: null,
+              responsible_leader_id: LEADER_ID,
+              submitted_by: SUBMITTER_ID,
+              submitted_at: '2026-06-13T12:00:00.000Z',
+              version: 1,
+            },
+          },
+          {
+            scheduled_date: '2026-06-20',
+            scheduled_time: '19:00',
+            week_starting: '2026-06-15',
+            reporting_month: '2026-06-01',
+            meeting: {
+              id: '3f1b7c6e-0000-4000-8000-000000000303',
+              status: 'RESCHEDULED',
+              scheduled_date: '2026-06-20',
+              scheduled_time: '19:00',
+              actual_date: '2026-06-21',
+              actual_time: '16:00',
+              not_held_reason: null,
+              not_held_note: null,
+              facilitated_by: null,
+              responsible_leader_id: LEADER_ID,
+              submitted_by: SUBMITTER_ID,
+              submitted_at: '2026-06-21T12:00:00.000Z',
+              version: 2,
+            },
+          },
+          {
+            scheduled_date: '2026-06-27',
+            scheduled_time: '19:00',
+            week_starting: '2026-06-22',
+            reporting_month: '2026-06-01',
+            meeting: null,
+          },
+        ],
+      }),
+    ),
+  );
+}
+
+export async function mockDccEvents(page: Page): Promise<void> {
+  await page.route('**/api/v1/dcc/events?*', (route) =>
+    route.fulfill(
+      json({
+        reporting_month: '2026-06-01',
+        open: true,
+        data: [
+          {
+            id: '3f1b7c6e-0000-4000-8000-000000000501',
+            event_date: '2026-06-07',
+            recordable: true,
+            not_recordable_reason: null,
+            removed: false,
+            removal_reason: null,
+            coverage: { met: 5, owed: 8 },
+          },
+          {
+            id: '3f1b7c6e-0000-4000-8000-000000000502',
+            event_date: '2026-06-14',
+            recordable: false,
+            not_recordable_reason: 'REMOVED',
+            removed: true,
+            removal_reason: 'The church held a combined regional service.',
+            coverage: null,
+          },
+          {
+            id: '3f1b7c6e-0000-4000-8000-000000000503',
+            event_date: '2026-06-21',
+            recordable: true,
+            not_recordable_reason: null,
+            removed: false,
+            removal_reason: null,
+            coverage: { met: 8, owed: 8 },
+          },
+          {
+            id: '3f1b7c6e-0000-4000-8000-000000000504',
+            event_date: '2026-06-28',
+            recordable: false,
+            not_recordable_reason: 'NOT_YET_HELD',
+            removed: false,
+            removal_reason: null,
+            coverage: null,
+          },
+        ],
+      }),
+    ),
+  );
+}
+
+/**
+ * One meeting's roster, in the state a correction screen has to handle: some
+ * members marked, one not marked at all.
+ *
+ * The unmarked member is the point. Decision 0223 gives the roster each member's
+ * mark so a correction resubmits what is stored, and section 13 has the roster
+ * declared rather than inferred — so a member nobody has marked must reach the
+ * screen as `null` and not as `present: false`.
+ */
+export async function mockMeetingRoster(page: Page): Promise<void> {
+  await page.route('**/api/v1/cells/*/meetings/*/roster', (route) =>
+    route.fulfill(
+      json({
+        cell_id: 'C-0007',
+        meeting_id: '2026-06-27',
+        scheduled_date: '2026-06-27',
+        scheduled_time: '19:00',
+        week_starting: '2026-06-22',
+        reporting_month: '2026-06-01',
+        roster_date: '2026-06-27',
+        responsible_leader_id: LEADER_ID,
+        meeting: null,
+        members: [
+          {
+            person_id: '3f1b7c6e-0000-4000-8000-000000000601',
+            member_id: 'M-00701',
+            first_name: 'Rosalinda',
+            last_name: 'Ocampo',
+            record: null,
+          },
+          {
+            person_id: '3f1b7c6e-0000-4000-8000-000000000602',
+            member_id: 'M-00702',
+            first_name: 'Bienvenido',
+            last_name: 'Trinidad',
+            record: null,
+          },
+        ],
+      }),
+    ),
+  );
+}
+
+/** A leader's DCC checklist: one person recorded already, one not. */
+export async function mockDccRoster(page: Page): Promise<void> {
+  await page.route('**/api/v1/dcc/events/*/roster', (route) =>
+    route.fulfill(
+      json({
+        event: {
+          id: '3f1b7c6e-0000-4000-8000-000000000501',
+          event_date: '2026-06-07',
+          recordable: true,
+          not_recordable_reason: null,
+          removed: false,
+          removal_reason: null,
+          coverage: { met: 5, owed: 8 },
+        },
+        data: [
+          {
+            person_id: '3f1b7c6e-0000-4000-8000-000000000601',
+            member_id: 'M-00701',
+            full_name: 'Rosalinda Ocampo',
+            responsible_leader_id: LEADER_ID,
+            record: { present: true, version: 1, recorded_at: '2026-06-07T12:00:00.000Z' },
+          },
+          {
+            person_id: '3f1b7c6e-0000-4000-8000-000000000602',
+            member_id: 'M-00702',
+            full_name: 'Bienvenido Trinidad',
+            responsible_leader_id: LEADER_ID,
+            record: null,
+          },
+        ],
+        next_cursor: null,
+      }),
+    ),
+  );
+}

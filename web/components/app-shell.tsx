@@ -28,6 +28,8 @@ import { cn } from '@/lib/utils';
  */
 const LINKS = [
   { href: '/people', label: 'People' },
+  { href: '/cells', label: 'Cell Leaders' },
+  { href: '/dcc', label: 'DCC Attendance' },
   { href: '/session', label: 'Your session' },
 ];
 
