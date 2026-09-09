@@ -153,7 +153,9 @@ recording capability gains a read they did not have, not whether the figures exi
 > this ruling's — this one's survives on the two grounds above — and which capability may
 > read those marks is recorded as open in `CLAUDE.md`. *This note said "Section 7
 > re-derives **the** acceptance", which in this file names the bit and so contradicted the
-> blockquote above it.*
+> "Dead since 2026-09-09" note under **Why accepted rather than closed**, which says the
+> acceptance survives on the two grounds there. A version of this marker pointed at "the
+> blockquote above it", which resolves to the nearest one above and not to that.*
 
 ## What this binds
 
