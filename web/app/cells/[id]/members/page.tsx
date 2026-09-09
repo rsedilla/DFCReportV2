@@ -235,7 +235,12 @@ function MemberRow({
     <li className="border-line rounded-lg border p-4">
       <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-2">
         <div>
-          <p className="text-base font-medium">{member.full_name}</p>
+          {/*
+            A heading rather than a paragraph: each member is a section of the
+            list with its own controls, so a screen reader should be able to move
+            between them by heading rather than by reading every line.
+          */}
+          <h3 className="text-base font-medium">{member.full_name}</h3>
           <p className="text-muted mt-1 text-sm">
             {member.member_id} — a member since {dayLabel(member.started_at.slice(0, 10))}
           </p>

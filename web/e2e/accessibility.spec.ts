@@ -573,10 +573,13 @@ const TARGET_SWEEP = [
   },
   {
     // The picker's search box and its Find button, plus a Remove per member.
+    // Settled on a member's own heading, not on "Current members", which renders
+    // from the page rather than from the data — so the count would run before the
+    // list arrived, which is what the minimum caught.
     name: 'cell members',
     route: '/cells/3f1b7c6e-0000-4000-8000-000000000101/members',
     settleRole: 'heading' as const,
-    settle: 'Current members',
+    settle: 'Rosalinda Ocampo',
     minimum: 5,
   },
   {
