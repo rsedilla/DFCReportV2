@@ -16,6 +16,13 @@ correction capability gets `201` for a roster that matches and `403` for one tha
 not, so the pair of outcomes answers a question about stored attendance that no read route
 answers.
 
+> **Corrected on 2026-09-09.** A read route answers it now: decision 0223 gives
+> `GET /api/v1/cells/{id}/meetings/{meeting_id}/roster` each member's mark, under the
+> *identical* capability and target declaration this route carries. The disclosure this
+> ruling accepted is therefore redundant rather than novel, which strengthens the
+> acceptance and changes nothing about it — what the ruling turns on is that a write
+> writing nothing owes no amendment capability, not on where else the figure can be read.
+
 Raised by `architecture-guardian` as a Stop Condition on the second pass of that slice.
 Section 7 says a capability without a scope grant is not usable and Section 8 says what a
 search may disclose; neither says whether a write that writes nothing owes the capability

@@ -9,8 +9,14 @@ meeting in a state Section 13 says cannot exist.
 - **A rescheduled meeting's roster comes from the actual date** (Section 12), not the
   scheduled one: "Membership can change between the two, and the roster should be the
   people who could actually have been there."
-- **A submission must name every member of the meeting exactly once** (Section 13), which
-  is what Section 20's reconciliation depends on.
+- **A submission must name every member of the meeting exactly once** (Section 13).
+
+  > **Corrected on 2026-09-09.** This said the rule "is what Section 20's reconciliation
+  > depends on". It is not: both of Section 20's bucket views are computed from the
+  > attendees, so a roster with holes reconciles exactly as a complete one does. The rule
+  > is Section 13's on its own terms — a partial list is a leader saying nothing about the
+  > members it omits — and Section 13 now states it in its own words, which it did not when
+  > this ruling cited it. Nothing this ruling turns on moves.
 
 So the ordinary flow records attendance against the scheduled-date roster and then moves
 the roster out from under it. A person who joined between the two dates has no record and

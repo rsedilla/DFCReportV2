@@ -628,9 +628,11 @@ export class CellMeetingsService implements RecordedMeetingsPort {
         // Null is a member with no live row — not yet recorded, or recorded and then
         // superseded with nothing replacing them. A nullable object rather than a boolean
         // defaulting to false, because `false` would tell a client the leader marked this
-        // member absent when nobody marked them at all. Section 13 has a meeting's
-        // attendance **declared** rather than inferred, and a read that manufactures a
-        // declaration is the one thing a correction screen must not be handed.
+        // member absent when nobody marked them at all. Section 13 has a meeting's roster
+        // **declared** by its leader — the phrase "declared, never inferred" is that
+        // section's about a *status*, and the roster rule it now states carries the same
+        // idea one level down — and a read that manufactures a declaration is the one
+        // thing a correction screen must not be handed.
         //
         // *The ground given here first was that resubmitting `false` for such a member
         // loses data. It does not, and this comment refuted itself two lines down: a
@@ -1447,7 +1449,7 @@ export class CellMeetingsService implements RecordedMeetingsPort {
    * the ordinary flow records attendance against the scheduled-date roster and then moves
    * the roster out from under it, leaving the meeting failing section 13's "every member
    * exactly once" rule with nothing to surface it: coverage counts recorded meetings
-   * rather than complete ones, so the month reconciles wrongly and every figure looks
+   * rather than complete ones, so nothing surfaces it and every figure looks
    * ordinary.
    *
    * **The identity, the month and the week never move.** `(cell_id, scheduled_date)` is

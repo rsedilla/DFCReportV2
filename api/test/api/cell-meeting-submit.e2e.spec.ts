@@ -28,10 +28,15 @@ import type { TestAccount, TestCell, TestPerson } from '../setup/fixtures';
  * change history covers — and is refused here rather than silently overwriting, which
  * section 14 forbids in terms.
  *
- * The cases that matter are the ones section 20 will reconcile against: a `HELD` meeting
- * carries a line for **every** member, present or not, so that classification and
- * monthly-attendance buckets can sum to the same unique-people total. A roster with
- * holes in it cannot do that, and the defect is invisible until a month is reported.
+ * The cases that matter are the ones section 13's roster rule governs: a meeting that took
+ * place carries a line for **every** member, present or not, because a partial list is a
+ * leader saying nothing about the members it omits and nothing distinguishes that from
+ * saying they were absent. The defect is invisible until somebody reads the meeting.
+ *
+ * *These were "the cases section 20 will reconcile against", holding that a roster with
+ * holes cannot make the buckets sum. Both are false: each bucket view is computed from the
+ * attendees, so a roster with holes reconciles exactly as a complete one does. What holes
+ * break is the account the leader gave.*
  *
  * The meeting is the version unit (section 14), which is the opposite of DCC.
  *
@@ -269,11 +274,14 @@ describe('recording a Cell meeting (sections 12, 13 and 14)', () => {
   });
 
   it('refuses a HELD meeting that leaves a member out', async () => {
-    // **The case section 20's reconciliation depends on.** Section 13: a meeting where
-    // nobody came "is HELD with zero attendance... every member is recorded as not
-    // having attended". Absent rows and rows marked absent are different facts, and
-    // accepting a partial list makes the denominator depend on how much of the roster a
-    // client happened to send.
+    // **The case section 13's roster rule exists for.** Section 13: a meeting where nobody
+    // came "is HELD with zero attendance... every member is recorded as not having
+    // attended". A partial list is a leader saying nothing about the members it omits, and
+    // this route cannot tell that from a leader saying they were absent.
+    //
+    // *This named it "the case section 20's reconciliation depends on" and said a partial
+    // list moves the denominator. Section 20 depends on neither, and that denominator is a
+    // count of meetings.*
     const one = await member('Aurelio');
     await member('Bartolome');
 

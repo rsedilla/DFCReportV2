@@ -1289,10 +1289,16 @@ export class DccAttendanceService {
     // 0201). This mirrors what `CellMeetingsService.lostRaceAnswer` does, and it is the
     // half DCC was missing: an actor holding `dcc.take_attendance` alone was answered a
     // `409` carrying the stored value *and the name of the account that recorded it*,
-    // where the identical body sent sequentially answers `403 dcc.correct_subtree`. The
-    // DCC roster publishes neither of those, so section 7's ordering rule -- nothing the
+    // where the identical body sent sequentially answers `403 dcc.correct_subtree`. Section 7's ordering rule -- nothing the
     // caller is told varies with the stored contents until the amendment capability is
     // decided -- applies here exactly as it does one domain over.
+    //
+    // *The ground given here was "the DCC roster publishes neither of those", and it was
+    // false when it was written: `renderLine` returns each person's `present`, `version`
+    // and `recorded_at` under `dcc.take_attendance`, which section 7 states and decision
+    // 0194 settles as deliberate. Only the recording account's name is withheld. The gate
+    // stands on the rule, which never depended on which routes exist. Swept from section
+    // 7, section 22, decision 0201 and the Cell twin on 2026-09-09, and missed here.*
     //
     // **Only on this branch.** A loser that agrees with the winner wrote nothing and is
     // answered `RESOURCE_BUSY` above, and section 7 owes no amendment capability for a
