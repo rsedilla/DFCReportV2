@@ -351,3 +351,45 @@ export async function mockDccReport(page: Page): Promise<void> {
     ),
   );
 }
+
+/**
+ * A Cell's current members.
+ *
+ * Two rows and no next page, which is what a real Cell looks like at this church's
+ * scale. `started_at` is what the screen reads a "member since" date from, and it
+ * is why removing somebody does not erase the months they were counted in.
+ */
+export async function mockCellMembers(page: Page): Promise<void> {
+  await page.route('**/api/v1/cells/*/members**', (route) => {
+    if (route.request().method() !== 'GET') {
+      return route.fulfill({ status: 204, body: '' });
+    }
+
+    return route.fulfill(
+      json({
+        data: [
+          {
+            person_id: '3f1b7c6e-0000-4000-8000-000000000601',
+            member_id: 'M-00701',
+            full_name: 'Rosalinda Ocampo',
+            started_at: '2026-03-01T00:00:00.000Z',
+          },
+          {
+            person_id: '3f1b7c6e-0000-4000-8000-000000000602',
+            member_id: 'M-00702',
+            full_name: 'Bienvenido Trinidad',
+            started_at: '2026-05-12T00:00:00.000Z',
+          },
+        ],
+        next_cursor: null,
+      }),
+    );
+  });
+}
+
+/** A Cell with nobody in it, which is a sentence rather than an error. */
+export async function mockCellMembersEmpty(page: Page): Promise<void> {
+  await page.route('**/api/v1/cells/*/members**', (route) =>
+    route.fulfill(json({ data: [], next_cursor: null })),
+  );
+}

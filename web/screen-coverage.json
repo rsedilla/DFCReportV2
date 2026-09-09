@@ -120,23 +120,23 @@
     },
     {
       "route": "GET /api/v1/cells/:id/members",
-      "waived_to": "screens block",
-      "reason": "The Cell roster (§12). Cell Attendance reads it, and it is the roster view §12 keeps separate from the statistical report."
+      "reason": "The Cell roster (§12). Cell Attendance reads it, and it is the roster view §12 keeps separate from the statistical report.",
+      "screen": "web/app/cells/[id]/members/page.tsx"
     },
     {
       "route": "POST /api/v1/cells/:id/members",
-      "waived_to": "screens block",
-      "reason": "Adding a member is part of running a Cell during the pilot month (§10)."
+      "reason": "Adding a member is part of running a Cell during the pilot month (§10).",
+      "screen": "web/app/cells/[id]/members/page.tsx"
     },
     {
       "route": "DELETE /api/v1/cells/:id/members/:person_id",
-      "waived_to": "screens block",
-      "reason": "The other half of membership, and a move is one transaction (§10)."
+      "reason": "The other half of membership, and a move is one transaction (§10).",
+      "screen": "web/app/cells/[id]/members/page.tsx"
     },
     {
       "route": "PUT /api/v1/cells/:id/schedule",
-      "waived_to": "screens block",
-      "reason": "A schedule change decides which meetings a month derives, so a pilot month needs it reachable (§10, §13)."
+      "reason": "A schedule change decides which meetings a month derives, so a pilot month needs it reachable (§10, §13).",
+      "screen": "web/app/cells/[id]/schedule/page.tsx"
     },
     {
       "route": "GET /api/v1/cells/:id/meetings",

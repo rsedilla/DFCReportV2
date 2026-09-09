@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 
 import { AppShell, PAGE_WIDTH } from '@/components/app-shell';
-import { LeaderPicker } from '@/components/leader-picker';
+import { PersonPicker } from '@/components/person-picker';
 import { PossibleMatches } from '@/components/possible-matches';
 import { Button } from '@/components/ui/button';
 import { FailureNotice } from '@/components/ui/failure-notice';
@@ -332,7 +332,7 @@ function NewPersonForm() {
           mobileNumber={values.mobile_number}
         />
 
-        <LeaderPicker
+        <PersonPicker
           selectedId={leaderId}
           selectedName={leaderName}
           onSelect={(person) => {

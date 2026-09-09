@@ -15,6 +15,7 @@ import {
   type CellSubmission,
   type RosterMember,
 } from '@/lib/cells';
+import { idempotencyKeyFor } from '@/lib/idempotency';
 import { describeFailure } from '@/lib/messages';
 import { dayLabel } from '@/lib/reporting-month';
 
@@ -130,7 +131,7 @@ function RecordMeeting() {
   // same submission retried carries the same key and replays, and a changed mark
   // is a different submission and gets a different one.
   const idempotencyKey = useMemo(
-    () => (submission === null ? null : keyFor(params.id, params.date, submission)),
+    () => (submission === null ? null : idempotencyKeyFor(params.id, params.date, submission)),
     [submission, params.id, params.date],
   );
 
@@ -320,34 +321,3 @@ function MemberMark({
   );
 }
 
-/**
- * A key that is a function of the request, so a retry replays and a change writes.
- *
- * Section 22 requires a v4 UUID, so this hashes the body into one rather than
- * sending a digest: the shape is fixed at the boundary and a client that invented
- * its own format would be refused. The randomness a v4 normally carries is
- * deliberately replaced by the body's own content — which is the point, since two
- * attempts at the same submission must agree and a `crypto.randomUUID()` per press
- * would not.
- */
-function keyFor(cellId: string, meetingId: string, submission: CellSubmission): string {
-  const canonical = JSON.stringify([cellId, meetingId, submission]);
-
-  let h1 = 0x811c9dc5;
-  let h2 = 0x01000193;
-  for (let index = 0; index < canonical.length; index += 1) {
-    const code = canonical.charCodeAt(index);
-    h1 = Math.imul(h1 ^ code, 0x01000193) >>> 0;
-    h2 = Math.imul(h2 + code, 0x85ebca6b) >>> 0;
-  }
-
-  const hex = (value: number) => value.toString(16).padStart(8, '0');
-  const a = hex(h1);
-  const b = hex(h2);
-  const c = hex(Math.imul(h1 ^ h2, 0xc2b2ae35) >>> 0);
-  const d = hex(Math.imul(h1 + h2, 0x27d4eb2f) >>> 0);
-
-  // Version 4 and the RFC variant, so the value satisfies the boundary's own
-  // `@IsUUID()` rather than merely looking like a UUID.
-  return `${a}-${b.slice(0, 4)}-4${b.slice(5, 8)}-a${c.slice(1, 4)}-${c.slice(4)}${d}`;
-}

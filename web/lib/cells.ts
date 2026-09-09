@@ -261,3 +261,97 @@ export async function submitMeeting(
     { method: 'POST', body: submission, idempotencyKey },
   );
 }
+
+/** A current member of a Cell (SKILL.md section 10). */
+export interface CellMember {
+  person_id: string;
+  member_id: string;
+  full_name: string;
+  /** When this membership began, which a report reads figures against. */
+  started_at: string;
+}
+
+export interface CellMemberPage {
+  data: CellMember[];
+  next_cursor: string | null;
+}
+
+export async function listCellMembers(
+  cellId: string,
+  cursor: string | null,
+  signal?: AbortSignal,
+): Promise<CellMemberPage> {
+  const query = new URLSearchParams();
+  if (cursor) {
+    query.set('cursor', cursor);
+  }
+  const suffix = query.toString() ? `?${query.toString()}` : '';
+
+  return authenticatedRequest<CellMemberPage>(`/api/v1/cells/${cellId}/members${suffix}`, {
+    signal,
+  });
+}
+
+/**
+ * Add somebody to a Cell.
+ *
+ * **Who may be added is the server's question, not this client's.** Section 10
+ * requires a member and the Cell's leader to share a Network, refuses somebody
+ * archived or merged, and refuses somebody already in the Cell — and section 7
+ * decides whether this actor may act on this Cell at all. A client that filtered
+ * the directory to "eligible" people would be answering an authorization question
+ * section 7 reserves to the API (principle 4), and would still be wrong about the
+ * Network rule the moment a Cell changed hands.
+ */
+export async function addCellMember(
+  cellId: string,
+  personId: string,
+  idempotencyKey: string,
+): Promise<unknown> {
+  return authenticatedRequest<unknown>(`/api/v1/cells/${cellId}/members`, {
+    method: 'POST',
+    body: { person_id: personId },
+    idempotencyKey,
+  });
+}
+
+/**
+ * End somebody's membership.
+ *
+ * It ends the membership rather than deleting it: section 5 forbids removing a row
+ * of an effective-dated table, and section 12 reads a past month's figures against
+ * the membership window. So somebody removed today still counts in the months they
+ * were a member for, which is what makes a closed month reproducible.
+ */
+export async function removeCellMember(
+  cellId: string,
+  personId: string,
+  idempotencyKey: string,
+): Promise<unknown> {
+  return authenticatedRequest<unknown>(`/api/v1/cells/${cellId}/members/${personId}`, {
+    method: 'DELETE',
+    idempotencyKey,
+  });
+}
+
+/**
+ * Change a Cell's meeting day and time.
+ *
+ * **It takes effect at the start of the following month** (section 10, decision
+ * 0057), never today. A month has exactly one schedule throughout, which is what
+ * lets a coverage denominator be derived from the calendar at all — a mid-month
+ * change would make the number of scheduled meetings depend on when the change was
+ * filed. Every screen offering this has to say so, or a leader will expect this
+ * week's meeting to move.
+ */
+export async function changeCellSchedule(
+  cellId: string,
+  schedule: { day_of_week: number; time_of_day: string },
+  idempotencyKey: string,
+): Promise<unknown> {
+  return authenticatedRequest<unknown>(`/api/v1/cells/${cellId}/schedule`, {
+    method: 'PUT',
+    body: schedule,
+    idempotencyKey,
+  });
+}

@@ -16,6 +16,7 @@ import {
   type DccRecordInput,
   type DccRosterLine,
 } from '@/lib/dcc';
+import { idempotencyKeyFor } from '@/lib/idempotency';
 import { describeFailure } from '@/lib/messages';
 import { dayLabel } from '@/lib/reporting-month';
 
@@ -92,7 +93,7 @@ function DccChecklist() {
       }));
   }, [lines, edits]);
 
-  const idempotencyKey = useMemo(() => keyFor(params.id, records), [params.id, records]);
+  const idempotencyKey = useMemo(() => idempotencyKeyFor(params.id, records), [params.id, records]);
 
   const save = useMutation({
     mutationFn: () => submitDccAttendance(params.id, records, idempotencyKey),
@@ -238,31 +239,3 @@ function PersonMark({
   );
 }
 
-/**
- * A key that is a function of the request (decision 0127).
- *
- * The same reasoning as the Cell meeting screen's, and deliberately a second copy
- * rather than a shared helper: the two bodies differ — one carries a version per
- * person and the other one for the meeting — and a shared function would invite a
- * caller to think the two submissions are the same shape, which section 14 says
- * they are not.
- */
-function keyFor(eventId: string, records: DccRecordInput[]): string {
-  const canonical = JSON.stringify([eventId, records]);
-
-  let h1 = 0x811c9dc5;
-  let h2 = 0x01000193;
-  for (let index = 0; index < canonical.length; index += 1) {
-    const code = canonical.charCodeAt(index);
-    h1 = Math.imul(h1 ^ code, 0x01000193) >>> 0;
-    h2 = Math.imul(h2 + code, 0x85ebca6b) >>> 0;
-  }
-
-  const hex = (value: number) => value.toString(16).padStart(8, '0');
-  const a = hex(h1);
-  const b = hex(h2);
-  const c = hex(Math.imul(h1 ^ h2, 0xc2b2ae35) >>> 0);
-  const d = hex(Math.imul(h1 + h2, 0x27d4eb2f) >>> 0);
-
-  return `${a}-${b.slice(0, 4)}-4${b.slice(5, 8)}-a${c.slice(1, 4)}-${c.slice(4)}${d}`;
-}

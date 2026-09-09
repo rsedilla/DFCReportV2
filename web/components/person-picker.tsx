@@ -19,6 +19,13 @@ import { MINIMUM_SEARCH_LENGTH, searchPeople, type Person } from '@/lib/people';
  * which is what stops a leader placing somebody into a branch they do not
  * oversee. A request without one has no target to authorize.
  *
+ * **It is a person picker rather than a leader picker**, and was named for its
+ * first caller until a second arrived. What it does is search the church-wide
+ * directory and hand back one person; who that person may be is a different
+ * question on every screen that uses it — a pastoral leader here, a Cell member
+ * there — and each of those is settled by the API on submission rather than by
+ * this component.
+ *
  * **The search is church-wide, and the refusal comes from the server.** This
  * picker does not filter the list to people the viewer may place under, because
  * that would be the client deciding an authorization question section 7 reserves
@@ -29,7 +36,7 @@ import { MINIMUM_SEARCH_LENGTH, searchPeople, type Person } from '@/lib/people';
  * so some choices are refused for that reason too. Again by the server, and again
  * with its own message.
  */
-export function LeaderPicker({
+export function PersonPicker({
   selectedId,
   selectedName,
   onSelect,

@@ -17,6 +17,8 @@ import {
   mockCells,
   mockCellsEmpty,
   mockDccEvents,
+  mockCellMembers,
+  mockCellMembersEmpty,
   mockCellReport,
   mockCellReportForOneCell,
   mockDccReport,
@@ -312,6 +314,60 @@ const SCANS = [
     },
   },
   {
+    // Two members, each removable behind a confirmation, and the picker above them.
+    name: 'cell members',
+    route: '/cells/3f1b7c6e-0000-4000-8000-000000000101/members',
+    pattern: '/cells/[id]/members',
+    async before(page: import('@playwright/test').Page) {
+      await mockSignedIn(page);
+      await mockCellMembers(page);
+    },
+    async arrange(page: import('@playwright/test').Page) {
+      await expect(page.getByRole('heading', { name: 'Current members' })).toBeVisible();
+      await expect(page.getByText('Rosalinda Ocampo')).toBeVisible();
+    },
+  },
+  {
+    // The confirmation, which renders new content and so is its own scanned state.
+    name: 'cell members, confirming a removal',
+    route: '/cells/3f1b7c6e-0000-4000-8000-000000000101/members',
+    async before(page: import('@playwright/test').Page) {
+      await mockSignedIn(page);
+      await mockCellMembers(page);
+    },
+    async arrange(page: import('@playwright/test').Page) {
+      await page.getByRole('button', { name: 'Remove' }).first().click();
+      await expect(page.getByRole('button', { name: 'Yes, remove' })).toBeVisible();
+      await expect(page.getByText(/Past months keep counting them/)).toBeVisible();
+    },
+  },
+  {
+    name: 'cell members, none yet',
+    route: '/cells/3f1b7c6e-0000-4000-8000-000000000101/members',
+    async before(page: import('@playwright/test').Page) {
+      await mockSignedIn(page);
+      await mockCellMembersEmpty(page);
+    },
+    async arrange(page: import('@playwright/test').Page) {
+      await expect(page.getByText('This Cell has no members yet.')).toBeVisible();
+    },
+  },
+  {
+    // The whole screen is about one rule: the change lands next month.
+    name: 'cell schedule',
+    route: '/cells/3f1b7c6e-0000-4000-8000-000000000101/schedule',
+    pattern: '/cells/[id]/schedule',
+    async before(page: import('@playwright/test').Page) {
+      await mockSignedIn(page);
+    },
+    async arrange(page: import('@playwright/test').Page) {
+      await expect(
+        page.getByRole('heading', { name: 'Change when this Cell meets' }),
+      ).toBeVisible();
+      await expect(page.getByRole('radio', { name: 'Wednesday' })).toBeVisible();
+    },
+  },
+  {
     // The aggregate arm: coverage leads, and no buckets, which section 12 makes a
     // structural rule rather than a rendering choice.
     name: 'cell attendance report',
@@ -516,6 +572,25 @@ const TARGET_SWEEP = [
     minimum: 8,
   },
   {
+    // The picker's search box and its Find button, plus a Remove per member.
+    // Settled on a member's own heading, not on "Current members", which renders
+    // from the page rather than from the data — so the count would run before the
+    // list arrived, which is what the minimum caught.
+    name: 'cell members',
+    route: '/cells/3f1b7c6e-0000-4000-8000-000000000101/members',
+    settleRole: 'heading' as const,
+    settle: 'Rosalinda Ocampo',
+    minimum: 5,
+  },
+  {
+    // Seven day radios, the time input, and the submit.
+    name: 'cell schedule',
+    route: '/cells/3f1b7c6e-0000-4000-8000-000000000101/schedule',
+    settleRole: 'heading' as const,
+    settle: 'Change when this Cell meets',
+    minimum: 9,
+  },
+  {
     // Two month controls and the scope select.
     name: 'cell attendance report',
     route: '/reports/cells',
@@ -602,6 +677,19 @@ const TARGET_EXEMPT: { name: string; why: string }[] = [
       'the middle of a paragraph.',
   },
   {
+    name: 'cell members, confirming a removal',
+    why:
+      'It renders the same controls as "cell members", which is measured, with Remove ' +
+      'swapped for a confirm and a cancel of the same size. Measuring it would re-measure ' +
+      'controls already covered.',
+  },
+  {
+    name: 'cell members, none yet',
+    why:
+      'Its only controls are the picker above the empty list, which "cell members" already ' +
+      'measures. The state is the absence of rows.',
+  },
+  {
     name: 'cell attendance report, one Cell',
     why:
       'It renders the same three controls as "cell attendance report", which is measured, ' +
@@ -632,6 +720,7 @@ test('every interactive target meets the 24px minimum', async ({ page }) => {
   await mockDccRoster(page);
   await mockCellReport(page);
   await mockDccReport(page);
+  await mockCellMembers(page);
 
   for (const entry of TARGET_SWEEP) {
     const { route, settle, minimum } = entry;
