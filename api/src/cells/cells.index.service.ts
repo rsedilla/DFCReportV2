@@ -98,9 +98,18 @@ export class CellsIndexService {
     // The DCC events index deliberately does **not** do this: section 9 runs its calendar
     // thirteen months ahead and wants a future Sunday visible, so that route lists the
     // event and gives it no coverage. The figures differ in kind — a Cell's denominator is
-    // a schedule count, which section 17 licenses moving within an open month, and a DCC
-    // one is a count of obligations, which do not exist until the service has happened.
-    await assertReportingPeriodHasBegun(this.db, reportingMonth);
+    // a schedule count, which sections 10 and 13 let move within an open month only by a
+    // creation or a closure, and a DCC one is a count of obligations, which do not exist
+    // until the service has happened. *An earlier version credited section 17 with
+    // licensing the denominator; section 17 requires the open flag to be shown and says
+    // nothing about a denominator, and section 10 is what fixes one — "a month therefore
+    // has exactly one schedule throughout".*
+    await assertReportingPeriodHasBegun(this.db, reportingMonth, {
+      // This route's period field is `month` and the client sent an unnormalised day, so
+      // the refusal names both rather than the helper's defaults (section 22).
+      field: 'month',
+      value: query.month,
+    });
     const limit = query.limit ?? DEFAULT_PAGE;
     const after = decodeCellIndexCursor(query.cursor);
 

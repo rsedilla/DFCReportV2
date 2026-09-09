@@ -490,10 +490,19 @@ describe('the Cells index (sections 10, 12 and 22)', () => {
     const month = manilaDayOf(new Date(now.getTime() + 40 * 24 * 60 * 60 * 1000));
     const notBegun = `${month.slice(0, 7)}-01`;
 
-    const response = await list(markAccount, { month: notBegun });
+    // **A day inside the month, not its first**, so the refusal cannot pass by quoting a
+    // value that happens to match what was sent.
+    const response = await list(markAccount, { month: `${notBegun.slice(0, 8)}15` });
 
     expect(response.status).toBe(422);
     expect(response.body.error.code).toBe('VALIDATION_FAILED');
+    // **The details, which is the assertion that was missing.** The shared helper defaults
+    // to `period` and to the normalised month, which is right for the reporting routes and
+    // names a field this request does not carry — section 22 asks a refusal to name the
+    // field a client needs in order to fix it.
+    expect(response.body.error.details).toEqual(
+      expect.objectContaining({ field: 'month', value: `${notBegun.slice(0, 8)}15` }),
+    );
   });
 
   it('reports the schedule in force now, not a change queued for next month', async () => {

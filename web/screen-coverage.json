@@ -106,7 +106,7 @@
     {
       "route": "GET /api/v1/cells",
       "waived_to": "screens block",
-      "reason": "The index every other Cell route depends on (decision 0226). Cell Leaders is the screen in that block which shows it, and Dashboard reads it with ?led_by=me for a leader's own Cells (§19). Neither exists yet."
+      "reason": "The index every other Cell route depends on (decision 0226). Cell Leaders is the screen in that block which shows it, and Dashboard reads it with ?led_by=me for a leader's own Cells (§19). Neither exists yet. It is ACTIVE-only, so it does not by itself discharge §19's requirement that a closed Cell's meetings stay reachable while their month is open."
     },
     {
       "route": "GET /api/v1/dcc/events",
