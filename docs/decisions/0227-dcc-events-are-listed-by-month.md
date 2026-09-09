@@ -1,5 +1,10 @@
 # 2026-09-09 — DCC events are listed by month, under the viewing capability
 
+> **Amended the same day by [decision 0229](0229-a-dcc-event-that-has-not-happened-owes-nobody-a-record.md).**
+> "What a row carries" below states the no-coverage rule for a **removed** event alone. It
+> also covers an event whose Manila day has not begun, on Section 9's "an event that did
+> take place"; Section 9 states both cases.
+
 `GET /api/v1/dcc/events/{id}/roster` and its submit both take an event identifier, and
 nothing handed a leader one. Section 22's route table named no index.
 

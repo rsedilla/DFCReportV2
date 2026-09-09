@@ -44,10 +44,23 @@ the month the window closed on, which is the one month a leader most needs to re
 ## What was rejected
 
 **Refusing the whole month**, as Section 20 does for a report naming a period that has not
-begun (decision 0216). A DCC month is a calendar as well as a figure, and refusing it
-would take away the roster route's only index for every Sunday of that month. The Cell
-listing takes the opposite answer for the opposite reason — its rows carry nothing but a
-Cell and a figure — and that asymmetry is deliberate rather than an oversight.
+begun (decision 0216). A DCC month is a calendar as well as a figure: `GET
+/api/v1/dcc/events/{id}/roster` and its submit both take an event identifier, and this
+index is the only route that yields one — so refusing the month would take away the only
+way to reach every Sunday in it.
+
+**`GET /api/v1/cells` refuses instead, and the discriminator is reachability rather than
+the shape of a row.** What that route's month parameterises is the *figure* on each row and
+not the **membership** of the list: the same Cells, with the same identifiers, come back for
+any month. A client refused a month that has not begun asks for one that has and reaches
+everything it could have reached. Nothing becomes unreachable, so the argument that keeps
+this index open does not apply to it.
+
+*A first version of this ruling gave the ground as "its rows carry nothing but a Cell and a
+figure". That distinguishes nothing — a DCC row is likewise an event and a figure, and a
+Cell row carries a category, a schedule and a leader besides — and `architecture-guardian`
+refused it. Whether the Cell listing should refuse at all is still recorded as open in
+`CLAUDE.md`; what is settled here is only why this route does not.*
 
 ## What this does not settle
 
@@ -61,6 +74,14 @@ not this rule alone.
 **Nothing about Cell coverage.** A Cell's denominator is a schedule count, derived rather
 than owed, and its route refuses a month that has not begun instead. Which of the two
 answers a *list* should give is the Stop Condition recorded in `CLAUDE.md`.
+
+**What a `null` contributes to a month's aggregate.** Decision 0224 sums a month's coverage
+across its events, and this ruling now gives two kinds of event no figure at all rather than
+`0 of 0`. Decision 0225 answered the structurally identical question for a Cell explicitly,
+so the silence here is worth naming: the natural answer is that such an event contributes
+nothing to either term, which is the only reading consistent with "nobody owes a record".
+Nothing can reach it — no monthly DCC aggregate route exists — and it should be stated in
+Section 9 before one is built rather than derived at that keyboard.
 
 ---
 
