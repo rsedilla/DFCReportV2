@@ -51,7 +51,7 @@ must therefore publish a per-person version or no client can submit a correction
 Of the three fields the roster returns, this one is *required* to be published, and no
 version of this argument had said so.
 
-**The bound the Cell case rests on does not exist here.** A Cell submission must name every
+**The bound the Cell case rested on does not exist here.** A Cell submission must name every
 member exactly once and is answered as a whole, so recovering N figures costs 2^N. DCC is
 recorded per line with per-line outcomes, so the same actor could recover N figures in N
 probes. The acceptance would be worth very little in this domain whether or not the roster
@@ -79,8 +79,9 @@ same actor may write the value", which is the unqualified claim this ruling with
 eight lines above — where a record exists and disagrees, changing it needs
 `dcc.correct_subtree`.*
 
-**Accepting in both domains on one reason.** There is no single reason. The Cell case rests
-on a bound; the DCC case rests on the three grounds above, of which the mandatory version
+**Accepting in both domains on one reason.** There is no single reason. The Cell case rested
+on a bound — gone since 2026-09-09, and re-derived in Section 7 on three grounds that
+replace it; the DCC case rests on the three grounds above, of which the mandatory version
 is the one that is not a judgement call. Collapsing them is what produced the withdrawn
 claim of 2026-09-03 that a Cell ground covered both paths.
 
