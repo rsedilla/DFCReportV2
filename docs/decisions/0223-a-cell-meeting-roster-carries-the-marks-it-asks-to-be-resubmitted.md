@@ -2,8 +2,15 @@
 
 Section 13 and Section 14 provide for correcting a recorded meeting, and
 `SubmitCellMeetingDto.attendance` requires **the whole roster** on a `HELD` submission —
-"every member of the Cell on the meeting date, present or not" — because Section 20's
-reconciliation needs an absent row and a row marked absent to be different facts.
+"every member of the Cell on the meeting date, present or not" — because a submission is one
+leader's account of the whole meeting.
+
+> **Corrected on review the same day.** This gave the reason as "Section 20's
+> reconciliation needs an absent row and a row marked absent to be different facts".
+> Section 20 says nothing of the kind, and `CellFiguresService` counts attendees, so the
+> two contribute identically to every figure the system computes. The whole-roster
+> requirement is Section 13's on its own terms, and what makes this field nullable is the
+> round trip rather than a reconciliation.
 
 Nothing let a client read the marks it must resubmit.
 `GET /api/v1/cells/{id}/meetings/{meeting_id}/roster` returned each member as

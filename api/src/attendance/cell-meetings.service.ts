@@ -626,9 +626,15 @@ export class CellMeetingsService implements RecordedMeetingsPort {
         // decision 0223 refuses.
         //
         // Null is a member with no live row — not yet recorded, or recorded and then
-        // superseded with nothing replacing them. Section 20 needs an absent row and a
-        // row marked absent to stay different facts, which is why this is a nullable
-        // object rather than a boolean defaulting to false.
+        // superseded with nothing replacing them. A nullable object rather than a boolean
+        // defaulting to false, because a screen rendering `present: false` for a member
+        // who has no row would resubmit them absent — which is the data loss this field
+        // exists to prevent, arriving through the field itself.
+        //
+        // *This cited section 20 as needing the two to be different facts. Section 20 says
+        // nothing of the kind and `CellFiguresService` counts attendees, so they
+        // contribute identically to every figure that exists; the reason is the round
+        // trip, not a reconciliation.*
         record: marks.get(member.personId) ?? null,
       })),
     };
