@@ -246,8 +246,23 @@ resolves exactly as well as it did in the single file and no better. *Recounted 
 `Next:`, and 180 carry both on one line. 0213 through 0229 each moved the first two and
 neither of the others, none of them carrying a `Next:`. The one file with no `Previous:` is
 0001, which has nothing before it. The previous recount was dated 2026-09-07 and was left
-stale by 0229 — by the commit whose stated purpose was correcting exactly this class, which
-is why the instruction below is to run the commands rather than to trust the sentence.
+stale by 0229 — by the commit whose stated purpose was correcting exactly this class. So the
+commands are here rather than the instruction to recount being here alone, which is what the
+Open section below already does with its own two counts:*
+
+```bash
+ls docs/decisions/*.md | wc -l                        # files
+grep -l 'Previous:' docs/decisions/*.md | wc -l       # carry Previous:
+grep -l 'Next:' docs/decisions/*.md | wc -l           # carry Next:
+grep -lE 'Previous:.*Next:' docs/decisions/*.md | wc -l  # carry both on one line
+```
+
+*A claim that a command exists is worth exactly as much as the command, and a command is
+worth what it actually prints. This paragraph asserted one for a commit before there was
+one; the first four written to replace it anchored `Previous:` and `Next:` at the start of
+a line and answered 1 where the prose says 181, because 180 of the files carry the pair on
+one line. Both were caught by running them.*
+
 *The stale figures said 214 and 213, and were left by the commits adding 0216 and 0217, and it was stale again by two when 0220 landed, 0218 and 0219 having each left it where it stood —
 in the paragraph whose instruction is to recount rather than increment, which is why the
 recount is dated and the trigger named rather than the numbers simply being replaced.* The forward half was
