@@ -1154,9 +1154,17 @@ describe('recording a Cell meeting (sections 12, 13 and 14)', () => {
     it('checks the correction capability before disclosing the stored record', async () => {
       // **Ordering, and it is the hazard `DccAttendanceService` documents.** A
       // `VERSION_CONFLICT` carries the stored present count and the submitter's name
-      // (section 22), neither of which `GET .../roster` discloses — so raising it before
-      // the capability check lets an actor who may not correct this record read it out of
-      // the refusal, by sending any stale version.
+      // (section 22) — so raising it before the capability check lets an actor who may not
+      // correct this record read it out of the refusal, by sending any stale version.
+      //
+      // **The ground was "neither of which `GET .../roster` discloses", and the ruling of
+      // 2026-09-09 made it false on both halves**: decision 0223 gives the roster each
+      // member's mark, and it returns `submitted_by` on the meeting. The gate stays because
+      // it is right on its own terms — a refusal must not answer what the capability
+      // withholds, whatever another route publishes — rather than because this is the only
+      // door. `cell-meetings.service.ts` carries the same correction over the code this
+      // pins, and section 22 and the DCC sibling carry it too; this comment was the home
+      // that sweep did not reach, being a comment inside a test body.
       //
       // Under role defaults the residual sits inside the actor's own scope; it becomes a
       // section 8 disclosure under a grant section 7 explicitly permits, which is the

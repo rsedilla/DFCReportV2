@@ -41,10 +41,10 @@ route is already guarded by `cell.take_attendance` resolved against the meeting 
 inheritance from the confirmation-bit acceptance. Section 7 has since separated the two:
 publishing the marks is a second acceptance, re-derived there on three grounds of its own,
 and the bit's grounds were never this field's. The sentence above is left standing as this
-ruling's own reason rather than as a citation of anything. *It is not one of Section 7's
+ruling's own reason rather than as a citation of anything. It is not one of Section 7's
 three, and a version of this note said it was — which would have put a ground Section 7
-attributes to the bit inside the field's three, two sentences after saying the two sets are
-separate.*
+attributes to the bit inside the field's three, in the sentence after the one saying the two
+sets are separate.*
 
 > **Two corrections, from the review of the implementation on the same day.** This
 > paragraph said "resolved against the meeting's **frozen** responsible leader", which is
