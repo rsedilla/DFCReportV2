@@ -1,6 +1,7 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 
 import { CapabilityDeniedError, ScopeDeniedError } from '../../common/errors/api-error';
+import { canonicalId, sameId } from '../../common/identifiers';
 import { APP_CONFIG, type AppConfig } from '../../config/configuration';
 import { DATABASE, type Db } from '../../database/database.module';
 import { HierarchyService } from '../../hierarchy/hierarchy.service';
@@ -38,6 +39,18 @@ interface ActiveRoles {
   /** Every active role row, honoured or not. See `activeRoles` for why both. */
   held: AccountRole[];
 }
+
+/**
+ * Who one capability's grants reach, as a union rather than as a nullable set.
+ *
+ * `WHOLE_CHURCH` is not "the set of everybody": it is the absence of a narrowing, and a
+ * caller applies no filter at all for it. Encoding the two as one nullable field would
+ * make "no narrowing" and "narrowed to nobody" the same value, and a caller that read it
+ * wrongly would publish the church rather than refuse. See
+ * {@link AuthorizationService.scopeMembership}.
+ */
+export type ScopeMembership =
+  { kind: 'WHOLE_CHURCH' } | { kind: 'PERSONS'; personIds: ReadonlySet<string> };
 
 export interface EffectiveGrant {
   capability: Capability;
@@ -488,6 +501,102 @@ export class AuthorizationService {
     }
 
     return false;
+  }
+
+  /**
+   * The Persons one capability's grants put inside this actor's scope, **enumerated**
+   * rather than tested one at a time (SKILL.md section 7).
+   *
+   * **It exists because a list route cannot ask `covers` per row.** Every scoped route
+   * before the index routes of 2026-09-09 named one target, so the guard's own decision
+   * answered it; a list has no target, and section 7 still decides which rows it may
+   * carry. Calling `coversWith` once per candidate would answer correctly and issue one
+   * recursive subtree query per row — and a page that filtered *after* paging would
+   * return short pages whose `next_cursor` says nothing about how many rows remain.
+   *
+   * **It is here, beside {@link scopeCovers}, and that placement is the whole safeguard.**
+   * The two are one rule read two ways: `scopeCovers` asks whether a person is in scope,
+   * this asks who is. They must agree, and they can only be kept in agreement by being
+   * read together — a set-builder written in the module that consumes it is a second
+   * implementation of authorization, which is the arrangement section 7 exists to
+   * prevent. Both switch exhaustively over the same closed enum, so a fifth scope value
+   * fails to compile in both places rather than silently defaulting in one.
+   *
+   * **`WHOLE_CHURCH` is a sentinel and never an enumeration.** Answering it as a set of
+   * every Person would make the widest grant the slowest, and would make a caller's
+   * filter depend on `persons` holding a row for everybody the grant reaches — which is
+   * a different claim from the one section 7 makes.
+   *
+   * **The union across grants, and never the first match.** Authority only widens
+   * (above): an account holding a role default at own-subtree and an explicit Network
+   * grant is in scope for both, and stopping at either would silently narrow the answer
+   * `coversWith` would have given for a person in the other.
+   *
+   * **`grantCoversNothing` is applied here exactly as `coversWith` applies it**, so a
+   * grant section 7 refuses to honour contributes nobody rather than contributing a
+   * subtree. Omitting it is the mutation that makes this disagree with the guard.
+   *
+   * **The identifiers are canonical**, because the caller compares them against values
+   * from its own tables and a comparison decided on a spelling is the defect
+   * `identifiers.ts` exists to remove.
+   *
+   * **Undated, and every branch of it.** Section 7 gives its dated resolution to a
+   * *viewing read asking about a past period*, and the routes that call this name a
+   * month for the figures on each row rather than for the rows themselves — the same
+   * reading `GET /api/v1/cells/{id}/meetings` already has, which resolves its Cell
+   * through the undated `leaderForScope` while taking a `month`. An index that dated its
+   * membership would list Cells whose detail route then refused, and hide Cells whose
+   * detail route serves — two answers to one authorization question, which is worse than
+   * either answer alone.
+   */
+  async scopeMembership(actor: Actor, capability: Capability): Promise<ScopeMembership> {
+    const authority = await this.authorityFor(actor.accountId);
+    const personIds = new Set<string>();
+
+    for (const grant of authority.grants.filter((held) => held.capability === capability)) {
+      if (grantCoversNothing(capability, grant.scope.type)) {
+        continue;
+      }
+
+      switch (grant.scope.type) {
+        case ScopeType.WholeChurch:
+          return { kind: 'WHOLE_CHURCH' };
+        case ScopeType.OwnSubtree:
+          for (const personId of await this.hierarchy.subtreeOf(this.db, actor.personId)) {
+            personIds.add(canonicalId(personId));
+          }
+          break;
+        case ScopeType.SubtreeExclSelf:
+          for (const personId of await this.hierarchy.subtreeOf(this.db, actor.personId)) {
+            if (!sameId(personId, actor.personId)) {
+              personIds.add(canonicalId(personId));
+            }
+          }
+          break;
+        case ScopeType.Network: {
+          // The database requires a Network to be named on a NETWORK grant, and
+          // `scopeCovers` reads an unnamed one as covering nothing. The same reading
+          // here, or the two disagree on a row.
+          if (grant.scope.network === null) {
+            break;
+          }
+
+          // `peopleInNetworkAsOf` at now, which is what `currentNetwork` is —
+          // `scopeCovers` compares a person's current Network against the grant's, and
+          // this is that comparison inverted over the whole membership.
+          for (const personId of await this.networks.peopleInNetworkAsOf(
+            this.db,
+            grant.scope.network,
+            new Date(),
+          )) {
+            personIds.add(canonicalId(personId));
+          }
+          break;
+        }
+      }
+    }
+
+    return { kind: 'PERSONS', personIds };
   }
 
   private async scopeCovers(

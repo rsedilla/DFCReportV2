@@ -17,6 +17,7 @@ import {
 } from 'class-validator';
 
 import { CURSOR_MAX_LENGTH } from '../../common/cursor';
+import { IsManilaCalendarDate } from '../../common/time/is-manila-calendar-date';
 import { ClosedMonthAmendmentDto } from './cell-meeting-submit.dto';
 import { IsStorableText } from '../../common/text/is-storable-text';
 
@@ -157,4 +158,56 @@ export class SubmitDccAttendanceDto {
   @ValidateNested()
   @Type(() => ClosedMonthAmendmentDto)
   amendment?: ClosedMonthAmendmentDto;
+}
+
+/**
+ * `GET /api/v1/dcc/events?month=YYYY-MM-01` (SKILL.md section 9; decision 0227).
+ *
+ * **No `limit` and no `cursor`, and that is the calendar rather than an omission.** A
+ * month holds four or five Sundays, so this collection's size is arithmetic rather than a
+ * function of the data — the same argument `CellMeetingsQueryDto` makes one domain over,
+ * where section 22 asks a collection to page because it can grow.
+ */
+export class DccEventsQueryDto {
+  /**
+   * Any day of the month; the service normalises it to the first.
+   *
+   * **Required rather than defaulted to the current month.** Section 9 closes the window
+   * at the end of the 7th, so on the 7th of April "this month" is ambiguous between the
+   * month still open for records and the month the calendar is in, and a client that
+   * meant March would silently be answered April.
+   */
+  @IsManilaCalendarDate({
+    message: 'month must be a YYYY-MM-DD Asia/Manila date that exists (SKILL.md section 22).',
+  })
+  month!: string;
+}
+
+/**
+ * `GET /api/v1/dcc/events/{id}/coverage-gaps` (SKILL.md section 15; decision 0228).
+ *
+ * Paginated, unlike the index above, and for the reason section 22 gives: this collection
+ * is the leaders of a subtree, whose size is a function of the data rather than of the
+ * calendar.
+ */
+export class DccCoverageGapsDto {
+  /** Section 22: defaults to 50, maximum 200. */
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(200)
+  limit?: number;
+
+  /**
+   * The `next_cursor` of the previous page, passed back unmodified (section 22).
+   *
+   * The same `(last_name, first_name, member_id)` key the roster beside it pages by, and
+   * literally the same encoder: this list is ordered by name for section 15's reason, so
+   * it shares the key rather than deriving a fourth one (`roster-cursor.ts`).
+   */
+  @IsOptional()
+  @IsString()
+  @Length(1, CURSOR_MAX_LENGTH)
+  cursor?: string;
 }

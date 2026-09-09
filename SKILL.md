@@ -1984,7 +1984,7 @@ Removing a Sunday from the DCC calendar is a deliberate Admin action, never infe
 
 A leader who has not yet submitted their people's attendance for an event that did take place is a reporting gap, not a cancelled service. Those are tracked as coverage.
 
-**That gap may be drilled into, and the drill-down names the responsible leaders within the actor's scope who owe a record for the event** (ruling of 2026-09-09). It is an attention list on Section 15's terms: filtered, **never ranked, never colour-graded**, ordered by name or date and never by how far behind somebody is, and each entry offers the action that resolves it — which for a leader holding `dcc.submit_on_behalf` is recording on their behalf (Section 14).
+**That gap may be drilled into by `GET /api/v1/dcc/events/{id}/coverage-gaps`, and the drill-down names the responsible leaders within the actor's scope who owe a record for the event** (ruling of 2026-09-09). It is guarded by `dcc.view_subtree`, the same capability as the index it explains and for the same reason: it carries a figure measured over the actor's subtree, and a recording capability names no subtree. A removed event has no gaps rather than every leader in it, because nobody owes a record for a service that was not held. It is an attention list on Section 15's terms: filtered, **never ranked, never colour-graded**, ordered by name or date and never by how far behind somebody is, and each entry offers the action that resolves it — which for a leader holding `dcc.submit_on_behalf` is recording on their behalf (Section 14).
 
 A count alone cannot be acted on, and Section 19 puts outstanding work above the figures for exactly that reason. Nothing new is disclosed: every roster line already carries its responsible leader, and the ruling of 2026-09-03 settled that this domain publishes per-person figures by design.
 
@@ -4300,6 +4300,7 @@ GET  /api/v1/leaders/{id}/summary
 
 GET  /api/v1/dcc/events?month=YYYY-MM-01  the month's events, with coverage per event
 GET  /api/v1/dcc/events/{id}/roster
+GET  /api/v1/dcc/events/{id}/coverage-gaps  who owes a record, within the actor's scope
 POST /api/v1/dcc/events/{id}/submit       an Admin amendment is a flag on this, not a route
 
 GET  /api/v1/cells                       the Cells of the actor's scope; ?led_by=me narrows

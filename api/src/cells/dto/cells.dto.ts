@@ -496,3 +496,64 @@ export class CellMembersDto {
   @Length(1, CURSOR_MAX_LENGTH)
   cursor?: string;
 }
+
+/**
+ * `GET /api/v1/cells` — the Cells of the actor's scope (SKILL.md section 22; decision
+ * 0226).
+ */
+export class CellIndexDto {
+  /**
+   * Any day of the reporting month the coverage line is read for; the service
+   * normalises it to the first.
+   *
+   * **Required rather than defaulted to the current month**, on the reasoning
+   * `CellMeetingsQueryDto` gives for the same parameter: section 13 closes a month at the
+   * end of the 7th, so on the 7th of April "this month" is genuinely ambiguous between
+   * the month still open for records and the month the calendar is in — and a client that
+   * meant March would silently be answered April.
+   *
+   * **It dates the figures on each row and not the rows themselves.** The membership of
+   * this list is the actor's scope now, which is the resolution `GET
+   * /api/v1/cells/{id}/meetings` already has while taking this same parameter. Section 7
+   * owes its dated resolution to a viewing read asking about a past period, and dating
+   * the membership here would make the index list Cells whose detail route refuses and
+   * hide Cells whose detail route serves.
+   */
+  @IsManilaCalendarDate({
+    message: 'month must be a YYYY-MM-DD Asia/Manila date that exists (SKILL.md section 22).',
+  })
+  month!: string;
+
+  /**
+   * `me`, to narrow the list to the Cells the actor personally leads (decision 0226).
+   *
+   * **One value and not a person identifier.** A `led_by=<person_id>` would be a second
+   * way of asking a scope question — the caller would name somebody and the server would
+   * decide whether they may see that person's Cells — where section 19 asks only for the
+   * caller's own Cells against their whole scope. `me` cannot name anybody else, so the
+   * filter has no reading under which it widens anything.
+   */
+  @IsOptional()
+  @IsIn(['me'], { message: 'led_by accepts only the value "me" (SKILL.md section 22).' })
+  led_by?: 'me';
+
+  /** Section 22: defaults to 50, maximum 200. */
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(200)
+  limit?: number;
+
+  /**
+   * The `next_cursor` of the previous page, passed back unmodified.
+   *
+   * Opaque, as section 22 requires: base64url of the one ordering key this collection
+   * uses, `cell_id`. A keyset rather than an offset, because a Cell created while a
+   * client pages would shift every subsequent page by one.
+   */
+  @IsOptional()
+  @IsString()
+  @Length(1, CURSOR_MAX_LENGTH)
+  cursor?: string;
+}

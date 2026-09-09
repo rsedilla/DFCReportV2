@@ -14,6 +14,7 @@ import { DccAttendanceService } from './dcc-attendance.service';
 import { DccCalendarService } from './dcc-calendar.service';
 import { CellFiguresService } from './cell-figures.service';
 import { DccFiguresService } from './dcc-figures.service';
+import { DccCoverageService } from './dcc-coverage.service';
 import { DccController } from './dcc.controller';
 
 /**
@@ -53,15 +54,28 @@ import { DccController } from './dcc.controller';
   providers: [
     DccCalendarService,
     DccAttendanceService,
+    DccCoverageService,
     CellMeetingsService,
     CellMeetingsScopeService,
     DccFiguresService,
     CellFiguresService,
   ],
-  // `CellMeetingsScopeService` is exported for `AppModule`'s `CELL_MEETING_SCOPE_PORT`
-  // binding alone (decision 0188). Nest resolves a provider's dependencies in the
-  // module that *registers* it, so a `useExisting` in `AppModule` needs the class
-  // reachable from there — the wiring fault `module-graph.spec.ts` exists to catch.
-  exports: [DccCalendarService, CellMeetingsScopeService, DccFiguresService, CellFiguresService],
+  // **Two of these are exported to be bound to a port token, and for nothing else.**
+  // Nest resolves a provider's dependencies in the module that *registers* it, so a
+  // `useExisting` naming a class needs that class reachable from the binding's own
+  // module — the wiring fault `module-graph.spec.ts` exists to catch.
+  //
+  // `CellMeetingsScopeService` carries `CELL_MEETING_SCOPE_PORT`, bound in `AppModule`
+  // because its consumer is the globally registered `CapabilityGuard` (decision 0188).
+  // `CellMeetingsService` carries `RECORDED_MEETINGS_PORT`, bound in
+  // `RecordedMeetingsBindingModule` because *its* consumer is registered in `CellsModule`,
+  // which `AppModule` is not the resolving context for.
+  exports: [
+    DccCalendarService,
+    CellMeetingsScopeService,
+    CellMeetingsService,
+    DccFiguresService,
+    CellFiguresService,
+  ],
 })
 export class AttendanceModule {}

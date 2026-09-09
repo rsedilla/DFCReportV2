@@ -8,6 +8,7 @@ import { CELL_MEETING_SCOPE_PORT } from '../../src/auth/authorization/cell-meeti
 import { CELL_SCOPE_PORT } from '../../src/auth/authorization/cell-scope.port';
 import { CredentialsService } from '../../src/auth/credentials.service';
 import { CellMeetingsScopeService } from '../../src/attendance/cell-meetings.scope.service';
+import { CellsIndexService } from '../../src/cells/cells.index.service';
 import { CellsReadService } from '../../src/cells/cells.read.service';
 import { NetworksService } from '../../src/networks/networks.service';
 
@@ -83,6 +84,13 @@ describe('the application module graph (section 2)', () => {
       // partial graph may construct nothing — the same "no such graph exists yet" that
       // made mandatory look safe for the other two.
       ['EMAIL_PORT', moduleRef.get(CredentialsService, { strict: false }), 'email'],
+      // `RECORDED_MEETINGS_PORT` — the numerator of section 12's coverage line, bound in
+      // `RecordedMeetingsBindingModule` because its consumer is registered in
+      // `CellsModule`, which `AppModule` is not the resolving context for. That is the
+      // same arrangement `CELL_RELATIONSHIPS_PORT` got wrong once, so it is asserted the
+      // same way and on the consumer's own field: `moduleRef.get(TOKEN)` searches the
+      // whole container and would find a provider that never reaches this class.
+      ['RECORDED_MEETINGS_PORT', moduleRef.get(CellsIndexService, { strict: false }), 'recorded'],
     ];
 
     for (const [token, consumer, field] of consumers) {

@@ -15,10 +15,12 @@ import { CellsClosureService } from './cells.closure.service';
 import { CellsConfigurationService } from './cells.configuration.service';
 import { CellsLeadershipRequestService } from './cells.leadership-request.service';
 import { CellsMembershipService } from './cells.membership.service';
+import { CellsIndexService } from './cells.index.service';
 import { CellsService } from './cells.service';
 import {
   AddCellMemberDto,
   ApproveLeadershipRequestDto,
+  CellIndexDto,
   CellMembersDto,
   ChangeCellCategoryDto,
   ChangeCellScheduleDto,
@@ -45,6 +47,7 @@ import {
 export class CellsController {
   constructor(
     private readonly cells: CellsService,
+    private readonly index: CellsIndexService,
     private readonly membership: CellsMembershipService,
     private readonly configuration: CellsConfigurationService,
     private readonly closure: CellsClosureService,
@@ -90,6 +93,49 @@ export class CellsController {
       actor,
       claim,
     );
+  }
+
+  /**
+   * `GET /api/v1/cells` — the Cells whose leader falls within the actor's scope
+   * (SKILL.md sections 10, 12, 19 and 22; decision 0226).
+   *
+   * **`{ kind: 'actor' }`, because a list has no target.** Section 7 resolves one
+   * capability against one object, and the object here would have to be each row — which
+   * is a narrowing rather than a decision, so it belongs in the domain layer (decision
+   * 0062). The guard therefore asks whether the caller holds `cell.view_subtree` at a
+   * scope reaching themselves, and `CellsIndexService` asks the same service which people
+   * that scope contains. Both answers come from `AuthorizationService`; neither is
+   * re-derived.
+   *
+   * **Not `{ kind: 'church' }`**, which "the Cells of the church" invites and which is
+   * Whole Church only: it would deny every Leader holding this capability at own-subtree,
+   * who is every leader the route exists for. The DCC routes record the identical
+   * mistake one domain over.
+   *
+   * **`cell.view_subtree` is a viewing capability, and this route asks about now.**
+   * Section 7 gives its dated resolution to a viewing read asking about a *past period*;
+   * the `month` here dates the coverage figure on each row and not the membership of the
+   * list. That is the reading `GET /api/v1/cells/{id}/meetings` already has — it takes a
+   * month and resolves its Cell through the undated `leaderForScope` — and the two must
+   * agree, or the index lists Cells whose detail route refuses.
+   *
+   * *This route declares no `cell`-shaped target, so it is outside the allowlist in
+   * `capability-scope-resolution.spec.ts` rather than an addition to it. That file
+   * catches a viewing capability declared against a Cell-resolved target; the obligation
+   * it is about is discharged here by the paragraph above rather than by the list.*
+   */
+  @Get()
+  @RequiresCapability(Capability.CellViewSubtree, { kind: 'actor' })
+  async list(
+    @Query() query: CellIndexDto,
+    @CurrentActor() actor: Actor,
+  ): Promise<Record<string, unknown>> {
+    return this.index.list(actor, {
+      month: query.month,
+      ledBy: query.led_by,
+      limit: query.limit,
+      cursor: query.cursor,
+    });
   }
 
   /**

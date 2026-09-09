@@ -19,6 +19,7 @@ import { NetworksModule } from './networks/networks.module';
 import { CELL_MEETING_SCOPE_PORT } from './auth/authorization/cell-meeting-scope.port';
 import { CELL_SCOPE_PORT } from './auth/authorization/cell-scope.port';
 import { CellRelationshipsBindingModule } from './cells/cell-relationships.binding.module';
+import { RecordedMeetingsBindingModule } from './attendance/recorded-meetings.binding.module';
 import { AttendanceModule } from './attendance/attendance.module';
 import { ReportingModule } from './reporting/reporting.module';
 import { CellMeetingsScopeService } from './attendance/cell-meetings.scope.service';
@@ -65,6 +66,7 @@ import { PeopleModule } from './people/people.module';
     AttendanceModule,
     ReportingModule,
     CellRelationshipsBindingModule,
+    RecordedMeetingsBindingModule,
   ],
   controllers: [HealthController],
   providers: [

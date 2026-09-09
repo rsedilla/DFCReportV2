@@ -104,6 +104,21 @@
       "reason": "Resending an activation email is Admin operations, alongside provisioning above."
     },
     {
+      "route": "GET /api/v1/cells",
+      "waived_to": "screens block",
+      "reason": "The index every other Cell route depends on (decision 0226). Cell Leaders is the screen in that block which shows it, and Dashboard reads it with ?led_by=me for a leader's own Cells (§19). Neither exists yet."
+    },
+    {
+      "route": "GET /api/v1/dcc/events",
+      "waived_to": "screens block",
+      "reason": "The DCC calendar a leader picks an event from (decision 0227). DCC Attendance is the screen in that block which shows it; the roster below is unreachable without it."
+    },
+    {
+      "route": "GET /api/v1/dcc/events/:id/coverage-gaps",
+      "waived_to": "screens block",
+      "reason": "The attention list behind each event's coverage figure (decision 0228, §15). It belongs beside DCC Attendance and on Dashboard's outstanding work, and neither screen exists yet."
+    },
+    {
       "route": "GET /api/v1/cells/:id/members",
       "waived_to": "screens block",
       "reason": "The Cell roster (§12). Cell Attendance reads it, and it is the roster view §12 keeps separate from the statistical report."

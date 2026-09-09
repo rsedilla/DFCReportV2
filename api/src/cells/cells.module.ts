@@ -11,6 +11,7 @@ import { CellsController } from './cells.controller';
 import { CellsClosureService } from './cells.closure.service';
 import { CellsConfigurationService } from './cells.configuration.service';
 import { CellsLeadershipRequestService } from './cells.leadership-request.service';
+import { CellsIndexService } from './cells.index.service';
 import { CellsMembershipService } from './cells.membership.service';
 import { CellsReadService } from './cells.read.service';
 import { CellsService } from './cells.service';
@@ -74,6 +75,7 @@ import { CellsService } from './cells.service';
   providers: [
     CellsService,
     CellsLeadershipRequestService,
+    CellsIndexService,
     CellsMembershipService,
     CellsConfigurationService,
     CellsClosureService,

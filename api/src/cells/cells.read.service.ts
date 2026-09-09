@@ -9,7 +9,7 @@ import { CURSOR_INSTANT_FORMAT } from './leadership-request-cursor';
 
 import type { LeadershipRequestCursor, LeadershipRequestRow } from './leadership-request-cursor';
 import type { RosterCursor } from '../common/roster-cursor';
-import type { Database } from '../database/schema';
+import type { CellCategory, Database } from '../database/schema';
 import type { Transaction } from 'kysely';
 
 /**
@@ -861,5 +861,159 @@ export class CellsReadService implements CellScopePort, CellRelationshipsPort {
       .executeTakeFirst();
 
     return row !== undefined;
+  }
+
+  /**
+   * One page of the `ACTIVE` Cells whose current leader is one of these people
+   * (SKILL.md sections 10 and 22; decision 0226).
+   *
+   * **The leader set is the caller's, and this method authorizes nothing.** Section 7
+   * decides who is in scope and `AuthorizationService.scopeMembership` enumerates them;
+   * a read service answers questions. `null` means no narrowing at all, which is what a
+   * Whole Church grant reaches — and it is a distinct argument from an empty array,
+   * which is a caller in scope for nobody and must list nothing. Collapsing the two is
+   * the one mistake here that publishes the church.
+   *
+   * **`ACTIVE` only, and decision 0226 says in terms that it does not settle this.**
+   * Section 7's base bullet keeps a closed Cell visible to the leader who led it, while
+   * its closed-Cell clause says every write against one resolves through nobody; that
+   * tension is recorded as open in `CLAUDE.md` and predates this route. `ACTIVE` is the
+   * conservative arm: Section 10 says "every other count of Cells means active Cells",
+   * so a listing that means the other thing is the one that would need the ruling. What
+   * this costs is named rather than hidden — a Cell closed mid-month holds real recorded
+   * attendance for that month and does not appear here, so the index is not the surface
+   * that reaches it.
+   *
+   * **The leadership joined is the open one**, which on an `ACTIVE` Cell is also the
+   * current one: migration 0009 gives an `ACTIVE` Cell exactly one open leadership row.
+   * That is why this needs none of `leaderForScope`'s ordering — the fallback that
+   * method implements exists for a closed Cell, and there are none here.
+   *
+   * **Keyset on `cell_id`, which is total, immutable and meaningless.** Section 10 makes
+   * a Cell ID encode nothing, so ordering by it ranks nobody — and Section 13 forbids
+   * ordering this list by coverage, which is the ordering a reader would otherwise
+   * reach for. It is a single-column key because `cell_id` is unique, so the cursor
+   * needs no tie-break and the comparison is one predicate rather than three.
+   *
+   * *Not ordered by leader name, which would read better and cannot be paged safely
+   * here: a rename moves the key, and a keyset over a moving key skips or repeats rows.
+   * `roster-cursor.ts` records that failure. A client sorting a page for display is
+   * permitted (Section 13, sorting within an authorized scope); ordering the collection
+   * itself is what has to be stable.*
+   */
+  async cellsInScope(
+    executor: Db | Transaction<Database>,
+    leaderIds: readonly string[] | null,
+    page: { limit: number; after?: string | null },
+  ): Promise<
+    {
+      id: string;
+      cellId: string;
+      leaderId: string;
+      category: CellCategory;
+      dayOfWeek: number;
+      timeOfDay: string;
+    }[]
+  > {
+    const after = page.after ?? null;
+
+    const rows = await executor
+      .selectFrom('cells')
+      .innerJoin('cell_leaderships', (join) =>
+        join
+          .onRef('cell_leaderships.cell_id', '=', 'cells.id')
+          .on('cell_leaderships.ended_at', 'is', null),
+      )
+      // The category and schedule in force now. Migration 0009 gives an `ACTIVE` Cell
+      // exactly one open row of each, so these are inner joins rather than lookups that
+      // might miss — a Cell without them cannot exist in this state.
+      .innerJoin('cell_categories', (join) =>
+        join
+          .onRef('cell_categories.cell_id', '=', 'cells.id')
+          .on('cell_categories.ended_at', 'is', null),
+      )
+      .innerJoin('cell_schedules', (join) =>
+        join
+          .onRef('cell_schedules.cell_id', '=', 'cells.id')
+          .on('cell_schedules.ended_at', 'is', null),
+      )
+      .select([
+        'cells.id as id',
+        'cells.cell_id as cell_id',
+        'cell_leaderships.person_id as leader_id',
+        'cell_categories.category as category',
+        'cell_schedules.day_of_week as day_of_week',
+        'cell_schedules.time_of_day as time_of_day',
+      ])
+      .where('cells.state', '=', 'ACTIVE')
+      .$if(leaderIds !== null, (query) =>
+        query.where('cell_leaderships.person_id', 'in', leaderIds as readonly string[]),
+      )
+      .$if(after !== null, (query) => query.where('cells.cell_id', '>', after as string))
+      .orderBy('cells.cell_id')
+      .limit(page.limit)
+      .execute();
+
+    return rows.map((row) => ({
+      id: row.id,
+      cellId: row.cell_id,
+      leaderId: row.leader_id,
+      category: row.category,
+      dayOfWeek: Number(row.day_of_week),
+      timeOfDay: String(row.time_of_day).slice(0, 5),
+    }));
+  }
+
+  /**
+   * How many meetings each of these Cells has scheduled in the month — the
+   * **denominator** of Section 12's coverage line, for a page of Cells at once.
+   *
+   * **The same derivation as {@link scheduledMeetingsIn}, counted rather than listed**,
+   * and that is a duplication worth naming: two statements now derive one rule, which is
+   * the shape this repository records against itself. They are adjacent, in the module
+   * Section 2 assigns the denominator to, and both express the derivation the same way —
+   * a day-by-day series against the schedule rows in force, comparing `EXTRACT(ISODOW)`
+   * with `day_of_week`, with the in-force comparison made on Manila **dates** at both
+   * edges for the reason that method gives. A change to one is a change to both.
+   *
+   * *Reusing that method per Cell was the alternative, and it is a round trip per row:
+   * up to 200 on one page, for 200 integers. The listing form is kept for the single-Cell
+   * route because it needs the dates themselves, which the caller there joins recorded
+   * rows onto.*
+   *
+   * **A Cell with no schedule row in force over any day of the month is absent from the
+   * map, and the caller reads that as zero** (decision 0225): the line reads `0 of 0`,
+   * it is shown, and the Cell stays in any aggregate denominator contributing zero to
+   * both terms. Reachable without backdating, since a month after a Cell's closure has
+   * no schedule row — though this listing shows `ACTIVE` Cells, so the case it reaches
+   * here is a month before the Cell existed.
+   */
+  async scheduledCountsIn(
+    executor: Db | Transaction<Database>,
+    cellIds: readonly string[],
+    reportingMonth: string,
+  ): Promise<Map<string, number>> {
+    if (cellIds.length === 0) {
+      return new Map();
+    }
+
+    const result = await sql<{ cell_id: string; scheduled: string }>`
+      SELECT schedule.cell_id                AS cell_id,
+             count(*)                        AS scheduled
+        FROM generate_series(
+               ${reportingMonth}::date,
+               (${reportingMonth}::date + interval '1 month' - interval '1 day')::date,
+               interval '1 day'
+             ) AS day
+        JOIN cell_schedules AS schedule
+          ON schedule.cell_id = ANY(${sql.val(cellIds)}::uuid[])
+         AND (schedule.started_at AT TIME ZONE 'Asia/Manila')::date <= day
+         AND (schedule.ended_at IS NULL
+              OR (schedule.ended_at AT TIME ZONE 'Asia/Manila')::date >= day)
+       WHERE EXTRACT(ISODOW FROM day) = schedule.day_of_week
+       GROUP BY schedule.cell_id
+    `.execute(executor);
+
+    return new Map(result.rows.map((row) => [row.cell_id, Number(row.scheduled)]));
   }
 }
