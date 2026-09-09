@@ -7,31 +7,15 @@ import { useSyncExternalStore } from 'react';
 import { AppShell, PAGE_WIDTH } from '@/components/app-shell';
 import { Button } from '@/components/ui/button';
 import { FailureNotice } from '@/components/ui/failure-notice';
+import { getMe } from '@/lib/me';
 import { describeFailure } from '@/lib/messages';
 import {
-  authenticatedRequest,
   isHalted,
   resumeSession,
   signOut,
   signOutEverywhere,
   subscribe,
 } from '@/lib/session';
-
-interface GrantSummary {
-  capability: string;
-  scope_type: string;
-  scope_network: string | null;
-  read_only: boolean;
-  source: string;
-}
-
-interface SessionDescription {
-  account_id: string;
-  person_id: string;
-  email: string | null;
-  first_name: string | null;
-  capabilities: GrantSummary[];
-}
 
 /**
  * Where a signed-in person lands, until there is a Dashboard worth landing on.
@@ -79,7 +63,7 @@ function SessionDetail() {
 
   const session = useQuery({
     queryKey: ['auth', 'me'],
-    queryFn: () => authenticatedRequest<SessionDescription>('/api/v1/auth/me'),
+    queryFn: ({ signal }) => getMe(signal),
   });
 
   const endSession = useMutation({
