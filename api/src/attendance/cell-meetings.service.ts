@@ -584,6 +584,20 @@ export class CellMeetingsService implements RecordedMeetingsPort {
 
     const members = await this.cells.membersAsOfWithin(this.db, cellId, rosterDate);
 
+    // **The marks the caller is being asked to resubmit** (decision 0223). A `HELD`
+    // submission carries the whole roster rather than the lines being changed, so a
+    // correction screen that could not read what is recorded would render every member
+    // unmarked and overwrite every other member's mark with a blank one — silent data
+    // loss on the path section 13 exists to provide, reachable by a leader correcting
+    // one person. Decision 0194 settled the same thing one domain over: a leader marking
+    // a checklist must see who is already marked.
+    //
+    // Empty where the meeting has no row yet, which is the ordinary first submission.
+    const marks =
+      recorded === null
+        ? new Map<string, { present: boolean }>()
+        : await this.marksFor(recorded.id as string);
+
     return {
       cell_id: cell.cellId,
       meeting_id: meetingId,
@@ -602,8 +616,44 @@ export class CellMeetingsService implements RecordedMeetingsPort {
         member_id: member.memberId,
         first_name: member.firstName,
         last_name: member.lastName,
+        // **`present` alone, and no per-person version.** Decision 0164 has a Cell
+        // submission carry *the meeting's* version and decision 0190 states that
+        // `cell_attendance.version` "orders one person's chain and is not compared" — so
+        // a per-person version here would be a number the client must not send back,
+        // offered beside the fields it must. The version a correction carries is on the
+        // `meeting` object above. `recorded_at` is omitted for the same reason: nothing
+        // on this path compares one, and a field a client cannot act on is the shape
+        // decision 0223 refuses.
+        //
+        // Null is a member with no live row — not yet recorded, or recorded and then
+        // superseded with nothing replacing them. Section 20 needs an absent row and a
+        // row marked absent to stay different facts, which is why this is a nullable
+        // object rather than a boolean defaulting to false.
+        record: marks.get(member.personId) ?? null,
       })),
     };
+  }
+
+  /**
+   * Each member's live attendance mark for one meeting, by Person (decision 0223).
+   *
+   * **`superseded_at IS NULL`, because a correction supersedes rather than overwrites**
+   * (section 14). Reading a superseded row would show a leader the mark they replaced and
+   * invite them to resubmit it, which is the failure this read exists to prevent, one
+   * correction later.
+   *
+   * `cell_attendance_one_live` permits one live row per person per meeting, so the map is
+   * total on what it returns rather than merely usually so.
+   */
+  private async marksFor(meetingRowId: string): Promise<Map<string, { present: boolean }>> {
+    const rows = await this.db
+      .selectFrom('cell_attendance')
+      .select(['person_id', 'present'])
+      .where('cell_meeting_id', '=', meetingRowId)
+      .where('superseded_at', 'is', null)
+      .execute();
+
+    return new Map(rows.map((row) => [row.person_id, { present: row.present }]));
   }
 
   /**
