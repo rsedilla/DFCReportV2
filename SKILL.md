@@ -1984,6 +1984,12 @@ Removing a Sunday from the DCC calendar is a deliberate Admin action, never infe
 
 A leader who has not yet submitted their people's attendance for an event that did take place is a reporting gap, not a cancelled service. Those are tracked as coverage.
 
+**That gap may be drilled into, and the drill-down names the responsible leaders within the actor's scope who owe a record for the event** (ruling of 2026-09-09). It is an attention list on Section 15's terms: filtered, **never ranked, never colour-graded**, ordered by name or date and never by how far behind somebody is, and each entry offers the action that resolves it — which for a leader holding `dcc.submit_on_behalf` is recording on their behalf (Section 14).
+
+A count alone cannot be acted on, and Section 19 puts outstanding work above the figures for exactly that reason. Nothing new is disclosed: every roster line already carries its responsible leader, and the ruling of 2026-09-03 settled that this domain publishes per-person figures by design.
+
+**The scope is the whole of the constraint.** The list covers the actor's own pastoral subtree, and reaches the church only where the actor's grant does. The same data shown church-wide and ordered by how many records are missing is the leaderboard Section 13 forbids as a default or landing view, and forbids comparing leaders who do not oversee one another — so it is the ordering and the audience that are governed here, not the fact.
+
 ### What an event takes a record for
 
 Three states stop an event taking one, and a submission against any of them is refused: a **removed** Sunday, an event whose **Manila day has not begun**, and one whose **month has closed**. The first two answer `INVARIANT_VIOLATION` and the third `PERIOD_CLOSED`, which Section 22 gives its own code for the reason it gives — the record is not wrong, the period is shut, and only Admin may amend it.
@@ -2015,6 +2021,12 @@ DCC attendance for a calendar month may be recorded or corrected until the end o
 DCC coverage is shaped differently from Cell coverage. A Cell has one leader and its coverage counts recorded meetings out of scheduled meetings. A DCC event is church-wide, and many leaders each record their own people, so DCC coverage counts **how many responsible leaders have a record for the event**, not how many events exist. It measures whether the record exists, never who entered it — a submission made on behalf, or by an upline standing in for a leader who holds no account (below), completes that leader's coverage.
 
 Report that figure at every scope, as a single line, on the same terms as Cell coverage: factual, no ranking of leaders by it, and no derived score (Section 13).
+
+**The events of a month are listed by `GET /api/v1/dcc/events?month=YYYY-MM-01`, under `dcc.view_subtree`** (ruling of 2026-09-09). A month is the unit this section already uses — the submission window, the coverage figure and the reporting routes all take one — so no window width has to be invented and then owed. The deciding case is a **removed** Sunday: a month view shows it in its place as the decision it records, where a rolling window would slide past a gap without naming it and a listing across the thirteen-month horizon would bury it.
+
+**The capability is the viewing one rather than the recording one, and the reason is the figure.** Each row carries that event's coverage measured over the actor's subtree, and a recording capability names no subtree to measure over. `dcc.view_subtree` does, is a Read capability, and is grantable `read_only`, which a figure somebody may read without recording anything should be. `dcc.take_attendance` still guards the roster and the submission this index leads to: the index is a read, what it leads to is a write, and the capabilities differ because the acts differ.
+
+A row carries the event's date, whether it is recordable, and its coverage as **two figures** — leaders with a record out of leaders who owe one, never divided. A removed event carries the removal and no coverage, because nobody owes a record for a service that was not held. Rows are ordered by date and never by coverage, and none is colour-graded (Sections 13, 17 and 19).
 
 **Over a month, that single line is the number of leader-events with a record over the number of leader-events owed** (ruling of 2026-09-09), summed across the month's events. Both terms are reported and the figure is never divided into a percentage. Section 20 attributes coverage "by the obligation rather than by the record", and this is that sentence made arithmetic: a leader owes one record for each event they were the responsible leader at, and coverage is the fraction of those obligations discharged. It inherits the instant Section 20 already fixes — the denominator is the responsible leaders **as of the event date** — so a leader assigned in the third week owes records from that date and not before it, with nothing further needed to make a mid-month arrival correct.
 
@@ -3520,6 +3532,12 @@ Purpose:
 - show Met / Moved / Did not meet counts and trends factually, with the reason breakdown and the coverage line (Section 13)
 - show meetings conducted by someone other than the Cell leader, as a factual support signal, never as a score
 
+**A leader lists the Cells of their scope** (ruling of 2026-09-09). `GET /api/v1/cells` returns the Cells whose leader falls within the actor's pastoral scope, guarded by `cell.view_subtree` and paginated by cursor (Section 22); `?led_by=me` narrows it to the Cells the actor personally leads. Section 19 wants both readings — its Cell-leader dashboard leads with "the user's own Cells" and its upline dashboard with "within their scope" — so the narrower one is a **filter over one authorized set** rather than a second route or a second rule. A Cell the actor leads is inside the actor's own subtree by definition, so the filter grants nothing and only removes rows the caller may already see.
+
+No new capability: `cell.view_subtree` is a Read capability, is grantable `read_only`, and already guards `GET /api/v1/cells/{id}/members` after the ruling of 2026-09-04, which moved that read for exactly this reason. A list of Cells is the same kind of read as the roster of one, a level up.
+
+Each row carries the Cell's identifier, category, schedule, current leader, and the month's coverage line as **two figures** — recorded out of scheduled, never divided (Section 12, Section 13). **The list is never ordered by coverage and no row is colour-graded**: a list of Cells ordered worst-first is a leaderboard whatever it is called, and Sections 13, 17 and 19 forbid it.
+
 ### Cells needing attention
 
 Surface Cells that have gone quiet, as a working list for the leader who oversees them:
@@ -4280,9 +4298,11 @@ GET  /api/v1/leaders/{id}/children
 GET  /api/v1/leaders/{id}/descendants
 GET  /api/v1/leaders/{id}/summary
 
+GET  /api/v1/dcc/events?month=YYYY-MM-01  the month's events, with coverage per event
 GET  /api/v1/dcc/events/{id}/roster
 POST /api/v1/dcc/events/{id}/submit       an Admin amendment is a flag on this, not a route
 
+GET  /api/v1/cells                       the Cells of the actor's scope; ?led_by=me narrows
 POST /api/v1/cells                       direct creation, initial encoding only
 
 POST /api/v1/cells/leadership-requests     step one: a new Cell, or a handover
