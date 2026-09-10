@@ -464,6 +464,34 @@ export class CloseCellDto {
  * lines above describing the case that returns one, and beside code that returns one.
  * It described the version before the pagination, in the commit that added it.*
  */
+/**
+ * `GET /api/v1/cells/people-without-a-cell` (SKILL.md sections 10, 15 and 19;
+ * decision 0233).
+ *
+ * **Pagination and nothing else.** The list is defined by a condition on the data and
+ * by the actor's own scope, and it names no period — a month here would make it the
+ * dated read decision 0231 describes, which is exactly what it is not.
+ */
+export class PeopleWithoutACellDto {
+  /**
+   * Opaque, and passed back unmodified (section 22). Decoded by
+   * `decodeRosterCursor`, which refuses text the database cannot store before any
+   * key reaches a comparison.
+   */
+  @IsOptional()
+  @IsString()
+  @Length(1, CURSOR_MAX_LENGTH)
+  cursor?: string;
+
+  /** Section 22: defaults to 50, maximum 200. */
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(200)
+  limit?: number;
+}
+
 export class CellMembersDto {
   /** Section 22: defaults to 50, maximum 200. */
   @IsOptional()

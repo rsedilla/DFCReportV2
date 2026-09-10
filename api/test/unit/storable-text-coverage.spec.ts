@@ -52,11 +52,18 @@ describe('storable text is refused at the edge, on every field that takes text',
    * attention list decision 0232 adds reuses `people.controller.ts`’s own `decodeCursor`,
    * the decoder `SearchPeopleDto.cursor` two lines above is exempt on, so it refuses the
    * same values at the same point.*
+   *
+   * *The one added with decision 0233 was checked the same way: `PeopleWithoutACellDto.cursor`
+   * is decoded by `decodeRosterCursor`, the decoder `DccCoverageGapsDto` and `DccRosterDto`
+   * are already exempt on, which asks `isStorableText` of all three of its keys before any
+   * of them reaches a comparison. That route orders on `member_id` rather than the
+   * identifier precisely so it could reuse that cursor instead of declaring a fourth.*
    */
   const NEVER_STORED = new Set([
     'CellIndexDto.cursor',
     'DccCoverageGapsDto.cursor',
     'DccRosterDto.cursor',
+    'PeopleWithoutACellDto.cursor',
     'LeadershipRequestQueueDto.cursor',
     'CellMembersDto.cursor',
     'SearchPeopleDto.cursor',

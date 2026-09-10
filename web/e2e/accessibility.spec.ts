@@ -8,6 +8,7 @@ import {
   mockAccepted,
   mockAwaitingReassignment,
   mockDuplicateRefusal,
+  mockPeopleWithoutACell,
   mockPeople,
   mockPossibleMatches,
   mockSignInRefused,
@@ -342,6 +343,19 @@ const SCANS = [
     },
   },
   {
+    // Section 15's people-without-a-Cell list, which section 10's closure flow fills
+    // (decision 0233).
+    name: 'people without a cell',
+    route: '/cells/people-without-a-cell',
+    async before(page: import('@playwright/test').Page) {
+      await mockSignedIn(page);
+      await mockPeopleWithoutACell(page);
+    },
+    async arrange(page: import('@playwright/test').Page) {
+      await expect(page.getByRole('heading', { name: 'Bituin Carreon' })).toBeVisible();
+    },
+  },
+  {
     // Section 20's attention list, which the placement graph's reconstruction would
     // otherwise keep invisible (decision 0232).
     name: 'people awaiting reassignment',
@@ -662,6 +676,16 @@ const TARGET_SWEEP = [
     minimum: 12,
   },
   {
+    // The back link and one link per person: three, with no "Show more" for this
+    // fixture. Settled on a person rather than the page heading, which renders before
+    // the list arrives.
+    name: 'people without a cell',
+    route: '/cells/people-without-a-cell',
+    settleRole: 'heading' as const,
+    settle: 'Bituin Carreon',
+    minimum: 3,
+  },
+  {
     // The back link and one link per person, which is the reassignment section 19
     // asks each entry to carry. No "Show more": the fixture fits one page.
     //
@@ -844,6 +868,7 @@ test('every interactive target meets the 24px minimum', async ({ page }) => {
   await mockCoverageGaps(page);
   await mockPastoralPath(page);
   await mockAwaitingReassignment(page);
+  await mockPeopleWithoutACell(page);
 
   for (const entry of TARGET_SWEEP) {
     const { route, settle, minimum } = entry;

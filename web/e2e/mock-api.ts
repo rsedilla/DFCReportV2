@@ -129,6 +129,34 @@ export async function mockPeople(page: Page): Promise<void> {
 }
 
 /**
+ * Section 15's people-without-a-Cell list, with two people on it (decision 0233).
+ *
+ * Registered on the `cells` prefix, which is where the route lives: the list is a Cell
+ * attention list even though every row names a Person.
+ */
+export async function mockPeopleWithoutACell(page: Page): Promise<void> {
+  await page.route('**/api/v1/cells/people-without-a-cell*', (route) =>
+    route.fulfill(
+      json({
+        data: [
+          {
+            id: '3f1b7c6e-0000-4000-8000-000000000921',
+            member_id: 'M-01101',
+            full_name: 'Bituin Carreon',
+          },
+          {
+            id: '3f1b7c6e-0000-4000-8000-000000000922',
+            member_id: 'M-01102',
+            full_name: 'Rodolfo Villamor',
+          },
+        ],
+        next_cursor: null,
+      }),
+    ),
+  );
+}
+
+/**
  * The attention list section 20 requires (decision 0232), with something on it.
  *
  * Two rows rather than one, because the screen's own ordering rule is the thing most
