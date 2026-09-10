@@ -1677,6 +1677,8 @@ Senior Pastors (Bishop Oriel Ballano, Pastora Geraldine Ballano) receive Whole C
 
 The settings it governs today are the Cell attention threshold (Section 15), the initial-encoding phase flag (Section 2), and the first Sunday the DCC calendar covers (Section 9). Each alters behaviour for the entire church from a single control, which is why none is per leader and why all carry an audit trail: a threshold change silently re-populates every leader's attention list, closing the encoding phase permanently removes Admin's direct-create path for Cells, and moving the calendar's first Sunday changes which months the generation command will fill.
 
+**One setting is also written by a system action, and this is the whole of the exception** (ruling of 2026-09-11). The first Sunday the DCC calendar covers is set once by the scheduled generation command on the run that finds it unset (Sections 9 and 13, and the rulings of 2026-08-31), which holds no capability and has no interactive actor — Section 6 permits that null actor for exactly this case. It is audit logged as `setting.changed` like every other change, with its previous and new values, so the audit rule above is not weakened by it. **Nothing else is covered**: every other change to every setting, this one included, is an Admin action under `settings.manage`.
+
 A setting is not a place to record domain rules. Anything that changes what a figure means, rather than a single operational parameter, belongs in this specification and not behind a control.
 
 ```text
