@@ -218,6 +218,46 @@ describe('the DCC calendar (SKILL.md section 9)', () => {
     expect(after.value).toBe(first.calendarStart);
   });
 
+  /**
+   * Section 7 requires every change to a `settings.manage` setting to be audit logged
+   * with its previous and new values, and names this one among the three it governs.
+   *
+   * **The write it replaced emitted nothing.** `setting.changed` sat in the audit
+   * vocabulary from the day it was written with no code ever emitting it, so the one
+   * control section 7 says must always be audited was the one never audited. That was
+   * invisible because nothing asked (ruling of 2026-09-11).
+   *
+   * The actor is null: the command is invoked by a schedule and has no interactive
+   * actor, which section 6 permits for exactly this case.
+   */
+  it('audits the change, as section 7 requires of every setting', async () => {
+    const first = await calendar.generate();
+
+    const entries = await db
+      .selectFrom('audit_log')
+      .selectAll()
+      .where('action', '=', 'setting.changed')
+      .execute();
+
+    expect(entries).toHaveLength(1);
+    expect(entries[0].actor_id).toBeNull();
+    expect(entries[0].target_type).toBe('setting');
+    expect(entries[0].target_id).toBe('dcc_calendar_start');
+    expect(entries[0].before).toEqual({ value: null });
+    expect(entries[0].after).toEqual({ value: first.calendarStart });
+
+    // Set once, audited once: a second run changes nothing and says nothing.
+    await calendar.generate();
+
+    const again = await db
+      .selectFrom('audit_log')
+      .select('id')
+      .where('action', '=', 'setting.changed')
+      .execute();
+
+    expect(again).toHaveLength(1);
+  });
+
   it('leaves a start that was already set where it is, even a much older one', async () => {
     // **The half the case above cannot see, and a mutation proved it.** Both runs
     // there compute the same Sunday, so a service that rewrote the key on every run

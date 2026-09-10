@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 
+import { SettingsModule } from '../admin/settings/settings.module';
 import { AuditModule } from '../audit/audit.module';
 import { AuthModule } from '../auth/auth.module';
 import { AuthorizationModule } from '../auth/authorization/authorization.module';
@@ -67,6 +68,12 @@ import { DccController } from './dcc.controller';
     // imports `HierarchyModule` alone and `HierarchyModule` imports nothing, so no chain
     // from `networks` reaches back here.
     NetworksModule,
+    // Decision 0237: `admin` owns `settings`, so the DCC calendar's floor is read and
+    // set through its service rather than by writing the table. Not a cycle, and the
+    // reason is stated because section 2 reserves a port for where it would be:
+    // `SettingsModule` owns one table and imports nothing, so no chain from it reaches
+    // back here.
+    SettingsModule,
   ],
   controllers: [DccController, CellMeetingsController],
   providers: [

@@ -1,10 +1,9 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { sql } from 'kysely';
 
+import { SettingsService } from '../admin/settings/settings.service';
 import { AuditService } from '../audit/audit.service';
 import { manilaDayOf, startOfManilaDay } from '../common/time/manila';
 import { DATABASE, type Db } from '../database/database.module';
-import type { Json } from '../database/schema';
 
 import { databaseNow, isMonthOpen, reportingMonthOf } from '../common/time/submission-window';
 
@@ -51,6 +50,11 @@ export class DccCalendarService {
   constructor(
     @Inject(DATABASE) private readonly db: Db,
     private readonly audit: AuditService,
+    // `admin` owns `settings` and this module asks it rather than writing the table
+    // (SKILL.md section 2, ruling of 2026-09-11). An ordinary import rather than a
+    // port, because `SettingsModule` imports nothing, so the direction is not a cycle
+    // and section 2 reserves a port for where it would be.
+    private readonly settings: SettingsService,
   ) {}
 
   /**
@@ -70,18 +74,15 @@ export class DccCalendarService {
       // afterwards (ruling of 2026-08-31). It records when this church's calendar
       // began, so a report over an earlier range says "before we started" rather
       // than "no service".
-      const existingStart = await this.readCalendarStart(trx);
+      const existingStart = await this.settings.dccCalendarStartWithin(trx);
       const calendarStart = existingStart ?? sundayOnOrBefore(today);
 
       if (existingStart === null) {
-        await trx
-          .updateTable('settings')
-          // `settings.value` is `jsonb`, so a date goes in as a JSON string rather
-          // than as bare text — `to_jsonb` rather than a cast, which would refuse
-          // `2026-08-30` as invalid JSON. The read below unwraps it the same way.
-          .set({ value: sql<Json>`to_jsonb(${calendarStart}::text)`, updated_at: now })
-          .where('key', '=', 'dcc_calendar_start')
-          .execute();
+        // `admin` owns `settings`, so this asks rather than writes (ruling of
+        // 2026-09-11). The method writes the row and the `setting.changed` audit
+        // entry together, inside this transaction, which is what section 7 requires
+        // and what the direct write it replaced never did.
+        await this.settings.setDccCalendarStartOnceWithin(trx, calendarStart, now);
       }
 
       const sundays = sundaysBetween(calendarStart, addMonths(today, HORIZON_MONTHS));
@@ -170,16 +171,6 @@ export class DccCalendarService {
       .executeTakeFirst();
 
     return row?.event_date ?? null;
-  }
-
-  private async readCalendarStart(executor: Db): Promise<string | null> {
-    const row = await executor
-      .selectFrom('settings')
-      .select('value')
-      .where('key', '=', 'dcc_calendar_start')
-      .executeTakeFirstOrThrow();
-
-    return typeof row.value === 'string' ? row.value : null;
   }
 }
 
