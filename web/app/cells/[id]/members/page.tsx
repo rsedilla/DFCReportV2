@@ -125,8 +125,10 @@ function CellMembers() {
           Cell&rsquo;s leader, and the server says so if they are not.
         </p>
 
-        <div className="mt-4">
-          <PersonPicker
+        <div className="mt-4">          <PersonPicker
+            legend="Who to add"
+            description="Search everyone in the church by name. They must be in the same Network as this Cell's leader."
+            searchLabel="Search for a person by name"
             selectedId={chosen?.id ?? null}
             selectedName={chosen?.full_name ?? null}
             onSelect={setChosen}

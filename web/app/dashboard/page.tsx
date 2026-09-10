@@ -7,7 +7,7 @@ import { AppShell, PAGE_WIDTH } from '@/components/app-shell';
 import { CoverageFigure } from '@/components/coverage-figure';
 import { FailureNotice } from '@/components/ui/failure-notice';
 import { listCellMeetings, listCells, type CellSummary } from '@/lib/cells';
-import { getMe } from '@/lib/me';
+import { getMe, holdsWholeChurch } from '@/lib/me';
 import { describeFailure } from '@/lib/messages';
 import { getCellMonthlyReport, getDccMonthlyReport } from '@/lib/reports';
 import { dayLabel, monthLabel, reportingMonthOf } from '@/lib/reporting-month';
@@ -83,17 +83,33 @@ function Dashboard() {
     })),
   });
 
+  /**
+   * The scope the figures are read at, and why it is not always the actor.
+   *
+   * **A Whole Church grant is read as Whole Church.** Keying every tile on the
+   * signed-in person's own subtree is right for a leader and wrong for anybody
+   * holding a church-wide grant who is not themselves in the pastoral tree —
+   * section 5 permits exactly that for an administrator, and section 20 then
+   * places them in no subtree at all. The tiles read `0` while the attention
+   * list above them showed real Cells, which is the disagreement this fixes.
+   */
+  const reportScope = holdsWholeChurch(me.data, 'reports.view_subtree')
+    ? ({ kind: 'WHOLE_CHURCH' } as const)
+    : ({ kind: 'LEADER', person_id: me.data?.person_id ?? '' } as const);
+
+  const scopeLabel = holdsWholeChurch(me.data, 'reports.view_subtree')
+    ? 'Whole Church'
+    : 'People you oversee';
+
   const cellFigures = useQuery({
-    queryKey: ['cell-report', month, me.data?.person_id],
-    queryFn: ({ signal }) =>
-      getCellMonthlyReport(month, { kind: 'LEADER', person_id: me.data!.person_id }, signal),
+    queryKey: ['cell-report', month, reportScope],
+    queryFn: ({ signal }) => getCellMonthlyReport(month, reportScope, signal),
     enabled: me.data !== undefined,
   });
 
   const dccFigures = useQuery({
-    queryKey: ['dcc-report', month, me.data?.person_id],
-    queryFn: ({ signal }) =>
-      getDccMonthlyReport(month, { kind: 'LEADER', person_id: me.data!.person_id }, signal),
+    queryKey: ['dcc-report', month, reportScope],
+    queryFn: ({ signal }) => getDccMonthlyReport(month, reportScope, signal),
     enabled: me.data !== undefined,
   });
 
@@ -123,8 +139,8 @@ function Dashboard() {
         {me.data?.first_name ? `Welcome, ${me.data.first_name}` : 'Dashboard'}
       </h1>
       <p className="text-muted mt-2 max-w-2xl text-sm leading-relaxed">
-        What needs doing comes first. The figures below it are for{' '}
-        {monthLabel(month)} and cover the people you oversee.
+        What needs doing comes first. The figures below it are for {monthLabel(month)}, and
+        their scope is {scopeLabel}.
       </p>
 
       <div className="mt-8">
@@ -199,7 +215,7 @@ function Dashboard() {
             counts="Cell attendance"
             value={cellFigures.data ? String(cellFigures.data.unique_people) : '—'}
             unit="people attended"
-            scope="People you oversee"
+            scope={scopeLabel}
             period={periodLabel(month, cellFigures.data?.open)}
             href="/reports/cells"
           />
@@ -207,7 +223,7 @@ function Dashboard() {
             counts="DCC attendance"
             value={dccFigures.data ? String(dccFigures.data.unique_people) : '—'}
             unit="people attended"
-            scope="People you oversee"
+            scope={scopeLabel}
             period={periodLabel(month, dccFigures.data?.open)}
             href="/reports/dcc"
           />
@@ -224,7 +240,7 @@ function Dashboard() {
                 '—'
               )
             }
-            scope="Cells you oversee"
+            scope={scopeLabel}
             period={periodLabel(month, cellFigures.data?.open)}
             href="/reports/cells"
           />
@@ -241,7 +257,7 @@ function Dashboard() {
                 '—'
               )
             }
-            scope="Leaders you oversee"
+            scope={scopeLabel}
             period={periodLabel(month, dccFigures.data?.open)}
             href="/reports/dcc"
           />
@@ -263,7 +279,7 @@ function Dashboard() {
           <Tile
             counts="Cells in your scope"
             value={scoped.data ? String(scoped.data.data.length) : '—'}
-            scope="People you oversee"
+            scope={scopeLabel}
             period="As of today"
             href="/cells"
           />

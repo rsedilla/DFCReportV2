@@ -8,7 +8,7 @@ import { AttendanceBuckets, ClassificationFigures } from '@/components/attendanc
 import { CoverageFigure } from '@/components/coverage-figure';
 import { MonthPicker } from '@/components/month-picker';
 import { FailureNotice } from '@/components/ui/failure-notice';
-import { getMe } from '@/lib/me';
+import { getMe, holdsWholeChurch } from '@/lib/me';
 import { describeFailure } from '@/lib/messages';
 import { getDccMonthlyReport, type ReportScope } from '@/lib/reports';
 import { dayLabel, reportingMonthOf } from '@/lib/reporting-month';
@@ -51,9 +51,17 @@ export function DccReport() {
 
   const me = useQuery({ queryKey: ['me'], queryFn: ({ signal }) => getMe(signal) });
 
-  const scope: Exclude<ReportScope, { kind: 'CELL' }> | null = me.data
-    ? { kind: 'LEADER', person_id: me.data.person_id }
-    : null;
+  // A Whole Church grant is read as Whole Church, for the reason the Cell report
+  // beside this one gives: an administrator holding one need not be in the
+  // pastoral tree, and section 20 then places them in no subtree at all.
+  const scope: Exclude<ReportScope, { kind: 'CELL' }> | null = holdsWholeChurch(
+    me.data,
+    'reports.view_subtree',
+  )
+    ? { kind: 'WHOLE_CHURCH' }
+    : me.data
+      ? { kind: 'LEADER', person_id: me.data.person_id }
+      : null;
 
   const report = useQuery({
     queryKey: ['dcc-report', month, scope],

@@ -44,7 +44,12 @@ export default function SignInPage() {
 
     try {
       await signIn(email, password, 'Web browser');
-      router.replace('/session');
+      // Section 19 makes the dashboard "the screen every user lands on", and
+      // this is one of the two places a signed-in person arrives from. The
+      // landing route was pointed here when the dashboard was built and this
+      // was not, so signing in went to the session description instead — a
+      // screen about the account rather than about the work.
+      router.replace('/dashboard');
     } catch (cause) {
       // The one caller that passes `credentialRefusal`: this form is the only
       // place where `UNAUTHENTICATED` means "what you typed was refused" rather

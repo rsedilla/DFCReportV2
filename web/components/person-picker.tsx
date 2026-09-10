@@ -37,10 +37,25 @@ import { MINIMUM_SEARCH_LENGTH, searchPeople, type Person } from '@/lib/people';
  * with its own message.
  */
 export function PersonPicker({
+  legend,
+  description,
+  searchLabel,
   selectedId,
   selectedName,
   onSelect,
 }: {
+  /**
+   * What this person is being chosen *as*, and why.
+   *
+   * **Required rather than defaulted**, because the wording is the part that
+   * differs between callers and a default is the part nobody changes. This
+   * component said "Pastoral leader — who will pastor this person?" on a screen
+   * that was adding a Cell member, which is a different question with a
+   * different answer, and it read as a bug to anybody using it.
+   */
+  legend: string;
+  description: string;
+  searchLabel: string;
   selectedId: string | null;
   selectedName: string | null;
   onSelect: (person: { id: string; full_name: string } | null) => void;
@@ -57,7 +72,7 @@ export function PersonPicker({
   if (selectedId && selectedName) {
     return (
       <div className="border-line rounded-md border p-4">
-        <p className="text-sm font-medium">Pastoral leader</p>
+        <p className="text-sm font-medium">{legend}</p>
         <p className="mt-1 text-sm">{selectedName}</p>
         <Button variant="secondary" className="mt-3" onClick={() => onSelect(null)}>
           Choose someone else
@@ -68,16 +83,15 @@ export function PersonPicker({
 
   return (
     <div className="border-line rounded-md border p-4">
-      <p className="text-sm font-medium">Pastoral leader</p>
+      <p className="text-sm font-medium">{legend}</p>
       <p className="text-muted mt-1 text-sm leading-relaxed">
-        Who will pastor this person? Required, and it decides who can see and edit their
-        details.
+        {description}
       </p>
 
       {/* Stacked on a phone, inline from `sm` up — as on the people search. */}
       <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-end">
         <Field
-          label="Search for a leader by name"
+          label={searchLabel}
           type="search"
           name="leader_q"
           autoComplete="off"
