@@ -99,6 +99,11 @@ that would serve it is a viewing capability, and no route carries `cell.view_sub
 yet. That is a gap in the surface rather than in the rule, and it closes with the first
 route that carries a viewing capability against a Cell.
 
+*Both halves are historical. `cell.view_subtree` acquired its first route on 2026-09-04
+(decision 0204) and its second on 2026-09-09 (decision 0226), and the second was made dated
+on 2026-09-10 (decision 0231). The gap this paragraph names is not thereby closed: neither
+route serves a past meeting's roster.*
+
 Stating it as a cost rather than as an argument, because the alternative reading of
 Section 13 is not unreasonable: a past leader asking about a past meeting *is* asking
 about a period. The answer is that they should ask a route whose capability says so.

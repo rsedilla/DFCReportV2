@@ -54,6 +54,15 @@ any existing route. `cell.view_subtree` guards one route, which decision 0204 ma
 so the current Network is the correct instant there and stays. `audit.view` guards none. The
 next dated route inherits the rule instead of rediscovering the question.
 
+*Both counts here have since moved, and the second sentence has gone false. Decision 0226
+gave `cell.view_subtree` a second route on 2026-09-09, `GET /api/v1/cells`, and decision 0231
+made that one **dated** on 2026-09-10 — so the current Network is no longer the correct
+instant for every route this capability guards, and this ruling's rule is what says so. The
+rule is unchanged and is what the later ruling inherited; what was wrong was reading a
+route count as though it were fixed. `audit.view` still guards none. That the sentence
+survived the ruling which made it false is recorded in `CLAUDE.md` as a Stop Condition about
+the walk it describes.*
+
 **That is the third answer, and neither of the two the question was framed between.** Binding
 the refusal to the *capability* would have refused `GET /cells/{id}/members` to a Network
 grant holder — a live route, correctly answered today, with no defect behind the regression.

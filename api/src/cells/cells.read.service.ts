@@ -949,8 +949,13 @@ export class CellsReadService implements CellScopePort, CellRelationshipsPort {
    * attendance for that month and does not appear here, so the index is not the surface
    * that reaches it.
    *
-   * **A row that is in force is not the same as a row that is open**, and only the
-   * leadership join may use the second. Migration 0009 gives an `ACTIVE` Cell exactly one
+   * **A row that is in force is not the same as a row that is open**, and the leadership join
+   * uses the second. **Decision 0231 reverses that**: under section 7 this join must resolve at
+   * the period's instant, and it has not been changed yet. It is deliberately *not* said
+   * that it then matches the category and schedule joins below — those take the caller's
+   * `now`, and which instant they should take once membership is dated is itself a Stop
+   * Condition in `CLAUDE.md`, because both are **inner** joins and so decide membership
+   * rather than display. Migration 0009 gives an `ACTIVE` Cell exactly one
    * open leadership row, and both leadership writers open at or before now — a handover
    * takes the instant it is approved — so open and current coincide there.
    *

@@ -69,6 +69,10 @@ Read capabilities, and it is one of the three capabilities that resolve as of th
 being viewed (decision 0186). It guards no route: it appears in the `Capability` enum and in
 the role defaults and nowhere else.
 
+*True on the day this was written and not since: decision 0204 gave it `GET
+/api/v1/cells/{id}/members` the same day, and decision 0226 gave it `GET /api/v1/cells` on
+2026-09-09.*
+
 So the question is not whether to add a capability. It is that `GET /api/v1/cells/{id}/members`
 is guarded by `cell.manage_membership` while the capability written for exactly this read sits
 unused — which is why nobody can be given roster visibility without the power to change the

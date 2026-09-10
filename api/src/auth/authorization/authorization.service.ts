@@ -550,15 +550,20 @@ export class AuthorizationService {
    * from its own tables and a comparison decided on a spelling is the defect
    * `identifiers.ts` exists to remove.
    *
-   * **Undated, and every branch of it — which is a shipped reading rather than a settled
-   * one.** Section 7 gives its dated resolution to a viewing read asking about a past
+   * **Undated, and every branch of it — which was a shipped reading until decision 0231
+   * settled it the other way, and is now a reading the code has not yet caught up with.** Section 7 gives its dated resolution to a viewing read asking about a past
    * period, and both routes calling this name a month. What that month dates is the figure
    * on each row; whether it also dates the *membership* of the collection is a question
    * section 7 has no sentence about, because its dated rule is stated per target kind and
-   * these routes declare `{ kind: 'actor' }`. It is recorded as a Stop Condition in
-   * `CLAUDE.md`, with the cost `architecture-guardian` reproduced against the database.
+   * these routes declare `{ kind: 'actor' }`. **Settled on 2026-09-10 as decision 0231**: section 7
+   * now says a collection naming a period resolves its membership as of that period, at the
+   * period's final millisecond. **This method has not been changed to honour it.** The
+   * route's dated membership lands in its own change, and what that change owes here is a
+   * separate Stop Condition in `CLAUDE.md`, because this walk is undated in two further
+   * ways the ruling does not reach: `subtreeOf` selects on `ended_at IS NULL`, and a
+   * `NETWORK` grant resolves at `new Date()` rather than at the instant section 7 names.
    *
-   * *The argument for shipping it undated is reachability and not classification: an index
+   * *The argument for shipping it undated was reachability and not classification: an index
    * must list exactly the Cells whose detail routes the caller can reach. A first version
    * of this paragraph made it by pointing at `GET /api/v1/cells/{id}/meetings` as though
    * that route's undated resolution were evidence about which resolution section 7 assigns

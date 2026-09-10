@@ -113,16 +113,18 @@ export class CellsController {
    * mistake one domain over.
    *
    * **`cell.view_subtree` is a viewing capability, and this route resolves undated —
-   * which is not what section 7's text says, and is recorded as open rather than
-   * defended.** Section 7 makes this one of the three capabilities resolving "as of the
+   * which is not what section 7's text says, and which decision 0231 has now settled
+   * against.** Section 7 makes this one of the three capabilities resolving "as of the
    * period being viewed" and says a viewing read "asking about a past month" owes a
-   * resolution as of that period. This route takes a required `month`. What section 7 has
-   * never contemplated is a *collection* whose period dates the figure on each row while
-   * the membership of the list is a separate question — and section 3 draws exactly that
+   * resolution as of that period. This route takes a required `month`. What section 7 had not contemplated until
+   * decision 0231 is a *collection* whose period dates the figure on each row while
+   * the membership of the list is a separate question — it now contemplates exactly that
+   * and rules the membership is **not** separate — and section 3 draws exactly that
    * line elsewhere, between period-based figures and "current-state inventory metrics",
    * among which it names Cell Groups.
    *
-   * **The reason it ships undated is reachability, not classification.** The index must
+   * **The reason it shipped undated was reachability, not classification — and decision 0231
+   * answers that argument rather than accepting it.** The index must
    * list exactly the Cells whose detail routes the caller can reach:
    * `GET /api/v1/cells/{id}/meetings` takes the same `month` and resolves undated, so a
    * dated index would hide from a leader a month the detail route serves them, which is
@@ -134,8 +136,11 @@ export class CellsController {
    *
    * **The cost is real and was reproduced**: a Cell handed over on 1 September lists for
    * the incoming leader when August is asked for, carrying that month's coverage line,
-   * while the leader who oversaw all of August cannot reach it. `CLAUDE.md` carries the
-   * question and the three defensible readings.
+   * while the leader who oversaw all of August cannot reach it. **Decision 0231 settled it at the period's final
+   * millisecond, and this route has not yet been changed** — the change is blocked behind
+   * the Stop Conditions that ruling's own review raised, which `CLAUDE.md` carries. The
+   * cost above is what the change removes; the gap it opens in its place, an index row
+   * linking to a refusal, `CLAUDE.md` carries as a bullet of its own.
    *
    * *This route declares no `cell`-shaped target, so it is outside the allowlist in
    * `capability-scope-resolution.spec.ts` rather than an addition to it. That file
