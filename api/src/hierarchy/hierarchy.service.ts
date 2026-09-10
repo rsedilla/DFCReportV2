@@ -147,9 +147,9 @@ export class HierarchyService {
    * **Identifiers only, and that is a module rule rather than a style.** Section 2
    * lets one module read another's table in exactly one shape -- a read joined
    * onto a query rooted in a table the reading module owns -- and names the two
-   * queries in this file that qualify, closing the list. Resolving names here
-   * would be a third: a bare lookup in `persons`, rooted in nothing this module
-   * owns, answering a question `people` answers already. The caller composes the
+   * queries in this file among the instances it argues. Resolving names here
+   * would not be one of them: it is a bare lookup in `persons`, rooted in
+   * nothing this module owns, answering a question `people` answers already. The caller composes the
    * names through `PeopleReadService`.
    *
    * **`topIsRoot` is the distinction section 5 requires be surfaced.** A Network

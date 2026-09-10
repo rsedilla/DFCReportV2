@@ -10,7 +10,7 @@ import { MonthPicker } from '@/components/month-picker';
 import { FailureNotice } from '@/components/ui/failure-notice';
 import { getMe, holdsWholeChurch } from '@/lib/me';
 import { describeFailure } from '@/lib/messages';
-import { getDccMonthlyReport, type ReportScope } from '@/lib/reports';
+import { getDccMonthlyReport, type ReportNetwork, type ReportScope } from '@/lib/reports';
 import { dayLabel, reportingMonthOf } from '@/lib/reporting-month';
 
 /**
@@ -49,16 +49,28 @@ export default function DccReportPage() {
 export function DccReport() {
   const [month, setMonth] = useState(() => reportingMonthOf());
 
+  // **Section 19's Senior Pastor scope selector.** Empty means the whole church; the
+  // two Networks are the only other values section 4 defines. It is offered only to
+  // a Whole Church holder, because that is the grant section 19 describes a Senior
+  // Pastor by — a leader-scoped viewer has one scope and a control with one option
+  // is a control that lies about having a choice.
+  const [network, setNetwork] = useState<ReportNetwork | ''>('');
+
   const me = useQuery({ queryKey: ['me'], queryFn: ({ signal }) => getMe(signal) });
+
+  const wholeChurch = holdsWholeChurch(me.data, 'reports.view_subtree');
 
   // A Whole Church grant is read as Whole Church, for the reason the Cell report
   // beside this one gives: an administrator holding one need not be in the
   // pastoral tree, and section 20 then places them in no subtree at all.
-  const scope: Exclude<ReportScope, { kind: 'CELL' }> | null = holdsWholeChurch(
-    me.data,
-    'reports.view_subtree',
-  )
-    ? { kind: 'WHOLE_CHURCH' }
+  //
+  // **A Network narrows that grant and never widens a leader's**, which is why the
+  // selector is gated above rather than the scope being chosen here: a leader-scoped
+  // viewer reaches the `LEADER` branch whatever `network` holds.
+  const scope: Exclude<ReportScope, { kind: 'CELL' }> | null = wholeChurch
+    ? network === ''
+      ? { kind: 'WHOLE_CHURCH' }
+      : { kind: 'NETWORK', network }
     : me.data
       ? { kind: 'LEADER', person_id: me.data.person_id }
       : null;
@@ -79,6 +91,32 @@ export function DccReport() {
       </p>
 
       <MonthPicker month={month} onChange={setMonth} open={report.data?.open} />
+
+      {wholeChurch ? (
+        <div className="mt-4">
+          <label htmlFor="dcc-scope" className="block text-sm font-medium">
+            Figures for
+          </label>
+          <select
+            id="dcc-scope"
+            value={network}
+            onChange={(event) => setNetwork(event.target.value as ReportNetwork | '')}
+            className="border-line focus-visible:outline-accent mt-2 min-h-11 rounded-md border px-3 text-sm focus-visible:outline-2 focus-visible:outline-offset-2"
+          >
+            <option value="">The whole church</option>
+            <option value="MENS">Men&rsquo;s Network</option>
+            <option value="WOMENS">Women&rsquo;s Network</option>
+          </select>
+          <p className="text-muted mt-2 max-w-2xl text-sm leading-relaxed">
+            A Network counts the people who belong to it, not the people under its root
+            (decision 0219). For the people who attended, the two Networks add up to the
+            whole church wherever everybody holds one Network — which section 20 states as a
+            property of the data rather than one the schema enforces. It claims nothing of
+            the kind for the coverage figures above, which count obligations rather than
+            people.
+          </p>
+        </div>
+      ) : null}
 
       <div className="mt-8">
         <FailureNotice

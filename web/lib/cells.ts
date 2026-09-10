@@ -145,6 +145,29 @@ export function meetingStateLabel(meeting: RecordedMeeting | null): string {
  * have shown, which is what makes the dashboard's "your own Cells" and the
  * upline's "Cells in your scope" one route.
  */
+/**
+ * Section 15's people-without-a-Cell attention list (decision 0233).
+ *
+ * **It names no period**, unlike the Cells index beside it: it asks about now, so a
+ * person placed in a Cell last week is already gone from it. A person leading an
+ * ACTIVE Cell is excluded by the server, because a leader holds no membership row and
+ * the literal reading would list every Cell Leader as needing a Cell.
+ */
+export async function peopleWithoutACell(
+  params: { cursor?: string; limit?: number } = {},
+  signal?: AbortSignal,
+): Promise<{ data: PersonWithoutACell[]; next_cursor: string | null }> {
+  const query = new URLSearchParams();
+  if (params.cursor) query.set('cursor', params.cursor);
+  if (params.limit !== undefined) query.set('limit', String(params.limit));
+  const suffix = query.toString();
+
+  return authenticatedRequest<{ data: PersonWithoutACell[]; next_cursor: string | null }>(
+    `/api/v1/cells/people-without-a-cell${suffix === '' ? '' : `?${suffix}`}`,
+    { signal },
+  );
+}
+
 export async function listCells(
   params: { month: string; ledBy?: 'me'; cursor?: string | null },
   signal?: AbortSignal,
@@ -158,6 +181,13 @@ export async function listCells(
   }
 
   return authenticatedRequest<CellIndexPage>(`/api/v1/cells?${query.toString()}`, { signal });
+}
+
+/** A person in scope holding no active Cell membership (decision 0233). */
+export interface PersonWithoutACell {
+  id: string;
+  member_id: string;
+  full_name: string;
 }
 
 /**

@@ -77,10 +77,23 @@ export interface DccMonthlyReport extends MonthlyCommon {
   coverage: DccCoverage;
 }
 
+/**
+ * The scopes a report may be asked for (SKILL.md sections 7, 17 and 20).
+ *
+ * **`NETWORK` is offered by the DCC report and not by the Cell one**, which is the
+ * API's own asymmetry rather than a choice made here: what a `NETWORK`-scoped *Cell*
+ * figure narrows is unstated in section 20 and recorded as open in `CLAUDE.md`, so
+ * that route refuses the scope. `getCellMonthlyReport` therefore takes a narrower
+ * type than this union, and the compiler is what keeps a caller from asking.
+ */
 export type ReportScope =
   | { kind: 'WHOLE_CHURCH' }
+  | { kind: 'NETWORK'; network: ReportNetwork }
   | { kind: 'LEADER'; person_id: string }
   | { kind: 'CELL'; cell_id: string };
+
+/** Section 4: the two Networks, which are the only values the API accepts. */
+export type ReportNetwork = 'MENS' | 'WOMENS';
 
 function query(period: string, scope: ReportScope): string {
   const params = new URLSearchParams({ period, scope: scope.kind });
@@ -90,13 +103,19 @@ function query(period: string, scope: ReportScope): string {
   if (scope.kind === 'CELL') {
     params.set('cell_id', scope.cell_id);
   }
+  // Required where the scope is `NETWORK` and refused under any other, which is the
+  // API's rule rather than a convenience: a request naming both a Network and a
+  // leader is asking for two different things.
+  if (scope.kind === 'NETWORK') {
+    params.set('network', scope.network);
+  }
 
   return params.toString();
 }
 
 export async function getCellMonthlyReport(
   period: string,
-  scope: ReportScope,
+  scope: Exclude<ReportScope, { kind: 'NETWORK' }>,
   signal?: AbortSignal,
 ): Promise<CellMonthlyReport> {
   return authenticatedRequest<CellMonthlyReport>(

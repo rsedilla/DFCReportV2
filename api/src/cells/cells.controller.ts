@@ -1,7 +1,7 @@
 import { Body, Controller, Delete, Get, HttpCode, Param, Post, Put, Query } from '@nestjs/common';
 
 import { RequiresCapability } from '../auth/authorization/authorization.decorators';
-import { type Actor } from '../auth/authorization/authorization.service';
+import { AuthorizationService, type Actor } from '../auth/authorization/authorization.service';
 import { Capability } from '../auth/authorization/capabilities';
 import { CurrentActor } from '../auth/current-actor.decorator';
 import {
@@ -9,7 +9,10 @@ import {
   type CurrentClaim,
 } from '../common/idempotency/current-idempotency.decorator';
 
+import { decodeRosterCursor, encodeRosterCursor } from '../common/roster-cursor';
 import { UuidParamPipe } from '../common/uuid-param.pipe';
+import { PeopleReadService } from '../people/people.read.service';
+import { composeName } from '../people/people.shared';
 
 import { CellsClosureService } from './cells.closure.service';
 import { CellsConfigurationService } from './cells.configuration.service';
@@ -28,6 +31,7 @@ import {
   CreateCellDto,
   CreateLeadershipRequestDto,
   DeclineLeadershipRequestDto,
+  PeopleWithoutACellDto,
   LeadershipRequestQueueDto,
 } from './dto/cells.dto';
 
@@ -52,6 +56,13 @@ export class CellsController {
     private readonly configuration: CellsConfigurationService,
     private readonly closure: CellsClosureService,
     private readonly requests: CellsLeadershipRequestService,
+    // The people-without-a-Cell list is a population of Persons, so the query is
+    // rooted in the module that owns them and reads this module's tables as
+    // anti-joins (section 2). `CellsModule` already imports `PeopleModule`.
+    private readonly people: PeopleReadService,
+    // The scope set is the authorization module's to compute rather than this
+    // controller's to re-derive.
+    private readonly authorization: AuthorizationService,
   ) {}
 
   /**
@@ -159,6 +170,57 @@ export class CellsController {
       limit: query.limit,
       cursor: query.cursor,
     });
+  }
+
+  /**
+   * People in the actor's scope holding no active Cell membership (SKILL.md sections
+   * 10, 15 and 19; decision 0233).
+   *
+   * **Section 15 requires this list and section 10 fills it.** A closure must not
+   * complete without deciding where its members go, and it may leave them unassigned
+   * by explicit choice — this is where those people become visible again rather than
+   * lost.
+   *
+   * **`cell.view_subtree` against the actor, and a Cell capability rather than a
+   * People one.** The rows name Persons, so the sibling list one domain over is
+   * guarded by `people.view_subtree`; the discriminator decision 0233 uses is the
+   * **act**, not the row. What resolves an entry here is `POST /cells/{id}/members`,
+   * so a reader whose grants reach no Cell would be offered a list they cannot act on
+   * — which is what section 15 says an attention list must never carry.
+   *
+   * **An actor target, because there is no Cell to resolve against** — that being the
+   * condition the list describes. `GET /api/v1/cells` above has the same shape for the
+   * same reason (decision 0226), and the narrowing happens in the service.
+   *
+   * **A person leading an `ACTIVE` Cell is excluded** (decision 0233). A leader holds
+   * no membership row, so the literal reading would list every Cell Leader as needing
+   * a Cell.
+   *
+   * **It names no period.** Unlike the index above it asks about now, so it is undated
+   * under section 7's first clause and deliberately outside decision 0231's class.
+   */
+  @Get('people-without-a-cell')
+  @RequiresCapability(Capability.CellViewSubtree, { kind: 'actor' })
+  async peopleWithoutACell(
+    @Query() query: PeopleWithoutACellDto,
+    @CurrentActor() actor: Actor,
+  ): Promise<{ data: Record<string, unknown>[]; next_cursor: string | null }> {
+    const scope = await this.authorization.scopeMembership(actor, Capability.CellViewSubtree);
+
+    const { rows, nextCursor } = await this.people.withoutACell(
+      scope,
+      query.limit ?? 50,
+      decodeRosterCursor(query.cursor),
+    );
+
+    return {
+      data: rows.map((row) => ({
+        id: row.id,
+        member_id: row.member_id,
+        full_name: composeName(row),
+      })),
+      next_cursor: encodeRosterCursor(nextCursor),
+    };
   }
 
   /**

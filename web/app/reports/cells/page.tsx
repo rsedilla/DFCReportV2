@@ -71,7 +71,9 @@ export function CellReport() {
   // 5 permits that for an administrator, and section 20 then places them in no
   // subtree. The label said "Everyone in your scope" while the query asked about
   // one person, which is the disagreement this closes.
-  const scope: ReportScope | null =
+  // Narrower than `ReportScope`: this route refuses `NETWORK`, because what such a
+  // figure narrows is unstated in section 20 and recorded as open. The type says so.
+  const scope: Exclude<ReportScope, { kind: 'NETWORK' }> | null =
     cellId !== ''
       ? { kind: 'CELL', cell_id: cellId }
       : wholeChurch
@@ -82,7 +84,7 @@ export function CellReport() {
 
   const report = useQuery({
     queryKey: ['cell-report', month, scope],
-    queryFn: ({ signal }) => getCellMonthlyReport(month, scope as ReportScope, signal),
+    queryFn: ({ signal }) => getCellMonthlyReport(month, scope as Exclude<ReportScope, { kind: 'NETWORK' }>, signal),
     enabled: scope !== null,
   });
 

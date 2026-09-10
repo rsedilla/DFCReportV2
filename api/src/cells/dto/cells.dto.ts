@@ -498,6 +498,34 @@ export class CellMembersDto {
 }
 
 /**
+ * `GET /api/v1/cells/people-without-a-cell` (SKILL.md sections 10, 15 and 19;
+ * decision 0233).
+ *
+ * **Pagination and nothing else.** The list is defined by a condition on the data and
+ * by the actor's own scope, and it names no period — a month here would make it the
+ * dated read decision 0231 describes, which is exactly what it is not.
+ */
+export class PeopleWithoutACellDto {
+  /**
+   * Opaque, and passed back unmodified (section 22). Decoded by
+   * `decodeRosterCursor`, which refuses text the database cannot store before any
+   * key reaches a comparison.
+   */
+  @IsOptional()
+  @IsString()
+  @Length(1, CURSOR_MAX_LENGTH)
+  cursor?: string;
+
+  /** Section 22: defaults to 50, maximum 200. */
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(200)
+  limit?: number;
+}
+
+/**
  * `GET /api/v1/cells` — the Cells of the actor's scope (SKILL.md section 22; decision
  * 0226).
  */

@@ -113,6 +113,10 @@
       "screen": "web/app/cells/page.tsx"
     },
     {
+      "route": "GET /api/v1/cells/people-without-a-cell",
+      "screen": "web/app/cells/people-without-a-cell/page.tsx"
+    },
+    {
       "route": "GET /api/v1/dcc/events",
       "reason": "The DCC calendar a leader picks an event from (decision 0227). DCC Attendance is the screen in that block which shows it; the roster below is unreachable without it.",
       "screen": "web/app/dcc/page.tsx"

@@ -8,6 +8,7 @@ import {
   mockAccepted,
   mockAwaitingReassignment,
   mockDuplicateRefusal,
+  mockPeopleWithoutACell,
   mockPeople,
   mockPossibleMatches,
   mockSignInRefused,
@@ -327,6 +328,7 @@ const SCANS = [
       await mockCellReport(page);
       await mockDccReport(page);
       await mockAwaitingReassignment(page);
+      await mockPeopleWithoutACell(page);
     },
     async arrange(page: import('@playwright/test').Page) {
       await expect(
@@ -339,6 +341,19 @@ const SCANS = [
       // static and the scope label defaults while `me.data` is undefined — so axe
       // would otherwise scan a page with no rows on it.
       await expect(page.getByRole('link', { name: 'Amihan Bacani' })).toBeVisible();
+    },
+  },
+  {
+    // Section 15's people-without-a-Cell list, which section 10's closure flow fills
+    // (decision 0233).
+    name: 'people without a cell',
+    route: '/cells/people-without-a-cell',
+    async before(page: import('@playwright/test').Page) {
+      await mockSignedIn(page);
+      await mockPeopleWithoutACell(page);
+    },
+    async arrange(page: import('@playwright/test').Page) {
+      await expect(page.getByRole('heading', { name: 'Bituin Carreon' })).toBeVisible();
     },
   },
   {
@@ -657,9 +672,29 @@ const TARGET_SWEEP = [
     // The page heading and the awaiting-a-record heading both render before the
     // queries resolve, so counting there counted six controls on a page that owns
     // more — which is what the floor caught when this section was added.
+    //
+    // **It settles on a row of *People without a Cell*, which is the last section in
+    // the page.** It settled on `Amihan Bacani` — a row of *People needing a leader*,
+    // one section earlier — for as long as that was the last one. Adding a section
+    // after it left the settle resolving before the new queries did, and the count ran
+    // two targets short: green on a fast machine and red in CI, which is the trap this
+    // comment already records three earlier encounters with. The rule it states was
+    // right and the name under it went stale, so moving a section means moving this.
     settleRole: 'link' as const,
-    settle: 'Amihan Bacani',
-    minimum: 12,
+    settle: 'Bituin Carreon',
+    // Fifteen: the twelve above plus the two people without a Cell and the link into
+    // that list, which section 15's second attention list contributes.
+    minimum: 15,
+  },
+  {
+    // The back link and one link per person: three, with no "Show more" for this
+    // fixture. Settled on a person rather than the page heading, which renders before
+    // the list arrives.
+    name: 'people without a cell',
+    route: '/cells/people-without-a-cell',
+    settleRole: 'heading' as const,
+    settle: 'Bituin Carreon',
+    minimum: 3,
   },
   {
     // The back link and one link per person, which is the reassignment section 19
@@ -844,6 +879,7 @@ test('every interactive target meets the 24px minimum', async ({ page }) => {
   await mockCoverageGaps(page);
   await mockPastoralPath(page);
   await mockAwaitingReassignment(page);
+  await mockPeopleWithoutACell(page);
 
   for (const entry of TARGET_SWEEP) {
     const { route, settle, minimum } = entry;

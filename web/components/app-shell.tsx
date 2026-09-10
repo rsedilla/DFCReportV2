@@ -1,11 +1,20 @@
 'use client';
 
+import { useQuery } from '@tanstack/react-query';
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
 import type { ReactNode } from 'react';
 
 import { RequireSession } from '@/components/require-session';
+import { getMe } from '@/lib/me';
 import { cn } from '@/lib/utils';
+
+/**
+ * Where My Network sits: directly after People, which is section 19's order —
+ * Dashboard, My People, My Network — and is also the pairing a reader expects,
+ * since both are about people rather than about Cells or figures.
+ */
+const MY_NETWORK_AFTER = 2;
 
 /**
  * The frame every signed-in screen sits in.
@@ -18,9 +27,24 @@ import { cn } from '@/lib/utils';
  *
  * **It lists only destinations that exist.** Section 19 sets out the eventual
  * Leader sidebar — Dashboard, My People, My Network, DCC Attendance, Cell
- * Attendance, Cell Leaders, Network Summary, Search — and most of those are
- * Stage 3 and later. Rendering them now, disabled or dead, teaches people that
- * the navigation lies, and that outlasts the stubs. It grows as routes arrive.
+ * Attendance, Cell Leaders, Network Summary, Search — and most of those were
+ * Stage 3 and later. Rendering them before their route exists, disabled or dead,
+ * teaches people that the navigation lies, and that outlasts the stubs. It grows
+ * as routes arrive.
+ *
+ * **My Network arrived late by that rule's own terms**, and is added here rather
+ * than left: `/people/[id]/network` has existed since the screens block, so the
+ * entry has been due since then and nothing recorded it as owed. It is the one
+ * link that needs the viewer's own identity, which is why it is built from
+ * `getMe` rather than sitting in the static list beside the others.
+ *
+ * **Search is not a separate entry and is not missing.** Section 19 lists it, and
+ * People *is* the search: the screen's whole content is a search field over the
+ * church-wide directory (section 8). A second entry pointing at the same screen
+ * would be navigation describing itself twice.
+ *
+ * **Network Summary stays absent**, deferred past the pilot with the five views
+ * behind it, which `docs/ROADMAP.md` records.
  *
  * **Dashboard is first, which section 19 requires**: it is "the first item in the
  * sidebar and the screen every user lands on". *This paragraph said there was
@@ -75,6 +99,24 @@ export const PAGE_WIDTH = {
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
 
+  // **Shares the cache with every screen that already asks.** The key is the one
+  // `getMe` is queried under elsewhere, so this adds a cache read rather than a
+  // request per page.
+  const me = useQuery({ queryKey: ['me'], queryFn: ({ signal }) => getMe(signal) });
+
+  // **My Network appears once the viewer's own identity is known, and not before.**
+  // It is the only entry whose destination depends on who is looking, and the rule
+  // above is that this list holds destinations that exist — a link to
+  // `/people/undefined/network` exists in the same sense a dead one does.
+  const links =
+    me.data === undefined
+      ? LINKS
+      : [
+          ...LINKS.slice(0, MY_NETWORK_AFTER),
+          { href: `/people/${me.data.person_id}/network`, label: 'My Network' },
+          ...LINKS.slice(MY_NETWORK_AFTER),
+        ];
+
   return (
     <RequireSession>
       <div className="min-h-dvh">
@@ -83,7 +125,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             aria-label="Main"
             className="mx-auto flex max-w-5xl flex-wrap items-center gap-1 px-5 py-2"
           >
-            {LINKS.map((link) => {
+            {links.map((link) => {
               const active = pathname === link.href || pathname.startsWith(`${link.href}/`);
 
               return (

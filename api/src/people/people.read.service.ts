@@ -5,6 +5,7 @@ import { AuthorizationService, type Actor } from '../auth/authorization/authoriz
 import { Capability } from '../auth/authorization/capabilities';
 import { HierarchyService } from '../hierarchy/hierarchy.service';
 import { NetworksService } from '../networks/networks.service';
+import { type RosterCursor } from '../common/roster-cursor';
 import { DATABASE, type Db } from '../database/database.module';
 
 import { normalizeName } from './duplicate-matching';
@@ -617,6 +618,182 @@ export class PeopleReadService {
       nextCursor:
         found.length > limit && last !== undefined
           ? { lastName: last.last_name, firstName: last.first_name, id: last.id }
+          : null,
+    };
+  }
+
+  /**
+   * People in scope holding no active Cell membership (SKILL.md sections 10, 15 and
+   * 19; decision 0233).
+   *
+   * **Section 15 requires the list and section 10 fills it.** A closure "must not
+   * complete without the decision being made", members may be left unassigned by
+   * explicit choice, and the people left that way "appear in the attention list in
+   * Section 15". This is that list.
+   *
+   * **A person leading an `ACTIVE` Cell is excluded, and that is not a detail.** A
+   * leader holds no `cell_memberships` row, so the literal reading of section 15
+   * places every Cell Leader in the church on a list of people needing a Cell —
+   * alphabetically among their own downline. Reproduced against the demo database
+   * before the exclusion was written. It keys on **leading**, not on holding any Cell
+   * relationship, so a leader whose Cell has closed reappears, which is right.
+   *
+   * *Whether such a person is a **member** of their own Cell is a wider question with
+   * consequences in section 12, and decision 0233 deliberately does not settle it.
+   * This exclusion is correct under either answer.*
+   *
+   * **Archived and merged-away people are excluded** on the sibling list's ground
+   * (decision 0232, and decision 0229 before it): adding either to a Cell is refused,
+   * so the entry would carry no act that resolves it.
+   *
+   * **Undated.** It asks about now — somebody placed last week needs no action today —
+   * so it names no period, which is what keeps it out of decision 0231's dated class.
+   *
+   * **Ordered by name**, never by how long somebody has been without a Cell (sections
+   * 13, 15 and 17). That ordering would rank the leaders who have not yet placed
+   * people rather than the people.
+   *
+   * **Rooted in `persons`, which this module owns, and reading three tables `cells`
+   * owns as anti-joins** — `cell_memberships`, `cell_leaderships` and `cells` itself.
+   *
+   * **Section 2's exemption names this join** (decision 0234). The exemption is "a read
+   * joined onto a query rooted in a table the reading module owns", which this is, and
+   * section 2 now names it. Widening the list took a ruling with all three of its legs.
+   *
+   * *No count is stated here. A first version called this "the third instance", which was
+   * false of the tree — `cells` joins `persons` in two more places — and whether section
+   * 2's enumeration is of instances or of argued instances is a Stop Condition.*
+   *
+   * **The two existing ports were never counter-examples**, which is what made the
+   * amendment the principled answer rather than the convenient one — and the
+   * discriminator is the **call site**. `NetworksService` asks `openLeadershipsOf` as a
+   * precondition check keyed by a `personId` it already holds, and `CapabilityGuard` asks
+   * `leaderForScope` to resolve one Cell. Neither read is joined onto anything, so neither
+   * is a join onto a query rooted in the reading module's own table. They instance section
+   * 2's main rule, inverted because the direction would be a cycle, and never its
+   * exemption.
+   *
+   * *A first version argued this from where each port's implementation roots, which is
+   * true of any port implementation — the one this method was offered included — and so
+   * distinguished nothing.*
+   *
+   * *A first version of this docblock claimed a port would return a short page. It is
+   * withdrawn: a port returning the placed set puts the filter back in the `WHERE` clause
+   * as a `NOT IN`, so the page is full. The scope filter below is that shape already.*
+   *
+   * *`awaitingReassignment` above is **not** precedent for this and was cited as such in
+   * error: it selects from `pastoral_assignments`, which `hierarchy` owns, and reads
+   * `accounts` and `account_roles`, which `auth` owns, so it satisfies neither the
+   * exemption's premise nor any other clause of section 2. **That is a Stop Condition in
+   * its own right and `CLAUDE.md` carries it**; decision 0234 settles this method and
+   * deliberately does not reach that one.*
+   */
+  async withoutACell(
+    scope: { kind: 'WHOLE_CHURCH' } | { kind: 'PERSONS'; personIds: ReadonlySet<string> },
+    limit: number,
+    cursor: RosterCursor | null = null,
+  ): Promise<{
+    rows: {
+      id: string;
+      member_id: string;
+      first_name: string;
+      middle_name: string | null;
+      last_name: string;
+    }[];
+    nextCursor: RosterCursor | null;
+  }> {
+    // An empty scope selects nobody, and `IN ()` is not valid SQL.
+    if (scope.kind === 'PERSONS' && scope.personIds.size === 0) {
+      return { rows: [], nextCursor: null };
+    }
+
+    let query = this.db
+      .selectFrom('persons as person')
+      .select([
+        'person.id as id',
+        'person.member_id as member_id',
+        'person.first_name as first_name',
+        'person.middle_name as middle_name',
+        'person.last_name as last_name',
+      ])
+      .where('person.merged_into_id', 'is', null)
+      // No open membership: the condition section 15 states.
+      .where((eb) =>
+        eb.not(
+          eb.exists(
+            eb
+              .selectFrom('cell_memberships as membership')
+              .select(sql`1`.as('one'))
+              .whereRef('membership.person_id', '=', 'person.id')
+              .where('membership.ended_at', 'is', null),
+          ),
+        ),
+      )
+      // Leading an ACTIVE Cell counts as having one (decision 0233).
+      .where((eb) =>
+        eb.not(
+          eb.exists(
+            eb
+              .selectFrom('cell_leaderships as leadership')
+              .innerJoin('cells as led', 'led.id', 'leadership.cell_id')
+              .select(sql`1`.as('one'))
+              .whereRef('leadership.person_id', '=', 'person.id')
+              .where('leadership.ended_at', 'is', null)
+              .where('led.state', '=', 'ACTIVE'),
+          ),
+        ),
+      )
+      // An archived Person cannot be added to a Cell, so no act resolves the entry.
+      .where((eb) =>
+        eb.not(
+          eb.exists(
+            eb
+              .selectFrom('person_lifecycle as life')
+              .select(sql`1`.as('one'))
+              .whereRef('life.person_id', '=', 'person.id')
+              .where('life.ended_at', 'is', null)
+              .where('life.state', '=', 'ARCHIVED'),
+          ),
+        ),
+      )
+      .orderBy('person.last_name')
+      .orderBy('person.first_name')
+      // The Member ID rather than the identifier, so this reuses `RosterCursor`
+      // instead of declaring a fourth cursor shape. It is unique and not null, so the
+      // three keys are a total order.
+      .orderBy('person.member_id')
+      .limit(limit + 1);
+
+    if (scope.kind === 'PERSONS') {
+      query = query.where('person.id', 'in', [...scope.personIds]);
+    }
+
+    if (cursor !== null) {
+      query = query.where((eb) =>
+        eb.or([
+          eb('person.last_name', '>', cursor.lastName),
+          eb.and([
+            eb('person.last_name', '=', cursor.lastName),
+            eb('person.first_name', '>', cursor.firstName),
+          ]),
+          eb.and([
+            eb('person.last_name', '=', cursor.lastName),
+            eb('person.first_name', '=', cursor.firstName),
+            eb('person.member_id', '>', cursor.memberId),
+          ]),
+        ]),
+      );
+    }
+
+    const found = await query.execute();
+    const rows = found.slice(0, limit);
+    const last = rows[rows.length - 1];
+
+    return {
+      rows,
+      nextCursor:
+        found.length > limit && last !== undefined
+          ? { lastName: last.last_name, firstName: last.first_name, memberId: last.member_id }
           : null,
     };
   }
