@@ -81,10 +81,17 @@ the undated class deliberately and "whether the route it guards reads or writes"
 routes are meant to resolve differently, so a divergence between them is not evidence that
 either is wrong.
 
-**The gap it leaves is genuine, is new, and is recorded as a question of its own.** Once the
-route is dated, a leader who handed a Cell over will see it listed for a month they oversaw,
-and `GET /api/v1/cells/{id}/meetings` will refuse them: that route resolves through the
-Cell's **current** leader, so the row links to a refusal.
+**The gap it leaves is genuine, is new, is wider than one route, and is recorded as a
+question of its own.** Once the route is dated, a leader who handed a Cell over will see it
+listed for a month they oversaw, and **every** detail route under `/cells/{id}` will refuse
+them — all eight resolve through the Cell's **current** leader, so the row links to a
+subtree that is closed to them end to end.
+
+**One of those routes refuses under the same capability the index is granted on.**
+`GET /api/v1/cells/{id}/members` carries `cell.view_subtree`, exactly as the index does, and
+is undated only because it names no period. So this is not a case of two capability classes
+resolving differently by design, and the paragraph above must not be read as covering it: an
+actor holding one capability is offered a row by it and refused the roster behind it.
 
 **It is not the open question about Section 7's closed-Cell fallback**, and parking it there
 would have hidden it. That question is about a **closed** Cell and about a fallback firing;

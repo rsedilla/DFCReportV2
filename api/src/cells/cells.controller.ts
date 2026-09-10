@@ -116,9 +116,10 @@ export class CellsController {
    * which is not what section 7's text says, and which decision 0231 has now settled
    * against.** Section 7 makes this one of the three capabilities resolving "as of the
    * period being viewed" and says a viewing read "asking about a past month" owes a
-   * resolution as of that period. This route takes a required `month`. What section 7 has
-   * never contemplated is a *collection* whose period dates the figure on each row while
-   * the membership of the list is a separate question — and section 3 draws exactly that
+   * resolution as of that period. This route takes a required `month`. What section 7 had not contemplated until
+   * decision 0231 is a *collection* whose period dates the figure on each row while
+   * the membership of the list is a separate question — it now contemplates exactly that
+   * and rules the membership is **not** separate — and section 3 draws exactly that
    * line elsewhere, between period-based figures and "current-state inventory metrics",
    * among which it names Cell Groups.
    *
