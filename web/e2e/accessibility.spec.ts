@@ -18,6 +18,8 @@ import {
   mockCellsEmpty,
   mockDccEvents,
   mockCellMembers,
+  mockCoverageGaps,
+  mockPastoralPath,
   mockCellMembersEmpty,
   mockCellReport,
   mockCellReportForOneCell,
@@ -314,6 +316,54 @@ const SCANS = [
     },
   },
   {
+    // Where a leader lands: outstanding work above the numbers (section 19).
+    name: 'dashboard',
+    route: '/dashboard',
+    async before(page: import('@playwright/test').Page) {
+      await mockSignedIn(page);
+      await mockCells(page);
+      await mockCellMeetings(page);
+      await mockCellReport(page);
+      await mockDccReport(page);
+    },
+    async arrange(page: import('@playwright/test').Page) {
+      await expect(
+        page.getByRole('heading', { name: 'Meetings awaiting a record' }),
+      ).toBeVisible();
+      // A tile carries its scope and its period, which section 19 requires of
+      // every one of them.
+      await expect(page.getByText(/People you oversee ·/).first()).toBeVisible();
+    },
+  },
+  {
+    // The drill-down without which a coverage figure is a dashboard of counts.
+    name: 'dcc coverage gaps',
+    route: '/dcc/3f1b7c6e-0000-4000-8000-000000000501/gaps',
+    pattern: '/dcc/[id]/gaps',
+    async before(page: import('@playwright/test').Page) {
+      await mockSignedIn(page);
+      await mockCoverageGaps(page);
+    },
+    async arrange(page: import('@playwright/test').Page) {
+      await expect(page.getByRole('heading', { name: 'Consuelo Bautista' })).toBeVisible();
+    },
+  },
+  {
+    // The chain from the Network root down, with the root named in words.
+    name: 'pastoral network',
+    route: '/people/3f1b7c6e-0000-4000-8000-000000000601/network',
+    pattern: '/people/[id]/network',
+    async before(page: import('@playwright/test').Page) {
+      await mockSignedIn(page);
+      await mockPeople(page);
+      await mockPastoralPath(page);
+    },
+    async arrange(page: import('@playwright/test').Page) {
+      await expect(page.getByRole('heading', { name: 'Corazon Villanueva' })).toBeVisible();
+      await expect(page.getByText('Network root')).toBeVisible();
+    },
+  },
+  {
     // Two members, each removable behind a confirmation, and the picker above them.
     name: 'cell members',
     route: '/cells/3f1b7c6e-0000-4000-8000-000000000101/members',
@@ -321,6 +371,8 @@ const SCANS = [
     async before(page: import('@playwright/test').Page) {
       await mockSignedIn(page);
       await mockCellMembers(page);
+  await mockCoverageGaps(page);
+  await mockPastoralPath(page);
     },
     async arrange(page: import('@playwright/test').Page) {
       await expect(page.getByRole('heading', { name: 'Current members' })).toBeVisible();
@@ -572,6 +624,31 @@ const TARGET_SWEEP = [
     minimum: 8,
   },
   {
+    // Six tile links, two awaiting-a-record links and one attention link.
+    name: 'dashboard',
+    route: '/dashboard',
+    settleRole: 'heading' as const,
+    settle: 'Meetings awaiting a record',
+    minimum: 6,
+  },
+  {
+    // The back link alone: the list is names, and naming a leader is the whole of
+    // what decision 0228 permits here.
+    name: 'dcc coverage gaps',
+    route: '/dcc/3f1b7c6e-0000-4000-8000-000000000501/gaps',
+    settleRole: 'heading' as const,
+    settle: 'Consuelo Bautista',
+    minimum: 1,
+  },
+  {
+    // Back link, three people in the chain, and the picker's two controls.
+    name: 'pastoral network',
+    route: '/people/3f1b7c6e-0000-4000-8000-000000000601/network',
+    settleRole: 'heading' as const,
+    settle: 'Corazon Villanueva',
+    minimum: 6,
+  },
+  {
     // The picker's search box and its Find button, plus a Remove per member.
     // Settled on a member's own heading, not on "Current members", which renders
     // from the page rather than from the data — so the count would run before the
@@ -721,6 +798,8 @@ test('every interactive target meets the 24px minimum', async ({ page }) => {
   await mockCellReport(page);
   await mockDccReport(page);
   await mockCellMembers(page);
+  await mockCoverageGaps(page);
+  await mockPastoralPath(page);
 
   for (const entry of TARGET_SWEEP) {
     const { route, settle, minimum } = entry;

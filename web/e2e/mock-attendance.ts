@@ -393,3 +393,72 @@ export async function mockCellMembersEmpty(page: Page): Promise<void> {
     route.fulfill(json({ data: [], next_cursor: null })),
   );
 }
+
+/** Who still owes a record for one Sunday (decision 0228). */
+export async function mockCoverageGaps(page: Page): Promise<void> {
+  await page.route('**/api/v1/dcc/events/*/coverage-gaps*', (route) =>
+    route.fulfill(
+      json({
+        event: {
+          id: '3f1b7c6e-0000-4000-8000-000000000501',
+          event_date: '2026-06-07',
+          recordable: true,
+          not_recordable_reason: null,
+          removed: false,
+          removal_reason: null,
+          coverage: { met: 5, owed: 8 },
+        },
+        data: [
+          {
+            person_id: '3f1b7c6e-0000-4000-8000-000000000801',
+            member_id: 'M-00901',
+            full_name: 'Consuelo Bautista',
+          },
+          {
+            person_id: '3f1b7c6e-0000-4000-8000-000000000802',
+            member_id: 'M-00902',
+            full_name: 'Ferdinand Salazar',
+          },
+        ],
+        next_cursor: null,
+      }),
+    ),
+  );
+}
+
+/**
+ * A pastoral path that reaches a Network root.
+ *
+ * The root flag is on the first entry only, which is what decision 0131 makes the
+ * chain say about itself: a path that stopped short would otherwise read the same
+ * as one that reached the top.
+ */
+export async function mockPastoralPath(page: Page): Promise<void> {
+  await page.route('**/api/v1/people/*/pastoral-path*', (route) =>
+    route.fulfill(
+      json({
+        data: [
+          {
+            id: '3f1b7c6e-0000-4000-8000-000000000901',
+            member_id: 'M-00001',
+            full_name: 'Corazon Villanueva',
+            network_root: true,
+          },
+          {
+            id: '3f1b7c6e-0000-4000-8000-000000000902',
+            member_id: 'M-00044',
+            full_name: 'Teofilo Ramos',
+            network_root: false,
+          },
+          {
+            id: '3f1b7c6e-0000-4000-8000-000000000601',
+            member_id: 'M-00701',
+            full_name: 'Rosalinda Ocampo',
+            network_root: false,
+          },
+        ],
+        next_cursor: null,
+      }),
+    ),
+  );
+}

@@ -133,3 +133,39 @@ export async function submitDccAttendance(
     idempotencyKey,
   });
 }
+
+/** One leader who owes a record for an event and has not filed one (decision 0228). */
+export interface CoverageGap {
+  person_id: string;
+  member_id: string;
+  full_name: string;
+}
+
+export interface CoverageGaps {
+  event: DccEvent;
+  data: CoverageGap[];
+  next_cursor: string | null;
+}
+
+/**
+ * Who still owes a record for one event, within the actor's scope.
+ *
+ * **An attention list on section 15's terms, which is what makes naming leaders
+ * defensible rather than a leaderboard**: filtered to the actor's own scope,
+ * ordered by name, never by how far behind anybody is, and carrying no grade.
+ * Section 19 is why it exists — "a dashboard of counts tells a leader nothing to
+ * act on" — and section 14 is the act it enables, since an upline may record on
+ * behalf of a downline leader within their subtree.
+ *
+ * Decision 0228 makes the **scope** the whole of the constraint: the same data
+ * shown church-wide and ordered by how many records are missing is the leaderboard
+ * section 13 exists to prevent.
+ */
+export async function getCoverageGaps(
+  eventId: string,
+  signal?: AbortSignal,
+): Promise<CoverageGaps> {
+  return authenticatedRequest<CoverageGaps>(`/api/v1/dcc/events/${eventId}/coverage-gaps`, {
+    signal,
+  });
+}

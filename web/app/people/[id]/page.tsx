@@ -80,9 +80,12 @@ function PersonDetail() {
           <h1 className="mt-6 text-2xl font-semibold tracking-tight">{person.data.full_name}</h1>
           <p className="text-muted mt-1 font-mono text-sm">{person.data.member_id}</p>
 
-          <div className="mt-6">
+          <div className="mt-6 flex flex-wrap gap-3">
             <Link href={`/people/${id}/edit`} className={cn(buttonClasses('secondary'))}>
               Edit details
+            </Link>
+            <Link href={`/people/${id}/network`} className={cn(buttonClasses('secondary'))}>
+              Pastoral network
             </Link>
           </div>
 

@@ -118,6 +118,15 @@ function EventRow({ event }: { event: DccEvent }) {
           No service was held.
           {event.removal_reason ? ` ${event.removal_reason}` : ''}
         </p>
+      ) : event.coverage && event.coverage.met < event.coverage.owed ? (
+        <p className="mt-2">
+          <Link
+            href={`/dcc/${event.id}/gaps`}
+            className="focus-visible:outline-accent inline-flex min-h-6 items-center rounded-sm text-sm underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2"
+          >
+            See who still has to record
+          </Link>
+        </p>
       ) : event.not_recordable_reason ? (
         <p className="text-muted mt-2 text-sm">
           {notRecordableLabel(event.not_recordable_reason)}.
