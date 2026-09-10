@@ -122,9 +122,14 @@ names.**
 
 *It is not everybody, and the first version of this ruling said it was.* `subtreeOf` seeds
 at the actor itself, so the departed leader still sees their own former disciples and the
-person sees themselves; and a `NETWORK` grant of `people.view_subtree` sees the **whole**
-list, because `scopeMembership` resolves that scope by enumerating Network membership rather
-than by walking the tree. Reproduced against the database in all three directions.
+person sees themselves; and a `NETWORK` grant of `people.view_subtree` sees the rows of
+**its own Network**, because `scopeMembership` resolves that scope by enumerating Network
+membership rather than by walking the tree. Reproduced against the database in all three
+directions.
+
+*A Network is half the church, not the list — a gap in the other Network is invisible to
+such a reader, and whether they may **act** on the rows they do see is unsettled: §5's "Who
+may perform it" does not name them. Both are recorded in `CLAUDE.md`.*
 
 Reproduced against the database rather than reasoned about, and pinned as the behaviour that
 ships — `awaiting-reassignment.e2e.spec.ts` asserts the empty answer for the leader who is

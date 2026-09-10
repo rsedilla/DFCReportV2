@@ -147,15 +147,29 @@ function Dashboard() {
     (cell) => cell.coverage.recorded < cell.coverage.scheduled,
   );
 
+  // **Every query on this page, not the three it started with.** Section 19 puts
+  // outstanding work above the figures precisely so a leader can trust it, and a
+  // failed load that renders as an empty list says "nothing to do" on this screen's
+  // authority. `meetings` is the one that matters most: without it a failed
+  // `listCellMeetings` yields an empty `awaiting` and prints "Nothing outstanding
+  // for your own Cells this month", which is the opposite of the truth.
+  const meetingsFailed = meetings.find((query) => query.isError);
+
   const failure = mine.isError
     ? describeFailure(mine.error)
-    : scoped.isError
-      ? describeFailure(scoped.error)
-      : unplaced.isError
-        ? describeFailure(unplaced.error)
-        : me.isError
-          ? describeFailure(me.error)
-          : null;
+    : meetingsFailed
+      ? describeFailure(meetingsFailed.error)
+      : scoped.isError
+        ? describeFailure(scoped.error)
+        : unplaced.isError
+          ? describeFailure(unplaced.error)
+          : cellFigures.isError
+            ? describeFailure(cellFigures.error)
+            : dccFigures.isError
+              ? describeFailure(dccFigures.error)
+              : me.isError
+                ? describeFailure(me.error)
+                : null;
 
   return (
     <main id="main" className={PAGE_WIDTH.INDEX}>
@@ -271,16 +285,24 @@ function Dashboard() {
                 </li>
               ))}
             </ul>
-            {unplaced.data.data.length > UNPLACED_TILE || unplaced.data.next_cursor !== null ? (
-              <p className="mt-4">
-                <Link
-                  href="/people/awaiting-reassignment"
-                  className="focus-visible:outline-accent inline-flex min-h-6 items-center rounded-sm text-sm underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2"
-                >
-                  See everyone waiting for a leader
-                </Link>
-              </p>
-            ) : null}
+            {/*
+              **Unconditional, and it was not.** The link was shown only when the tile
+              overflowed, so with one to five people waiting — the ordinary case — the
+              screen had no route into it from anywhere in the application. The
+              coverage ledger cannot see that: it asks whether every route has a
+              screen and never whether every screen can be reached, which is decision
+              0213's own blind spot one direction over.
+            */}
+            <p className="mt-4">
+              <Link
+                href="/people/awaiting-reassignment"
+                className="focus-visible:outline-accent inline-flex min-h-6 items-center rounded-sm text-sm underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2"
+              >
+                {unplaced.data.data.length > UNPLACED_TILE || unplaced.data.next_cursor !== null
+                  ? 'See everyone waiting for a leader'
+                  : 'Open the full list'}
+              </Link>
+            </p>
           </>
         ) : null}
       </section>

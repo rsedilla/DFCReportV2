@@ -513,11 +513,17 @@ export class PeopleReadService {
       ])
       .where('edge.ended_at', 'is', null)
       // A merged-away Person is not listed: the survivor carries the identity
-      // (section 3, Person Merge). **The same is asked of the leader**, so
-      // `former_leader` cannot name an absorbed record while the identity sits on
-      // somebody else.
+      // (section 3, Person Merge).
+      //
+      // **The same is deliberately not asked of the leader.** A filter there was
+      // written and withdrawn: section 3 never rewrites a pastoral edge, so a
+      // disciple whose leader was absorbed still has no reachable leader and is
+      // exactly the gap this list exists to surface — dropping their row would hide
+      // it. Whether `former_leader` should then name the absorbed record or the
+      // survivor is Person Merge's to answer for every surface at once, which
+      // `CLAUDE.md` records, and is not this endpoint's to decide. Unreachable
+      // today: nothing writes `merged_into_id`.
       .where('person.merged_into_id', 'is', null)
-      .where('leader.merged_into_id', 'is', null)
       // **An archived Person is not listed, because section 5 refuses to reassign
       // one.** Section 19 asks each entry to carry the action that resolves it, and
       // decision 0229 states the consequence for the sibling list: an entry no act
@@ -551,8 +557,16 @@ export class PeopleReadService {
           ),
         ),
       )
-      // Section 5's remedy: an administrator outside the pastoral structure is in
-      // the correct and permanent state, so their disciples are not a gap.
+      // Section 5's remedy, applied one relationship over: an administrator outside
+      // the pastoral structure is in the correct and permanent state, so their
+      // disciples are not waiting for a reassignment.
+      //
+      // **A live `ADMIN` role is a proxy for that state and not the state itself**,
+      // which is stated rather than assumed. Nothing forbids a leader inside the tree
+      // from also holding `ADMIN`, and if such a leader's own assignment ends, this
+      // exclusion takes their whole disciple set off the list. Section 5 states the
+      // remedy for the neighbouring list, where the Person and the state coincide;
+      // here they need not, and `CLAUDE.md` carries that as open.
       .where((eb) =>
         eb.not(
           eb.exists(
