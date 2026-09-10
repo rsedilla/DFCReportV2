@@ -50,8 +50,13 @@ the current-state rule does. What this ruling fixes is the first row only.
 parties.** Every other target in this section resolves to one leader at one moment and asks
 whether the actor's subtree contains them. A union would be a third rule, belonging to
 neither of the two Section 7 defines, and it would widen visibility past what either instant
-authorises. Decision 0220 refused a comparable widening for a report, on the ground that a
-Cell's report would become partly readable; the same argument reaches a list.
+authorises.
+
+*Decision 0220's refusal is deliberately **not** cited for this. What it rejected was
+**per-meeting** resolution, on the ground that a Cell's report would become **partly**
+readable — and a union does not make a list partly readable, it makes every row readable by
+more people. The bullet this ruling retires said as much, that 0220 rejected that
+alternative "for a different reason". The containment argument above stands without it.*
 
 **Because the instant already exists and is already load-bearing.** Decision 0218 settled
 that a report resolves at the period's final millisecond whether the period is open or
@@ -76,12 +81,19 @@ the undated class deliberately and "whether the route it guards reads or writes"
 routes are meant to resolve differently, so a divergence between them is not evidence that
 either is wrong.
 
-**The gap it leaves is genuine and belongs to a question already open.** Whether Section 7's
-closed-Cell fallback survives for a capability that resolves as a write is recorded in
-`CLAUDE.md`, and `GET /api/v1/cells/{id}/meetings` is named there as the one live route the
-tension still reaches. This ruling does not settle it and does not lean on it. Whoever
-settles it should know that the index now hands that route a Cell the actor held in a past
-period, which is the case that makes the two rules visibly disagree on one screen.
+**The gap it leaves is genuine, is new, and is recorded as a question of its own.** Once the
+route is dated, a leader who handed a Cell over will see it listed for a month they oversaw,
+and `GET /api/v1/cells/{id}/meetings` will refuse them: that route resolves through the
+Cell's **current** leader, so the row links to a refusal.
+
+**It is not the open question about Section 7's closed-Cell fallback**, and parking it there
+would have hidden it. That question is about a **closed** Cell and about a fallback firing;
+this is an **ACTIVE** Cell where no fallback fires at all and the plain current-leader
+resolution simply names somebody else. `CLAUDE.md` carries it as a bullet of its own.
+
+This ruling states the gap and does not settle it. Closing it means either dating the
+meetings route, which the rule above declines to do because its capability is a recording
+one, or accepting that an index row may link to a refusal and saying so on the screen.
 
 ## What is not changed
 

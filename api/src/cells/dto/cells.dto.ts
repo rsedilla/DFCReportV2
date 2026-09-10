@@ -512,8 +512,8 @@ export class CellIndexDto {
    * the month still open for records and the month the calendar is in — and a client that
    * meant March would silently be answered April.
    *
-   * **It dates the figures on each row and not the rows themselves, and whether that is
-   * right is recorded as open in `CLAUDE.md`.** Section 7 owes a dated resolution to a
+   * **It dates the figures on each row and not the rows themselves, which decision 0231
+   * settled against on 2026-09-10; the route has not yet been changed.** Section 7 owes a dated resolution to a
    * viewing read asking about a past period, and this route carries a viewing capability
    * and names a period — so the reading shipped here is the one the controller's docblock
    * argues for on reachability grounds, not the one section 7's text states.

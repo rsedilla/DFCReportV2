@@ -64,10 +64,17 @@ somebody; the fallback never arises.
 **The instant does move the month a handover falls in, and that is worth stating separately**
 — it is decision 0218's doing rather than this ruling's. That month resolves through the
 **incoming** leader while holding rows the outgoing leader recorded, which is the mirror of the
-closure month this ruling turns on. What it decides is left open in `CLAUDE.md` rather than
+closure month this ruling turns on. What it decides was left open in `CLAUDE.md` rather than
 settled here, and §13's own answer one unit down — decision 0187, which gives a meeting on the
-handover *day* to the **outgoing** leader — is the reasoning nothing has carried up to a
+handover *day* to the **outgoing** leader — is the reasoning nothing had carried up to a
 period.
+
+*Settled on 2026-09-10 as decision 0231, which keeps this ruling's answer and supplies the
+reasoning: 0187 turns on attribution not depending on when a record was entered, and a period
+has no date of its own but two ends, so choosing its final instant is a choice of end rather
+than of clerk. That ruling took this question together with the same question asked of
+`GET /api/v1/cells`, on the ground that one shape asked of two routes should not end up under
+two rules.*
 
 **Who reads it is a containment rule, and is stated only as one.** §7 resolves a `CELL`
 selector to a Person, and a subtree grant asks whether that Person is within the actor's
