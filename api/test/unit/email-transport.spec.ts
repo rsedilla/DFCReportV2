@@ -49,7 +49,7 @@ describe('the email transport (section 6)', () => {
   });
 
   describe('the outbox', () => {
-    it('carries the directory it was given', () => {
+    it('binds where NODE_ENV is explicitly development, and carries its directory', () => {
       set('NODE_ENV', 'development');
       set('EMAIL_TRANSPORT', 'outbox');
       set('EMAIL_OUTBOX_DIR', '/tmp/outbox');
@@ -68,23 +68,54 @@ describe('the email transport (section 6)', () => {
       expect(() => loadConfig()).toThrow(/EMAIL_OUTBOX_DIR is required/);
     });
 
-    // The load-bearing half of the ruling. Not "does not deliver" — refuses to start.
-    it('stops the process in production, even with a directory configured', () => {
-      set('NODE_ENV', 'production');
+    /**
+     * The load-bearing half of the ruling, and the case a first version got wrong.
+     *
+     * `NODE_ENV` is optional and the resolved value *defaults* to `development`, so a
+     * refusal written against that value treats an absent variable as a developer's
+     * laptop. `npm run start:prod` sets nothing and `dotenv` is loaded in every
+     * environment, so a production host with `EMAIL_TRANSPORT=outbox` in its `.env` and
+     * no exported `NODE_ENV` wrote credentials to disk. Every row below except the last
+     * must refuse.
+     */
+    it.each([
+      ['unset', undefined],
+      ['test', 'test'],
+      ['production', 'production'],
+    ])('refuses to start when NODE_ENV is %s, even with a directory configured', (_l, value) => {
+      set('NODE_ENV', value);
       set('EMAIL_TRANSPORT', 'outbox');
       set('EMAIL_OUTBOX_DIR', '/tmp/outbox');
 
-      expect(() => loadConfig()).toThrow(/must never run in production/);
+      expect(() => loadConfig()).toThrow(/binds only where NODE_ENV is explicitly "development"/);
+    });
+
+    /**
+     * These three refuse too, and it is the **earlier** guard that catches them —
+     * `NODE_ENV` itself is validated against the three names before any transport is
+     * chosen. The property that matters is that the process stops, and both rows are
+     * asserted rather than one being written as though it were the other.
+     */
+    it.each([
+      ['blank', ''],
+      ['the wrong case', 'Development'],
+      ['padded', ' development '],
+    ])('refuses to start when NODE_ENV is %s, at the NODE_ENV guard', (_l, value) => {
+      set('NODE_ENV', value);
+      set('EMAIL_TRANSPORT', 'outbox');
+      set('EMAIL_OUTBOX_DIR', '/tmp/outbox');
+
+      expect(() => loadConfig()).toThrow(/NODE_ENV must be development, test or production/);
     });
 
     // The refusal is about the environment, so it must not be escapable by omitting the
-    // directory and getting the other error instead.
-    it('stops the process in production even with no directory configured', () => {
+    // directory and collecting the other error instead.
+    it('refuses on the environment before it asks about the directory', () => {
       set('NODE_ENV', 'production');
       set('EMAIL_TRANSPORT', 'outbox');
       set('EMAIL_OUTBOX_DIR', undefined);
 
-      expect(() => loadConfig()).toThrow(/must never run in production/);
+      expect(() => loadConfig()).toThrow(/binds only where NODE_ENV is explicitly "development"/);
     });
   });
 

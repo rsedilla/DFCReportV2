@@ -1358,13 +1358,23 @@ When a person becomes a Cell Leader and has no account:
 account cannot be activated at all** (ruling of 2026-09-11). The default adapter delivers
 nothing and deliberately does not log the token, and the token is stored only as a hash,
 so there is no way back. A **development transport** therefore exists beside it: it writes
-each message, token included, as a file in a local outbox directory, and is selected by
-configuration rather than by default. Writing the token down is the trade this section
-already makes once for the bootstrap command above, on the same terms — single-use,
-short-lived, and read by the person operating the machine — and with a narrower reach,
-since nothing is addressed to anybody. **The process refuses to start when that transport
-is selected outside development**, which is the half that makes it safe to ship; and a
-token still never appears in an API response, which is the rule this does not touch.
+each message — activation **and password reset** — token included, as a file in a local
+outbox directory, and is selected by configuration rather than by default.
+
+**The process refuses to start unless `NODE_ENV` is explicitly `development`**, and that
+refusal rather than the adapter is what makes the transport safe to ship. It is read from
+the raw variable, because the resolved value defaults to `development` when nobody set one
+and a decision about writing credentials to disk may not rest on a default.
+
+**What this borrows from the bootstrap command above, and what it does not.** The token is
+single-use and short-lived exactly as the printed one is, and nothing is addressed to
+anybody. The term that does **not** carry across is the one that paragraph turns on: there
+the operator is the holder, and here whoever reads the directory reads tokens minted for
+other people's accounts. Whether that is admissible on a development machine — against
+*Password reset security* above, which says an administrator must not know another user's
+password — is **not settled by this rule** and is recorded as open. What is unmoved is the
+narrower guarantee: a token never appears in an API response, so nothing here widens what
+an administrator can obtain through the product.
 
 **Provisioning is an explicit action under `accounts.manage`, and what it may
 create is bounded by what qualifies the holder.** Cell leadership is the ordinary

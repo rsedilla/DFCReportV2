@@ -134,7 +134,7 @@ export function loadConfig(): AppConfig {
     throw new Error(`JWT_SECRET must be at least ${MINIMUM_SECRET_LENGTH} characters`);
   }
 
-  const { emailTransport, emailOutboxDir } = emailDelivery(nodeEnv);
+  const { emailTransport, emailOutboxDir } = emailDelivery();
 
   return {
     nodeEnv,
@@ -154,11 +154,21 @@ export function loadConfig(): AppConfig {
 /**
  * Which transport is bound, and the refusal that makes the outbox safe to ship.
  *
- * **The production refusal is the load-bearing half of the 2026-09-11 ruling**, not
- * the adapter. `outbox` writes an activation token to a file, which section 6 admits
- * on the same terms it already admits `bootstrap:admin` printing one — read by the
- * person operating the machine, single-use, short-lived. None of that is true of a
- * production host, so the process stops rather than starting with it.
+ * **The refusal is the load-bearing half of the 2026-09-11 ruling**, not the adapter,
+ * and it is stated positively: `outbox` binds in `development` and nowhere else.
+ *
+ * **It reads `process.env.NODE_ENV` rather than the resolved `nodeEnv`, and that is the
+ * whole of the fix.** The resolved value *defaults* to `development` when the variable
+ * is absent, so a rule written against it treats "nobody said" as "a developer's
+ * laptop". `npm run start:prod` sets nothing and `main.ts` loads `dotenv` in every
+ * environment, so a production host that never exports `NODE_ENV`, carrying
+ * `EMAIL_TRANSPORT=outbox` in its `.env`, wrote activation **and password-reset**
+ * tokens to disk.
+ *
+ * *A first version refused `production` by name; `architecture-guardian` reproduced the
+ * absent-variable hole. A second stated the rule positively against the resolved value,
+ * which reads correctly and leaves the identical hole, because the default is the very
+ * value being required. A decision this size may not rest on a default.*
  *
  * **Absent means `log`**, so no existing deployment changes behaviour by taking this
  * change, and a deployment that has never heard of either variable is unaffected.
@@ -166,7 +176,7 @@ export function loadConfig(): AppConfig {
  * The directory is required with `outbox` rather than defaulted, because a default
  * would put credentials somewhere nobody chose.
  */
-function emailDelivery(nodeEnv: AppConfig['nodeEnv']): {
+function emailDelivery(): {
   emailTransport: EmailTransport;
   emailOutboxDir: string | null;
 } {
@@ -188,10 +198,14 @@ function emailDelivery(nodeEnv: AppConfig['nodeEnv']): {
     return { emailTransport, emailOutboxDir: null };
   }
 
-  if (nodeEnv === 'production') {
+  const declared = (process.env.NODE_ENV ?? '').trim();
+  if (declared !== 'development') {
     throw new Error(
-      'EMAIL_TRANSPORT=outbox writes activation tokens to disk and must never run in ' +
-        'production (SKILL.md section 6). Configure a real provider instead.',
+      'EMAIL_TRANSPORT=outbox writes activation and password-reset tokens to disk, so it ' +
+        'binds only where NODE_ENV is explicitly "development" (SKILL.md section 6). ' +
+        `NODE_ENV is ${declared === '' ? 'unset' : `"${declared}"`}. An absent value is not ` +
+        'development here, because a credential-writing decision may not rest on a default. ' +
+        'Configure a real provider instead.',
     );
   }
 
