@@ -513,8 +513,32 @@ export class PeopleReadService {
       ])
       .where('edge.ended_at', 'is', null)
       // A merged-away Person is not listed: the survivor carries the identity
-      // (section 3, Person Merge).
+      // (section 3, Person Merge). **The same is asked of the leader**, so
+      // `former_leader` cannot name an absorbed record while the identity sits on
+      // somebody else.
       .where('person.merged_into_id', 'is', null)
+      .where('leader.merged_into_id', 'is', null)
+      // **An archived Person is not listed, because section 5 refuses to reassign
+      // one.** Section 19 asks each entry to carry the action that resolves it, and
+      // decision 0229 states the consequence for the sibling list: an entry no act
+      // resolves is what an attention list must never carry. Listing one would send a
+      // reader to a screen that refuses them.
+      //
+      // Unreachable today — no route holds `people.manage_lifecycle`, so nothing
+      // writes `ARCHIVED` — and written now because the day archival ships is the
+      // same day this list's headline case becomes real.
+      .where((eb) =>
+        eb.not(
+          eb.exists(
+            eb
+              .selectFrom('person_lifecycle as life')
+              .select(sql`1`.as('one'))
+              .whereRef('life.person_id', '=', 'person.id')
+              .where('life.ended_at', 'is', null)
+              .where('life.state', '=', 'ARCHIVED'),
+          ),
+        ),
+      )
       // The condition itself: the leader holds no open assignment of their own.
       .where((eb) =>
         eb.not(

@@ -14,6 +14,16 @@ import { getCellMonthlyReport, getDccMonthlyReport } from '@/lib/reports';
 import { dayLabel, monthLabel, reportingMonthOf } from '@/lib/reporting-month';
 
 /**
+ * How many people needing a leader the dashboard tile shows before deferring to the
+ * full list (section 19).
+ *
+ * A dashboard entry is a prompt to act, not the list itself: section 15 forbids
+ * ranking, so a longer tile would be a longer arbitrary slice rather than a more
+ * useful one. The screen behind it pages honestly.
+ */
+const UNPLACED_TILE = 5;
+
+/**
  * Where a signed-in leader lands (SKILL.md section 19).
  *
  * **Outstanding work comes above the numbers, and that is the whole design.**
@@ -40,7 +50,7 @@ import { dayLabel, monthLabel, reportingMonthOf } from '@/lib/reporting-month';
  * 10). Both figures here come from the reporting routes, which count distinct
  * people; nothing on this screen sums attendances.
  *
- * **Two of section 19's four outstanding-work lists have no route yet** and are
+ * **Two of section 19's five outstanding-work lists have no route yet** and are
  * named here rather than faked: people with no active Cell membership within the
  * actor's scope, and the outcome of a Cell leadership request the actor
  * submitted — the latter being a question `CLAUDE.md` records as open, since
@@ -51,16 +61,6 @@ import { dayLabel, monthLabel, reportingMonthOf } from '@/lib/reporting-month';
  * **Nothing here is ranked or colour-graded** (sections 13, 17 and 19). The
  * attention list is filtered rather than sorted, in the order the API returns.
  */
-/**
- * How many people needing a leader the dashboard tile shows before deferring to the
- * full list (section 19).
- *
- * A dashboard entry is a prompt to act, not the list itself: section 15 forbids
- * ranking, so a longer tile would be a longer arbitrary slice rather than a more
- * useful one. The screen behind it pages honestly.
- */
-const UNPLACED_TILE = 5;
-
 export default function DashboardPage() {
   return (
     <AppShell>
@@ -151,9 +151,11 @@ function Dashboard() {
     ? describeFailure(mine.error)
     : scoped.isError
       ? describeFailure(scoped.error)
-      : me.isError
-        ? describeFailure(me.error)
-        : null;
+      : unplaced.isError
+        ? describeFailure(unplaced.error)
+        : me.isError
+          ? describeFailure(me.error)
+          : null;
 
   return (
     <main id="main" className={PAGE_WIDTH.INDEX}>
@@ -224,7 +226,7 @@ function Dashboard() {
       </section>
 
       {/*
-        Section 19's fourth outstanding-work entry, and section 20 requires the list
+        Section 19's fifth outstanding-work entry, and section 20 requires the list
         behind it (decision 0232). It sits with the other outstanding work rather than
         with the figures because it is something to do, not something to read.
 

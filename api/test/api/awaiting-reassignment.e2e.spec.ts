@@ -85,6 +85,26 @@ describe('people awaiting reassignment (sections 5, 19 and 20)', () => {
       .query(query)
       .set('Authorization', `Bearer ${as.accessToken}`);
 
+  /**
+   * Archives a Person the way the lifecycle table requires: the open row is closed
+   * and the ARCHIVED one opened, because `person_lifecycle_one_open` permits one.
+   */
+  const archive = async (person: TestPerson): Promise<void> => {
+    const at = new Date();
+
+    await db
+      .updateTable('person_lifecycle')
+      .set({ ended_at: at })
+      .where('person_id', '=', person.id)
+      .where('ended_at', 'is', null)
+      .execute();
+
+    await db
+      .insertInto('person_lifecycle')
+      .values({ person_id: person.id, state: 'ARCHIVED', started_at: at })
+      .execute();
+  };
+
   const idsOf = (response: request.Response): string[] =>
     (response.body.data as { id: string }[]).map((row) => row.id).sort();
 
@@ -179,7 +199,13 @@ describe('people awaiting reassignment (sections 5, 19 and 20)', () => {
   // Recorded as a finding rather than asserted as a rule: see the escalation in
   // `CLAUDE.md`. Closing a leader's assignment removes them from every ancestor's
   // `subtreeOf` walk, and their disciples with them — so the very gap this list
-  // exists to surface is what puts it out of a subtree-scoped actor's reach.
+  // exists to surface is what puts it out of reach of every actor **above the break**.
+  //
+  // It is not out of reach of everybody, and saying so was this branch's own worst
+  // claim: that walk seeds at the actor, so the departed leader and the person
+  // themselves both see the row, and a `NETWORK` grant sees the whole list because it
+  // enumerates Network membership rather than walking the tree. The cases below pin
+  // all three rather than the one.
   // ---------------------------------------------------------------------------
 
   it('answers a subtree-scoped leader an empty list, because the broken chain is what hides it', async () => {
@@ -205,7 +231,7 @@ describe('people awaiting reassignment (sections 5, 19 and 20)', () => {
 
     const second = await createPerson(db, {
       firstName: 'Ana',
-      lastName: 'Santos',
+      lastName: 'Abad',
       network: 'MENS',
     });
     await assignTo(db, second.id, mark.id);
@@ -223,9 +249,140 @@ describe('people awaiting reassignment (sections 5, 19 and 20)', () => {
     expect(next.body.next_cursor).toBeNull();
 
     // Ordered by name, never by how long a gap has stood (sections 13, 15, 17).
-    // Santos precedes Reyes on neither ordering by chance: `Reyes` sorts before
-    // `Santos`, so Juan is first.
-    expect([first.body.data[0].id, next.body.data[0].id]).toEqual([juan.id, second.id]);
+    // **Abad sorts first and was written second**, so this distinguishes an ordered
+    // query from an unordered one. It did not before: Reyes was created in
+    // `beforeEach` and Santos inside the test, so alphabetical order and physical
+    // row order were the same order and an unordered query passed.
+    expect([first.body.data[0].id, next.body.data[0].id]).toEqual([second.id, juan.id]);
+  });
+
+  it('does not rank by how long a gap has stood', async () => {
+    // The one prohibition this list ships under (sections 13, 15, 17), and it needs a
+    // fixture where staleness and name disagree. Mark's break is older than Nathan's,
+    // so a query ordered by staleness answers Reyes first where an alphabetical one
+    // answers Abad. Without this case, ordering by staleness passes every other case
+    // in this file.
+    await unplace(mark);
+
+    const nathan = await createPerson(db, { firstName: 'Nathan', network: 'MENS' });
+    await assignTo(db, nathan.id, manuel.id);
+
+    const recent = await createPerson(db, {
+      firstName: 'Ana',
+      lastName: 'Abad',
+      network: 'MENS',
+    });
+    await assignTo(db, recent.id, nathan.id);
+
+    // Nathan's break is newer than Mark's, which `unplace` set at 2021-01-01.
+    await db
+      .updateTable('pastoral_assignments')
+      .set({ ended_at: new Date('2024-06-01T00:00:00+08:00') })
+      .where('person_id', '=', nathan.id)
+      .where('ended_at', 'is', null)
+      .execute();
+
+    const response = await list(admin);
+
+    expect(response.status).toBe(200);
+    expect((response.body.data as { id: string }[]).map((row) => row.id)).toEqual([
+      recent.id,
+      juan.id,
+    ]);
+  });
+
+  it('does not list a person whose leader is archived but still holds an open row', async () => {
+    // The reverse direction of the ruling's "both directions" claim: the flag is set
+    // and the gap is not there, so Juan is waiting for nothing.
+    await archive(mark);
+
+    expect((await list(admin)).body.data).toEqual([]);
+  });
+
+  it('does not list an archived person, because section 5 refuses to reassign one', async () => {
+    // Section 19 asks each entry to carry the action that resolves it, and no act
+    // resolves this one (decision 0229, for the sibling list).
+    await unplace(mark);
+    await archive(juan);
+
+    expect((await list(admin)).body.data).toEqual([]);
+  });
+
+  it('does not list a merged-away person', async () => {
+    await unplace(mark);
+    await db
+      .updateTable('persons')
+      .set({ merged_into_id: manuel.id })
+      .where('id', '=', juan.id)
+      .execute();
+
+    expect((await list(admin)).body.data).toEqual([]);
+  });
+
+  it('lists again once the leader ADMIN role is revoked', async () => {
+    // The exclusion keys on a live role. A revoked one is not an administrator, so
+    // the disciple is waiting again.
+    const markAdmin = await createAccount(app, db, { person: mark, roles: ['ADMIN'] });
+    await unplace(mark);
+
+    expect((await list(admin)).body.data).toEqual([]);
+
+    await db
+      .updateTable('account_roles')
+      .set({ revoked_at: new Date() })
+      .where('account_id', '=', markAdmin.id)
+      .execute();
+
+    expect(idsOf(await list(admin))).toEqual([juan.id]);
+  });
+
+  // ---------------------------------------------------------------------------
+  // Who else reaches it
+  //
+  // The escalation above concerns the actor section 20 names. These pin that it is
+  // only that actor: a first version of the finding generalised it to "only a Whole
+  // Church grant sees anything", which is false in all three directions below.
+  // ---------------------------------------------------------------------------
+
+  it('answers a NETWORK-scoped grant the whole list', async () => {
+    await unplace(mark);
+
+    const outsider = await createPerson(db, { firstName: 'Perla', network: 'MENS' });
+    await assignTo(db, outsider.id, raymond.id);
+    const grantee = await createAccount(app, db, { person: outsider, roles: [] });
+    await db
+      .insertInto('capability_grants')
+      .values({
+        account_id: grantee.id,
+        capability: 'people.view_subtree',
+        scope_type: 'NETWORK',
+        scope_network: 'MENS',
+        read_only: true,
+        reason: 'A Network-scoped grant reaches this list without walking the tree.',
+        granted_by: admin.id,
+      })
+      .execute();
+
+    // Network scope is resolved by enumerating Network membership, so a break in the
+    // chain hides nobody from it.
+    expect(idsOf(await list(grantee))).toEqual([juan.id]);
+  });
+
+  it('answers the departed leader their own former disciple', async () => {
+    await unplace(mark);
+    const markAccount = await createAccount(app, db, { person: mark, roles: ['LEADER'] });
+
+    // The subtree walk seeds at the actor, so Mark's own walk downward is intact. It
+    // is the walk from above him that is broken.
+    expect(idsOf(await list(markAccount))).toEqual([juan.id]);
+  });
+
+  it('answers the person themselves', async () => {
+    await unplace(mark);
+    const juanAccount = await createAccount(app, db, { person: juan, roles: ['LEADER'] });
+
+    // OWN_SUBTREE includes the actor at depth 0.
+    expect(idsOf(await list(juanAccount))).toEqual([juan.id]);
   });
 
   it('refuses a cursor it cannot resolve', async () => {

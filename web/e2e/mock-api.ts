@@ -129,6 +129,45 @@ export async function mockPeople(page: Page): Promise<void> {
 }
 
 /**
+ * The attention list section 20 requires (decision 0232), with something on it.
+ *
+ * Two rows rather than one, because the screen's own ordering rule is the thing most
+ * worth not breaking: section 15 forbids ranking, so these are alphabetical by the
+ * name shown and nothing else.
+ */
+export async function mockAwaitingReassignment(page: Page): Promise<void> {
+  await page.route('**/api/v1/people/awaiting-reassignment*', (route) =>
+    route.fulfill(
+      json({
+        data: [
+          {
+            id: '3f1b7c6e-0000-4000-8000-000000000901',
+            member_id: 'M-01001',
+            full_name: 'Amihan Bacani',
+            former_leader: {
+              person_id: '3f1b7c6e-0000-4000-8000-000000000903',
+              member_id: 'M-01003',
+              full_name: 'Rogelio Mendoza',
+            },
+          },
+          {
+            id: '3f1b7c6e-0000-4000-8000-000000000902',
+            member_id: 'M-01002',
+            full_name: 'Teodoro Cruz',
+            former_leader: {
+              person_id: '3f1b7c6e-0000-4000-8000-000000000903',
+              member_id: 'M-01003',
+              full_name: 'Rogelio Mendoza',
+            },
+          },
+        ],
+        next_cursor: null,
+      }),
+    ),
+  );
+}
+
+/**
  * The pre-flight lookup with something to show — a Tier 2 candidate the viewer
  * pastors, and one whose details section 8 withholds.
  *

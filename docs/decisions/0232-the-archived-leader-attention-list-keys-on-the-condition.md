@@ -52,12 +52,23 @@ an administrator off a list of people waiting for a leader, and here it keeps th
 off a list of people whose leader needs replacing. An administrator outside the pastoral
 structure is a deliberate arrangement rather than a gap.
 
-**The exclusion is safe under either answer to a question nobody has settled.** Whether a
-Person outside the pastoral structure may acquire disciples at all is recorded as an open
-Stop Condition. If the answer is no, this exclusion covers a state nothing can reach and
-costs nothing. If it is yes, the arrangement is deliberate and the exclusion is right. What
-it must not do is prejudge that question, and it does not — it says only that this list is
-not where that state is surfaced.
+**The exclusion prejudges nothing about a question nobody has settled, and it is not free.**
+Whether a Person outside the pastoral structure may acquire disciples at all is recorded as
+an open Stop Condition. If the answer is no, this exclusion covers a state nothing can reach
+and costs nothing.
+
+**If the answer is yes, it costs the visibility of a live Section 20 residual, and that is
+stated rather than glossed.** Section 20 places a person by walking to a leader the
+placement graph names; an administrator who has never held a pastoral assignment is named by
+no edge, so the chain terminates and their disciples sit in the Whole Church total and in no
+real leader's subtree. That is the additivity gap Section 20 says must be surfaced as
+needing repair — and this exclusion is what stops this list surfacing it.
+
+It is still the right exclusion here: Section 5 calls an administrator outside the pastoral
+structure correct and permanent, so their disciples are not waiting for a *reassignment*,
+which is the act this list offers. What they may be waiting for is a rule about whether that
+arrangement should exist at all, and that belongs to the Stop Condition rather than to a
+list whose every entry must carry an act that resolves it.
 
 ## It is current-state, and names no period
 
@@ -105,8 +116,15 @@ and this ruling moves none of that: appearing on a list confers nothing.
 authorized graph no upline can see it.** The gap that puts somebody on the list is the same
 gap that removes them from every ancestor's reach: `subtreeOf` walks open assignment rows,
 so a leader holding none is not in their own upline's subtree, and their disciples are not
-either. A subtree-scoped actor is therefore answered an empty list, and only a Whole Church
-grant sees anything.
+either. **An actor whose only path to the person runs through that leader is therefore
+answered an empty list, and that is every actor above the break — the upline Section 20
+names.**
+
+*It is not everybody, and the first version of this ruling said it was.* `subtreeOf` seeds
+at the actor itself, so the departed leader still sees their own former disciples and the
+person sees themselves; and a `NETWORK` grant of `people.view_subtree` sees the **whole**
+list, because `scopeMembership` resolves that scope by enumerating Network membership rather
+than by walking the tree. Reproduced against the database in all three directions.
 
 Reproduced against the database rather than reasoned about, and pinned as the behaviour that
 ships — `awaiting-reassignment.e2e.spec.ts` asserts the empty answer for the leader who is
@@ -119,10 +137,11 @@ authorize anything, on the ground that Section 20 requires the condition widenin
 surfaced as a gap needing repair rather than read as a grant of visibility. Using it here
 would make this very list the licence that argument refuses.
 
-So the route ships correct and, for every actor but a Whole Church holder, empty. That is
-worth having: an administrator is exactly who can reassign across a break, and Section 5
-already makes a cross-branch move a conversation between two leaders. But it is not what
-Section 20 asks for, and the difference is recorded in `CLAUDE.md` rather than papered over.
+So the route ships correct, and empty for the one actor Section 20 names. That is less bad
+than it first looks: a Whole Church grant reads it, and so does a `NETWORK` grant — and
+Section 5 forbids a cross-Network pastoral edge, so a Network-scoped reader can act on every
+row they can see. But it is not what Section 20 asks for, and the difference is recorded in
+`CLAUDE.md` rather than papered over.
 
 ## What this does not settle
 
