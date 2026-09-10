@@ -58,7 +58,7 @@ const UNPLACED_TILE = 5;
  * **One of section 19's five outstanding-work lists has no route yet** and is
  * named here rather than faked: the outcome of a Cell leadership request the actor
  * submitted — a question `CLAUDE.md` records as open, since
- * section 7 names no capability for such a read. A third is partly served: a
+ * section 7 names no capability for such a read. The other is partly served: a
  * **closed** Cell's meetings are not reachable, because the Cells index is
  * `ACTIVE`-only and nothing supplies the identifier.
  *

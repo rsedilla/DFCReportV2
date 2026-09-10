@@ -1,25 +1,18 @@
-"use client";
+'use client';
 
-import { useQuery } from "@tanstack/react-query";
-import { useState } from "react";
+import { useQuery } from '@tanstack/react-query';
+import { useState } from 'react';
 
-import { AppShell, PAGE_WIDTH } from "@/components/app-shell";
-import {
-  AttendanceBuckets,
-  ClassificationFigures,
-} from "@/components/attendance-figures";
-import { CoverageFigure } from "@/components/coverage-figure";
-import { MonthPicker } from "@/components/month-picker";
-import { FailureNotice } from "@/components/ui/failure-notice";
-import { listCells } from "@/lib/cells";
-import { getMe, holdsWholeChurch } from "@/lib/me";
-import { describeFailure } from "@/lib/messages";
-import {
-  getCellMonthlyReport,
-  hasBuckets,
-  type ReportScope,
-} from "@/lib/reports";
-import { reportingMonthOf } from "@/lib/reporting-month";
+import { AppShell, PAGE_WIDTH } from '@/components/app-shell';
+import { AttendanceBuckets, ClassificationFigures } from '@/components/attendance-figures';
+import { CoverageFigure } from '@/components/coverage-figure';
+import { MonthPicker } from '@/components/month-picker';
+import { FailureNotice } from '@/components/ui/failure-notice';
+import { listCells } from '@/lib/cells';
+import { getMe, holdsWholeChurch } from '@/lib/me';
+import { describeFailure } from '@/lib/messages';
+import { getCellMonthlyReport, hasBuckets, type ReportScope } from '@/lib/reports';
+import { reportingMonthOf } from '@/lib/reporting-month';
 
 /**
  * Cell attendance figures for a month (SKILL.md sections 12, 13, 17 and 20;
@@ -60,16 +53,13 @@ export default function CellReportPage() {
 
 export function CellReport() {
   const [month, setMonth] = useState(() => reportingMonthOf());
-  const [cellId, setCellId] = useState<string>("");
+  const [cellId, setCellId] = useState<string>('');
 
-  const me = useQuery({
-    queryKey: ["me"],
-    queryFn: ({ signal }) => getMe(signal),
-  });
-  const wholeChurch = holdsWholeChurch(me.data, "reports.view_subtree");
+  const me = useQuery({ queryKey: ['me'], queryFn: ({ signal }) => getMe(signal) });
+  const wholeChurch = holdsWholeChurch(me.data, 'reports.view_subtree');
 
   const cells = useQuery({
-    queryKey: ["cells", month, false],
+    queryKey: ['cells', month, false],
     queryFn: ({ signal }) => listCells({ month }, signal),
   });
 
@@ -83,23 +73,18 @@ export function CellReport() {
   // one person, which is the disagreement this closes.
   // Narrower than `ReportScope`: this route refuses `NETWORK`, because what such a
   // figure narrows is unstated in section 20 and recorded as open. The type says so.
-  const scope: Exclude<ReportScope, { kind: "NETWORK" }> | null =
-    cellId !== ""
-      ? { kind: "CELL", cell_id: cellId }
+  const scope: Exclude<ReportScope, { kind: 'NETWORK' }> | null =
+    cellId !== ''
+      ? { kind: 'CELL', cell_id: cellId }
       : wholeChurch
-        ? { kind: "WHOLE_CHURCH" }
+        ? { kind: 'WHOLE_CHURCH' }
         : me.data
-          ? { kind: "LEADER", person_id: me.data.person_id }
+          ? { kind: 'LEADER', person_id: me.data.person_id }
           : null;
 
   const report = useQuery({
-    queryKey: ["cell-report", month, scope],
-    queryFn: ({ signal }) =>
-      getCellMonthlyReport(
-        month,
-        scope as Exclude<ReportScope, { kind: "NETWORK" }>,
-        signal,
-      ),
+    queryKey: ['cell-report', month, scope],
+    queryFn: ({ signal }) => getCellMonthlyReport(month, scope as Exclude<ReportScope, { kind: 'NETWORK' }>, signal),
     enabled: scope !== null,
   });
 
@@ -107,8 +92,8 @@ export function CellReport() {
     <main id="main" className={PAGE_WIDTH.INDEX}>
       <h1 className="text-2xl font-semibold tracking-tight">Cell Attendance</h1>
       <p className="text-muted mt-2 max-w-2xl text-sm leading-relaxed">
-        What your Cells recorded this month. Recording coverage comes first,
-        because it is the one figure that cannot be improved by recording less.
+        What your Cells recorded this month. Recording coverage comes first, because it is
+        the one figure that cannot be improved by recording less.
       </p>
 
       <MonthPicker month={month} onChange={setMonth} open={report.data?.open} />
@@ -124,7 +109,7 @@ export function CellReport() {
           className="border-line focus-visible:outline-accent mt-2 min-h-11 rounded-md border px-3 text-sm focus-visible:outline-2 focus-visible:outline-offset-2"
         >
           <option value="">
-            {wholeChurch ? "Everyone in your scope" : "Everyone you oversee"}
+            {wholeChurch ? 'Everyone in your scope' : 'Everyone you oversee'}
           </option>
           {(cells.data?.data ?? []).map((cell) => (
             <option key={cell.id} value={cell.id}>
@@ -133,9 +118,9 @@ export function CellReport() {
           ))}
         </select>
         <p className="text-muted mt-2 max-w-2xl text-sm leading-relaxed">
-          How often people came is shown for a single Cell only. Across several
-          Cells it would mean &ldquo;attended everything their own Cell happened
-          to record&rdquo;, which reads best for the Cells that recorded least.
+          How often people came is shown for a single Cell only. Across several Cells it would
+          mean &ldquo;attended everything their own Cell happened to record&rdquo;, which reads
+          best for the Cells that recorded least.
         </p>
       </div>
 
@@ -167,9 +152,8 @@ export function CellReport() {
               />
             </p>
             <p className="text-muted mt-2 max-w-2xl text-sm leading-relaxed">
-              Out of the meetings the schedule says these Cells were due to
-              hold. A Cell that scheduled nothing this month counts as none of
-              each and is not left out.
+              Out of the meetings the schedule says these Cells were due to hold. A Cell that
+              scheduled nothing this month counts as none of each and is not left out.
             </p>
           </section>
 
@@ -195,15 +179,11 @@ export function CellReport() {
               // Section 12: where N is zero the view shows the coverage line alone
               // and no buckets — a bucket every person satisfies is not a bucket.
               <p className="text-muted max-w-2xl text-sm leading-relaxed">
-                This Cell recorded no meetings this month, so there is nobody to
-                count and no buckets to show. The coverage line above is what
-                explains it.
+                This Cell recorded no meetings this month, so there is nobody to count and no
+                buckets to show. The coverage line above is what explains it.
               </p>
             ) : (
-              <AttendanceBuckets
-                buckets={report.data.buckets}
-                n={report.data.n}
-              />
+              <AttendanceBuckets buckets={report.data.buckets} n={report.data.n} />
             )
           ) : null}
         </div>

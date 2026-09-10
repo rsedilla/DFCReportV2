@@ -1,13 +1,20 @@
-"use client";
+'use client';
 
-import { useQuery } from "@tanstack/react-query";
-import { usePathname } from "next/navigation";
-import Link from "next/link";
-import type { ReactNode } from "react";
+import { useQuery } from '@tanstack/react-query';
+import { usePathname } from 'next/navigation';
+import Link from 'next/link';
+import type { ReactNode } from 'react';
 
-import { RequireSession } from "@/components/require-session";
-import { getMe } from "@/lib/me";
-import { cn } from "@/lib/utils";
+import { RequireSession } from '@/components/require-session';
+import { getMe } from '@/lib/me';
+import { cn } from '@/lib/utils';
+
+/**
+ * Where My Network sits: directly after People, which is section 19's order —
+ * Dashboard, My People, My Network — and is also the pairing a reader expects,
+ * since both are about people rather than about Cells or figures.
+ */
+const MY_NETWORK_AFTER = 2;
 
 /**
  * The frame every signed-in screen sits in.
@@ -45,21 +52,14 @@ import { cn } from "@/lib/utils";
  * outstanding work until Cells and attendance existed. Both now do, and the entry
  * arrived with them.*
  */
-/**
- * Where My Network sits: directly after People, which is section 19's order —
- * Dashboard, My People, My Network — and is also the pairing a reader expects,
- * since both are about people rather than about Cells or figures.
- */
-const MY_NETWORK_AFTER = 2;
-
 const LINKS = [
-  { href: "/dashboard", label: "Dashboard" },
-  { href: "/people", label: "People" },
-  { href: "/cells", label: "Cell Leaders" },
-  { href: "/dcc", label: "DCC Attendance" },
-  { href: "/reports/cells", label: "Cell Attendance" },
-  { href: "/reports/dcc", label: "DCC Figures" },
-  { href: "/session", label: "Your session" },
+  { href: '/dashboard', label: 'Dashboard' },
+  { href: '/people', label: 'People' },
+  { href: '/cells', label: 'Cell Leaders' },
+  { href: '/dcc', label: 'DCC Attendance' },
+  { href: '/reports/cells', label: 'Cell Attendance' },
+  { href: '/reports/dcc', label: 'DCC Figures' },
+  { href: '/session', label: 'Your session' },
 ];
 
 /**
@@ -92,8 +92,8 @@ const LINKS = [
  * and jumps to another.
  */
 export const PAGE_WIDTH = {
-  READING: "mx-auto max-w-3xl px-5 py-8 sm:py-12",
-  INDEX: "mx-auto max-w-5xl px-5 py-8 sm:py-12",
+  READING: 'mx-auto max-w-3xl px-5 py-8 sm:py-12',
+  INDEX: 'mx-auto max-w-5xl px-5 py-8 sm:py-12',
 } as const;
 
 export function AppShell({ children }: { children: ReactNode }) {
@@ -102,10 +102,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   // **Shares the cache with every screen that already asks.** The key is the one
   // `getMe` is queried under elsewhere, so this adds a cache read rather than a
   // request per page.
-  const me = useQuery({
-    queryKey: ["me"],
-    queryFn: ({ signal }) => getMe(signal),
-  });
+  const me = useQuery({ queryKey: ['me'], queryFn: ({ signal }) => getMe(signal) });
 
   // **My Network appears once the viewer's own identity is known, and not before.**
   // It is the only entry whose destination depends on who is looking, and the rule
@@ -116,7 +113,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       ? LINKS
       : [
           ...LINKS.slice(0, MY_NETWORK_AFTER),
-          { href: `/people/${me.data.person_id}/network`, label: "My Network" },
+          { href: `/people/${me.data.person_id}/network`, label: 'My Network' },
           ...LINKS.slice(MY_NETWORK_AFTER),
         ];
 
@@ -129,8 +126,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             className="mx-auto flex max-w-5xl flex-wrap items-center gap-1 px-5 py-2"
           >
             {links.map((link) => {
-              const active =
-                pathname === link.href || pathname.startsWith(`${link.href}/`);
+              const active = pathname === link.href || pathname.startsWith(`${link.href}/`);
 
               return (
                 <Link
@@ -139,13 +135,11 @@ export function AppShell({ children }: { children: ReactNode }) {
                   // `aria-current` rather than colour alone: which page you are on
                   // is information, and colour is never the only way this
                   // application conveys information (1.4.1).
-                  aria-current={active ? "page" : undefined}
+                  aria-current={active ? 'page' : undefined}
                   className={cn(
-                    "focus-visible:outline-accent inline-flex min-h-11 items-center rounded-md px-3",
-                    "text-sm focus-visible:outline-2 focus-visible:outline-offset-2",
-                    active
-                      ? "text-ink font-medium underline underline-offset-8"
-                      : "text-muted",
+                    'focus-visible:outline-accent inline-flex min-h-11 items-center rounded-md px-3',
+                    'text-sm focus-visible:outline-2 focus-visible:outline-offset-2',
+                    active ? 'text-ink font-medium underline underline-offset-8' : 'text-muted',
                   )}
                 >
                   {link.label}

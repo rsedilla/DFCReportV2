@@ -1,4 +1,4 @@
-import { authenticatedRequest } from "./session";
+import { authenticatedRequest } from './session';
 
 /**
  * The aggregate reporting surface as this client sees it (SKILL.md sections 9, 12,
@@ -65,16 +65,8 @@ interface MonthlyCommon {
  * section 12's structural rule rather than a rendering choice.
  */
 export type CellMonthlyReport =
-  | (MonthlyCommon & {
-      scope: { kind: "CELL"; cell_id: string };
-      n: number;
-      buckets: AttendanceBucket[];
-      coverage: CellCoverage;
-    })
-  | (MonthlyCommon & {
-      scope: { kind: "LEADER"; person_id: string } | { kind: "WHOLE_CHURCH" };
-      coverage: CellCoverage;
-    });
+  | (MonthlyCommon & { scope: { kind: 'CELL'; cell_id: string }; n: number; buckets: AttendanceBucket[]; coverage: CellCoverage })
+  | (MonthlyCommon & { scope: { kind: 'LEADER'; person_id: string } | { kind: 'WHOLE_CHURCH' }; coverage: CellCoverage });
 
 export interface DccMonthlyReport extends MonthlyCommon {
   scope: unknown;
@@ -95,27 +87,27 @@ export interface DccMonthlyReport extends MonthlyCommon {
  * type than this union, and the compiler is what keeps a caller from asking.
  */
 export type ReportScope =
-  | { kind: "WHOLE_CHURCH" }
-  | { kind: "NETWORK"; network: ReportNetwork }
-  | { kind: "LEADER"; person_id: string }
-  | { kind: "CELL"; cell_id: string };
+  | { kind: 'WHOLE_CHURCH' }
+  | { kind: 'NETWORK'; network: ReportNetwork }
+  | { kind: 'LEADER'; person_id: string }
+  | { kind: 'CELL'; cell_id: string };
 
 /** Section 4: the two Networks, which are the only values the API accepts. */
-export type ReportNetwork = "MENS" | "WOMENS";
+export type ReportNetwork = 'MENS' | 'WOMENS';
 
 function query(period: string, scope: ReportScope): string {
   const params = new URLSearchParams({ period, scope: scope.kind });
-  if (scope.kind === "LEADER") {
-    params.set("leader_id", scope.person_id);
+  if (scope.kind === 'LEADER') {
+    params.set('leader_id', scope.person_id);
   }
-  if (scope.kind === "CELL") {
-    params.set("cell_id", scope.cell_id);
+  if (scope.kind === 'CELL') {
+    params.set('cell_id', scope.cell_id);
   }
   // Required where the scope is `NETWORK` and refused under any other, which is the
   // API's rule rather than a convenience: a request naming both a Network and a
   // leader is asking for two different things.
-  if (scope.kind === "NETWORK") {
-    params.set("network", scope.network);
+  if (scope.kind === 'NETWORK') {
+    params.set('network', scope.network);
   }
 
   return params.toString();
@@ -123,7 +115,7 @@ function query(period: string, scope: ReportScope): string {
 
 export async function getCellMonthlyReport(
   period: string,
-  scope: Exclude<ReportScope, { kind: "NETWORK" }>,
+  scope: Exclude<ReportScope, { kind: 'NETWORK' }>,
   signal?: AbortSignal,
 ): Promise<CellMonthlyReport> {
   return authenticatedRequest<CellMonthlyReport>(
@@ -134,7 +126,7 @@ export async function getCellMonthlyReport(
 
 export async function getDccMonthlyReport(
   period: string,
-  scope: Exclude<ReportScope, { kind: "CELL" }>,
+  scope: Exclude<ReportScope, { kind: 'CELL' }>,
   signal?: AbortSignal,
 ): Promise<DccMonthlyReport> {
   return authenticatedRequest<DccMonthlyReport>(
@@ -147,16 +139,13 @@ export async function getDccMonthlyReport(
 export function hasBuckets(
   report: CellMonthlyReport,
 ): report is Extract<CellMonthlyReport, { n: number }> {
-  return "buckets" in report;
+  return 'buckets' in report;
 }
 
-export const CLASSIFICATION_LABELS: {
-  key: keyof Classification;
-  label: string;
-}[] = [
-  { key: "vip", label: "VIP" },
-  { key: "second_timer", label: "2nd Timer" },
-  { key: "third_timer", label: "3rd Timer" },
-  { key: "fourth_timer", label: "4th Timer" },
-  { key: "regular", label: "Regular" },
+export const CLASSIFICATION_LABELS: { key: keyof Classification; label: string }[] = [
+  { key: 'vip', label: 'VIP' },
+  { key: 'second_timer', label: '2nd Timer' },
+  { key: 'third_timer', label: '3rd Timer' },
+  { key: 'fourth_timer', label: '4th Timer' },
+  { key: 'regular', label: 'Regular' },
 ];

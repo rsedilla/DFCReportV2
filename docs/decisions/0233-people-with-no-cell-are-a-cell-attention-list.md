@@ -12,6 +12,12 @@ the attention list in Section 15".
 So the list is specified and its population is specified. Nothing says which capability
 guards it, which module owns it, or what it does about a Cell's leader.
 
+**This ruling settles the first and the third and does not settle the second.** That is a
+defect in it rather than a scoping choice: the sentence above names three questions and the
+sections below answer two. Which module owns the query is escalated instead, and
+`CLAUDE.md` carries it — the code ships reading three `cells` tables from `people`, and
+whether Section 2's exemption admits that is not this ruling's to decide.
+
 ## `cell.view_subtree`, resolved against the actor
 
 **It is a Cell attention list, and Section 15 says so by placing it there.** Its two

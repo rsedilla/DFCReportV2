@@ -1,24 +1,17 @@
-"use client";
+'use client';
 
-import { useQuery } from "@tanstack/react-query";
-import { useState } from "react";
+import { useQuery } from '@tanstack/react-query';
+import { useState } from 'react';
 
-import { AppShell, PAGE_WIDTH } from "@/components/app-shell";
-import {
-  AttendanceBuckets,
-  ClassificationFigures,
-} from "@/components/attendance-figures";
-import { CoverageFigure } from "@/components/coverage-figure";
-import { MonthPicker } from "@/components/month-picker";
-import { FailureNotice } from "@/components/ui/failure-notice";
-import { getMe, holdsWholeChurch } from "@/lib/me";
-import { describeFailure } from "@/lib/messages";
-import {
-  getDccMonthlyReport,
-  type ReportNetwork,
-  type ReportScope,
-} from "@/lib/reports";
-import { dayLabel, reportingMonthOf } from "@/lib/reporting-month";
+import { AppShell, PAGE_WIDTH } from '@/components/app-shell';
+import { AttendanceBuckets, ClassificationFigures } from '@/components/attendance-figures';
+import { CoverageFigure } from '@/components/coverage-figure';
+import { MonthPicker } from '@/components/month-picker';
+import { FailureNotice } from '@/components/ui/failure-notice';
+import { getMe, holdsWholeChurch } from '@/lib/me';
+import { describeFailure } from '@/lib/messages';
+import { getDccMonthlyReport, type ReportNetwork, type ReportScope } from '@/lib/reports';
+import { dayLabel, reportingMonthOf } from '@/lib/reporting-month';
 
 /**
  * DCC attendance figures for a month (SKILL.md sections 9, 12, 13, 17 and 20;
@@ -61,14 +54,11 @@ export function DccReport() {
   // a Whole Church holder, because that is the grant section 19 describes a Senior
   // Pastor by — a leader-scoped viewer has one scope and a control with one option
   // is a control that lies about having a choice.
-  const [network, setNetwork] = useState<ReportNetwork | "">("");
+  const [network, setNetwork] = useState<ReportNetwork | ''>('');
 
-  const me = useQuery({
-    queryKey: ["me"],
-    queryFn: ({ signal }) => getMe(signal),
-  });
+  const me = useQuery({ queryKey: ['me'], queryFn: ({ signal }) => getMe(signal) });
 
-  const wholeChurch = holdsWholeChurch(me.data, "reports.view_subtree");
+  const wholeChurch = holdsWholeChurch(me.data, 'reports.view_subtree');
 
   // A Whole Church grant is read as Whole Church, for the reason the Cell report
   // beside this one gives: an administrator holding one need not be in the
@@ -77,22 +67,18 @@ export function DccReport() {
   // **A Network narrows that grant and never widens a leader's**, which is why the
   // selector is gated above rather than the scope being chosen here: a leader-scoped
   // viewer reaches the `LEADER` branch whatever `network` holds.
-  const scope: Exclude<ReportScope, { kind: "CELL" }> | null = wholeChurch
-    ? network === ""
-      ? { kind: "WHOLE_CHURCH" }
-      : { kind: "NETWORK", network }
+  const scope: Exclude<ReportScope, { kind: 'CELL' }> | null = wholeChurch
+    ? network === ''
+      ? { kind: 'WHOLE_CHURCH' }
+      : { kind: 'NETWORK', network }
     : me.data
-      ? { kind: "LEADER", person_id: me.data.person_id }
+      ? { kind: 'LEADER', person_id: me.data.person_id }
       : null;
 
   const report = useQuery({
-    queryKey: ["dcc-report", month, scope],
+    queryKey: ['dcc-report', month, scope],
     queryFn: ({ signal }) =>
-      getDccMonthlyReport(
-        month,
-        scope as Exclude<ReportScope, { kind: "CELL" }>,
-        signal,
-      ),
+      getDccMonthlyReport(month, scope as Exclude<ReportScope, { kind: 'CELL' }>, signal),
     enabled: scope !== null,
   });
 
@@ -100,8 +86,8 @@ export function DccReport() {
     <main id="main" className={PAGE_WIDTH.INDEX}>
       <h1 className="text-2xl font-semibold tracking-tight">DCC Figures</h1>
       <p className="text-muted mt-2 max-w-2xl text-sm leading-relaxed">
-        What the people you oversee recorded for this month&rsquo;s Sundays, and
-        how many of the leaders who owed a record filed one.
+        What the people you oversee recorded for this month&rsquo;s Sundays, and how many of
+        the leaders who owed a record filed one.
       </p>
 
       <MonthPicker month={month} onChange={setMonth} open={report.data?.open} />
@@ -114,9 +100,7 @@ export function DccReport() {
           <select
             id="dcc-scope"
             value={network}
-            onChange={(event) =>
-              setNetwork(event.target.value as ReportNetwork | "")
-            }
+            onChange={(event) => setNetwork(event.target.value as ReportNetwork | '')}
             className="border-line focus-visible:outline-accent mt-2 min-h-11 rounded-md border px-3 text-sm focus-visible:outline-2 focus-visible:outline-offset-2"
           >
             <option value="">The whole church</option>
@@ -124,9 +108,12 @@ export function DccReport() {
             <option value="WOMENS">Women&rsquo;s Network</option>
           </select>
           <p className="text-muted mt-2 max-w-2xl text-sm leading-relaxed">
-            A Network counts the people who belong to it, not the people under
-            its root (decision 0219). The two Networks therefore add up to the
-            whole church.
+            A Network counts the people who belong to it, not the people under its root
+            (decision 0219). For the people who attended, the two Networks add up to the
+            whole church wherever everybody holds one Network — which section 20 states as a
+            property of the data rather than one the schema enforces. It claims nothing of
+            the kind for the coverage figures above, which count obligations rather than
+            people.
           </p>
         </div>
       ) : null}
@@ -159,9 +146,9 @@ export function DccReport() {
               />
             </p>
             <p className="text-muted mt-2 max-w-2xl text-sm leading-relaxed">
-              Counted across every Sunday of the month. A leader owes one record
-              for each Sunday they were responsible for somebody, and a Sunday
-              that has not happened owes nobody anything.
+              Counted across every Sunday of the month. A leader owes one record for each
+              Sunday they were responsible for somebody, and a Sunday that has not happened
+              owes nobody anything.
             </p>
           </section>
 
@@ -170,26 +157,19 @@ export function DccReport() {
               The month
             </h2>
             <p className="mt-2 text-sm">
-              <span className="text-xl font-semibold tabular-nums">
-                {report.data.n}
-              </span>
+              <span className="text-xl font-semibold tabular-nums">{report.data.n}</span>
               <span className="text-muted">
-                {" "}
-                {report.data.n === 1 ? "Sunday counted" : "Sundays counted"}
+                {' '}
+                {report.data.n === 1 ? 'Sunday counted' : 'Sundays counted'}
               </span>
             </p>
             {report.data.removed_events.length > 0 ? (
               // Section 9: a removal records a decision, so it is named rather
               // than left as a smaller number nobody can explain.
               <p className="text-muted mt-2 max-w-2xl text-sm leading-relaxed">
-                No service was held on{" "}
-                {report.data.removed_events
-                  .map((date) => dayLabel(date))
-                  .join(", ")}
-                , so
-                {report.data.removed_events.length === 1
-                  ? " that Sunday is"
-                  : " those Sundays are"}{" "}
+                No service was held on{' '}
+                {report.data.removed_events.map((date) => dayLabel(date)).join(', ')}, so
+                {report.data.removed_events.length === 1 ? ' that Sunday is' : ' those Sundays are'}{' '}
                 not counted.
               </p>
             ) : null}
@@ -214,14 +194,10 @@ export function DccReport() {
 
           {report.data.n === 0 ? (
             <p className="text-muted max-w-2xl text-sm leading-relaxed">
-              No Sundays were counted this month, so there is nothing to break
-              down.
+              No Sundays were counted this month, so there is nothing to break down.
             </p>
           ) : (
-            <AttendanceBuckets
-              buckets={report.data.buckets}
-              n={report.data.n}
-            />
+            <AttendanceBuckets buckets={report.data.buckets} n={report.data.n} />
           )}
         </div>
       ) : null}

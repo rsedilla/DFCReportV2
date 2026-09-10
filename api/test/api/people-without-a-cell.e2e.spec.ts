@@ -161,6 +161,26 @@ describe('people without a Cell (sections 10, 15 and 19)', () => {
     expect(idsOf(await list(admin))).toContain(mark.id);
   });
 
+  it('lists a Cell’s members once it closes, which is what fills this list', async () => {
+    // **The scenario section 15 exists for**, and it was untested. Section 10 says a
+    // closure must not complete without deciding where its members go, that they may be
+    // left unassigned by explicit choice, and that "people left without a Cell appear in
+    // the attention list in Section 15". This is that sentence, exercised.
+    const cell = await createCell(db, { leader: mark, createdAt: CREATED });
+    await joinCell(nathan, cell);
+
+    expect(idsOf(await list(admin))).not.toContain(nathan.id);
+
+    await closeCellDirectly(db, cell.id, { reason: 'MEMBERS_DISPERSED' });
+
+    // Closure ends every membership, so the member is waiting for a Cell again — and so
+    // is the leader, for the separate reason the case above pins.
+    const after = idsOf(await list(admin));
+
+    expect(after).toContain(nathan.id);
+    expect(after).toContain(mark.id);
+  });
+
   // ---------------------------------------------------------------------------
   // The two exclusions this list shares with its sibling
   // ---------------------------------------------------------------------------

@@ -145,13 +145,6 @@ export function meetingStateLabel(meeting: RecordedMeeting | null): string {
  * have shown, which is what makes the dashboard's "your own Cells" and the
  * upline's "Cells in your scope" one route.
  */
-/** A person in scope holding no active Cell membership (decision 0233). */
-export interface PersonWithoutACell {
-  id: string;
-  member_id: string;
-  full_name: string;
-}
-
 /**
  * Section 15's people-without-a-Cell attention list (decision 0233).
  *
@@ -188,6 +181,13 @@ export async function listCells(
   }
 
   return authenticatedRequest<CellIndexPage>(`/api/v1/cells?${query.toString()}`, { signal });
+}
+
+/** A person in scope holding no active Cell membership (decision 0233). */
+export interface PersonWithoutACell {
+  id: string;
+  member_id: string;
+  full_name: string;
 }
 
 /**

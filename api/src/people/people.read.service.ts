@@ -653,9 +653,21 @@ export class PeopleReadService {
    * 13, 15 and 17). That ordering would rank the leaders who have not yet placed
    * people rather than the people.
    *
-   * Rooted in `persons`, which this module owns, and reading the two `cells` tables as
-   * anti-joins — the same direction as `awaitingReassignment` above, which reads
-   * `accounts` (section 2).
+   * **Rooted in `persons`, which this module owns, and reading three tables `cells`
+   * owns as anti-joins** — `cell_memberships`, `cell_leaderships` and `cells` itself.
+   *
+   * **Whether section 2's exemption admits that is unsettled and is recorded as a Stop
+   * Condition in `CLAUDE.md`.** The exemption is "a read joined onto a query rooted in a
+   * table the reading module owns", which this is — and it names two instances and closes
+   * the list, saying adding to it "is an amendment rather than a decision taken in a
+   * module". No amendment was made. Two modules answer these same two questions through a
+   * port instead (`cell-relationships.port.ts`, `cell-scope.port.ts`), which is what
+   * section 2 prescribes where the dependency would be a cycle — and `people → cells` is
+   * one, since `CellsModule` imports `PeopleModule`.
+   *
+   * *`awaitingReassignment` above is **not** precedent for this and was cited as such in
+   * error: it selects from `pastoral_assignments`, which `hierarchy` owns, so it does not
+   * satisfy the exemption's premise either.*
    */
   async withoutACell(
     scope: { kind: 'WHOLE_CHURCH' } | { kind: 'PERSONS'; personIds: ReadonlySet<string> },
