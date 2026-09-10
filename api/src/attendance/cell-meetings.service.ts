@@ -19,7 +19,8 @@ import {
 } from '../common/errors/postgres-errors';
 import { DATABASE, type Db } from '../database/database.module';
 
-import { isMonthOpen, reportingMonthOf } from '../common/time/submission-window';
+import { databaseNow, isMonthOpen, reportingMonthOf } from '../common/time/submission-window';
+import { startOfManilaDay } from '../common/time/manila';
 
 import { AuditService } from '../audit/audit.service';
 import {
@@ -812,6 +813,31 @@ export class CellMeetingsService implements RecordedMeetingsPort {
       const entry = scheduled.find((candidate) => candidate.scheduledDate === meetingId);
       if (entry === undefined) {
         throw new NotFoundError('This Cell was not scheduled to meet on that date.', {
+          cell_id: cellId,
+          meeting_id: meetingId,
+        });
+      }
+
+      // **A meeting whose Manila day has not begun takes no record** (ruling of
+      // 2026-09-11). Section 13's window states when a month *shuts* and not when it
+      // opens, so a scheduled date later this month sits inside an open window and was
+      // admitted: filed as `HELD`, with marks, for a meeting nobody had attended.
+      //
+      // Section 9's rule for a DCC event, in the domain that had no counterpart, and the
+      // same boundary — the day's **beginning**. Not its end: a leader filing on the
+      // night of the meeting is who section 13 is written for.
+      //
+      // **The scheduled date rather than any actual date**, because this is a first
+      // submission and a reschedule moves `actual_date` only. What bounds *that* date is
+      // a separate question and is open.
+      //
+      // Before the window check, deliberately: a date that has not happened is refused
+      // for that reason whether or not its month is open, and an amendment does not
+      // license it either — section 13's flag widens *when* a record may be written and
+      // never what it may claim.
+      const now = await databaseNow(trx);
+      if (now.getTime() < startOfManilaDay(meetingId).getTime()) {
+        throw new InvariantViolationError('This Cell meeting has not taken place yet.', {
           cell_id: cellId,
           meeting_id: meetingId,
         });
