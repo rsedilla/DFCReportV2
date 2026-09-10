@@ -1,17 +1,17 @@
-"use client";
+'use client';
 
-import { useQueries, useQuery } from "@tanstack/react-query";
-import Link from "next/link";
+import { useQueries, useQuery } from '@tanstack/react-query';
+import Link from 'next/link';
 
-import { AppShell, PAGE_WIDTH } from "@/components/app-shell";
-import { CoverageFigure } from "@/components/coverage-figure";
-import { FailureNotice } from "@/components/ui/failure-notice";
-import { listCellMeetings, listCells, type CellSummary } from "@/lib/cells";
-import { getMe, holdsWholeChurch } from "@/lib/me";
-import { describeFailure } from "@/lib/messages";
-import { awaitingReassignment } from "@/lib/people";
-import { getCellMonthlyReport, getDccMonthlyReport } from "@/lib/reports";
-import { dayLabel, monthLabel, reportingMonthOf } from "@/lib/reporting-month";
+import { AppShell, PAGE_WIDTH } from '@/components/app-shell';
+import { CoverageFigure } from '@/components/coverage-figure';
+import { FailureNotice } from '@/components/ui/failure-notice';
+import { listCellMeetings, listCells, type CellSummary } from '@/lib/cells';
+import { getMe, holdsWholeChurch } from '@/lib/me';
+import { describeFailure } from '@/lib/messages';
+import { awaitingReassignment } from '@/lib/people';
+import { getCellMonthlyReport, getDccMonthlyReport } from '@/lib/reports';
+import { dayLabel, monthLabel, reportingMonthOf } from '@/lib/reporting-month';
 
 /**
  * How many people needing a leader the dashboard tile shows before deferring to the
@@ -72,10 +72,7 @@ export default function DashboardPage() {
 function Dashboard() {
   const month = reportingMonthOf();
 
-  const me = useQuery({
-    queryKey: ["me"],
-    queryFn: ({ signal }) => getMe(signal),
-  });
+  const me = useQuery({ queryKey: ['me'], queryFn: ({ signal }) => getMe(signal) });
 
   // Section 20's attention list (decision 0232). It takes no month: the list asks
   // about now, so it is deliberately not keyed on the period the figures below use.
@@ -84,18 +81,17 @@ function Dashboard() {
   // read rather than by a second request — the same trick the collection endpoints
   // use one layer down, and section 22 returns no total to ask instead.
   const unplaced = useQuery({
-    queryKey: ["awaiting-reassignment", "dashboard"],
-    queryFn: ({ signal }) =>
-      awaitingReassignment({ limit: UNPLACED_TILE + 1 }, signal),
+    queryKey: ['awaiting-reassignment', 'dashboard'],
+    queryFn: ({ signal }) => awaitingReassignment({ limit: UNPLACED_TILE + 1 }, signal),
   });
 
   const mine = useQuery({
-    queryKey: ["cells", month, true],
-    queryFn: ({ signal }) => listCells({ month, ledBy: "me" }, signal),
+    queryKey: ['cells', month, true],
+    queryFn: ({ signal }) => listCells({ month, ledBy: 'me' }, signal),
   });
 
   const scoped = useQuery({
-    queryKey: ["cells", month, false],
+    queryKey: ['cells', month, false],
     queryFn: ({ signal }) => listCells({ month }, signal),
   });
 
@@ -104,9 +100,8 @@ function Dashboard() {
   // coverage figures and never which meetings are missing.
   const meetings = useQueries({
     queries: (mine.data?.data ?? []).map((cell) => ({
-      queryKey: ["cell-meetings", cell.id, month],
-      queryFn: ({ signal }: { signal: AbortSignal }) =>
-        listCellMeetings(cell.id, month, signal),
+      queryKey: ['cell-meetings', cell.id, month],
+      queryFn: ({ signal }: { signal: AbortSignal }) => listCellMeetings(cell.id, month, signal),
     })),
   });
 
@@ -120,22 +115,22 @@ function Dashboard() {
    * places them in no subtree at all. The tiles read `0` while the attention
    * list above them showed real Cells, which is the disagreement this fixes.
    */
-  const reportScope = holdsWholeChurch(me.data, "reports.view_subtree")
-    ? ({ kind: "WHOLE_CHURCH" } as const)
-    : ({ kind: "LEADER", person_id: me.data?.person_id ?? "" } as const);
+  const reportScope = holdsWholeChurch(me.data, 'reports.view_subtree')
+    ? ({ kind: 'WHOLE_CHURCH' } as const)
+    : ({ kind: 'LEADER', person_id: me.data?.person_id ?? '' } as const);
 
-  const scopeLabel = holdsWholeChurch(me.data, "reports.view_subtree")
-    ? "Whole Church"
-    : "People you oversee";
+  const scopeLabel = holdsWholeChurch(me.data, 'reports.view_subtree')
+    ? 'Whole Church'
+    : 'People you oversee';
 
   const cellFigures = useQuery({
-    queryKey: ["cell-report", month, reportScope],
+    queryKey: ['cell-report', month, reportScope],
     queryFn: ({ signal }) => getCellMonthlyReport(month, reportScope, signal),
     enabled: me.data !== undefined,
   });
 
   const dccFigures = useQuery({
-    queryKey: ["dcc-report", month, reportScope],
+    queryKey: ['dcc-report', month, reportScope],
     queryFn: ({ signal }) => getDccMonthlyReport(month, reportScope, signal),
     enabled: me.data !== undefined,
   });
@@ -179,11 +174,11 @@ function Dashboard() {
   return (
     <main id="main" className={PAGE_WIDTH.INDEX}>
       <h1 className="text-2xl font-semibold tracking-tight">
-        {me.data?.first_name ? `Welcome, ${me.data.first_name}` : "Dashboard"}
+        {me.data?.first_name ? `Welcome, ${me.data.first_name}` : 'Dashboard'}
       </h1>
       <p className="text-muted mt-2 max-w-2xl text-sm leading-relaxed">
-        What needs doing comes first. The figures below it are for{" "}
-        {monthLabel(month)}, and their scope is {scopeLabel}.
+        What needs doing comes first. The figures below it are for {monthLabel(month)}, and
+        their scope is {scopeLabel}.
       </p>
 
       <div className="mt-8">
@@ -203,10 +198,7 @@ function Dashboard() {
         ) : (
           <ul className="mt-4 flex flex-col gap-3">
             {awaiting.map(({ cell, date }) => (
-              <li
-                key={`${cell.id}-${date}`}
-                className="border-line rounded-lg border p-4"
-              >
+              <li key={`${cell.id}-${date}`} className="border-line rounded-lg border p-4">
                 {/*
                   Each entry carries the action that resolves it (section 19),
                   which is the recording form for that meeting rather than a
@@ -230,15 +222,13 @@ function Dashboard() {
           Cells with meetings still to record
         </h2>
         <p className="text-muted mt-1 max-w-2xl text-sm leading-relaxed">
-          Within your scope, in no particular order. This is a filter, not a
-          ranking.
+          Within your scope, in no particular order. This is a filter, not a ranking.
         </p>
         {scoped.isPending ? (
           <p className="text-muted mt-2 text-sm">Loading&hellip;</p>
         ) : needingAttention.length === 0 ? (
           <p className="text-muted mt-2 max-w-2xl text-sm leading-relaxed">
-            Every Cell in your scope has recorded all of this month&rsquo;s
-            meetings.
+            Every Cell in your scope has recorded all of this month&rsquo;s meetings.
           </p>
         ) : (
           <ul className="mt-4 flex flex-col gap-3">
@@ -265,8 +255,8 @@ function Dashboard() {
           People needing a leader
         </h2>
         <p className="text-muted mt-1 max-w-2xl text-sm leading-relaxed">
-          Their own pastoral leader no longer holds an assignment. Listed by
-          name, never by how long they have waited.
+          Their own pastoral leader no longer holds an assignment. Listed by name, never by
+          how long they have waited.
         </p>
         {unplaced.isPending ? (
           <p className="text-muted mt-2 text-sm">Loading&hellip;</p>
@@ -274,31 +264,27 @@ function Dashboard() {
           <>
             {unplaced.data.data.length === 0 ? (
               <p className="text-muted mt-2 max-w-2xl text-sm leading-relaxed">
-                Everyone in your scope has a pastoral leader who is still in
-                place.
+                Everyone in your scope has a pastoral leader who is still in place.
               </p>
             ) : (
               <ul className="mt-4 flex flex-col gap-3">
-                {unplaced.data.data.slice(0, UNPLACED_TILE).map((person) => (
-                  <li
-                    key={person.id}
-                    className="border-line rounded-lg border p-4"
-                  >
-                    {/*
+              {unplaced.data.data.slice(0, UNPLACED_TILE).map((person) => (
+                <li key={person.id} className="border-line rounded-lg border p-4">
+                  {/*
                     The action that resolves it (section 19) is the reassignment, which
                     lives on the person's place in the tree.
                   */}
-                    <Link
-                      href={`/people/${person.id}/network`}
-                      className="focus-visible:outline-accent inline-flex min-h-6 items-center rounded-sm text-base font-medium underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2"
-                    >
-                      {person.full_name}
-                    </Link>
-                    <p className="text-muted mt-1 text-sm">
-                      Was under {person.former_leader.full_name}
-                    </p>
-                  </li>
-                ))}
+                  <Link
+                    href={`/people/${person.id}/network`}
+                    className="focus-visible:outline-accent inline-flex min-h-6 items-center rounded-sm text-base font-medium underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2"
+                  >
+                    {person.full_name}
+                  </Link>
+                  <p className="text-muted mt-1 text-sm">
+                    Was under {person.former_leader.full_name}
+                  </p>
+                </li>
+              ))}
               </ul>
             )}
             {/*
@@ -306,7 +292,7 @@ function Dashboard() {
               shown only when the tile overflowed, so with one to five people waiting
               the screen had no route into it from anywhere in the application. Moving
               it out of that condition left it inside the *non-empty* branch, so on a
-              church where nobody is waiting — the ordinary case, and the state this
+              church where nobody is waiting — the ordinary case, and the state the
               demo database is in — the screen was still unreachable, under a comment
               claiming it was unconditional. It is now outside both branches.
 
@@ -319,10 +305,9 @@ function Dashboard() {
                 href="/people/awaiting-reassignment"
                 className="focus-visible:outline-accent inline-flex min-h-6 items-center rounded-sm text-sm underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2"
               >
-                {unplaced.data.data.length > UNPLACED_TILE ||
-                unplaced.data.next_cursor !== null
-                  ? "See everyone waiting for a leader"
-                  : "Open the full list"}
+                {unplaced.data.data.length > UNPLACED_TILE || unplaced.data.next_cursor !== null
+                  ? 'See everyone waiting for a leader'
+                  : 'Open the full list'}
               </Link>
             </p>
           </>
@@ -341,9 +326,7 @@ function Dashboard() {
         <div className="mt-4 grid gap-4 sm:grid-cols-2">
           <Tile
             counts="Cell attendance"
-            value={
-              cellFigures.data ? String(cellFigures.data.unique_people) : "—"
-            }
+            value={cellFigures.data ? String(cellFigures.data.unique_people) : '—'}
             unit="people attended"
             scope={scopeLabel}
             period={periodLabel(month, cellFigures.data?.open)}
@@ -351,9 +334,7 @@ function Dashboard() {
           />
           <Tile
             counts="DCC attendance"
-            value={
-              dccFigures.data ? String(dccFigures.data.unique_people) : "—"
-            }
+            value={dccFigures.data ? String(dccFigures.data.unique_people) : '—'}
             unit="people attended"
             scope={scopeLabel}
             period={periodLabel(month, dccFigures.data?.open)}
@@ -369,7 +350,7 @@ function Dashboard() {
                   unit="meetings recorded"
                 />
               ) : (
-                "—"
+                '—'
               )
             }
             scope={scopeLabel}
@@ -386,7 +367,7 @@ function Dashboard() {
                   unit="records filed"
                 />
               ) : (
-                "—"
+                '—'
               )
             }
             scope={scopeLabel}
@@ -403,14 +384,14 @@ function Dashboard() {
         <div className="mt-4 grid gap-4 sm:grid-cols-2">
           <Tile
             counts="Cells you lead"
-            value={mine.data ? String(mine.data.data.length) : "—"}
+            value={mine.data ? String(mine.data.data.length) : '—'}
             scope="Your own Cells"
             period="As of today"
             href="/cells?led_by=me"
           />
           <Tile
             counts="Cells in your scope"
-            value={scoped.data ? String(scoped.data.data.length) : "—"}
+            value={scoped.data ? String(scoped.data.data.length) : '—'}
             scope={scopeLabel}
             period="As of today"
             href="/cells"
@@ -427,9 +408,7 @@ function periodLabel(month: string, open: boolean | undefined): string {
     return monthLabel(month);
   }
 
-  return open
-    ? `${monthLabel(month)} · still open`
-    : `${monthLabel(month)} · closed`;
+  return open ? `${monthLabel(month)} · still open` : `${monthLabel(month)} · closed`;
 }
 
 /**
