@@ -215,6 +215,57 @@ export async function duplicateCandidates(
 }
 
 /**
+ * Somebody whose own pastoral leader holds no assignment, and the leader who left
+ * (SKILL.md sections 5, 19 and 20; decision 0232).
+ *
+ * `former_leader` is named rather than merely counted, because section 19 asks
+ * each entry to carry the action that resolves it and a reassignment means knowing
+ * who somebody is being moved away from.
+ */
+export interface AwaitingReassignment {
+  id: string;
+  member_id: string;
+  full_name: string;
+  former_leader: {
+    person_id: string;
+    member_id: string;
+    full_name: string;
+  };
+}
+
+/**
+ * The attention list section 20 requires (decision 0232).
+ *
+ * **It keys on the condition, not on the archived flag.** A leader holding no open
+ * pastoral assignment leaves the same gap however they came to hold none, and
+ * section 20's placement graph reconstructs a chain past all three of section 5's
+ * causes equally. A person whose leader holds an `ADMIN` account is excluded, which
+ * is section 5's own remedy one relationship over.
+ *
+ * **It names no period.** Somebody reassigned last week needs no action today, so
+ * this asks about now rather than about a reporting month.
+ */
+export async function awaitingReassignment(
+  params: { cursor?: string; limit?: number } = {},
+  signal?: AbortSignal,
+): Promise<{ data: AwaitingReassignment[]; next_cursor: string | null }> {
+  const query = new URLSearchParams();
+  if (params.cursor) {
+    query.set('cursor', params.cursor);
+  }
+  if (params.limit !== undefined) {
+    query.set('limit', String(params.limit));
+  }
+
+  const suffix = query.toString();
+
+  return authenticatedRequest<{ data: AwaitingReassignment[]; next_cursor: string | null }>(
+    `/api/v1/people/awaiting-reassignment${suffix === '' ? '' : `?${suffix}`}`,
+    { signal },
+  );
+}
+
+/**
  * A person's age, derived and never stored.
  *
  * Section 3 keeps the birthday as the authoritative value precisely because it

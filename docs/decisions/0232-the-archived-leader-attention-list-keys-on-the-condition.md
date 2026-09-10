@@ -99,6 +99,31 @@ leaderboard of neglect whatever it is called.
 person under `PUT /api/v1/people/{id}/pastoral-leader`. Section 5 governs who may perform it
 and this ruling moves none of that: appearing on a list confers nothing.
 
+## What building it found, and could not settle
+
+**Section 20 says this list is shown to "the upline who can act", and under Section 7's
+authorized graph no upline can see it.** The gap that puts somebody on the list is the same
+gap that removes them from every ancestor's reach: `subtreeOf` walks open assignment rows,
+so a leader holding none is not in their own upline's subtree, and their disciples are not
+either. A subtree-scoped actor is therefore answered an empty list, and only a Whole Church
+grant sees anything.
+
+Reproduced against the database rather than reasoned about, and pinned as the behaviour that
+ships — `awaiting-reassignment.e2e.spec.ts` asserts the empty answer for the leader who is
+the departed leader's own upline, which is the actor Section 20 names.
+
+**It is escalated rather than worked around, because the obvious fix is the one thing
+Section 7 forbids.** The graph that *would* reach these people is Section 20's placement
+graph, which continues past a leader who left — and decision 0214 refuses to let that graph
+authorize anything, on the ground that Section 20 requires the condition widening it to be
+surfaced as a gap needing repair rather than read as a grant of visibility. Using it here
+would make this very list the licence that argument refuses.
+
+So the route ships correct and, for every actor but a Whole Church holder, empty. That is
+worth having: an administrator is exactly who can reassign across a break, and Section 5
+already makes a cross-branch move a conversation between two leaders. But it is not what
+Section 20 asks for, and the difference is recorded in `CLAUDE.md` rather than papered over.
+
 ## What this does not settle
 
 **Whether the three causes should be told apart in the data.** They should not need to be for

@@ -79,6 +79,10 @@
       "screen": "web/components/possible-matches.tsx"
     },
     {
+      "route": "GET /api/v1/people/awaiting-reassignment",
+      "screen": "web/app/people/awaiting-reassignment/page.tsx"
+    },
+    {
       "route": "GET /api/v1/people/:id/pastoral-path",
       "reason": "§8 asks for the chain when a profile is opened, and the profile screen does not request it yet. My Network is where it lands.",
       "screen": "web/app/people/[id]/network/page.tsx"

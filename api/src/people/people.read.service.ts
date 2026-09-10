@@ -435,4 +435,151 @@ export class PeopleReadService {
       scope: 'IDENTITY_ONLY',
     };
   }
+
+  /**
+   * People whose own pastoral leader holds no open pastoral assignment
+   * (SKILL.md sections 5, 19 and 20; decision 0232).
+   *
+   * **The condition, never the lifecycle flag.** Section 20 requires this list and
+   * named its subject "a person whose pastoral leader is **archived**"; what it
+   * exists to counteract is the reconstruction one paragraph above, which continues
+   * a chain past a leader holding no assignment *within the period* — and section 5
+   * gives three legitimate causes of holding none. Keyed on the flag this would
+   * surface one cause and miss two while the reconstruction hid all three. The two
+   * also come apart in both directions: an archived Person keeps an open row until
+   * it is closed, and an unarchived one may hold none.
+   *
+   * **The one exclusion is section 5's own remedy, one relationship over.** A leader
+   * holding an `ADMIN` account is outside the pastoral structure deliberately and
+   * permanently, so their disciples are not waiting for a repair. Section 5 states
+   * that remedy for the neighbouring list — Persons holding no assignment of their
+   * own — and it is the same argument here. It prejudges nothing about whether such
+   * a Person may hold disciples at all, which is open.
+   *
+   * **Undated, and it names no period.** Somebody reassigned last week needs no
+   * action today, so this asks about now: section 7's first clause, the same one
+   * decision 0204 applied to the Cell roster. It is deliberately not the dated
+   * reading decision 0231 gives a collection that *does* name one.
+   *
+   * **Ordered by name and never by how long a gap has stood** (sections 13, 15, 17).
+   * A list ordered by staleness is a ranking of neglect whatever it is called, which
+   * is why the ordering is decided here rather than left to a caller's `sort`.
+   *
+   * A root's row carries a null `leader_id` and is not a gap — nobody is missing
+   * above a root (section 5, Network roots) — so those rows are excluded by the
+   * join rather than by a filter.
+   */
+  async awaitingReassignment(
+    scope: { kind: 'WHOLE_CHURCH' } | { kind: 'PERSONS'; personIds: ReadonlySet<string> },
+    limit: number,
+    cursor: SearchCursor | null = null,
+  ): Promise<{
+    rows: {
+      id: string;
+      member_id: string;
+      first_name: string;
+      middle_name: string | null;
+      last_name: string;
+      leader_id: string;
+      leader_member_id: string;
+      leader_first_name: string;
+      leader_middle_name: string | null;
+      leader_last_name: string;
+    }[];
+    nextCursor: SearchCursor | null;
+  }> {
+    // An empty scope selects nobody. Expressed here rather than as an `IN ()`,
+    // which PostgreSQL rejects, and it is the honest answer for an actor whose
+    // grant reaches nobody.
+    if (scope.kind === 'PERSONS' && scope.personIds.size === 0) {
+      return { rows: [], nextCursor: null };
+    }
+
+    let query = this.db
+      .selectFrom('pastoral_assignments as edge')
+      .innerJoin('persons as person', 'person.id', 'edge.person_id')
+      .innerJoin('persons as leader', 'leader.id', 'edge.leader_id')
+      .select([
+        'person.id as id',
+        'person.member_id as member_id',
+        'person.first_name as first_name',
+        'person.middle_name as middle_name',
+        'person.last_name as last_name',
+        'leader.id as leader_id',
+        'leader.member_id as leader_member_id',
+        'leader.first_name as leader_first_name',
+        'leader.middle_name as leader_middle_name',
+        'leader.last_name as leader_last_name',
+      ])
+      .where('edge.ended_at', 'is', null)
+      // A merged-away Person is not listed: the survivor carries the identity
+      // (section 3, Person Merge).
+      .where('person.merged_into_id', 'is', null)
+      // The condition itself: the leader holds no open assignment of their own.
+      .where((eb) =>
+        eb.not(
+          eb.exists(
+            eb
+              .selectFrom('pastoral_assignments as up')
+              .select(sql`1`.as('one'))
+              .whereRef('up.person_id', '=', 'edge.leader_id')
+              .where('up.ended_at', 'is', null),
+          ),
+        ),
+      )
+      // Section 5's remedy: an administrator outside the pastoral structure is in
+      // the correct and permanent state, so their disciples are not a gap.
+      .where((eb) =>
+        eb.not(
+          eb.exists(
+            eb
+              .selectFrom('accounts as account')
+              .innerJoin('account_roles as role', 'role.account_id', 'account.id')
+              .select(sql`1`.as('one'))
+              .whereRef('account.person_id', '=', 'edge.leader_id')
+              .where('role.role', '=', 'ADMIN')
+              .where('role.revoked_at', 'is', null),
+          ),
+        ),
+      )
+      .orderBy('person.last_name')
+      .orderBy('person.first_name')
+      .orderBy('person.id')
+      // One more than asked for, so the last page is recognised without a count
+      // (section 22 returns no totals).
+      .limit(limit + 1);
+
+    if (scope.kind === 'PERSONS') {
+      query = query.where('person.id', 'in', [...scope.personIds]);
+    }
+
+    if (cursor !== null) {
+      query = query.where((eb) =>
+        eb.or([
+          eb('person.last_name', '>', cursor.lastName),
+          eb.and([
+            eb('person.last_name', '=', cursor.lastName),
+            eb('person.first_name', '>', cursor.firstName),
+          ]),
+          eb.and([
+            eb('person.last_name', '=', cursor.lastName),
+            eb('person.first_name', '=', cursor.firstName),
+            eb('person.id', '>', cursor.id),
+          ]),
+        ]),
+      );
+    }
+
+    const found = await query.execute();
+    const rows = found.slice(0, limit);
+    const last = rows[rows.length - 1];
+
+    return {
+      rows,
+      nextCursor:
+        found.length > limit && last !== undefined
+          ? { lastName: last.last_name, firstName: last.first_name, id: last.id }
+          : null,
+    };
+  }
 }

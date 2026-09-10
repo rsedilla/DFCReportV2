@@ -3,7 +3,7 @@ import { Body, Controller, Get, Param, Patch, Post, Put, Query } from '@nestjs/c
 import { CurrentActor } from '../auth/current-actor.decorator';
 import { RequiresCapability } from '../auth/authorization/authorization.decorators';
 import { Capability } from '../auth/authorization/capabilities';
-import { type Actor } from '../auth/authorization/authorization.service';
+import { AuthorizationService, type Actor } from '../auth/authorization/authorization.service';
 import { InvariantViolationError, NotFoundError } from '../common/errors/api-error';
 import { unresolvableCursor } from '../common/cursor';
 import { HierarchyService } from '../hierarchy/hierarchy.service';
@@ -13,6 +13,7 @@ import {
 } from '../common/idempotency/current-idempotency.decorator';
 
 import {
+  AwaitingReassignmentDto,
   CorrectSexDto,
   ReassignPastoralLeaderDto,
   CreatePersonDto,
@@ -25,7 +26,7 @@ import { PeopleReadService } from './people.read.service';
 import { PeopleReassignmentService } from './people.reassignment.service';
 import { PeopleService } from './people.service';
 import { PeopleSexCorrectionService } from './people.sex-correction.service';
-import { fullProfile, normalizeMobile, type SearchCursor } from './people.shared';
+import { composeName, fullProfile, normalizeMobile, type SearchCursor } from './people.shared';
 import { isStorableText } from '../common/text/storable-text';
 
 /**
@@ -64,6 +65,10 @@ export class PeopleController {
     // taken from the owning module's service rather than re-walked here
     // (section 2). `PeopleModule` already imports `HierarchyModule`.
     private readonly hierarchy: HierarchyService,
+    // The attention list below narrows to the actor's own scope, and the scope set
+    // is the authorization module's to compute rather than this controller's to
+    // re-derive (section 2, and the seam decision 0106 made its own module).
+    private readonly authorization: AuthorizationService,
   ) {}
 
   /**
@@ -165,6 +170,79 @@ export class PeopleController {
     );
 
     return { data: visible.slice(0, limit), next_cursor: null };
+  }
+
+  /**
+   * People within the actor's scope whose own pastoral leader holds no open
+   * pastoral assignment (SKILL.md sections 5, 19 and 20; decision 0232).
+   *
+   * **Section 20 requires this list and calls it required rather than advisable.**
+   * The placement graph continues a chain past a leader who has left, so a report
+   * still adds up — and that reconstruction is exactly what removes the pressure to
+   * fix the gap. This is the surface that keeps the repair visible.
+   *
+   * **It keys on the condition rather than on the lifecycle flag** (decision 0232).
+   * Section 20 named its subject "archived"; the reconstruction fires on a leader
+   * holding no assignment, of which section 5 gives three legitimate causes, so the
+   * narrower reading surfaced one and hid two. The service carries the query and the
+   * one exclusion — a leader holding an `ADMIN` account, which is section 5's own
+   * remedy one relationship over.
+   *
+   * **`people.view_subtree` against the actor**, with the narrowing done in the
+   * service, which is the shape `GET /people/duplicate-candidates` above already
+   * uses. It is the Read capability for this domain and is grantable `read_only`;
+   * a management capability granted `read_only` is refused at creation, so guarding
+   * an attention list with one would make it ungrantable to exactly the person
+   * section 20 wants reading it. Not `reports.view_subtree`, which section 7 makes
+   * **dated** — this route names no period, and a dated capability over a route with
+   * no period is the error section 7 warns against in the paragraph defining the
+   * phrase.
+   *
+   * **The scope is the actor's own, and the filter narrows rather than widens.**
+   * `scopeMembership` returns Whole Church or a set of person identifiers, and the
+   * set is applied to the *person* rather than to their leader: section 20 says the
+   * list is shown to "the upline who can act", and the actor can act on somebody
+   * inside their own subtree whether or not the departed leader still is.
+   *
+   * **Never ranked** (sections 13, 15, 17). Ordered by name in the service, with no
+   * measure of how long a gap has stood and no colour grading. Each entry names the
+   * leader who left, which is what a client needs in order to offer the reassignment
+   * that resolves it (section 19).
+   */
+  @Get('awaiting-reassignment')
+  @RequiresCapability(Capability.PeopleViewSubtree, { kind: 'actor' })
+  async awaitingReassignment(
+    @Query() query: AwaitingReassignmentDto,
+    @CurrentActor() actor: Actor,
+  ): Promise<{ data: Record<string, unknown>[]; next_cursor: string | null }> {
+    const scope = await this.authorization.scopeMembership(actor, Capability.PeopleViewSubtree);
+
+    const { rows, nextCursor } = await this.read.awaitingReassignment(
+      scope,
+      query.limit ?? 50,
+      decodeCursor(query.cursor),
+    );
+
+    return {
+      data: rows.map((row) => ({
+        id: row.id,
+        member_id: row.member_id,
+        full_name: composeName(row),
+        // Named rather than merely counted: section 19 asks each entry to carry the
+        // action that resolves it, and reassigning somebody means knowing who they
+        // are being moved away from.
+        former_leader: {
+          person_id: row.leader_id,
+          member_id: row.leader_member_id,
+          full_name: composeName({
+            first_name: row.leader_first_name,
+            middle_name: row.leader_middle_name,
+            last_name: row.leader_last_name,
+          }),
+        },
+      })),
+      next_cursor: encodeCursor(nextCursor),
+    };
   }
 
   /**

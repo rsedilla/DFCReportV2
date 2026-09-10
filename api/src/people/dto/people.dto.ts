@@ -312,6 +312,38 @@ export class DuplicateCandidatesDto {
   limit?: number;
 }
 
+/**
+ * `GET /api/v1/people/awaiting-reassignment` (SKILL.md sections 5, 19 and 20;
+ * decision 0232).
+ *
+ * **Pagination and nothing else, deliberately.** The list is defined entirely by a
+ * condition on the data — a person whose pastoral leader holds no open assignment —
+ * and by the actor's own scope. There is no filter to offer: a threshold would make
+ * it a ranking, and a date would make it a dated read, which decision 0232 refuses
+ * for a list that asks about now.
+ */
+export class AwaitingReassignmentDto {
+  /**
+   * Opaque, and passed back unmodified (section 22).
+   *
+   * The same bound and the same reason as `SearchPeopleDto.cursor` below: this
+   * cursor carries `last_name`, `first_name` and a UUID, and a bound below
+   * `CURSOR_MAX_LENGTH` would let the server emit a cursor its own DTO refuses.
+   */
+  @IsOptional()
+  @IsString()
+  @Length(1, CURSOR_MAX_LENGTH)
+  cursor?: string;
+
+  /** Section 22: defaults to 50, maximum 200. */
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(200)
+  limit?: number;
+}
+
 export class SearchPeopleDto {
   @IsString()
   // The upper bound is the name bound rather than a coincidence that matches it: this

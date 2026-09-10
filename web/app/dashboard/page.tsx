@@ -9,6 +9,7 @@ import { FailureNotice } from '@/components/ui/failure-notice';
 import { listCellMeetings, listCells, type CellSummary } from '@/lib/cells';
 import { getMe, holdsWholeChurch } from '@/lib/me';
 import { describeFailure } from '@/lib/messages';
+import { awaitingReassignment } from '@/lib/people';
 import { getCellMonthlyReport, getDccMonthlyReport } from '@/lib/reports';
 import { dayLabel, monthLabel, reportingMonthOf } from '@/lib/reporting-month';
 
@@ -50,6 +51,16 @@ import { dayLabel, monthLabel, reportingMonthOf } from '@/lib/reporting-month';
  * **Nothing here is ranked or colour-graded** (sections 13, 17 and 19). The
  * attention list is filtered rather than sorted, in the order the API returns.
  */
+/**
+ * How many people needing a leader the dashboard tile shows before deferring to the
+ * full list (section 19).
+ *
+ * A dashboard entry is a prompt to act, not the list itself: section 15 forbids
+ * ranking, so a longer tile would be a longer arbitrary slice rather than a more
+ * useful one. The screen behind it pages honestly.
+ */
+const UNPLACED_TILE = 5;
+
 export default function DashboardPage() {
   return (
     <AppShell>
@@ -62,6 +73,17 @@ function Dashboard() {
   const month = reportingMonthOf();
 
   const me = useQuery({ queryKey: ['me'], queryFn: ({ signal }) => getMe(signal) });
+
+  // Section 20's attention list (decision 0232). It takes no month: the list asks
+  // about now, so it is deliberately not keyed on the period the figures below use.
+  //
+  // One more than the tile shows, so "is there more than this" is answered by the
+  // read rather than by a second request — the same trick the collection endpoints
+  // use one layer down, and section 22 returns no total to ask instead.
+  const unplaced = useQuery({
+    queryKey: ['awaiting-reassignment', 'dashboard'],
+    queryFn: ({ signal }) => awaitingReassignment({ limit: UNPLACED_TILE + 1 }, signal),
+  });
 
   const mine = useQuery({
     queryKey: ['cells', month, true],
@@ -199,6 +221,66 @@ function Dashboard() {
             ))}
           </ul>
         )}
+      </section>
+
+      {/*
+        Section 19's fourth outstanding-work entry, and section 20 requires the list
+        behind it (decision 0232). It sits with the other outstanding work rather than
+        with the figures because it is something to do, not something to read.
+
+        **Undated, so it is above the period heading rather than under it.** The list
+        asks about now: somebody reassigned last week needs no action today, whatever a
+        past month's chain looked like. Putting it below would attach it to the month
+        selector and make it look like a figure for a period, which is exactly the line
+        section 3 draws and section 19 says a dashboard is where it is most easily lost.
+      */}
+      <section className="mt-10" aria-labelledby="unplaced-heading">
+        <h2 id="unplaced-heading" className="text-lg font-medium">
+          People needing a leader
+        </h2>
+        <p className="text-muted mt-1 max-w-2xl text-sm leading-relaxed">
+          Their own pastoral leader no longer holds an assignment. Listed by name, never by
+          how long they have waited.
+        </p>
+        {unplaced.isPending ? (
+          <p className="text-muted mt-2 text-sm">Loading&hellip;</p>
+        ) : unplaced.data && unplaced.data.data.length === 0 ? (
+          <p className="text-muted mt-2 max-w-2xl text-sm leading-relaxed">
+            Everyone in your scope has a pastoral leader who is still in place.
+          </p>
+        ) : unplaced.data ? (
+          <>
+            <ul className="mt-4 flex flex-col gap-3">
+              {unplaced.data.data.slice(0, UNPLACED_TILE).map((person) => (
+                <li key={person.id} className="border-line rounded-lg border p-4">
+                  {/*
+                    The action that resolves it (section 19) is the reassignment, which
+                    lives on the person's place in the tree.
+                  */}
+                  <Link
+                    href={`/people/${person.id}/network`}
+                    className="focus-visible:outline-accent inline-flex min-h-6 items-center rounded-sm text-base font-medium underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2"
+                  >
+                    {person.full_name}
+                  </Link>
+                  <p className="text-muted mt-1 text-sm">
+                    Was under {person.former_leader.full_name}
+                  </p>
+                </li>
+              ))}
+            </ul>
+            {unplaced.data.data.length > UNPLACED_TILE || unplaced.data.next_cursor !== null ? (
+              <p className="mt-4">
+                <Link
+                  href="/people/awaiting-reassignment"
+                  className="focus-visible:outline-accent inline-flex min-h-6 items-center rounded-sm text-sm underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2"
+                >
+                  See everyone waiting for a leader
+                </Link>
+              </p>
+            ) : null}
+          </>
+        ) : null}
       </section>
 
       {/*
