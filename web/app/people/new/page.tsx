@@ -330,9 +330,10 @@ function NewPersonForm() {
           lastName={values.last_name}
           birthDate={values.birth_date}
           mobileNumber={values.mobile_number}
-        />
-
-        <PersonPicker
+        />        <PersonPicker
+          legend="Pastoral leader"
+          description="Who will pastor this person? Required, and it decides who can see and edit their details."
+          searchLabel="Search for a leader by name"
           selectedId={leaderId}
           selectedName={leaderName}
           onSelect={(person) => {

@@ -171,8 +171,10 @@ function PastoralNetwork() {
           belonged to in months that may already be closed, and is a separate permission.
         </p>
 
-        <div className="mt-4">
-          <PersonPicker
+        <div className="mt-4">          <PersonPicker
+            legend="New pastoral leader"
+            description="Who should pastor this person from now on? The server decides whether you may make this change."
+            searchLabel="Search for a leader by name"
             selectedId={chosen?.id ?? null}
             selectedName={chosen?.full_name ?? null}
             onSelect={setChosen}

@@ -56,6 +56,7 @@ export function CellReport() {
   const [cellId, setCellId] = useState<string>('');
 
   const me = useQuery({ queryKey: ['me'], queryFn: ({ signal }) => getMe(signal) });
+  const wholeChurch = holdsWholeChurch(me.data, 'reports.view_subtree');
 
   const cells = useQuery({
     queryKey: ['cells', month, false],
@@ -64,20 +65,26 @@ export function CellReport() {
 
   // The actor's own subtree by default: every leader can read it, and it is the
   // question a leader opening this screen is actually asking.
+  // **A Whole Church grant is read as Whole Church**, and the option's label says
+  // which. Keying on the actor's own subtree is right for a leader and wrong for
+  // anybody holding a church-wide grant who is not in the pastoral tree — section
+  // 5 permits that for an administrator, and section 20 then places them in no
+  // subtree. The label said "Everyone in your scope" while the query asked about
+  // one person, which is the disagreement this closes.
   const scope: ReportScope | null =
     cellId !== ''
       ? { kind: 'CELL', cell_id: cellId }
-      : me.data
-        ? { kind: 'LEADER', person_id: me.data.person_id }
-        : null;
+      : wholeChurch
+        ? { kind: 'WHOLE_CHURCH' }
+        : me.data
+          ? { kind: 'LEADER', person_id: me.data.person_id }
+          : null;
 
   const report = useQuery({
     queryKey: ['cell-report', month, scope],
     queryFn: ({ signal }) => getCellMonthlyReport(month, scope as ReportScope, signal),
     enabled: scope !== null,
   });
-
-  const wholeChurch = holdsWholeChurch(me.data, 'reports.view_subtree');
 
   return (
     <main id="main" className={PAGE_WIDTH.INDEX}>
