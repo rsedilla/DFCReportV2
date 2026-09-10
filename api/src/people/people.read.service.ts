@@ -662,22 +662,28 @@ export class PeopleReadService {
    * closed, and widening it took a ruling with all three of its legs.
    *
    * **The two existing ports were never counter-examples**, which is what made the
-   * amendment the principled answer rather than the convenient one.
-   * `CellsReadService.openLeadershipsOf` selects from `cell_leaderships` and joins
-   * `cells`; `CellScopePort.leaderForScope` takes a `cellId`. Both are rooted in the
-   * *owning* module's tables throughout, so neither is a join onto a query rooted in the
-   * reading module's own table. They instance section 2's main rule, inverted because the
-   * direction would be a cycle, and never its exemption.
+   * amendment the principled answer rather than the convenient one — and the
+   * discriminator is the **call site**. `NetworksService` asks `openLeadershipsOf` as a
+   * precondition check keyed by a `personId` it already holds, and `CapabilityGuard` asks
+   * `leaderForScope` to resolve one Cell. Neither read is joined onto anything, so neither
+   * is a join onto a query rooted in the reading module's own table. They instance section
+   * 2's main rule, inverted because the direction would be a cycle, and never its
+   * exemption.
    *
-   * **A port would also have cost a correct page.** The three anti-joins sit in the
-   * `WHERE` clause the `LIMIT` applies to. Behind a port that filter leaves the clause, so
-   * a page of `limit + 1` rows is fetched unfiltered and filtered in memory — returning
-   * fewer rows than the limit while more remain, which is a correctness consequence rather
-   * than an efficiency one.
+   * *A first version argued this from where each port's implementation roots, which is
+   * true of any port implementation — the one this method was offered included — and so
+   * distinguished nothing.*
+   *
+   * *A first version of this docblock claimed a port would return a short page. It is
+   * withdrawn: a port returning the placed set puts the filter back in the `WHERE` clause
+   * as a `NOT IN`, so the page is full. The scope filter below is that shape already.*
    *
    * *`awaitingReassignment` above is **not** precedent for this and was cited as such in
-   * error: it selects from `pastoral_assignments`, which `hierarchy` owns, so it does not
-   * satisfy the exemption's premise either.*
+   * error: it selects from `pastoral_assignments`, which `hierarchy` owns, and reads
+   * `accounts` and `account_roles`, which `auth` owns, so it satisfies neither the
+   * exemption's premise nor any other clause of section 2. **That is a Stop Condition in
+   * its own right and `CLAUDE.md` carries it**; decision 0234 settles this method and
+   * deliberately does not reach that one.*
    */
   async withoutACell(
     scope: { kind: 'WHOLE_CHURCH' } | { kind: 'PERSONS'; personIds: ReadonlySet<string> },

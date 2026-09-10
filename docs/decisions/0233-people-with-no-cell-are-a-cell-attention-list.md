@@ -14,9 +14,15 @@ guards it, which module owns it, or what it does about a Cell's leader.
 
 **This ruling settles the first and the third and does not settle the second.** That is a
 defect in it rather than a scoping choice: the sentence above names three questions and the
-sections below answer two. Which module owns the query is escalated instead, and
-`CLAUDE.md` carries it — the code ships reading three `cells` tables from `people`, and
-whether Section 2's exemption admits that is not this ruling's to decide.
+sections below answer two. Which module owns the query is escalated instead — the code ships
+reading three `cells` tables from `people`, and whether Section 2's exemption admits that
+is not this ruling's to decide.
+
+*It was settled the same day as decision 0234, which amends Section 2 to name the join.
+This paragraph said `CLAUDE.md` carried the escalation, and said so for as long as the
+bullet stood; the bullet was retired by that ruling and the sentence was left pointing at
+it, which is the "recorded as open when it is not" class this project counts. The record
+now lives in 0234.*
 
 ## `cell.view_subtree`, resolved against the actor
 

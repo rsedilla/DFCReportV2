@@ -35,32 +35,45 @@ row exists and never interpret one.
 `auth` through `cell-scope.port.ts`. **That claim is withdrawn.** Both were read before
 this ruling was written, and neither satisfies the exemption's premise:
 
-- `CellsReadService.openLeadershipsOf` selects from `cell_leaderships`, inner-joins
-  `cells`, and takes a `personId` as a parameter. It is rooted in the **owning** module's
-  tables throughout.
-- `CellScopePort.leaderForScope` takes a `cellId` and resolves a Cell's leader. Rooted in
-  `cells` tables likewise.
+**The discriminator is the call site, not where the port's implementation roots.** A first
+version of this ruling argued that both ports are rooted in the owning module's tables
+throughout, and `architecture-guardian` pointed out that this is true of *any* port
+implementation, the one `withoutACell` was offered included, so it distinguishes nothing.
+The argument is restated on the reads themselves:
 
-Neither is a join onto a query rooted in a table the *reading* module owns. Both are
-standalone lookups in another module's tables — which is precisely what Section 2's main
-rule sends through a service interface, and which becomes a port where the direction
-would be a cycle. They are instances of the rule, not of the exemption, so they were
-never evidence about this case at all.
+- `NetworksService` calls `openLeadershipsOf(transaction, personId)` as a precondition
+  check inside a Network-change transaction. It is a standalone lookup keyed by an
+  identifier the caller already holds.
+- `CapabilityGuard` calls `leaderForScope(cellId)` to resolve one Cell. The same shape.
+
+Neither read is a join onto a query rooted in a table the *reading* module owns, because
+neither is joined onto anything: each is a question asked on its own account. That is
+precisely what Section 2's main rule sends through a service interface, and what becomes a
+port where the direction would be a cycle. They instance the rule, not the exemption, so
+they were never evidence about this case at all.
 
 The distinction is the whole ruling. The exemption says a read of this shape is not a
 cross-module dependency; the port rule governs dependencies that exist. Reaching for a
 port here would have been answering the wrong rule's question.
 
-## What a port would have cost, which is not only an indirection
+## A cost this ruling claimed, and withdraws
 
-`CLAUDE.md` costed the port option as materialising "the whole church's placed set on
-every page". That named the smaller half.
+**A first version argued that a port would return a page short of its own limit**, on the
+ground that the three anti-joins sit in the `WHERE` clause the `LIMIT` applies to and
+would leave it. `CLAUDE.md` had costed the port option as materialising the placed set,
+and this ruling claimed to enlarge on that. **It is withdrawn, and it was never the same
+option.**
 
-The three anti-joins sit in the `WHERE` clause that the `LIMIT` applies to. Behind a port
-the filter leaves that clause: a page of `limit + 1` rows is fetched **unfiltered**,
-filtered in memory, and comes back short — so the route would return a page smaller than
-its own limit while more rows remain, and paging would need a loop no section bounds.
-That is a correctness consequence rather than an efficiency one.
+A port returning the placed set puts the filter straight back into the `WHERE` clause as a
+`NOT IN`, so the `LIMIT` applies to the filtered set and the page is full. The short page
+belongs to a different shape — one asked per page and filtered in memory — which nobody
+proposed. **This method already demonstrates the refutation**: `scope.personIds` is a
+materialised set from `hierarchy`, applied as `.where('person.id', 'in', [...])` on every
+page, with no effect on page fullness.
+
+It is withdrawn rather than restated for the narrower shape, because a cost the decision
+does not rest on is a claim the next module gets to argue from, and this one was wrong.
+The first ground carries the ruling alone.
 
 ## The query cannot be re-homed in `cells`
 
@@ -73,8 +86,12 @@ So the real choice was two-way, and the two-way choice is what was put and answe
 
 ## What this accepts
 
-**The closed list is widened for the second time, and the next module has a precedent to
-argue from.** That cost is real and is taken deliberately. The list stays closed, and
+**The closed list is widened for the first time, and the next module has a precedent to
+argue from.** *A first version said "the second time", and the commit message with it.
+`git log -S "Nothing else qualifies today" -- SKILL.md` returns one commit, which created
+the sentence; the correction of 2026-08-26 rewrote the exemption's **description** and
+added no instance. So this is the first widening, and the inflated figure inflated exactly
+the precedent this paragraph exists to cost.* That cost is real and is taken deliberately. The list stays closed, and
 adding to it stays an amendment — a ruling with all three legs — which is the mechanism
 working rather than failing. What is refused is a module deciding this for itself, which
 is what had happened and what decision 0233 escalated rather than ratified.
