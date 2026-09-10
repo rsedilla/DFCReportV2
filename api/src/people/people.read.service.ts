@@ -656,14 +656,24 @@ export class PeopleReadService {
    * **Rooted in `persons`, which this module owns, and reading three tables `cells`
    * owns as anti-joins** — `cell_memberships`, `cell_leaderships` and `cells` itself.
    *
-   * **Whether section 2's exemption admits that is unsettled and is recorded as a Stop
-   * Condition in `CLAUDE.md`.** The exemption is "a read joined onto a query rooted in a
-   * table the reading module owns", which this is — and it names two instances and closes
-   * the list, saying adding to it "is an amendment rather than a decision taken in a
-   * module". No amendment was made. Two modules answer these same two questions through a
-   * port instead (`cell-relationships.port.ts`, `cell-scope.port.ts`), which is what
-   * section 2 prescribes where the dependency would be a cycle — and `people → cells` is
-   * one, since `CellsModule` imports `PeopleModule`.
+   * **Section 2's exemption names this join** (decision 0234). The exemption is "a read
+   * joined onto a query rooted in a table the reading module owns", which this is, and
+   * section 2 now names it as the third instance beside `hierarchy`'s two. The list stays
+   * closed, and widening it took a ruling with all three of its legs.
+   *
+   * **The two existing ports were never counter-examples**, which is what made the
+   * amendment the principled answer rather than the convenient one.
+   * `CellsReadService.openLeadershipsOf` selects from `cell_leaderships` and joins
+   * `cells`; `CellScopePort.leaderForScope` takes a `cellId`. Both are rooted in the
+   * *owning* module's tables throughout, so neither is a join onto a query rooted in the
+   * reading module's own table. They instance section 2's main rule, inverted because the
+   * direction would be a cycle, and never its exemption.
+   *
+   * **A port would also have cost a correct page.** The three anti-joins sit in the
+   * `WHERE` clause the `LIMIT` applies to. Behind a port that filter leaves the clause, so
+   * a page of `limit + 1` rows is fetched unfiltered and filtered in memory — returning
+   * fewer rows than the limit while more remain, which is a correctness consequence rather
+   * than an efficiency one.
    *
    * *`awaitingReassignment` above is **not** precedent for this and was cited as such in
    * error: it selects from `pastoral_assignments`, which `hierarchy` owns, so it does not
