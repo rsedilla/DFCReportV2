@@ -86,12 +86,16 @@ So the real choice was two-way, and the two-way choice is what was put and answe
 
 ## What this accepts
 
-**The closed list is widened for the first time, and the next module has a precedent to
-argue from.** *A first version said "the second time", and the commit message with it.
-`git log -S "Nothing else qualifies today" -- SKILL.md` returns one commit, which created
-the sentence; the correction of 2026-08-26 rewrote the exemption's **description** and
-added no instance. So this is the first widening, and the inflated figure inflated exactly
-the precedent this paragraph exists to cost.* That cost is real and is taken deliberately. The list stays closed, and
+**The closed list is widened, and the next module has a precedent to argue from.** *Two
+successive versions of this sentence stated an ordinal and neither survived. "The second
+time" was refuted by the specification's own history — `git log -S "Nothing else qualifies
+today" -- SKILL.md` returns the one commit that created the sentence, and the correction of
+2026-08-26 rewrote the exemption's description without adding an instance. "The first" was
+then refuted by the tree, where `cells` joins `persons` in `membersAsOfWithin` and
+`membersOfWithin` and no home names either. Which ordinal is right depends on whether §2
+enumerates instances or argued instances, which is now a Stop Condition. It is deleted
+rather than corrected a third time, in the paragraph whose whole subject is the precedent a
+figure sets.* That cost is real and is taken deliberately. The list stays closed, and
 adding to it stays an amendment — a ruling with all three legs — which is the mechanism
 working rather than failing. What is refused is a module deciding this for itself, which
 is what had happened and what decision 0233 escalated rather than ratified.
@@ -100,6 +104,18 @@ is what had happened and what decision 0233 escalated rather than ratified.
 
 **Whether a Cell's leader is a member of their own Cell.** Still open, with consequences
 in Section 12, and untouched here.
+
+**Whether Section 2's enumeration is a list of instances or a list of argued instances.**
+This ruling adds one instance and re-derived the paragraph around it, and the re-derivation
+asserted a total that the tree refutes: `cells` joins `persons` in two places that neither
+Section 2, nor `people.module.ts`, nor any docblock names. So the amendment this ruling
+makes is sound and the enumeration it sits inside is not known to be complete. Recorded in
+`CLAUDE.md` rather than settled here, because deciding it would either admit two instances
+nobody argued or narrow a sentence the owner did not rule on.
+
+**Whether Section 2 admits `awaitingReassignment`, or `attendance` writing `settings`.**
+Both are recorded as Stop Conditions. Neither is reached by this ruling, and the second is
+on the write side, where Section 2 admits no exemption at all.
 
 Decision 0233's other two answers — the capability, and that leading an `ACTIVE` Cell
 counts as having one — are undisturbed. This supplies only the third question that ruling

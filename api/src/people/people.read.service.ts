@@ -658,8 +658,11 @@ export class PeopleReadService {
    *
    * **Section 2's exemption names this join** (decision 0234). The exemption is "a read
    * joined onto a query rooted in a table the reading module owns", which this is, and
-   * section 2 now names it as the third instance beside `hierarchy`'s two. The list stays
-   * closed, and widening it took a ruling with all three of its legs.
+   * section 2 now names it. Widening the list took a ruling with all three of its legs.
+   *
+   * *No count is stated here. A first version called this "the third instance", which was
+   * false of the tree — `cells` joins `persons` in two more places — and whether section
+   * 2's enumeration is of instances or of argued instances is a Stop Condition.*
    *
    * **The two existing ports were never counter-examples**, which is what made the
    * amendment the principled answer rather than the convenient one — and the

@@ -146,11 +146,10 @@ export class HierarchyService {
    *
    * **Identifiers only, and that is a module rule rather than a style.** Section 2
    * lets one module read another's table in exactly one shape -- a read joined
-   * onto a query rooted in a table the reading module owns -- and closes the list
-   * of instances, of which two are in this file and one is `people`'s
-   * `withoutACell` (decision 0234). Resolving names here would not join that
-   * list: it is a bare lookup in `persons`, rooted in nothing this module owns,
-   * answering a question `people` answers already. The caller composes the
+   * onto a query rooted in a table the reading module owns -- and names the two
+   * queries in this file among the instances it argues. Resolving names here
+   * would not be one of them: it is a bare lookup in `persons`, rooted in
+   * nothing this module owns, answering a question `people` answers already. The caller composes the
    * names through `PeopleReadService`.
    *
    * **`topIsRoot` is the distinction section 5 requires be surfaced.** A Network
