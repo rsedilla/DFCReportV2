@@ -201,7 +201,7 @@ recorded in `CLAUDE.md`, and each outside the route this stage's last branch own
 
 ---
 
-## Stage 5 — Reporting
+## Stage 5 — Reporting — **complete**
 
 - Classification and monthly attendance, for both domains (§9, §12)
 - Coverage, as a single line rather than a bucket
@@ -225,6 +225,12 @@ recorded in `CLAUDE.md`, and each outside the route this stage's last branch own
 That divergence is what the ruling of 2026-09-06 is about. A stage's bullet list is scope and its "Done when" is the exit criterion, and where the two part the bullets lapse with nothing recording it. So this stage's own lapse is written down rather than left to be found: **it ships the reporting API with no interface, and owes the screens block below.** Network Summary, the notifications, and the materialized closed months are deferred past the pilot — a stored figure nobody can yet read buys nothing, and a single branch running one month is a scale at which every figure is computed live.
 
 **Done when:** the reconciliation tests pass and run in CI — classification at every scope, and monthly-attendance buckets at Cell scope, each summing to the same unique-people total (`SKILL.md` §20).
+
+**Met on 2026-09-10.** `api/test/database/reporting-reconciliation.spec.ts` and `reporting-cell-reconciliation.spec.ts` both carry the Stage 5 Done-when in their own describe blocks, and both run inside `npm test`, which the `api` CI job runs on every pull request.
+
+**What lapsed, stated rather than left to be found.** Four of the six bullets above are not built, and the stage is complete anyway because its exit criterion is the reconciliation and nothing else — the divergence this stage's own paragraph names, two paragraphs up. Three were deferred past the pilot deliberately and are recorded there: Network Summary, the notifications, and the materialized closed months.
+
+**The fourth is partial and was not deferred by anything.** *Role-specific dashboards, with scope and period on every tile* — the second half holds, and every tile carries both. The first does not: §19 requires four dashboards that differ by role, and one generic dashboard ships. The Admin variant is covered by the ten `after the pilot — Admin screens` waivers in `web/screen-coverage.json`, and the Cell-leader and upline variants are served adequately by one screen that shows both a leader's own Cells and their scope. **The Senior Pastor scope selector — Whole Church, Men's, Women's — is covered by neither**, and is the one §19 item this stage owes with no waiver and no deferral behind it. It is named here so the pilot stage inherits it explicitly rather than by omission.
 
 **Why it matters:** this is where §20 stops being prose and becomes something enforced. A reconciliation failure is a data-integrity defect, not a rounding issue.
 
