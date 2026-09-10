@@ -174,7 +174,7 @@ jobs:
       # Two suites: axe-core over every route in both themes, and the section 6
       # refresh-token rules, which are invisible from the screen -- a sign-out
       # that revokes nothing looks exactly like one that works.
-      - name: Browser tests (axe-core in two engines, and the section 6 session rules)
+      - name: Browser tests (axe-core in Blink, layout in WebKit, and the section 6 session rules)
         run: npm run test:browser
 
       - name: Upload failure traces
