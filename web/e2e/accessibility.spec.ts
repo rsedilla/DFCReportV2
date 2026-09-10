@@ -6,6 +6,7 @@ import { join, resolve } from 'node:path';
 import {
   PERSON_IN_SCOPE,
   mockAccepted,
+  mockAwaitingReassignment,
   mockDuplicateRefusal,
   mockPeople,
   mockPossibleMatches,
@@ -325,6 +326,7 @@ const SCANS = [
       await mockCellMeetings(page);
       await mockCellReport(page);
       await mockDccReport(page);
+      await mockAwaitingReassignment(page);
     },
     async arrange(page: import('@playwright/test').Page) {
       await expect(
@@ -333,6 +335,23 @@ const SCANS = [
       // A tile carries its scope and its period, which section 19 requires of
       // every one of them.
       await expect(page.getByText(/People you oversee ·/).first()).toBeVisible();
+      // **Both of the above render before any query resolves** — the heading is
+      // static and the scope label defaults while `me.data` is undefined — so axe
+      // would otherwise scan a page with no rows on it.
+      await expect(page.getByRole('link', { name: 'Amihan Bacani' })).toBeVisible();
+    },
+  },
+  {
+    // Section 20's attention list, which the placement graph's reconstruction would
+    // otherwise keep invisible (decision 0232).
+    name: 'people awaiting reassignment',
+    route: '/people/awaiting-reassignment',
+    async before(page: import('@playwright/test').Page) {
+      await mockSignedIn(page);
+      await mockAwaitingReassignment(page);
+    },
+    async arrange(page: import('@playwright/test').Page) {
+      await expect(page.getByRole('heading', { name: 'Amihan Bacani' })).toBeVisible();
     },
   },
   {
@@ -624,12 +643,36 @@ const TARGET_SWEEP = [
     minimum: 8,
   },
   {
-    // Six tile links, two awaiting-a-record links and one attention link.
+    // Six tile links, two awaiting-a-record links, one attention link, two people
+    // needing a leader, and that section's own link to the full list: **twelve**.
+    //
+    // **The floor is what the page owns, not what has loaded when the settle
+    // resolves.** It was 8 — the six tiles plus the two rows the settle waits for —
+    // which could not detect the loss of the awaiting-a-record section, the attention
+    // row, or the very section the floor had just been raised for. That is this
+    // file's fourth encounter with the same trap.
     name: 'dashboard',
     route: '/dashboard',
+    // **Settled on a person in the last section to load, not on the first heading.**
+    // The page heading and the awaiting-a-record heading both render before the
+    // queries resolve, so counting there counted six controls on a page that owns
+    // more — which is what the floor caught when this section was added.
+    settleRole: 'link' as const,
+    settle: 'Amihan Bacani',
+    minimum: 12,
+  },
+  {
+    // The back link and one link per person, which is the reassignment section 19
+    // asks each entry to carry. No "Show more": the fixture fits one page.
+    //
+    // **Settled on a person rather than on the page heading**, which renders before
+    // the list arrives — the lesson the meeting-roster entry above records, and the
+    // one this file has now learned three times.
+    name: 'people awaiting reassignment',
+    route: '/people/awaiting-reassignment',
     settleRole: 'heading' as const,
-    settle: 'Meetings awaiting a record',
-    minimum: 6,
+    settle: 'Amihan Bacani',
+    minimum: 3,
   },
   {
     // The back link alone: the list is names, and naming a leader is the whole of
@@ -800,6 +843,7 @@ test('every interactive target meets the 24px minimum', async ({ page }) => {
   await mockCellMembers(page);
   await mockCoverageGaps(page);
   await mockPastoralPath(page);
+  await mockAwaitingReassignment(page);
 
   for (const entry of TARGET_SWEEP) {
     const { route, settle, minimum } = entry;

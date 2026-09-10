@@ -9,8 +9,19 @@ import { FailureNotice } from '@/components/ui/failure-notice';
 import { listCellMeetings, listCells, type CellSummary } from '@/lib/cells';
 import { getMe, holdsWholeChurch } from '@/lib/me';
 import { describeFailure } from '@/lib/messages';
+import { awaitingReassignment } from '@/lib/people';
 import { getCellMonthlyReport, getDccMonthlyReport } from '@/lib/reports';
 import { dayLabel, monthLabel, reportingMonthOf } from '@/lib/reporting-month';
+
+/**
+ * How many people needing a leader the dashboard tile shows before deferring to the
+ * full list (section 19).
+ *
+ * A dashboard entry is a prompt to act, not the list itself: section 15 forbids
+ * ranking, so a longer tile would be a longer arbitrary slice rather than a more
+ * useful one. The screen behind it pages honestly.
+ */
+const UNPLACED_TILE = 5;
 
 /**
  * Where a signed-in leader lands (SKILL.md section 19).
@@ -39,7 +50,7 @@ import { dayLabel, monthLabel, reportingMonthOf } from '@/lib/reporting-month';
  * 10). Both figures here come from the reporting routes, which count distinct
  * people; nothing on this screen sums attendances.
  *
- * **Two of section 19's four outstanding-work lists have no route yet** and are
+ * **Two of section 19's five outstanding-work lists have no route yet** and are
  * named here rather than faked: people with no active Cell membership within the
  * actor's scope, and the outcome of a Cell leadership request the actor
  * submitted — the latter being a question `CLAUDE.md` records as open, since
@@ -62,6 +73,17 @@ function Dashboard() {
   const month = reportingMonthOf();
 
   const me = useQuery({ queryKey: ['me'], queryFn: ({ signal }) => getMe(signal) });
+
+  // Section 20's attention list (decision 0232). It takes no month: the list asks
+  // about now, so it is deliberately not keyed on the period the figures below use.
+  //
+  // One more than the tile shows, so "is there more than this" is answered by the
+  // read rather than by a second request — the same trick the collection endpoints
+  // use one layer down, and section 22 returns no total to ask instead.
+  const unplaced = useQuery({
+    queryKey: ['awaiting-reassignment', 'dashboard'],
+    queryFn: ({ signal }) => awaitingReassignment({ limit: UNPLACED_TILE + 1 }, signal),
+  });
 
   const mine = useQuery({
     queryKey: ['cells', month, true],
@@ -125,13 +147,29 @@ function Dashboard() {
     (cell) => cell.coverage.recorded < cell.coverage.scheduled,
   );
 
+  // **Every query on this page, not the three it started with.** Section 19 puts
+  // outstanding work above the figures precisely so a leader can trust it, and a
+  // failed load that renders as an empty list says "nothing to do" on this screen's
+  // authority. `meetings` is the one that matters most: without it a failed
+  // `listCellMeetings` yields an empty `awaiting` and prints "Nothing outstanding
+  // for your own Cells this month", which is the opposite of the truth.
+  const meetingsFailed = meetings.find((query) => query.isError);
+
   const failure = mine.isError
     ? describeFailure(mine.error)
-    : scoped.isError
-      ? describeFailure(scoped.error)
-      : me.isError
-        ? describeFailure(me.error)
-        : null;
+    : meetingsFailed
+      ? describeFailure(meetingsFailed.error)
+      : scoped.isError
+        ? describeFailure(scoped.error)
+        : unplaced.isError
+          ? describeFailure(unplaced.error)
+          : cellFigures.isError
+            ? describeFailure(cellFigures.error)
+            : dccFigures.isError
+              ? describeFailure(dccFigures.error)
+              : me.isError
+                ? describeFailure(me.error)
+                : null;
 
   return (
     <main id="main" className={PAGE_WIDTH.INDEX}>
@@ -199,6 +237,81 @@ function Dashboard() {
             ))}
           </ul>
         )}
+      </section>
+
+      {/*
+        Section 19's fifth outstanding-work entry, and section 20 requires the list
+        behind it (decision 0232). It sits with the other outstanding work rather than
+        with the figures because it is something to do, not something to read.
+
+        **Undated, so it is above the period heading rather than under it.** The list
+        asks about now: somebody reassigned last week needs no action today, whatever a
+        past month's chain looked like. Putting it below would attach it to the month
+        selector and make it look like a figure for a period, which is exactly the line
+        section 3 draws and section 19 says a dashboard is where it is most easily lost.
+      */}
+      <section className="mt-10" aria-labelledby="unplaced-heading">
+        <h2 id="unplaced-heading" className="text-lg font-medium">
+          People needing a leader
+        </h2>
+        <p className="text-muted mt-1 max-w-2xl text-sm leading-relaxed">
+          Their own pastoral leader no longer holds an assignment. Listed by name, never by
+          how long they have waited.
+        </p>
+        {unplaced.isPending ? (
+          <p className="text-muted mt-2 text-sm">Loading&hellip;</p>
+        ) : unplaced.data ? (
+          <>
+            {unplaced.data.data.length === 0 ? (
+              <p className="text-muted mt-2 max-w-2xl text-sm leading-relaxed">
+                Everyone in your scope has a pastoral leader who is still in place.
+              </p>
+            ) : (
+              <ul className="mt-4 flex flex-col gap-3">
+              {unplaced.data.data.slice(0, UNPLACED_TILE).map((person) => (
+                <li key={person.id} className="border-line rounded-lg border p-4">
+                  {/*
+                    The action that resolves it (section 19) is the reassignment, which
+                    lives on the person's place in the tree.
+                  */}
+                  <Link
+                    href={`/people/${person.id}/network`}
+                    className="focus-visible:outline-accent inline-flex min-h-6 items-center rounded-sm text-base font-medium underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2"
+                  >
+                    {person.full_name}
+                  </Link>
+                  <p className="text-muted mt-1 text-sm">
+                    Was under {person.former_leader.full_name}
+                  </p>
+                </li>
+              ))}
+              </ul>
+            )}
+            {/*
+              **Unconditional, and two versions of it were not.** The link was first
+              shown only when the tile overflowed, so with one to five people waiting
+              the screen had no route into it from anywhere in the application. Moving
+              it out of that condition left it inside the *non-empty* branch, so on a
+              church where nobody is waiting — the ordinary case, and the state the
+              demo database is in — the screen was still unreachable, under a comment
+              claiming it was unconditional. It is now outside both branches.
+
+              The coverage ledger cannot catch either version: it asks whether every
+              route has a screen and never whether a screen can be reached, which is
+              decision 0213's own blind spot one direction over.
+            */}
+            <p className="mt-4">
+              <Link
+                href="/people/awaiting-reassignment"
+                className="focus-visible:outline-accent inline-flex min-h-6 items-center rounded-sm text-sm underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2"
+              >
+                {unplaced.data.data.length > UNPLACED_TILE || unplaced.data.next_cursor !== null
+                  ? 'See everyone waiting for a leader'
+                  : 'Open the full list'}
+              </Link>
+            </p>
+          </>
+        ) : null}
       </section>
 
       {/*

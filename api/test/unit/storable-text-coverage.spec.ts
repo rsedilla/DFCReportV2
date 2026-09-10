@@ -47,6 +47,11 @@ describe('storable text is refused at the edge, on every field that takes text',
    * because they are spelled `cursor`. `decodeCellIndexCursor` asks `isStorableText` of
    * the one key it carries, and `DccCoverageGapsDto` uses `decodeRosterCursor`, which asks
    * it of all three — so both decode paths refuse before any key reaches a comparison.*
+   *
+   * *The one added on 2026-09-10 was checked the same way and needed no new argument: the
+   * attention list decision 0232 adds reuses `people.controller.ts`’s own `decodeCursor`,
+   * the decoder `SearchPeopleDto.cursor` two lines above is exempt on, so it refuses the
+   * same values at the same point.*
    */
   const NEVER_STORED = new Set([
     'CellIndexDto.cursor',
@@ -55,6 +60,7 @@ describe('storable text is refused at the edge, on every field that takes text',
     'LeadershipRequestQueueDto.cursor',
     'CellMembersDto.cursor',
     'SearchPeopleDto.cursor',
+    'AwaitingReassignmentDto.cursor',
     'RefreshDto.refresh_token',
     'LogoutDto.refresh_token',
     'LoginDto.password',
