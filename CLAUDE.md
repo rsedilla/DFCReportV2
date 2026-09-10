@@ -242,11 +242,13 @@ rewritten to remove that language, because resolving each by inference is how a
 false cross-reference gets introduced, and this log records enough of those
 already. Each file carries previous/next links instead, so a positional reference
 resolves exactly as well as it did in the single file and no better. *Recounted on
-2026-09-10, the trigger being decision 0235: of 234 files, 233 carry `Previous:`, 181 carry
-`Next:`, and 180 carry both on one line. 0213 through 0235 each moved the first two and
+2026-09-11, the trigger being decision 0236: of 235 files, 234 carry `Previous:`, 181 carry
+`Next:`, and 180 carry both on one line. 0213 through 0236 each moved the first two and
 neither of the others, none of them carrying a `Next:`. The one file with no `Previous:` is
 0001, which has nothing before it. The recount before this one was dated 2026-09-10 and
-triggered by 0234, and was left stale by 0235 the same day. The one before that was dated 2026-09-10 and
+triggered by 0235, and was left stale by 0236 the next day — by the commit that added it, which
+recorded a ruling and left the count that ruling moved, the failure this paragraph exists to catch.
+The one before that was dated 2026-09-10 and triggered by 0234, and was left stale by 0235 the same day. The one before that was dated 2026-09-10 and
 triggered by 0233, and was left stale by 0234 within hours. The one before *that* was dated 2026-09-09 and
 triggered by 0230, and was left stale by 0231 the next day — the interval is short because
 the trigger is every added ruling, which is the point of naming the trigger rather than the
