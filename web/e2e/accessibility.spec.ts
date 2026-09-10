@@ -328,6 +328,7 @@ const SCANS = [
       await mockCellReport(page);
       await mockDccReport(page);
       await mockAwaitingReassignment(page);
+      await mockPeopleWithoutACell(page);
     },
     async arrange(page: import('@playwright/test').Page) {
       await expect(
@@ -673,7 +674,9 @@ const TARGET_SWEEP = [
     // more — which is what the floor caught when this section was added.
     settleRole: 'link' as const,
     settle: 'Amihan Bacani',
-    minimum: 12,
+    // Fifteen: the twelve above plus the two people without a Cell and the link into
+    // that list, which section 15's second attention list contributes.
+    minimum: 15,
   },
   {
     // The back link and one link per person: three, with no "Show more" for this

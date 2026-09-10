@@ -6,7 +6,12 @@ import Link from 'next/link';
 import { AppShell, PAGE_WIDTH } from '@/components/app-shell';
 import { CoverageFigure } from '@/components/coverage-figure';
 import { FailureNotice } from '@/components/ui/failure-notice';
-import { listCellMeetings, listCells, type CellSummary } from '@/lib/cells';
+import {
+  listCellMeetings,
+  listCells,
+  peopleWithoutACell,
+  type CellSummary,
+} from '@/lib/cells';
 import { getMe, holdsWholeChurch } from '@/lib/me';
 import { describeFailure } from '@/lib/messages';
 import { awaitingReassignment } from '@/lib/people';
@@ -50,10 +55,9 @@ const UNPLACED_TILE = 5;
  * 10). Both figures here come from the reporting routes, which count distinct
  * people; nothing on this screen sums attendances.
  *
- * **Two of section 19's five outstanding-work lists have no route yet** and are
- * named here rather than faked: people with no active Cell membership within the
- * actor's scope, and the outcome of a Cell leadership request the actor
- * submitted — the latter being a question `CLAUDE.md` records as open, since
+ * **One of section 19's five outstanding-work lists has no route yet** and is
+ * named here rather than faked: the outcome of a Cell leadership request the actor
+ * submitted — a question `CLAUDE.md` records as open, since
  * section 7 names no capability for such a read. A third is partly served: a
  * **closed** Cell's meetings are not reachable, because the Cells index is
  * `ACTIVE`-only and nothing supplies the identifier.
@@ -83,6 +87,13 @@ function Dashboard() {
   const unplaced = useQuery({
     queryKey: ['awaiting-reassignment', 'dashboard'],
     queryFn: ({ signal }) => awaitingReassignment({ limit: UNPLACED_TILE + 1 }, signal),
+  });
+
+  // Section 15's other attention list (decision 0233), and undated for the same
+  // reason: it asks who is not in a Cell now.
+  const withoutACell = useQuery({
+    queryKey: ['people-without-a-cell', 'dashboard'],
+    queryFn: ({ signal }) => peopleWithoutACell({ limit: UNPLACED_TILE + 1 }, signal),
   });
 
   const mine = useQuery({
@@ -167,9 +178,11 @@ function Dashboard() {
             ? describeFailure(cellFigures.error)
             : dccFigures.isError
               ? describeFailure(dccFigures.error)
-              : me.isError
-                ? describeFailure(me.error)
-                : null;
+              : withoutACell.isError
+                ? describeFailure(withoutACell.error)
+                : me.isError
+                  ? describeFailure(me.error)
+                  : null;
 
   return (
     <main id="main" className={PAGE_WIDTH.INDEX}>
@@ -307,6 +320,57 @@ function Dashboard() {
               >
                 {unplaced.data.data.length > UNPLACED_TILE || unplaced.data.next_cursor !== null
                   ? 'See everyone waiting for a leader'
+                  : 'Open the full list'}
+              </Link>
+            </p>
+          </>
+        ) : null}
+      </section>
+
+      {/*
+        Section 19's third outstanding-work entry, which section 15 requires and
+        section 10's closure flow fills (decision 0233). Undated, so it sits above the
+        period heading with the other current-state work.
+      */}
+      <section className="mt-10" aria-labelledby="without-cell-heading">
+        <h2 id="without-cell-heading" className="text-lg font-medium">
+          People without a Cell
+        </h2>
+        <p className="text-muted mt-1 max-w-2xl text-sm leading-relaxed">
+          In your scope and not in a Cell. Somebody who leads one is not listed.
+        </p>
+        {withoutACell.isPending ? (
+          <p className="text-muted mt-2 text-sm">Loading&hellip;</p>
+        ) : withoutACell.data ? (
+          <>
+            {withoutACell.data.data.length === 0 ? (
+              <p className="text-muted mt-2 max-w-2xl text-sm leading-relaxed">
+                Everyone in your scope is in a Cell.
+              </p>
+            ) : (
+              <ul className="mt-4 flex flex-col gap-3">
+                {withoutACell.data.data.slice(0, UNPLACED_TILE).map((person) => (
+                  <li key={person.id} className="border-line rounded-lg border p-4">
+                    <Link
+                      href={`/people/${person.id}`}
+                      className="focus-visible:outline-accent inline-flex min-h-6 items-center rounded-sm text-base font-medium underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2"
+                    >
+                      {person.full_name}
+                    </Link>
+                    <p className="text-muted mt-1 text-sm">{person.member_id}</p>
+                  </li>
+                ))}
+              </ul>
+            )}
+            {/* Unconditional, for the reason the section above records. */}
+            <p className="mt-4">
+              <Link
+                href="/cells/people-without-a-cell"
+                className="focus-visible:outline-accent inline-flex min-h-6 items-center rounded-sm text-sm underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2"
+              >
+                {withoutACell.data.data.length > UNPLACED_TILE ||
+                withoutACell.data.next_cursor !== null
+                  ? 'See everyone without a Cell'
                   : 'Open the full list'}
               </Link>
             </p>
