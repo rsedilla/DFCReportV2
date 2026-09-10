@@ -888,6 +888,18 @@ test('every interactive target meets the 24px minimum', async ({ page }) => {
     await page.goto(route);
     await expect(page.getByRole(settleRole, { name: settle })).toBeVisible();
 
+    // **Then wait for every section, not just the one the settle names.** A settle
+    // resolves on one element, so on a page whose sections load independently it says
+    // nothing about the others, and the count below runs against whatever happened to
+    // have arrived. That is green on a fast machine and red in CI, and it cost two
+    // rounds on the dashboard: once counting 13 of 15, then 14 of 15 after the settle
+    // was moved to a later section — which fixed one racing section and left another.
+    //
+    // Every pending section renders the same marker, so this waits for all of them and
+    // stops the question "which section is last" from having to be answered again each
+    // time one is added.
+    await expect(page.locator('main').getByText('Loading…')).toHaveCount(0);
+
     const targets = page.locator('main button, main a[href], main input, main select, main textarea');
     const count = await targets.count();
     expect(count, `${route} renders fewer targets than it owns`).toBeGreaterThanOrEqual(minimum);

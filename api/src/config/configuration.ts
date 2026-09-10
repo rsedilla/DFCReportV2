@@ -18,7 +18,20 @@ export interface AppConfig {
    * by the loader below.
    */
   seniorPastorPersonIds: string[];
+  /**
+   * Which `EmailPort` implementation is bound (SKILL.md section 6, ruling of
+   * 2026-09-11). `log` delivers nothing and is the default; `outbox` writes each
+   * message, token included, to `emailOutboxDir`.
+   */
+  emailTransport: EmailTransport;
+  /** Required by, and only meaningful to, the `outbox` transport. */
+  emailOutboxDir: string | null;
 }
+
+/** SKILL.md section 6. A real provider joins this list rather than replacing it. */
+export const EMAIL_TRANSPORTS = ['log', 'outbox'] as const;
+
+export type EmailTransport = (typeof EMAIL_TRANSPORTS)[number];
 
 const MINIMUM_SECRET_LENGTH = 32;
 
@@ -121,6 +134,8 @@ export function loadConfig(): AppConfig {
     throw new Error(`JWT_SECRET must be at least ${MINIMUM_SECRET_LENGTH} characters`);
   }
 
+  const { emailTransport, emailOutboxDir } = emailDelivery();
+
   return {
     nodeEnv,
     port,
@@ -131,7 +146,75 @@ export function loadConfig(): AppConfig {
       .map((origin) => origin.trim())
       .filter((origin) => origin !== ''),
     seniorPastorPersonIds: seniorPastorPersonIds(),
+    emailTransport,
+    emailOutboxDir,
   };
+}
+
+/**
+ * Which transport is bound, and the refusal that makes the outbox safe to ship.
+ *
+ * **The refusal is the load-bearing half of the 2026-09-11 ruling**, not the adapter,
+ * and it is stated positively: `outbox` binds in `development` and nowhere else.
+ *
+ * **It reads `process.env.NODE_ENV` rather than the resolved `nodeEnv`, and that is the
+ * whole of the fix.** The resolved value *defaults* to `development` when the variable
+ * is absent, so a rule written against it treats "nobody said" as "a developer's
+ * laptop". `npm run start:prod` sets nothing and `main.ts` loads `dotenv` in every
+ * environment, so a production host that never exports `NODE_ENV`, carrying
+ * `EMAIL_TRANSPORT=outbox` in its `.env`, wrote activation **and password-reset**
+ * tokens to disk.
+ *
+ * *A first version refused `production` by name; `architecture-guardian` reproduced the
+ * absent-variable hole. A second stated the rule positively against the resolved value,
+ * which reads correctly and leaves the identical hole, because the default is the very
+ * value being required. A decision this size may not rest on a default.*
+ *
+ * **Absent means `log`**, so no existing deployment changes behaviour by taking this
+ * change, and a deployment that has never heard of either variable is unaffected.
+ *
+ * The directory is required with `outbox` rather than defaulted, because a default
+ * would put credentials somewhere nobody chose.
+ */
+function emailDelivery(): {
+  emailTransport: EmailTransport;
+  emailOutboxDir: string | null;
+} {
+  const configured = (process.env.EMAIL_TRANSPORT ?? '').trim();
+
+  if (configured === '') {
+    return { emailTransport: 'log', emailOutboxDir: null };
+  }
+
+  if (!(EMAIL_TRANSPORTS as readonly string[]).includes(configured)) {
+    throw new Error(
+      `EMAIL_TRANSPORT must be one of ${EMAIL_TRANSPORTS.join(', ')} (got "${configured}")`,
+    );
+  }
+
+  const emailTransport = configured as EmailTransport;
+
+  if (emailTransport !== 'outbox') {
+    return { emailTransport, emailOutboxDir: null };
+  }
+
+  const declared = (process.env.NODE_ENV ?? '').trim();
+  if (declared !== 'development') {
+    throw new Error(
+      'EMAIL_TRANSPORT=outbox writes activation and password-reset tokens to disk, so it ' +
+        'binds only where NODE_ENV is explicitly "development" (SKILL.md section 6). ' +
+        `NODE_ENV is ${declared === '' ? 'unset' : `"${declared}"`}. An absent value is not ` +
+        'development here, because a credential-writing decision may not rest on a default. ' +
+        'Configure a real provider instead.',
+    );
+  }
+
+  const dir = (process.env.EMAIL_OUTBOX_DIR ?? '').trim();
+  if (dir === '') {
+    throw new Error('EMAIL_OUTBOX_DIR is required when EMAIL_TRANSPORT=outbox');
+  }
+
+  return { emailTransport, emailOutboxDir: dir };
 }
 
 /**
