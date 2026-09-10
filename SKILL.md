@@ -1354,6 +1354,18 @@ When a person becomes a Cell Leader and has no account:
 3. Send activation/set-password email.
 4. User creates their own password.
 
+**Step 3 needs a transport, and where none is configured nothing is delivered and the
+account cannot be activated at all** (ruling of 2026-09-11). The default adapter delivers
+nothing and deliberately does not log the token, and the token is stored only as a hash,
+so there is no way back. A **development transport** therefore exists beside it: it writes
+each message, token included, as a file in a local outbox directory, and is selected by
+configuration rather than by default. Writing the token down is the trade this section
+already makes once for the bootstrap command above, on the same terms — single-use,
+short-lived, and read by the person operating the machine — and with a narrower reach,
+since nothing is addressed to anybody. **The process refuses to start when that transport
+is selected outside development**, which is the half that makes it safe to ship; and a
+token still never appears in an API response, which is the rule this does not touch.
+
 **Provisioning is an explicit action under `accounts.manage`, and what it may
 create is bounded by what qualifies the holder.** Cell leadership is the ordinary
 qualification and it is the one this section describes. The two exceptions above —

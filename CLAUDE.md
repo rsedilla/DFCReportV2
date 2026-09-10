@@ -514,6 +514,7 @@ one, in the paragraph whose subject is false cross-references, and
 - 2026-09-10 — [People with no Cell are a Cell attention list, and leading one counts as having one](docs/decisions/0233-people-with-no-cell-are-a-cell-attention-list.md)
 - 2026-09-10 — [Section 2's exemption names the people-without-a-Cell join](docs/decisions/0234-section-2s-exemption-names-the-people-without-a-cell-join.md)
 - 2026-09-10 — [What each engine is tested for, and axe runs in Blink](docs/decisions/0235-what-each-engine-is-tested-for.md)
+- 2026-09-11 — [A development email transport writes to an outbox, and refuses in production](docs/decisions/0236-a-development-email-transport-writes-to-an-outbox.md)
 
 ### Open — awaiting a ruling
 
