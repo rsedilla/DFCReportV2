@@ -672,8 +672,16 @@ const TARGET_SWEEP = [
     // The page heading and the awaiting-a-record heading both render before the
     // queries resolve, so counting there counted six controls on a page that owns
     // more — which is what the floor caught when this section was added.
+    //
+    // **It settles on a row of *People without a Cell*, which is the last section in
+    // the page.** It settled on `Amihan Bacani` — a row of *People needing a leader*,
+    // one section earlier — for as long as that was the last one. Adding a section
+    // after it left the settle resolving before the new queries did, and the count ran
+    // two targets short: green on a fast machine and red in CI, which is the trap this
+    // comment already records three earlier encounters with. The rule it states was
+    // right and the name under it went stale, so moving a section means moving this.
     settleRole: 'link' as const,
-    settle: 'Amihan Bacani',
+    settle: 'Bituin Carreon',
     // Fifteen: the twelve above plus the two people without a Cell and the link into
     // that list, which section 15's second attention list contributes.
     minimum: 15,
