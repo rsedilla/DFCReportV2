@@ -4,7 +4,9 @@ import tseslint from 'typescript-eslint';
 import prettier from 'eslint-config-prettier';
 
 export default tseslint.config(
-  { ignores: ['dist/**', 'node_modules/**', 'coverage/**', 'eslint.config.mjs'] },
+  // `scripts/*.mjs` joins `eslint.config.mjs` here for the same reason: these are
+  // plain ESM run by node, outside the TypeScript project the type-aware rules need.
+  { ignores: ['dist/**', 'node_modules/**', 'coverage/**', 'eslint.config.mjs', 'scripts/**/*.mjs'] },
   eslint.configs.recommended,
   ...tseslint.configs.recommendedTypeChecked,
   prettier,
