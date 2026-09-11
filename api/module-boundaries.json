@@ -1,0 +1,108 @@
+{
+  "$comment": [
+    "The inventory SKILL.md section 2 stopped claiming (ruling of 2026-09-11, decision 0242).",
+    "Section 2 argues the SHAPE of the exemption, which is the rule. This file holds its",
+    "INSTANCES, which are a fact about the tree and go stale the moment the tree moves.",
+    "",
+    "`owners` is checked against `interface Database` in src/database/schema.ts, so a",
+    "migration adding a table cannot ship without that table being assigned an owner.",
+    "`null` means a table section 2 assigns to no module.",
+    "",
+    "`infrastructure` names directories under src/ that are not domain modules. They may",
+    "reach a table, and never silently: each such read is inventoried below as a `root`.",
+    "",
+    "`crossModule` names every read of a table the reading module does not own. Three kinds:",
+    "  join     - joined onto a query rooted in a table the reader owns (the exempt shape)",
+    "  subquery - reached inside an EXISTS or anti-join, which section 2 describes in those",
+    "             words for `withoutACell`",
+    "  root     - a query rooted in another module's table, permitted only from infrastructure",
+    "The write side has no entry and no exemption: section 2 is absolute there.",
+    "",
+    "Checked by api/scripts/check-module-boundaries.mjs, which fails in BOTH directions -- on",
+    "a read the ledger does not name, and on a ledger entry that matches nothing."
+  ],
+  "owners": {
+    "persons": "people",
+    "person_lifecycle": "people",
+    "network_assignments": "networks",
+    "pastoral_assignments": "hierarchy",
+    "accounts": "auth",
+    "account_roles": "auth",
+    "capability_grants": "auth",
+    "refresh_tokens": "auth",
+    "account_tokens": "auth",
+    "cells": "cells",
+    "cell_categories": "cells",
+    "cell_schedules": "cells",
+    "cell_leaderships": "cells",
+    "cell_memberships": "cells",
+    "cell_leadership_requests": "cells",
+    "dcc_events": "attendance",
+    "dcc_attendance": "attendance",
+    "cell_meetings": "attendance",
+    "cell_attendance": "attendance",
+    "cell_meeting_changes": "attendance",
+    "audit_log": "audit",
+    "idempotency_keys": null,
+    "settings": "admin"
+  },
+  "infrastructure": ["common", "database", "email", "idempotency"],
+  "crossModule": [
+    {
+      "file": "src/hierarchy/hierarchy.service.ts",
+      "method": "openDisciplesOf",
+      "table": "persons",
+      "kind": "join",
+      "reason": "Section 4 requires a Network-change refusal to name the disciples that must be moved first. Rooted in pastoral_assignments, which people does not own and cannot query, so the join cannot move to the owning module; returning identifiers would turn one query into one per row. Named in section 2."
+    },
+    {
+      "file": "src/hierarchy/hierarchy.service.ts",
+      "method": "directLeaderNameOf",
+      "table": "persons",
+      "kind": "join",
+      "reason": "Names one leader. Rooted in pastoral_assignments and returns at most one row. Named in section 2."
+    },
+    {
+      "file": "src/people/people.read.service.ts",
+      "method": "withoutACell",
+      "table": "cell_memberships",
+      "kind": "subquery",
+      "reason": "Section 15's attention list asks which people hold no Cell, so it is rooted in persons and cannot move to cells, which owns no table containing the people who hold none. Named in section 2 (decision 0234)."
+    },
+    {
+      "file": "src/people/people.read.service.ts",
+      "method": "withoutACell",
+      "table": "cell_leaderships",
+      "kind": "subquery",
+      "reason": "The same anti-join: leading an ACTIVE Cell counts as having one (decision 0233). Named in section 2 (decision 0234)."
+    },
+    {
+      "file": "src/people/people.read.service.ts",
+      "method": "withoutACell",
+      "table": "cells",
+      "kind": "join",
+      "reason": "Joined to the leadership anti-join so that only an ACTIVE Cell counts. Named in section 2 (decision 0234)."
+    },
+    {
+      "file": "src/cells/cells.read.service.ts",
+      "method": "membersAsOfWithin",
+      "table": "persons",
+      "kind": "join",
+      "reason": "A Cell's roster as of an instant, rooted in cell_memberships, joined to persons to name each member. Exactly the exempt shape, and one of the two instances section 2's enumeration never named -- which is what made the enumeration a Stop Condition and this ledger the answer (decision 0242)."
+    },
+    {
+      "file": "src/cells/cells.read.service.ts",
+      "method": "membersOfWithin",
+      "table": "persons",
+      "kind": "join",
+      "reason": "A Cell's current roster, rooted in cell_memberships, joined to persons to name each member. The second instance section 2 never named (decision 0242)."
+    },
+    {
+      "file": "src/database/cell-lock.ts",
+      "method": "lockCellsWithin",
+      "table": "cells",
+      "kind": "root",
+      "reason": "Shared infrastructure rather than a domain module: it takes the row lock section 24 orders, in one place, so that every caller takes the same strength in the same order. It selects the row and reads no column but id."
+    }
+  ]
+}
