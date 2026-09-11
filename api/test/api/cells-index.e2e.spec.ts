@@ -98,6 +98,9 @@ describe('the Cells index (sections 10, 12 and 22)', () => {
   const thisMonth = async (): Promise<string> =>
     `${manilaDayOf(await databaseNow(db)).slice(0, 7)}-01`;
 
+  /** The database's own Manila day, which is what a coverage bound would compare to. */
+  const today = async (): Promise<string> => manilaDayOf(await databaseNow(db));
+
   const list = async (
     as: TestAccount,
     query: Record<string, string | number> = {},
@@ -297,6 +300,16 @@ describe('the Cells index (sections 10, 12 and 22)', () => {
     // five, computed here rather than written down.
     expect(coverage.recorded).toBe(0);
     expect(coverage.scheduled).toBe(saturdaysIn(month));
+
+    // **The whole month, including days it has not reached** (ruling of 2026-09-11).
+    // The line above pins that only on a day when a Saturday is still to come: run on or
+    // after the month's last Saturday the two counts coincide, and it would pass equally
+    // against a denominator bounded at today. So the discriminating comparison is made
+    // explicitly, and it is skipped rather than faked on the days it cannot be made.
+    const stillToCome = saturdaysIn(month) - saturdaysUpTo(await today());
+    if (stillToCome > 0) {
+      expect(coverage.scheduled).toBeGreaterThan(saturdaysUpTo(await today()));
+    }
     expect(Object.keys(coverage).sort()).toEqual(['recorded', 'scheduled']);
     expect(response.body.reporting_month).toBe(month);
   });
@@ -633,6 +646,26 @@ describe('the Cells index (sections 10, 12 and 22)', () => {
 });
 
 /** How many Saturdays a `YYYY-MM-01` month holds, on plain calendar arithmetic. */
+/**
+ * The Saturdays of a month up to and including a given Manila day.
+ *
+ * Exists so the case above can say what it means: a denominator bounded at today would
+ * equal this, and section 12's is the whole month. Without it that assertion is a count
+ * that happens to be right for two different reasons.
+ */
+function saturdaysUpTo(day: string): number {
+  const [year, monthNumber, dayOfMonth] = day.split('-').map(Number);
+  let count = 0;
+
+  for (let at = 1; at <= dayOfMonth; at += 1) {
+    if (new Date(Date.UTC(year, monthNumber - 1, at)).getUTCDay() === 6) {
+      count += 1;
+    }
+  }
+
+  return count;
+}
+
 function saturdaysIn(month: string): number {
   const [year, monthNumber] = month.split('-').map(Number);
   let count = 0;
