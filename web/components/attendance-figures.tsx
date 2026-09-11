@@ -58,21 +58,35 @@ export function ClassificationFigures({
  * a property of the month rather than of who turned up: a reader comparing two
  * months needs the same columns in both.
  *
- * **Buckets reach this component only at Cell scope** (section 12), which the
- * report's own type enforces — an aggregate report carries no `buckets` field for
- * a caller to pass.
+ * **Both domains reach this component, and N does not mean the same thing in each**,
+ * which is why the sentence below is the caller's rather than this file's. Section 12
+ * makes a Cell's N "the meetings that actually took place and were recorded"; section 9
+ * makes DCC's N the applicable events — the Sundays the calendar carries a service on,
+ * recorded or not. *One sentence served both and said "N meetings were recorded this
+ * month", which is section 12's definition read onto section 9's figure: the DCC screen
+ * announced four meetings recorded beside a coverage line reading one record filed.*
+ *
+ * *A previous version of this docblock said buckets reach it only at Cell scope and that
+ * the report's own type enforces it. The DCC report passes buckets at every scope, so
+ * neither half was true.*
  */
-export function AttendanceBuckets({ buckets, n }: { buckets: AttendanceBucket[]; n: number }) {
+export function AttendanceBuckets({
+  buckets,
+  n,
+  summary,
+}: {
+  buckets: AttendanceBucket[];
+  n: number;
+  /** What N counts, in this domain's own words. See the docblock above. */
+  summary: (n: number) => string;
+}) {
   return (
     <section aria-labelledby="buckets-heading">
       <h2 id="buckets-heading" className="text-lg font-medium">
         How often people came
       </h2>
       <p className="text-muted mt-1 max-w-2xl text-sm leading-relaxed">
-        {n === 1
-          ? 'One meeting was recorded this month.'
-          : `${n} meetings were recorded this month.`}{' '}
-        Each column counts the people who attended that many of them.
+        {summary(n)} Each column counts the people who attended that many of them.
       </p>
 
       <dl className="mt-4 flex flex-wrap gap-3">

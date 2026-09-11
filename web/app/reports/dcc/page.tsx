@@ -197,7 +197,17 @@ export function DccReport() {
               No Sundays were counted this month, so there is nothing to break down.
             </p>
           ) : (
-            <AttendanceBuckets buckets={report.data.buckets} n={report.data.n} />
+            <AttendanceBuckets
+              buckets={report.data.buckets}
+              n={report.data.n}
+              // Section 9: N is the applicable DCC events — the Sundays the calendar
+              // carries a service on — and never a count of records filed.
+              summary={(n) =>
+                n === 1
+                  ? 'One Sunday carried a service this month.'
+                  : `${n} Sundays carried a service this month.`
+              }
+            />
           )}
         </div>
       ) : null}
