@@ -79,7 +79,6 @@ describe('the email transport (section 6)', () => {
      * must refuse.
      */
     it.each([
-      ['unset', undefined],
       ['test', 'test'],
       ['production', 'production'],
     ])('refuses to start when NODE_ENV is %s, even with a directory configured', (_l, value) => {
@@ -91,13 +90,16 @@ describe('the email transport (section 6)', () => {
     });
 
     /**
-     * These three refuse too, and it is the **earlier** guard that catches them —
-     * `NODE_ENV` itself is validated against the three names before any transport is
+     * These refuse too, and it is an **earlier** guard that catches them — `NODE_ENV` is
+     * required and then validated against the three names, before any transport is
      * chosen. The property that matters is that the process stops, and both rows are
      * asserted rather than one being written as though it were the other.
+     *
+     * **`unset` sits here since the ruling of 2026-09-11** and sat in the group above
+     * before it. That is the whole of what requiring the variable changed: the case that
+     * silently meant `development` now refuses, and refuses one guard earlier.
      */
     it.each([
-      ['blank', ''],
       ['the wrong case', 'Development'],
       ['padded', ' development '],
     ])('refuses to start when NODE_ENV is %s, at the NODE_ENV guard', (_l, value) => {
@@ -106,6 +108,17 @@ describe('the email transport (section 6)', () => {
       set('EMAIL_OUTBOX_DIR', '/tmp/outbox');
 
       expect(() => loadConfig()).toThrow(/NODE_ENV must be development, test or production/);
+    });
+
+    it.each([
+      ['unset', undefined],
+      ['blank', ''],
+    ])('refuses to start when NODE_ENV is %s, because it is required', (_l, value) => {
+      set('NODE_ENV', value);
+      set('EMAIL_TRANSPORT', 'outbox');
+      set('EMAIL_OUTBOX_DIR', '/tmp/outbox');
+
+      expect(() => loadConfig()).toThrow(/NODE_ENV is required/);
     });
 
     // The refusal is about the environment, so it must not be escapable by omitting the
