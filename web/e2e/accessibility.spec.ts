@@ -972,9 +972,9 @@ test('every interactive target meets the 24px minimum', async ({ page }) => {
  *   iPad portrait lands here.
  * - **1024** — `PAGE_WIDTH.INDEX` exactly, so the list screens stop growing too:
  *   the narrowest laptop, an iPad landscape, an iPad Pro 12.9 portrait. **The
- *   last width where anything can break**, because nothing widens past it —
- *   1366, 1440, 1512, 1920 and a 4K panel all render what this renders, with
- *   more margin.
+ *   width the sidebar first appears at**, and 1440 is where the content column
+ *   beside it stops growing — so 1512, 1920 and a 4K panel all render what 1440
+ *   renders, with more margin.
  */
 const VIEWPORT_WIDTHS = [
   { name: '320px, the narrowest phone in use', width: 320, height: 568, crossBrowser: true },
@@ -982,12 +982,25 @@ const VIEWPORT_WIDTHS = [
   { name: '768px, where READING stops growing', width: 768, height: 1024 },
   { name: '820px, where READING first centres', width: 820, height: 1180 },
   // **The narrowest laptop, an iPad landscape, an iPad Pro 12.9 portrait — and
-  // the last width where anything can break.** The widest content constraint in
-  // the application is `PAGE_WIDTH.INDEX` at 1024px, so above this the layout
-  // stops changing: a wider display adds margin rather than rearranging
-  // anything, and 1366, 1440, 1512, 1920 and a 4K panel all render what this
-  // width renders.
+  // the width the sidebar first appears at.** Tailwind's `lg` is 1024px, so this
+  // is the *narrowest* width of the two-column layout rather than the last width
+  // at which anything can break. It was the latter until the sidebar landed, and
+  // `scripts/check-breakpoints.mjs` is what refused to let that sentence stand
+  // unexamined.
   { name: '1024px, a laptop or an iPad landscape', width: 1024, height: 768, crossBrowser: true },
+  // **Where the content column stops growing beside the sidebar, and therefore
+  // the new last width at which anything can break.** At 1024 the sidebar takes
+  // 240px and the content is squeezed below `PAGE_WIDTH.INDEX`; by 1440 it has
+  // reached that constraint and a wider display adds margin rather than
+  // rearranging anything — so 1512, 1920 and a 4K panel all render what this
+  // renders. Scanning only 1024 would have left every real laptop and desktop
+  // covered by an argument that had stopped being true.
+  {
+    name: '1440px, the sidebar with the content column at full width',
+    width: 1440,
+    height: 900,
+    crossBrowser: true,
+  },
 ];
 
 /**
@@ -1021,9 +1034,19 @@ const CROSS_BROWSER_TAG = '@cross-browser';
  * itself, so it is among the tests WebKit still runs, and it goes red.
  *
  * It asserts the property rather than a count: the narrowest width, where
- * overflow is hardest, and the widest at which anything changes. A sixth width
- * added in between leaves it green, which is correct -- widening the
- * cross-browser set is a decision, and only the two ends are load-bearing.
+ * overflow is hardest, and the widest at which anything changes. A width added in
+ * between leaves it green, which is correct -- widening the cross-browser set is a
+ * decision, and only the two ends are load-bearing.
+ *
+ * **It went red when the sidebar landed, which is the case it was written for.**
+ * 1440 was added as the new widest and the tag stayed on 1024, so WebKit would
+ * have gone on scanning a width that had stopped being the end of anything.
+ *
+ * **1024 keeps the tag as well, and that is the decision this comment means.**
+ * It is an iPad in landscape, iOS permits no engine but WebKit, and it is now the
+ * width the sidebar first appears at -- a layout transition on a device whose only
+ * engine is the one Chromium cannot speak for. Three tagged widths rather than
+ * two, argued rather than inherited.
  */
 test('the cross-browser widths are the narrowest and the widest', { tag: [CROSS_BROWSER_TAG] }, () => {
   const widths = VIEWPORT_WIDTHS.map((viewport) => viewport.width);
