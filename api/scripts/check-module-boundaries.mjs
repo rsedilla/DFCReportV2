@@ -119,9 +119,10 @@ const AMBIGUOUS_JOIN_METHODS = new Set(['using', 'from']);
  * not a table reference at all.
  *
  * **A CTE named after a real table would shadow it**, and this file would then read a
- * reference to the CTE as a reference to the table. No Kysely CTE exists today and the raw
- * ones are named `upline`, `subtree` and `in_force`, so the case is recorded rather than
- * handled.
+ * reference to the CTE as a reference to the table. No Kysely CTE exists today, and no raw
+ * one is named after a table — checked by listing them rather than by recalling three,
+ * which is what an earlier version of this comment did while there were more. The case is
+ * recorded rather than handled, and a shadowing check would have to derive the names.
  */
 const CTE_METHODS = new Set(['with', 'withRecursive']);
 
@@ -354,11 +355,17 @@ const rawSqlReferences = (text, tables, resolveSubstitution) => {
   // `delete\s+from` and `insert\s+into` precede the bare `from` in the alternation so the
   // engine prefers them at the same position.
   const pattern =
-    /\b(update|insert\s+into|merge\s+into|delete\s+from|from|join)\s+(\$\{[^}]*\}|[^\s(;,)]+)/gi;
+    /\b(truncate|update|insert\s+into|merge\s+into|delete\s+from|from|join|using)\s+(?:only\s+)?(\$\{[^}]*\}|[^\s(;,)]+)((?:\s*,\s*[A-Za-z_][\w.$]*)*)/gi;
 
   for (const match of text.matchAll(pattern)) {
     const keyword = match[1].toLowerCase().replace(/\s+/g, ' ');
     const target = match[2].trim();
+    // `FROM cells, persons` is a join in SQL's oldest spelling, and the alternation reads
+    // only the first name. The trailing group carries the rest.
+    const alsoNamed = (match[3] ?? '')
+      .split(',')
+      .map((part) => part.trim())
+      .filter((part) => part.length > 0);
 
     /** One target may name several tables: `sql.table(t)` where `t` is a literal union. */
     let named = null;
@@ -380,13 +387,21 @@ const rawSqlReferences = (text, tables, resolveSubstitution) => {
       const table = tableOf(candidate.replace(/^["`]|["`]$/g, ''));
       if (!tables.has(table)) continue;
 
-      if (keyword === 'join') joined.add(table);
+      if (keyword === 'join' || keyword === 'using') joined.add(table);
       else if (keyword === 'from') roots.add(table);
       else {
-        // update / insert into / merge into / delete from
+        // truncate / update / insert into / merge into / delete from. `TRUNCATE` is named
+        // because section 5's no-delete exemption leans on the application role not holding
+        // it, and it was the one destructive form this reader could not see.
         writes.add(table);
         roots.add(table);
       }
+    }
+
+    // Everything after the first comma in `FROM a, b, c` is joined to it.
+    for (const extra of alsoNamed) {
+      const table = tableOf(extra.replace(/^["`]|["`]$/g, ''));
+      if (tables.has(table)) joined.add(table);
     }
   }
 
@@ -408,6 +423,51 @@ const resolveSqlSubstitution = (templateNode, fragment) => {
   return literalTypesOfParameter(templateNode, match[1]);
 };
 
+/**
+ * The table the query chain this call belongs to is rooted in, or null.
+ *
+ * **Per query rather than per method**, which is the correction that matters. The first
+ * version asked whether the enclosing *method* rooted anything the module owned, so an
+ * unrelated query elsewhere in the same method supplied the property and authorised a join
+ * that was not the exempt shape at all — the original defect, one level out.
+ */
+const rootOfChain = (node, tables) => {
+  let current = node.expression;
+
+  while (current !== undefined && ts.isPropertyAccessExpression(current)) {
+    const receiver = current.expression;
+    if (!ts.isCallExpression(receiver)) return null;
+
+    if (ts.isPropertyAccessExpression(receiver.expression)) {
+      const method = receiver.expression.name.text;
+      if (ROOT_METHODS.has(method)) {
+        const arg = receiver.arguments[0];
+        if (arg === undefined) return null;
+        if (ts.isStringLiteral(arg) || ts.isNoSubstitutionTemplateLiteral(arg)) {
+          const table = tableOf(arg.text);
+          return tables.has(table) ? table : null;
+        }
+        return null;
+      }
+    }
+    current = receiver.expression;
+  }
+
+  return null;
+};
+
+/**
+ * Whether this call sits inside a query chain — some call below it roots a query.
+ *
+ * **This is what keeps the unknown-builder refusal from firing on ordinary code.** Every
+ * table in this schema is an ordinary English word, so `logger.log('settings')`,
+ * `map.get('cells')` and `config.get('settings')` all hand a "table name" to a method this
+ * file does not know. Refusing those would break the build on code that never touches the
+ * database, and the advice the refusal gives — enumerate it as a builder — would then be
+ * actively wrong.
+ */
+const inQueryChain = (node, tables) => rootOfChain(node, tables) !== null;
+
 const collect = (file, source, tables) => {
   /** key: enclosing method name -> { roots, joined, writes } */
   const groups = new Map();
@@ -416,7 +476,8 @@ const collect = (file, source, tables) => {
       groups.set(name, {
         roots: new Set(),
         subqueries: new Set(),
-        joined: new Set(),
+        /** `{ table, root }` per join, so the exempt shape is checked per query. */
+        joined: [],
         writes: new Set(),
       });
     }
@@ -432,19 +493,42 @@ const collect = (file, source, tables) => {
         first !== undefined &&
         (ts.isStringLiteral(first) || ts.isNoSubstitutionTemplateLiteral(first)) &&
         tables.has(tableOf(first.text));
-      const isJoin =
-        JOIN_METHODS.has(method) || (AMBIGUOUS_JOIN_METHODS.has(method) && namesATable);
+      // **The ambiguous pair resolves a literal-union parameter too.** Excluding them from
+      // resolution left `updateTable('cells').from(table)` and `deleteFrom('cells').using(table)`
+      // invisible where `table` is typed `'persons' | 'accounts'` — the shape this file
+      // already resolves everywhere else. `Buffer.from` is untouched: no `.from(` site in
+      // `api/src` passes a parameter typed as a union of table names.
+      const ambiguousNamesATable =
+        AMBIGUOUS_JOIN_METHODS.has(method) &&
+        (namesATable ||
+          (first !== undefined &&
+            ts.isIdentifier(first) &&
+            (literalTypesOfParameter(node, first.text) ?? []).some((name) =>
+              tables.has(tableOf(name)),
+            )));
+      const isJoin = JOIN_METHODS.has(method) || ambiguousNamesATable;
 
       // **The rule that makes the enumeration above safe rather than hopeful.** A call
       // handing a known table name to a builder this file does not know is refused, so the
       // next builder nobody listed fails loudly instead of being skipped. Without it, six
       // table-taking builders were invisible and a cross-module join through `crossJoin`
       // passed at exit 0.
-      if (!isRoot && !isJoin && !CTE_METHODS.has(method) && !AMBIGUOUS_JOIN_METHODS.has(method)) {
-        if (namesATable) {
+      if (!isRoot && !isJoin && !CTE_METHODS.has(method)) {
+        // Only inside a query chain, so an unknown *builder* is refused and an ordinary
+        // method that happens to take a word which is also a table name is not.
+        // A union-typed parameter names tables just as a literal does, and the refusal
+        // must reach it for the same reason the classification does.
+        const unionNames =
+          first !== undefined && ts.isIdentifier(first)
+            ? (literalTypesOfParameter(node, first.text) ?? []).filter((name) =>
+                tables.has(tableOf(name)),
+              )
+            : [];
+
+        if ((namesATable || unionNames.length > 0) && inQueryChain(node, tables)) {
           fail(
             relativeTo(file),
-            `\`${method}\` in \`${enclosingName(node)}\` is handed the table \`${tableOf(first.text)}\`, and this check does not know that builder. Enumerate it in ROOT_METHODS, JOIN_METHODS or CTE_METHODS rather than leaving it unexamined.`,
+            `\`${method}\` in \`${enclosingName(node)}\` is handed the table \`${namesATable ? tableOf(first.text) : unionNames.join('` or `')}\`, and this check does not know that builder. Enumerate it in ROOT_METHODS, JOIN_METHODS or CTE_METHODS rather than leaving it unexamined.`,
           );
         }
       }
@@ -479,10 +563,59 @@ const collect = (file, source, tables) => {
           if (!tables.has(table)) continue;
 
           const group = groupFor(where);
-          if (isJoin) group.joined.add(table);
+          if (isJoin) group.joined.push({ table, root: rootOfChain(node, tables), node });
           else if (isNested(node)) group.subqueries.add(table);
           else group.roots.add(table);
           if (WRITE_METHODS.has(method)) group.writes.add(table);
+        }
+      }
+    }
+
+    // `sql.raw('UPDATE persons ...')` and `CompiledQuery.raw('...')` are raw SQL that never
+    // reaches a tagged template, so the reader above never saw them. A literal is read; a
+    // computed argument is refused, because this file refuses what it cannot read.
+    if (
+      ts.isCallExpression(node) &&
+      ts.isPropertyAccessExpression(node.expression) &&
+      node.expression.name.text === 'raw'
+    ) {
+      const arg = node.arguments[0];
+      const where = enclosingName(node);
+
+      if (arg !== undefined) {
+        if (ts.isStringLiteral(arg) || ts.isNoSubstitutionTemplateLiteral(arg)) {
+          const { roots, joined, writes, unreadable } = rawSqlReferences(arg.text, tables, () => null);
+          const group = groupFor(where);
+          for (const table of roots) group.roots.add(table);
+          for (const table of joined) group.joined.push({ table, root: null, node });
+          for (const table of writes) group.writes.add(table);
+          for (const fragment of unreadable) {
+            fail(relativeTo(file), `raw SQL in \`${where}\` names a table this check cannot resolve: \`${fragment}\``);
+          }
+        } else if (ts.isTemplateExpression(arg)) {
+          // Readable text with holes in it. The holes are refused only where one stands in
+          // a table position — `SET LOCAL lock_timeout = ${sql.raw(...)}` names no table and
+          // must not fail.
+          const { roots, joined, writes, unreadable } = rawSqlReferences(
+            arg.getText(),
+            tables,
+            () => null,
+          );
+          const group = groupFor(where);
+          for (const table of roots) group.roots.add(table);
+          for (const table of joined) group.joined.push({ table, root: null, node });
+          for (const table of writes) group.writes.add(table);
+          for (const fragment of unreadable) {
+            fail(
+              relativeTo(file),
+              `raw SQL in \`${where}\` names a table this check cannot resolve: \`${fragment}\``,
+            );
+          }
+        } else if (!ts.isIdentifier(arg)) {
+          fail(
+            relativeTo(file),
+            `\`raw\` in \`${where}\` is handed SQL this check cannot read. A computed statement cannot be derived; pass a literal or route the read through the owning module.`,
+          );
         }
       }
     }
@@ -504,7 +637,7 @@ const collect = (file, source, tables) => {
         );
         const group = groupFor(where);
         for (const table of roots) group.roots.add(table);
-        for (const table of joined) group.joined.add(table);
+        for (const table of joined) group.joined.push({ table, root: null, node });
         for (const table of writes) group.writes.add(table);
         for (const fragment of unreadable) {
           fail(
@@ -550,17 +683,30 @@ const main = async () => {
 
   const infrastructure = new Set(ledger.infrastructure ?? []);
 
-  // **Checked like everything else here.** `owners` and `crossModule` each fail in both
-  // directions and this list failed in neither, so a name that matched no directory
+  // **Checked in both directions, like everything else here.** This list failed in neither,
+  // so a name that matched no directory
   // granted nothing and said nothing — `idempotency` was such an entry, the module being
   // `src/common/idempotency` and therefore `common`. Naming a directory here converts
   // every future foreign root beneath it from a hard failure into a ledger line, which is
   // too large a widening to sit in an unchecked list.
+  const infrastructureUsed = new Set(
+    declared.filter((entry) => entry.kind === 'root').map((entry) => entry.file.split('/')[1]),
+  );
+
   for (const name of infrastructure) {
     if (!existsSync(path.join(srcRoot, name))) {
       fail(
         'module-boundaries.json',
         `\`infrastructure\` names \`${name}\`, which is not a directory under \`src/\`.`,
+      );
+    } else if (!infrastructureUsed.has(name)) {
+      // The other direction, which the first version of this guard did not have while its
+      // own comment claimed the symmetry was restored. `common` and `email` were entries of
+      // exactly this shape -- granting root access to tables nothing beneath them reads --
+      // and were removed by hand rather than by anything failing.
+      fail(
+        'module-boundaries.json',
+        `\`infrastructure\` names \`${name}\`, and no \`root\` entry below it uses that grant. An unused widening is one nobody has had to argue for.`,
       );
     }
   }
@@ -584,10 +730,15 @@ const main = async () => {
       // section 2 assigns to nobody, so rooting in `idempotency_keys` alone would have
       // satisfied "a query rooted in a table the reading module owns" while satisfying no
       // such thing. The exemption's premise names ownership and this asks for ownership.
-      const rootsItsOwn = [...roots, ...subqueries].some((table) => owners[table] === owner);
+      //
+      // A **subquery** is measured against the method's own top-level roots, because that
+      // is the query it is nested inside — section 2 calls `withoutACell` "rooted in
+      // `persons`" while it anti-joins three Cell tables. A **join** is measured against
+      // its own chain's root instead.
+      const subqueryRootsItsOwn = [...roots].some((table) => owners[table] === owner);
 
       /** The inventory is where a permitted cross-module read lives. */
-      const inventory = (table, kind, describe) => {
+      const inventory = (table, kind, describe, shapeHolds = subqueryRootsItsOwn) => {
         const key = `${relative}#${method}#${table}#${kind}`;
         if (!unmatched.has(key)) {
           fail(relative, describe(table));
@@ -602,7 +753,7 @@ const main = async () => {
         // for a method that roots nothing of its own — or roots only in `idempotency_keys`,
         // which nobody owns — was admitted by being written down, which is the distinction
         // this whole file exists to draw, missed one level in.
-        if ((kind === 'join' || kind === 'subquery') && !rootsItsOwn) {
+        if ((kind === 'join' || kind === 'subquery') && !shapeHolds) {
           fail(
             relative,
             `\`${method}\` is inventoried as a \`${kind}\` of \`${table}\`, and it roots no query in a table \`${owner}\` owns. Section 2 exempts a read joined onto a query you root yourself; this is not that shape.`,
@@ -649,13 +800,17 @@ const main = async () => {
         );
       }
 
-      for (const table of joined) {
+      for (const { table, root, node } of joined) {
         if (ownIt(table)) continue;
         inventory(
           table,
           'join',
           (name) =>
             `\`${method}\` joins \`${name}\`, owned by \`${owners[name]}\`, and the ledger does not name it. Section 2 exempts this shape; the ledger holds the instances.`,
+          // A standalone chain is measured against its own root. A **nested** one belongs to
+          // the query it sits inside, which is how section 2 reads `withoutACell`: "rooted
+          // in `persons`" while anti-joining three Cell tables, one of which it joins to.
+          isNested(node) ? subqueryRootsItsOwn : owners[root] === owner,
         );
       }
     }

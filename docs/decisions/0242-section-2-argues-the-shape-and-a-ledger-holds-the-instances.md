@@ -140,7 +140,7 @@ directory fails.
 
 *The fix batch introduced a defect of its own, in the way this repository keeps recording:
 the repaired regular expression was written with a literal backspace character in place of
-``, so it matched nothing at all and the terminal hid it. It was found by printing the
+`\b`, so it matched nothing at all and the terminal hid it. It was found by printing the
 compiled pattern rather than by reading the line.*
 
 ---
