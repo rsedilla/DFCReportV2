@@ -93,6 +93,45 @@ describe('the development email transport (section 6)', () => {
       expect(contents).toContain('2026-09-17T16:23:07.618Z');
     });
 
+    /**
+     * The ruling of 2026-09-11, second version, and the case it turns on.
+     *
+     * Section 6 refuses an administrator another user's password. A reset token *is* that,
+     * one step earlier, for an account somebody is already using — and on a development
+     * machine this transport is the only place one becomes readable, because
+     * `account_tokens` stores a SHA-256 hash and no call site returns a minted token to
+     * anybody else. The first version of that ruling held the opposite and was wrong on
+     * both facts.
+     */
+    it('withholds a password-reset token while still recording the message', async () => {
+      const reset = { ...message, kind: 'PASSWORD_RESET' as const };
+
+      await new OutboxEmailAdapter(config({ emailTransport: 'outbox', emailOutboxDir: dir })).send(
+        reset,
+      );
+
+      const written = await readdir(dir);
+      expect(written).toHaveLength(1);
+
+      const contents = await readFile(join(dir, written[0]), 'utf8');
+      // The credential itself, which is the whole of the rule.
+      expect(contents).not.toContain(reset.token);
+      // Still a record that the flow ran, and why the token is absent.
+      expect(contents).toContain('PASSWORD_RESET');
+      expect(contents).toContain('withheld');
+      expect(contents).toContain('leader@example.test');
+    });
+
+    it('still writes an activation token, which is the reason it exists', async () => {
+      await new OutboxEmailAdapter(config({ emailTransport: 'outbox', emailOutboxDir: dir })).send(
+        message,
+      );
+
+      const written = await readdir(dir);
+      const contents = await readFile(join(dir, written[0]), 'utf8');
+      expect(contents).toContain(message.token);
+    });
+
     it('does not collide when one person is sent two messages', async () => {
       const adapter = new OutboxEmailAdapter(
         config({ emailTransport: 'outbox', emailOutboxDir: dir }),

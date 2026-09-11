@@ -1306,6 +1306,46 @@ sign-in, where the stored password is whatever it was when it was set.
 - Invalidate token after use
 - Do not let admins know or choose another user's password
 
+**That last rule is not exempted on a development machine, and the development email
+transport is what it binds to** (ruling of 2026-09-11). That transport writes each message
+to a directory. It writes an **activation** token and **withholds a password-reset** one,
+recording the message without it.
+
+The distinction is not a matter of degree. An activation credential belongs to an account
+nobody has used; a reset credential takes over an account somebody is using, which is what
+the sentence above is about. The transport was justified by the first and never by the
+second — it exists because a provisioned account cannot otherwise be activated at all — so
+withholding the reset token costs it nothing it was built for. The trade this section makes
+for `bootstrap:admin`, which prints its activation token, carries for the same reason and
+stops at the same place: there the operator *is* the holder.
+
+**A first version of this ruling exempted the development machine outright, and its ground
+was false.** It held that the operator already had the token anyway — that `account_tokens`
+was one query away and the service would mint either token on request. Neither is true.
+That table stores a SHA-256 digest and the schema says in terms that the token itself is
+never stored; of the four sites that mint one, three hand it only to this transport and the
+fourth refuses while any account exists. This section already said so where it introduces
+the transport: the token is stored only as a hash, *so there is no way back*. The outbox
+exists **because** the database yields nothing, and the amendment argued it was redundant
+**because** the database yields everything.
+
+So on a development machine this transport is the only source of a usable credential for
+another person's account, which is the access this rule withholds.
+
+**What is enforced, and what is not.** The transport binds only where `NODE_ENV` is
+explicitly `development`, the process refuses to start with it selected anywhere else, and
+Section 24 requires `NODE_ENV` rather than letting an absent one resolve. The refusal to
+write a reset token is pinned by `api/test/unit/email-outbox-adapter.spec.ts`. The suite
+cannot **bind** it end to end, since `api/test/setup/env.ts` pins `NODE_ENV=test` and
+`loadConfig` refuses the outbox there; that suite reaches the adapter by constructing it
+directly, which is how the case above exists at all.
+
+**A shared development host has nothing enforcing anything.** The argument for writing an
+activation token to disk rests on the operator being the only person with access to the
+machine, and the `NODE_ENV` guard cannot tell a laptop from a team server. That is stated
+as a limitation rather than as a rule, because a rule with nothing that can fail on it is
+a wish; `CLAUDE.md` carries it as open.
+
 ```text
 account_tokens
 - id
@@ -1360,21 +1400,31 @@ When a person becomes a Cell Leader and has no account:
 account cannot be activated at all** (ruling of 2026-09-11). The default adapter delivers
 nothing and deliberately does not log the token, and the token is stored only as a hash,
 so there is no way back. A **development transport** therefore exists beside it: it writes
-each message — activation **and password reset** — token included, as a file in a local
-outbox directory, and is selected by configuration rather than by default.
+each message as a file in a local outbox directory, **carrying an activation token and
+withholding a password-reset one** (ruling of 2026-09-11), and is selected by configuration
+rather than by default. *This read "activation and password reset — token included", which
+was true when written and was made false by that ruling — the same two-sentences-in-one-section
+contradiction the ruling exists to record, reintroduced by the fix for it.*
 
 **The process refuses to start unless `NODE_ENV` is explicitly `development`**, and that
 refusal rather than the adapter is what makes the transport safe to ship. It is read from
-the raw variable, because the resolved value defaults to `development` when nobody set one
-and a decision about writing credentials to disk may not rest on a default.
+the resolved value, which Section 24 requires rather than defaulting, so a decision about
+writing credentials to disk rests on a variable somebody set. *This said it reads the raw
+variable "because the resolved value defaults to `development` when nobody set one". Both
+halves stopped being true when the ruling of 2026-09-11 made `NODE_ENV` required, and the
+sentence survived a sweep because it wraps across a line break.*
 
 **What this borrows from the bootstrap command above, and what it does not.** The token is
 single-use and short-lived exactly as the printed one is, and nothing is addressed to
 anybody. The term that does **not** carry across is the one that paragraph turns on: there
-the operator is the holder, and here whoever reads the directory reads tokens minted for
-other people's accounts. Whether that is admissible on a development machine — against
-*Password reset security* above, which says an administrator must not know another user's
-password — is **not settled by this rule** and is recorded as open. What is unmoved is the
+the operator is the holder, and here whoever reads the directory reads an activation token
+minted for somebody else's account. Whether that is admissible on a development machine —
+against *Password reset security* above, which says an administrator must not know another
+user's password — **is settled** by the ruling of 2026-09-11, and settled differently for
+each kind: an activation token is written, and a reset token is withheld, because the first
+belongs to an account nobody has used and the second takes over one somebody is using.
+*This said the question was "not settled by this rule" and recorded as open, and pointed at
+a `CLAUDE.md` bullet that ruling retired.* What is unmoved is the
 narrower guarantee: a token never appears in an API response, so nothing here widens what
 an administrator can obtain through the product.
 

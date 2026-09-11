@@ -16,12 +16,31 @@ import { EmailPort, OutboundEmail } from './email.port';
  * `account_tokens` stores only a hash, and `bootstrap:admin` refuses to run twice — so
  * an account created through the ordinary flow had no path to a password.
  *
- * **It writes the token, and that is the point rather than an oversight.** Section 6
- * makes the same trade for `bootstrap:admin`, which prints its activation token, on
- * terms this inherits: the token is single-use, short-lived, and read by the person
- * operating the machine. It reaches further in one direction only — a file outlives
- * scrollback — and less far in another, since nothing is addressed to anybody and no
- * inbox receives it.
+ * **It writes an ACTIVATION token, and refuses to write a PASSWORD_RESET one** (ruling of
+ * 2026-09-11). Section 6 makes the same trade for `bootstrap:admin`, which prints its
+ * activation token, on terms an activation inherits: the token is single-use, short-lived,
+ * and read by the person operating the machine. It reaches further in one direction only —
+ * a file outlives scrollback — and less far in another, since nothing is addressed to
+ * anybody and no inbox receives it.
+ *
+ * **A reset token does not inherit those terms.** An activation credential belongs to an
+ * account nobody has used; a reset credential takes over an account somebody is using,
+ * which is what Section 6 means by an administrator coming to know another user's
+ * password. The bootstrap precedent does not carry either, because there the operator
+ * *is* the holder.
+ *
+ * **The first version of this ruling reasoned the other way and was wrong on its facts.**
+ * It held that refusing withheld nothing, since the operator could read `account_tokens`
+ * or mint a token directly. Neither is true: that table stores a SHA-256 hash and the
+ * schema says in terms that "the token itself is never stored", and no call site hands a
+ * minted token to anybody but this transport. So the outbox is not a convenience that
+ * saves a query — on a development machine it is the **only** source of a usable
+ * credential for another person's account, which is the access Section 6 withholds.
+ *
+ * **The reset message is still written, without its token**, so a developer learns the
+ * flow ran and why the token is absent rather than wondering whether delivery failed.
+ * Nothing about the API changes: Section 6 requires the forgot-password response to be
+ * identical whether or not the address matches, and this transport is downstream of that.
  *
  * **What keeps it safe is in `configuration.ts`, not here**: the process refuses to
  * start with this transport selected in production. This class deliberately carries no
@@ -68,14 +87,30 @@ export class OutboxEmailAdapter implements EmailPort {
  * because the next step is copying it into a form.
  */
 function render(message: OutboundEmail): string {
-  return [
+  const head = [
     `Kind:      ${message.kind}`,
     `To:        ${message.to.name} <${message.to.email}>`,
     `Expires:   ${message.expiresAt.toISOString()}`,
     '',
-    'Token:',
-    message.token,
-    '',
+  ];
+
+  // **Activation carries its token; a reset does not.** The refusal is here rather than
+  // in a caller because this is the only place a token would reach disk.
+  const credential =
+    message.kind === 'ACTIVATION'
+      ? ['Token:', message.token, '']
+      : [
+          'Token:     withheld (SKILL.md section 6).',
+          '',
+          'A password-reset token takes over an account somebody is already using, which',
+          'is the access section 6 refuses an administrator. An activation token is',
+          'written, because an account nobody has used cannot otherwise be reached.',
+          '',
+        ];
+
+  return [
+    ...head,
+    ...credential,
     'This message was not delivered. It was written by the development transport',
     '(SKILL.md section 6). Nothing was sent to the address above.',
     '',
