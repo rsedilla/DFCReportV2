@@ -26,15 +26,25 @@
  * without that table being assigned an owner, which is the half a hand-written
  * map would lose first.
  *
- * **What it cannot read, it refuses.** A table argument that is not a string
- * literal, and a raw `sql` template whose `FROM`/`JOIN` target it cannot resolve,
- * both fail rather than being skipped. A derivation that skipped what it could not
- * read would claim a completeness a declared list never claimed.
+ * **What it cannot read, it refuses**, and the widest of those refusals is the one
+ * that was missing. A table argument that is not a literal fails; a raw `sql` target
+ * it cannot resolve fails; and **a builder it does not know, handed a name that is a
+ * table, fails** — because the first version enumerated the builders and skipped
+ * everything else, which left `crossJoin`, `crossJoinLateral`, `using`, `from`,
+ * `mergeInto` and `replaceInto` invisible rather than refused. A derivation that
+ * skips what it cannot read claims a completeness a declared list never claimed.
+ *
+ * **Its scope is `api/src`.** `api/scripts` and `api/test` are outside the walk: no
+ * script roots a query, and the suite's fixtures write other modules' tables
+ * constantly and are not application code. What the derivation is *required* to
+ * reach is recorded as an open Stop Condition in `CLAUDE.md` rather than asserted
+ * here, because a completeness claim needs a stated boundary.
  *
  * **A name that is not in `Database` is not a table** and is ignored: it is a CTE
  * or an alias. That is sound rather than lenient, because the set it is checked
  * against is itself derived.
  */
+import { existsSync } from 'node:fs';
 import { readdir, readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
@@ -49,25 +59,112 @@ const srcRoot = path.join(apiRoot, 'src');
 const schemaFile = path.join(srcRoot, 'database', 'schema.ts');
 const ledgerFile = path.join(apiRoot, 'module-boundaries.json');
 
-/** Kysely builders that establish what a query is rooted in. */
-const ROOT_METHODS = new Set(['selectFrom', 'updateTable', 'insertInto', 'deleteFrom']);
-/** Kysely builders that write. */
-const WRITE_METHODS = new Set(['updateTable', 'insertInto', 'deleteFrom']);
-/** Kysely builders that join another table onto the root. */
+/**
+ * Every builder that takes a table name, and what each one means.
+ *
+ * **The enumeration is not what makes this safe** — a closed list of builders is a list
+ * somebody forgets to extend, and the first version of this file was missing six of them:
+ * `crossJoin`, `crossJoinLateral`, `using`, `from`, `mergeInto` and `replaceInto`, each of
+ * which reached another module's table and was not examined at all. What makes it safe is
+ * the rule below it: **any call taking a known table name as its first argument must be a
+ * builder this file knows, or it is refused.** A builder nobody enumerated then fails
+ * loudly rather than being invisible, which is the difference between a derivation and a
+ * guess.
+ */
+const ROOT_METHODS = new Set([
+  'selectFrom',
+  'updateTable',
+  'insertInto',
+  'deleteFrom',
+  'mergeInto',
+  'replaceInto',
+]);
+/** Builders that write. Section 2 admits no exemption here and the ledger holds no entry. */
+const WRITE_METHODS = new Set([
+  'updateTable',
+  'insertInto',
+  'deleteFrom',
+  'mergeInto',
+  'replaceInto',
+]);
+/** Builders that bring another table alongside the root. */
 const JOIN_METHODS = new Set([
   'innerJoin',
   'leftJoin',
   'rightJoin',
   'fullJoin',
+  'crossJoin',
   'innerJoinLateral',
   'leftJoinLateral',
+  'crossJoinLateral',
+  'crossApply',
+  'outerApply',
+]);
+/**
+ * Builders that name a second table and whose names are also ordinary JavaScript.
+ *
+ * `using` on a DELETE and `from` on an UPDATE each bring a second table the statement
+ * reads, and neither is a join in SQL's grammar. They are separated from the set above
+ * because `Buffer.from` and `Array.from` are everywhere: enumerating `from` as a builder
+ * refused nine call sites that have nothing to do with the database, on the first run.
+ *
+ * **They act only on an argument that is already a known table name**, and are otherwise
+ * ignored rather than refused. That is a stated hole: `updateTable(x).from(computed)` is
+ * not reachable by this check. Nothing writes one, and the alternative refuses every
+ * `Buffer.from` in the tree.
+ */
+const AMBIGUOUS_JOIN_METHODS = new Set(['using', 'from']);
+/**
+ * Builders whose first argument names a CTE rather than a table, and which are therefore
+ * not a table reference at all.
+ *
+ * **A CTE named after a real table would shadow it**, and this file would then read a
+ * reference to the CTE as a reference to the table. No Kysely CTE exists today and the raw
+ * ones are named `upline`, `subtree` and `in_force`, so the case is recorded rather than
+ * handled.
+ */
+const CTE_METHODS = new Set(['with', 'withRecursive']);
+
+/**
+ * Calls that may take an arrow whose body is a **subquery** rather than a fresh statement.
+ *
+ * This is the discriminator, and the first version got it wrong by asking only whether an
+ * arrow stood anywhere above the call. `db.transaction().execute(async (trx) => ...)` puts
+ * an arrow above every write path in this repository, so a genuine main-rule violation
+ * inside a transaction was downgraded from a hard failure to an inventoriable entry. What
+ * matters is which builder the arrow was handed to.
+ */
+const SUBQUERY_HOSTS = new Set([
+  'where',
+  'andWhere',
+  'orWhere',
+  'having',
+  'on',
+  'select',
+  'exists',
+  'notExists',
+  'not',
+  'and',
+  'or',
+  'whereExists',
+  'whereNotExists',
 ]);
 
 const problems = [];
 const fail = (file, message) => problems.push({ file, message });
 
-/** `'persons as person'` and `'persons'` both name `persons`. */
-const tableOf = (literal) => literal.split(/\s+as\s+/i)[0].trim();
+/**
+ * `'persons as person'`, `'persons'` and `'public.persons'` all name `persons`.
+ *
+ * **The schema qualifier is stripped**, because the rule "a name not in `Database` is not
+ * a table" is sound only if every spelling a table can take is in `Database`, and
+ * `public.persons` is not. It was silently discarded as an alias until it was probed.
+ */
+const tableOf = (literal) => {
+  const withoutAlias = literal.split(/\s+as\s+/i)[0].trim();
+  const lastDot = withoutAlias.lastIndexOf('.');
+  return lastDot === -1 ? withoutAlias : withoutAlias.slice(lastDot + 1);
+};
 
 const listFiles = async (dir) => {
   const found = [];
@@ -78,6 +175,9 @@ const listFiles = async (dir) => {
   }
   return found;
 };
+
+/** Always `/`, so a refusal and an inventory failure name one file one way. */
+const relativeTo = (file) => path.relative(apiRoot, file).split(path.sep).join('/');
 
 const parse = (file, text) =>
   ts.createSourceFile(file, text, ts.ScriptTarget.Latest, /* setParentNodes */ true);
@@ -164,7 +264,21 @@ const enclosingName = (node) => {
  */
 const isNested = (node) => {
   for (let current = node.parent; current !== undefined; current = current.parent) {
-    if (ts.isArrowFunction(current) || ts.isFunctionExpression(current)) return true;
+    if (ts.isArrowFunction(current) || ts.isFunctionExpression(current)) {
+      // Which builder was this arrow handed to? An expression-builder callback on `where`
+      // or `exists` is a subquery; a transaction callback on `execute` is not, and every
+      // write path in this repository is written inside one.
+      const call = current.parent;
+      if (
+        call !== undefined &&
+        ts.isCallExpression(call) &&
+        call.arguments.some((argument) => argument === current) &&
+        ts.isPropertyAccessExpression(call.expression)
+      ) {
+        return SUBQUERY_HOSTS.has(call.expression.name.text);
+      }
+      return false;
+    }
     if (
       ts.isMethodDeclaration(current) ||
       ts.isFunctionDeclaration(current) ||
@@ -225,24 +339,73 @@ const literalTypesOfParameter = (node, name) => {
  * What it must not do is miss one, which is why an unresolvable FROM/JOIN target
  * is a refusal rather than a shrug.
  */
-const rawSqlReferences = (text, tables) => {
+const rawSqlReferences = (text, tables, resolveSubstitution) => {
   const roots = new Set();
   const joined = new Set();
+  const writes = new Set();
   const unreadable = [];
 
-  for (const match of text.matchAll(/\b(from|join)\s+([^\s(;,)]+)/gi)) {
-    const keyword = match[1].toLowerCase();
-    const target = match[2].replace(/^["`]|["`]$/g, '');
+  // **Writes are matched first and by their own keywords**, which the first version did not
+  // do at all: it matched `FROM` and `JOIN` only, so `UPDATE persons SET ...` and
+  // `INSERT INTO persons ...` reached nothing and a cross-module write passed silently --
+  // the one clause section 2 states with no exemption. `DELETE FROM` was worse than missed,
+  // being read as an ordinary `FROM` and filed as a read.
+  //
+  // `delete\s+from` and `insert\s+into` precede the bare `from` in the alternation so the
+  // engine prefers them at the same position.
+  const pattern =
+    /\b(update|insert\s+into|merge\s+into|delete\s+from|from|join)\s+(\$\{[^}]*\}|[^\s(;,)]+)/gi;
 
-    if (target.startsWith('$') || target.startsWith('{')) {
-      unreadable.push(match[0].trim());
-      continue;
+  for (const match of text.matchAll(pattern)) {
+    const keyword = match[1].toLowerCase().replace(/\s+/g, ' ');
+    const target = match[2].trim();
+
+    /** One target may name several tables: `sql.table(t)` where `t` is a literal union. */
+    let named = null;
+
+    if (target.startsWith('${')) {
+      // **Resolved rather than refused where the answer is syntactically present.**
+      // `endConfigurationWithin` writes `UPDATE ${sql.table(table)}` with `table` typed
+      // `'cell_categories' | 'cell_schedules'`, both owned by the module that writes them.
+      named = resolveSubstitution(target.slice(2, -1).trim());
+      if (named === null) {
+        unreadable.push(match[0].trim());
+        continue;
+      }
+    } else {
+      named = [target];
     }
-    if (!tables.has(target)) continue;
-    (keyword === 'from' ? roots : joined).add(target);
+
+    for (const candidate of named) {
+      const table = tableOf(candidate.replace(/^["`]|["`]$/g, ''));
+      if (!tables.has(table)) continue;
+
+      if (keyword === 'join') joined.add(table);
+      else if (keyword === 'from') roots.add(table);
+      else {
+        // update / insert into / merge into / delete from
+        writes.add(table);
+        roots.add(table);
+      }
+    }
   }
 
-  return { roots, joined, unreadable };
+  return { roots, joined, writes, unreadable };
+};
+
+/**
+ * What a `${...}` inside a raw `sql` template names, where that is decidable.
+ *
+ * Only one shape is decided: `sql.table(x)` where `x` is a parameter typed as a union of
+ * string literals. That is the shape `endConfigurationWithin` uses to write a Cell's own
+ * category and schedule rows, and the names are present in the signature rather than
+ * computed. Anything else answers null and is refused by the caller, which is the half
+ * that keeps the derivation honest.
+ */
+const resolveSqlSubstitution = (templateNode, fragment) => {
+  const match = /^sql\.table\(\s*([A-Za-z_$][\w$]*)\s*\)$/.exec(fragment);
+  if (match === null) return null;
+  return literalTypesOfParameter(templateNode, match[1]);
 };
 
 const collect = (file, source, tables) => {
@@ -264,7 +427,27 @@ const collect = (file, source, tables) => {
     if (ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression)) {
       const method = node.expression.name.text;
       const isRoot = ROOT_METHODS.has(method);
-      const isJoin = JOIN_METHODS.has(method);
+      const first = node.arguments[0];
+      const namesATable =
+        first !== undefined &&
+        (ts.isStringLiteral(first) || ts.isNoSubstitutionTemplateLiteral(first)) &&
+        tables.has(tableOf(first.text));
+      const isJoin =
+        JOIN_METHODS.has(method) || (AMBIGUOUS_JOIN_METHODS.has(method) && namesATable);
+
+      // **The rule that makes the enumeration above safe rather than hopeful.** A call
+      // handing a known table name to a builder this file does not know is refused, so the
+      // next builder nobody listed fails loudly instead of being skipped. Without it, six
+      // table-taking builders were invisible and a cross-module join through `crossJoin`
+      // passed at exit 0.
+      if (!isRoot && !isJoin && !CTE_METHODS.has(method) && !AMBIGUOUS_JOIN_METHODS.has(method)) {
+        if (namesATable) {
+          fail(
+            relativeTo(file),
+            `\`${method}\` in \`${enclosingName(node)}\` is handed the table \`${tableOf(first.text)}\`, and this check does not know that builder. Enumerate it in ROOT_METHODS, JOIN_METHODS or CTE_METHODS rather than leaving it unexamined.`,
+          );
+        }
+      }
 
       if (isRoot || isJoin) {
         const arg = node.arguments[0];
@@ -274,7 +457,7 @@ const collect = (file, source, tables) => {
         let candidates = null;
 
         if (arg === undefined) {
-          fail(path.relative(apiRoot, file), `\`${method}\` with no argument in \`${where}\``);
+          fail(relativeTo(file), `\`${method}\` with no argument in \`${where}\``);
         } else if (ts.isStringLiteral(arg) || ts.isNoSubstitutionTemplateLiteral(arg)) {
           candidates = [arg.text];
         } else if (ts.isIdentifier(arg)) {
@@ -286,7 +469,7 @@ const collect = (file, source, tables) => {
           // Refused rather than skipped: a computed table name is exactly what a
           // check claiming completeness must not wave through.
           fail(
-            path.relative(apiRoot, file),
+            relativeTo(file),
             `\`${method}\` in \`${where}\` takes a table argument this check cannot resolve to a literal`,
           );
         }
@@ -314,13 +497,18 @@ const collect = (file, source, tables) => {
 
       if (tagName === 'sql' || tagName === 'raw') {
         const where = enclosingName(node);
-        const { roots, joined, unreadable } = rawSqlReferences(node.template.getText(), tables);
+        const { roots, joined, writes, unreadable } = rawSqlReferences(
+          node.template.getText(),
+          tables,
+          (fragment) => resolveSqlSubstitution(node, fragment),
+        );
         const group = groupFor(where);
         for (const table of roots) group.roots.add(table);
         for (const table of joined) group.joined.add(table);
+        for (const table of writes) group.writes.add(table);
         for (const fragment of unreadable) {
           fail(
-            path.relative(apiRoot, file),
+            relativeTo(file),
             `raw SQL in \`${where}\` names a table this check cannot resolve: \`${fragment}\``,
           );
         }
@@ -362,13 +550,28 @@ const main = async () => {
 
   const infrastructure = new Set(ledger.infrastructure ?? []);
 
+  // **Checked like everything else here.** `owners` and `crossModule` each fail in both
+  // directions and this list failed in neither, so a name that matched no directory
+  // granted nothing and said nothing — `idempotency` was such an entry, the module being
+  // `src/common/idempotency` and therefore `common`. Naming a directory here converts
+  // every future foreign root beneath it from a hard failure into a ledger line, which is
+  // too large a widening to sit in an unchecked list.
+  for (const name of infrastructure) {
+    if (!existsSync(path.join(srcRoot, name))) {
+      fail(
+        'module-boundaries.json',
+        `\`infrastructure\` names \`${name}\`, which is not a directory under \`src/\`.`,
+      );
+    }
+  }
+
   /** Declared cross-module reads, keyed so a match can be struck off. */
   const unmatched = new Map(
     declared.map((entry) => [`${entry.file}#${entry.method}#${entry.table}#${entry.kind}`, entry]),
   );
 
   for (const file of await listFiles(srcRoot)) {
-    const relative = path.relative(apiRoot, file).split(path.sep).join('/');
+    const relative = relativeTo(file);
     const owner = moduleOf(file);
     const isInfrastructure = infrastructure.has(owner);
     const groups = collect(file, parse(file, await readFile(file, 'utf8')), tables);
@@ -377,14 +580,34 @@ const main = async () => {
       /** Unowned tables belong to nobody, so anything may reach them (section 2). */
       const ownIt = (table) => owners[table] === owner || owners[table] === null;
 
+      // **Owned by *this* module, not merely reachable.** `ownIt` also admits a table
+      // section 2 assigns to nobody, so rooting in `idempotency_keys` alone would have
+      // satisfied "a query rooted in a table the reading module owns" while satisfying no
+      // such thing. The exemption's premise names ownership and this asks for ownership.
+      const rootsItsOwn = [...roots, ...subqueries].some((table) => owners[table] === owner);
+
       /** The inventory is where a permitted cross-module read lives. */
       const inventory = (table, kind, describe) => {
         const key = `${relative}#${method}#${table}#${kind}`;
-        if (unmatched.has(key)) {
-          unmatched.delete(key);
+        if (!unmatched.has(key)) {
+          fail(relative, describe(table));
           return;
         }
-        fail(relative, describe(table));
+
+        unmatched.delete(key);
+
+        // **The exempt shape is checked, not taken on the ledger's word.** Section 2
+        // exempts "a read joined onto a query rooted in a table the reading module owns",
+        // and membership of the ledger is not that property. Without this, a `join` entry
+        // for a method that roots nothing of its own — or roots only in `idempotency_keys`,
+        // which nobody owns — was admitted by being written down, which is the distinction
+        // this whole file exists to draw, missed one level in.
+        if ((kind === 'join' || kind === 'subquery') && !rootsItsOwn) {
+          fail(
+            relative,
+            `\`${method}\` is inventoried as a \`${kind}\` of \`${table}\`, and it roots no query in a table \`${owner}\` owns. Section 2 exempts a read joined onto a query you root yourself; this is not that shape.`,
+          );
+        }
       };
 
       for (const table of writes) {

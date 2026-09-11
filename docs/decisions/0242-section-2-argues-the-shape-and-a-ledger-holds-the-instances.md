@@ -7,8 +7,11 @@ decision taken in a module."
 
 **The enumeration was wrong on the day it was written, and nothing could tell anyone.**
 `cells` joins `persons` in `membersAsOfWithin` and `membersOfWithin`, both rooted in
-`cell_memberships`, both exactly the exempt shape, and neither named in Section 2 or
-anywhere else. That was recorded as a Stop Condition — whether the enumeration is of
+`cell_memberships`, both exactly the exempt shape, and neither among the instances Section 2
+enumerated. *A first version of this sentence said "neither named in Section 2 or anywhere
+else", which is false: both were named by name in Section 2's own italic, in the `CLAUDE.md`
+bullet being retired, and in decision 0234. What they were not is **authorised** — named as
+the gap rather than as an instance — and the sentence collapsed those two senses of named.* That was recorded as a Stop Condition — whether the enumeration is of
 instances or of *argued* instances — and it is settled here.
 
 ## The ruling
@@ -51,11 +54,16 @@ that compiles the API.
 cannot ship without that table being given an owner, which is the half a hand-written map
 would lose first.
 
-**Three kinds of cross-module read are inventoried**, and the distinction is Section 2's own
-rather than an invention: a `join`, a `subquery` — the word that section already uses when it
-says `withoutACell` "anti-joins" three Cell tables while being "rooted in `persons`" — and a
-`root`, which only shared infrastructure may take. **The write side has no entry and no
-exemption**, because a write is what an invariant guards.
+**Three kinds of cross-module read are inventoried, and only two of them are Section 2's
+own.** A `join` and a `subquery` are: that section already uses the second word itself, when
+it says `withoutACell` "anti-joins" three Cell tables while being "rooted in `persons`". A
+`root` is **not** — it is a second exemption, narrower than the first, permitting shared
+infrastructure to root a query in another module's table. *This paragraph claimed all three
+were Section 2's own, and the ruling claimed below that it widened nothing. Both were false:
+the `root` kind shipped in the ledger and in this file and in no Section, which is the
+"all three legs" rule broken by the change enforcing it. Section 2 now states it, and whether
+it should admit it at all is escalated as a Stop Condition rather than settled here.* **The
+write side has no entry and no exemption**, because a write is what an invariant guards.
 
 **What it cannot resolve, it refuses.** A table argument that is not a literal fails, as does
 a raw `sql` template whose `FROM` or `JOIN` target it cannot read. One argument is resolved
@@ -70,7 +78,10 @@ is sound rather than lenient, because the set it is checked against is itself de
 
 Eight cross-module reads across six methods. Five are the instances Section 2 argued. Two are
 `cells` joining `persons`, which is the gap that made this a Stop Condition and which the
-derivation found without being told to look. The eighth is `lockCellsWithin` in
+derivation confirmed independently. *This said the derivation "found" them "without being
+told to look", which it did not: it was written against a Stop Condition that named both
+methods in the sentence being settled. The one it genuinely found unprompted is the eighth.*
+The eighth is `lockCellsWithin` in
 `src/database/cell-lock.ts`, shared infrastructure taking the row lock Section 24 orders,
 which no clause of Section 2 had ever mentioned in either direction.
 
@@ -81,13 +92,56 @@ to admit it.
 
 ## What this does not do
 
-**It does not widen the exemption.** The shape is unchanged and so is the main rule. The two
-`cells` joins were always either admitted by the shape or not; this settles that they are,
-and records them.
+**It does not widen the *first* exemption.** Its shape is unchanged: the two `cells` joins
+were always either admitted by it or not, and this settles that they are and records them.
+What it does add is a **second** exemption for shared infrastructure, which is stated above
+rather than denied, and which is open.
 
 **It does not decide whether an operator may read another person's activation or
 password-reset token on a development machine**, which is the other Section 2-adjacent Stop
 Condition open at the time of writing and is about Section 6.
+
+## What the mandatory review found
+
+Eight, and three were silent misses in the derivation — the worst class available here,
+because this ruling's whole claim is that a derived check is worth more than a prose total.
+A probe of thirteen cross-module reads passed at exit 0 on seven of them.
+
+**A cross-module write in raw SQL was invisible.** The reader matched `FROM` and `JOIN` only,
+so `UPDATE persons SET …` and `INSERT INTO persons …` reached nothing, and `DELETE FROM` was
+filed as a read. That is the one clause Section 2 states with no exemption, passing silently,
+while `CLAUDE.md` asserted the check "fails on a cross-module write in any form".
+
+**Six table-taking builders were never examined.** `crossJoin`, `crossJoinLateral`, `using`,
+`from`, `mergeInto` and `replaceInto` were in neither enumerated set, and an unenumerated
+builder was not refused — it was not a candidate. The fix is not a longer list: any call
+handed a known table name by a builder this file does not know is now refused, so the next
+one fails loudly instead of being skipped.
+
+**A schema-qualified name was discarded as an alias.** `public.persons` is not in
+`interface Database`, and the rule "a name not in `Database` is not a table" is sound only if
+every spelling is. It now strips the qualifier.
+
+**The subquery discriminator downgraded a main-rule violation.** It asked only whether an
+arrow stood anywhere above the call, and `db.transaction().execute(async (trx) => …)` puts one
+above every write path in this repository — so a root in another module's table inside a
+transaction was offered a ledger line instead of a refusal. It now asks which builder the
+arrow was handed to.
+
+**The ledger's `kind` was an assertion it made about itself.** A `join` entry was admitted by
+being written down, with nothing checking Section 2's actual precondition — that the join sits
+on a query the reading module roots. That is the distinction this file exists to draw, missed
+one level in, and it is now derived.
+
+**`infrastructure` was checked in neither direction**, where `owners` and `crossModule` are
+each checked in both. One of its four entries named no directory at all, and two granted
+access to tables nothing beneath them reads. It is one entry now, and an entry naming no
+directory fails.
+
+*The fix batch introduced a defect of its own, in the way this repository keeps recording:
+the repaired regular expression was written with a literal backspace character in place of
+``, so it matched nothing at all and the terminal hid it. It was found by printing the
+compiled pattern rather than by reading the line.*
 
 ---
 

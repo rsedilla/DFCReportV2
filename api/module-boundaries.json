@@ -10,6 +10,11 @@
     "",
     "`infrastructure` names directories under src/ that are not domain modules. They may",
     "reach a table, and never silently: each such read is inventoried below as a `root`.",
+    "It is one entry, and deliberately: naming a directory here turns every future foreign",
+    "root beneath it from a hard failure into a ledger line. It held four until 2026-09-11,",
+    "of which `idempotency` matched no directory at all (the module is `src/common/idempotency`),",
+    "and `common` and `email` granted access to tables neither reads. The check now refuses",
+    "an entry that names no directory under src/.",
     "",
     "`crossModule` names every read of a table the reading module does not own. Three kinds:",
     "  join     - joined onto a query rooted in a table the reader owns (the exempt shape)",
@@ -46,7 +51,7 @@
     "idempotency_keys": null,
     "settings": "admin"
   },
-  "infrastructure": ["common", "database", "email", "idempotency"],
+  "infrastructure": ["database"],
   "crossModule": [
     {
       "file": "src/hierarchy/hierarchy.service.ts",
