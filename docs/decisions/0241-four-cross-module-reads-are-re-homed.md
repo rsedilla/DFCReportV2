@@ -49,6 +49,13 @@ page comes back full.
 **That precedent is good and is not evidence.** It was established about a different query,
 and this one is verified on its own terms rather than by citation.
 
+*That last sentence was false when it was written, and `architecture-guardian` established
+it by mutation: applying the exclusion after `slice(0, limit)` — the exact truncation this
+section argues against — left all nineteen cases of the route's suite green. The property
+held; nothing in the repository asserted it, which is the same thing as not having verified
+it. A case now does, and it was checked the only way that means anything: under that
+mutation it is the one test of the twenty that fails.*
+
 ## What this does not do
 
 **It does not settle whether Section 2's exemption enumerates instances or argued
@@ -60,6 +67,34 @@ nothing settles it.
 **It does not decide whether `people.manage_pastoral_assignment` may be held at `NETWORK`
 scope**, nor any other question the attention list carries. Moving a read changes no
 authorization.
+
+## What the mandatory review found
+
+The re-homing was correct — all four reads moved, the port direction is a genuine cycle,
+paging is right and the rows match the query it replaced. Every finding was in the
+refusal, the verification or the prose, and three are worth keeping here:
+
+**The port's refusal branch was dead on the only fault that produces it.** It tested
+`=== null`, and Nest injects `undefined` for an unresolved `@Optional()` token, so a
+deployment missing the binding got a `TypeError` rather than the named refusal. This
+repository already documents the trap in `cells.index.service.ts` and uses a falsy check;
+this port did not, having been written from the shape rather than from the reason.
+
+**The refusal also sat behind two early returns**, so an unbound port was invisible on a
+healthy tree and would have surfaced on the day a leader departed rather than on the day of
+the deployment. It is now the first thing the method does. `cells.index.service.ts` states
+that counter-rule too.
+
+**Section 2 requires two things of an inversion port and this shipped one.** The
+module-graph assertion was there; the case exercising the unbound refusal was not.
+`admin-accounts-port-unbound.e2e.spec.ts` is that case.
+
+Two questions the review raised are **escalated rather than settled**, and `CLAUDE.md`
+carries both: whether a re-homing may give up the single-snapshot property the query it
+replaced had — one statement became four, on the pool — and whether Section 2 bounds the
+set a re-homed read may materialise, `brokenEdgesWithin` taking no scope argument. Neither
+is decided here. The first has a one-line remedy that is deliberately not applied, because
+adopting decision 0210's mechanism outside the scope 0210 names is a ruling.
 
 ---
 

@@ -40,23 +40,6 @@ export class AccountsRepository {
   }
 
   /**
-   * Which of these people hold an account, whatever state it is in.
-   *
-   * **Holding an account, not being able to sign in.** Section 9 routes a DCC
-   * submission to "the nearest upline leader who does" hold one, and is explicit
-   * that a pending account can persist and that the covering arrangement must
-   * persist with it. So the question this answers is whether a row exists, and a
-   * `PENDING` account stops the upward walk exactly as an `ACTIVE` one does.
-   *
-   * That is uncomfortable and is deliberate: a leader whose account was minted and
-   * never activated becomes their own submitter and can file nothing. The remedy is
-   * provisioning (section 6), not a walk that quietly steps over a state somebody is
-   * supposed to fix — and a walk that skipped pending accounts would hide it.
-   *
-   * Here rather than in `attendance` because `auth` owns `accounts` (section 2), and
-   * the query is rooted in this table rather than in the caller's.
-   */
-  /**
    * The Person an account belongs to, on the caller's executor, or null.
    *
    * **Exists so that `attendance` need not read `accounts`** (SKILL.md section 2, ruling
@@ -89,8 +72,11 @@ export class AccountsRepository {
    * through a port because `auth` imports `PeopleModule` — so the consumer cannot import
    * this module back (SKILL.md section 2, ruling of 2026-09-11).
    *
-   * An empty input answers empty without querying: `IN ()` is not valid SQL, and the
-   * caller reaches this with no broken edges on an ordinary healthy tree.
+   * An empty input answers empty without querying, because `IN ()` is not valid SQL.
+   * **Its only caller today cannot reach it** — `awaitingReassignment` returns before
+   * asking whenever the broken-edge set is empty — so the guard is for the next caller
+   * rather than for that one. Stated rather than dressed up as a live case: a guard given
+   * a reason that cannot occur is how the reason survives the caller changing.
    */
   async personsHoldingAdminWithin(
     executor: Db | Transaction<Database>,
@@ -112,6 +98,23 @@ export class AccountsRepository {
     return new Set(rows.map((row) => row.person_id));
   }
 
+  /**
+   * Which of these people hold an account, whatever state it is in.
+   *
+   * **Holding an account, not being able to sign in.** Section 9 routes a DCC
+   * submission to "the nearest upline leader who does" hold one, and is explicit
+   * that a pending account can persist and that the covering arrangement must
+   * persist with it. So the question this answers is whether a row exists, and a
+   * `PENDING` account stops the upward walk exactly as an `ACTIVE` one does.
+   *
+   * That is uncomfortable and is deliberate: a leader whose account was minted and
+   * never activated becomes their own submitter and can file nothing. The remedy is
+   * provisioning (section 6), not a walk that quietly steps over a state somebody is
+   * supposed to fix — and a walk that skipped pending accounts would hide it.
+   *
+   * Here rather than in `attendance` because `auth` owns `accounts` (section 2), and
+   * the query is rooted in this table rather than in the caller's.
+   */
   async personsHoldingAccounts(executor: Db, personIds: readonly string[]): Promise<Set<string>> {
     if (personIds.length === 0) {
       return new Set();

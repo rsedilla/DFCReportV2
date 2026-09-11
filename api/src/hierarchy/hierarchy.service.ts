@@ -701,18 +701,6 @@ export class HierarchyService {
   }
 
   /**
-   * The people this person currently leads, with enough to name them.
-   *
-   * Section 4 refuses a Network change while the person leads anyone, and requires
-   * the refusal to name the disciples that must be moved first. That refusal is
-   * enforced in `networks`, which cannot read this table — so the evidence for it
-   * is produced here.
-   *
-   * The join to `persons` mirrors `directLeaderNameOf` below: a name is what makes
-   * the refusal actionable, and returning bare identifiers would push the same
-   * join into a module that owns neither table.
-   */
-  /**
    * Every open pastoral edge whose **leader** holds no open assignment of their own —
    * the condition Section 20's attention list exists for (ruling of 2026-09-11).
    *
@@ -764,6 +752,18 @@ export class HierarchyService {
     }));
   }
 
+  /**
+   * The people this person currently leads, with enough to name them.
+   *
+   * Section 4 refuses a Network change while the person leads anyone, and requires
+   * the refusal to name the disciples that must be moved first. That refusal is
+   * enforced in `networks`, which cannot read this table — so the evidence for it
+   * is produced here.
+   *
+   * The join to `persons` mirrors `directLeaderNameOf` below: a name is what makes
+   * the refusal actionable, and returning bare identifiers would push the same
+   * join into a module that owns neither table.
+   */
   async openDisciplesOf(
     executor: Db,
     personId: string,

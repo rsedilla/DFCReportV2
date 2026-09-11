@@ -417,22 +417,6 @@ export class PeopleReadService {
   }
 
   /**
-   * The five fields section 8 permits for a person outside the viewer's pastoral
-   * scope — Member ID, full name, sex, current Network and the name of their
-   * current direct leader — plus two that are not about them.
-   *
-   * `id` is the handle the duplicate-acknowledgement flow needs to name a candidate
-   * back to the server, and `scope` tells a client it is looking at a withheld
-   * profile rather than an empty one. Section 8's list is about a person's
-   * *details*, and neither of these is one; they are named here rather than left
-   * for a reader to notice the count does not match.
-   *
-   * Written as a list of what is *included* rather than as a list of what is
-   * removed. A redaction that deletes named fields lets the next field added to
-   * the profile through by default, which is the wrong direction for a rule about
-   * what the church may see.
-   */
-  /**
    * A Person's display name on the caller's executor, or null where no row matches.
    *
    * **Exists so that `attendance` need not read `persons`** (SKILL.md section 2, ruling of
@@ -460,6 +444,22 @@ export class PeopleReadService {
     return person === undefined ? null : `${person.first_name} ${person.last_name}`;
   }
 
+  /**
+   * The five fields section 8 permits for a person outside the viewer's pastoral
+   * scope — Member ID, full name, sex, current Network and the name of their
+   * current direct leader — plus two that are not about them.
+   *
+   * `id` is the handle the duplicate-acknowledgement flow needs to name a candidate
+   * back to the server, and `scope` tells a client it is looking at a withheld
+   * profile rather than an empty one. Section 8's list is about a person's
+   * *details*, and neither of these is one; they are named here rather than left
+   * for a reader to notice the count does not match.
+   *
+   * Written as a list of what is *included* rather than as a list of what is
+   * removed. A redaction that deletes named fields lets the next field added to
+   * the profile through by default, which is the wrong direction for a rule about
+   * what the church may see.
+   */
   async minimalIdentity(person: PersonRecord): Promise<Record<string, unknown>> {
     const [network, leader] = await Promise.all([
       this.networks.currentNetwork(this.db, person.id),
@@ -531,6 +531,31 @@ export class PeopleReadService {
     }[];
     nextCursor: SearchCursor | null;
   }> {
+    // **The port is checked before anything else reads or returns**, so a wiring fault
+    // cannot hide behind an empty scope or a healthy tree. Both early returns below answer
+    // without reaching the administrator exclusion, and a refusal placed after them would
+    // surface on the day a leader departs rather than on the day of the deployment —
+    // which is the counter-rule `cells.index.service.ts` states for the same shape.
+    //
+    // **Falsy rather than `=== null`, and the difference is what the branch is for.** Nest
+    // injects `undefined` for an unresolved `@Optional()` token, so a check against `null`
+    // alone is dead on the only fault that produces one; and `useValue(undefined)` does not
+    // override a real provider, so the branch must admit `null` for a test to reach it at
+    // all. Read into a local so the narrowing holds across the awaits below.
+    const adminAccounts = this.adminAccounts;
+
+    if (!adminAccounts) {
+      // Section 2: an inversion port refuses rather than skipping the check. Answering
+      // without the administrator exclusion would put an administrator's whole disciple
+      // set on an attention list nobody can act on, which is the silent hole the
+      // fail-closed reading exists to prevent.
+      throw new Error(
+        'Cannot list the people awaiting reassignment: ADMIN_ACCOUNTS_PORT is not bound, ' +
+          'so the SKILL.md section 5 administrator exclusion cannot be applied. This is a ' +
+          'deployment fault.',
+      );
+    }
+
     // An empty scope selects nobody. Expressed here rather than as an `IN ()`,
     // which PostgreSQL rejects, and it is the honest answer for an actor whose
     // grant reaches nobody.
@@ -558,18 +583,7 @@ export class PeopleReadService {
     // assignment ends, this exclusion takes their whole disciple set off the list. Section
     // 5 states the remedy for the neighbouring list, where the Person and the state
     // coincide; here they need not, and `CLAUDE.md` carries that as open.
-    if (this.adminAccounts === null) {
-      // Section 2: an inversion port refuses rather than skipping the check. Answering
-      // without the administrator exclusion would put an administrator's whole disciple
-      // set on an attention list nobody can act on, which is the silent hole the
-      // fail-closed reading exists to prevent.
-      throw new Error(
-        'ADMIN_ACCOUNTS_PORT is unbound, so the administrator exclusion cannot be applied ' +
-          '(SKILL.md section 2).',
-      );
-    }
-
-    const administrators = await this.adminAccounts.personsHoldingAdminWithin(this.db, [
+    const administrators = await adminAccounts.personsHoldingAdminWithin(this.db, [
       ...new Set(edges.map((edge) => edge.leaderId)),
     ]);
 
@@ -777,12 +791,13 @@ export class PeopleReadService {
    * withdrawn: a port returning the placed set puts the filter back in the `WHERE` clause
    * as a `NOT IN`, so the page is full. The scope filter below is that shape already.*
    *
-   * *`awaitingReassignment` above is **not** precedent for this and was cited as such in
-   * error: it selects from `pastoral_assignments`, which `hierarchy` owns, and reads
-   * `accounts` and `account_roles`, which `auth` owns, so it satisfies neither the
-   * exemption's premise nor any other clause of section 2. **That is a Stop Condition in
-   * its own right and `CLAUDE.md` carries it**; decision 0234 settles this method and
-   * deliberately does not reach that one.*
+   * *`awaitingReassignment` above is **not** precedent for this, and the reason has
+   * changed rather than lapsed. It was cited as precedent in error while it selected from
+   * `pastoral_assignments` and read `accounts` and `account_roles`, satisfying neither the
+   * exemption's premise nor any other clause of section 2 — a Stop Condition in its own
+   * right, which decision 0241 settled by re-homing its edge condition to `hierarchy` and
+   * its administrator exclusion to `auth`, rather than by admitting either. It now roots in `persons` and crosses nothing, so it is not an
+   * exemption instance at all and still cannot be precedent for one.*
    */
   async withoutACell(
     scope: { kind: 'WHOLE_CHURCH' } | { kind: 'PERSONS'; personIds: ReadonlySet<string> },
