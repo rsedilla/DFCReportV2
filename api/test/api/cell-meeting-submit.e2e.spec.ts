@@ -250,6 +250,48 @@ describe('recording a Cell meeting (sections 12, 13 and 14)', () => {
       .set('Idempotency-Key', randomUUID())
       .send(body);
 
+  /**
+   * Section 13 takes section 9's rule (ruling of 2026-09-11).
+   *
+   * **The window states when a month shuts and not when it opens**, so a scheduled date
+   * later this month sits inside an open window and was admitted — filed as `HELD`, with
+   * marks, for a meeting nobody had attended. Found by using the demo application rather
+   * than by reading: its dashboard counted two such meetings in September's figures.
+   *
+   * The boundary is the day's **beginning**, which is why the same-day case below is a
+   * separate assertion rather than an afterthought: a leader filing on the night of the
+   * meeting is who this section is written for, and a rule written against the day's end
+   * would refuse them.
+   */
+  it('refuses a meeting whose day has not begun, and admits today', async () => {
+    const nextSaturday = await sql<{ day: string }>`
+      SELECT to_char(
+               (now() AT TIME ZONE 'Asia/Manila')::date
+                 + (7 - ((EXTRACT(ISODOW FROM (now() AT TIME ZONE 'Asia/Manila')::date)::int + 1) % 7)),
+               'YYYY-MM-DD'
+             ) AS day
+    `.execute(db);
+
+    const future = nextSaturday.rows[0].day;
+    expect(future > meetingDate).toBe(true);
+
+    // A complete, valid body, so the refusal below is the rule and not a malformed
+    // request. A first attempt sent an empty roster and collected a 422 for that, which
+    // never reached the check and would have passed against the wrong assertion.
+    const present = await member('Aurelio');
+    const body = { status: 'HELD', attendance: [{ person_id: present.id, present: true }] };
+
+    const refused = await submit(body, markAccount, future);
+
+    expect(refused.status).toBe(409);
+    expect(refused.body.error.code).toBe('INVARIANT_VIOLATION');
+    expect(refused.body.error.message).toMatch(/has not taken place yet/);
+
+    // The day that has begun is admitted, which is the half a rule written against the
+    // day's *end* would have broken.
+    expect((await submit(body)).status).toBe(201);
+  });
+
   it('records a HELD meeting with a line for every member', async () => {
     const one = await member('Aurelio');
     const two = await member('Bartolome');
