@@ -1306,6 +1306,28 @@ sign-in, where the stored password is whatever it was when it was set.
 - Invalidate token after use
 - Do not let admins know or choose another user's password
 
+**That last rule binds deployed environments, and a development machine is exempt** (ruling
+of 2026-09-11). The development email transport writes each message to a directory, tokens
+included, so an operator can read an activation or reset token belonging to another account
+— which is the rule's own shape, reached on a machine where it means something different.
+
+The exemption rests on the operator already holding everything it could give them: a
+development database is theirs, `account_tokens` is one query away, and the service will
+mint either token on request. The outbox saves a query rather than granting access. The
+data is theirs too — fixtures are invented and a development spine is one they loaded.
+
+**It has something that fails on it**, which is why it is stated rather than assumed. The
+transport binds only where `NODE_ENV` is explicitly `development`, the process refuses to
+start with it set anywhere else, and Section 24 requires `NODE_ENV` itself rather than
+letting an absent one resolve to `development`.
+
+Two things the exemption does not cover. It is **not** an exemption for `test`: the suite
+pins `NODE_ENV=test`, so no case can bind the transport, and a database truncated before
+every case is no place for a credential written to disk. And it is **not** an exemption for
+a **shared** development host — the argument above rests on the operator being the only
+person with access to the machine and the database behind it, so a development environment
+several people reach is a deployed one for this rule, whatever its `NODE_ENV` says.
+
 ```text
 account_tokens
 - id
