@@ -82,6 +82,36 @@ export class AccountsRepository {
     return account?.person_id ?? null;
   }
 
+  /**
+   * `AdminAccountsPort`. Of these Persons, those holding a live `ADMIN` role.
+   *
+   * Implemented here because `auth` owns `accounts` and `account_roles`, and reached
+   * through a port because `auth` imports `PeopleModule` — so the consumer cannot import
+   * this module back (SKILL.md section 2, ruling of 2026-09-11).
+   *
+   * An empty input answers empty without querying: `IN ()` is not valid SQL, and the
+   * caller reaches this with no broken edges on an ordinary healthy tree.
+   */
+  async personsHoldingAdminWithin(
+    executor: Db | Transaction<Database>,
+    personIds: readonly string[],
+  ): Promise<Set<string>> {
+    if (personIds.length === 0) {
+      return new Set();
+    }
+
+    const rows = await executor
+      .selectFrom('accounts as account')
+      .innerJoin('account_roles as role', 'role.account_id', 'account.id')
+      .select('account.person_id as person_id')
+      .where('account.person_id', 'in', [...personIds])
+      .where('role.role', '=', 'ADMIN')
+      .where('role.revoked_at', 'is', null)
+      .execute();
+
+    return new Set(rows.map((row) => row.person_id));
+  }
+
   async personsHoldingAccounts(executor: Db, personIds: readonly string[]): Promise<Set<string>> {
     if (personIds.length === 0) {
       return new Set();

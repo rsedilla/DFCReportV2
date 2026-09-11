@@ -18,6 +18,7 @@ import { HierarchyModule } from './hierarchy/hierarchy.module';
 import { NetworksModule } from './networks/networks.module';
 import { CELL_MEETING_SCOPE_PORT } from './auth/authorization/cell-meeting-scope.port';
 import { CELL_SCOPE_PORT } from './auth/authorization/cell-scope.port';
+import { AdminAccountsBindingModule } from './auth/admin-accounts.binding.module';
 import { CellRelationshipsBindingModule } from './cells/cell-relationships.binding.module';
 import { RecordedMeetingsBindingModule } from './attendance/recorded-meetings.binding.module';
 import { AttendanceModule } from './attendance/attendance.module';
@@ -66,6 +67,7 @@ import { PeopleModule } from './people/people.module';
     AttendanceModule,
     ReportingModule,
     CellRelationshipsBindingModule,
+    AdminAccountsBindingModule,
     RecordedMeetingsBindingModule,
   ],
   controllers: [HealthController],
