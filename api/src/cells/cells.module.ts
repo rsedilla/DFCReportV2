@@ -35,7 +35,13 @@ import { CellsService } from './cells.service';
  * without a database, which is what makes a wiring mistake fail in seconds rather
  * than on every authenticated request.
  *
- * **It touches no table it does not own.** Every cross-module read goes through the
+ * **It writes no table it does not own, and reads one it does not own, in two places.**
+ * `membersAsOfWithin` and `membersOfWithin` each join `persons` onto a query rooted in
+ * `cell_memberships`, which is the exemption's shape and is **not** among the instances
+ * section 2 enumerates. Whether that enumeration is of instances or of argued instances
+ * is an open Stop Condition in `CLAUDE.md`, and it is named here rather than smoothed
+ * over: this docblock claimed the module touched no table it does not own while those two
+ * joins stood in it. Everything else goes through the
  * service owning that table, inside the transaction this module opens: `people` for a
  * Person's identity and lifecycle, `hierarchy` for an open pastoral assignment,
  * `networks` for a Network in force, `authorization` for roles, grants and the Account

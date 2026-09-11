@@ -93,8 +93,32 @@ Two questions the review raised are **escalated rather than settled**, and `CLAU
 carries both: whether a re-homing may give up the single-snapshot property the query it
 replaced had — one statement became four, on the pool — and whether Section 2 bounds the
 set a re-homed read may materialise, `brokenEdgesWithin` taking no scope argument. Neither
-is decided here. The first has a one-line remedy that is deliberately not applied, because
-adopting decision 0210's mechanism outside the scope 0210 names is a ruling.
+is decided here. The first is escalated rather than fixed because its remedy is an amendment:
+a read-only transaction restores nothing at `READ COMMITTED`, where every statement takes its
+own snapshot even inside one transaction, so the fix is `REPEATABLE READ` — and Section 24 says
+a report is the only transaction running at another level and that adding a second is an
+amendment there.
+
+## What the second review found, on the fix batch
+
+Five more, and the two worth keeping are both about a test proving less than it claimed.
+
+**The case written to discharge Section 2 could not fail on the defect it was written
+for.** It reached the refusal by overriding the *token* with `null`, and a deployment
+missing the binding module produces `undefined`. Reverting the falsy check to `=== null`
+left all three cases green, and a probe reproduced the fail-open answer end to end: an
+ordinary `200` listing with the administrator exclusion silently not applied. **The comment
+claiming `undefined` was unreachable from a test was false** — `TestingModuleBuilder`
+carries `overrideModule`, which replaces the binding module itself. The suite now exercises
+both states in two blocks, and under `=== null` the two `undefined` cases fail while the
+`null` one passes, which is the discrimination that was missing. *The identical false claim
+stands in `cells-index-port-unbound.e2e.spec.ts`, whose port has the same gap; it is
+recorded rather than fixed here, being a different port on a different module.*
+
+**A third case tested nothing.** It claimed to reach the empty-scope early return, and no
+grant can produce one: `subtreeOf` seeds its walk at the actor, so an `OWN_SUBTREE` scope
+always contains at least that person. It is removed rather than reworded, the return being
+defensive rather than reachable at the API layer.
 
 ---
 

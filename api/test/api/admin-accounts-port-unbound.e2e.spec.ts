@@ -1,8 +1,9 @@
-import { Logger } from '@nestjs/common';
+import { Logger, Module } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import request from 'supertest';
 
 import { AppModule } from '../../src/app.module';
+import { AdminAccountsBindingModule } from '../../src/auth/admin-accounts.binding.module';
 import { configureApp } from '../../src/bootstrap';
 import { EMAIL_PORT } from '../../src/email/email.port';
 import { ADMIN_ACCOUNTS_PORT } from '../../src/people/admin-accounts.port';
@@ -24,8 +25,23 @@ import type { TestAccount, TestPerson } from '../setup/fixtures';
  * `createTestApp` and a mutation removing it leaves the whole suite green. Section 2
  * requires exactly this case of an inversion port: "each inversion port has one case
  * exercising its unbound refusal — that branch is unreachable through a normally built
- * application, so nothing else can reach it." `ADMIN_ACCOUNTS_PORT` shipped with the
- * module-graph half and without this one, which `architecture-guardian` found.
+ * application, so nothing else can reach it."
+ *
+ * **Two unbound states, and only one of them is what a deployment produces.** A missing
+ * binding module leaves an `@Optional()` token resolving to `undefined`; a provider
+ * overridden in a test resolves to `null`, because `useValue(undefined)` does not override
+ * at all — Nest reads an undefined value as no value and falls through to the real
+ * provider. The service therefore tests the field for falsiness, and **both states are
+ * exercised below, in two blocks**, because a suite that reached only `null` could not fail
+ * on the defect this port actually shipped with: a `=== null` check, dead on the one fault
+ * that produces an unbound port.
+ *
+ * *The first version of this suite reached `null` only, and asserted in a comment that
+ * `undefined` was unreachable from a test. That was false — `TestingModuleBuilder` carries
+ * `overrideModule`, which replaces the binding module itself and reproduces the deployment
+ * fault exactly. `architecture-guardian` found it by reverting the fix and watching all
+ * three cases stay green. The same false claim stands in `cells-index-port-unbound`, whose
+ * port has the same gap.*
  *
  * **What refusing buys.** The alternative reading is to skip the port and answer without
  * section 5's administrator exclusion, which would put an administrator's entire disciple
@@ -36,36 +52,50 @@ import type { TestAccount, TestPerson } from '../setup/fixtures';
  *
  * Fixture names and email addresses are invented (`CLAUDE.md`, Secrets).
  */
+
+/** Replaces `AdminAccountsBindingModule`, binding nothing, so the token resolves to `undefined`. */
+@Module({})
+class NoAdminAccountsBinding {}
+
+/** The tree every case below runs against: a root, an unplaced leader, and an administrator. */
+interface Fixture {
+  admin: TestAccount;
+  mark: TestPerson;
+}
+
+const buildFixture = async (app: INestApplication, db: Kysely<Database>): Promise<Fixture> => {
+  const raymond = await createPerson(db, { firstName: 'Raymond', network: 'MENS' });
+  await assignTo(db, raymond.id, null);
+
+  const mark = await createPerson(db, { firstName: 'Mark', network: 'MENS' });
+  await assignTo(db, mark.id, raymond.id);
+
+  const adminPerson = await createPerson(db, { firstName: 'Adele', network: 'WOMENS' });
+  const admin = await createAccount(app, db, { person: adminPerson, roles: ['ADMIN'] });
+
+  return { admin, mark };
+};
+
+/** Leaves Juan holding an open row whose leader holds none — the condition the list keys on. */
+const breakAnEdge = async (db: Kysely<Database>, mark: TestPerson): Promise<void> => {
+  const juan = await createPerson(db, { firstName: 'Juan', lastName: 'Reyes', network: 'MENS' });
+  await assignTo(db, juan.id, mark.id);
+  await db
+    .updateTable('pastoral_assignments')
+    .set({ ended_at: new Date('2021-01-01T00:00:00+08:00') })
+    .where('person_id', '=', mark.id)
+    .where('ended_at', 'is', null)
+    .execute();
+};
+
 describe('the awaiting-reassignment list with the admin-accounts port unbound (section 2)', () => {
-  let app: INestApplication;
   let db: Kysely<Database>;
-  let admin: TestAccount;
-  let mark: TestPerson;
   /** Everything the exception filter logs at `error` during a case. */
   let logged: string[];
   let loggerSpy: jest.SpyInstance;
 
-  beforeAll(async () => {
+  beforeAll(() => {
     db = createTestDb();
-
-    const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
-      .overrideProvider(EMAIL_PORT)
-      .useClass(CapturingEmailAdapter)
-      // The one line under test.
-      //
-      // **`null` rather than `undefined`.** `useValue(undefined)` reads as the obvious way
-      // to say "unbound" and does not override: Nest treats an undefined value as no value
-      // and falls through to the real provider. `null` overrides — and a deployment with
-      // the binding module missing produces `undefined`, not `null`, so the service tests
-      // the field for falsiness and both reach the same branch. The first version of this
-      // port checked `=== null` and was therefore dead on the only fault that produces one.
-      .overrideProvider(ADMIN_ACCOUNTS_PORT)
-      .useValue(null)
-      .compile();
-
-    app = moduleRef.createNestApplication();
-    configureApp(app);
-    await app.init();
   });
 
   beforeEach(async () => {
@@ -75,15 +105,6 @@ describe('the awaiting-reassignment list with the admin-accounts port unbound (s
     loggerSpy = jest.spyOn(Logger.prototype, 'error').mockImplementation((...args: unknown[]) => {
       logged.push(args.map((arg) => String(arg)).join(' '));
     });
-
-    const raymond = await createPerson(db, { firstName: 'Raymond', network: 'MENS' });
-    await assignTo(db, raymond.id, null);
-
-    mark = await createPerson(db, { firstName: 'Mark', network: 'MENS' });
-    await assignTo(db, mark.id, raymond.id);
-
-    const adminPerson = await createPerson(db, { firstName: 'Adele', network: 'WOMENS' });
-    admin = await createAccount(app, db, { person: adminPerson, roles: ['ADMIN'] });
   });
 
   afterEach(() => {
@@ -91,64 +112,106 @@ describe('the awaiting-reassignment list with the admin-accounts port unbound (s
   });
 
   afterAll(async () => {
-    await app.close();
     await db.destroy();
   });
 
-  const list = async (as: TestAccount): Promise<request.Response> =>
+  const list = async (app: INestApplication, as: TestAccount): Promise<request.Response> =>
     request(app.getHttpServer())
       .get('/api/v1/people/awaiting-reassignment')
       .set('Authorization', `Bearer ${as.accessToken}`);
 
-  it('refuses the listing rather than answering without the administrator exclusion', async () => {
-    // A broken edge, so the list would otherwise have a row to answer with: Juan's leader
-    // Mark holds no open assignment of his own.
-    const juan = await createPerson(db, { firstName: 'Juan', lastName: 'Reyes', network: 'MENS' });
-    await assignTo(db, juan.id, mark.id);
-    await db
-      .updateTable('pastoral_assignments')
-      .set({ ended_at: new Date('2021-01-01T00:00:00+08:00') })
-      .where('person_id', '=', mark.id)
-      .where('ended_at', 'is', null)
-      .execute();
+  // ---------------------------------------------------------------------------
+  // The deployment fault: the binding module is missing, so the token is `undefined`
+  // ---------------------------------------------------------------------------
 
-    const response = await list(admin);
+  describe('with the binding module absent, which is what a deployment produces', () => {
+    let app: INestApplication;
 
-    // 500 rather than a 4xx: an unbound provider is a deployment fault and nothing the
-    // caller did, and it is fixed by a redeploy after which the same request succeeds.
-    expect(response.status).toBe(500);
-    expect(response.body.error.code).toBe('INTERNAL_ERROR');
+    beforeAll(async () => {
+      const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
+        .overrideProvider(EMAIL_PORT)
+        .useClass(CapturingEmailAdapter)
+        // The one line under test, and the only way to reach `undefined`: replacing the
+        // module that binds the token, rather than overriding the token with a value.
+        .overrideModule(AdminAccountsBindingModule)
+        .useModule(NoAdminAccountsBinding)
+        .compile();
 
-    // **The log, because the status alone distinguishes nothing.** `INTERNAL_ERROR` carries
-    // a fixed body, so a deliberate refusal and a `TypeError` from a missing guard render
-    // identically — which is the mutation this assertion exists to catch, and which is the
-    // defect the first version of this port actually had.
-    expect(logged.join(' ')).toContain('ADMIN_ACCOUNTS_PORT');
+      app = moduleRef.createNestApplication();
+      configureApp(app);
+      await app.init();
+    });
+
+    afterAll(async () => {
+      await app.close();
+    });
+
+    it('refuses rather than answering without the administrator exclusion', async () => {
+      const { admin, mark } = await buildFixture(app, db);
+      await breakAnEdge(db, mark);
+
+      const response = await list(app, admin);
+
+      // 500 rather than a 4xx: an unbound provider is a deployment fault and nothing the
+      // caller did, and it is fixed by a redeploy after which the same request succeeds.
+      expect(response.status).toBe(500);
+      expect(response.body.error.code).toBe('INTERNAL_ERROR');
+
+      // **The log, because the status alone distinguishes nothing.** `INTERNAL_ERROR`
+      // carries a fixed body, so a deliberate refusal and a `TypeError` from a missing
+      // guard render identically — which is the defect this port actually shipped with.
+      expect(logged.join(' ')).toContain('ADMIN_ACCOUNTS_PORT');
+    });
+
+    it('refuses on a healthy tree, where no edge is broken at all', async () => {
+      // **The empty case is what a naive guard misses.** The service returns early when no
+      // edge is broken, so a refusal placed after that return would surface on the day a
+      // leader departed rather than on the day of the deployment. Every leader here holds
+      // an open assignment, which is the ordinary state of the church.
+      const { admin } = await buildFixture(app, db);
+
+      const response = await list(app, admin);
+
+      expect(response.status).toBe(500);
+      expect(logged.join(' ')).toContain('ADMIN_ACCOUNTS_PORT');
+    });
   });
 
-  it('refuses on a healthy tree, where no edge is broken at all', async () => {
-    // **The empty case is the one a naive guard misses**, and here it is two guards deep:
-    // the service returns early both for a scope reaching nobody and for a tree with no
-    // broken edges, so a refusal placed after either would surface on the day a leader
-    // departs rather than on the day of the deployment. Every leader in this case holds an
-    // open assignment, which is the ordinary state of the church.
-    const response = await list(admin);
+  // ---------------------------------------------------------------------------
+  // The injected state: a test overriding the provider, which resolves to `null`
+  // ---------------------------------------------------------------------------
 
-    expect(response.status).toBe(500);
-    expect(logged.join(' ')).toContain('ADMIN_ACCOUNTS_PORT');
-  });
+  describe('with the provider overridden to null, which is what a test can inject', () => {
+    let app: INestApplication;
 
-  it('refuses for an actor whose scope reaches nobody', async () => {
-    // The other early return: a `PERSONS` scope of size zero. A wiring fault that hid
-    // behind an empty scope would surface for some leaders and not others, which is worse
-    // than surfacing for none.
-    const stranger = await createPerson(db, { firstName: 'Ruth', network: 'WOMENS' });
-    await assignTo(db, stranger.id, null);
-    const account = await createAccount(app, db, { person: stranger, roles: ['LEADER'] });
+    beforeAll(async () => {
+      const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
+        .overrideProvider(EMAIL_PORT)
+        .useClass(CapturingEmailAdapter)
+        .overrideProvider(ADMIN_ACCOUNTS_PORT)
+        .useValue(null)
+        .compile();
 
-    const response = await list(account);
+      app = moduleRef.createNestApplication();
+      configureApp(app);
+      await app.init();
+    });
 
-    expect(response.status).toBe(500);
-    expect(logged.join(' ')).toContain('ADMIN_ACCOUNTS_PORT');
+    afterAll(async () => {
+      await app.close();
+    });
+
+    it('refuses on the other falsy state, so the check cannot narrow to one of them', async () => {
+      // Both states reach one branch deliberately. A check admitting only `undefined` would
+      // be untestable by override, and one admitting only `null` is dead in production —
+      // which is the pair this case and the block above pin together.
+      const { admin, mark } = await buildFixture(app, db);
+      await breakAnEdge(db, mark);
+
+      const response = await list(app, admin);
+
+      expect(response.status).toBe(500);
+      expect(logged.join(' ')).toContain('ADMIN_ACCOUNTS_PORT');
+    });
   });
 });

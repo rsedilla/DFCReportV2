@@ -114,8 +114,12 @@ makes is sound and the enumeration it sits inside is not known to be complete. R
 nobody argued or narrow a sentence the owner did not rule on.
 
 **Whether Section 2 admits `awaitingReassignment`, or `attendance` writing `settings`.**
-Both are recorded as Stop Conditions. Neither is reached by this ruling, and the second is
-on the write side, where Section 2 admits no exemption at all.
+Both were recorded as Stop Conditions when this ruling was written, and neither was reached
+by it; the second is on the write side, where Section 2 admits no exemption at all. *Both
+have since been settled and neither by an exemption: decision 0237 moved the `settings`
+write behind its owner, and decision 0241 re-homed `awaitingReassignment`'s two reads. This
+paragraph outlived both, which is the "recorded as open" claim this log counts as its own
+defect class — found by sweeping the class rather than the named copies.*
 
 Decision 0233's other two answers — the capability, and that leading an `ACTIVE` Cell
 counts as having one — are undisturbed. This supplies only the third question that ruling

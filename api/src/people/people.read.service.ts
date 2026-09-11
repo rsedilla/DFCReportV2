@@ -539,9 +539,12 @@ export class PeopleReadService {
     //
     // **Falsy rather than `=== null`, and the difference is what the branch is for.** Nest
     // injects `undefined` for an unresolved `@Optional()` token, so a check against `null`
-    // alone is dead on the only fault that produces one; and `useValue(undefined)` does not
-    // override a real provider, so the branch must admit `null` for a test to reach it at
-    // all. Read into a local so the narrowing holds across the awaits below.
+    // alone is dead on the only fault that produces one — which is the defect this port
+    // shipped with. It admits `null` as well because `useValue(undefined)` does not
+    // override a real provider, so a test overriding the *token* can only inject `null`;
+    // a test overriding the binding *module* reaches `undefined`, and
+    // `admin-accounts-port-unbound.e2e.spec.ts` does both. Read into a local so the
+    // narrowing holds across the awaits below.
     const adminAccounts = this.adminAccounts;
 
     if (!adminAccounts) {
