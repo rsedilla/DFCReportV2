@@ -525,6 +525,7 @@ one, in the paragraph whose subject is false cross-references, and
 - 2026-09-11 — [A Cell meeting is not recorded before its day has begun](docs/decisions/0238-a-cell-meeting-is-not-recorded-before-it-has-begun.md)
 - 2026-09-11 — [A Cell coverage denominator is the month's whole schedule](docs/decisions/0239-a-cell-coverage-denominator-is-the-months-whole-schedule.md)
 - 2026-09-11 — [`NODE_ENV` is required, and an absent one refuses to start](docs/decisions/0240-node-env-is-required.md)
+- 2026-09-11 — [Four cross-module reads are re-homed, and one of them needs a port](docs/decisions/0241-four-cross-module-reads-are-re-homed.md)
 
 ### Open — awaiting a ruling
 

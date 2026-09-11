@@ -2,7 +2,8 @@ import { Inject, Injectable } from '@nestjs/common';
 
 import { DATABASE, type Db } from '../database/database.module';
 
-import type { AccountStatus } from '../database/schema';
+import type { AccountStatus, Database } from '../database/schema';
+import type { Transaction } from 'kysely';
 
 export interface AccountRecord {
   id: string;
@@ -55,6 +56,32 @@ export class AccountsRepository {
    * Here rather than in `attendance` because `auth` owns `accounts` (section 2), and
    * the query is rooted in this table rather than in the caller's.
    */
+  /**
+   * The Person an account belongs to, on the caller's executor, or null.
+   *
+   * **Exists so that `attendance` need not read `accounts`** (SKILL.md section 2, ruling
+   * of 2026-09-11). Two conflict paths there looked the identical question up directly,
+   * because the table was reachable rather than because a service could not answer it.
+   *
+   * **It takes an executor where {@link findById} takes the pool**, and that is the whole
+   * reason a second method exists rather than the callers using that one. Section 14 makes
+   * a conflict an ordinary outcome, so those paths run inside a transaction: reaching the
+   * pool would ask a bounded one for a second connection while holding one (section 24),
+   * every time two leaders disagree.
+   */
+  async personBehindWithin(
+    executor: Db | Transaction<Database>,
+    accountId: string,
+  ): Promise<string | null> {
+    const account = await executor
+      .selectFrom('accounts')
+      .select('person_id')
+      .where('id', '=', accountId)
+      .executeTakeFirst();
+
+    return account?.person_id ?? null;
+  }
+
   async personsHoldingAccounts(executor: Db, personIds: readonly string[]): Promise<Set<string>> {
     if (personIds.length === 0) {
       return new Set();

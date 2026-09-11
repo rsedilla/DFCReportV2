@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { sql } from 'kysely';
+import { sql, type Transaction } from 'kysely';
 
 import { AuthorizationService, type Actor } from '../auth/authorization/authorization.service';
 import { Capability } from '../auth/authorization/capabilities';
@@ -7,6 +7,7 @@ import { HierarchyService } from '../hierarchy/hierarchy.service';
 import { NetworksService } from '../networks/networks.service';
 import { type RosterCursor } from '../common/roster-cursor';
 import { DATABASE, type Db } from '../database/database.module';
+import type { Database } from '../database/schema';
 
 import { normalizeName } from './duplicate-matching';
 import {
@@ -418,6 +419,34 @@ export class PeopleReadService {
    * the profile through by default, which is the wrong direction for a rule about
    * what the church may see.
    */
+  /**
+   * A Person's display name on the caller's executor, or null where no row matches.
+   *
+   * **Exists so that `attendance` need not read `persons`** (SKILL.md section 2, ruling of
+   * 2026-09-11). Its conflict bodies name whoever recorded the reading a client is being
+   * shown, and looked the name up directly because the table was reachable.
+   *
+   * **It takes an executor**, because section 14 makes a conflict an ordinary outcome and
+   * those paths hold a transaction: reaching the pool would ask a bounded one for a second
+   * connection while holding one (section 24).
+   *
+   * **First and last only, which is what the callers render.** No middle name and no
+   * Member ID: this answers "who is this" in a sentence, not an identity payload, and
+   * {@link minimalIdentity} below is the one that decides what a Person discloses.
+   */
+  async displayNameWithin(
+    executor: Db | Transaction<Database>,
+    personId: string,
+  ): Promise<string | null> {
+    const person = await executor
+      .selectFrom('persons')
+      .select(['first_name', 'last_name'])
+      .where('id', '=', personId)
+      .executeTakeFirst();
+
+    return person === undefined ? null : `${person.first_name} ${person.last_name}`;
+  }
+
   async minimalIdentity(person: PersonRecord): Promise<Record<string, unknown>> {
     const [network, leader] = await Promise.all([
       this.networks.currentNetwork(this.db, person.id),

@@ -1334,25 +1334,22 @@ export class DccAttendanceService {
     executor: Db,
     accountId: string,
   ): Promise<{ id: string; name: string }> {
-    // On the caller's executor, which for the in-transaction conflict is the
-    // transaction. `findById` reads the pool, and section 14 makes a conflict an
-    // ordinary outcome rather than a rare one — so reaching the pool here would ask
-    // for a second connection while holding one, on a path taken every time two
-    // leaders disagree.
-    const account = await executor
-      .selectFrom('accounts')
-      .select('person_id')
-      .where('id', '=', accountId)
-      .executeTakeFirst();
+    // `auth` owns `accounts`, so this asks rather than reads (SKILL.md section 2, ruling
+    // of 2026-09-11). On the caller's executor, which for the in-transaction conflict is
+    // the transaction: `findById` reads the pool, and section 14 makes a conflict an
+    // ordinary outcome rather than a rare one — so reaching the pool here would ask for a
+    // second connection while holding one, on a path taken every time two leaders
+    // disagree. `personBehindWithin` exists for exactly that reason.
+    const personId = await this.accounts.personBehindWithin(executor, accountId);
 
-    if (account === undefined) {
+    if (personId === null) {
       // Unreachable while `recorded_by` carries a foreign key, and answered rather
       // than thrown: a conflict a person cannot read is worse than one naming an
       // account it cannot resolve.
       return { id: accountId, name: 'an account that no longer exists' };
     }
 
-    return this.personNameFor(executor, account.person_id, accountId);
+    return this.personNameFor(executor, personId, accountId);
   }
 
   private async personNameFor(

@@ -150,6 +150,8 @@ Principle 13 requires a modular monolith. These are the modules, and the list is
 
 The exemption is deliberately narrow and the asymmetry is the point. A write is what an invariant guards, so the five pastoral-assignment rules have one home only while `hierarchy` is the sole writer of `pastoral_assignments`. A join reads rows the owning module would have returned anyway and changes nothing.
 
+**A standalone lookup in another module's table is the main rule's own case, not the exemption's** (ruling of 2026-09-11). The exemption above is about a read *joined onto a query you root yourself*; a lookup by identifier is joined onto nothing and is precisely what "for anything a service interface can answer" names. Four such reads existed and were re-homed rather than admitted — three as ordinary service calls, one as a port, chosen by whether the direction was a cycle and by nothing else.
+
 **Where the dependency would be a cycle, and only there, it is inverted through a port — and such a port is optional and refuses** (ruling of 2026-09-01). The consuming module declares the interface it needs, the owning module implements it, and a binding module joins the two — which is what keeps this section's dependency direction acyclic where two modules each need something the other owns.
 
 **A dependency that is not a cycle takes the ordinary route above: import the owning module and call its service interface.** Stated because the distinction is easy to lose — a module that does not yet import another looks like one that cannot, and a port declared where a plain import would do adds an indirection, a binding module and a fail-closed branch for nothing. Check the direction before reaching for a port.
