@@ -183,7 +183,17 @@ export function CellReport() {
                 buckets to show. The coverage line above is what explains it.
               </p>
             ) : (
-              <AttendanceBuckets buckets={report.data.buckets} n={report.data.n} />
+              <AttendanceBuckets
+                buckets={report.data.buckets}
+                n={report.data.n}
+                // Section 12: N is the meetings that actually took place and were
+                // recorded, which is not the coverage denominator beside it.
+                summary={(n) =>
+                  n === 1
+                    ? 'One meeting was recorded this month.'
+                    : `${n} meetings were recorded this month.`
+                }
+              />
             )
           ) : null}
         </div>
