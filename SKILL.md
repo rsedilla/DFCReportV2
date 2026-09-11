@@ -4932,6 +4932,8 @@ A deployment that changes `default_transaction_isolation` therefore silently rem
 
 ### DateStyle
 
+**`NODE_ENV` is required, and an absent one refuses to start** (ruling of 2026-09-11), alongside `DATABASE_URL` and `JWT_SECRET`. A blank or unrecognised value was always refused; an absent one resolved to `development`, which is the one case this changes. It matters because a resolved value that can differ from the variable is a second way of asking the same question, and the difference is invisible at the point of reading — it produced the wrong guard twice in decision 0236. Requiring the variable makes the two identical, so a decision keyed on the environment may read either. No script in this repository sets it, so a deployment procedure that omits it is told at startup rather than by whatever silently took the development path.
+
 **The application pins `DateStyle` on every connection rather than inheriting it**, in the connection's startup packet, as `ISO, MDY`. It reads the value back when it starts and **refuses to start** unless the pin took effect.
 
 **What it prevents is silent.** The driver parses a `timestamptz` from the text the server sends and expects the ISO output format. Under `SQL`, `Postgres` or `German` it does not fail: it returns **null**. Every `timestamptz` and `timestamp` the API reads then comes back empty — `started_at`, `ended_at`, every effective-dated period and every audit entry — with nothing raised. Section 5's as-of queries, Section 4's backdate floor and Section 20's period boundaries are all built on those columns, so a deployment could pass every test in this repository and still answer "who led this person in March" with nothing at all.

@@ -119,7 +119,12 @@ function seniorPastorPersonIds(): string[] {
 }
 
 export function loadConfig(): AppConfig {
-  const nodeEnv = (process.env.NODE_ENV ?? 'development') as AppConfig['nodeEnv'];
+  // **Required rather than defaulted** (ruling of 2026-09-11). A blank or unrecognised
+  // value was always refused; an absent one resolved to `development`, which made the
+  // resolved field a second way of asking a question the raw variable answers differently.
+  // That difference is invisible where it is read, and it produced the wrong guard twice
+  // in decision 0236. Required, the two cannot differ.
+  const nodeEnv = required('NODE_ENV') as AppConfig['nodeEnv'];
   if (!['development', 'test', 'production'].includes(nodeEnv)) {
     throw new Error(`NODE_ENV must be development, test or production (got "${nodeEnv}")`);
   }
@@ -134,7 +139,7 @@ export function loadConfig(): AppConfig {
     throw new Error(`JWT_SECRET must be at least ${MINIMUM_SECRET_LENGTH} characters`);
   }
 
-  const { emailTransport, emailOutboxDir } = emailDelivery();
+  const { emailTransport, emailOutboxDir } = emailDelivery(nodeEnv);
 
   return {
     nodeEnv,
@@ -157,18 +162,18 @@ export function loadConfig(): AppConfig {
  * **The refusal is the load-bearing half of the 2026-09-11 ruling**, not the adapter,
  * and it is stated positively: `outbox` binds in `development` and nowhere else.
  *
- * **It reads `process.env.NODE_ENV` rather than the resolved `nodeEnv`, and that is the
- * whole of the fix.** The resolved value *defaults* to `development` when the variable
- * is absent, so a rule written against it treats "nobody said" as "a developer's
- * laptop". `npm run start:prod` sets nothing and `main.ts` loads `dotenv` in every
- * environment, so a production host that never exports `NODE_ENV`, carrying
- * `EMAIL_TRANSPORT=outbox` in its `.env`, wrote activation **and password-reset**
- * tokens to disk.
+ * **It takes the resolved `nodeEnv`, which is safe only because that value is now
+ * required** (ruling of 2026-09-11). While an absent `NODE_ENV` resolved to
+ * `development`, this had to read the raw variable: `npm run start:prod` sets nothing and
+ * `main.ts` loads `dotenv` in every environment, so a production host that never exported
+ * it, carrying `EMAIL_TRANSPORT=outbox` in its `.env`, would have written activation
+ * **and password-reset** tokens to disk.
  *
- * *A first version refused `production` by name; `architecture-guardian` reproduced the
- * absent-variable hole. A second stated the rule positively against the resolved value,
- * which reads correctly and leaves the identical hole, because the default is the very
- * value being required. A decision this size may not rest on a default.*
+ * *Two versions of this guard were wrong for that reason. The first refused `production`
+ * by name; `architecture-guardian` reproduced the absent-variable hole. The second stated
+ * the rule positively against the resolved value, which reads correctly and left the
+ * identical hole, because the default was the very value being required. Requiring the
+ * variable is what removed the difference rather than this guard working around it.*
  *
  * **Absent means `log`**, so no existing deployment changes behaviour by taking this
  * change, and a deployment that has never heard of either variable is unaffected.
@@ -176,7 +181,7 @@ export function loadConfig(): AppConfig {
  * The directory is required with `outbox` rather than defaulted, because a default
  * would put credentials somewhere nobody chose.
  */
-function emailDelivery(): {
+function emailDelivery(nodeEnv: AppConfig['nodeEnv']): {
   emailTransport: EmailTransport;
   emailOutboxDir: string | null;
 } {
@@ -198,14 +203,11 @@ function emailDelivery(): {
     return { emailTransport, emailOutboxDir: null };
   }
 
-  const declared = (process.env.NODE_ENV ?? '').trim();
-  if (declared !== 'development') {
+  if (nodeEnv !== 'development') {
     throw new Error(
       'EMAIL_TRANSPORT=outbox writes activation and password-reset tokens to disk, so it ' +
         'binds only where NODE_ENV is explicitly "development" (SKILL.md section 6). ' +
-        `NODE_ENV is ${declared === '' ? 'unset' : `"${declared}"`}. An absent value is not ` +
-        'development here, because a credential-writing decision may not rest on a default. ' +
-        'Configure a real provider instead.',
+        `NODE_ENV is "${nodeEnv}". Configure a real provider instead.`,
     );
   }
 
