@@ -31,9 +31,12 @@ mint one, three hand the plaintext to the email transport and nowhere else, and 
 `bootstrap:admin`, which refuses while any account exists and so can never mint for another
 person. No API response carries a token.
 
-**Section 6 already said this, and the amendment contradicted it twenty-one lines up.** Its
-own words, justifying why the transport exists at all: the token is stored only as a hash,
-*so there is no way back*. The outbox exists **because** the database yields nothing. The
+**Section 6 already said this, in the subsection that introduces the transport, and the
+amendment contradicted it.** Its own words, justifying why the transport exists at all: the
+token is stored only as a hash, *so there is no way back*. *Three homes said "twenty-one
+lines up"; the sentence is roughly ninety lines **below** the amendment, and twenty-one was
+the size of the block the first commit replaced. A number nobody checked, in a ruling whose
+subject is a claim stated with confidence and not checked.* The outbox exists **because** the database yields nothing. The
 first version argued it was redundant **because** the database yields everything.
 
 So the outbox is not a convenience that saves a query. On a development machine it is the
@@ -45,10 +48,14 @@ access Section 6 withholds.
 An activation credential belongs to an account **nobody has used**. A reset credential takes
 over an account somebody **is** using. Section 6's sentence is about the second.
 
-The transport was justified by the first and never by the second. `outbox-email.adapter.ts`
-says it exists "because without it a provisioned account cannot be activated at all", and
-Section 6 says the same where it introduces the transport. Neither mentions the reset flow.
-Refusing the reset token therefore costs the transport nothing it was built for.
+The transport was justified by the first and never by the second. The reason both homes
+give is an **activation** reason: `outbox-email.adapter.ts` says it exists "because without
+it a provisioned account cannot be activated at all", and Section 6 says the same where it
+introduces the transport. Refusing the reset token therefore costs the transport nothing it
+was built for. *A first version of this paragraph added "neither mentions the reset flow",
+which is false of Section 6 — the sentence introducing the transport named the reset message
+explicitly, and said the token was written. That is the clause this ruling amends, so citing
+it as silent was the overshoot of a correction.*
 
 Section 6 makes the same trade for `bootstrap:admin`, which prints its activation token. That
 precedent carries to an activation and not to a reset, because there the operator **is** the
@@ -62,6 +69,14 @@ on the argument that it was already open, when it was not.
 
 **Refusing to write the token at all** removes the only reason the transport exists: a
 provisioned account could not be activated, and the demo accounts would be unreachable.
+
+**What this ruling costs, stated rather than left to be found.** On a development machine an
+`ACTIVE` account whose password is lost now has no in-product recovery: `resendActivation`
+refuses any account that is not `PENDING_ACTIVATION`, and the reset token is withheld. The
+only route left is direct database access, which is the first of the two Stop Conditions
+below. That is the same recovery argument Section 6 accepts one flow over for
+`bootstrap:admin`, and it is what makes that Stop Condition load-bearing rather than
+theoretical.
 
 **Re-grounding the exemption on database access** — an operator holding `DATABASE_URL` can
 forge a token row from a hash they compute, or overwrite `accounts.password_hash` with an

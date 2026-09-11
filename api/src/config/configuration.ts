@@ -167,7 +167,10 @@ export function loadConfig(): AppConfig {
  * `development`, this had to read the raw variable: `npm run start:prod` sets nothing and
  * `main.ts` loads `dotenv` in every environment, so a production host that never exported
  * it, carrying `EMAIL_TRANSPORT=outbox` in its `.env`, would have written activation
- * **and password-reset** tokens to disk.
+ * **and password-reset** tokens to disk. *That is history: since the ruling of 2026-09-11
+ * the adapter withholds a reset token, so the same hole today would write activation
+ * tokens only. The sentence is kept in the past tense rather than softened, because the
+ * guard it argues for is what stops either.*
  *
  * *Two versions of this guard were wrong for that reason. The first refused `production`
  * by name; `architecture-guardian` reproduced the absent-variable hole. The second stated
