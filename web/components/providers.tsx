@@ -2,10 +2,10 @@
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { ApiRequestError } from '@/lib/api-client';
-import { SessionHaltedError } from '@/lib/session';
+import { SessionHaltedError, hasStoredSession, subscribe } from '@/lib/session';
 
 /**
  * Server state, and the one retry rule worth setting deliberately.
@@ -65,5 +65,52 @@ export function Providers({ children }: { children: ReactNode }) {
       }),
   );
 
+  useForgetCacheAcrossSessions(client);
+
   return <QueryClientProvider client={client}>{children}</QueryClientProvider>;
+}
+
+/**
+ * Everything cached is forgotten whenever the session changes hands.
+ *
+ * **A cache outlives a sign-out, and nothing else here was clearing it.** Every
+ * query key in this application names what it asks for and never who is asking —
+ * `['me']`, `['cells', month, ...]`, `['dcc-report', month, scope]` — so after a
+ * sign-out and a sign-in as somebody else, the previous person's answers keep
+ * rendering until each key passes `staleTime`. Found by using the application:
+ * signing out of one Senior Pastor and in as the other showed the first one's
+ * name and a link to their pastoral network for half a minute.
+ *
+ * **The API was never wrong, which is what makes this easy to miss.** Every
+ * request carried the new token and `GET /auth/me` answered with the new person
+ * throughout; a reload corrected it. Section 7 decides what a person may see, and
+ * this is the one place that decision can be undone after the fact — a Cell Leader
+ * signing in after a Senior Pastor on a shared phone would be shown Whole Church
+ * figures the API is refusing them, which is exactly the usage Section 23
+ * describes.
+ *
+ * **Keyed on whether a session is stored, not on who holds it.** A token refresh
+ * keeps that answer `true` and must not discard a cache mid-use; a sign-out makes
+ * it `false` and a sign-in makes it `true`, and both edges clear. Clearing on the
+ * way in as well as on the way out is deliberate: a tab that never observed the
+ * sign-out still starts the new session with nothing inherited.
+ *
+ * Fixing it in each page would mean every future page remembering; there is one
+ * cache and one place a session changes, so the rule lives at that seam.
+ */
+function useForgetCacheAcrossSessions(client: QueryClient): void {
+  const wasSignedIn = useRef<boolean | null>(null);
+
+  useEffect(() => {
+    wasSignedIn.current = hasStoredSession();
+
+    return subscribe(() => {
+      const signedIn = hasStoredSession();
+      if (signedIn === wasSignedIn.current) {
+        return;
+      }
+      wasSignedIn.current = signedIn;
+      client.clear();
+    });
+  }, [client]);
 }

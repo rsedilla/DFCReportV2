@@ -354,3 +354,69 @@ test('a refresh refused with 401 discards the stored token', async ({ page }) =>
   const stored = await page.evaluate(() => window.localStorage.getItem('dfc.refresh_token'));
   expect(stored, 'a refused refresh token was kept').toBeNull();
 });
+
+/**
+ * **A cache must not outlive the session that filled it.**
+ *
+ * Every query key in this application names what it asks for and never who is
+ * asking, and nothing cleared the cache when a session ended. So signing out and
+ * signing in as somebody else served the previous person's answers until each key
+ * passed its thirty-second `staleTime`: the dashboard greeted the wrong person by
+ * name and linked to their pastoral network.
+ *
+ * The API was never wrong, which is why nothing else caught it. Every request
+ * carried the new token and `/auth/me` answered with the new person throughout.
+ * What was wrong is that the screen showed what the API had already stopped
+ * saying — and section 7 decides what a person may see, so a Cell Leader signing
+ * in after a Senior Pastor on a shared phone is shown figures the API refuses
+ * them.
+ *
+ * Found by using the application rather than by a test, which is the honest note
+ * to leave: two accounts each behave correctly in isolation, and no assertion
+ * covered what one leaves behind for the next.
+ */
+test('a sign-out forgets what the previous session cached', async ({ page }) => {
+  let whoAmI = 'Geraldine';
+
+  await page.addInitScript(() => {
+    window.localStorage.setItem('dfc.refresh_token', 'test-refresh-token');
+  });
+
+  await page.route('**/api/v1/auth/refresh', (route) => route.fulfill(tokens('access-1', 'refresh-1')));
+  await page.route('**/api/v1/auth/logout-all', (route) => route.fulfill({ status: 204, body: '' }));
+  await page.route('**/api/v1/auth/logout', (route) => route.fulfill({ status: 204, body: '' }));
+  await page.route('**/api/v1/auth/login', (route) => route.fulfill(tokens('access-2', 'refresh-2')));
+
+  // The one thing that differs between the two people.
+  await page.route('**/api/v1/auth/me', (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        account_id: '4f8c1d6a-0f1e-4b2a-9c3d-5e6f7a8b9c0d',
+        person_id: '9a1b2c3d-4e5f-4061-8273-8495a6b7c8d9',
+        email: 'someone@example.invalid',
+        first_name: whoAmI,
+        capabilities: [],
+      }),
+    }),
+  );
+
+  // **One page load, and then nothing but in-app navigation.** That is the whole
+  // of the case: a reload always corrected this, because the client is created
+  // per mount, so a test that called `goto` between the two sessions would pass
+  // with the fix removed. It did, before this was rewritten.
+  await page.goto('/session');
+  await expect(page.getByRole('heading', { level: 1 })).toContainText('Your session');
+
+  await page.getByRole('button', { name: 'Sign out on every device' }).click();
+  await expect(page.getByRole('heading', { level: 1 })).toContainText('Sign in');
+
+  whoAmI = 'Oriel';
+  await page.getByLabel('Email address').fill('oriel@example.invalid');
+  await page.getByLabel('Password').fill('a-password-nobody-uses');
+  await page.getByRole('button', { name: 'Sign in' }).click();
+
+  await expect(page.getByRole('heading', { level: 1 })).toContainText('Oriel');
+  await expect(page.getByRole('heading', { level: 1 })).not.toContainText('Geraldine');
+});
