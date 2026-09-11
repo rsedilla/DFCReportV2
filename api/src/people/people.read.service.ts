@@ -1,12 +1,14 @@
-import { Inject, Injectable } from '@nestjs/common';
-import { sql } from 'kysely';
+import { Inject, Injectable, Optional } from '@nestjs/common';
+import { sql, type Transaction } from 'kysely';
 
 import { AuthorizationService, type Actor } from '../auth/authorization/authorization.service';
 import { Capability } from '../auth/authorization/capabilities';
 import { HierarchyService } from '../hierarchy/hierarchy.service';
 import { NetworksService } from '../networks/networks.service';
 import { type RosterCursor } from '../common/roster-cursor';
+import { ADMIN_ACCOUNTS_PORT, type AdminAccountsPort } from './admin-accounts.port';
 import { DATABASE, type Db } from '../database/database.module';
+import type { Database } from '../database/schema';
 
 import { normalizeName } from './duplicate-matching';
 import {
@@ -87,6 +89,18 @@ export class PeopleReadService {
     private readonly hierarchy: HierarchyService,
     private readonly networks: NetworksService,
     private readonly authorization: AuthorizationService,
+    // `auth` owns `accounts` and `account_roles`, and imports this module — so the read
+    // is inverted through a port, which is what section 2 reserves one for (ruling of
+    // 2026-09-11).
+    //
+    // **Optional, and the operation refuses when it is unbound**, which is what section 2
+    // requires of an inversion port: a fail-open reading would turn a wiring fault into a
+    // silent hole in section 5's administrator exclusion. `module-graph.spec.ts` asserts
+    // the token resolves in a normally built application, because an optional injection
+    // cannot fail at startup.
+    @Optional()
+    @Inject(ADMIN_ACCOUNTS_PORT)
+    private readonly adminAccounts: AdminAccountsPort | null,
   ) {}
 
   /**
@@ -403,6 +417,34 @@ export class PeopleReadService {
   }
 
   /**
+   * A Person's display name on the caller's executor, or null where no row matches.
+   *
+   * **Exists so that `attendance` need not read `persons`** (SKILL.md section 2, ruling of
+   * 2026-09-11). Its conflict bodies name whoever recorded the reading a client is being
+   * shown, and looked the name up directly because the table was reachable.
+   *
+   * **It takes an executor**, because section 14 makes a conflict an ordinary outcome and
+   * those paths hold a transaction: reaching the pool would ask a bounded one for a second
+   * connection while holding one (section 24).
+   *
+   * **First and last only, which is what the callers render.** No middle name and no
+   * Member ID: this answers "who is this" in a sentence, not an identity payload, and
+   * {@link minimalIdentity} below is the one that decides what a Person discloses.
+   */
+  async displayNameWithin(
+    executor: Db | Transaction<Database>,
+    personId: string,
+  ): Promise<string | null> {
+    const person = await executor
+      .selectFrom('persons')
+      .select(['first_name', 'last_name'])
+      .where('id', '=', personId)
+      .executeTakeFirst();
+
+    return person === undefined ? null : `${person.first_name} ${person.last_name}`;
+  }
+
+  /**
    * The five fields section 8 permits for a person outside the viewer's pastoral
    * scope — Member ID, full name, sex, current Network and the name of their
    * current direct leader — plus two that are not about them.
@@ -489,6 +531,34 @@ export class PeopleReadService {
     }[];
     nextCursor: SearchCursor | null;
   }> {
+    // **The port is checked before anything else reads or returns**, so a wiring fault
+    // cannot hide behind an empty scope or a healthy tree. Both early returns below answer
+    // without reaching the administrator exclusion, and a refusal placed after them would
+    // surface on the day a leader departs rather than on the day of the deployment —
+    // which is the counter-rule `cells.index.service.ts` states for the same shape.
+    //
+    // **Falsy rather than `=== null`, and the difference is what the branch is for.** Nest
+    // injects `undefined` for an unresolved `@Optional()` token, so a check against `null`
+    // alone is dead on the only fault that produces one — which is the defect this port
+    // shipped with. It admits `null` as well because `useValue(undefined)` does not
+    // override a real provider, so a test overriding the *token* can only inject `null`;
+    // a test overriding the binding *module* reaches `undefined`, and
+    // `admin-accounts-port-unbound.e2e.spec.ts` does both. Read into a local so the
+    // narrowing holds across the awaits below.
+    const adminAccounts = this.adminAccounts;
+
+    if (!adminAccounts) {
+      // Section 2: an inversion port refuses rather than skipping the check. Answering
+      // without the administrator exclusion would put an administrator's whole disciple
+      // set on an attention list nobody can act on, which is the silent hole the
+      // fail-closed reading exists to prevent.
+      throw new Error(
+        'Cannot list the people awaiting reassignment: ADMIN_ACCOUNTS_PORT is not bound, ' +
+          'so the SKILL.md section 5 administrator exclusion cannot be applied. This is a ' +
+          'deployment fault.',
+      );
+    }
+
     // An empty scope selects nobody. Expressed here rather than as an `IN ()`,
     // which PostgreSQL rejects, and it is the honest answer for an actor whose
     // grant reaches nobody.
@@ -496,44 +566,63 @@ export class PeopleReadService {
       return { rows: [], nextCursor: null };
     }
 
+    // **Which edges are broken is `hierarchy`'s question**, and the administrator
+    // exclusion is `auth`'s (SKILL.md section 2, ruling of 2026-09-11). Both were read
+    // here as correlated sub-queries against tables this module does not own. They are now
+    // asked of their owners and applied as sets, which is what lets this query root in
+    // `persons` and join nothing across a module boundary.
+    const edges = await this.hierarchy.brokenEdgesWithin(this.db);
+    if (edges.length === 0) {
+      return { rows: [], nextCursor: null };
+    }
+
+    // Section 5's remedy, applied one relationship over: an administrator outside the
+    // pastoral structure is in the correct and permanent state, so their disciples are not
+    // waiting for a reassignment.
+    //
+    // **A live `ADMIN` role is a proxy for that state and not the state itself**, which is
+    // stated rather than assumed and is unchanged by moving the read. Nothing forbids a
+    // leader inside the tree from also holding `ADMIN`, and if such a leader's own
+    // assignment ends, this exclusion takes their whole disciple set off the list. Section
+    // 5 states the remedy for the neighbouring list, where the Person and the state
+    // coincide; here they need not, and `CLAUDE.md` carries that as open.
+    const administrators = await adminAccounts.personsHoldingAdminWithin(this.db, [
+      ...new Set(edges.map((edge) => edge.leaderId)),
+    ]);
+
+    const leaderFor = new Map<string, string>();
+    for (const edge of edges) {
+      if (!administrators.has(edge.leaderId)) {
+        leaderFor.set(edge.personId, edge.leaderId);
+      }
+    }
+
+    if (leaderFor.size === 0) {
+      return { rows: [], nextCursor: null };
+    }
+
     let query = this.db
-      .selectFrom('pastoral_assignments as edge')
-      .innerJoin('persons as person', 'person.id', 'edge.person_id')
-      .innerJoin('persons as leader', 'leader.id', 'edge.leader_id')
+      .selectFrom('persons as person')
       .select([
         'person.id as id',
         'person.member_id as member_id',
         'person.first_name as first_name',
         'person.middle_name as middle_name',
         'person.last_name as last_name',
-        'leader.id as leader_id',
-        'leader.member_id as leader_member_id',
-        'leader.first_name as leader_first_name',
-        'leader.middle_name as leader_middle_name',
-        'leader.last_name as leader_last_name',
       ])
-      .where('edge.ended_at', 'is', null)
+      .where('person.id', 'in', [...leaderFor.keys()])
       // A merged-away Person is not listed: the survivor carries the identity
       // (section 3, Person Merge).
       //
       // **The same is deliberately not asked of the leader.** A filter there was
       // written and withdrawn: section 3 never rewrites a pastoral edge, so a
       // disciple whose leader was absorbed still has no reachable leader and is
-      // exactly the gap this list exists to surface — dropping their row would hide
-      // it. Whether `former_leader` should then name the absorbed record or the
-      // survivor is Person Merge's to answer for every surface at once, which
-      // `CLAUDE.md` records, and is not this endpoint's to decide. Unreachable
-      // today: nothing writes `merged_into_id`.
+      // exactly the gap this list exists to surface.
       .where('person.merged_into_id', 'is', null)
       // **An archived Person is not listed, because section 5 refuses to reassign
       // one.** Section 19 asks each entry to carry the action that resolves it, and
       // decision 0229 states the consequence for the sibling list: an entry no act
-      // resolves is what an attention list must never carry. Listing one would send a
-      // reader to a screen that refuses them.
-      //
-      // Unreachable today — no route holds `people.manage_lifecycle`, so nothing
-      // writes `ARCHIVED` — and written now because the day archival ships is the
-      // same day this list's headline case becomes real.
+      // resolves is what an attention list must never carry.
       .where((eb) =>
         eb.not(
           eb.exists(
@@ -543,41 +632,6 @@ export class PeopleReadService {
               .whereRef('life.person_id', '=', 'person.id')
               .where('life.ended_at', 'is', null)
               .where('life.state', '=', 'ARCHIVED'),
-          ),
-        ),
-      )
-      // The condition itself: the leader holds no open assignment of their own.
-      .where((eb) =>
-        eb.not(
-          eb.exists(
-            eb
-              .selectFrom('pastoral_assignments as up')
-              .select(sql`1`.as('one'))
-              .whereRef('up.person_id', '=', 'edge.leader_id')
-              .where('up.ended_at', 'is', null),
-          ),
-        ),
-      )
-      // Section 5's remedy, applied one relationship over: an administrator outside
-      // the pastoral structure is in the correct and permanent state, so their
-      // disciples are not waiting for a reassignment.
-      //
-      // **A live `ADMIN` role is a proxy for that state and not the state itself**,
-      // which is stated rather than assumed. Nothing forbids a leader inside the tree
-      // from also holding `ADMIN`, and if such a leader's own assignment ends, this
-      // exclusion takes their whole disciple set off the list. Section 5 states the
-      // remedy for the neighbouring list, where the Person and the state coincide;
-      // here they need not, and `CLAUDE.md` carries that as open.
-      .where((eb) =>
-        eb.not(
-          eb.exists(
-            eb
-              .selectFrom('accounts as account')
-              .innerJoin('account_roles as role', 'role.account_id', 'account.id')
-              .select(sql`1`.as('one'))
-              .whereRef('account.person_id', '=', 'edge.leader_id')
-              .where('role.role', '=', 'ADMIN')
-              .where('role.revoked_at', 'is', null),
           ),
         ),
       )
@@ -610,8 +664,30 @@ export class PeopleReadService {
     }
 
     const found = await query.execute();
-    const rows = found.slice(0, limit);
-    const last = rows[rows.length - 1];
+    const page = found.slice(0, limit);
+    const last = page[page.length - 1];
+
+    // **The leaders of this page only**, after paging rather than joined into it. At most
+    // `limit` rows, and `persons` is this module's own table, so the second read costs one
+    // round trip and crosses nothing.
+    const leaders = await this.leadersFor([
+      ...new Set(page.map((row) => leaderFor.get(row.id) as string)),
+    ]);
+
+    const rows = page.map((row) => {
+      const leader = leaders.get(leaderFor.get(row.id) as string);
+
+      if (leader === undefined) {
+        // Unreachable: `pastoral_assignments.leader_id` carries a foreign key, so the row
+        // this page was built from names a Person who exists. Thrown rather than dropped,
+        // because dropping would shorten a page silently — and where the query this
+        // replaced inner-joined the leader, a missing one removed the entry before the
+        // limit was applied rather than after it.
+        throw new Error(`No Person row for the former leader of ${row.id}`);
+      }
+
+      return { ...row, ...leader };
+    });
 
     return {
       rows,
@@ -620,6 +696,43 @@ export class PeopleReadService {
           ? { lastName: last.last_name, firstName: last.first_name, id: last.id }
           : null,
     };
+  }
+
+  /** The former leaders named on a page of the attention list, by identifier. */
+  private async leadersFor(leaderIds: readonly string[]): Promise<
+    Map<
+      string,
+      {
+        leader_id: string;
+        leader_member_id: string;
+        leader_first_name: string;
+        leader_middle_name: string | null;
+        leader_last_name: string;
+      }
+    >
+  > {
+    if (leaderIds.length === 0) {
+      return new Map();
+    }
+
+    const rows = await this.db
+      .selectFrom('persons')
+      .select(['id', 'member_id', 'first_name', 'middle_name', 'last_name'])
+      .where('id', 'in', [...leaderIds])
+      .execute();
+
+    return new Map(
+      rows.map((row) => [
+        row.id,
+        {
+          leader_id: row.id,
+          leader_member_id: row.member_id,
+          leader_first_name: row.first_name,
+          leader_middle_name: row.middle_name,
+          leader_last_name: row.last_name,
+        },
+      ]),
+    );
   }
 
   /**
@@ -681,12 +794,13 @@ export class PeopleReadService {
    * withdrawn: a port returning the placed set puts the filter back in the `WHERE` clause
    * as a `NOT IN`, so the page is full. The scope filter below is that shape already.*
    *
-   * *`awaitingReassignment` above is **not** precedent for this and was cited as such in
-   * error: it selects from `pastoral_assignments`, which `hierarchy` owns, and reads
-   * `accounts` and `account_roles`, which `auth` owns, so it satisfies neither the
-   * exemption's premise nor any other clause of section 2. **That is a Stop Condition in
-   * its own right and `CLAUDE.md` carries it**; decision 0234 settles this method and
-   * deliberately does not reach that one.*
+   * *`awaitingReassignment` above is **not** precedent for this, and the reason has
+   * changed rather than lapsed. It was cited as precedent in error while it selected from
+   * `pastoral_assignments` and read `accounts` and `account_roles`, satisfying neither the
+   * exemption's premise nor any other clause of section 2 — a Stop Condition in its own
+   * right, which decision 0241 settled by re-homing its edge condition to `hierarchy` and
+   * its administrator exclusion to `auth`, rather than by admitting either. It now roots in `persons` and crosses nothing, so it is not an
+   * exemption instance at all and still cannot be precedent for one.*
    */
   async withoutACell(
     scope: { kind: 'WHOLE_CHURCH' } | { kind: 'PERSONS'; personIds: ReadonlySet<string> },

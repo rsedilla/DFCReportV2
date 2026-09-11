@@ -2,7 +2,8 @@ import { Inject, Injectable } from '@nestjs/common';
 
 import { DATABASE, type Db } from '../database/database.module';
 
-import type { AccountStatus } from '../database/schema';
+import type { AccountStatus, Database } from '../database/schema';
+import type { Transaction } from 'kysely';
 
 export interface AccountRecord {
   id: string;
@@ -36,6 +37,65 @@ export class AccountsRepository {
       .executeTakeFirst();
 
     return row ?? null;
+  }
+
+  /**
+   * The Person an account belongs to, on the caller's executor, or null.
+   *
+   * **Exists so that `attendance` need not read `accounts`** (SKILL.md section 2, ruling
+   * of 2026-09-11). Two conflict paths there looked the identical question up directly,
+   * because the table was reachable rather than because a service could not answer it.
+   *
+   * **It takes an executor where {@link findById} takes the pool**, and that is the whole
+   * reason a second method exists rather than the callers using that one. Section 14 makes
+   * a conflict an ordinary outcome, so those paths run inside a transaction: reaching the
+   * pool would ask a bounded one for a second connection while holding one (section 24),
+   * every time two leaders disagree.
+   */
+  async personBehindWithin(
+    executor: Db | Transaction<Database>,
+    accountId: string,
+  ): Promise<string | null> {
+    const account = await executor
+      .selectFrom('accounts')
+      .select('person_id')
+      .where('id', '=', accountId)
+      .executeTakeFirst();
+
+    return account?.person_id ?? null;
+  }
+
+  /**
+   * `AdminAccountsPort`. Of these Persons, those holding a live `ADMIN` role.
+   *
+   * Implemented here because `auth` owns `accounts` and `account_roles`, and reached
+   * through a port because `auth` imports `PeopleModule` — so the consumer cannot import
+   * this module back (SKILL.md section 2, ruling of 2026-09-11).
+   *
+   * An empty input answers empty without querying, because `IN ()` is not valid SQL.
+   * **Its only caller today cannot reach it** — `awaitingReassignment` returns before
+   * asking whenever the broken-edge set is empty — so the guard is for the next caller
+   * rather than for that one. Stated rather than dressed up as a live case: a guard given
+   * a reason that cannot occur is how the reason survives the caller changing.
+   */
+  async personsHoldingAdminWithin(
+    executor: Db | Transaction<Database>,
+    personIds: readonly string[],
+  ): Promise<Set<string>> {
+    if (personIds.length === 0) {
+      return new Set();
+    }
+
+    const rows = await executor
+      .selectFrom('accounts as account')
+      .innerJoin('account_roles as role', 'role.account_id', 'account.id')
+      .select('account.person_id as person_id')
+      .where('account.person_id', 'in', [...personIds])
+      .where('role.role', '=', 'ADMIN')
+      .where('role.revoked_at', 'is', null)
+      .execute();
+
+    return new Set(rows.map((row) => row.person_id));
   }
 
   /**

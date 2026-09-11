@@ -256,6 +256,60 @@ describe('people awaiting reassignment (sections 5, 19 and 20)', () => {
     expect([first.body.data[0].id, next.body.data[0].id]).toEqual([second.id, juan.id]);
   });
 
+  it('returns a full page where excluded rows sort ahead of it', async () => {
+    // **The property decision 0241 claims and nothing could fail on.** That ruling moved
+    // the administrator exclusion out of the paging query and behind a service interface,
+    // and argued the page still comes back full because the exclusion is applied in the
+    // `WHERE` clause, leaving `LIMIT` to operate on the filtered rows. The argument is
+    // right and was untested: the only paging case here used two rows and `limit: 1`, with
+    // no excluded row anywhere near a page boundary.
+    //
+    // **The mutation it exists to catch** is applying the exclusion after `slice(0, limit)`
+    // — the truncation shape section 22's pagination rule forbids, where a short page with
+    // a null cursor claims to be the last page of a set that was cut. Under that mutant
+    // this case answers an empty first page while two listable rows remain.
+    //
+    // Three administrator-led rows sorting ahead of two listable ones, and a limit of two.
+    await unplace(mark);
+
+    for (const [first, last] of [
+      ['Abel', 'Aquino'],
+      ['Bella', 'Atienza'],
+      ['Cesar', 'Bautista'],
+    ]) {
+      const leader = await createPerson(db, { firstName: `${first}sLeader`, network: 'MENS' });
+      await assignTo(db, leader.id, raymond.id);
+      await unplace(leader);
+      // Section 5's remedy: an administrator outside the pastoral structure is in the
+      // correct and permanent state, so their disciples are excluded.
+      await createAccount(app, db, { person: leader, roles: ['ADMIN'] });
+
+      const disciple = await createPerson(db, {
+        firstName: first,
+        lastName: last,
+        network: 'MENS',
+      });
+      await assignTo(db, disciple.id, leader.id);
+    }
+
+    // Two listable rows, both sorting after every excluded one. Juan Reyes is already
+    // under the unplaced Mark from `beforeEach`.
+    const santos = await createPerson(db, {
+      firstName: 'Nora',
+      lastName: 'Santos',
+      network: 'MENS',
+    });
+    await assignTo(db, santos.id, mark.id);
+
+    const page = await list(admin, { limit: 2 });
+
+    expect(page.status).toBe(200);
+    // Full, rather than emptied by three excluded rows consuming the limit ahead of it.
+    expect(idsOf(page)).toEqual([juan.id, santos.id].sort());
+    // And it is genuinely the last page, rather than short with a cursor still to follow.
+    expect(page.body.next_cursor).toBeNull();
+  });
+
   it('does not rank by how long a gap has stood', async () => {
     // The one prohibition this list ships under (sections 13, 15, 17), and it needs a
     // fixture where staleness and name disagree. Mark's break is older than Nathan's,

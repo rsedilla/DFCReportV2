@@ -8,6 +8,7 @@ import { CELL_MEETING_SCOPE_PORT } from '../../src/auth/authorization/cell-meeti
 import { CELL_SCOPE_PORT } from '../../src/auth/authorization/cell-scope.port';
 import { CredentialsService } from '../../src/auth/credentials.service';
 import { CellMeetingsScopeService } from '../../src/attendance/cell-meetings.scope.service';
+import { PeopleReadService } from '../../src/people/people.read.service';
 import { CellsIndexService } from '../../src/cells/cells.index.service';
 import { CellsReadService } from '../../src/cells/cells.read.service';
 import { NetworksService } from '../../src/networks/networks.service';
@@ -91,6 +92,11 @@ describe('the application module graph (section 2)', () => {
       // same way and on the consumer's own field: `moduleRef.get(TOKEN)` searches the
       // whole container and would find a provider that never reaches this class.
       ['RECORDED_MEETINGS_PORT', moduleRef.get(CellsIndexService, { strict: false }), 'recorded'],
+      // `ADMIN_ACCOUNTS_PORT` — section 5's administrator exclusion on section 20's
+      // attention list, bound in `AdminAccountsBindingModule` because its consumer is
+      // registered in `PeopleModule` (ruling of 2026-09-11). Same arrangement, same
+      // assertion, and on the consumer's own field for the same reason.
+      ['ADMIN_ACCOUNTS_PORT', moduleRef.get(PeopleReadService, { strict: false }), 'adminAccounts'],
     ];
 
     for (const [token, consumer, field] of consumers) {

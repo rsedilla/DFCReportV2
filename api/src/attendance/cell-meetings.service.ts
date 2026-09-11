@@ -22,6 +22,8 @@ import { DATABASE, type Db } from '../database/database.module';
 import { databaseNow, isMonthOpen, reportingMonthOf } from '../common/time/submission-window';
 import { startOfManilaDay } from '../common/time/manila';
 
+import { AccountsRepository } from '../auth/accounts.repository';
+import { PeopleReadService } from '../people/people.read.service';
 import { AuditService } from '../audit/audit.service';
 import {
   AuthorizationService,
@@ -439,6 +441,12 @@ export class CellMeetingsService implements RecordedMeetingsPort {
     private readonly idempotency: IdempotencyService,
     private readonly authorization: AuthorizationService,
     private readonly meetingScope: CellMeetingsScopeService,
+    // `people` owns `persons` and `auth` owns `accounts`, so the conflict bodies below
+    // ask rather than read (SKILL.md section 2, ruling of 2026-09-11). Ordinary imports
+    // rather than ports: this module already imports both, and section 2 reserves a port
+    // for where the direction would be a cycle.
+    private readonly people: PeopleReadService,
+    private readonly accounts: AccountsRepository,
   ) {}
 
   /**
@@ -2404,19 +2412,10 @@ export class CellMeetingsService implements RecordedMeetingsPort {
       return { id: '', name: 'somebody whose account has since been removed' };
     }
 
-    const person = await executor
-      .selectFrom('persons')
-      .select(['first_name', 'last_name'])
-      .where('id', '=', personId)
-      .executeTakeFirst();
+    // `people` owns `persons`, so this asks rather than reads (ruling of 2026-09-11).
+    const name = await this.people.displayNameWithin(executor, personId);
 
-    return {
-      id: personId,
-      name:
-        person === undefined
-          ? 'somebody no longer recorded'
-          : `${person.first_name} ${person.last_name}`,
-    };
+    return { id: personId, name: name ?? 'somebody no longer recorded' };
   }
 
   /**
@@ -2435,13 +2434,11 @@ export class CellMeetingsService implements RecordedMeetingsPort {
       return { id: '', name: 'an earlier submission' };
     }
 
-    const account = await executor
-      .selectFrom('accounts')
-      .select('person_id')
-      .where('id', '=', accountId)
-      .executeTakeFirst();
+    // `auth` owns `accounts` (ruling of 2026-09-11). `personBehindWithin` takes the
+    // caller's executor for the reason this method's docblock already gives.
+    const personId = await this.accounts.personBehindWithin(executor, accountId);
 
-    return this.personNameFor(executor, account?.person_id ?? null);
+    return this.personNameFor(executor, personId);
   }
 
   /**

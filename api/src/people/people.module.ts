@@ -23,7 +23,11 @@ import { PeopleSexCorrectionService } from './people.sex-correction.service';
  * writes" until the split, and stating a rule more strongly than the code keeps it
  * is how the rule stops being checkable.
  *
- * It touches no table it does not own, in either direction. Creating a Person
+ * It writes no table it does not own, in either direction, and reads one set of them:
+ * section 2's exemption names `withoutACell` anti-joining `cell_memberships`,
+ * `cell_leaderships` and `cells` (decision 0234). *This read "touches no table it does
+ * not own" until 2026-09-11, which stopped being true when that exemption was granted
+ * and was left standing by the ruling that granted it.* Creating a Person
  * opens a Network assignment, a pastoral assignment and an audit entry, and each
  * goes through the service owning that table — `networks`, `hierarchy` and
  * `audit` — inside the transaction `people` opens.

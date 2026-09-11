@@ -701,6 +701,58 @@ export class HierarchyService {
   }
 
   /**
+   * Every open pastoral edge whose **leader** holds no open assignment of their own —
+   * the condition Section 20's attention list exists for (ruling of 2026-09-11).
+   *
+   * **Rooted in `pastoral_assignments` and joined to nothing**, which is why it lives
+   * here rather than in `people`. The list itself is a list of Persons and is `people`'s
+   * to build; the question of which edges are broken is a question about this module's
+   * table, and reading it from `people` was the Section 2 violation this closes.
+   *
+   * **It returns the whole set rather than a page.** The caller pages over `persons`,
+   * where the ordering keys live, so this cannot be the paging query. The set is bounded
+   * by how many leaders have left without a successor, which is a repair backlog rather
+   * than a population: at church scale it is a handful, and a large one is itself the
+   * signal the list exists to raise.
+   *
+   * **It applies no lifecycle or role filter.** Archived and merged Persons, and the
+   * administrator exclusion, are decided by tables this module does not own, and each is
+   * applied by whoever owns them.
+   */
+  async brokenEdgesWithin(
+    executor: Db | Transaction<Database>,
+  ): Promise<{ personId: string; leaderId: string }[]> {
+    const rows = await executor
+      .selectFrom('pastoral_assignments as edge')
+      .select(['edge.person_id as person_id', 'edge.leader_id as leader_id'])
+      .where('edge.ended_at', 'is', null)
+      // **A root's seat is not a broken edge.** Section 5 gives each Network a root whose
+      // row names no leader, so `leader_id` is null there — and a root is in the correct
+      // and permanent state rather than waiting for anybody. The query this replaced
+      // dropped them by inner-joining `persons` on the leader; stating it is the same
+      // rule made explicit, which is what moving the query out of that join costs.
+      .where('edge.leader_id', 'is not', null)
+      .where((eb) =>
+        eb.not(
+          eb.exists(
+            eb
+              .selectFrom('pastoral_assignments as up')
+              .select(sql`1`.as('one'))
+              .whereRef('up.person_id', '=', 'edge.leader_id')
+              .where('up.ended_at', 'is', null),
+          ),
+        ),
+      )
+      .execute();
+
+    return rows.map((row) => ({
+      personId: row.person_id,
+      // Non-null by the filter above, which the row type cannot carry.
+      leaderId: row.leader_id as string,
+    }));
+  }
+
+  /**
    * The people this person currently leads, with enough to name them.
    *
    * Section 4 refuses a Network change while the person leads anyone, and requires
