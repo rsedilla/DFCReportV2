@@ -1306,27 +1306,43 @@ sign-in, where the stored password is whatever it was when it was set.
 - Invalidate token after use
 - Do not let admins know or choose another user's password
 
-**That last rule binds deployed environments, and a development machine is exempt** (ruling
-of 2026-09-11). The development email transport writes each message to a directory, tokens
-included, so an operator can read an activation or reset token belonging to another account
-— which is the rule's own shape, reached on a machine where it means something different.
+**That last rule is not exempted on a development machine, and the development email
+transport is what it binds to** (ruling of 2026-09-11). That transport writes each message
+to a directory. It writes an **activation** token and **withholds a password-reset** one,
+recording the message without it.
 
-The exemption rests on the operator already holding everything it could give them: a
-development database is theirs, `account_tokens` is one query away, and the service will
-mint either token on request. The outbox saves a query rather than granting access. The
-data is theirs too — fixtures are invented and a development spine is one they loaded.
+The distinction is not a matter of degree. An activation credential belongs to an account
+nobody has used; a reset credential takes over an account somebody is using, which is what
+the sentence above is about. The transport was justified by the first and never by the
+second — it exists because a provisioned account cannot otherwise be activated at all — so
+withholding the reset token costs it nothing it was built for. The trade this section makes
+for `bootstrap:admin`, which prints its activation token, carries for the same reason and
+stops at the same place: there the operator *is* the holder.
 
-**It has something that fails on it**, which is why it is stated rather than assumed. The
-transport binds only where `NODE_ENV` is explicitly `development`, the process refuses to
-start with it set anywhere else, and Section 24 requires `NODE_ENV` itself rather than
-letting an absent one resolve to `development`.
+**A first version of this ruling exempted the development machine outright, and its ground
+was false.** It held that the operator already had the token anyway — that `account_tokens`
+was one query away and the service would mint either token on request. Neither is true.
+That table stores a SHA-256 digest and the schema says in terms that the token itself is
+never stored; of the four sites that mint one, three hand it only to this transport and the
+fourth refuses while any account exists. This section already said so where it introduces
+the transport: the token is stored only as a hash, *so there is no way back*. The outbox
+exists **because** the database yields nothing, and the amendment argued it was redundant
+**because** the database yields everything.
 
-Two things the exemption does not cover. It is **not** an exemption for `test`: the suite
-pins `NODE_ENV=test`, so no case can bind the transport, and a database truncated before
-every case is no place for a credential written to disk. And it is **not** an exemption for
-a **shared** development host — the argument above rests on the operator being the only
-person with access to the machine and the database behind it, so a development environment
-several people reach is a deployed one for this rule, whatever its `NODE_ENV` says.
+So on a development machine this transport is the only source of a usable credential for
+another person's account, which is the access this rule withholds.
+
+**What is enforced, and what is not.** The transport binds only where `NODE_ENV` is
+explicitly `development`, the process refuses to start with it selected anywhere else, and
+Section 24 requires `NODE_ENV` rather than letting an absent one resolve. The refusal to
+write a reset token is pinned by `api/test/unit/email-outbox-adapter.spec.ts`. The suite
+cannot reach the transport at all, since `api/test/setup/env.ts` pins `NODE_ENV=test`.
+
+**A shared development host has nothing enforcing anything.** The argument for writing an
+activation token to disk rests on the operator being the only person with access to the
+machine, and the `NODE_ENV` guard cannot tell a laptop from a team server. That is stated
+as a limitation rather than as a rule, because a rule with nothing that can fail on it is
+a wish; `CLAUDE.md` carries it as open.
 
 ```text
 account_tokens
@@ -1387,8 +1403,11 @@ outbox directory, and is selected by configuration rather than by default.
 
 **The process refuses to start unless `NODE_ENV` is explicitly `development`**, and that
 refusal rather than the adapter is what makes the transport safe to ship. It is read from
-the raw variable, because the resolved value defaults to `development` when nobody set one
-and a decision about writing credentials to disk may not rest on a default.
+the resolved value, which Section 24 requires rather than defaulting, so a decision about
+writing credentials to disk rests on a variable somebody set. *This said it reads the raw
+variable "because the resolved value defaults to `development` when nobody set one". Both
+halves stopped being true when the ruling of 2026-09-11 made `NODE_ENV` required, and the
+sentence survived a sweep because it wraps across a line break.*
 
 **What this borrows from the bootstrap command above, and what it does not.** The token is
 single-use and short-lived exactly as the printed one is, and nothing is addressed to
