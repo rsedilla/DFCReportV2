@@ -1117,6 +1117,45 @@ for (const viewport of VIEWPORT_WIDTHS) {
  * `sr-only`'s `padding: 0` while the clip stays, which left an 18px box in the
  * layout rather than a hidden one. That is what this pins.
  */
+/**
+ * Exactly one navigation entry is the current page.
+ *
+ * **axe cannot see this, and that is why it is a test of its own.** Two links each
+ * carrying `aria-current="page"` is valid markup — the attribute is not required to
+ * be unique — so every automated rule passes while a screen reader announces two
+ * current pages and the eye sees two highlighted entries.
+ *
+ * The state that produced it: My Network is `/people/{id}/network` and People is
+ * `/people`, so a prefix test marked both. It is asserted by *count* rather than by
+ * naming People, so a third entry nested under an existing one fails here rather
+ * than being noticed by eye.
+ *
+ * **The link is clicked rather than its route typed**, because My Network is the one
+ * entry whose href depends on who is signed in. Navigating to a hard-coded person's
+ * network page tests a different thing entirely — somebody else's page, where People
+ * *is* the right answer — and an earlier version of this case did exactly that and
+ * failed against a correct implementation.
+ */
+test('only the most specific navigation entry is marked as the current page', async ({ page }) => {
+  await mockSignedIn(page);
+  await mockPeople(page);
+  await mockPastoralPath(page);
+
+  await page.goto('/people');
+
+  const navigation = page.getByRole('navigation', { name: 'Main' });
+  await navigation.getByRole('link', { name: 'My Network' }).click();
+
+  await expect(page).toHaveURL(/\/people\/[^/]+\/network$/);
+
+  const current = navigation.locator('a[aria-current="page"]');
+
+  await expect(current, 'more than one navigation entry claims to be the current page').toHaveCount(
+    1,
+  );
+  await expect(current).toHaveText('My Network');
+});
+
 test('the skip link is hidden until focused, and a full target once it is', async ({ page }) => {
   await page.goto('/sign-in');
 
