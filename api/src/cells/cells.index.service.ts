@@ -191,12 +191,27 @@ export class CellsIndexService {
    * names the token so the fault is diagnosable from one log line, on the precedent
    * `NetworksService` sets for the same situation.
    *
-   * **Falsy rather than `=== undefined`, and the difference is what makes the branch
-   * testable.** The only way to reach an unbound port from a test is to override the
-   * provider, and `useValue(undefined)` does not override — Nest reads an undefined value
-   * as no value and falls through to the real provider, which is how the first version of
-   * `network-change-port-unbound.e2e.spec.ts` got a `200` and read as a failed
-   * precondition. `useValue(null)` overrides, so the check has to admit `null` as well.
+   * **Falsy rather than `=== undefined`, and it is the test that needs the width rather
+   * than production.** Nest injects `undefined` for an unresolved `@Optional()` token, so
+   * `undefined` is the only state a deployment produces. A test overriding the *token*
+   * cannot reach it: `useValue(undefined)` does not override, because Nest reads an
+   * undefined value as no value and falls through to the real provider, which is how the
+   * first version of `network-change-port-unbound.e2e.spec.ts` got a `200` and read as a
+   * failed precondition. `useValue(null)` overrides, so the check admits `null` too.
+   *
+   * *A `=== null` check — the defect `ADMIN_ACCOUNTS_PORT` shipped with — cannot be
+   * written here: `recorded` is declared `?:`, so its type holds no `null` and the
+   * comparison is a type error. That port's field is declared `| null`, which is what
+   * made the dead check compile there.*
+   *
+   * *This paragraph claimed overriding the provider was "the only way to reach an unbound
+   * port from a test". That is false. `TestingModuleBuilder.overrideModule` replaces the
+   * binding module and reproduces the deployment fault exactly, and
+   * `cells-index-port-unbound.e2e.spec.ts` now does both. What that second block catches,
+   * verified by running the mutation, is the removal of `@Optional()` above: section 2
+   * requires an unbound inversion port to cost one operation rather than the whole
+   * application, and without it the application cannot be built at all — which the
+   * `null`-only suite stayed green through.*
    */
   private async recordedCounts(
     cellIds: readonly string[],
