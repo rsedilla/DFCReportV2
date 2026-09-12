@@ -71,7 +71,7 @@ export interface PersonForDecision {
 }
 
 /**
- * Reading a Person, and the church-wide directory search (SKILL.md sections 3 and
+ * Reading a Person, and the directory search (SKILL.md sections 3 and
  * 8).
  *
  * Separate from the write paths because it shares nothing with them: no
@@ -334,8 +334,8 @@ export class PeopleReadService {
     // that looked like two characters can arrive here empty: `Jr`, `II`, `--`,
     // two spaces. An empty term builds the pattern `%%`, which matches every row
     // -- the directory dump `escapeLike` was added to prevent, reached by a
-    // shorter route. Section 8 makes this search church-wide for identity
-    // resolution, not for bulk export.
+    // shorter route. Section 8's search is for identity resolution rather than
+    // bulk export, in either mode.
     if (normalized === '') {
       return { rows: [], nextCursor: null };
     }

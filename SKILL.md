@@ -2013,7 +2013,7 @@ construction.
 
 ### Church-wide search and duplicate prevention
 
-Leaders may search the church-wide Person directory by name, primarily for identity resolution and duplicate prevention (see Section 3, Duplicate prevention).
+Leaders may search the Person directory by name. **Its default is the searcher's own pastoral scope** (ruling of 2026-09-13, decision 0244); the church-wide directory is reached by asking for it. *This sentence read "the church-wide Person directory … primarily for identity resolution and duplicate prevention", and decision 0244 quotes it as the sentence its ground refutes: duplicate prevention is answered by the church-wide duplicate-candidate lookup of Section 3, never by this search. The glosses derived from it were corrected first and this was left, so the section stated the refuted purpose before stating the rule.*
 
 **Where that directory is offered is a separate question from what it returns, and the two are answered separately** (ruling of 2026-09-13, decision 0244). The **People screen lists only people within the searching leader's pastoral scope**, so a leader opening it is shown the people under their care rather than the whole church. The church-wide directory stays reachable wherever a task requires naming a specific person — adding a Person, adding a member to a Cell, naming a new pastoral leader on a reassignment — because those are pickers inside an operation rather than a place to look around. For an actor whose scope is the whole church the screen is unchanged, since their scope *is* the church.
 

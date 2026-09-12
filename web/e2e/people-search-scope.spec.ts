@@ -95,7 +95,7 @@ test.describe('what the People screen says when it finds nobody', () => {
     await page.getByRole('button', { name: 'Search' }).click();
 
     const main = page.locator('main');
-    await expect(main).toContainText('Nobody you pastor matches');
+    await expect(main).toContainText('Nobody you oversee matches');
 
     // **The sentence this replaced.** It read "This searched the whole church, not
     // only the people you pastor. If they are new, add them." — false after decision

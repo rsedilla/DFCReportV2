@@ -84,10 +84,10 @@ function PeopleSearch() {
     <main id="main" className={PAGE_WIDTH.INDEX}>
       <h1 className="text-2xl font-semibold tracking-tight">People</h1>
       <p className="text-muted mt-2 max-w-2xl text-sm leading-relaxed">
-        Search the people you pastor, by name. Somebody in another leader&rsquo;s care will not
-        appear here; when you add a person or add a member to a Cell, that search still
-        reaches the whole church, so you can find an existing record rather than create a
-        second one.
+        Search the people you oversee, by name. Somebody outside that will not appear
+        here; when you add a person or add a member to a Cell, that search still reaches
+        the whole church, so you can find an existing record rather than create a second
+        one.
       </p>
 
       {/*
@@ -133,10 +133,10 @@ function PeopleSearch() {
           <p className="text-muted text-sm">Searching…</p>
         ) : results.isError ? null : results.data.data.length === 0 ? (
           <div>
-            <p className="text-sm">Nobody you pastor matches &ldquo;{submitted}&rdquo;.</p>
+            <p className="text-sm">Nobody you oversee matches &ldquo;{submitted}&rdquo;.</p>
             <p className="text-muted mt-2 text-sm leading-relaxed">
-              They may still be somewhere else in the church. Adding a person searches
-              every branch as you type, so start there rather than assuming they are new.
+              They may still be elsewhere in the church. Adding a person searches every
+              branch as you type, so start there rather than assuming they are new.
             </p>
           </div>
         ) : (

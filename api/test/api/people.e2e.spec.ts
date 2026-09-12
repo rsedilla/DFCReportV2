@@ -13,7 +13,7 @@ import type { Database } from '../../src/database/schema';
 import type { TestAccount, TestPerson } from '../setup/fixtures';
 
 /**
- * `/api/v1/people` — creation, church-wide search, and the basic edit.
+ * `/api/v1/people` — creation, search, and the basic edit.
  *
  * The two rules worth the most care here are section 3's duplicate handling and
  * section 8's field-level scoping, because both fail quietly: a matcher that
@@ -987,10 +987,12 @@ describe('people (SKILL.md sections 3, 7 and 8)', () => {
     });
 
     it('pages within the restricted set, and never out of it', async () => {
-      // The paging case above this block uses an administrator, whose scope is the
-      // whole church -- so `restrictTo` is null there and the cursor is never
-      // exercised against a restricted set. A regression dropping the restriction
-      // whenever a cursor is present would stay green on it.
+      // The paging case in the `church-wide search` block below uses an
+      // administrator, whose scope is the whole church -- so `restrictTo` is null
+      // there and the cursor is never exercised against a restricted set. A
+      // regression dropping the restriction whenever a cursor is present would stay
+      // green on it. *This said "above this block", which is the wrong direction:
+      // that case is below, in the next describe.*
       for (const firstName of ['Aaron', 'Abel', 'Abner']) {
         const extra = await createPerson(db, { firstName, network: 'MENS' });
         await assignTo(db, extra.id, manuel.id);
@@ -998,8 +1000,14 @@ describe('people (SKILL.md sections 3, 7 and 8)', () => {
 
       const seen: string[] = [];
       let cursor: string | null = null;
+      // Counted, because every other assertion here passes on a single page. If
+      // `limit` stopped being honoured and one request returned all five, `seen`
+      // would still be five and the cursor still null -- and the cursor, which is
+      // what this case exists for, would never be exercised.
+      let requests = 0;
 
       for (let page = 0; page < 6; page += 1) {
+        requests += 1;
         const response: request.Response = await request(app.getHttpServer())
           .get('/api/v1/people')
           .query(
@@ -1019,6 +1027,9 @@ describe('people (SKILL.md sections 3, 7 and 8)', () => {
       }
 
       expect(cursor).toBeNull();
+      // More than one request, or the cursor was never exercised and this case is
+      // asserting a single page of five rather than paging through them.
+      expect(requests).toBeGreaterThan(1);
       // Five in scope: Raymond, Manuel, and the three just placed under Manuel.
       expect(seen).toHaveLength(5);
       expect(new Set(seen).size).toBe(5);
@@ -1096,9 +1107,17 @@ describe('people (SKILL.md sections 3, 7 and 8)', () => {
       });
     });
 
-    it('still finds people outside the scope, because that is what prevents duplicates', async () => {
-      // Narrowing the rows to the searcher's own subtree would defeat the purpose:
-      // they would create a second record for someone another leader already has.
+    it('the church-wide mode still reaches a person outside the searcher scope', async () => {
+      // What this pins is the wide mode, which the person pickers send. The rows a
+      // picker must reach are exactly these: section 10 makes Cell membership
+      // independent of pastoral assignment, so a Cell holds members its leader does
+      // not pastor.
+      //
+      // *This case was named "still finds people outside the scope, because that is
+      // what prevents duplicates", and its comment said narrowing the rows "would
+      // defeat the purpose". That is the argument decision 0244 refutes, and a test
+      // name is printed by the runner on every CI run -- the loudest of the six
+      // places it stood, and the one a sweep of the source files did not reach.*
       const response = await search(raymondAccount, 'Juan', { churchWide: true });
 
       expect((response.body.data as unknown[]).length).toBeGreaterThan(0);
