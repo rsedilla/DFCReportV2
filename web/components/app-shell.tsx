@@ -117,6 +117,31 @@ export function AppShell({ children }: { children: ReactNode }) {
           ...LINKS.slice(MY_NETWORK_AFTER),
         ];
 
+  // **One entry is current, and it is the most specific one that matches.**
+  //
+  // A prefix test alone marked two: My Network is `/people/{id}/network`, which
+  // starts with `/people/`, so People claimed the page as well. Both rendered
+  // underlined and both carried `aria-current="page"` — which is not a highlight
+  // that looks wrong but a second answer to "where am I", announced to a screen
+  // reader as two current pages.
+  //
+  // The prefix test itself is right and is kept: a person's profile is
+  // `/people/{id}` and belongs under People, which an exact match would lose. What
+  // was missing is that a longer match beats a shorter one, so `/people/{id}/network`
+  // resolves to My Network and `/people/{id}` still resolves to People.
+  //
+  // It is computed once here rather than per link, because "the most specific match"
+  // is a question about the whole list and cannot be answered from inside a `map`.
+  const currentHref = links.reduce<string | null>((best, link) => {
+    const matches = pathname === link.href || pathname.startsWith(`${link.href}/`);
+
+    if (!matches) {
+      return best;
+    }
+
+    return best === null || link.href.length > best.length ? link.href : best;
+  }, null);
+
   return (
     <RequireSession>
       {/*
@@ -145,7 +170,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             )}
           >
             {links.map((link) => {
-              const active = pathname === link.href || pathname.startsWith(`${link.href}/`);
+              const active = link.href === currentHref;
 
               return (
                 <Link
