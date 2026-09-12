@@ -15,8 +15,8 @@
  * decided by the palette, and a defect there is a defect on every screen at once.
  *
  * **What it cannot do is notice a pair nobody listed.** `bg-accent text-ink` is
- * idiomatic Tailwind and produces a 2.14:1 button, and no script checking a fixed
- * list will see it until the pair is added here. Adding a token, or using an
+ * idiomatic Tailwind and produces a 3.19:1 button in light and 1.59:1 in dark, and no
+ * script checking a fixed list will see it until the pair is added here. Adding a token, or using an
  * existing one in a new position, means adding the pair.
  *
  * The list is the set of combinations that *carry a contrast requirement*, not
@@ -49,9 +49,16 @@ const CSS = fileURLToPath(new URL('../app/globals.css', import.meta.url));
  *
  * What that symmetry does not tell you is which direction is *permitted*, and
  * the palette has one trap worth naming. `accent` as a background is a primary
- * button, and the only foregrounds that clear 4.5:1 on it are `surface` and
- * `raised`. `ink` on `accent` is 2.14:1 and `muted` on `accent` is 1.37:1. Both
- * are one Tailwind class away and neither can be caught here.
+ * button, and `surface` and `raised` are the only foregrounds clearing 4.5:1 on it
+ * in *both* themes. `ink` on `accent` is 3.19:1 in light and 1.59:1 in dark;
+ * `muted` on `accent` is 1.23:1 and 1.33:1. Each is one Tailwind class away and
+ * none can be caught here.
+ *
+ * *`line` clears 4.5:1 on the dark accent, at 7.08:1, and does not in light, at
+ * 4.19:1 — so it is not a third safe foreground, and it is a decorative divider
+ * rather than a text token in any case. The earlier wording said `surface` and
+ * `raised` were the only two full stop, which the teal palette made false in one
+ * theme.*
  */
 const TEXT_PAIRS = [
   ['ink', 'surface'],
@@ -64,7 +71,7 @@ const TEXT_PAIRS = [
   // position no pair here covered. `surface` is the foreground for it in both
   // themes, and the pair is listed because the palette comment says a
   // combination nobody lists is one this check cannot see: `bg-accent text-ink`
-  // is 2.14:1 and would have passed lint unnoticed.
+  // is 3.19:1 in light and 1.59:1 in dark, and would have passed lint unnoticed.
   ['surface', 'accent'],
   // `field-invalid` is *also* body text: the message beside an invalid field,
   // and the form-level refusal on sign-in, both render in it at `text-sm`.
