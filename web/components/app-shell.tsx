@@ -139,7 +139,22 @@ export function AppShell({ children }: { children: ReactNode }) {
                   className={cn(
                     'focus-visible:outline-accent inline-flex min-h-11 items-center rounded-md px-3',
                     'text-sm focus-visible:outline-2 focus-visible:outline-offset-2',
-                    active ? 'text-ink font-medium underline underline-offset-8' : 'text-muted',
+                    // **`accent` carries the current page, and the underline and weight
+                    // stay.** They are not decoration left over from an earlier version:
+                    // 1.4.1 forbids colour as the only carrier of information, so
+                    // removing either would make this an accessibility defect rather
+                    // than a tidier class list. `aria-current` above covers assistive
+                    // technology and the underline covers a sighted reader who cannot
+                    // separate the two hues.
+                    //
+                    // `accent` on `surface` is a pair `check-contrast.mjs` already holds
+                    // in both themes, because `body` is `bg-surface` and this header
+                    // declares no background of its own. Using the token in this new
+                    // position therefore adds no pair — which is the one thing that
+                    // check cannot notice for itself.
+                    active
+                      ? 'text-accent font-medium underline underline-offset-8'
+                      : 'text-muted',
                   )}
                 >
                   {link.label}
