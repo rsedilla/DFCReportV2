@@ -42,8 +42,8 @@
  * `scripts/check-contrast.mjs` runs in lint and checks the pairs it lists: text
  * against its backgrounds both ways round, and `edge` against its backgrounds. It
  * does not check `line`, which is decorative and exempt, and it cannot see a
- * combination nobody listed — `bg-accent text-ink` is 2.14:1 and would pass lint
- * unnoticed. Using a token in a new position means adding the pair there. The
+ * combination nobody listed — `bg-accent text-ink` is 3.19:1 in light and 1.59:1 in
+ * dark, and would pass lint unnoticed. Using a token in a new position means adding the pair there. The
  * same check refuses a token named for a judgement.
  */
 @theme inline {
@@ -70,25 +70,25 @@
   color-scheme: light dark;
 
   --surface: #ffffff;
-  --raised: #f7f8f9;
-  --ink: #16191d;
-  --muted: #5b6470;
-  --line: #e2e6ea;
-  --edge: #767f8a;
-  --accent: #1f4f8b;
-  --field-invalid: #a4262c;
+  --raised: #f1f8f7;
+  --ink: #12211f;
+  --muted: #4d6360;
+  --line: #daeae7;
+  --edge: #688381;
+  --accent: #0d7a6f;
+  --field-invalid: #b3261e;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --surface: #14171a;
-    --raised: #1b1f24;
-    --ink: #e9edf1;
-    --muted: #9aa5b1;
-    --line: #2a2f36;
-    --edge: #6b7480;
-    --accent: #8ab4e8;
-    --field-invalid: #f29d9a;
+    --surface: #101817;
+    --raised: #172321;
+    --ink: #e6f1ef;
+    --muted: #92aba7;
+    --line: #263431;
+    --edge: #6d8784;
+    --accent: #5ed2c0;
+    --field-invalid: #f2a3a0;
   }
 }
 
