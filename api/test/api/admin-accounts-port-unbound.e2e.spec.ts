@@ -40,8 +40,10 @@ import type { TestAccount, TestPerson } from '../setup/fixtures';
  * `undefined` was unreachable from a test. That was false — `TestingModuleBuilder` carries
  * `overrideModule`, which replaces the binding module itself and reproduces the deployment
  * fault exactly. `architecture-guardian` found it by reverting the fix and watching all
- * three cases stay green. The same false claim stands in `cells-index-port-unbound`, whose
- * port has the same gap.*
+ * three cases stay green. The same false claim stood in both other port suites and has
+ * been corrected in both: `cells-index-port-unbound`, which this sentence named, and
+ * `network-change-port-unbound`, which it did not — that one was found by grepping all
+ * three suites for `overrideModule`, which is the sweep that naming one copy does not do.*
  *
  * **What refusing buys.** The alternative reading is to skip the port and answer without
  * section 5's administrator exclusion, which would put an administrator's entire disciple
