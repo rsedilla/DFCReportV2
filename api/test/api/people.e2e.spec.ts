@@ -13,7 +13,7 @@ import type { Database } from '../../src/database/schema';
 import type { TestAccount, TestPerson } from '../setup/fixtures';
 
 /**
- * `/api/v1/people` — creation, church-wide search, and the basic edit.
+ * `/api/v1/people` — creation, search, and the basic edit.
  *
  * The two rules worth the most care here are section 3's duplicate handling and
  * section 8's field-level scoping, because both fail quietly: a matcher that
@@ -909,6 +909,161 @@ describe('people (SKILL.md sections 3, 7 and 8)', () => {
     }
   });
 
+  describe('the scope of the rows (SKILL.md section 8, decision 0244)', () => {
+    it('returns only the searcher own scope when nothing asks for wider', async () => {
+      // Raymond oversees Manuel. Rico and Juan are the sibling branch he does not,
+      // which is the whole point of this fixture.
+      const response = await search(raymondAccount, 'Testfixture');
+
+      expect(response.status).toBe(200);
+      const ids = (response.body.data as { id: string }[]).map((row) => row.id);
+
+      expect(ids).toContain(manuel.id);
+      expect(ids).toContain(raymond.id);
+      expect(ids).not.toContain(juan.id);
+      expect(ids).not.toContain(rico.id);
+      expect(ids).not.toContain(geraldine.id);
+    });
+
+    it('returns the church when asked, which is what the pickers ask', async () => {
+      const response = await search(raymondAccount, 'Testfixture', { churchWide: true });
+
+      expect(response.status).toBe(200);
+      const ids = (response.body.data as { id: string }[]).map((row) => row.id);
+
+      expect(ids).toContain(juan.id);
+      expect(ids).toContain(rico.id);
+    });
+
+    it('widens the rows and never the fields', async () => {
+      // The load-bearing case. If `church_wide` ever came to mean "and show more
+      // about them", it would turn a display flag into a grant of authority.
+      // Section 8 permits five fields for somebody outside the actor scope,
+      // asserted here as the whole key set rather than a spot check.
+      const response = await search(raymondAccount, 'Juan', { churchWide: true });
+
+      const found = (response.body.data as Record<string, unknown>[]).find(
+        (row) => row.id === juan.id,
+      );
+
+      expect(found).toBeDefined();
+      expect(Object.keys(found as object).sort()).toEqual([
+        'direct_leader_name',
+        'full_name',
+        'id',
+        'member_id',
+        'network',
+        'scope',
+        'sex',
+      ]);
+    });
+
+    it('changes nothing for an actor whose scope is the whole church', async () => {
+      // An administrator holds Whole Church, so narrow and wide are the same
+      // question asked twice. A regression that narrowed them would show here.
+      const narrow = await search(adminAccount, 'Testfixture');
+      const wide = await search(adminAccount, 'Testfixture', { churchWide: true });
+
+      const idsOf = (response: { body: { data: { id: string }[] } }) =>
+        response.body.data.map((row) => row.id).sort();
+
+      expect(idsOf(narrow)).toEqual(idsOf(wide));
+      expect(idsOf(narrow)).toContain(juan.id);
+    });
+
+    it('spends the page limit on rows it returns, not on rows it discards', async () => {
+      // The reason the restriction is applied in SQL rather than to the returned
+      // page. Church-wide order here is Ester, Geraldine, Juan, Manuel, Oriel,
+      // Raymond, Rico -- so a post-filter at `limit: 2` would take Ester and
+      // Geraldine, discard both, and answer zero rows while two matches remained.
+      //
+      // **What it pins is the two rows, and not the cursor.** Raymond's scope is
+      // exactly two people, so this asks for the whole of it and reaches no page
+      // boundary inside it. The case below is the one that pages.
+      const response = await search(raymondAccount, 'Testfixture', { limit: 2 });
+
+      expect(response.status).toBe(200);
+      expect((response.body.data as unknown[]).length).toBe(2);
+    });
+
+    it('pages within the restricted set, and never out of it', async () => {
+      // The paging case in the `church-wide search` block below uses an
+      // administrator, whose scope is the whole church -- so `restrictTo` is null
+      // there and the cursor is never exercised against a restricted set. A
+      // regression dropping the restriction whenever a cursor is present would stay
+      // green on it. *This said "above this block", which is the wrong direction:
+      // that case is below, in the next describe.*
+      for (const firstName of ['Aaron', 'Abel', 'Abner']) {
+        const extra = await createPerson(db, { firstName, network: 'MENS' });
+        await assignTo(db, extra.id, manuel.id);
+      }
+
+      const seen: string[] = [];
+      let cursor: string | null = null;
+      // Counted, because every other assertion here passes on a single page. If
+      // `limit` stopped being honoured and one request returned all five, `seen`
+      // would still be five and the cursor still null -- and the cursor, which is
+      // what this case exists for, would never be exercised.
+      let requests = 0;
+
+      for (let page = 0; page < 6; page += 1) {
+        requests += 1;
+        const response: request.Response = await request(app.getHttpServer())
+          .get('/api/v1/people')
+          .query(
+            cursor === null
+              ? { q: 'Testfixture', limit: 2 }
+              : { q: 'Testfixture', limit: 2, cursor },
+          )
+          .set('Authorization', `Bearer ${raymondAccount.accessToken}`);
+
+        expect(response.status).toBe(200);
+        seen.push(...(response.body.data as { id: string }[]).map((row) => row.id));
+
+        cursor = response.body.next_cursor as string | null;
+        if (cursor === null) {
+          break;
+        }
+      }
+
+      expect(cursor).toBeNull();
+      // More than one request, or the cursor was never exercised and this case is
+      // asserting a single page of five rather than paging through them.
+      expect(requests).toBeGreaterThan(1);
+      // Five in scope: Raymond, Manuel, and the three just placed under Manuel.
+      expect(seen).toHaveLength(5);
+      expect(new Set(seen).size).toBe(5);
+      expect(seen).not.toContain(juan.id);
+      expect(seen).not.toContain(rico.id);
+      expect(seen).not.toContain(geraldine.id);
+    });
+
+    it('refuses a church_wide value it does not define', async () => {
+      // Sections 22 and decisions 0185, 0199 and 0200: a value the API does not
+      // define is refused at the edge rather than absorbed. `banana` answered 200
+      // with the narrow result before this -- fail-closed, and still a value nobody
+      // defined being accepted. Reproduced against the running API at 200.
+      const response = await request(app.getHttpServer())
+        .get('/api/v1/people')
+        .query({ q: 'Testfixture', church_wide: 'banana' })
+        .set('Authorization', `Bearer ${raymondAccount.accessToken}`);
+
+      expect(response.status).toBe(422);
+      expect(response.body.error.code).toBe('VALIDATION_FAILED');
+    });
+
+    it('still accepts the two values it does define', async () => {
+      for (const value of ['true', 'false']) {
+        const response = await request(app.getHttpServer())
+          .get('/api/v1/people')
+          .query({ q: 'Testfixture', church_wide: value })
+          .set('Authorization', `Bearer ${raymondAccount.accessToken}`);
+
+        expect(response.status).toBe(200);
+      }
+    });
+  });
+
   describe('church-wide search (SKILL.md section 8)', () => {
     it('returns the full profile for someone in the searcher scope', async () => {
       const response = await search(raymondAccount, 'Manuel');
@@ -929,7 +1084,7 @@ describe('people (SKILL.md sections 3, 7 and 8)', () => {
       // the current direct leader's name. Everything else is withheld -- and the
       // assertion is on the whole key set, so a field added to the profile later
       // cannot leak here unnoticed.
-      const response = await search(raymondAccount, 'Juan');
+      const response = await search(raymondAccount, 'Juan', { churchWide: true });
 
       const found = (response.body.data as Record<string, unknown>[]).find(
         (row) => row.id === juan.id,
@@ -952,10 +1107,18 @@ describe('people (SKILL.md sections 3, 7 and 8)', () => {
       });
     });
 
-    it('still finds people outside the scope, because that is what prevents duplicates', async () => {
-      // Narrowing the rows to the searcher's own subtree would defeat the purpose:
-      // they would create a second record for someone another leader already has.
-      const response = await search(raymondAccount, 'Juan');
+    it('the church-wide mode still reaches a person outside the searcher scope', async () => {
+      // What this pins is the wide mode, which the person pickers send. The rows a
+      // picker must reach are exactly these: section 10 makes Cell membership
+      // independent of pastoral assignment, so a Cell holds members its leader does
+      // not pastor.
+      //
+      // *This case was named "still finds people outside the scope, because that is
+      // what prevents duplicates", and its comment said narrowing the rows "would
+      // defeat the purpose". That is the argument decision 0244 refutes, and a test
+      // name is printed by the runner on every CI run -- the loudest of the six
+      // places it stood, and the one a sweep of the source files did not reach.*
+      const response = await search(raymondAccount, 'Juan', { churchWide: true });
 
       expect((response.body.data as unknown[]).length).toBeGreaterThan(0);
     });
@@ -965,7 +1128,7 @@ describe('people (SKILL.md sections 3, 7 and 8)', () => {
       // the pattern `%%` -- the directory dump the LIKE escaping was added to
       // prevent, reached by a shorter route.
       for (const q of ['Jr', 'II', '  ']) {
-        const response = await search(raymondAccount, q);
+        const response = await search(raymondAccount, q, { churchWide: true });
 
         expect(response.status).toBe(200);
         expect(response.body.data).toEqual([]);
@@ -973,7 +1136,7 @@ describe('people (SKILL.md sections 3, 7 and 8)', () => {
     });
 
     it('pages with an opaque cursor and no total', async () => {
-      const first = await search(adminAccount, 'Testfixture', 2);
+      const first = await search(adminAccount, 'Testfixture', { limit: 2 });
 
       expect(first.status).toBe(200);
       expect((first.body.data as unknown[]).length).toBe(2);
@@ -1334,10 +1497,29 @@ describe('people (SKILL.md sections 3, 7 and 8)', () => {
     });
   });
 
-  function search(actor: TestAccount, q: string, limit?: number) {
+  /**
+   * The search, narrowed to the actor's own scope unless `churchWide` is passed
+   * (SKILL.md section 8, decision 0244).
+   *
+   * The flag is explicit at every call site rather than defaulted here, because
+   * which of the two a case exercises is the thing most of these cases are about.
+   */
+  function search(
+    actor: TestAccount,
+    q: string,
+    options: { limit?: number; churchWide?: boolean } = {},
+  ) {
+    const query: Record<string, string | number | boolean> = { q };
+    if (options.limit !== undefined) {
+      query.limit = options.limit;
+    }
+    if (options.churchWide) {
+      query.church_wide = true;
+    }
+
     return request(app.getHttpServer())
       .get('/api/v1/people')
-      .query(limit === undefined ? { q } : { q, limit })
+      .query(query)
       .set('Authorization', `Bearer ${actor.accessToken}`);
   }
 });
