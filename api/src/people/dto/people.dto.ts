@@ -1,5 +1,6 @@
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import {
+  IsBoolean,
   ArrayMaxSize,
   IsArray,
   IsIn,
@@ -384,4 +385,29 @@ export class SearchPeopleDto {
   @Min(1)
   @Max(200)
   limit?: number;
+
+  /**
+   * Whether this search may return people outside the searcher's pastoral scope
+   * (SKILL.md section 8, ruling of 2026-09-13, decision 0244).
+   *
+   * **Absent means no, and that direction is the point.** Section 8 narrows the
+   * People *screen* to the searcher's own scope while keeping the church-wide
+   * directory reachable where a task names a specific person. Defaulting to the
+   * narrow answer means a surface added later is private unless somebody opts it
+   * out, rather than church-wide unless somebody remembers to opt it in.
+   *
+   * `true` restores exactly the previous behaviour: every match in the church, with
+   * the fields scoped per person rather than the rows. It is what the three person
+   * pickers send, and nothing else should.
+   *
+   * **It widens no authority.** The capability guarding this route is unchanged and
+   * its scope still decides what a `true` here can reach; the flag chooses only
+   * whether that scope filters the rows as well as the fields. A Leader sending
+   * `true` gets what section 8 already publishes church-wide — five fields for a
+   * person outside their scope — and nothing more.
+   */
+  @IsOptional()
+  @Transform(({ value }) => value === 'true' || value === true)
+  @IsBoolean()
+  church_wide?: boolean;
 }

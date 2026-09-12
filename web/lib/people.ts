@@ -70,14 +70,28 @@ export interface PersonPage {
  */
 export const MINIMUM_SEARCH_LENGTH = 2;
 
+/**
+ * Search by name.
+ *
+ * **`churchWide` defaults to false, and the default is the rule rather than a
+ * convenience** (SKILL.md section 8, decision 0244). The People screen shows the
+ * people a leader pastors; the church-wide directory stays reachable from the
+ * person pickers, where a task already names somebody specific. A caller that
+ * says nothing gets the narrow answer, so a screen added later is private unless
+ * it deliberately opts out.
+ */
 export async function searchPeople(
   q: string,
   cursor: string | null,
   signal?: AbortSignal,
+  options: { churchWide?: boolean } = {},
 ): Promise<PersonPage> {
   const params = new URLSearchParams({ q });
   if (cursor) {
     params.set('cursor', cursor);
+  }
+  if (options.churchWide) {
+    params.set('church_wide', 'true');
   }
 
   return authenticatedRequest<PersonPage>(`/api/v1/people?${params.toString()}`, { signal });

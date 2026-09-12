@@ -347,13 +347,32 @@ export class PeopleController {
   }
 
   /**
-   * Church-wide search, by name (section 8).
+   * Search by name (section 8), narrowed to the searcher's scope unless asked wider.
    *
-   * **Deliberately not guarded by a subtree scope on the result.** Section 8 says
-   * a leader may search the whole directory precisely so that duplicate
-   * prevention works, and narrowing the search to their own subtree would defeat
-   * it — they would create a second record for somebody another leader already
-   * has. What is scoped is the *fields*, not the rows.
+   * **Both the rows and the fields are scoped, and they are scoped separately.**
+   * The fields have always been: a person outside the actor's pastoral scope comes
+   * back as `minimalIdentity`, five fields, and that is unchanged. The rows are new
+   * (ruling of 2026-09-13, decision 0244) — absent `church_wide`, the query returns
+   * only people the actor's `people.view_subtree` grant reaches.
+   *
+   * *This docblock previously said the route was "deliberately not guarded by a
+   * subtree scope on the result", because narrowing it "would defeat" duplicate
+   * prevention: a leader would create a second record for somebody another leader
+   * already has. **That was false**, and the ruling records the refutation rather
+   * than deleting the claim. Duplicate prevention is answered by
+   * `GET /people/duplicate-candidates`, which the Add a Person screen calls as a
+   * name is typed and which reaches the whole church whatever this route returns.
+   * The argument had been written into the code as the design's reason, so a reader
+   * checking the reasoning would have found it here and agreed with it.*
+   *
+   * **The capability is unchanged and so is what it authorizes.** `church_wide`
+   * does not widen a grant; it chooses whether the grant's scope filters rows as
+   * well as fields. A Leader sending it receives what section 8 already publishes
+   * church-wide and nothing further.
+   *
+   * The scope set is fetched once and handed to the query, rather than the page
+   * being filtered after it returns — see `searchByName` for why that distinction
+   * is not cosmetic.
    */
   @Get()
   @RequiresCapability(Capability.PeopleViewSubtree, { kind: 'actor' })
@@ -361,10 +380,19 @@ export class PeopleController {
     @Query() query: SearchPeopleDto,
     @CurrentActor() actor: Actor,
   ): Promise<{ data: Record<string, unknown>[]; next_cursor: string | null }> {
+    // Whole Church needs no restriction: the set would be every row, and asking
+    // for it would materialise the directory to filter it against itself.
+    const membership = query.church_wide
+      ? null
+      : await this.authorization.scopeMembership(actor, Capability.PeopleViewSubtree);
+    const restrictTo =
+      membership === null || membership.kind === 'WHOLE_CHURCH' ? null : membership.personIds;
+
     const { rows, nextCursor } = await this.read.searchByName(
       query.q,
       query.limit ?? 50,
       decodeCursor(query.cursor),
+      restrictTo,
     );
 
     const data = await Promise.all(

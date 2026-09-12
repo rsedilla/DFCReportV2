@@ -77,9 +77,10 @@ function PeopleSearch() {
     <main id="main" className={PAGE_WIDTH.INDEX}>
       <h1 className="text-2xl font-semibold tracking-tight">People</h1>
       <p className="text-muted mt-2 max-w-2xl text-sm leading-relaxed">
-        Search everyone in the church by name. You will see the details of people you pastor;
-        for everyone else you will see who they are and who leads them, so you can ask rather
-        than create a second record.
+        Search the people you pastor, by name. Somebody in another leader&rsquo;s care will not
+        appear here; when you add a person or add a member to a Cell, that search still
+        reaches the whole church, so you can find an existing record rather than create a
+        second one.
       </p>
 
       {/*
