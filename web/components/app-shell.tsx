@@ -119,11 +119,30 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   return (
     <RequireSession>
-      <div className="min-h-dvh">
-        <header className="border-line border-b">
+      {/*
+        **One navigation, arranged two ways by the width of the window** (SKILL.md
+        section 19, "The sidebar is navigation"). Below `lg` it is the bar across the
+        top it has always been; at `lg` and above it stands beside the page as the
+        sidebar that section describes.
+
+        **Width, never the device.** Nothing here asks what a phone is: a phone turned
+        landscape is wider than a narrow laptop window, someone half-screening a browser
+        wants the narrow layout, and an installed PWA is a window like any other. The
+        breakpoint is the only question asked.
+
+        **One list rendered once.** The links are built above and the same markup serves
+        both arrangements, so a link cannot exist in one layout and not the other, and
+        nothing is hidden from a screen reader to make a layout work.
+      */}
+      <div className="min-h-dvh lg:flex">
+        <header className="border-line border-b lg:w-60 lg:shrink-0 lg:border-r lg:border-b-0">
           <nav
             aria-label="Main"
-            className="mx-auto flex max-w-5xl flex-wrap items-center gap-1 px-5 py-2"
+            className={cn(
+              'mx-auto flex max-w-5xl flex-wrap items-center gap-1 px-5 py-2',
+              'lg:mx-0 lg:h-dvh lg:max-w-none lg:flex-col lg:flex-nowrap',
+              'lg:items-stretch lg:gap-0.5 lg:overflow-y-auto lg:py-6',
+            )}
           >
             {links.map((link) => {
               const active = pathname === link.href || pathname.startsWith(`${link.href}/`);
@@ -139,6 +158,9 @@ export function AppShell({ children }: { children: ReactNode }) {
                   className={cn(
                     'focus-visible:outline-accent inline-flex min-h-11 items-center rounded-md px-3',
                     'text-sm focus-visible:outline-2 focus-visible:outline-offset-2',
+                    // The sidebar is a column, so a link fills its width and the
+                    // target grows rather than staying a word-shaped strip (2.5.8).
+                    'lg:w-full',
                     active ? 'text-ink font-medium underline underline-offset-8' : 'text-muted',
                   )}
                 >
@@ -149,7 +171,13 @@ export function AppShell({ children }: { children: ReactNode }) {
           </nav>
         </header>
 
-        {children}
+        {/*
+          `min-w-0` so a wide table inside a page scrolls within its own container
+          rather than stretching this column and pushing the sidebar off screen —
+          the rule every page already follows for itself, applied to the flex child
+          that now holds them.
+        */}
+        <div className="lg:min-w-0 lg:flex-1">{children}</div>
       </div>
     </RequireSession>
   );
