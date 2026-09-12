@@ -6,9 +6,9 @@ import { mockPeople, mockSignedIn } from './mock-api';
  * Which search each surface asks for (SKILL.md section 8, decision 0244).
  *
  * The People screen shows the people a leader pastors. The three person pickers —
- * Add a Person, Add a member to a Cell, choose whose network to view — keep the
- * church-wide directory, because each names one specific person for one operation
- * rather than offering a place to look around.
+ * Add a Person, Add a member to a Cell, and naming a new pastoral leader on a
+ * reassignment — keep the church-wide directory, because each names one specific
+ * person for one operation rather than offering a place to look around.
  *
  * **This asserts the request rather than the rendered rows, and that is the point.**
  * The narrowing is enforced by the API: the rows a leader may see are decided there,
@@ -76,5 +76,31 @@ test.describe('which search each surface asks for', () => {
       searches.some((url) => url.includes('church_wide=true')),
       'the picker narrowed itself to the actor scope, which would make a person in another branch unreachable',
     ).toBe(true);
+  });
+});
+
+test.describe('what the People screen says when it finds nobody', () => {
+  test('does not claim it searched the whole church', async ({ page }) => {
+    await mockSignedIn(page);
+    await page.route('**/api/v1/people?*', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ data: [], next_cursor: null }),
+      }),
+    );
+
+    await page.goto('/people');
+    await page.getByLabel('Search by name').fill('Nobodyhere');
+    await page.getByRole('button', { name: 'Search' }).click();
+
+    const main = page.locator('main');
+    await expect(main).toContainText('Nobody you pastor matches');
+
+    // **The sentence this replaced.** It read "This searched the whole church, not
+    // only the people you pastor. If they are new, add them." — false after decision
+    // 0244, and an instruction to create the duplicate on the one screen the ruling
+    // narrows. It survived 402 browser tests because none of them read this copy.
+    await expect(main).not.toContainText('searched the whole church');
   });
 });

@@ -13,9 +13,18 @@ Network's members as a matter of course.
 **The People screen lists only people within the searching leader's pastoral scope.**
 
 **The church-wide directory is unchanged and stays reachable where a task names a
-specific person** — adding a Person, adding a member to a Cell, and choosing whose
-network to view. Those are person *pickers* inside an operation, not a place to look
-around.
+specific person** — adding a Person, adding a member to a Cell, and naming a new
+pastoral leader on a reassignment. Those are person *pickers* inside an operation, not a
+place to look around.
+
+*The third was described here as "choosing whose network to view", which is a link from
+a person's page and uses no picker at all. It is `/people/{id}/network`'s reassignment
+control, whose own screen calls reassignment the highest-risk authorization surface in
+the system. The correction is recorded because the ruling's ground — that a picker names
+one person for one operation rather than offering a place to look around — is true of it,
+and was never argued about a surface where naming an out-of-scope person is a Section 5
+write attempt rather than a read. It is refused server-side by Section 5 invariant 1,
+and it was church-wide before this ruling and is unchanged by it.*
 
 **The five fields are untouched.** Nothing becomes visible that was not, and nothing
 becomes invisible that a rule required. What moves is which surface presents them

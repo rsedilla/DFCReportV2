@@ -407,7 +407,14 @@ export class SearchPeopleDto {
    * person outside their scope — and nothing more.
    */
   @IsOptional()
-  @Transform(({ value }) => value === 'true' || value === true)
+  // **Anything but `true` or `false` is left alone so `@IsBoolean()` refuses it.**
+  // A transform of the form `value === 'true'` always yields a boolean, so the
+  // validator below it can never fail and `church_wide=banana` is absorbed as
+  // `false` — fail-closed, and still a value the API does not define being
+  // accepted rather than refused at the edge, which is the line decisions 0185,
+  // 0199 and 0200 draw. Reproduced against the running API at `200` before this
+  // was written.
+  @Transform(({ value }) => (value === 'true' ? true : value === 'false' ? false : value))
   @IsBoolean()
   church_wide?: boolean;
 }

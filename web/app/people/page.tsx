@@ -21,14 +21,21 @@ import {
 import { cn } from '@/lib/utils';
 
 /**
- * Church-wide people search (SKILL.md section 8).
+ * People search, over the searcher's own pastoral scope (SKILL.md section 8).
  *
- * **The directory is church-wide on purpose, and this screen must not narrow
- * it.** Section 8 lets a leader search every name in the church precisely so that
- * duplicate prevention works: scoping results to their own subtree would have
- * them create a second record for somebody another leader already holds, which
- * is the failure section 3's whole matching apparatus exists to prevent. What is
- * scoped is the *fields*, not the rows.
+ * **This screen narrows the directory, and that is the ruling rather than an
+ * omission** (decision 0244). A leader opening People sees the people they
+ * pastor; the church-wide directory stays reachable from the person pickers,
+ * where a task already names somebody specific.
+ *
+ * *This docblock said the opposite in terms — that the screen "must not narrow"
+ * the directory, because scoping the rows "would have them create a second record
+ * for somebody another leader already holds". That was the argument the ruling
+ * refutes. Duplicate prevention is answered by the church-wide duplicate-candidate
+ * lookup, which `/people/new` fires as a name is typed and which `people.create`
+ * backs with its own church-wide refusal. It never ran through this screen.*
+ *
+ * Both are scoped now: the rows by the request, the fields per person as before.
  *
  * **So a row comes back in one of two shapes, and the difference is stated
  * rather than implied.** For somebody outside the viewer's pastoral scope the
@@ -126,10 +133,10 @@ function PeopleSearch() {
           <p className="text-muted text-sm">Searching…</p>
         ) : results.isError ? null : results.data.data.length === 0 ? (
           <div>
-            <p className="text-sm">Nobody matches “{submitted}”.</p>
+            <p className="text-sm">Nobody you pastor matches &ldquo;{submitted}&rdquo;.</p>
             <p className="text-muted mt-2 text-sm leading-relaxed">
-              This searched the whole church, not only the people you pastor. If they are new,
-              add them.
+              They may still be somewhere else in the church. Adding a person searches
+              every branch as you type, so start there rather than assuming they are new.
             </p>
           </div>
         ) : (

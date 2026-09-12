@@ -973,13 +973,83 @@ describe('people (SKILL.md sections 3, 7 and 8)', () => {
 
     it('spends the page limit on rows it returns, not on rows it discards', async () => {
       // The reason the restriction is applied in SQL rather than to the returned
-      // page. Filtering afterwards would let a `limit` be consumed by out-of-scope
-      // rows, so a caller asking for two could be handed none while matches
-      // remained -- and the null cursor would call that the last page.
+      // page. Church-wide order here is Ester, Geraldine, Juan, Manuel, Oriel,
+      // Raymond, Rico -- so a post-filter at `limit: 2` would take Ester and
+      // Geraldine, discard both, and answer zero rows while two matches remained.
+      //
+      // **What it pins is the two rows, and not the cursor.** Raymond's scope is
+      // exactly two people, so this asks for the whole of it and reaches no page
+      // boundary inside it. The case below is the one that pages.
       const response = await search(raymondAccount, 'Testfixture', { limit: 2 });
 
       expect(response.status).toBe(200);
       expect((response.body.data as unknown[]).length).toBe(2);
+    });
+
+    it('pages within the restricted set, and never out of it', async () => {
+      // The paging case above this block uses an administrator, whose scope is the
+      // whole church -- so `restrictTo` is null there and the cursor is never
+      // exercised against a restricted set. A regression dropping the restriction
+      // whenever a cursor is present would stay green on it.
+      for (const firstName of ['Aaron', 'Abel', 'Abner']) {
+        const extra = await createPerson(db, { firstName, network: 'MENS' });
+        await assignTo(db, extra.id, manuel.id);
+      }
+
+      const seen: string[] = [];
+      let cursor: string | null = null;
+
+      for (let page = 0; page < 6; page += 1) {
+        const response: request.Response = await request(app.getHttpServer())
+          .get('/api/v1/people')
+          .query(
+            cursor === null
+              ? { q: 'Testfixture', limit: 2 }
+              : { q: 'Testfixture', limit: 2, cursor },
+          )
+          .set('Authorization', `Bearer ${raymondAccount.accessToken}`);
+
+        expect(response.status).toBe(200);
+        seen.push(...(response.body.data as { id: string }[]).map((row) => row.id));
+
+        cursor = response.body.next_cursor as string | null;
+        if (cursor === null) {
+          break;
+        }
+      }
+
+      expect(cursor).toBeNull();
+      // Five in scope: Raymond, Manuel, and the three just placed under Manuel.
+      expect(seen).toHaveLength(5);
+      expect(new Set(seen).size).toBe(5);
+      expect(seen).not.toContain(juan.id);
+      expect(seen).not.toContain(rico.id);
+      expect(seen).not.toContain(geraldine.id);
+    });
+
+    it('refuses a church_wide value it does not define', async () => {
+      // Sections 22 and decisions 0185, 0199 and 0200: a value the API does not
+      // define is refused at the edge rather than absorbed. `banana` answered 200
+      // with the narrow result before this -- fail-closed, and still a value nobody
+      // defined being accepted. Reproduced against the running API at 200.
+      const response = await request(app.getHttpServer())
+        .get('/api/v1/people')
+        .query({ q: 'Testfixture', church_wide: 'banana' })
+        .set('Authorization', `Bearer ${raymondAccount.accessToken}`);
+
+      expect(response.status).toBe(422);
+      expect(response.body.error.code).toBe('VALIDATION_FAILED');
+    });
+
+    it('still accepts the two values it does define', async () => {
+      for (const value of ['true', 'false']) {
+        const response = await request(app.getHttpServer())
+          .get('/api/v1/people')
+          .query({ q: 'Testfixture', church_wide: value })
+          .set('Authorization', `Bearer ${raymondAccount.accessToken}`);
+
+        expect(response.status).toBe(200);
+      }
     });
   });
 

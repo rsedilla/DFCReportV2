@@ -322,9 +322,10 @@ export class PeopleReadService {
     restrictTo: ReadonlySet<string> | null = null,
   ): Promise<{ rows: PersonRecord[]; nextCursor: SearchCursor | null }> {
     // Both sides normalized. Normalizing only the term meant `Nuñez` was searched
-    // for as `nunez` against a raw stored `Nuñez` and never found -- and section 8
-    // makes this search the mechanism section 3's duplicate prevention depends on,
-    // so a miss here creates the duplicate.
+    // for as `nunez` against a raw stored `Nuñez` and never found -- and a miss here
+    // loses somebody from their own leader's list. *This said section 8 makes this
+    // search the mechanism section 3's duplicate prevention depends on; since
+    // decision 0244 that is `duplicate-candidates`, which this method is not.*
     //
     // `%` and `_` are escaped: unescaped, `q=%%` pages out the whole directory.
     const normalized = normalizeName(term);
@@ -339,9 +340,16 @@ export class PeopleReadService {
       return { rows: [], nextCursor: null };
     }
 
-    // An empty restriction is not an absent one. A leader whose scope reaches
-    // nobody gets no rows, where `in []` would be malformed SQL and dropping the
-    // clause would hand them the church.
+    // An empty restriction is not an absent one: `in ()` is malformed SQL, and
+    // dropping the clause instead would hand the caller the church.
+    //
+    // **Unreachable today, and kept anyway.** `subtreeOf` seeds at the actor, so
+    // `OWN_SUBTREE` always contains them; `SUBTREE_EXCL_SELF` cannot pass this
+    // route's `{ kind: 'actor' }` guard at all; and a `NETWORK` grant covering the
+    // actor enumerates at least the actor. So no caller can produce an empty set
+    // through the route as it stands. It is a guard against the next scope kind
+    // rather than a behaviour, and is described as one — an earlier version of this
+    // comment stated it as something a leader experiences, which no leader can.
     if (restrictTo !== null && restrictTo.size === 0) {
       return { rows: [], nextCursor: null };
     }
