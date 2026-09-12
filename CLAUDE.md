@@ -243,10 +243,14 @@ rewritten to remove that language, because resolving each by inference is how a
 false cross-reference gets introduced, and this log records enough of those
 already. Each file carries previous/next links instead, so a positional reference
 resolves exactly as well as it did in the single file and no better. *Recounted on
-2026-09-11, the trigger being decision 0243: of 242 files, 241 carry `Previous:`, 181 carry
-`Next:`, and 180 carry both on one line. 0213 through 0243 each moved the first two and
+2026-09-13, the trigger being decision 0244: of 243 files, 242 carry `Previous:`, 181 carry
+`Next:`, and 180 carry both on one line. 0213 through 0244 each moved the first two and
 neither of the others, none of them carrying a `Next:`. The one file with no `Previous:` is
 0001, which has nothing before it. The recount before this one was dated 2026-09-11 and
+triggered by 0243, and was left stale by 0244 two days later — the first time in this chain
+that the staling ruling did not arrive the same day, which changes nothing about the
+instruction and is worth one clause because every other entry here says "the same day".
+The one before that was dated 2026-09-11 and
 triggered by 0242, and was left stale by 0243 the same day. The one before that was dated 2026-09-11 and
 triggered by 0241, and was left stale by 0242 the same day. The one before that was dated 2026-09-11 and
 triggered by 0240, and was left stale by 0241 the same day — by a commit that shipped a
@@ -534,6 +538,7 @@ one, in the paragraph whose subject is false cross-references, and
 - 2026-09-11 — [Four cross-module reads are re-homed, and one of them needs a port](docs/decisions/0241-four-cross-module-reads-are-re-homed.md)
 - 2026-09-11 — [Section 2 argues the shape, and a derived ledger holds the instances](docs/decisions/0242-section-2-argues-the-shape-and-a-ledger-holds-the-instances.md)
 - 2026-09-11 — [The development outbox writes an activation token and withholds a reset one](docs/decisions/0243-the-development-outbox-withholds-a-reset-token.md)
+- 2026-09-13 — [The People screen lists the searcher's own scope, and the pickers keep the church](docs/decisions/0244-the-people-screen-lists-the-searchers-own-scope.md)
 
 ### Open — awaiting a ruling
 

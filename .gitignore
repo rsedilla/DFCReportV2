@@ -54,3 +54,8 @@ tree-data/
 # developer would reach for first, inside the repository they are working in. This
 # repository is public, and a committed token is compromised even after it is deleted.
 outbox/
+
+# Screenshots captured from a running app against the demo database. They show the
+# real leadership spine's names, and this repository is public (CLAUDE.md, Secrets).
+# They are a working artefact for design review, not repository content.
+screenshots/

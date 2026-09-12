@@ -2015,6 +2015,10 @@ construction.
 
 Leaders may search the church-wide Person directory by name, primarily for identity resolution and duplicate prevention (see Section 3, Duplicate prevention).
 
+**Where that directory is offered is a separate question from what it returns, and the two are answered separately** (ruling of 2026-09-13, decision 0244). The **People screen lists only people within the searching leader's pastoral scope**, so a leader opening it is shown the people under their care rather than the whole church. The church-wide directory stays reachable wherever a task requires naming a specific person — adding a Person, adding a member to a Cell, choosing whose network to view — because those are pickers inside an operation rather than a place to look around. For an actor whose scope is the whole church the screen is unchanged, since their scope *is* the church.
+
+**The field rule below is untouched by that**, and so is duplicate prevention: it is answered by the church-wide duplicate-candidate lookup, which the Add a Person screen performs as a name is typed, and never by this screen. **The pickers may not be narrowed with the screen.** Section 10 makes Cell membership independent of pastoral assignment, so a Cell legitimately holds members its leader does not pastor, and narrowing the shared search rather than the screen would make exactly those people unaddable.
+
 For a person within the searching leader's authorized pastoral scope, return full profile fields as normally authorized.
 
 For a person outside the searching leader's authorized pastoral scope, return only the minimum information necessary to identify a possible existing record:
