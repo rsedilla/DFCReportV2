@@ -683,8 +683,10 @@ const TARGET_SWEEP = [
     settleRole: 'link' as const,
     settle: 'Bituin Carreon',
     // Fifteen: the twelve above plus the two people without a Cell and the link into
-    // that list, which section 15's second attention list contributes.
-    minimum: 15,
+    // that list, which section 15's second attention list contributes. Sixteen since
+    // decision 0245 moved the way in to the DCC calendar from the sidebar onto this
+    // page, so losing that link is something the floor now notices.
+    minimum: 16,
   },
   {
     // The back link and one link per person: three, with no "Show more" for this

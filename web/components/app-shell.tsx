@@ -100,10 +100,16 @@ export function AppShell({ children }: { children: ReactNode }) {
           matches: [`/people/${me.data.person_id}/network`],
         };
 
+  // **No item renders until the account is described.** The arrangement depends on
+  // it, so rendering the leader order first would reorder the navigation under a
+  // whole-church reader's pointer and focus (WCAG 2.2 3.2.3). A failed request
+  // settles too, and falls back to the leader order, as landing falls back to Record.
   const ordered = readsWholeChurch(me.data)
     ? [REPORTS, RECORD, network, PEOPLE, CELLS]
     : [RECORD, REPORTS, PEOPLE, CELLS, network];
-  const links = ordered.filter((link): link is NavEntry => link !== null);
+  const links = me.isPending
+    ? []
+    : ordered.filter((link): link is NavEntry => link !== null);
 
   // **One entry is current, and it is the one owning the longest matching prefix.**
   //

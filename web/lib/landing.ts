@@ -13,7 +13,15 @@ import { getMe, holdsWholeChurch, type SessionDescription } from './me';
  * still shows only what the API returns (section 1, principle 4).
  */
 export const RECORD_PATH = '/dashboard';
-export const REPORTS_PATH = '/reports/cells';
+
+/**
+ * **Reports opens on the DCC figures, because that is where the scope selector is.**
+ * Section 19 gives a Senior Pastor Whole Church, Men's and Women's; the DCC report
+ * offers a Network scope and the Cell report refuses one, so landing a whole-church
+ * reader on the Cell figures would open on the one screen that cannot show them a
+ * Network.
+ */
+export const REPORTS_PATH = '/reports/dcc';
 
 export function readsWholeChurch(me: SessionDescription | undefined): boolean {
   return holdsWholeChurch(me, 'reports.view_subtree');

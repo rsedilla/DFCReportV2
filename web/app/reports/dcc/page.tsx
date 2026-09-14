@@ -94,7 +94,7 @@ export function DccReport() {
       {/* A standalone target rather than an inline one, so it clears 2.5.8's 24px. */}
       <div className="mt-1">
         <TextLink href="/reports/cells" className="text-sm">
-          Also under Reports: Cell Attendance
+          Also under Reports: Cell figures
         </TextLink>
       </div>
 
