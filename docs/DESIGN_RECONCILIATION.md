@@ -18,18 +18,18 @@ church's leadership tree, and this repository is public.
 | Area | The handoff | Decided | Follows | Built in |
 | --- | --- | --- | --- | --- |
 | Sidebar | Record · Reports · People · Cells · Network | Adopted, with Account and session in the sidebar footer | [Decision 0245](decisions/0245-the-sidebar-follows-the-design.md) | PR #126, in review |
-| Ordering leaders | Coverage tables sorted furthest behind first | Leaders A to Z, the viewer first, with a *Behind only* filter | §13, §22, decision 0226 | UI-6 |
+| Ordering leaders | Coverage tables sorted furthest behind first | Leaders A to Z, the viewer first, with a *Behind only* filter | §13, §22; attention lists ordered by name (§9, decision 0228) | UI-6 |
 | Status tags | Red fill on some statuses; "9 days late", "Owed" | Every tag the same red, so colour never tells one row from another; factual wording such as "Awaiting a record" and "1 meeting awaiting" | §17, §13, §1 Principle 7 | UI-1 (style), with each screen (wording) |
-| Accent colour | Red | Red replaces teal | — | UI-1 |
+| Accent colour | Red | Red replaces teal. A design choice rather than a rule: decision 0245 adopts no visual language, and §23's contrast rule binds the red in both themes | §23 | UI-1 |
 | Name fields | One "Full name" box | One "Full name" label over three boxes: First, Middle, Last | §3 | UI-4 |
-| Person form | No Sex, Civil status or Birthday | All three are on the form | §3 | UI-4 |
+| Person form | No Sex, Civil status or Birthday | On Add, Sex and Civil status are required and Birthday is optional and prompted. On Edit, Sex is read-only and corrected only by an Admin through its own route, and a recorded Birthday cannot be cleared | §3, §4, §7 | UI-4 |
 | Cell on the person forms | A Cell dropdown on Add and Edit | Optional Cell when adding; on Edit the Cell is read-only with *Move to another Cell* | §10 | UI-4 |
 | Journey stage | *Correct this stage* with a reason | No override. The stage is shown with the attendance behind it and a link to correct that attendance | §9 | UI-4 |
-| Export | *Export CSV* from Reports | Not in the pilot; recorded as an open question in `CLAUDE.md` | — | — |
+| Export | *Export CSV* from Reports | Not in the pilot; recorded as an open question in `CLAUDE.md` by PR #127 | — | — |
 | Dark theme | None | Kept: a dark version of the design is derived | §23, decision 0235 | UI-1 |
-| Year view | Person by month for the year | Left out until the open question on an in-progress year's classification is ruled | Decision 0222 | — |
+| Year view | Person by month for the year | Left out of the pilot, although §18 asks for January to December. Two open questions stand in the way: which month's classification an in-progress year carries, and whether §20's placement graph may authorize a per-person view | §18, decision 0222 | — |
 | Preview as | See the app as another person | Dropped: prototype only | — | — |
-| Offline queue | "Saved on this device" states | Dropped for now | — | — |
+| Offline queue | "Saved on this device" states | Dropped for now | §23, *Deferred until required* | — |
 
 ## Terms
 
