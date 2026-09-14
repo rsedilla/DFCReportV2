@@ -17,7 +17,7 @@ church's leadership tree, and this repository is public.
 
 | Area | The handoff | Decided | Follows | Built in |
 | --- | --- | --- | --- | --- |
-| Sidebar | Record · Reports · People · Cells · Network | Adopted, with Account and session in the sidebar footer | [Decision 0245](decisions/0245-the-sidebar-follows-the-design.md) | PR #126, in review |
+| Sidebar | Record · Reports · People · Cells · Network | Adopted, with Account and session in the sidebar footer | [Decision 0245](decisions/0245-the-sidebar-follows-the-design.md) | PR #126, merged |
 | Ordering leaders | Coverage tables sorted furthest behind first | Leaders A to Z with the viewer first, and an *Awaiting a record only* filter. Listing the viewer first is a design choice: it ranks nobody, and the specification does not mention it | §13, §22; attention lists ordered by name (§9, decision 0228); §1 Principle 7 for the label | UI-6 |
 | Status tags | Red fill on statuses, stages and figures; "9 days late", "Owed" | Anything about records awaiting is a plain outlined word and never a colour, in factual wording such as "Awaiting a record", "1 meeting awaiting" and "All recorded". Red is used on a person's stage and on a period being open; which facts carry it is a design choice, and every stage carries the same red | §13, §17, §23, §1 Principle 7 | UI-1 (style), with each screen (wording) |
 | Accent colour | Red | Red replaces teal. A design choice rather than a rule: decision 0245 adopts no visual language, and §23's contrast rule binds the red in both themes | §23 | UI-1 |
