@@ -66,11 +66,12 @@ Senior Pastor's checklist — which is how a Network root with no account left t
 disciples on nobody's checklist. So `Record` stays in that arrangement, second rather than
 first.
 
-**The arrangement is decided by a capability, not by a role, because the client has no
-role to read.** `GET /api/v1/auth/me` deliberately returns grants and no role, and Section
-7 makes a capability and its scope the thing that decides. A whole-church reporting grant
-is exactly the property that makes `Reports` the useful first screen, and it is what the
-client can see.
+**The arrangement is decided by a capability, not by a role, because Section 7 makes a
+capability and its scope the thing that decides.** A whole-church reporting grant is exactly
+the property that makes `Reports` the useful first screen. It is also what the client can
+read today: `GET /api/v1/auth/me` returns the account's grants and no role
+(`api/src/auth/auth.service.ts`). That is a fact about the response rather than a rule, and
+an additive field could change it without moving this ruling.
 
 *The owner's approved proposal gave the Senior Pastors and Admin two different orders,
 differing only in whether `Network` or `People` comes third. No grant distinguishes the two
