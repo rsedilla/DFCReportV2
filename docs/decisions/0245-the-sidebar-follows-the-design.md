@@ -98,8 +98,12 @@ one `Record` queue, is later work with rulings of its own where it needs them.
 **It settles nothing else the design proposes.** Its default ordering by coverage, its
 coloured status tags, its single name field, its classification correction, its yearly
 view and its export each disagree with the specification or name a route that does not
-exist, and each is a ruling of its own. Nor does it adopt the design's product name or its
-visual language.
+exist. Nor does it adopt the design's product name or its visual language.
+
+*This said each of those "is a ruling of its own". When the owner took them one at a time the
+same day, none became one: the specification already answered four of them, export was
+left open (PR #127), and the yearly view was left out of the pilot while the questions it rests
+on stay open. `docs/DESIGN_RECONCILIATION.md` records each outcome.*
 
 ---
 
