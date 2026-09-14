@@ -230,6 +230,26 @@ function Dashboard() {
         )}
       </section>
 
+      {/*
+        **Record is where DCC attendance is recorded from too** (section 19, ruling of
+        2026-09-14). The sidebar no longer carries a DCC Attendance entry, so this is
+        the way in to the calendar a leader picks a Sunday from.
+      */}
+      <section className="mt-10" aria-labelledby="dcc-heading">
+        <h2 id="dcc-heading" className="text-lg font-medium">
+          DCC attendance
+        </h2>
+        <p className="text-muted mt-2 max-w-2xl text-sm leading-relaxed">
+          Sunday attendance is recorded from this month&rsquo;s DCC calendar.
+        </p>
+        <Link
+          href="/dcc"
+          className="text-accent focus-visible:outline-accent mt-1 inline-flex min-h-11 items-center rounded-md text-sm underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2"
+        >
+          Open the DCC calendar
+        </Link>
+      </section>
+
       <section className="mt-10" aria-labelledby="attention-heading">
         <h2 id="attention-heading" className="text-lg font-medium">
           Cells with meetings still to record

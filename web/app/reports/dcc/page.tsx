@@ -8,6 +8,7 @@ import { AttendanceBuckets, ClassificationFigures } from '@/components/attendanc
 import { CoverageFigure } from '@/components/coverage-figure';
 import { MonthPicker } from '@/components/month-picker';
 import { FailureNotice } from '@/components/ui/failure-notice';
+import { TextLink } from '@/components/ui/text-link';
 import { getMe, holdsWholeChurch } from '@/lib/me';
 import { describeFailure } from '@/lib/messages';
 import { getDccMonthlyReport, type ReportNetwork, type ReportScope } from '@/lib/reports';
@@ -89,6 +90,13 @@ export function DccReport() {
         What the people you oversee recorded for this month&rsquo;s Sundays, and how many of
         the leaders who owed a record filed one.
       </p>
+      {/* Both figures pages sit under Reports (section 19, ruling of 2026-09-14). */}
+      {/* A standalone target rather than an inline one, so it clears 2.5.8's 24px. */}
+      <div className="mt-1">
+        <TextLink href="/reports/cells" className="text-sm">
+          Also under Reports: Cell figures
+        </TextLink>
+      </div>
 
       <MonthPicker month={month} onChange={setMonth} open={report.data?.open} />
 

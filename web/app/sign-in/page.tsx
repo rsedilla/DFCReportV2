@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { FailureNotice } from '@/components/ui/failure-notice';
 import { Field } from '@/components/ui/field';
 import { TextLink } from '@/components/ui/text-link';
+import { resolveLanding } from '@/lib/landing';
 import { describeFailure, type Failure } from '@/lib/messages';
 import { signIn } from '@/lib/session';
 
@@ -44,12 +45,11 @@ export default function SignInPage() {
 
     try {
       await signIn(email, password, 'Web browser');
-      // Section 19 makes the dashboard "the screen every user lands on", and
-      // this is one of the two places a signed-in person arrives from. The
-      // landing route was pointed here when the dashboard was built and this
-      // was not, so signing in went to the session description instead — a
-      // screen about the account rather than about the work.
-      router.replace('/dashboard');
+      // Section 19 decides where a person lands (ruling of 2026-09-14): Record for
+      // a leader, Reports for a whole-church reader. This is one of the two places a
+      // signed-in person arrives from, and the home page is the other, so both ask
+      // `resolveLanding` rather than each naming a route.
+      router.replace(await resolveLanding());
     } catch (cause) {
       // The one caller that passes `credentialRefusal`: this form is the only
       // place where `UNAUTHENTICATED` means "what you typed was refused" rather

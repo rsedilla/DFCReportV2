@@ -73,6 +73,11 @@ const TEXT_PAIRS = [
   // combination nobody lists is one this check cannot see: `bg-accent text-ink`
   // is 3.19:1 in light and 1.59:1 in dark, and would have passed lint unnoticed.
   ['surface', 'accent'],
+  // The current sidebar item is a filled block: `surface` text on `ink`, the
+  // reverse of body text. Contrast is symmetric, so it clears whenever `ink` on
+  // `surface` does — and it is listed anyway, because an unlisted position is one
+  // this check cannot see.
+  ['surface', 'ink'],
   // `field-invalid` is *also* body text: the message beside an invalid field,
   // and the form-level refusal on sign-in, both render in it at `text-sm`.
   // 1.4.3 puts that at 4.5:1, and listing the token only as a control boundary
