@@ -13,6 +13,7 @@ import {
   mockPossibleMatches,
   mockSignInRefused,
   mockSignedIn,
+  mockWholeChurchReader,
 } from './mock-api';
 import {
   mockCellMeetings,
@@ -748,22 +749,25 @@ const TARGET_SWEEP = [
     minimum: 9,
   },
   {
-    // Two month controls and the scope select.
+    // Two month controls, the scope select, and the link to the DCC figures that
+    // decision 0245 put beside them under Reports.
     name: 'cell attendance report',
     route: '/reports/cells',
     settleRole: 'heading' as const,
     settle: 'Recording coverage',
-    minimum: 3,
+    minimum: 4,
   },
   {
-    // Two month controls. The DCC report offers no scope select: section 20's
-    // NETWORK narrowing for this domain is settled, but a leader reads their own
-    // subtree and nothing here needs a second question.
+    // Two month controls, and the link to the Cell figures that decision 0245 put
+    // beside them under Reports. No scope select for this fixture's viewer: the DCC
+    // report offers its Network select only to a whole-church reader, and this
+    // fixture's reporting grant is one Network. That select is why a whole-church
+    // reader lands on this report rather than on the Cell figures.
     name: 'dcc figures report',
     route: '/reports/dcc',
     settleRole: 'heading' as const,
     settle: 'Recording coverage',
-    minimum: 2,
+    minimum: 3,
   },
   {
     // Back link, two radios per person across two people, and Save. Six rather
@@ -1182,6 +1186,94 @@ test('a Cell meeting screen marks Record as the current page, not Cells', async 
     1,
   );
   await expect(current).toHaveText('Record');
+});
+
+/**
+ * A reader without a whole-church reporting grant sees Record first.
+ *
+ * The shared fixture reads reports over one Network, which is not Whole Church, so this
+ * is the leader arrangement of decision 0245. It is pinned beside the whole-church case
+ * below so that the two arrangements are asserted as a pair and cannot quietly converge.
+ */
+test('a reader without a whole-church grant sees Record first', async ({ page }) => {
+  await mockSignedIn(page);
+  await mockPeople(page);
+
+  await page.goto('/people');
+
+  const navigation = page.getByRole('navigation', { name: 'Main' });
+
+  await expect(navigation.getByRole('link')).toHaveText([
+    'Record',
+    'Reports',
+    'People',
+    'Cells',
+    'Network',
+  ]);
+});
+
+/**
+ * A whole-church reader sees Reports first, and Reports opens on the DCC figures.
+ *
+ * **Nothing else reaches this arrangement.** Before `mockWholeChurchReader` existed the
+ * only account in the suite read reports over one Network, so the order, and the
+ * landing screen decision 0245 gives the two Senior Pastors and Admin, were untested.
+ * The href is asserted separately from the order: a report that moved would otherwise
+ * pass as long as the labels stayed put.
+ */
+test('a whole-church reader sees Reports first, opening on the DCC figures', async ({ page }) => {
+  await mockSignedIn(page);
+  await mockWholeChurchReader(page);
+  await mockPeople(page);
+
+  await page.goto('/people');
+
+  const navigation = page.getByRole('navigation', { name: 'Main' });
+
+  await expect(navigation.getByRole('link')).toHaveText([
+    'Reports',
+    'Record',
+    'Network',
+    'People',
+    'Cells',
+  ]);
+  await expect(navigation.getByRole('link', { name: 'Reports', exact: true })).toHaveAttribute(
+    'href',
+    '/reports/dcc',
+  );
+});
+
+/**
+ * The navigation renders nothing until the account is described.
+ *
+ * **Its arrangement depends on the account**, so rendering a guess first would move
+ * links under a whole-church reader's pointer as the page loads. `/auth/me` is held
+ * here until the shell is on screen, which is the window a slow phone lives in: the
+ * footer's account link is there, and no navigation landmark is. Releasing the answer
+ * then brings the whole arrangement in at once.
+ */
+test('the navigation renders nothing until the account is described', async ({ page }) => {
+  await mockSignedIn(page);
+  await mockPeople(page);
+
+  let answer = () => {};
+  const described = new Promise<void>((resolve) => {
+    answer = resolve;
+  });
+
+  await page.route('**/api/v1/auth/me', async (route) => {
+    await described;
+    await route.fallback();
+  });
+
+  await page.goto('/people');
+
+  await expect(page.getByRole('link', { name: 'Account and session' })).toBeVisible();
+  await expect(page.getByRole('navigation', { name: 'Main' })).toHaveCount(0);
+
+  answer();
+
+  await expect(page.getByRole('navigation', { name: 'Main' }).getByRole('link')).toHaveCount(5);
 });
 
 test('the skip link is hidden until focused, and a full target once it is', async ({ page }) => {

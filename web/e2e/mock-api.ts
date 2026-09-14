@@ -57,6 +57,14 @@ function apiError(status: number, code: string, message: string) {
   return json({ error: { code, message, details: {} } }, status);
 }
 
+const ME = {
+  account_id: '4f8c1d6a-0f1e-4b2a-9c3d-5e6f7a8b9c0d',
+  person_id: '9a1b2c3d-4e5f-4061-8273-8495a6b7c8d9',
+  email: 'admin@example.invalid',
+  first_name: 'Marilou',
+  capabilities: CAPABILITIES,
+};
+
 /** Install the happy path: a live session, and `/auth/me` answering for it. */
 export async function mockSignedIn(page: Page): Promise<void> {
   // Written before any script on the page runs, so the client finds a stored
@@ -67,17 +75,26 @@ export async function mockSignedIn(page: Page): Promise<void> {
 
   await page.route('**/api/v1/auth/refresh', (route) => route.fulfill(json(SESSION_TOKENS)));
 
-  await page.route('**/api/v1/auth/me', (route) =>
-    route.fulfill(
-      json({
-        account_id: '4f8c1d6a-0f1e-4b2a-9c3d-5e6f7a8b9c0d',
-        person_id: '9a1b2c3d-4e5f-4061-8273-8495a6b7c8d9',
-        email: 'admin@example.invalid',
-        first_name: 'Marilou',
-        capabilities: CAPABILITIES,
-      }),
-    ),
+  await page.route('**/api/v1/auth/me', (route) => route.fulfill(json(ME)));
+}
+
+/**
+ * The same account, reading reports across the whole church.
+ *
+ * **Installed after `mockSignedIn`, and overrides it for `/auth/me` alone**, because
+ * Playwright runs the most recently registered matching route first. The shared grant
+ * list reads reports over one Network, so without this the arrangement decision 0245
+ * gives a whole-church reader is reachable by no test at all. Only the reporting
+ * grant is widened, so a case using it differs from the rest in that one respect.
+ */
+export async function mockWholeChurchReader(page: Page): Promise<void> {
+  const capabilities = CAPABILITIES.map((grant) =>
+    grant.capability === 'reports.view_subtree'
+      ? { ...grant, scope_type: 'WHOLE_CHURCH', scope_network: null }
+      : grant,
   );
+
+  await page.route('**/api/v1/auth/me', (route) => route.fulfill(json({ ...ME, capabilities })));
 }
 
 /**

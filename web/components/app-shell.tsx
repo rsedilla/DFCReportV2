@@ -39,23 +39,6 @@ function matchedLength(pathname: string, match: string | RegExp): number {
 }
 
 /**
- * The frame every signed-in screen sits in.
- *
- * **Five items, and the split is between recording and reading** (SKILL.md section
- * 19, ruling of 2026-09-14). What a person fills in is under `Record`; what they
- * read is under `Reports`. Each module keeps its own name; the label is what
- * reaches it.
- *
- * **The navigation carries links and never counts** (section 19). A figure in
- * navigation has to be computed on every page load and arrives stripped of the
- * scope and period that make it readable.
- *
- * **Which arrangement a person sees follows the reach of `reports.view_subtree`**,
- * not a role, because `/auth/me` returns grants and no role. The rule lives in
- * `lib/landing.ts` beside the landing path it also decides, so the first item and
- * the screen a person lands on cannot disagree.
- */
-/**
  * **A Cell's meeting screens are recording, so they are Record's** (ruling of
  * 2026-09-14), although their address begins with `/cells/`. The pattern matches a
  * Cell's list of meetings and every meeting beneath it, and nothing else under a Cell.
@@ -106,6 +89,23 @@ export const PAGE_WIDTH = {
   INDEX: 'mx-auto max-w-5xl px-5 py-8 sm:py-12',
 } as const;
 
+/**
+ * The frame every signed-in screen sits in.
+ *
+ * **Five items, and the split is between recording and reading** (SKILL.md section
+ * 19, ruling of 2026-09-14). What a person fills in is under `Record`; what they
+ * read is under `Reports`. Each module keeps its own name; the label is what
+ * reaches it.
+ *
+ * **The navigation carries links and never counts** (section 19). A figure in
+ * navigation has to be computed on every page load and arrives stripped of the
+ * scope and period that make it readable.
+ *
+ * **Which arrangement a person sees follows the reach of `reports.view_subtree`**,
+ * not a role, because section 7 makes a capability and its scope the thing that
+ * decides. The rule lives in `lib/landing.ts` beside the landing path it also
+ * decides, so the first item and the screen a person lands on cannot disagree.
+ */
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
 
@@ -127,9 +127,11 @@ export function AppShell({ children }: { children: ReactNode }) {
         };
 
   // **No item renders until the account is described.** The arrangement depends on
-  // it, so rendering the leader order first would reorder the navigation under a
-  // whole-church reader's pointer and focus (WCAG 2.2 3.2.3). A failed request
-  // settles too, and falls back to the leader order, as landing falls back to Record.
+  // it, so rendering the leader order first would move links under a whole-church
+  // reader's pointer and focus as the page loads. A failed request settles too, to
+  // the leader order, as landing settles to Record. If a later refetch succeeds, the
+  // navigation takes the account's own arrangement then: the right answer arriving
+  // late, not a second guess replacing a first.
   const ordered = readsWholeChurch(me.data)
     ? [REPORTS, RECORD, network, PEOPLE, CELLS]
     : [RECORD, REPORTS, PEOPLE, CELLS, network];
@@ -137,7 +139,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     ? []
     : ordered.filter((link): link is NavEntry => link !== null);
 
-  // **One entry is current, and it is the one owning the longest matching prefix.**
+  // **One entry is current, and it is the one whose match covers most of the address.**
   //
   // A prefix test alone marks two: Network is `/people/{id}/network`, which starts
   // with `/people/`, so People would claim the page as well — a second answer to
@@ -213,12 +215,19 @@ export function AppShell({ children }: { children: ReactNode }) {
               'lg:items-stretch lg:overflow-y-auto lg:py-6',
             )}
           >
-            <nav
-              aria-label="Main"
-              className="flex flex-wrap items-center gap-1 lg:flex-col lg:items-stretch lg:gap-0.5"
-            >
-              {links.map((link) => renderLink(link))}
-            </nav>
+            {/*
+              **No empty landmark.** While the account loads there are no items, and a
+              navigation landmark named Main with nothing in it is announced as
+              navigation offering nothing, so it is not rendered until it has links.
+            */}
+            {links.length > 0 ? (
+              <nav
+                aria-label="Main"
+                className="flex flex-wrap items-center gap-1 lg:flex-col lg:items-stretch lg:gap-0.5"
+              >
+                {links.map((link) => renderLink(link))}
+              </nav>
+            ) : null}
 
             {/*
               **The account is not a navigation item** (ruling of 2026-09-14). It sits
