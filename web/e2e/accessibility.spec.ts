@@ -1125,16 +1125,18 @@ for (const viewport of VIEWPORT_WIDTHS) {
  * be unique — so every automated rule passes while a screen reader announces two
  * current pages and the eye sees two highlighted entries.
  *
- * The state that produced it: My Network is `/people/{id}/network` and People is
+ * The state that produced it: Network is `/people/{id}/network` and People is
  * `/people`, so a prefix test marked both. It is asserted by *count* rather than by
  * naming People, so a third entry nested under an existing one fails here rather
  * than being noticed by eye.
  *
- * **The link is clicked rather than its route typed**, because My Network is the one
+ * **The link is clicked rather than its route typed**, because Network is the one
  * entry whose href depends on who is signed in. Navigating to a hard-coded person's
  * network page tests a different thing entirely — somebody else's page, where People
  * *is* the right answer — and an earlier version of this case did exactly that and
  * failed against a correct implementation.
+ *
+ * *The entry was labelled My Network until decision 0245 renamed it.*
  */
 test('only the most specific navigation entry is marked as the current page', async ({ page }) => {
   await mockSignedIn(page);
@@ -1144,7 +1146,7 @@ test('only the most specific navigation entry is marked as the current page', as
   await page.goto('/people');
 
   const navigation = page.getByRole('navigation', { name: 'Main' });
-  await navigation.getByRole('link', { name: 'My Network' }).click();
+  await navigation.getByRole('link', { name: 'Network', exact: true }).click();
 
   await expect(page).toHaveURL(/\/people\/[^/]+\/network$/);
 
@@ -1153,7 +1155,7 @@ test('only the most specific navigation entry is marked as the current page', as
   await expect(current, 'more than one navigation entry claims to be the current page').toHaveCount(
     1,
   );
-  await expect(current).toHaveText('My Network');
+  await expect(current).toHaveText('Network');
 });
 
 test('the skip link is hidden until focused, and a full target once it is', async ({ page }) => {

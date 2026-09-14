@@ -97,9 +97,12 @@ export function CellReport() {
         the one figure that cannot be improved by recording less.
       </p>
       {/* Both figures pages sit under Reports (section 19, ruling of 2026-09-14). */}
-      <p className="text-muted mt-2 text-sm">
-        Also under Reports: <TextLink inline href="/reports/dcc">DCC Figures</TextLink>
-      </p>
+      {/* A standalone target rather than an inline one, so it clears 2.5.8's 24px. */}
+      <div className="mt-1">
+        <TextLink href="/reports/dcc" className="text-sm">
+          Also under Reports: DCC Figures
+        </TextLink>
+      </div>
 
       <MonthPicker month={month} onChange={setMonth} open={report.data?.open} />
 
