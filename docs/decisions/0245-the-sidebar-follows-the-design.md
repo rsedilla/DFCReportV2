@@ -41,9 +41,14 @@ and lands on `Reports`. Every other account sees `Record · Reports · People ·
 Network` and lands on `Record`. By the role defaults that is the two Senior Pastors and
 Admin in the first arrangement, and leaders in the second.
 
-**When the Admin dashboard is built, it adds an `Admin` item for administrators and becomes
-their landing screen.** How the client recognises an administrator is settled with that
-screen, for the reason below.
+**When the Admin dashboard is built, it adds an `Admin` item for the accounts holding the
+capabilities that screen needs, and becomes their landing screen.** Which capabilities
+those are is not settled here: the screen's planned contents span several, and naming one
+now would hide the item from somebody granted another. It is recorded as open.
+
+*The first version said the item was "for administrators", which keyed a sidebar item to
+a role in the ruling whose ground is that the sidebar never follows one. Review raised it
+and the owner settled the wording.*
 
 ## The ground
 

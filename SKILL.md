@@ -3962,7 +3962,7 @@ Network    My Network, the pastoral tree (Section 5)
 
 **The order, and the screen a person lands on, follow the reach of `reports.view_subtree` and never a role**, because Section 7 makes a capability and its scope the thing that decides. An account holding it at `WHOLE_CHURCH` sees `Reports · Record · Network · People · Cells` and lands on `Reports`; by the role defaults that is the two Senior Pastors and Admin. Every other account sees `Record · Reports · People · Cells · Network` and lands on `Record`. `Record` stays in the first arrangement because Section 9 puts a person's DCC record on the checklist of the nearest account-holding leader above them, which a Senior Pastor is for their own direct disciples.
 
-When the Admin dashboard below is built, it adds an `Admin` item for administrators and becomes their landing screen.
+When the Admin dashboard below is built, it adds an `Admin` item for the accounts holding the capabilities that screen needs, and becomes their landing screen. Which capabilities those are is settled with that screen, and is recorded as open until then.
 
 Do not add Birthday as a sidebar item.
 
