@@ -2,6 +2,7 @@
 
 import { useId } from 'react';
 
+import { FieldError } from '@/components/ui/field';
 import { cn } from '@/lib/utils';
 
 /**
@@ -63,7 +64,7 @@ export function RadioGroup<T extends string>({
   // resolve, so `aria-valid-attr-value` passes and the sweep stays green.
   return (
     <fieldset className="flex flex-col gap-1.5" aria-describedby={describedBy}>
-      <legend className="text-sm font-medium">{legend}</legend>
+      <legend className="field-label">{legend}</legend>
 
       {description ? (
         <p id={descriptionId} className="text-muted text-sm leading-relaxed">
@@ -101,11 +102,7 @@ export function RadioGroup<T extends string>({
         })}
       </div>
 
-      {error ? (
-        <p id={errorId} className="text-field-invalid text-sm leading-relaxed">
-          {error}
-        </p>
-      ) : null}
+      {error ? <FieldError id={errorId}>{error}</FieldError> : null}
     </fieldset>
   );
 }

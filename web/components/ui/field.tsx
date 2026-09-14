@@ -1,6 +1,7 @@
 'use client';
 
 import * as LabelPrimitive from '@radix-ui/react-label';
+import { CircleAlert } from 'lucide-react';
 import type { InputHTMLAttributes, ReactNode, Ref } from 'react';
 import { useId } from 'react';
 
@@ -24,6 +25,12 @@ import { cn } from '@/lib/utils';
  * merely sitting near it. `field-invalid` marks the state of an input and
  * nothing else: it is never applied to a meeting status, a coverage figure or a
  * leader, whatever it would seem to fit.
+ *
+ * **The error changes shape, not only colour.** Labels are red (`field-label` in
+ * `app/globals.css`), so red text would no longer stand out as a refusal. An
+ * invalid field instead takes a heavier border, and its message is set in `ink`
+ * beside a `field-invalid` icon. The padding shrinks by the border's extra pixel so
+ * the text does not shift when the state changes.
  *
  * The border uses `edge` rather than `line`. `line` is decorative and exempt
  * from 1.4.11; the boundary of a control is not, and reaching for the wrong one
@@ -57,7 +64,7 @@ export function Field({
 
   return (
     <div className={cn('flex flex-col gap-1.5', className)}>
-      <LabelPrimitive.Root htmlFor={id} className="text-sm font-medium">
+      <LabelPrimitive.Root htmlFor={id} className="field-label">
         {label}
       </LabelPrimitive.Root>
 
@@ -74,16 +81,27 @@ export function Field({
         className={cn(
           'border-edge bg-surface text-ink min-h-11 rounded-md border px-3 text-base',
           'focus-visible:outline-accent focus-visible:outline-2 focus-visible:outline-offset-2',
-          'aria-[invalid=true]:border-field-invalid',
+          'aria-[invalid=true]:border-field-invalid aria-[invalid=true]:border-2',
+          'aria-[invalid=true]:px-[11px]',
         )}
         {...props}
       />
 
-      {error ? (
-        <p id={errorId} className="text-field-invalid text-sm leading-relaxed">
-          {error}
-        </p>
-      ) : null}
+      {error ? <FieldError id={errorId}>{error}</FieldError> : null}
     </div>
+  );
+}
+
+/**
+ * The message beside an invalid field or group: `ink` text, weighted, after a
+ * `field-invalid` icon. The icon is decorative and hidden from assistive
+ * technology; the text is what is announced and what carries the meaning.
+ */
+export function FieldError({ id, children }: { id: string; children: ReactNode }) {
+  return (
+    <p id={id} className="text-ink flex items-start gap-2 text-sm leading-relaxed font-medium">
+      <CircleAlert aria-hidden="true" className="text-field-invalid mt-0.5 size-4 shrink-0" />
+      <span>{children}</span>
+    </p>
   );
 }

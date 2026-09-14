@@ -46,7 +46,9 @@ const VARIANTS: Record<NonNullable<ButtonProps['variant']>, string> = {
 export function buttonClasses(variant: NonNullable<ButtonProps['variant']> = 'primary'): string {
   return cn(
     'inline-flex min-h-11 items-center justify-center gap-2 rounded-md border px-4',
-    'text-sm font-medium transition-colors',
+    // A label rather than a sentence: small, bold, uppercase and tracked, which is
+    // what distinguishes an action from the prose around it without a colour.
+    'text-xs font-bold tracking-[0.07em] uppercase transition-colors',
     'focus-visible:outline-accent focus-visible:outline-2 focus-visible:outline-offset-2',
     'disabled:cursor-not-allowed disabled:opacity-60',
     VARIANTS[variant],

@@ -204,7 +204,7 @@ function RecordMeeting() {
 
           {status === 'NOT_HELD' ? (
             <div className="mt-6">
-              <label htmlFor="not-held-note" className="block text-sm font-medium">
+              <label htmlFor="not-held-note" className="field-label block">
                 What happened? (optional)
               </label>
               <p className="text-muted mt-1 max-w-2xl text-sm leading-relaxed">
@@ -264,7 +264,7 @@ function RecordMeeting() {
 
               {correcting ? (
                 <div className="mt-6">
-                  <label htmlFor="correction-reason" className="block text-sm font-medium">
+                  <label htmlFor="correction-reason" className="field-label block">
                     Why is this changing? (optional)
                   </label>
                   <textarea
