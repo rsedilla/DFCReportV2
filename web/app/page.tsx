@@ -3,6 +3,7 @@
 import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
 
+import { resolveLanding } from '@/lib/landing';
 import { hasStoredSession } from '@/lib/session';
 
 /**
@@ -10,7 +11,9 @@ import { hasStoredSession } from '@/lib/session';
  *
  * A pure client cannot redirect on the server (SKILL.md section 2 — no API
  * routes, no server actions, and nothing running here at request time), so the
- * decision is made after mount, once `localStorage` is readable.
+ * decision is made after mount, once `localStorage` is readable. Where a signed-in
+ * person belongs depends on their grants (section 19, ruling of 2026-09-14), so it
+ * asks the API once before going.
  *
  * It says what it is doing rather than rendering an empty page. The wait is
  * normally imperceptible, but on a slow phone it is not, and a blank screen with
@@ -21,7 +24,22 @@ export default function HomePage() {
   const router = useRouter();
 
   useEffect(() => {
-    router.replace(hasStoredSession() ? '/dashboard' : '/sign-in');
+    if (!hasStoredSession()) {
+      router.replace('/sign-in');
+      return;
+    }
+
+    let cancelled = false;
+
+    void resolveLanding().then((path) => {
+      if (!cancelled) {
+        router.replace(path);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
   }, [router]);
 
   return (
