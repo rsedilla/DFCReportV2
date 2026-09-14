@@ -128,10 +128,10 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   // **No item renders until the account is described.** The arrangement depends on
   // it, so rendering the leader order first would move links under a whole-church
-  // reader's pointer and focus as the page loads. A failed request settles too, to
-  // the leader order, as landing settles to Record. If a later refetch succeeds, the
-  // navigation takes the account's own arrangement then: the right answer arriving
-  // late, not a second guess replacing a first.
+  // reader's pointer and focus on every page load. A failed request falls back to
+  // the leader order, as landing falls back to Record, and if a later refetch then
+  // succeeds for a whole-church reader the navigation reorders once. That is
+  // accepted because it follows a failure rather than every load.
   const ordered = readsWholeChurch(me.data)
     ? [REPORTS, RECORD, network, PEOPLE, CELLS]
     : [RECORD, REPORTS, PEOPLE, CELLS, network];
@@ -219,6 +219,8 @@ export function AppShell({ children }: { children: ReactNode }) {
               **No empty landmark.** While the account loads there are no items, and a
               navigation landmark named Main with nothing in it is announced as
               navigation offering nothing, so it is not rendered until it has links.
+              Below `lg` the account link beside it moves along when the links arrive;
+              at `lg` it is pinned to the sidebar's foot and does not.
             */}
             {links.length > 0 ? (
               <nav

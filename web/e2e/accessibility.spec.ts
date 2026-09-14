@@ -1216,8 +1216,9 @@ test('a reader without a whole-church grant sees Record first', async ({ page })
  * A whole-church reader sees Reports first, and Reports opens on the DCC figures.
  *
  * **Nothing else reaches this arrangement.** Before `mockWholeChurchReader` existed the
- * only account in the suite read reports over one Network, so the order, and the
- * landing screen decision 0245 gives the two Senior Pastors and Admin, were untested.
+ * only account in the suite read reports over one Network, so the order decision 0245
+ * gives the two Senior Pastors and Admin, and where their Reports item leads, were
+ * untested. Where they *land* is a separate question with its own cases below.
  * The href is asserted separately from the order: a report that moved would otherwise
  * pass as long as the labels stayed put.
  */
@@ -1274,6 +1275,38 @@ test('the navigation renders nothing until the account is described', async ({ p
   answer();
 
   await expect(page.getByRole('navigation', { name: 'Main' }).getByRole('link')).toHaveCount(5);
+});
+
+/**
+ * The home page lands a whole-church reader on Reports, which opens on the DCC figures.
+ *
+ * **Asserted on the address, not on the navigation.** The navigation reads the Reports
+ * path directly and never asks where to land, so a case on its links cannot notice the
+ * landing rule going wrong. The home page and sign-in both ask `resolveLanding`, and
+ * this is the one of the two that needs no credentials typed.
+ */
+test('the home page lands a whole-church reader on Reports', async ({ page }) => {
+  await mockSignedIn(page);
+  await mockWholeChurchReader(page);
+  await mockDccReport(page);
+
+  await page.goto('/');
+
+  await expect(page).toHaveURL(/\/reports\/dcc$/);
+});
+
+/**
+ * The home page lands everyone else on Record, which is the Dashboard.
+ *
+ * The pair to the case above, so that a landing rule answering the same thing for
+ * everybody fails one of the two whichever way it errs.
+ */
+test('the home page lands a reader without a whole-church grant on Record', async ({ page }) => {
+  await mockSignedIn(page);
+
+  await page.goto('/');
+
+  await expect(page).toHaveURL(/\/dashboard$/);
 });
 
 test('the skip link is hidden until focused, and a full target once it is', async ({ page }) => {

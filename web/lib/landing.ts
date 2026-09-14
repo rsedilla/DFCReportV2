@@ -4,10 +4,9 @@ import { getMe, holdsWholeChurch, type SessionDescription } from './me';
  * Where a signed-in person lands, and which arrangement of the sidebar they see
  * (SKILL.md section 19, ruling of 2026-09-14).
  *
- * **Read off the reach of `reports.view_subtree`, never a role.** `/auth/me`
- * returns grants and no role, and section 7 makes the capability and its scope the
- * thing that decides. A whole-church reader starts on Reports; everyone else starts
- * on Record, which is the Dashboard.
+ * **Read off the reach of `reports.view_subtree`, never a role**, because section 7
+ * makes a capability and its scope the thing that decides. A whole-church reader
+ * starts on Reports; everyone else starts on Record, which is the Dashboard.
  *
  * Nothing here authorizes anything. Landing somewhere is courtesy, and the screen
  * still shows only what the API returns (section 1, principle 4).
