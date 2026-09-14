@@ -28,6 +28,13 @@ keeps its section and its name; what changes is the label that reaches it.
 | Cell Leaders (Section 15) | `Cells` |
 | My Network | `Network` |
 
+**A Cell's meeting screens are recording, so they sit under `Record` wherever they are
+reached from** — a Cell's list of meetings and the screen a meeting is recorded on,
+whether a leader arrives from Record's outstanding work or from a Cell under `Cells`. The
+first version of this ruling said recording belongs to `Record` and the application marked
+these screens as `Cells` anyway, because their address begins with a Cell's; review
+raised it as a question the ruling had not answered, and the owner settled it here.
+
 **The order, and the screen a person lands on, follow the reach of `reports.view_subtree`.**
 An account holding it at `WHOLE_CHURCH` sees `Reports · Record · Network · People · Cells`
 and lands on `Reports`. Every other account sees `Record · Reports · People · Cells ·

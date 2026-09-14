@@ -3958,6 +3958,8 @@ Network    My Network, the pastoral tree (Section 5)
 
 `Account and session` sits in the sidebar's footer, under the signed-in person's name, and is not one of the items.
 
+**A Cell's meeting screens are recording, so they sit under `Record` wherever they are reached from** — a Cell's list of meetings and the screen a meeting is recorded on, whether a leader arrives from Record's outstanding work or from a Cell under `Cells`.
+
 **The order, and the screen a person lands on, follow the reach of `reports.view_subtree` and never a role**, because Section 7 makes a capability and its scope the thing that decides. An account holding it at `WHOLE_CHURCH` sees `Reports · Record · Network · People · Cells` and lands on `Reports`; by the role defaults that is the two Senior Pastors and Admin. Every other account sees `Record · Reports · People · Cells · Network` and lands on `Record`. `Record` stays in the first arrangement because Section 9 puts a person's DCC record on the checklist of the nearest account-holding leader above them, which a Senior Pastor is for their own direct disciples.
 
 When the Admin dashboard below is built, it adds an `Admin` item for administrators and becomes their landing screen.
