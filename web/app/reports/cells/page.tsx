@@ -8,6 +8,7 @@ import { AttendanceBuckets, ClassificationFigures } from '@/components/attendanc
 import { CoverageFigure } from '@/components/coverage-figure';
 import { MonthPicker } from '@/components/month-picker';
 import { FailureNotice } from '@/components/ui/failure-notice';
+import { TextLink } from '@/components/ui/text-link';
 import { listCells } from '@/lib/cells';
 import { getMe, holdsWholeChurch } from '@/lib/me';
 import { describeFailure } from '@/lib/messages';
@@ -94,6 +95,10 @@ export function CellReport() {
       <p className="text-muted mt-2 max-w-2xl text-sm leading-relaxed">
         What your Cells recorded this month. Recording coverage comes first, because it is
         the one figure that cannot be improved by recording less.
+      </p>
+      {/* Both figures pages sit under Reports (section 19, ruling of 2026-09-14). */}
+      <p className="text-muted mt-2 text-sm">
+        Also under Reports: <TextLink inline href="/reports/dcc">DCC Figures</TextLink>
       </p>
 
       <MonthPicker month={month} onChange={setMonth} open={report.data?.open} />
