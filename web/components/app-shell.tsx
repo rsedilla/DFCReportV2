@@ -20,7 +20,22 @@ import { cn } from '@/lib/utils';
 interface NavEntry {
   href: string;
   label: string;
-  matches: readonly string[];
+  matches: readonly (string | RegExp)[];
+}
+
+/**
+ * How much of `pathname` one of an entry's matches covers, or -1 where it does not match.
+ *
+ * A string is a prefix that owns itself and everything beneath it. A pattern is for a
+ * screen whose address sits under another entry's prefix but belongs to this one — so
+ * it counts the length it matched, which is longer than the prefix it has to beat.
+ */
+function matchedLength(pathname: string, match: string | RegExp): number {
+  if (typeof match === 'string') {
+    return pathname === match || pathname.startsWith(`${match}/`) ? match.length : -1;
+  }
+
+  return match.exec(pathname)?.[0].length ?? -1;
 }
 
 /**
@@ -40,7 +55,18 @@ interface NavEntry {
  * `lib/landing.ts` beside the landing path it also decides, so the first item and
  * the screen a person lands on cannot disagree.
  */
-const RECORD: NavEntry = { href: RECORD_PATH, label: 'Record', matches: [RECORD_PATH, '/dcc'] };
+/**
+ * **A Cell's meeting screens are recording, so they are Record's** (ruling of
+ * 2026-09-14), although their address begins with `/cells/`. The pattern matches a
+ * Cell's list of meetings and every meeting beneath it, and nothing else under a Cell.
+ */
+const CELL_MEETINGS = /^\/cells\/[^/]+\/meetings(?=\/|$)/;
+
+const RECORD: NavEntry = {
+  href: RECORD_PATH,
+  label: 'Record',
+  matches: [RECORD_PATH, '/dcc', CELL_MEETINGS],
+};
 const REPORTS: NavEntry = { href: REPORTS_PATH, label: 'Reports', matches: ['/reports'] };
 const PEOPLE: NavEntry = { href: '/people', label: 'People', matches: ['/people'] };
 const CELLS: NavEntry = { href: '/cells', label: 'Cells', matches: ['/cells'] };
@@ -122,11 +148,11 @@ export function AppShell({ children }: { children: ReactNode }) {
   let longest = -1;
 
   for (const link of [...links, ACCOUNT]) {
-    for (const prefix of link.matches) {
-      const inside = pathname === prefix || pathname.startsWith(`${prefix}/`);
+    for (const match of link.matches) {
+      const length = matchedLength(pathname, match);
 
-      if (inside && prefix.length > longest) {
-        longest = prefix.length;
+      if (length > longest) {
+        longest = length;
         currentHref = link.href;
       }
     }

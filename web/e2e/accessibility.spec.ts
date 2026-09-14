@@ -1160,6 +1160,30 @@ test('only the most specific navigation entry is marked as the current page', as
   await expect(current).toHaveText('Network');
 });
 
+/**
+ * A Cell's meeting screens mark Record, not Cells.
+ *
+ * **The address says Cells and the ruling says Record** (decision 0245): a meeting
+ * screen is recording, whichever entry a leader reached it from. A prefix test alone
+ * marks Cells, because `/cells/{id}/meetings` begins with `/cells`, so this is the
+ * case that fails if the pattern owning these screens is ever lost.
+ */
+test('a Cell meeting screen marks Record as the current page, not Cells', async ({ page }) => {
+  await mockSignedIn(page);
+  await mockCellMeetings(page);
+
+  await page.goto('/cells/3f1b7c6e-0000-4000-8000-000000000101/meetings');
+  await expect(page.getByRole('heading', { name: 'Cell C-0007' })).toBeVisible();
+
+  const navigation = page.getByRole('navigation', { name: 'Main' });
+  const current = navigation.locator('a[aria-current="page"]');
+
+  await expect(current, 'more than one navigation entry claims to be the current page').toHaveCount(
+    1,
+  );
+  await expect(current).toHaveText('Record');
+});
+
 test('the skip link is hidden until focused, and a full target once it is', async ({ page }) => {
   await page.goto('/sign-in');
 
