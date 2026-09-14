@@ -2058,7 +2058,7 @@ Senior Pastors retain authorized whole-church visibility across both Men's and W
 
 ## 9. DCC Attendance
 
-Sidebar label: `DCC Attendance`.
+Sidebar: recorded under `Record` and read under `Reports` (Section 19, ruling of 2026-09-14).
 
 DCC uses Blackboard-style checklist attendance.
 
@@ -2908,7 +2908,7 @@ The expectation of weekly meeting is real, and it is enforced through the Cell r
 
 ## 12. Cell Attendance
 
-Sidebar label: `Cell Attendance`.
+Sidebar: recorded under `Record` and read under `Reports` (Section 19, ruling of 2026-09-14).
 
 Cell Attendance uses the same familiar checklist UX as DCC but is a separate attendance domain.
 
@@ -3644,7 +3644,7 @@ For example: a leader records nine present on a phone, loses signal, and an upli
 
 ## 15. Cell Leaders Module
 
-Sidebar label: `Cell Leaders`.
+Sidebar label: `Cells` (Section 19, ruling of 2026-09-14).
 
 Purpose:
 
@@ -3694,7 +3694,7 @@ Do not assume these counts are equal.
 
 ## 16. Network Summary Module
 
-Sidebar label: `Network Summary`.
+No sidebar item of its own: it is reached under `Reports` (Section 19, ruling of 2026-09-14).
 
 Do not add a separate sidebar link for leadership-development metrics. Put them inside Network Summary.
 
@@ -3923,7 +3923,7 @@ Scope must appear on the tile. The same tile reads 12 for a Cell leader and 11,4
 
 ### Lead with what needs doing
 
-A dashboard of counts tells a leader nothing to act on. Dashboard is the first item in the sidebar and the screen every user lands on, so outstanding work belongs above the numbers:
+A dashboard of counts tells a leader nothing to act on. The Dashboard is the sidebar's `Record` item and the screen a leader lands on (Sidebar, below), so outstanding work belongs above the numbers:
 
 - meetings awaiting a record, for the user's own Cells (Section 13) — **and for a closed Cell, each meeting shown to the leader it names, while its month's window is open**. This is the only surface naming those meetings and the only thing that makes the permission to record them reachable, and it shows each one to the same person Section 7 authorizes to file it
 - Cells needing attention within their scope (Section 15)
@@ -3944,26 +3944,27 @@ One fixed set of tiles serves nobody. A Cell leader has no downline leaders to c
 
 No dashboard ranks leaders, scores them, or colour-grades them (Section 13, Meeting summary and the ranking prohibition).
 
-### Leader sidebar
+### Sidebar
+
+The sidebar has five items (ruling of 2026-09-14). What a person fills in is under `Record`, and what they read is under `Reports`. Each module keeps its section and its name; the label is what reaches it.
 
 ```text
-Dashboard
-My People
-My Network
-DCC Attendance
-Cell Attendance
-Cell Leaders
-Network Summary
-Search
+Record     the Dashboard, and recording DCC and Cell attendance (Sections 9, 12, 13)
+Reports    DCC and Cell figures, and Network Summary when it is built (Section 16)
+People     My People and Search (Sections 3 and 8)
+Cells      the Cell Leaders module (Section 15)
+Network    My Network, the pastoral tree (Section 5)
 ```
+
+`Account and session` sits in the sidebar's footer, under the signed-in person's name, and is not one of the items.
+
+**The order, and the screen a person lands on, follow the reach of `reports.view_subtree` and never a role**, because the client is given grants and no role (Section 7). An account holding it at `WHOLE_CHURCH` sees `Reports · Record · Network · People · Cells` and lands on `Reports`; by the role defaults that is the two Senior Pastors and Admin. Every other account sees `Record · Reports · People · Cells · Network` and lands on `Record`. `Record` stays in the first arrangement because Section 9 puts a person's DCC record on the checklist of the nearest account-holding leader above them, which a Senior Pastor is for their own direct disciples.
+
+When the Admin dashboard below is built, it adds an `Admin` item for administrators and becomes their landing screen.
 
 Do not add Birthday as a sidebar item.
 
 Birthday remains person data and is used to calculate age.
-
-### Senior Pastor sidebar
-
-Keep navigation similarly compact. Senior Pastors have whole-church scope for the same reporting modules.
 
 ### Admin dashboard
 
