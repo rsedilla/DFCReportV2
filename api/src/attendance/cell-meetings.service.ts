@@ -1342,8 +1342,11 @@ export class CellMeetingsService implements RecordedMeetingsPort {
     // carries each member's mark, so the same actor fetches both in one `GET`. The gate
     // stays because it is right — a refusal must not answer what the capability withholds,
     // whatever some other route happens to publish — but it no longer rests on this being
-    // the only door. Which capability may read those marks is recorded as open in
-    // `CLAUDE.md`, and settling it settles what this comment should say.
+    // the only door. Decision 0246 settles that those marks are read under
+    // `cell.take_attendance`, the route's own declaration, so the conflict body no longer
+    // tells that actor anything the roster does not. The gate is left in place: whether
+    // a submission that wrote nothing owes it at all is still recorded as open in
+    // `CLAUDE.md`.
     //
     // *The previous batch moved the numeric-version door behind this check and left the
     // null-version one in front of it, then claimed in its own message to have closed
