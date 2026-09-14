@@ -7,6 +7,7 @@ import { useSyncExternalStore } from 'react';
 import { AppShell, PAGE_WIDTH } from '@/components/app-shell';
 import { Button } from '@/components/ui/button';
 import { FailureNotice } from '@/components/ui/failure-notice';
+import { HeaderCell, rowClasses, Table } from '@/components/ui/table';
 import { getMe } from '@/lib/me';
 import { describeFailure } from '@/lib/messages';
 import {
@@ -162,30 +163,22 @@ function SessionDetail() {
               This account is advertised no capabilities.
             </p>
           ) : (
-            <div className="border-line mt-4 overflow-x-auto rounded-md border">
-              <table className="w-full border-collapse text-left text-sm">
-                <caption className="sr-only">
-                  Capabilities held by this account, with scope, source, and whether the grant is
-                  read-only.
-                </caption>
+            <Table
+              className="mt-4"
+              caption="Capabilities held by this account, with scope, source, and whether the grant is read-only."
+            >
                 <thead>
-                  <tr className="border-line bg-raised border-b">
-                    <th scope="col" className="px-3 py-2 font-medium">
-                      Capability
-                    </th>
-                    <th scope="col" className="px-3 py-2 font-medium">
-                      Scope
-                    </th>
-                    <th scope="col" className="px-3 py-2 font-medium">
-                      Source
-                    </th>
+                  <tr>
+                    <HeaderCell>Capability</HeaderCell>
+                    <HeaderCell>Scope</HeaderCell>
+                    <HeaderCell>Source</HeaderCell>
                   </tr>
                 </thead>
                 <tbody>
                   {session.data.capabilities.map((grant) => (
                     <tr
                       key={`${grant.capability}:${grant.scope_type}:${grant.source}`}
-                      className="border-line border-b last:border-b-0"
+                      className={rowClasses}
                     >
                       <td className="px-3 py-2 font-mono">{grant.capability}</td>
                       <td className="text-muted px-3 py-2">
@@ -197,8 +190,7 @@ function SessionDetail() {
                     </tr>
                   ))}
                 </tbody>
-              </table>
-            </div>
+            </Table>
           )}
         </>
       )}

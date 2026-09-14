@@ -102,7 +102,7 @@ export function DccReport() {
 
       {wholeChurch ? (
         <div className="mt-4">
-          <label htmlFor="dcc-scope" className="block text-sm font-medium">
+          <label htmlFor="dcc-scope" className="field-label block">
             Figures for
           </label>
           <select

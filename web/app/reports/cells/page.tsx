@@ -107,7 +107,7 @@ export function CellReport() {
       <MonthPicker month={month} onChange={setMonth} open={report.data?.open} />
 
       <div className="mt-4">
-        <label htmlFor="cell-scope" className="block text-sm font-medium">
+        <label htmlFor="cell-scope" className="field-label block">
           Figures for
         </label>
         <select

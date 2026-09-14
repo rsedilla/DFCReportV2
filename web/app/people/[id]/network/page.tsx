@@ -184,7 +184,7 @@ function PastoralNetwork() {
         {chosen ? (
           <>
             <div className="mt-4">
-              <label htmlFor="reason" className="block text-sm font-medium">
+              <label htmlFor="reason" className="field-label block">
                 Why is this changing? (optional)
               </label>
               <textarea

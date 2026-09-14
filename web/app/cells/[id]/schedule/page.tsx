@@ -117,7 +117,7 @@ function CellSchedule() {
       </div>
 
       <div className="mt-6">
-        <label htmlFor="time-of-day" className="block text-sm font-medium">
+        <label htmlFor="time-of-day" className="field-label block">
           What time
         </label>
         <p className="text-muted mt-1 max-w-2xl text-sm leading-relaxed">

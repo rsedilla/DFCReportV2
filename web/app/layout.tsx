@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from 'next';
-import { Inter } from 'next/font/google';
+import { Archivo } from 'next/font/google';
 import type { ReactNode } from 'react';
 
 import { Providers } from '@/components/providers';
@@ -7,17 +7,18 @@ import { Providers } from '@/components/providers';
 import './globals.css';
 
 /**
- * One typeface, self-hosted by `next/font` at build time.
+ * One typeface, Archivo, for headings and body alike, self-hosted by `next/font`
+ * at build time.
  *
  * `next/font` downloads the files and serves them from this origin, so no
  * request leaves for a font host at run time and there is no layout shift while
  * one arrives. The fallback stack in `globals.css` is what renders if the face
  * never loads, which is the case on a leader's phone on a poor connection.
  */
-const inter = Inter({
+const archivo = Archivo({
   subsets: ['latin'],
   display: 'swap',
-  variable: '--font-inter',
+  variable: '--font-archivo',
 });
 
 export const metadata: Metadata = {
@@ -37,7 +38,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="en" className={inter.variable}>
+    <html lang="en" className={archivo.variable}>
       <body>
         {/*
           A skip link, and the reason it is the first focusable thing in the

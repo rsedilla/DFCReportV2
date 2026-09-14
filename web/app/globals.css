@@ -16,6 +16,12 @@
  * attention is surfaced by putting it on an attention list (section 15), never by
  * colouring it as a failure.
  *
+ * **The accent is red, and that is why the paragraph above matters more here, not
+ * less.** It is the accent of a primary button, a link, a focus ring and a field
+ * label, and of a tag stating a neutral fact. It is never the colour of a record awaiting entry, a
+ * meeting status, a coverage figure or a leader: those are words, in an outlined
+ * tag or in plain text (`docs/DESIGN_RECONCILIATION.md`).
+ *
  * `@theme inline` maps each token to a custom property, so the utilities Tailwind
  * generates follow the values below into dark mode rather than being frozen at
  * build time.
@@ -42,9 +48,9 @@
  * `scripts/check-contrast.mjs` runs in lint and checks the pairs it lists: text
  * against its backgrounds both ways round, and `edge` against its backgrounds. It
  * does not check `line`, which is decorative and exempt, and it cannot see a
- * combination nobody listed — `bg-accent text-ink` is 3.19:1 in light and 1.59:1 in
- * dark, and would pass lint unnoticed. Using a token in a new position means adding the pair there. The
- * same check refuses a token named for a judgement.
+ * combination nobody listed — `bg-accent text-ink` is below 4.5:1 in both themes,
+ * and would pass lint unnoticed. Using a token in a new position means adding the
+ * pair there. The same check refuses a token named for a judgement.
  */
 @theme inline {
   --color-surface: var(--surface);
@@ -57,46 +63,86 @@
   --color-field-invalid: var(--field-invalid);
 
   /*
-   * `--font-inter` is minted by `next/font` in `app/layout.tsx` and self-hosted
+   * `--font-archivo` is minted by `next/font` in `app/layout.tsx` and self-hosted
    * from this origin. The rest of the stack is what renders if that face never
    * arrives, which is a leader on a poor connection rather than a hypothetical.
    */
   --font-sans:
-    var(--font-inter), system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial,
-    sans-serif;
+    var(--font-archivo), 'Helvetica Neue', Helvetica, Arial, system-ui, -apple-system,
+    'Segoe UI', Roboto, sans-serif;
+
+  /*
+   * Square corners everywhere: cards, inputs, buttons, tags and dialogs. Setting
+   * the scale to zero here, rather than removing `rounded-*` from each call site,
+   * is what keeps a screen written next month square without anyone remembering.
+   */
+  --radius-xs: 0;
+  --radius-sm: 0;
+  --radius-md: 0;
+  --radius-lg: 0;
+  --radius-xl: 0;
+  --radius-2xl: 0;
 }
 
 :root {
   color-scheme: light dark;
 
   --surface: #ffffff;
-  --raised: #f1f8f7;
-  --ink: #12211f;
-  --muted: #4d6360;
-  --line: #daeae7;
-  --edge: #688381;
-  --accent: #0d7a6f;
-  --field-invalid: #b3261e;
+  --raised: #f7f7f7;
+  --ink: #111111;
+  --muted: #6b6b6b;
+  --line: #d6d6d6;
+  --edge: #111111;
+  /*
+   * A step darker than the design's `#e4002b`, chosen by the owner on 2026-09-15.
+   * The design's red cleared 4.5:1 on `raised` by 0.02, so any nudge toward the
+   * design would have failed the build; this one looks the same and has room.
+   */
+  --accent: #d20028;
+  --field-invalid: #a2001e;
 }
 
+/*
+ * The dark theme is derived rather than drawn: the design has none. The accent
+ * lightens so that it stays legible on a dark surface, and a filled accent control
+ * then carries dark text rather than white, which is the same `surface` on
+ * `accent` pair the light theme uses.
+ */
 @media (prefers-color-scheme: dark) {
   :root {
-    --surface: #101817;
-    --raised: #172321;
-    --ink: #e6f1ef;
-    --muted: #92aba7;
-    --line: #263431;
-    --edge: #6d8784;
-    --accent: #5ed2c0;
-    --field-invalid: #f2a3a0;
+    --surface: #121212;
+    --raised: #1c1c1c;
+    --ink: #f2f2f2;
+    --muted: #a6a6a6;
+    --line: #303030;
+    --edge: #9a9a9a;
+    --accent: #ff6b80;
+    --field-invalid: #ffb3be;
   }
+}
+
+/*
+ * The label above a field, a group of choices or a select: small, bold, uppercase,
+ * tracked, and in the accent (the owner's choice of 2026-09-15). One utility rather
+ * than a class string pasted per screen, so a label written next month matches.
+ *
+ * A red label is structure, not a judgement, and it is why an invalid field no
+ * longer signals itself with red text alone: its border thickens and its message
+ * sits in `ink` beside a `field-invalid` icon (`components/ui/field.tsx`).
+ */
+@utility field-label {
+  @apply text-accent text-xs font-bold tracking-[0.08em] uppercase;
 }
 
 /*
  * Responsive from the beginning: leaders will open this on their phones long
  * before a native app exists, so mobile web is a current surface rather than
  * preparation for the future (SKILL.md section 23).
+ *
+ * Figures use lining, tabular numerals, so a column of counts lines up and a
+ * figure does not change width as it changes value.
  */
 body {
   @apply bg-surface text-ink font-sans antialiased;
+  font-variant-numeric: lining-nums tabular-nums;
 }

@@ -38,13 +38,21 @@ export function FailureNotice({ failure }: { failure: Failure | null }) {
   return (
     <div role="alert" aria-live="assertive">
       {failure ? (
+        // A refusal of input carries `field-invalid` on its icon and sets its words
+        // in `ink`, the same shape as the message beside a field (`FieldError`):
+        // labels are red, so red text would not read as a refusal.
         <p
           className={
-            'flex items-start gap-2 text-sm leading-relaxed ' +
-            (failure.aboutInput ? 'text-field-invalid' : 'text-ink')
+            'text-ink flex items-start gap-2 text-sm leading-relaxed ' +
+            (failure.aboutInput ? 'font-medium' : '')
           }
         >
-          <Icon aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
+          <Icon
+            aria-hidden="true"
+            className={
+              'mt-0.5 size-4 shrink-0 ' + (failure.aboutInput ? 'text-field-invalid' : '')
+            }
+          />
           <span>{failure.message}</span>
         </p>
       ) : null}

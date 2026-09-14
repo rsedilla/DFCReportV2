@@ -3,6 +3,7 @@
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 
 import { buttonClasses } from '@/components/ui/button';
+import { Tag } from '@/components/ui/tag';
 import { hasNotBegun, monthLabel, shiftMonth } from '@/lib/reporting-month';
 import { cn } from '@/lib/utils';
 
@@ -78,13 +79,17 @@ export function MonthPicker({
         read against and moving it changes all of them at once. Polite rather than
         assertive: it is the result of the reader's own action.
       */}
-      <p aria-live="polite" className="text-sm">
+      <p aria-live="polite" className="flex flex-wrap items-center gap-2 text-sm">
         <span className="font-medium">{monthLabel(month)}</span>
-        {open === undefined ? null : (
-          <span className="text-muted">
-            {' — '}
-            {open ? 'still open for submission' : 'closed for submission'}
-          </span>
+        {/*
+          A period being open is a neutral fact and carries the accent; a closed one
+          is outlined. The words say which in both, so the colour is never the only
+          indicator (1.4.1), and neither says anything about a leader or a record.
+        */}
+        {open === undefined ? null : open ? (
+          <Tag>Open for submission</Tag>
+        ) : (
+          <Tag appearance="outline">Closed for submission</Tag>
         )}
       </p>
     </div>
