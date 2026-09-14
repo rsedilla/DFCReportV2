@@ -39,8 +39,10 @@ const MY_NETWORK_AFTER = 2;
  * `getMe` rather than sitting in the static list beside the others.
  *
  * **Search is not a separate entry and is not missing.** Section 19 lists it, and
- * People *is* the search: the screen's whole content is a search field over the
- * church-wide directory (section 8). A second entry pointing at the same screen
+ * People *is* the search: the screen's whole content is a search field (section 8).
+ * Since decision 0244 it searches the viewer's own pastoral scope rather than the
+ * church, which narrows what the entry reaches and leaves the argument for one entry
+ * rather than two exactly where it was. A second entry pointing at the same screen
  * would be navigation describing itself twice.
  *
  * **Network Summary stays absent**, deferred past the pilot with the five views

@@ -455,7 +455,7 @@ Whitespace normalization carries unusual weight here. `Dela Cruz`, `DelaCruz`, a
 
 **Tier 2 candidates need somewhere to appear.** A creation workflow can only ever refuse on Tier 1, so if candidates were surfaced only at the moment of creation, every Tier 2 match would be computed and discarded. They are presented before creation instead, by a pre-flight lookup the encoder makes with the details they have so far — which is also what Section 9 asks for as the first step of registering a VIP: search existing People first.
 
-That lookup reads the whole directory, as Section 8's church-wide search does and for the same reason. What it may say about a candidate depends on whether that candidate is inside the viewer's pastoral scope, and the rule has three parts — of which the first is the one that is easy to get wrong, and the third was found only after the first two had each been got right.
+That lookup reads the whole directory, and since the ruling of 2026-09-13 it is the reader that carries duplicate prevention: Section 8's search narrows to the actor's own scope unless asked wider, so this lookup no longer shares a reason with it and stands on its own. What it may say about a candidate depends on whether that candidate is inside the viewer's pastoral scope, and the rule has three parts — of which the first is the one that is easy to get wrong, and the third was found only after the first two had each been got right.
 
 **Which candidates appear.** A candidate outside the viewer's scope is surfaced only if they would **still** have matched a subject carrying nothing Section 8 protects — no birthday, no mobile number. Membership out of scope is therefore a function of the names and sex alone.
 
@@ -2013,7 +2013,11 @@ construction.
 
 ### Church-wide search and duplicate prevention
 
-Leaders may search the church-wide Person directory by name, primarily for identity resolution and duplicate prevention (see Section 3, Duplicate prevention).
+Leaders may search the Person directory by name. **Its default is the searcher's own pastoral scope** (ruling of 2026-09-13, decision 0244); the church-wide directory is reached by asking for it. *This sentence read "the church-wide Person directory … primarily for identity resolution and duplicate prevention", and decision 0244 quotes it as the sentence its ground refutes: duplicate prevention is answered by the church-wide duplicate-candidate lookup of Section 3, never by this search. The glosses derived from it were corrected first and this was left, so the section stated the refuted purpose before stating the rule.*
+
+**Where that directory is offered is a separate question from what it returns, and the two are answered separately** (ruling of 2026-09-13, decision 0244). The **People screen lists only people within the searching leader's pastoral scope**, so a leader opening it is shown the people under their care rather than the whole church. The church-wide directory stays reachable wherever a task requires naming a specific person — adding a Person, adding a member to a Cell, naming a new pastoral leader on a reassignment — because those are pickers inside an operation rather than a place to look around. For an actor whose scope is the whole church the screen is unchanged, since their scope *is* the church.
+
+**The field rule below is untouched by that**, and so is duplicate prevention: it is answered by the church-wide duplicate-candidate lookup, which the Add a Person screen performs as a name is typed, and never by this screen. **The pickers may not be narrowed with the screen.** Section 10 makes Cell membership independent of pastoral assignment, so a Cell legitimately holds members its leader does not pastor, and narrowing the shared search rather than the screen would make exactly those people unaddable.
 
 For a person within the searching leader's authorized pastoral scope, return full profile fields as normally authorized.
 
@@ -2038,7 +2042,7 @@ Do not expose, for a person outside the searching leader's pastoral scope:
 - account information
 - complete pastoral/downline information
 
-**This list bounds the church-wide directory, not every surface that names a person.** It is written about *searching* — the church-wide people search this section defines, which everyone may use precisely so that duplicates are prevented (Section 3). It is not a rule that a person's Cell membership is invisible to everybody outside their pastoral branch, and reading it that way would forbid a Cell Leader their own roster.
+**This list bounds the church-wide directory, not every surface that names a person.** It is written about *searching* — the people search this section defines, whose church-wide mode everyone may reach (Section 3, and the ruling of 2026-09-13 for when it is reached rather than offered). It is not a rule that a person's Cell membership is invisible to everybody outside their pastoral branch, and reading it that way would forbid a Cell Leader their own roster.
 
 The distinction is the direction the question is asked from. A search starts from a person and would otherwise let any leader assemble a profile of anyone in the church. A Cell's roster starts from the Cell, and is shown only to those authorized over that Cell — its leader, their upline within scope, Admin and the Senior Pastors, which is exactly the set Section 10 authorizes to *change* that membership. Nobody learns anything about a person they could not already act on.
 
@@ -4411,7 +4415,7 @@ GET  /api/v1/auth/me
 POST /api/v1/accounts                    provisioning, `accounts.manage`
 POST /api/v1/accounts/{id}/activation-email   re-send (Section 6)
 
-GET  /api/v1/people                       search, church-wide (Section 8)
+GET  /api/v1/people                       search, the actor's own scope; `church_wide=true` for the directory (Section 8)
 GET  /api/v1/people/duplicate-candidates  declared before /{id}, or it is one
 GET  /api/v1/people/{id}
 GET  /api/v1/people/{id}/pastoral-path

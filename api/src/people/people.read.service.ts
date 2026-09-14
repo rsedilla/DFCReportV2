@@ -71,7 +71,7 @@ export interface PersonForDecision {
 }
 
 /**
- * Reading a Person, and the church-wide directory search (SKILL.md sections 3 and
+ * Reading a Person, and the directory search (SKILL.md sections 3 and
  * 8).
  *
  * Separate from the write paths because it shares nothing with them: no
@@ -295,7 +295,7 @@ export class PeopleReadService {
   }
 
   /**
-   * Church-wide search by name (section 8), cursor-paginated (section 22).
+   * Search by name (section 8), cursor-paginated (section 22).
    *
    * Keyset rather than offset, because rows inserted while a client is paging
    * shift every subsequent offset and the directory grows during a Sunday service
@@ -303,16 +303,29 @@ export class PeopleReadService {
    * is `(last_name, first_name, id)`, and `id` is there to make it total: two
    * people legitimately share a name, and a key that is not unique loses rows at
    * the page boundary.
+   *
+   * **`restrictTo` narrows the rows, and it is applied in SQL rather than to the
+   * page** (ruling of 2026-09-13, decision 0244). Filtering the returned page
+   * instead would be shorter and wrong: `limit` would be spent on rows about to be
+   * discarded, so a caller asking for fifty could receive three and a `next_cursor`
+   * of null while matches remained — the truncation `CLAUDE.md` already records as
+   * open against the duplicate-candidate lookup, reproduced here deliberately.
+   *
+   * `null` means no restriction, which is the church-wide search section 8 has
+   * always defined. The caller decides; this method holds no opinion about which
+   * surface deserves which.
    */
   async searchByName(
     term: string,
     limit: number,
     cursor: SearchCursor | null = null,
+    restrictTo: ReadonlySet<string> | null = null,
   ): Promise<{ rows: PersonRecord[]; nextCursor: SearchCursor | null }> {
     // Both sides normalized. Normalizing only the term meant `Nuñez` was searched
-    // for as `nunez` against a raw stored `Nuñez` and never found -- and section 8
-    // makes this search the mechanism section 3's duplicate prevention depends on,
-    // so a miss here creates the duplicate.
+    // for as `nunez` against a raw stored `Nuñez` and never found -- and a miss here
+    // loses somebody from their own leader's list. *This said section 8 makes this
+    // search the mechanism section 3's duplicate prevention depends on; since
+    // decision 0244 that is `duplicate-candidates`, which this method is not.*
     //
     // `%` and `_` are escaped: unescaped, `q=%%` pages out the whole directory.
     const normalized = normalizeName(term);
@@ -321,9 +334,23 @@ export class PeopleReadService {
     // that looked like two characters can arrive here empty: `Jr`, `II`, `--`,
     // two spaces. An empty term builds the pattern `%%`, which matches every row
     // -- the directory dump `escapeLike` was added to prevent, reached by a
-    // shorter route. Section 8 makes this search church-wide for identity
-    // resolution, not for bulk export.
+    // shorter route. Section 8's search is for identity resolution rather than
+    // bulk export, in either mode.
     if (normalized === '') {
+      return { rows: [], nextCursor: null };
+    }
+
+    // An empty restriction is not an absent one: `in ()` is malformed SQL, and
+    // dropping the clause instead would hand the caller the church.
+    //
+    // **Unreachable today, and kept anyway.** `subtreeOf` seeds at the actor, so
+    // `OWN_SUBTREE` always contains them; `SUBTREE_EXCL_SELF` cannot pass this
+    // route's `{ kind: 'actor' }` guard at all; and a `NETWORK` grant covering the
+    // actor enumerates at least the actor. So no caller can produce an empty set
+    // through the route as it stands. It is a guard against the next scope kind
+    // rather than a behaviour, and is described as one — an earlier version of this
+    // comment stated it as something a leader experiences, which no leader can.
+    if (restrictTo !== null && restrictTo.size === 0) {
       return { rows: [], nextCursor: null };
     }
 
@@ -347,6 +374,7 @@ export class PeopleReadService {
       // A merged-away Person is not a search result: the survivor carries the
       // identity (section 3, Person Merge).
       .where('merged_into_id', 'is', null)
+      .$if(restrictTo !== null, (qb) => qb.where('id', 'in', [...(restrictTo ?? [])]))
       .where((eb) =>
         eb.or([
           eb(normalizedFirst, 'like', pattern),

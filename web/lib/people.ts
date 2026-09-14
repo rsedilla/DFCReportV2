@@ -4,9 +4,10 @@ import { authenticatedRequest } from './session';
  * The `people` API as this client sees it (SKILL.md sections 3 and 8).
  *
  * **A person comes back in one of two shapes, and the difference is a domain
- * rule rather than a loading state.** Section 8 makes the directory church-wide
- * by name — deliberately, so that duplicate prevention works across branches —
- * and withholds the *details* of anyone outside the viewer's pastoral scope. The
+ * rule rather than a loading state.** Section 8 withholds the *details* of anyone
+ * outside the viewer's pastoral scope. Since decision 0244 it also decides whether
+ * such a person appears at all: the directory is still church-wide, and reaching
+ * all of it is now a request a caller makes rather than the default. The
  * API says which it gave you in `scope`, and it says so explicitly rather than
  * leaving fields absent, "so a client can tell a withheld profile from an empty
  * one and say so, rather than rendering a person who looks like they have no
@@ -70,14 +71,28 @@ export interface PersonPage {
  */
 export const MINIMUM_SEARCH_LENGTH = 2;
 
+/**
+ * Search by name.
+ *
+ * **`churchWide` defaults to false, and the default is the rule rather than a
+ * convenience** (SKILL.md section 8, decision 0244). The People screen shows the
+ * people a leader pastors; the church-wide directory stays reachable from the
+ * person pickers, where a task already names somebody specific. A caller that
+ * says nothing gets the narrow answer, so a screen added later is private unless
+ * it deliberately opts out.
+ */
 export async function searchPeople(
   q: string,
   cursor: string | null,
   signal?: AbortSignal,
+  options: { churchWide?: boolean } = {},
 ): Promise<PersonPage> {
   const params = new URLSearchParams({ q });
   if (cursor) {
     params.set('cursor', cursor);
+  }
+  if (options.churchWide) {
+    params.set('church_wide', 'true');
   }
 
   return authenticatedRequest<PersonPage>(`/api/v1/people?${params.toString()}`, { signal });
