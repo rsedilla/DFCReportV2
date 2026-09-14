@@ -248,9 +248,7 @@ resolves exactly as well as it did in the single file and no better. *Recounted 
 neither of the others, none of them carrying a `Next:`. The one file with no `Previous:` is
 0001, which has nothing before it. The recount before this one was dated 2026-09-13 and
 triggered by 0244, and was left stale by 0245 the next day. The one before that was dated 2026-09-11 and
-triggered by 0243, and was left stale by 0244 two days later — the first time in this chain
-that the staling ruling did not arrive the same day, which changes nothing about the
-instruction and is worth one clause because every other entry here says "the same day".
+triggered by 0243, and was left stale by 0244 two days later.
 The one before that was dated 2026-09-11 and
 triggered by 0242, and was left stale by 0243 the same day. The one before that was dated 2026-09-11 and
 triggered by 0241, and was left stale by 0242 the same day. The one before that was dated 2026-09-11 and
