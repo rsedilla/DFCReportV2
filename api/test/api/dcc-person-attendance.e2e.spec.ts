@@ -357,7 +357,7 @@ describe('one person’s DCC attendance (section 9, decision 0247)', () => {
     expect(admitted.body.classification).toBe('VIP');
   });
 
-  it('admits a Senior Pastor to a person in either Network', async () => {
+  it('admits a Senior Pastor to a person', async () => {
     const eventId = await createEvent(shift(await recentSunday(), -7));
     await insertRecord(eventId, timothy, true, mark, markAccount);
 
