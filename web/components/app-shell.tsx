@@ -1,6 +1,15 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
+import {
+  ChartColumn,
+  CircleUserRound,
+  ClipboardCheck,
+  LayoutGrid,
+  type LucideIcon,
+  Network,
+  Users,
+} from 'lucide-react';
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
 import type { ReactNode } from 'react';
@@ -20,6 +29,7 @@ import { cn } from '@/lib/utils';
 interface NavEntry {
   href: string;
   label: string;
+  icon: LucideIcon;
   matches: readonly (string | RegExp)[];
 }
 
@@ -48,12 +58,26 @@ const CELL_MEETINGS = /^\/cells\/[^/]+\/meetings(?=\/|$)/;
 const RECORD: NavEntry = {
   href: RECORD_PATH,
   label: 'Record',
+  icon: ClipboardCheck,
   matches: [RECORD_PATH, '/dcc', CELL_MEETINGS],
 };
-const REPORTS: NavEntry = { href: REPORTS_PATH, label: 'Reports', matches: ['/reports'] };
-const PEOPLE: NavEntry = { href: '/people', label: 'People', matches: ['/people'] };
-const CELLS: NavEntry = { href: '/cells', label: 'Cells', matches: ['/cells'] };
-const ACCOUNT: NavEntry = { href: '/session', label: 'Account and session', matches: ['/session'] };
+const REPORTS: NavEntry = {
+  href: REPORTS_PATH,
+  label: 'Reports',
+  icon: ChartColumn,
+  matches: ['/reports'],
+};
+const PEOPLE: NavEntry = { href: '/people', label: 'People', icon: Users, matches: ['/people'] };
+const CELLS: NavEntry = { href: '/cells', label: 'Cells', icon: LayoutGrid, matches: ['/cells'] };
+const ACCOUNT: NavEntry = {
+  href: '/session',
+  label: 'Account and session',
+  icon: CircleUserRound,
+  matches: ['/session'],
+};
+
+/** The application's name, at the top of the sidebar (owner's choice, 2026-09-15). */
+const APPLICATION_NAME = 'G12 Church Management';
 
 /**
  * How wide a screen's content is allowed to get, and why there are two.
@@ -105,6 +129,13 @@ export const PAGE_WIDTH = {
  * not a role, because section 7 makes a capability and its scope the thing that
  * decides. The rule lives in `lib/landing.ts` beside the landing path it also
  * decides, so the first item and the screen a person lands on cannot disagree.
+ *
+ * **Two arrangements by width, one navigation** (UI-2, owner's choices of
+ * 2026-09-15). Below `lg` (1024px) — phones and tablets — the items are a tab bar
+ * fixed to the bottom of the screen, within a thumb's reach, under a slim bar that
+ * names the section and holds the account button. At `lg` and above they stand in
+ * the sidebar. It is one `<nav>` restyled rather than two, so there is exactly one
+ * landmark named Main at every width and nothing to keep in step.
  */
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
@@ -123,6 +154,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       : {
           href: `/people/${me.data.person_id}/network`,
           label: 'Network',
+          icon: Network,
           matches: [`/people/${me.data.person_id}/network`],
         };
 
@@ -146,7 +178,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   // "where am I", announced to a screen reader as two current pages. A longer match
   // beats a shorter one, so `/people/{id}/network` resolves to Network and
   // `/people/{id}` still resolves to People.
-  let currentHref: string | null = null;
+  let current: NavEntry | null = null;
   let longest = -1;
 
   for (const link of [...links, ACCOUNT]) {
@@ -155,13 +187,14 @@ export function AppShell({ children }: { children: ReactNode }) {
 
       if (length > longest) {
         longest = length;
-        currentHref = link.href;
+        current = link;
       }
     }
   }
 
-  function renderLink(link: NavEntry, placement: 'item' | 'footer' = 'item') {
-    const active = link.href === currentHref;
+  function renderItem(link: NavEntry) {
+    const active = link.href === current?.href;
+    const Icon = link.icon;
 
     return (
       <Link
@@ -172,84 +205,118 @@ export function AppShell({ children }: { children: ReactNode }) {
         // information (1.4.1).
         aria-current={active ? 'page' : undefined}
         className={cn(
-          'focus-visible:outline-accent inline-flex min-h-11 items-center px-3',
-          'focus-visible:outline-2 focus-visible:outline-offset-2',
-          // The sidebar is a column, so a link fills its width and the target grows
-          // rather than staying a word-shaped strip (2.5.8).
-          'lg:w-full',
-          placement === 'item'
-            ? cn(
-                // **The design's navigation item: square, uppercase, tracked.** A
-                // preview of the redesign's look ahead of UI-1, applied here alone.
-                'rounded-none text-[13px] font-semibold tracking-[0.08em] uppercase',
-                // **The current item is a filled block, which is a change of shape and
-                // not of hue alone** (1.4.1), with the heavier weight as a second cue.
-                // `surface` on `ink` is listed in `check-contrast.mjs` for both themes,
-                // where it flips to a light block with dark text.
-                active ? 'bg-ink text-surface font-bold' : 'text-ink hover:bg-raised',
-              )
-            : cn(
-                'rounded-md text-xs underline underline-offset-4',
-                active ? 'text-ink font-medium' : 'text-muted hover:text-ink',
-              ),
+          'focus-visible:outline-accent focus-visible:outline-2 focus-visible:-outline-offset-2',
+          'lg:focus-visible:outline-offset-2',
+          // **A tab below `lg`**: an equal share of the bar, the icon over the word,
+          // and 56px tall against the 44px minimum a phone held standing up needs
+          // (2.5.8). `min-w-0` so five of them share 320px without pushing past it.
+          'flex min-h-14 min-w-0 flex-1 flex-col items-center justify-center gap-1 px-1',
+          'text-[0.625rem] leading-none font-bold tracking-[0.04em] uppercase',
+          // **An item at `lg`**: a full-width row of the sidebar, the icon dropped.
+          'lg:min-h-11 lg:flex-none lg:flex-row lg:justify-start lg:px-3',
+          'lg:text-[0.8125rem] lg:tracking-[0.08em]',
+          // **The current item is a filled block at every width, which is a change of
+          // shape and not of hue alone** (1.4.1). `surface` on `ink` is listed in
+          // `check-contrast.mjs` for both themes, where it flips to a light block.
+          active ? 'bg-ink text-surface' : 'text-ink hover:bg-raised',
         )}
       >
-        {link.label}
+        <Icon aria-hidden="true" strokeWidth={1.5} className="size-5 shrink-0 lg:hidden" />
+        <span className="max-w-full truncate">{link.label}</span>
       </Link>
     );
   }
 
+  const accountActive = current?.href === ACCOUNT.href;
+
   return (
     <RequireSession>
-      {/*
-        **One navigation, arranged two ways by the width of the window.** Below `lg`
-        it is the bar across the top; at `lg` and above it stands beside the page as
-        the sidebar section 19 describes. Width, never the device.
-      */}
       <div className="min-h-dvh lg:flex">
-        <header className="border-line border-b lg:w-60 lg:shrink-0 lg:border-r lg:border-b-0">
-          <div
+        {/*
+          **The bar across the top below `lg`.** It names where you are and holds the
+          account, which is not a navigation item (ruling of 2026-09-14). The section
+          name is a paragraph rather than a heading: every screen carries its own
+          `h1`, and a second heading above it would be announced as the page's title.
+        */}
+        <header className="bg-surface border-line sticky top-0 z-30 flex min-h-14 items-center justify-between gap-3 border-b pr-1.5 pl-5 lg:hidden">
+          <p className="truncate text-base font-bold tracking-tight">
+            {current?.label ?? APPLICATION_NAME}
+          </p>
+          <Link
+            href={ACCOUNT.href}
+            aria-current={accountActive ? 'page' : undefined}
             className={cn(
-              'mx-auto flex max-w-5xl flex-wrap items-center gap-1 px-5 py-2',
-              'lg:sticky lg:top-0 lg:mx-0 lg:h-dvh lg:max-w-none lg:flex-col lg:flex-nowrap',
-              'lg:items-stretch lg:overflow-y-auto lg:py-6',
+              'focus-visible:outline-accent inline-flex size-11 shrink-0 items-center justify-center',
+              'focus-visible:outline-2 focus-visible:-outline-offset-2',
+              accountActive ? 'bg-ink text-surface' : 'text-ink hover:bg-raised',
             )}
           >
+            <CircleUserRound aria-hidden="true" strokeWidth={1.5} className="size-6" />
+            <span className="sr-only">{ACCOUNT.label}</span>
+          </Link>
+        </header>
+
+        <div className="lg:border-line lg:w-60 lg:shrink-0 lg:border-r">
+          <div className="lg:sticky lg:top-0 lg:flex lg:h-dvh lg:flex-col lg:overflow-y-auto lg:px-3 lg:py-6">
+            <p className="hidden px-3 pb-6 text-lg leading-tight font-bold tracking-tight lg:block">
+              {APPLICATION_NAME}
+            </p>
+
             {/*
               **No empty landmark.** While the account loads there are no items, and a
               navigation landmark named Main with nothing in it is announced as
               navigation offering nothing, so it is not rendered until it has links.
-              Below `lg` the account link beside it moves along when the links arrive;
-              at `lg` it is pinned to the sidebar's foot and does not.
             */}
             {links.length > 0 ? (
               <nav
                 aria-label="Main"
-                className="flex flex-wrap items-center gap-1 lg:flex-col lg:items-stretch lg:gap-0.5"
+                className={cn(
+                  'bg-surface border-edge fixed inset-x-0 bottom-0 z-30 flex border-t',
+                  // The phone's home indicator sits over the bottom few pixels; the
+                  // inset is zero wherever there is none.
+                  'pb-[env(safe-area-inset-bottom)]',
+                  'lg:static lg:flex-col lg:gap-0.5 lg:border-t-0 lg:bg-transparent lg:pb-0',
+                )}
               >
-                {links.map((link) => renderLink(link))}
+                {links.map((link) => renderItem(link))}
               </nav>
             ) : null}
 
             {/*
-              **The account is not a navigation item** (ruling of 2026-09-14). It sits
-              under the person's name at the foot of the sidebar, and at the end of the
-              bar below `lg`, where there is no foot to put it in.
+              **The account is not a navigation item** (ruling of 2026-09-14). At `lg`
+              it sits under the person's name at the foot of the sidebar; below `lg` it
+              is the button in the bar across the top, and this block is not rendered.
             */}
-            <div className="flex items-center gap-1 lg:border-line lg:mt-auto lg:flex-col lg:items-stretch lg:border-t lg:pt-4">
+            <div className="lg:border-line hidden lg:mt-auto lg:flex lg:flex-col lg:border-t lg:pt-4">
               {me.data?.first_name ? (
-                <p className="text-ink hidden px-3 text-sm lg:block">{me.data.first_name}</p>
+                <p className="text-ink px-3 text-sm">{me.data.first_name}</p>
               ) : null}
-              {renderLink(ACCOUNT, 'footer')}
+              <Link
+                href={ACCOUNT.href}
+                aria-current={accountActive ? 'page' : undefined}
+                className={cn(
+                  'focus-visible:outline-accent inline-flex min-h-11 items-center px-3 text-xs',
+                  'underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2',
+                  accountActive ? 'text-ink font-medium' : 'text-muted hover:text-ink',
+                )}
+              >
+                {ACCOUNT.label}
+              </Link>
             </div>
           </div>
-        </header>
+        </div>
 
         {/*
           `min-w-0` so a wide table inside a page scrolls within its own container
           rather than stretching this column and pushing the sidebar off screen.
+
+          **Below `lg` the page stops short of the tab bar**, by the bar's height and
+          the home-indicator inset, so the last thing on a page can be scrolled clear
+          of it rather than sitting underneath (2.4.11).
         */}
-        <div className="lg:min-w-0 lg:flex-1">{children}</div>
+        <div className="min-w-0 pb-[calc(3.5rem+env(safe-area-inset-bottom))] lg:flex-1 lg:pb-0">
+          {children}
+        </div>
       </div>
     </RequireSession>
   );

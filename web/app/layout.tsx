@@ -38,7 +38,15 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="en" className={archivo.variable}>
+    // **Scroll padding for the two pinned bars below `lg`** (2.4.11 Focus Not
+    // Obscured). When focus moves to a control, the browser scrolls it into view
+    // clear of the bar across the top and the tab bar along the bottom rather than
+    // underneath either. At `lg` the sidebar sits beside the page and neither bar
+    // exists, so the padding is removed.
+    <html
+      lang="en"
+      className={`${archivo.variable} scroll-pt-16 scroll-pb-20 lg:scroll-pt-0 lg:scroll-pb-0`}
+    >
       <body>
         {/*
           A skip link, and the reason it is the first focusable thing in the
