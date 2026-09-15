@@ -68,6 +68,12 @@ export interface PersonPage {
  * with `VALIDATION_FAILED`. Stated here rather than left to the screens, which
  * were enabling the Search button at one character and then rendering the pipe's
  * raw refusal as a form-level error.
+ *
+ * **This counts the term as typed, and the API counts it again once normalized.**
+ * Normalizing turns a hyphen or an apostrophe into a separator and drops Jr, Sr, II and
+ * III, so `a-` or `Jr` enables the button here and the API refuses it with "Enter at
+ * least two letters of a name.", which the screens show as the API words it. Repeating
+ * that normalization here would be a second copy of a rule the API owns.
  */
 export const MINIMUM_SEARCH_LENGTH = 2;
 

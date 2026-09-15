@@ -345,14 +345,19 @@ export class AwaitingReassignmentDto {
   limit?: number;
 }
 
+/** The fewest characters a people search runs on, counted once the term is normalized. */
+export const SEARCH_MINIMUM = 2;
+
 export class SearchPeopleDto {
   @IsString()
   // The upper bound is the name bound rather than a coincidence that matches it: this
   // term is matched against `first_name`, `last_name` and the two joined, so a bound
   // below `NAME_FIELD_MAX_LENGTH` would leave a full-length name searchable only by
   // prefix, and would do so silently if that constant were ever raised. The minimum is
-  // its own rule — two characters, so a one-letter probe cannot page the directory.
-  @Length(2, NAME_FIELD_MAX_LENGTH)
+  // its own rule — two characters, so a one-letter probe cannot page the directory — and
+  // it is checked twice: here on the term as typed, and in the controller on the term as
+  // searched, because normalizing can shorten it.
+  @Length(SEARCH_MINIMUM, NAME_FIELD_MAX_LENGTH)
   @IsStorableText()
   q!: string;
 

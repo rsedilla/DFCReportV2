@@ -4,7 +4,11 @@ import { CurrentActor } from '../auth/current-actor.decorator';
 import { RequiresCapability } from '../auth/authorization/authorization.decorators';
 import { Capability } from '../auth/authorization/capabilities';
 import { AuthorizationService, type Actor } from '../auth/authorization/authorization.service';
-import { InvariantViolationError, NotFoundError } from '../common/errors/api-error';
+import {
+  InvariantViolationError,
+  NotFoundError,
+  ValidationFailedError,
+} from '../common/errors/api-error';
 import { unresolvableCursor } from '../common/cursor';
 import { HierarchyService } from '../hierarchy/hierarchy.service';
 import {
@@ -19,8 +23,10 @@ import {
   CreatePersonDto,
   DuplicateCandidatesDto,
   EditPersonDto,
+  SEARCH_MINIMUM,
   SearchPeopleDto,
 } from './dto/people.dto';
+import { normalizeName } from './duplicate-matching';
 import { PeopleDuplicatesService } from './people.duplicates.service';
 import { PeopleReadService } from './people.read.service';
 import { PeopleReassignmentService } from './people.reassignment.service';
@@ -386,6 +392,16 @@ export class PeopleController {
     @Query() query: SearchPeopleDto,
     @CurrentActor() actor: Actor,
   ): Promise<{ data: Record<string, unknown>[]; next_cursor: string | null }> {
+    // **The minimum is counted on the term as it is searched, not as it was typed.** The
+    // DTO's bound reads the raw string, and `normalizeName` turns a hyphen or an apostrophe
+    // into a separator and drops Jr, Sr, II and III. So `a-`, `a'` and ` a` each passed it
+    // and searched for a single letter, across the church in church-wide mode, and `Jr`
+    // passed it and was answered with an empty list. Refused here with the field named, which is the shape a client shows as
+    // a sentence rather than as "some fields need correcting".
+    if (normalizeName(query.q).replace(/\s+/g, '').length < SEARCH_MINIMUM) {
+      throw new ValidationFailedError('Enter at least two letters of a name.', { field: 'q' });
+    }
+
     // Whole Church needs no restriction: the set would be every row, and asking
     // for it would materialise the directory to filter it against itself.
     const membership = query.church_wide

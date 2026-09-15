@@ -1123,15 +1123,27 @@ describe('people (SKILL.md sections 3, 7 and 8)', () => {
       expect((response.body.data as unknown[]).length).toBeGreaterThan(0);
     });
 
-    it('does not page out the directory for a term that normalizes to nothing', async () => {
-      // `normalizeName` drops suffix tokens, so `Jr` arrives empty and would build
-      // the pattern `%%` -- the directory dump the LIKE escaping was added to
-      // prevent, reached by a shorter route.
-      for (const q of ['Jr', 'II', '  ']) {
+    it('refuses a term that normalizes to fewer than two characters, naming the field', async () => {
+      // The two-character bound on the DTO reads the term as typed. `normalizeName` turns
+      // a hyphen or an apostrophe into a separator and drops suffix tokens, so `a-`, `a'`
+      // and ` a` passed it and searched the church for one letter, and `Jr` built an empty
+      // term -- which the service answered with nothing rather than `%%`. The route now
+      // counts the term as it is searched, church-wide mode included.
+      for (const q of ['a-', "a'", ' a', 'Jr', 'II', '  ']) {
+        const response = await search(raymondAccount, q, { churchWide: true });
+
+        expect(response.status).toBe(422);
+        expect(response.body.error.code).toBe('VALIDATION_FAILED');
+        expect(response.body.error.details.field).toBe('q');
+        expect(response.body.error.message).toBe('Enter at least two letters of a name.');
+      }
+    });
+
+    it('still searches a two-letter term, and names written with a hyphen or apostrophe', async () => {
+      for (const q of ['Ma', "O'Ma", 'Dela-Cruz']) {
         const response = await search(raymondAccount, q, { churchWide: true });
 
         expect(response.status).toBe(200);
-        expect(response.body.data).toEqual([]);
       }
     });
 
