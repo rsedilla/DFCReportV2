@@ -305,7 +305,7 @@ const SCANS = [
       await mockCells(page);
     },
     async arrange(page: import('@playwright/test').Page) {
-      await expect(page.getByRole('heading', { name: 'Cell Leaders' })).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'Cells', exact: true })).toBeVisible();
       await expect(page.getByRole('link', { name: 'C-0007' })).toBeVisible();
       // The `0 of 0` row, asserted rather than assumed: settling on the heading
       // alone would pass on a page where the second row never rendered.
@@ -338,8 +338,30 @@ const SCANS = [
     },
     async arrange(page: import('@playwright/test').Page) {
       await expect(page.getByRole('heading', { name: 'Cell C-0007' })).toBeVisible();
-      await expect(page.getByText('Awaiting a record')).toBeVisible();
-      await expect(page.getByText('Did not meet', { exact: true })).toBeVisible();
+      // Filtered to what is visible: the rows render as a table from `lg` and as cards
+      // below it, so each word is in the page twice and one copy is hidden.
+      await expect(page.getByText('Awaiting a record').filter({ visible: true })).toBeVisible();
+      await expect(
+        page.getByText('Did not meet', { exact: true }).filter({ visible: true }),
+      ).toBeVisible();
+    },
+  },
+  {
+    // "Change when it meets", the schedule change as a dialog over the Cell's page: seven
+    // day radios, the time, and what the Cell meets on now.
+    name: 'cell meetings, changing when it meets',
+    route: '/cells/3f1b7c6e-0000-4000-8000-000000000101/meetings',
+    pattern: '/cells/[id]/meetings',
+    async before(page: import('@playwright/test').Page) {
+      await mockSignedIn(page);
+      await mockCellMeetings(page);
+    },
+    async arrange(page: import('@playwright/test').Page) {
+      await expect(page.getByRole('heading', { name: 'Cell C-0007' })).toBeVisible();
+      await page.getByRole('button', { name: 'Change when it meets' }).click();
+      const dialog = page.getByRole('dialog', { name: 'Change when C-0007 meets' });
+      await expect(dialog.getByRole('radio', { name: 'Wednesday' })).toBeVisible();
+      await expect(dialog.getByText(/^Meets now on/)).toBeVisible();
     },
   },
   {
@@ -490,6 +512,21 @@ const SCANS = [
     },
   },
   {
+    // Add to a Cell from the list: the profile's dialog, over the Cells of the viewer's scope.
+    name: 'people without a cell, adding to a cell',
+    route: '/cells/people-without-a-cell',
+    async before(page: import('@playwright/test').Page) {
+      await mockSignedIn(page);
+      await mockPeopleWithoutACell(page);
+      await mockCells(page);
+    },
+    async arrange(page: import('@playwright/test').Page) {
+      await page.getByRole('button', { name: 'Add to a Cell' }).first().click();
+      const dialog = page.getByRole('dialog', { name: 'Add Bituin Carreon to a Cell' });
+      await expect(dialog.getByRole('combobox', { name: 'Cell' })).toBeVisible();
+    },
+  },
+  {
     // Section 20's attention list, which the placement graph's reconstruction would
     // otherwise keep invisible (decision 0232).
     name: 'people awaiting reassignment',
@@ -531,7 +568,7 @@ const SCANS = [
     },
   },
   {
-    // Two members, each removable behind a confirmation, and the picker above them.
+    // Two members, each removable behind a confirmation, under the Add a member button.
     name: 'cell members',
     route: '/cells/3f1b7c6e-0000-4000-8000-000000000101/members',
     pattern: '/cells/[id]/members',
@@ -542,8 +579,8 @@ const SCANS = [
   await mockPastoralPath(page);
     },
     async arrange(page: import('@playwright/test').Page) {
-      await expect(page.getByRole('heading', { name: 'Current members' })).toBeVisible();
-      await expect(page.getByText('Rosalinda Ocampo')).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'Rosalinda Ocampo' })).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Add a member' })).toBeVisible();
     },
   },
   {
@@ -557,7 +594,7 @@ const SCANS = [
     async arrange(page: import('@playwright/test').Page) {
       await page.getByRole('button', { name: 'Remove' }).first().click();
       await expect(page.getByRole('button', { name: 'Yes, remove' })).toBeVisible();
-      await expect(page.getByText(/Past months keep counting them/)).toBeVisible();
+      await expect(page.getByText(/Past months keep counting them/).filter({ visible: true })).toBeVisible();
     },
   },
   {
@@ -572,18 +609,23 @@ const SCANS = [
     },
   },
   {
-    // The whole screen is about one rule: the change lands next month.
-    name: 'cell schedule',
-    route: '/cells/3f1b7c6e-0000-4000-8000-000000000101/schedule',
-    pattern: '/cells/[id]/schedule',
+    // The Add a member dialog: the church-wide person search, searched, with a result.
+    name: 'cell members, adding a member',
+    route: '/cells/3f1b7c6e-0000-4000-8000-000000000101/members',
+    pattern: '/cells/[id]/members',
     async before(page: import('@playwright/test').Page) {
       await mockSignedIn(page);
+      await mockPeople(page);
+      await mockCellMeetings(page);
+      await mockCellMembers(page);
     },
     async arrange(page: import('@playwright/test').Page) {
-      await expect(
-        page.getByRole('heading', { name: 'Change when this Cell meets' }),
-      ).toBeVisible();
-      await expect(page.getByRole('radio', { name: 'Wednesday' })).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'Rosalinda Ocampo' })).toBeVisible();
+      await page.getByRole('button', { name: 'Add a member' }).click();
+      const dialog = page.getByRole('dialog', { name: 'Add a member to C-0007' });
+      await dialog.getByLabel('Search for a person by name').fill('Marilou');
+      await dialog.getByRole('button', { name: 'Find' }).click();
+      await expect(dialog.getByRole('button', { name: 'Choose' }).first()).toBeVisible();
     },
   },
   {
@@ -751,23 +793,23 @@ const TARGET_SWEEP = [
     minimum: 11,
   },
   {
-    // Two month controls, the "only my Cells" filter, and a link per Cell. The
-    // month controls are icon-only and are the reason this state is measured
-    // rather than exempted: an icon button is where a 24px target goes wrong.
+    // The link to people without a Cell, two month controls, the "only my Cells" filter,
+    // and a link per Cell. The month controls are icon-only and are the reason this state
+    // is measured rather than exempted: an icon button is where a 24px target goes wrong.
     name: 'cells',
     route: '/cells',
     settleRole: 'link' as const,
     settle: 'C-0007',
-    minimum: 5,
+    minimum: 6,
   },
   {
     name: 'cell meetings',
     route: '/cells/3f1b7c6e-0000-4000-8000-000000000101/meetings',
     settleRole: 'heading' as const,
     settle: 'Cell C-0007',
-    // The two month controls. Every meeting row is text: recording is a later
-    // screen, and this one carries no control per row.
-    minimum: 2,
+    // The back link, Members, Change when it meets, the two month controls, and a link
+    // per meeting across the fixture's four.
+    minimum: 9,
   },
   {
     name: 'dcc calendar',
@@ -828,14 +870,14 @@ const TARGET_SWEEP = [
     minimum: 21,
   },
   {
-    // The back link and one link per person: three, with no "Show more" for this
-    // fixture. Settled on a person rather than the page heading, which renders before
-    // the list arrives.
+    // The back link, and a name link and an Add to a Cell button per person: five, with no
+    // "Show more" for this fixture. Settled on a person rather than the page heading, which
+    // renders before the list arrives.
     name: 'people without a cell',
     route: '/cells/people-without-a-cell',
     settleRole: 'heading' as const,
     settle: 'Bituin Carreon',
-    minimum: 3,
+    minimum: 5,
   },
   {
     // The back link and one link per person, which is the reassignment section 19
@@ -868,23 +910,14 @@ const TARGET_SWEEP = [
     minimum: 6,
   },
   {
-    // The picker's search box and its Find button, plus a Remove per member.
-    // Settled on a member's own heading, not on "Current members", which renders
-    // from the page rather than from the data — so the count would run before the
-    // list arrived, which is what the minimum caught.
+    // The back link, Add a member, and a name link and a Remove per member. Settled on a
+    // member's own heading, which renders from the data, so the count runs after the list
+    // arrived.
     name: 'cell members',
     route: '/cells/3f1b7c6e-0000-4000-8000-000000000101/members',
     settleRole: 'heading' as const,
     settle: 'Rosalinda Ocampo',
-    minimum: 5,
-  },
-  {
-    // Seven day radios, the time input, and the submit.
-    name: 'cell schedule',
-    route: '/cells/3f1b7c6e-0000-4000-8000-000000000101/schedule',
-    settleRole: 'heading' as const,
-    settle: 'Change when this Cell meets',
-    minimum: 9,
+    minimum: 6,
   },
   {
     // Two month controls, the scope select, and the link to the DCC figures that
@@ -998,8 +1031,27 @@ const TARGET_EXEMPT: { name: string; why: string }[] = [
   {
     name: 'cell members, none yet',
     why:
-      'Its only controls are the picker above the empty list, which "cell members" already ' +
-      'measures. The state is the absence of rows.',
+      'Its only controls are the back link and Add a member above the empty list, which ' +
+      '"cell members" already measures. The state is the absence of rows.',
+  },
+  {
+    name: 'cell meetings, changing when it meets',
+    why:
+      'Opens the schedule dialog over the measured "cell meetings". Its controls are the ' +
+      'RadioGroup primitive measured under "record a cell meeting", a Field input measured under ' +
+      '"add a person", and two Buttons, the primitive measured on every screen.',
+  },
+  {
+    name: 'cell members, adding a member',
+    why:
+      'Opens the Add a member dialog over the measured "cell members". Its controls are the ' +
+      'PersonPicker measured under "pastoral network" and two Buttons, the measured primitive.',
+  },
+  {
+    name: 'people without a cell, adding to a cell',
+    why:
+      'Opens the dialog already exempted under "person profile, moving to another cell" over ' +
+      'the measured "people without a cell": a SelectField and two Buttons.',
   },
   {
     name: 'cell attendance report, one Cell',

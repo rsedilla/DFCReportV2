@@ -13,8 +13,8 @@ import { cn } from '@/lib/utils';
  * wider than a 320px phone, and it scrolls inside this frame rather than making
  * the page scroll sideways, which `e2e/accessibility.spec.ts` fails on.
  *
- * Header cells are labels — small, bold, uppercase and tracked — over a heavier
- * rule, and body rows are divided by the decorative `line`.
+ * Header cells are labels — small, bold, uppercase, tracked and in the accent, like a
+ * field label — over a heavier rule, and body rows are divided by the decorative `line`.
  */
 export function Table({
   caption,
@@ -40,7 +40,7 @@ export function HeaderCell({ className, ...props }: ThHTMLAttributes<HTMLTableCe
     <th
       scope="col"
       className={cn(
-        'border-edge border-b-2 px-3 py-2 text-xs font-bold tracking-[0.08em] uppercase',
+        'border-edge text-accent border-b-2 px-3 py-2 text-xs font-bold tracking-[0.08em] uppercase',
         className,
       )}
       {...props}

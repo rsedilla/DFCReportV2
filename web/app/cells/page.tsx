@@ -9,9 +9,13 @@ import { CoverageFigure } from '@/components/coverage-figure';
 import { MonthPicker } from '@/components/month-picker';
 import { Button } from '@/components/ui/button';
 import { FailureNotice } from '@/components/ui/failure-notice';
+import { HeaderCell, Table, rowClasses } from '@/components/ui/table';
 import { categoryLabel, dayOfWeekLabel, listCells, type CellSummary } from '@/lib/cells';
 import { describeFailure } from '@/lib/messages';
 import { reportingMonthOf } from '@/lib/reporting-month';
+
+const LINK =
+  'focus-visible:outline-accent inline-flex min-h-6 items-center underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2';
 
 /**
  * The Cells of the signed-in leader's scope (SKILL.md sections 10, 12, 15 and 19;
@@ -35,6 +39,9 @@ import { reportingMonthOf } from '@/lib/reporting-month';
  * submitted — recording less makes coverage worse, never better — and section 13
  * forbids turning the two into a percentage. `0 of 4` is a real and unremarkable
  * reading, and a Cell that scheduled nothing reads `0 of 0` (decision 0225).
+ *
+ * **A table from `lg`, and cards below it.** The same rows in the same order: at 320px a
+ * five-column table is a sideways scroll on the screen a leader uses standing up.
  *
  * **The month is a heading, not a detail.** Section 19 requires the period on every
  * figure, and the next month is not offered at all: a period that has not begun is
@@ -61,19 +68,29 @@ function CellsIndex() {
 
   return (
     <main id="main" className={PAGE_WIDTH.INDEX}>
-      <h1 className="text-2xl font-semibold tracking-tight">Cell Leaders</h1>
+      <h1 className="text-2xl font-semibold tracking-tight">Cells</h1>
       <p className="text-muted mt-2 max-w-2xl text-sm leading-relaxed">
         The Cells you oversee, with how many of the month&rsquo;s scheduled meetings have a
         record. The two figures are shown as two; nothing here is scored, ranked, or ordered
         by how much is missing.
       </p>
 
-      <MonthPicker month={month} onChange={setMonth} open={cells.data?.open} />
+      <p className="mt-4">
+        {/*
+          Section 15 puts the people-without-a-Cell list in this module, so it is reached
+          from here as well as from the dashboard.
+        */}
+        <Link href="/cells/people-without-a-cell" className={`${LINK} text-sm`}>
+          People without a Cell
+        </Link>
+      </p>
 
-      <div className="mt-4">
+      <div className="flex flex-wrap items-center justify-between gap-x-4">
+        <MonthPicker month={month} onChange={setMonth} open={cells.data?.open} />
         <Button
           type="button"
           variant="secondary"
+          className="mt-6"
           aria-pressed={mineOnly}
           onClick={() => setMineOnly((on) => !on)}
         >
@@ -94,38 +111,67 @@ function CellsIndex() {
             : 'There are no Cells in your scope this month.'}
         </p>
       ) : cells.data ? (
-        <ul className="mt-6 flex flex-col gap-3">
-          {cells.data.data.map((cell) => (
-            <CellRow key={cell.id} cell={cell} month={month} />
-          ))}
-        </ul>
+        <>
+          <Table caption="Cells in your scope" className="mt-6 hidden lg:block">
+            <thead>
+              <tr>
+                <HeaderCell>Cell</HeaderCell>
+                <HeaderCell>Leader</HeaderCell>
+                <HeaderCell>Category</HeaderCell>
+                <HeaderCell>Meets</HeaderCell>
+                <HeaderCell>Recorded</HeaderCell>
+              </tr>
+            </thead>
+            <tbody>
+              {cells.data.data.map((cell) => (
+                <tr key={cell.id} className={rowClasses}>
+                  <td className="px-3 py-3">
+                    <Link href={`/cells/${cell.id}/meetings?month=${month}`} className={`${LINK} font-medium`}>
+                      {cell.cell_id}
+                    </Link>
+                  </td>
+                  <td className="px-3 py-3">{cell.leader.full_name}</td>
+                  <td className="px-3 py-3">{categoryLabel(cell.category)}</td>
+                  <td className="px-3 py-3">
+                    {dayOfWeekLabel(cell.schedule.day_of_week)}, {cell.schedule.time_of_day}
+                  </td>
+                  <td className="px-3 py-3">
+                    <CoverageFigure
+                      recorded={cell.coverage.recorded}
+                      scheduled={cell.coverage.scheduled}
+                      unit="meetings"
+                    />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </Table>
+
+          <ul className="mt-6 flex flex-col gap-3 lg:hidden">
+            {cells.data.data.map((cell) => (
+              <CellCard key={cell.id} cell={cell} month={month} />
+            ))}
+          </ul>
+        </>
       ) : null}
     </main>
   );
 }
 
 /**
- * One Cell.
- *
- * A card rather than a table row, because at 320px a five-column table is a
- * horizontal scroll on the screen a leader uses standing up. The heading is the
- * Cell&rsquo;s identifier, which section 10 makes human-readable and stable.
+ * One Cell, below `lg`. The heading is the Cell&rsquo;s identifier, which section 10
+ * makes human-readable and stable.
  */
-function CellRow({ cell, month }: { cell: CellSummary; month: string }) {
+function CellCard({ cell, month }: { cell: CellSummary; month: string }) {
   return (
-    <li className="border-line rounded-lg border p-4">
+    <li className="border-line border p-4">
       <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
         <h2 className="text-base font-medium">
           {/*
             `inline-flex` with a 24px minimum height, because 2.5.8 measures the
-            target and not the text. As inline text at this size the link was 20px
-            tall — which is the sort of thing no reader would report and every
-            thumb would feel.
+            target and not the text.
           */}
-          <Link
-            href={`/cells/${cell.id}/meetings?month=${month}`}
-            className="focus-visible:outline-accent inline-flex min-h-6 items-center rounded-sm underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2"
-          >
+          <Link href={`/cells/${cell.id}/meetings?month=${month}`} className={LINK}>
             {cell.cell_id}
           </Link>
         </h2>

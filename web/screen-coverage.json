@@ -144,7 +144,7 @@
     {
       "route": "PUT /api/v1/cells/:id/schedule",
       "reason": "A schedule change decides which meetings a month derives, so a pilot month needs it reachable (§10, §13).",
-      "screen": "web/app/cells/[id]/schedule/page.tsx"
+      "screen": "web/app/cells/[id]/meetings/page.tsx"
     },
     {
       "route": "GET /api/v1/cells/:id/meetings",
