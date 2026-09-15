@@ -62,6 +62,8 @@ export function MoveCellDialog({
       addCellMember(cellId, personId, idempotencyKeyFor('add', cellId, personId)),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['person-cells', personId] });
+      // The people-without-a-Cell list opens this dialog too, and a placed person leaves it.
+      await queryClient.invalidateQueries({ queryKey: ['people-without-a-cell'] });
       close();
     },
   });

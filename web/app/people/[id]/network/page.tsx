@@ -88,7 +88,7 @@ function PastoralNetwork() {
       <p className="mb-4">
         <Link
           href={`/people/${params.id}`}
-          className="focus-visible:outline-accent text-muted inline-flex min-h-6 items-center rounded-sm text-sm underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2"
+          className="focus-visible:outline-accent text-accent inline-flex min-h-6 items-center rounded-sm text-sm font-medium underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2"
         >
           Back to this person
         </Link>

@@ -5,9 +5,15 @@ import Link from 'next/link';
 import { useState } from 'react';
 
 import { AppShell, PAGE_WIDTH } from '@/components/app-shell';
+import { MoveCellDialog } from '@/components/move-cell-dialog';
+import { Button } from '@/components/ui/button';
 import { FailureNotice } from '@/components/ui/failure-notice';
-import { peopleWithoutACell } from '@/lib/cells';
+import { HeaderCell, Table, rowClasses } from '@/components/ui/table';
+import { peopleWithoutACell, type PersonWithoutACell } from '@/lib/cells';
 import { describeFailure } from '@/lib/messages';
+
+const LINK =
+  'focus-visible:outline-accent inline-flex min-h-6 items-center underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2';
 
 /**
  * People in the viewer's scope holding no active Cell membership (SKILL.md sections
@@ -17,6 +23,10 @@ import { describeFailure } from '@/lib/messages';
  * complete without deciding where its members go, and it may leave them unassigned by
  * explicit choice — so this is where those people stay visible instead of being lost
  * between one Cell and the next.
+ *
+ * **Each entry offers the action that resolves it** (section 15): Add to a Cell, the same
+ * dialog as on the person's profile, which sends one request and leaves the refusal to
+ * the server.
  *
  * **An attention list on section 15's terms.** Filtered to the viewer's own scope,
  * ordered by name, and carrying no measure of how long anybody has been without a
@@ -40,6 +50,7 @@ export default function PeopleWithoutACellPage() {
 
 function WithoutACell() {
   const [cursor, setCursor] = useState<string | undefined>(undefined);
+  const [placing, setPlacing] = useState<PersonWithoutACell | null>(null);
 
   const people = useQuery({
     queryKey: ['people-without-a-cell', cursor ?? null],
@@ -47,13 +58,10 @@ function WithoutACell() {
   });
 
   return (
-    <main id="main" className={PAGE_WIDTH.READING}>
+    <main id="main" className={PAGE_WIDTH.INDEX}>
       <p className="mb-4">
-        <Link
-          href="/dashboard"
-          className="focus-visible:outline-accent text-muted inline-flex min-h-6 items-center rounded-sm text-sm underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2"
-        >
-          Back to the dashboard
+        <Link href="/cells" className={`${LINK} text-accent text-sm font-medium`}>
+          Back to Cells
         </Link>
       </p>
 
@@ -67,6 +75,18 @@ function WithoutACell() {
         <FailureNotice failure={people.isError ? describeFailure(people.error) : null} />
       </div>
 
+      {/*
+        One dialog for the page, told which person it is for. A Cell is chosen inside it,
+        so the leader choosing is the one who knows which.
+      */}
+      <MoveCellDialog
+        open={placing !== null}
+        onClose={() => setPlacing(null)}
+        personId={placing?.id ?? ''}
+        personName={placing?.full_name ?? ''}
+        current={null}
+      />
+
       {people.isPending ? (
         <p className="text-muted mt-6 text-sm">Loading&hellip;</p>
       ) : people.data ? (
@@ -76,43 +96,58 @@ function WithoutACell() {
               Everyone in your scope is in a Cell.
             </p>
           ) : (
-            <ul className="mt-6 flex flex-col gap-3">
-              {people.data.data.map((person) => (
-                <li key={person.id} className="border-line rounded-lg border p-4">
-                  {/*
-                    The action that resolves an entry is adding the person to a Cell
-                    (section 19), and that is done from the Cell's own roster — which is
-                    why the link goes to the person rather than to a form here: the
-                    leader choosing a Cell is the one who knows which.
-                  */}
-                  <h2 className="text-base font-medium">
-                    <Link
-                      href={`/people/${person.id}`}
-                      className="focus-visible:outline-accent inline-flex min-h-6 items-center rounded-sm underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2"
-                    >
-                      {person.full_name}
-                    </Link>
-                  </h2>
-                  <p className="text-muted mt-1 text-sm">{person.member_id}</p>
-                </li>
-              ))}
-            </ul>
-          )}
+            <>
+              <Table caption="People without a Cell" className="mt-6 hidden lg:block">
+                <thead>
+                  <tr>
+                    <HeaderCell>Person</HeaderCell>
+                    <HeaderCell>
+                      <span className="sr-only">Add to a Cell</span>
+                    </HeaderCell>
+                  </tr>
+                </thead>
+                <tbody>
+                  {people.data.data.map((person) => (
+                    <tr key={person.id} className={rowClasses}>
+                      <td className="px-3 py-3">
+                        <PersonName person={person} />
+                      </td>
+                      <td className="px-3 py-3 text-right">
+                        <Button variant="secondary" onClick={() => setPlacing(person)}>
+                          Add to a Cell
+                        </Button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </Table>
 
-          <p className="text-muted mt-6 max-w-2xl text-sm leading-relaxed">
-            To place somebody, open the Cell that should have them and add them to its
-            members.
-          </p>
+              <ul className="mt-6 flex flex-col gap-3 lg:hidden">
+                {people.data.data.map((person) => (
+                  <li
+                    key={person.id}
+                    className="border-line flex flex-wrap items-center justify-between gap-3 border p-4"
+                  >
+                    <div>
+                      <PersonName person={person} />
+                    </div>
+                    <Button variant="secondary" onClick={() => setPlacing(person)}>
+                      Add to a Cell
+                    </Button>
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
 
           {people.data.next_cursor !== null ? (
             <p className="mt-4">
-              <button
-                type="button"
+              <Button
+                variant="secondary"
                 onClick={() => setCursor(people.data.next_cursor ?? undefined)}
-                className="border-line focus-visible:outline-accent inline-flex min-h-11 items-center rounded-lg border px-4 text-sm focus-visible:outline-2 focus-visible:outline-offset-2"
               >
                 Show more
-              </button>
+              </Button>
             </p>
           ) : null}
 
@@ -121,7 +156,7 @@ function WithoutACell() {
               <button
                 type="button"
                 onClick={() => setCursor(undefined)}
-                className="focus-visible:outline-accent text-muted inline-flex min-h-11 items-center rounded-sm text-sm underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2"
+                className={`${LINK} text-muted min-h-11 text-sm`}
               >
                 Back to the first page
               </button>
@@ -130,5 +165,18 @@ function WithoutACell() {
         </>
       ) : null}
     </main>
+  );
+}
+
+function PersonName({ person }: { person: PersonWithoutACell }) {
+  return (
+    <>
+      <h2 className="text-base font-medium">
+        <Link href={`/people/${person.id}`} className={LINK}>
+          {person.full_name}
+        </Link>
+      </h2>
+      <p className="text-muted text-xs">{person.member_id}</p>
+    </>
   );
 }

@@ -6,35 +6,44 @@ import { useParams, useSearchParams } from 'next/navigation';
 import { useState } from 'react';
 
 import { AppShell, PAGE_WIDTH } from '@/components/app-shell';
+import { CellScheduleDialog } from '@/components/cell-schedule-dialog';
 import { CoverageFigure } from '@/components/coverage-figure';
 import { MonthPicker } from '@/components/month-picker';
+import { Button, buttonClasses } from '@/components/ui/button';
 import { FailureNotice } from '@/components/ui/failure-notice';
+import { HeaderCell, Table, rowClasses } from '@/components/ui/table';
+import { Tag } from '@/components/ui/tag';
 import { listCellMeetings, meetingStateLabel, type ScheduledMeeting } from '@/lib/cells';
 import { describeFailure } from '@/lib/messages';
-import { dayLabel, reportingMonthOf } from '@/lib/reporting-month';
+import { dayLabel, monthLabel, reportingMonthOf, todayInManila } from '@/lib/reporting-month';
+
+const LINK =
+  'focus-visible:outline-accent inline-flex min-h-6 items-center underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2';
 
 /**
- * One Cell&rsquo;s meetings for a month (SKILL.md sections 12, 13 and 19).
+ * One Cell&rsquo;s meetings for a month, and the Cell&rsquo;s own page (SKILL.md sections
+ * 10, 12, 13 and 19).
  *
  * **A scheduled meeting with no record is an outstanding task, not a fourth
  * status.** Sections 13 and 19 make that distinction and this screen keeps it: the
  * three statuses are things a leader reported — `HELD`, `NOT_HELD`, `RESCHEDULED` —
- * and an absent record is the absence of a report. It reads &ldquo;Awaiting a
- * record&rdquo;, in the same type as the rest, because section 19 puts outstanding
- * work above the numbers and an unreported meeting is exactly that.
+ * and an absent record is the absence of a report. Every state is an outlined word
+ * and never a colour.
+ *
+ * **A meeting whose day has not come reads "Not yet"** rather than "Awaiting a
+ * record", as on the meeting&rsquo;s own screen: decision 0238 refuses a record before
+ * the day begins in Manila, so nothing is awaited yet.
  *
  * **`NOT_HELD` is a record and is never shown as a failure.** Section 13 makes
  * reporting honestly that a Cell could not meet the whole point of that status
- * existing, so it counts as recorded, carries no warning colour, and sits in the
- * list like any other row.
+ * existing, so it counts as recorded and sits in the list like any other row.
  *
  * **Every date here is the *scheduled* date, which is the meeting&rsquo;s identity**
  * (section 13). A reschedule moves the actual date and leaves this one alone, so the
- * row keeps its place in the month and the actual date is shown beside it rather
- * than instead of it — a meeting that moved is one fact, not two rows.
+ * row keeps its place in the month and the actual date is shown beside it.
  *
- * **The coverage line is the same two figures the index shows**, arrived at the same
- * way, and this screen recomputes neither: it renders the counts the API sends.
+ * **The coverage line is the same two figures the index shows**, and this screen
+ * recomputes neither: it renders the counts the API sends.
  */
 export default function CellMeetingsPage() {
   return (
@@ -48,16 +57,27 @@ function CellMeetings() {
   const params = useParams<{ id: string }>();
   const search = useSearchParams();
   const [month, setMonth] = useState(() => search.get('month') ?? reportingMonthOf());
+  const [changing, setChanging] = useState(false);
+  const [savedFrom, setSavedFrom] = useState<string | null>(null);
 
   const meetings = useQuery({
     queryKey: ['cell-meetings', params.id, month],
     queryFn: ({ signal }) => listCellMeetings(params.id, month, signal),
   });
 
+  const today = todayInManila();
+  const handle = meetings.data?.cell_id ?? null;
+
   return (
     <main id="main" className={PAGE_WIDTH.INDEX}>
+      <p className="mb-4">
+        <Link href="/cells" className={`${LINK} text-accent text-sm font-medium`}>
+          Back to Cells
+        </Link>
+      </p>
+
       <h1 className="text-2xl font-semibold tracking-tight">
-        {meetings.data ? `Cell ${meetings.data.cell_id}` : 'Cell meetings'}
+        {handle ? `Cell ${handle}` : 'Cell meetings'}
       </h1>
       <p className="text-muted mt-2 max-w-2xl text-sm leading-relaxed">
         Every meeting this Cell was scheduled to hold this month, and what was recorded for
@@ -65,20 +85,28 @@ function CellMeetings() {
         not happen.
       </p>
 
-      <p className="mt-4 flex flex-wrap gap-4">
-        <Link
-          href={`/cells/${params.id}/members`}
-          className="focus-visible:outline-accent inline-flex min-h-6 items-center rounded-sm text-sm underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2"
-        >
+      <div className="mt-4 flex flex-wrap gap-3">
+        <Link href={`/cells/${params.id}/members`} className={buttonClasses('secondary')}>
           Members
         </Link>
-        <Link
-          href={`/cells/${params.id}/schedule`}
-          className="focus-visible:outline-accent inline-flex min-h-6 items-center rounded-sm text-sm underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2"
-        >
+        <Button variant="secondary" onClick={() => setChanging(true)}>
           Change when it meets
-        </Link>
-      </p>
+        </Button>
+      </div>
+
+      {savedFrom ? (
+        <p aria-live="polite" className="mt-4 text-sm font-medium">
+          Saved. It takes effect on 1 {monthLabel(savedFrom)}.
+        </p>
+      ) : null}
+
+      <CellScheduleDialog
+        open={changing}
+        onClose={() => setChanging(false)}
+        onSaved={setSavedFrom}
+        cellId={params.id}
+        cellHandle={handle}
+      />
 
       {/*
         No `open` flag here: this route does not return one. It is shown on the
@@ -109,11 +137,56 @@ function CellMeetings() {
               scheduled nothing in a month before it existed, or after it closed.
             </p>
           ) : (
-            <ul className="mt-6 flex flex-col gap-3">
-              {meetings.data.meetings.map((entry) => (
-                <MeetingRow key={entry.scheduled_date} entry={entry} cellId={params.id} />
-              ))}
-            </ul>
+            <>
+              <Table caption="Meetings this month" className="mt-6 hidden lg:block">
+                <thead>
+                  <tr>
+                    <HeaderCell>Meeting</HeaderCell>
+                    <HeaderCell>Time</HeaderCell>
+                    <HeaderCell>What was recorded</HeaderCell>
+                  </tr>
+                </thead>
+                <tbody>
+                  {meetings.data.meetings.map((entry) => (
+                    <tr key={entry.scheduled_date} className={rowClasses}>
+                      <td className="px-3 py-3 align-top">
+                        <Link
+                          href={`/cells/${params.id}/meetings/${entry.scheduled_date}`}
+                          className={`${LINK} font-medium`}
+                        >
+                          {dayLabel(entry.scheduled_date)}
+                        </Link>
+                      </td>
+                      <td className="px-3 py-3 align-top">{entry.scheduled_time}</td>
+                      <td className="px-3 py-3 align-top">
+                        <MeetingState entry={entry} today={today} />
+                        <MeetingDetail entry={entry} />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </Table>
+
+              <ul className="mt-6 flex flex-col gap-3 lg:hidden">
+                {meetings.data.meetings.map((entry) => (
+                  <li key={entry.scheduled_date} className="border-line border p-4">
+                    <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+                      <h2 className="text-base font-medium">
+                        <Link
+                          href={`/cells/${params.id}/meetings/${entry.scheduled_date}`}
+                          className={LINK}
+                        >
+                          {dayLabel(entry.scheduled_date)}
+                        </Link>
+                        <span className="text-muted font-normal"> at {entry.scheduled_time}</span>
+                      </h2>
+                      <MeetingState entry={entry} today={today} />
+                    </div>
+                    <MeetingDetail entry={entry} />
+                  </li>
+                ))}
+              </ul>
+            </>
           )}
         </>
       ) : null}
@@ -121,31 +194,25 @@ function CellMeetings() {
   );
 }
 
-function MeetingRow({ entry, cellId }: { entry: ScheduledMeeting; cellId: string }) {
+/**
+ * Words, never a colour or an icon alone (1.4.1, and sections 13 and 17). A day that has
+ * not come is muted text rather than a tag: it is not a state anybody could act on.
+ */
+function MeetingState({ entry, today }: { entry: ScheduledMeeting; today: string }) {
+  if (entry.meeting === null && entry.scheduled_date > today) {
+    return <span className="text-muted text-sm">Not yet</span>;
+  }
+
+  return <Tag appearance="outline">{meetingStateLabel(entry.meeting)}</Tag>;
+}
+
+function MeetingDetail({ entry }: { entry: ScheduledMeeting }) {
   const meeting = entry.meeting;
   const moved =
     meeting !== null && meeting.actual_date !== null && meeting.actual_date !== entry.scheduled_date;
 
   return (
-    <li className="border-line rounded-lg border p-4">
-      <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-        <h2 className="text-base font-medium">
-          <Link
-            href={`/cells/${cellId}/meetings/${entry.scheduled_date}`}
-            className="focus-visible:outline-accent inline-flex min-h-6 items-center rounded-sm underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2"
-          >
-            {dayLabel(entry.scheduled_date)}
-          </Link>
-          <span className="text-muted font-normal"> at {entry.scheduled_time}</span>
-        </h2>
-        {/*
-          Words, never a colour or an icon alone (1.4.1, and sections 13 and 17).
-          "Awaiting a record" reads in the same type as the three statuses because
-          it is the state a leader most needs to see, not a lesser one.
-        */}
-        <p className="text-sm font-medium">{meetingStateLabel(meeting)}</p>
-      </div>
-
+    <>
       {moved && meeting ? (
         <p className="text-muted mt-2 text-sm">
           Moved to {dayLabel(meeting.actual_date as string)}
@@ -159,6 +226,6 @@ function MeetingRow({ entry, cellId }: { entry: ScheduledMeeting; cellId: string
           {meeting.not_held_note}
         </p>
       ) : null}
-    </li>
+    </>
   );
 }

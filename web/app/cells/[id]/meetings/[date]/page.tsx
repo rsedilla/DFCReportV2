@@ -253,7 +253,7 @@ function RecordMeeting() {
       <p className="mb-4">
         <Link
           href={`/cells/${params.id}/meetings`}
-          className="focus-visible:outline-accent text-muted inline-flex min-h-6 items-center text-sm underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2"
+          className="focus-visible:outline-accent text-accent inline-flex min-h-6 items-center text-sm font-medium underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2"
         >
           Back to this Cell&rsquo;s meetings
         </Link>

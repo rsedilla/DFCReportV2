@@ -80,7 +80,11 @@ export function MonthPicker({
         assertive: it is the result of the reader's own action.
       */}
       <p aria-live="polite" className="flex flex-wrap items-center gap-2 text-sm">
-        <span className="font-medium">{monthLabel(month)}</span>
+        {/*
+          Red and bold (owner's choice of 2026-09-15): every figure below is read against
+          this month. It is a period, not a status or a coverage figure.
+        */}
+        <span className="text-accent font-bold">{monthLabel(month)}</span>
         {/*
           A period being open is a neutral fact and carries the accent; a closed one
           is outlined. The words say which in both, so the colour is never the only
