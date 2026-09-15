@@ -2277,6 +2277,10 @@ Classification is **evaluated as of the end of the reporting month**, from the a
 
 Do not let leaders manually maintain classification when it can be derived from attendance history.
 
+#### One person's attendance and classification
+
+`GET /api/v1/dcc/people/{id}/attendance` returns one person's live DCC attendance records, newest event first and paginated on Section 22's terms, with their classification (ruling of 2026-09-15). It carries `dcc.view_subtree`, resolved against the person, and names no period, so it asks about now: the actor must hold the person in scope today. The classification is counted from every record standing now, by the rule the monthly report applies: present, live records on Sundays that were not removed. A record on a removed Sunday is listed, marked as removed, and not counted. The count is taken over the person's own records, because the monthly figures cover only people who attended in the month asked for, and a test holds the two in agreement. Nothing on this route changes a classification: one that looks wrong is corrected by correcting the record behind it.
+
 ### Adding a DCC VIP
 
 When adding a VIP:
@@ -4434,6 +4438,7 @@ GET  /api/v1/dcc/events?month=YYYY-MM-01  the month's events, with coverage per 
 GET  /api/v1/dcc/events/{id}/roster
 GET  /api/v1/dcc/events/{id}/coverage-gaps  who owes a record, within the actor's scope
 POST /api/v1/dcc/events/{id}/submit       an Admin amendment is a flag on this, not a route
+GET  /api/v1/dcc/people/{id}/attendance   one person's records and the classification they give (Section 9)
 
 GET  /api/v1/cells                       the Cells of the actor's scope; ?led_by=me narrows
 POST /api/v1/cells                       direct creation, initial encoding only
