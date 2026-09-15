@@ -14,13 +14,6 @@ import { ValidationFailedError } from './errors/api-error';
  * Stage 4 added the fourth, and it survived — because it did not re-derive anything.
  * `GET /api/v1/dcc/events/{id}/roster` pages by the same key as the Cell roster, so the
  * two share `roster-cursor.ts` itself rather than only this refusal (decision 0174).
- * Three decoders remain, in three files, for three distinct keys.
- *
- * *This docblock said "the two decoders" when it was written, in the change whose ruling
- * opens by correcting that exact count in `CLAUDE.md`. Counted rather than assumed, and
- * recounted when `roster-cursor.ts` moved into this directory: three files import the
- * refusal below, and "importers" is the wrong unit for what the sentence above is
- * about — which is why it names the decoders and the keys rather than the imports.*
  *
  * `VALIDATION_FAILED` because section 22 defines it as malformed or missing input,
  * which a value the server cannot read is exactly. `field: 'cursor'` because the

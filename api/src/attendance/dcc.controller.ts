@@ -12,9 +12,11 @@ import { UuidParamPipe } from '../common/uuid-param.pipe';
 
 import { DccAttendanceService } from './dcc-attendance.service';
 import { DccCoverageService } from './dcc-coverage.service';
+import { DccPersonAttendanceService } from './dcc-person-attendance.service';
 import {
   DccCoverageGapsDto,
   DccEventsQueryDto,
+  DccPersonAttendanceDto,
   DccRosterDto,
   SubmitDccAttendanceDto,
 } from './dto/dcc.dto';
@@ -22,14 +24,15 @@ import {
 /**
  * `/api/v1/dcc` (SKILL.md sections 9 and 22).
  *
- * **Every route here declares the actor as the target**, and the restriction to the
- * people the caller may record or read is a check in the owning module. Section 7 says a
- * DCC event "is church-wide and resolves through nothing; the endpoints on it are
+ * **Every route on an event declares the actor as the target**, and the restriction to
+ * the people the caller may record or read is a check in the owning module. Section 7
+ * says a DCC event "is church-wide and resolves through nothing; the endpoints on it are
  * scoped by the people they return", and the guard resolves one capability against
  * one target — so the target that carries meaning here is the caller, and the
- * event carries none (decision 0171). *This said "both routes" while there were two;
- * there are four since the ruling of 2026-09-09, and the statement is about the shape
- * rather than about the count.*
+ * event carries none (decision 0171).
+ *
+ * **The one route on a person declares the person** (decision 0247). A person is a
+ * target the guard resolves, so there the guard decides scope and the service only reads.
  *
  * **Two capabilities, split by act rather than by method** (decision 0227). The roster
  * and the submission carry `dcc.take_attendance`; the events index and its coverage
@@ -60,6 +63,7 @@ export class DccController {
   constructor(
     private readonly attendance: DccAttendanceService,
     private readonly coverage: DccCoverageService,
+    private readonly personRecords: DccPersonAttendanceService,
   ) {}
 
   /**
@@ -163,5 +167,23 @@ export class DccController {
       claim,
       body.amendment,
     );
+  }
+
+  /**
+   * `GET /api/v1/dcc/people/{id}/attendance` — one person's records and the classification
+   * they give (section 9; decision 0247).
+   *
+   * **`dcc.view_subtree` against the person**, so the guard refuses anybody the actor does
+   * not hold in scope today before the service reads a row. The route names no period, so
+   * it asks about now (section 7). The capability is the domain's read capability and is
+   * grantable `read_only`.
+   */
+  @Get('people/:id/attendance')
+  @RequiresCapability(Capability.DccViewSubtree, { kind: 'person', from: 'params.id' })
+  async personAttendance(
+    @Param('id') personId: string,
+    @Query() query: DccPersonAttendanceDto,
+  ): Promise<Record<string, unknown>> {
+    return this.personRecords.forPerson(personId, { limit: query.limit, cursor: query.cursor });
   }
 }

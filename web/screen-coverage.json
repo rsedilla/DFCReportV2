@@ -172,6 +172,11 @@
       "screen": "web/app/dcc/[id]/page.tsx"
     },
     {
+      "route": "GET /api/v1/dcc/people/:id/attendance",
+      "reason": "One person's DCC classification and the Sundays behind it (decision 0247), owed to a DCC section on the person profile.",
+      "waived_to": "screens block"
+    },
+    {
       "route": "POST /api/v1/cells",
       "waived_to": "after the pilot — Admin screens",
       "reason": "Direct creation is Admin's during the initial-encoding phase (§2, §10). The pilot's Cells exist before it starts."
