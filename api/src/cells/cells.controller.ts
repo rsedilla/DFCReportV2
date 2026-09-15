@@ -40,8 +40,7 @@ import {
  *
  * Creation is the one section 2 relaxes rather than the one section 10 makes
  * ordinary: while initial encoding is open, Admin creates a Cell and its leadership
- * assignment directly. Everything else here is an ordinary section 10 operation, and
- * each resolves scope through the Cell's leader rather than through the person named.
+ * assignment directly. Everything else here is an ordinary section 10 operation.
  * Request-and-approve is complete here, for both kinds: a request, the Admin queue,
  * a decline and an approval. `cell.request_leadership` guards step one against the
  * prospective leader; `cell.approve_leadership` guards the other three against the
@@ -221,6 +220,23 @@ export class CellsController {
       })),
       next_cursor: encodeRosterCursor(nextCursor),
     };
+  }
+
+  /**
+   * `GET /api/v1/cells/people/{id}/membership` — the Cell a person currently belongs to,
+   * with its current leader, and the Cells they currently lead (SKILL.md sections 8 and 10;
+   * decision 0248).
+   *
+   * **`cell.view_subtree` against the person, not the Cell.** The question is asked from the
+   * person, so a reader who holds them in scope sees their Cell and its leader's name even
+   * where that Cell is led outside the reader's scope, and nothing of its other members
+   * (section 8). It names no period, so it asks about now (section 7). The guard refuses a
+   * malformed identifier, so there is no `UuidParamPipe`.
+   */
+  @Get('people/:id/membership')
+  @RequiresCapability(Capability.CellViewSubtree, { kind: 'person', from: 'params.id' })
+  async personCells(@Param('id') personId: string): Promise<Record<string, unknown>> {
+    return this.membership.currentCellsOf(personId);
   }
 
   /**

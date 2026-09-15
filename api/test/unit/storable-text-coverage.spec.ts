@@ -58,9 +58,17 @@ describe('storable text is refused at the edge, on every field that takes text',
    * are already exempt on, which asks `isStorableText` of all three of its keys before any
    * of them reaches a comparison. That route orders on `member_id` rather than the
    * identifier precisely so it could reuse that cursor instead of declaring a fourth.*
+   *
+   * *The one added with decision 0247 was checked the same way. `DccPersonAttendanceDto.cursor`
+   * is decoded by `decodeDccPersonAttendanceCursor`, which accepts a decoded `eventDate` only
+   * where `isCalendarDate` holds and an `eventId` only where `isUuid` holds. Both are anchored
+   * patterns of digits, hyphens and hexadecimal, so neither admits a null byte or an unpaired
+   * surrogate, and a cursor carrying one is refused as unresolvable before either key reaches
+   * a comparison.*
    */
   const NEVER_STORED = new Set([
     'CellIndexDto.cursor',
+    'DccPersonAttendanceDto.cursor',
     'DccCoverageGapsDto.cursor',
     'DccRosterDto.cursor',
     'PeopleWithoutACellDto.cursor',

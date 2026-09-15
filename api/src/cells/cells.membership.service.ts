@@ -338,6 +338,49 @@ export class CellsMembershipService {
   }
 
   /**
+   * The Cell a person currently belongs to, with its current leader, and the Cells they
+   * currently lead (SKILL.md sections 8 and 10; decision 0248).
+   *
+   * Here for the reason `membersOf` gives: this is `cells` answering its own controller, and
+   * the query is written in `cells.read.service.ts`.
+   *
+   * **`NOT_FOUND` for a person who does not exist.** Only a Whole Church actor reaches this
+   * for one, because `scopeCovers` returns true before the target is read; every narrower
+   * scope is refused by the guard first.
+   */
+  async currentCellsOf(personId: string): Promise<Record<string, unknown>> {
+    const person = await this.people.findById(personId);
+    if (!person) {
+      throw new NotFoundError('No such person.');
+    }
+
+    const { membership, leads } = await this.cells.currentCellsOf(person.id);
+    const leaderId = membership?.leaderId ?? null;
+    const names = await this.people.namesOf(leaderId === null ? [] : [leaderId]);
+    const leader = leaderId === null ? undefined : names.get(leaderId);
+
+    return {
+      person_id: person.id,
+      membership:
+        membership === null
+          ? null
+          : {
+              id: membership.id,
+              cell_id: membership.cellId,
+              leader:
+                leaderId === null
+                  ? null
+                  : {
+                      person_id: leaderId,
+                      member_id: leader?.memberId ?? '',
+                      full_name: leader?.fullName ?? '',
+                    },
+            },
+      leads: leads.map((cell) => ({ id: cell.id, cell_id: cell.cellId })),
+    };
+  }
+
+  /**
    * End a person's membership of a Cell, leaving them in none.
    *
    * Section 10 makes this an ordinary authorized action rather than an exception:

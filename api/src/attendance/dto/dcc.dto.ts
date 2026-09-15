@@ -54,6 +54,28 @@ export class DccRosterDto {
 }
 
 /**
+ * `GET /api/v1/dcc/people/{id}/attendance` (SKILL.md section 22, *Pagination*; decision 0247).
+ *
+ * Bound on the same terms as the roster above. Nothing bounds one person's records either:
+ * somebody who attends every Sunday adds one a week for as long as they come.
+ */
+export class DccPersonAttendanceDto {
+  /** Section 22: defaults to 50, maximum 200. */
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(200)
+  limit?: number;
+
+  /** The `next_cursor` of the previous page, passed back unmodified (section 22). */
+  @IsOptional()
+  @IsString()
+  @Length(1, CURSOR_MAX_LENGTH)
+  cursor?: string;
+}
+
+/**
  * One person's line on a DCC checklist (SKILL.md sections 9 and 14).
  *
  * `version` is what section 14 requires a client to send back: "A client submits

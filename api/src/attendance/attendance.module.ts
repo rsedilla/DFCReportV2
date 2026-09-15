@@ -17,6 +17,7 @@ import { DccCalendarService } from './dcc-calendar.service';
 import { CellFiguresService } from './cell-figures.service';
 import { DccFiguresService } from './dcc-figures.service';
 import { DccCoverageService } from './dcc-coverage.service';
+import { DccPersonAttendanceService } from './dcc-person-attendance.service';
 import { DccController } from './dcc.controller';
 
 /**
@@ -80,6 +81,7 @@ import { DccController } from './dcc.controller';
     DccCalendarService,
     DccAttendanceService,
     DccCoverageService,
+    DccPersonAttendanceService,
     CellMeetingsService,
     CellMeetingsScopeService,
     DccFiguresService,
