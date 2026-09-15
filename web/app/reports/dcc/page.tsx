@@ -7,6 +7,7 @@ import { useState } from 'react';
 import { AppShell, PAGE_WIDTH } from '@/components/app-shell';
 import { AttendanceBuckets, ClassificationFigures } from '@/components/attendance-figures';
 import { CoverageFigure } from '@/components/coverage-figure';
+import { HowTheseAreCounted } from '@/components/how-counted';
 import { MonthPicker } from '@/components/month-picker';
 import { CoverageBySunday } from '@/components/report-coverage';
 import { ReportsSwitch } from '@/components/reports-switch';
@@ -93,7 +94,10 @@ export function DccReport() {
   return (
     <main id="main" className={PAGE_WIDTH.INDEX}>
       <h1 className="text-2xl font-semibold tracking-tight">Reports</h1>
-      <ReportsSwitch current="dcc" month={month} />
+      <div className="mt-4 flex flex-wrap items-center gap-3">
+        <ReportsSwitch current="dcc" month={month} />
+        <HowTheseAreCounted report="dcc" />
+      </div>
       <p className="text-muted mt-4 max-w-2xl text-sm leading-relaxed">
         What the people you oversee recorded for this month&rsquo;s Sundays, and how many of
         the leaders who owed a record filed one.

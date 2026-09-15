@@ -22,7 +22,7 @@ const REPORTS = [
  */
 export function ReportsSwitch({ current, month }: { current: 'cells' | 'dcc'; month: string }) {
   return (
-    <ul aria-label="Which report" className="border-edge mt-4 inline-flex border">
+    <ul aria-label="Which report" className="border-edge inline-flex border">
       {REPORTS.map((report) => {
         const active = report.key === current;
 

@@ -84,13 +84,13 @@
     },
     {
       "route": "GET /api/v1/people/:id/pastoral-path",
-      "reason": "§8 asks for the chain when a profile is opened, and the profile screen does not request it yet. My Network is where it lands.",
-      "screen": "web/app/people/[id]/network/page.tsx"
+      "reason": "§8 asks for the chain when a profile is opened: the profile names the person's direct leader from it, and My Network shows the whole chain.",
+      "screen": "web/app/people/[id]/page.tsx"
     },
     {
       "route": "PUT /api/v1/people/:id/pastoral-leader",
-      "reason": "Reassignment is the highest-risk authorization surface in the system (§5). My Network is the screen that performs it.",
-      "screen": "web/app/people/[id]/network/page.tsx"
+      "reason": "Reassignment is the highest-risk authorization surface in the system (§5). Move to another leader on the person's profile opens this dialog, which performs it.",
+      "screen": "web/components/move-leader-dialog.tsx"
     },
     {
       "route": "PUT /api/v1/people/:id/sex",

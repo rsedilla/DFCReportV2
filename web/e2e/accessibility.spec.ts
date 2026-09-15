@@ -10,6 +10,7 @@ import {
   mockCellChoices,
   mockCellCorrector,
   mockDuplicateRefusal,
+  mockGrants,
   mockMembershipAdd,
   mockPeopleWithoutACell,
   mockPeople,
@@ -148,9 +149,11 @@ const SCANS = [
     async before(page: import('@playwright/test').Page) {
       await mockSignedIn(page);
       await mockPeople(page);
+      await mockPastoralPath(page);
     },
     async arrange(page: import('@playwright/test').Page) {
       await expect(page.getByRole('heading', { name: 'Marilou Reyes Santos' })).toBeVisible();
+      await expect(page.getByText(/^Pastored by/)).toBeVisible();
       // The Cell and DCC sections (decisions 0248 and 0247), waited for rather than
       // assumed: each loads on its own request, and a scan before both arrive would pass on
       // a profile nobody sees.
@@ -172,6 +175,25 @@ const SCANS = [
     async arrange(page: import('@playwright/test').Page) {
       await page.getByRole('button', { name: 'Move to another Cell' }).click();
       await expect(page.getByRole('dialog').getByRole('combobox', { name: 'Cell' })).toBeVisible();
+    },
+  },
+  {
+    // Move to another leader: the leader search inside the dialog, offered to an account
+    // that may move people.
+    name: 'person profile, moving to another leader',
+    route: `/people/${PERSON_IN_SCOPE.id}`,
+    pattern: '/people/[id]',
+    async before(page: import('@playwright/test').Page) {
+      await mockSignedIn(page);
+      await mockGrants(page, ['people.manage_pastoral_assignment']);
+      await mockPeople(page);
+      await mockPastoralPath(page);
+    },
+    async arrange(page: import('@playwright/test').Page) {
+      await page.getByRole('button', { name: 'Move to another leader' }).click();
+      await expect(
+        page.getByRole('dialog').getByLabel('Search for a leader by name'),
+      ).toBeVisible();
     },
   },
   {
@@ -209,9 +231,11 @@ const SCANS = [
     async before(page: import('@playwright/test').Page) {
       await mockSignedIn(page);
       await mockPeople(page);
+      await mockPastoralPath(page);
     },
     async arrange(page: import('@playwright/test').Page) {
       await expect(page.getByRole('button', { name: 'Save changes' })).toBeVisible();
+      await expect(page.getByText('Teofilo Ramos', { exact: true })).toBeVisible();
     },
   },
   {
@@ -455,6 +479,21 @@ const SCANS = [
     },
   },
   {
+    // Recorded marks unlocked for an account that may correct them, with the reason field.
+    name: 'dcc checklist, changing recorded marks',
+    route: '/dcc/3f1b7c6e-0000-4000-8000-000000000501',
+    pattern: '/dcc/[id]',
+    async before(page: import('@playwright/test').Page) {
+      await mockSignedIn(page);
+      await mockGrants(page, ['dcc.correct_subtree']);
+      await mockDccRoster(page);
+    },
+    async arrange(page: import('@playwright/test').Page) {
+      await page.getByRole('button', { name: 'Change recorded marks' }).click();
+      await expect(page.getByLabel('Why is this changing? (optional)')).toBeVisible();
+    },
+  },
+  {
     // A Sunday whose month has closed: the recorded mark shown in a disabled group.
     name: 'dcc checklist, closed Sunday',
     route: '/dcc/3f1b7c6e-0000-4000-8000-000000000501',
@@ -646,6 +685,22 @@ const SCANS = [
     },
   },
   {
+    // How these are counted: a dialog of terms and sentences over the report.
+    name: 'cell attendance report, how these are counted',
+    route: '/reports/cells',
+    async before(page: import('@playwright/test').Page) {
+      await mockSignedIn(page);
+      await mockCells(page);
+      await mockCellReport(page);
+    },
+    async arrange(page: import('@playwright/test').Page) {
+      await page.getByRole('button', { name: 'How these are counted' }).click();
+      await expect(
+        page.getByRole('dialog', { name: 'How these are counted' }).getByText('An open month'),
+      ).toBeVisible();
+    },
+  },
+  {
     // One Cell, which is where section 12 permits buckets. The completed column
     // carries the API's own flag rather than a comparison against the calendar.
     name: 'cell attendance report, one Cell',
@@ -782,11 +837,12 @@ const TARGET_SWEEP = [
   {
     name: 'person profile',
     route: `/people/${PERSON_IN_SCOPE.id}`,
-    // A link, not a button: this screen's controls are all navigation, which is
-    // what they should be.
+    // Settled on a link: Edit details and Pastoral network navigate. With the link to the
+    // leader who pastors them, three; the Cell and DCC sections add more once they load.
+    // No Move to another leader for this account, which may not move people.
     settleRole: 'link' as const,
     settle: 'Edit details',
-    minimum: 2,
+    minimum: 3,
   },
   {
     name: 'edit a person',
@@ -905,12 +961,12 @@ const TARGET_SWEEP = [
     minimum: 1,
   },
   {
-    // Back link, three people in the chain, and the picker's two controls.
+    // Back link and three people in the chain. The move moved to the profile.
     name: 'pastoral network',
     route: '/people/3f1b7c6e-0000-4000-8000-000000000601/network',
     settleRole: 'heading' as const,
     settle: 'Corazon Villanueva',
-    minimum: 6,
+    minimum: 4,
   },
   {
     // The back link, Add a member, and a name link and a Remove per member. Settled on a
@@ -923,17 +979,19 @@ const TARGET_SWEEP = [
     minimum: 6,
   },
   {
-    // The two links of the Reports switch, two month controls, the scope select, and a
-    // link per Cell in Coverage by Cell — two Cells, counted in the table and the cards
-    // alike, since the count includes whichever of the two this viewport hides.
+    // The two links of the Reports switch, How these are counted, two month controls, the
+    // scope select, and a link per Cell in Coverage by Cell — two Cells, counted in the
+    // table and the cards alike, since the count includes whichever of the two this
+    // viewport hides.
     name: 'cell attendance report',
     route: '/reports/cells',
     settleRole: 'heading' as const,
     settle: 'Recording coverage',
-    minimum: 9,
+    minimum: 10,
   },
   {
-    // The two links of the Reports switch and two month controls, then Coverage by Sunday:
+    // The two links of the Reports switch, How these are counted and two month controls,
+    // then Coverage by Sunday:
     // four Sunday links and the one "who still has to record" link, in the table and the
     // cards alike. No scope select for this fixture's viewer: the DCC report offers its
     // Network select only to a whole-church reader, and this fixture's reporting grant is
@@ -943,7 +1001,7 @@ const TARGET_SWEEP = [
     route: '/reports/dcc',
     settleRole: 'heading' as const,
     settle: 'Recording coverage',
-    minimum: 14,
+    minimum: 15,
   },
   {
     // Back link, two radios per person across two people, and Save. Six rather
@@ -972,6 +1030,26 @@ const TARGET_EXEMPT: { name: string; why: string }[] = [
       'Opens the Move dialog over the measured "person profile". Its controls are a SelectField ' +
       'and two Buttons: the select is the one measured under "add a person", where the sweep ' +
       'counts its Cell select, and the Buttons are the primitive measured on every screen.',
+  },
+  {
+    name: 'person profile, moving to another leader',
+    why:
+      'Opens the Move to another leader dialog over the measured "person profile". No leader ' +
+      'is chosen in this state, so its controls are the person picker\'s search field and Find ' +
+      'button, measured under "add a person", which counts that same picker, and two Buttons, ' +
+      'the primitive measured on every screen.',
+  },
+  {
+    name: 'cell attendance report, how these are counted',
+    why:
+      'Opens the How these are counted dialog over the measured "cell attendance report", ' +
+      'where the button opening it is counted. Its only control is Close, a Button.',
+  },
+  {
+    name: 'dcc checklist, changing recorded marks',
+    why:
+      'The measured "dcc checklist" with its recorded mark unlocked: the same back link, radios ' +
+      'and Save, plus Stop editing, a Button, and the reason field, a two-row textarea.',
   },
   {
     name: 'add a person, cell refused',

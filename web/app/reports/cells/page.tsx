@@ -7,6 +7,7 @@ import { useState } from 'react';
 import { AppShell, PAGE_WIDTH } from '@/components/app-shell';
 import { AttendanceBuckets, ClassificationFigures } from '@/components/attendance-figures';
 import { CoverageFigure } from '@/components/coverage-figure';
+import { HowTheseAreCounted } from '@/components/how-counted';
 import { MonthPicker } from '@/components/month-picker';
 import { CoverageByCell } from '@/components/report-coverage';
 import { ReportsSwitch } from '@/components/reports-switch';
@@ -102,7 +103,10 @@ export function CellReport() {
   return (
     <main id="main" className={PAGE_WIDTH.INDEX}>
       <h1 className="text-2xl font-semibold tracking-tight">Reports</h1>
-      <ReportsSwitch current="cells" month={month} />
+      <div className="mt-4 flex flex-wrap items-center gap-3">
+        <ReportsSwitch current="cells" month={month} />
+        <HowTheseAreCounted report="cells" />
+      </div>
       <p className="text-muted mt-4 max-w-2xl text-sm leading-relaxed">
         What your Cells recorded this month. Recording coverage comes first, because it is
         the one figure that cannot be improved by recording less.

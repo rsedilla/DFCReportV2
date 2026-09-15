@@ -17,6 +17,7 @@ import {
   type DccRosterLine,
 } from '@/lib/dcc';
 import { idempotencyKeyFor } from '@/lib/idempotency';
+import { getMe } from '@/lib/me';
 import { describeFailure } from '@/lib/messages';
 import { dayLabel } from '@/lib/reporting-month';
 
@@ -47,6 +48,14 @@ import { dayLabel } from '@/lib/reporting-month';
  * **An event that takes no record is read-only here**, and the reason is stated: a
  * removed Sunday, a Sunday that has not happened, and a closed month are three
  * different things, and only the last of them is about a deadline.
+ *
+ * **A recorded mark is locked until the leader chooses to change it** (owner's choice of
+ * 2026-09-15, step 2 of the clean-up), the way the Cell meeting screen locks a recorded
+ * meeting. Changing a recorded line is a correction, which the API refuses without
+ * `dcc.correct_subtree`; so a stray tap on a phone cannot quietly become one, and an
+ * account without that capability is told before it presses Save rather than after.
+ * The optional reason travels only on recorded lines whose mark actually changed, because
+ * the API refuses a correction reason on a person's first record.
  */
 export default function DccRosterPage() {
   return (
@@ -67,11 +76,34 @@ function DccChecklist() {
     queryFn: ({ signal }) => getDccRoster(params.id, signal),
   });
 
+  const me = useQuery({ queryKey: ['me'], queryFn: ({ signal }) => getMe(signal) });
+
   const [edits, setEdits] = useState<Record<string, Mark>>({});
+  const [editing, setEditing] = useState(false);
+  const [correctionReason, setCorrectionReason] = useState('');
 
   const lines = useMemo(() => roster.data?.data ?? [], [roster.data]);
   const event = roster.data?.event ?? null;
   const recordable = event?.recordable ?? false;
+  const recordedCount = lines.filter((line) => line.record !== null).length;
+
+  // Held at any scope. Whether it covers each person is the API's to decide.
+  const canCorrect = (me.data?.capabilities ?? []).some(
+    (grant) => grant.capability === 'dcc.correct_subtree',
+  );
+
+  /** Back to the recorded marks: what was changed on recorded lines is dropped. */
+  function stopEditing() {
+    setEdits((current) =>
+      Object.fromEntries(
+        Object.entries(current).filter(
+          ([personId]) => lines.find((line) => line.person_id === personId)?.record === null,
+        ),
+      ),
+    );
+    setCorrectionReason('');
+    setEditing(false);
+  }
 
   /**
    * What is recorded, overlaid with what this leader has changed since.
@@ -85,24 +117,34 @@ function DccChecklist() {
     (line.record === null ? undefined : line.record.present ? 'present' : 'absent');
 
   const records = useMemo((): DccRecordInput[] => {
+    const reason = correctionReason.trim();
+
     return lines
       .filter((line) => edits[line.person_id] !== undefined || line.record !== null)
-      .map((line) => ({
-        person_id: line.person_id,
-        present:
+      .map((line) => {
+        const present =
           (edits[line.person_id] ??
-            (line.record !== null && line.record.present ? 'present' : 'absent')) === 'present',
-        // Null is this person's first record; a number is the version this
-        // client read, which section 14 compares per line.
-        version: line.record?.version ?? null,
-      }));
-  }, [lines, edits]);
+            (line.record !== null && line.record.present ? 'present' : 'absent')) === 'present';
+        const corrected = line.record !== null && line.record.present !== present;
+
+        return {
+          person_id: line.person_id,
+          present,
+          // Null is this person's first record; a number is the version this
+          // client read, which section 14 compares per line.
+          version: line.record?.version ?? null,
+          ...(corrected && reason ? { correction_reason: reason } : {}),
+        };
+      });
+  }, [lines, edits, correctionReason]);
 
   const idempotencyKey = useMemo(() => idempotencyKeyFor(params.id, records), [params.id, records]);
 
   const save = useMutation({
     mutationFn: () => submitDccAttendance(params.id, records, idempotencyKey),
     onSuccess: async () => {
+      setEditing(false);
+      setCorrectionReason('');
       await queryClient.invalidateQueries({ queryKey: ['dcc-roster', params.id] });
       await queryClient.invalidateQueries({ queryKey: ['dcc-events'] });
     },
@@ -160,6 +202,40 @@ function DccChecklist() {
             </p>
           ) : null}
 
+          {recordable && recordedCount > 0 ? (
+            <div className="border-edge mt-6 border p-4">
+              {editing ? (
+                <>
+                  <p className="text-sm font-bold">Changing recorded marks</p>
+                  <p className="text-muted mt-1 text-sm leading-relaxed">
+                    Saving replaces the marks you change.
+                  </p>
+                  <Button variant="quiet" className="mt-3" onClick={stopEditing}>
+                    Stop editing
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <p className="text-sm font-bold">
+                    Already recorded: {recordedCount === 1 ? '1 person' : `${recordedCount} people`}
+                  </p>
+                  {me.data ? (
+                    canCorrect ? (
+                      <Button variant="secondary" className="mt-3" onClick={() => setEditing(true)}>
+                        Change recorded marks
+                      </Button>
+                    ) : (
+                      <p className="text-muted mt-1 text-sm leading-relaxed">
+                        Changing a recorded mark needs permission to correct records, which this
+                        account does not hold.
+                      </p>
+                    )
+                  ) : null}
+                </>
+              )}
+            </div>
+          ) : null}
+
           {lines.length === 0 ? (
             <p className="text-muted mt-6 max-w-2xl text-sm leading-relaxed">
               Nobody is on your checklist for this Sunday. Attendance is recorded by each
@@ -176,13 +252,29 @@ function DccChecklist() {
                     key={line.person_id}
                     line={line}
                     mark={markFor(line)}
-                    disabled={!recordable}
+                    disabled={!recordable || (line.record !== null && !editing)}
                     onChange={(value) =>
                       setEdits((current) => ({ ...current, [line.person_id]: value }))
                     }
                   />
                 ))}
               </ul>
+
+              {editing ? (
+                <div className="mt-6">
+                  <label htmlFor="correction-reason" className="field-label block">
+                    Why is this changing? (optional)
+                  </label>
+                  <textarea
+                    id="correction-reason"
+                    value={correctionReason}
+                    onChange={(event) => setCorrectionReason(event.target.value)}
+                    rows={2}
+                    maxLength={500}
+                    className="border-edge focus-visible:outline-accent mt-2 w-full border px-3 py-2 text-sm focus-visible:outline-2 focus-visible:outline-offset-2"
+                  />
+                </div>
+              ) : null}
             </>
           )}
 
@@ -242,13 +334,7 @@ function PersonMark({
     <li className="border-line border-b py-4">
       <RadioGroup
         legend={line.full_name}
-        description={
-          mark === undefined
-            ? 'Not recorded yet'
-            : line.record === null || disabled
-              ? undefined
-              : 'Already recorded — change it only if it is wrong'
-        }
+        description={mark === undefined ? 'Not recorded yet' : undefined}
         name={`person-${line.person_id}`}
         // **The recorded mark is shown whether or not the Sunday takes a record.**
         // Decision 0194 shows marks so a leader is not asked twice; blanking them on a
