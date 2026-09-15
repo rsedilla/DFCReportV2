@@ -8,8 +8,8 @@ list said a meeting's roster is guarded by "`cell.take_attendance` for a submiss
 `GET /api/v1/cells/{id}/meetings/{meeting_id}/roster` declares `cell.take_attendance` alone.
 
 `CLAUDE.md` recorded it as a Stop Condition to settle "with the correction screen, which is
-the first thing that will hold both capabilities in one hand". The recording screens of the
-redesign (UI-3) are that screen, and `architecture-guardian` raised the question on them.
+the first thing that will hold both capabilities in one hand". It was escalated to the owner
+while the redesign's recording screens were reviewed.
 
 ## The ruling
 

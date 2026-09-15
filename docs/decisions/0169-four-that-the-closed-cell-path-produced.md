@@ -29,6 +29,13 @@ nobody should need the power to move a roster in order to mark it.
 It settles nothing about `GET /api/v1/cells/{id}/members`, which manages membership and
 whose read capability stays on `CLAUDE.md`'s open list for Stage 5.
 
+> **Settled since.** `GET /api/v1/cells/{id}/members` carries `cell.view_subtree`
+> ([decision 0204](0204-the-cell-roster-read-is-guarded-by-cell-view-subtree.md),
+> 2026-09-04). The meeting roster, marks included, is read under `cell.take_attendance`, and
+> `cell.correct_subtree` guards the correction only
+> ([decision 0246](0246-a-cell-meetings-recorded-marks-are-read-under-the-recording-capability.md),
+> 2026-09-15).
+
 ## A closed Cell's meetings cannot be rescheduled
 
 0168 authorized the closed-Cell write on "the date the submission declares", and defended
