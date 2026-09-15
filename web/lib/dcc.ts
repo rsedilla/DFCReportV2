@@ -169,3 +169,63 @@ export async function getCoverageGaps(
     signal,
   });
 }
+
+/** Section 9's classification, as the API names it. */
+export type DccClassification = 'VIP' | '2ND_TIMER' | '3RD_TIMER' | '4TH_TIMER' | 'REGULAR';
+
+/** The names section 9's classification view prints. */
+export function classificationLabel(classification: DccClassification): string {
+  switch (classification) {
+    case 'VIP':
+      return 'VIP';
+    case '2ND_TIMER':
+      return '2nd Timer';
+    case '3RD_TIMER':
+      return '3rd Timer';
+    case '4TH_TIMER':
+      return '4th Timer';
+    case 'REGULAR':
+      return 'Regular';
+    default:
+      return classification;
+  }
+}
+
+/** One of a person's DCC records (decision 0247). */
+export interface PersonDccRecord {
+  event_id: string;
+  event_date: string;
+  present: boolean;
+  /** A record on a Sunday later removed: listed, and not counted (section 9). */
+  removed: boolean;
+}
+
+export interface PersonDccAttendance {
+  person_id: string;
+  /** `null` for somebody with no counted attendance, who has no classification. */
+  classification: DccClassification | null;
+  /** The count the classification is made from, not a total of the list. */
+  attended: number;
+  data: PersonDccRecord[];
+  next_cursor: string | null;
+}
+
+/**
+ * One person's DCC records, newest first, and the classification they give
+ * (decision 0247).
+ *
+ * Nothing here changes a classification. One that looks wrong is corrected by
+ * correcting the Sunday behind it (section 9).
+ */
+export async function getPersonDccAttendance(
+  personId: string,
+  cursor: string | null,
+  signal?: AbortSignal,
+): Promise<PersonDccAttendance> {
+  const query = cursor ? `?${new URLSearchParams({ cursor }).toString()}` : '';
+
+  return authenticatedRequest<PersonDccAttendance>(
+    `/api/v1/dcc/people/${personId}/attendance${query}`,
+    { signal },
+  );
+}

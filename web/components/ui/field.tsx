@@ -44,6 +44,11 @@ export type FieldProps = Omit<InputHTMLAttributes<HTMLInputElement>, 'id' | 'cla
   description?: ReactNode;
   /** When set, the field is invalid and this is why, in words. */
   error?: string | null;
+  /**
+   * A small grey label rather than the red one, for a box inside a group whose legend
+   * already carries the red label (`NameFields`), so two rows of red capitals do not stack.
+   */
+  quietLabel?: boolean;
   ref?: Ref<HTMLInputElement>;
 };
 
@@ -51,6 +56,7 @@ export function Field({
   label,
   description,
   error,
+  quietLabel = false,
   className,
   ...props
 }: FieldProps & { className?: string }) {
@@ -64,7 +70,10 @@ export function Field({
 
   return (
     <div className={cn('flex flex-col gap-1.5', className)}>
-      <LabelPrimitive.Root htmlFor={id} className="field-label">
+      <LabelPrimitive.Root
+        htmlFor={id}
+        className={quietLabel ? 'text-muted text-sm' : 'field-label'}
+      >
         {label}
       </LabelPrimitive.Root>
 

@@ -1,3 +1,5 @@
+import { ApiRequestError } from './api-client';
+import { describeFailure, type Failure } from './messages';
 import { authenticatedRequest } from './session';
 
 /**
@@ -385,4 +387,78 @@ export async function changeCellSchedule(
     body: schedule,
     idempotencyKey,
   });
+}
+
+/**
+ * A person's current Cell, with its leader, and the Cells they lead (decision 0248).
+ *
+ * **The two halves are kept apart, and a screen keeps them apart too.** A Cell's
+ * leader holds no membership row, so a screen reading membership alone would show
+ * every Cell Leader as belonging to no Cell and offer to put them in one.
+ */
+export interface PersonCells {
+  person_id: string;
+  membership: {
+    id: string;
+    cell_id: string;
+    leader: { person_id: string; member_id: string; full_name: string } | null;
+  } | null;
+  leads: { id: string; cell_id: string }[];
+}
+
+export async function getPersonCells(personId: string, signal?: AbortSignal): Promise<PersonCells> {
+  return authenticatedRequest<PersonCells>(`/api/v1/cells/people/${personId}/membership`, {
+    signal,
+  });
+}
+
+/**
+ * Every Cell of the actor's scope for a month, following the cursor to the end.
+ *
+ * For a picker, which has to offer the whole list rather than its first page. The
+ * index pages by cursor and returns no total (section 22), so this asks until
+ * `next_cursor` is null.
+ */
+export async function listAllCells(month: string, signal?: AbortSignal): Promise<CellSummary[]> {
+  const cells: CellSummary[] = [];
+  let cursor: string | null = null;
+
+  do {
+    const page: CellIndexPage = await listCells({ month, cursor }, signal);
+    cells.push(...page.data);
+    cursor = page.next_cursor;
+  } while (cursor !== null);
+
+  return cells;
+}
+
+/**
+ * What a refused membership says, in words a leader can act on (SKILL.md section 10).
+ *
+ * **The same-Network refusal names both Networks.** It arrives with `member_network` and
+ * `cell_network` in `details`, so it is said plainly rather than in the server's wording,
+ * which cites the specification. Every other refusal keeps the server's own message.
+ */
+export function membershipFailure(error: unknown, personName: string, cellHandle: string): Failure {
+  if (error instanceof ApiRequestError && error.code === 'INVARIANT_VIOLATION') {
+    const member = error.details.member_network;
+    const cell = error.details.cell_network;
+
+    if (isNetwork(member) && isNetwork(cell)) {
+      return {
+        message: `${personName} is in the ${networkWord(member)} Network and ${cellHandle} is in the ${networkWord(cell)}, so they can’t join it.`,
+        aboutInput: false,
+      };
+    }
+  }
+
+  return describeFailure(error);
+}
+
+function isNetwork(value: unknown): value is 'MENS' | 'WOMENS' {
+  return value === 'MENS' || value === 'WOMENS';
+}
+
+function networkWord(network: 'MENS' | 'WOMENS'): string {
+  return network === 'MENS' ? 'Men’s' : 'Women’s';
 }

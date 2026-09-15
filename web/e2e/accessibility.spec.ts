@@ -7,10 +7,13 @@ import {
   PERSON_IN_SCOPE,
   mockAccepted,
   mockAwaitingReassignment,
+  mockCellChoices,
   mockCellCorrector,
   mockDuplicateRefusal,
+  mockMembershipAdd,
   mockPeopleWithoutACell,
   mockPeople,
+  mockPersonCreated,
   mockPossibleMatches,
   mockSignInRefused,
   mockSignedIn,
@@ -148,6 +151,55 @@ const SCANS = [
     },
     async arrange(page: import('@playwright/test').Page) {
       await expect(page.getByRole('heading', { name: 'Marilou Reyes Santos' })).toBeVisible();
+      // The Cell and DCC sections (decisions 0248 and 0247), waited for rather than
+      // assumed: each loads on its own request, and a scan before both arrive would pass on
+      // a profile nobody sees.
+      await expect(page.getByRole('button', { name: 'Move to another Cell' })).toBeVisible();
+      await expect(page.getByText('Service removed · not counted')).toBeVisible();
+    },
+  },
+  {
+    // The Move dialog, the first dialog in the application: a modal `<dialog>` over the
+    // profile, with its Cell choice.
+    name: 'person profile, moving to another cell',
+    route: `/people/${PERSON_IN_SCOPE.id}`,
+    pattern: '/people/[id]',
+    async before(page: import('@playwright/test').Page) {
+      await mockSignedIn(page);
+      await mockPeople(page);
+      await mockCellChoices(page);
+    },
+    async arrange(page: import('@playwright/test').Page) {
+      await page.getByRole('button', { name: 'Move to another Cell' }).click();
+      await expect(page.getByRole('dialog').getByRole('combobox', { name: 'Cell' })).toBeVisible();
+    },
+  },
+  {
+    // The person was created and the Cell chosen for them was refused: a heading, a
+    // failure notice naming both Networks, and one link onward.
+    name: 'add a person, cell refused',
+    route: '/people/new',
+    pattern: '/people/new',
+    async before(page: import('@playwright/test').Page) {
+      await mockSignedIn(page);
+      await mockPeople(page);
+      await mockCellChoices(page);
+      await mockPersonCreated(page);
+      await mockMembershipAdd(page, 'other-network');
+    },
+    async arrange(page: import('@playwright/test').Page) {
+      await page.getByLabel('First name').fill('Marilou');
+      await page.getByLabel('Last name').fill('Santos');
+      await page.getByRole('radio', { name: 'Female' }).check();
+      await page.getByRole('radio', { name: 'Married' }).check();
+      await page.getByLabel('Search for a leader by name').fill('an');
+      await page.getByRole('button', { name: 'Find' }).click();
+      await page.getByRole('button', { name: 'Choose' }).first().click();
+      await page.getByRole('combobox', { name: 'Cell' }).selectOption({ index: 2 });
+      await page.getByRole('button', { name: 'Add person' }).click();
+      await expect(
+        page.getByRole('heading', { name: 'Marilou Reyes Santos was added' }),
+      ).toBeVisible();
     },
   },
   {
@@ -876,6 +928,19 @@ const TARGET_SWEEP = [
  * prevent one list over.
  */
 const TARGET_EXEMPT: { name: string; why: string }[] = [
+  {
+    name: 'person profile, moving to another cell',
+    why:
+      'Opens the Move dialog over the measured "person profile". Its controls are a SelectField ' +
+      'and two Buttons: the select is the one measured under "add a person", where the sweep ' +
+      'counts its Cell select, and the Buttons are the primitive measured on every screen.',
+  },
+  {
+    name: 'add a person, cell refused',
+    why:
+      'Its only control is "Open their record", a link carrying the Button classes and their ' +
+      'min-h-11. The form it replaces is measured under "add a person".',
+  },
   {
     name: 'people, with results',
     why:

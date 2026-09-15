@@ -7,6 +7,8 @@ import { useState } from 'react';
 import Link from 'next/link';
 
 import { AppShell, PAGE_WIDTH } from '@/components/app-shell';
+import { NameFields } from '@/components/name-fields';
+import { PersonCells } from '@/components/person-cells';
 import { Button, buttonClasses } from '@/components/ui/button';
 import { FailureNotice } from '@/components/ui/failure-notice';
 import { Field } from '@/components/ui/field';
@@ -18,6 +20,7 @@ import {
   CIVIL_STATUS_OPTIONS,
   editPerson,
   getPerson,
+  sexLabel,
   type PersonEdit,
   type PersonFull,
 } from '@/lib/people';
@@ -159,32 +162,25 @@ function Fields({ person, id }: { person: PersonFull; id: string }) {
         <form onSubmit={onSubmit} className="mt-8 flex flex-col gap-5" noValidate>
           <FailureNotice failure={failure} />
 
-          <Field
-            label="First name"
-            name="first_name"
-            autoComplete="off"
-            required
-            value={values.first_name}
-            error={fieldErrors.first_name}
-            onChange={(event) => edit('first_name', event.target.value)}
+          <NameFields
+            values={values}
+            errors={fieldErrors}
+            onChange={(key, value) => edit(key, value)}
+            note="Middle name is optional."
           />
-          <Field
-            label="Middle name"
-            name="middle_name"
-            autoComplete="off"
-            value={values.middle_name}
-            onChange={(event) => edit('middle_name', event.target.value)}
-            description="Optional."
-          />
-          <Field
-            label="Last name"
-            name="last_name"
-            autoComplete="off"
-            required
-            value={values.last_name}
-            error={fieldErrors.last_name}
-            onChange={(event) => edit('last_name', event.target.value)}
-          />
+
+          {/*
+            Shown and not editable. Sex is not one of `people.edit_basic`'s fields: it
+            decides the Network (section 4), and correcting it is Admin's alone
+            (section 7).
+          */}
+          <div className="flex flex-col gap-1.5">
+            <p className="field-label">Sex</p>
+            <p className="text-sm">{sexLabel(person.sex)}</p>
+            <p className="text-muted text-sm leading-relaxed">
+              Only an Admin can correct this, because it decides which Network they belong to.
+            </p>
+          </div>
           {/*
             Section 7 gives `people.edit_basic` six fields, and civil status is
             the sixth. It belongs here for an ordinary reason: a marriage or a
@@ -248,6 +244,16 @@ function Fields({ person, id }: { person: PersonFull; id: string }) {
           </div>
         </form>
       )}
+
+      {/*
+        Outside the form, because moving somebody is its own write rather than part of
+        Save, and the move dialog carries a form of its own.
+      */}
+      <PersonCells
+        personId={id}
+        personName={person.full_name}
+        note="A move is saved as soon as you confirm it. It is not part of Save changes."
+      />
     </>
   );
 }

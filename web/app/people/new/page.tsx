@@ -1,18 +1,23 @@
 'use client';
 
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 
 import { AppShell, PAGE_WIDTH } from '@/components/app-shell';
+import { NameFields } from '@/components/name-fields';
 import { PersonPicker } from '@/components/person-picker';
 import { PossibleMatches } from '@/components/possible-matches';
-import { Button } from '@/components/ui/button';
+import { Button, buttonClasses } from '@/components/ui/button';
 import { FailureNotice } from '@/components/ui/failure-notice';
 import { Field } from '@/components/ui/field';
 import { RadioGroup } from '@/components/ui/radio-group';
+import { SelectField } from '@/components/ui/select-field';
 import { TextLink } from '@/components/ui/text-link';
 import { ApiRequestError } from '@/lib/api-client';
+import { addCellMember, categoryLabel, listAllCells, membershipFailure } from '@/lib/cells';
+import { idempotencyKeyFor } from '@/lib/idempotency';
 import { describeFailure, fieldErrorFor, type Failure } from '@/lib/messages';
 import {
   CIVIL_STATUS_OPTIONS,
@@ -21,8 +26,10 @@ import {
   isWithheld,
   type CivilStatus,
   type DuplicateCandidate,
+  type PersonFull,
   type Sex,
 } from '@/lib/people';
+import { reportingMonthOf } from '@/lib/reporting-month';
 
 /**
  * Adding a person (SKILL.md sections 3 and 9).
@@ -74,6 +81,24 @@ function NewPersonForm() {
   const [candidates, setCandidates] = useState<DuplicateCandidate[] | null>(null);
   const [failure, setFailure] = useState<Failure | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string | null>>({});
+
+  /**
+   * The Cell to place the new person in, if any.
+   *
+   * **A second write, after the person exists** (`docs/DESIGN_RECONCILIATION.md`). A
+   * membership needs a person to belong, so the Cell is added once creation succeeds,
+   * under `cell.manage_membership`. If that refusal comes, the person is still created,
+   * and `cellRefused` says so rather than leaving the Cell silently unset.
+   */
+  const [cellId, setCellId] = useState('');
+  const [cellRefused, setCellRefused] = useState<{ person: PersonFull; failure: Failure } | null>(
+    null,
+  );
+  const month = reportingMonthOf();
+  const cells = useQuery({
+    queryKey: ['cells-all', month],
+    queryFn: ({ signal }) => listAllCells(month, signal),
+  });
 
   /**
    * **Accumulated, never replaced.** Each refusal carries only the Tier 1
@@ -138,7 +163,25 @@ function NewPersonForm() {
         },
         key,
       ),
-    onSuccess: (person) => router.push(`/people/${person.id}`),
+    onSuccess: async (person) => {
+      if (cellId) {
+        try {
+          await addCellMember(cellId, person.id, idempotencyKeyFor('add', cellId, person.id));
+        } catch (error) {
+          setCellRefused({
+            person,
+            failure: membershipFailure(
+              error,
+              person.full_name,
+              cells.data?.find((cell) => cell.id === cellId)?.cell_id ?? 'The Cell you chose',
+            ),
+          });
+          return;
+        }
+      }
+
+      router.push(`/people/${person.id}`);
+    },
     onError: (error) => {
       if (error instanceof ApiRequestError && error.code === 'DUPLICATE_ACKNOWLEDGEMENT_REQUIRED') {
         setCandidates((error.details.candidates as DuplicateCandidate[]) ?? []);
@@ -161,6 +204,33 @@ function NewPersonForm() {
     setFieldErrors({});
     setCandidates(null);
     create.mutate({ acknowledgedIds: [], key: writeKey });
+  }
+
+  if (cellRefused) {
+    return (
+      <main id="main" className={PAGE_WIDTH.READING}>
+        <h1 className="text-2xl font-semibold tracking-tight">
+          {cellRefused.person.full_name} was added
+        </h1>
+        <p className="text-muted mt-2 max-w-2xl text-sm leading-relaxed">
+          They were not added to the Cell you chose. You can add them to a Cell from their
+          record.
+        </p>
+
+        <div className="mt-6">
+          <FailureNotice failure={cellRefused.failure} />
+        </div>
+
+        <div className="mt-6">
+          <Link
+            href={`/people/${cellRefused.person.id}`}
+            className={buttonClasses('primary')}
+          >
+            Open their record
+          </Link>
+        </div>
+      </main>
+    );
   }
 
   if (candidates) {
@@ -240,32 +310,11 @@ function NewPersonForm() {
       <form onSubmit={onSubmit} className="mt-8 flex flex-col gap-5" noValidate>
         <FailureNotice failure={failure} />
 
-        <Field
-          label="First name"
-          name="first_name"
-          autoComplete="off"
-          required
-          value={values.first_name}
-          error={fieldErrors.first_name}
-          onChange={(event) => set('first_name', event.target.value)}
-        />
-        <Field
-          label="Middle name"
-          name="middle_name"
-          autoComplete="off"
-          value={values.middle_name}
-          onChange={(event) => set('middle_name', event.target.value)}
-          description="Optional."
-        />
-        <Field
-          label="Last name"
-          name="last_name"
-          autoComplete="off"
-          required
-          value={values.last_name}
-          error={fieldErrors.last_name}
-          onChange={(event) => set('last_name', event.target.value)}
-          description="A generational suffix such as Jr or III belongs here, with the surname."
+        <NameFields
+          values={values}
+          errors={fieldErrors}
+          onChange={(key, value) => set(key, value)}
+          note="Middle name is optional. A generational suffix such as Jr or III belongs with the last name."
         />
 
         {/*
@@ -346,6 +395,26 @@ function NewPersonForm() {
             beginNewWrite();
           }}
         />
+
+        <SelectField
+          label="Cell"
+          name="cell"
+          value={cellId}
+          disabled={cells.isPending || cells.isError}
+          onChange={(event) => setCellId(event.target.value)}
+          description={
+            cells.isError
+              ? 'The Cells could not be loaded, so none can be chosen here. You can add them to a Cell from their record.'
+              : 'Optional. The Cells in your scope. They can also be added to a Cell later, from their record.'
+          }
+        >
+          <option value="">No Cell for now</option>
+          {(cells.data ?? []).map((cell) => (
+            <option key={cell.id} value={cell.id}>
+              {cell.cell_id} · {categoryLabel(cell.category)} · led by {cell.leader.full_name}
+            </option>
+          ))}
+        </SelectField>
 
         <div>
           <Button type="submit" disabled={create.isPending || !leaderId}>
