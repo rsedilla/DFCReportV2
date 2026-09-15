@@ -2,8 +2,7 @@
 
 The People screens of the redesign show a person's Cell on their profile and on Edit, and
 the move to another Cell starts from it. No route returns it. `GET /api/v1/people/{id}`
-returns a person's own details and nothing about Cells, and every Cell route in Section 22
-starts from a Cell rather than from a person.
+returns a person's own details and nothing about Cells.
 
 ## The ruling
 
@@ -17,8 +16,7 @@ to, with that Cell's current leader, or none.**
   the scope decision*). The actor must hold the person in scope today.
 - **It returns the open membership only.** Section 10 gives a person at most one, and zero
   is legitimate, so the answer is one Cell or none.
-- **It changes nothing.** A move is still an add on `POST /api/v1/cells/{id}/members`, under
-  `cell.manage_membership` over both Cells.
+- **It changes nothing.** A move is still an add on `POST /api/v1/cells/{id}/members`.
 
 ## The ground
 
@@ -27,8 +25,7 @@ current membership and opens the next, and a screen offering it has to say which
 person is leaving.
 
 **No role changes.** Every role in Section 7's catalog holds `cell.view_subtree` at the same
-scope it holds `people.view_subtree`, so a reader who may open the profile may read the
-Cell on it.
+scope it holds `people.view_subtree`.
 
 ## What it widens
 
