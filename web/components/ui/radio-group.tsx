@@ -39,6 +39,7 @@ export function RadioGroup<T extends string>({
   onChange,
   required,
   error,
+  disabled = false,
 }: {
   legend: string;
   description?: string;
@@ -48,6 +49,12 @@ export function RadioGroup<T extends string>({
   onChange: (value: T) => void;
   required?: boolean;
   error?: string | null;
+  /**
+   * Shown and not changeable, such as a recorded meeting nobody is editing. Set on
+   * the `<fieldset>`, which disables every radio inside it natively — so a keyboard
+   * cannot reach them either, rather than only a pointer being refused.
+   */
+  disabled?: boolean;
 }) {
   const id = useId();
   const descriptionId = `${id}-description`;
@@ -63,7 +70,11 @@ export function RadioGroup<T extends string>({
   // announced when focus reached an option. axe cannot see this: the ids
   // resolve, so `aria-valid-attr-value` passes and the sweep stays green.
   return (
-    <fieldset className="flex flex-col gap-1.5" aria-describedby={describedBy}>
+    <fieldset
+      className="flex flex-col gap-1.5"
+      aria-describedby={describedBy}
+      disabled={disabled}
+    >
       <legend className="field-label">{legend}</legend>
 
       {description ? (
@@ -84,7 +95,11 @@ export function RadioGroup<T extends string>({
                 'text-sm transition-colors sm:flex-none sm:min-w-32',
                 'has-[:focus-visible]:outline-accent has-[:focus-visible]:outline-2',
                 'has-[:focus-visible]:outline-offset-2',
-                checked ? 'border-accent bg-raised font-medium' : 'border-edge hover:bg-raised',
+                checked ? 'border-accent bg-raised font-medium' : 'border-edge',
+                // **Disabled looks disabled.** The pointer and the hover wash said "tap me"
+                // on a group that cannot change, so both follow the input's own state.
+                'has-[:enabled]:hover:bg-raised has-[:disabled]:cursor-not-allowed',
+                'has-[:disabled]:opacity-60',
               )}
             >
               <input

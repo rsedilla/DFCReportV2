@@ -118,7 +118,8 @@ export function categoryLabel(category: CellCategory): string {
  * How a meeting's state reads, including the state that is not a status.
  *
  * Words rather than a colour, on section 13's terms and section 23's: colour is
- * never the only carrier of meaning here, and none of these is an error.
+ * never the only carrier of meaning here, and none of these is an error. The three
+ * status words are the ones section 13 fixes, so they read the same on every screen.
  */
 export function meetingStateLabel(meeting: RecordedMeeting | null): string {
   if (meeting === null) {
@@ -127,11 +128,11 @@ export function meetingStateLabel(meeting: RecordedMeeting | null): string {
 
   switch (meeting.status) {
     case 'HELD':
-      return 'Held';
+      return 'Met';
     case 'NOT_HELD':
-      return 'Not held';
+      return 'Did not meet';
     case 'RESCHEDULED':
-      return 'Rescheduled';
+      return 'Moved';
     default:
       return meeting.status;
   }

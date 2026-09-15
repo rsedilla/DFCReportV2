@@ -162,7 +162,7 @@ function CellMembers() {
           <p className="text-muted mt-4 text-sm">Loading&hellip;</p>
         ) : members.data && members.data.data.length === 0 ? (
           <p className="text-muted mt-4 max-w-2xl text-sm leading-relaxed">
-            This Cell has no members yet. A meeting can still be recorded as held with nobody
+            This Cell has no members yet. A meeting can still be recorded as met with nobody
             to mark, which counts towards its coverage.
           </p>
         ) : members.data ? (
