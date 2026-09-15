@@ -1646,7 +1646,7 @@ The four scope values are a closed enumeration. A guard cannot fail closed again
 
 Scope resolves against a target. Where the target is a Person, it resolves through their pastoral position. Where it is not:
 
-- a **Cell**, a Cell meeting, a membership or a leadership resolves through the Cell's leader **as of the period being viewed**, falling back to its last leader where the Cell is closed. A closed Cell keeps its history and its roster visible to the leader who led it (Sections 10 and 15), which resolving through a current leader it no longer has would prevent
+- a **Cell**, a Cell meeting, a membership or a leadership resolves through the Cell's leader **as of the period being viewed**, falling back to its last leader where the Cell is closed. A closed Cell keeps its history and its roster visible to the leader who led it (Sections 10 and 15), which resolving through a current leader it no longer has would prevent. **A person's current Cell, read from the person, is not this target** (ruling of 2026-09-15): it resolves through the person rather than through the Cell's leader (Sections 8 and 10)
   - **A closed Cell has one exception, and it is not the fallback above.** The rule below is that a write is acted on now and resolves through the Cell's current leader — and a closed Cell has none, so every write against one resolves through nobody. The exception is **recording or correcting a Cell meeting whose month's submission window is still open** (Section 13), together with the meeting-scoped roster read that write requires: those resolve through whoever led the Cell **on the meeting's date**. Nothing else does — not a membership, not a leadership, not a configuration change — and once the window shuts, that too resolves through nobody and only Admin can amend
   - **Per record rather than per Cell**, which no other target in this list is, because the meeting carries the answer and the Cell no longer does. A Cell handed from A to B and then closed has meetings belonging to each, and resolving through the last leader would show A the task (Section 19) while denying A the write
   - **Within this exception, and only within it: where the meeting has a record, its scope resolves through that record's frozen `responsible_leader_id`; where it has none, through whoever led the Cell on the scheduled date** (ruling of 2026-09-02). An `ACTIVE` Cell is untouched by this and resolves through its current leader, whatever any record says — reading the record first would silently reverse the bullet below. The rule above is that "the meeting carries the answer and the Cell no longer does", and the frozen column is the meeting carrying it: Section 13 resolves it once, from the meeting's own instant, and nothing moves it afterwards. So the person who may correct a record and the person the record belongs to are the same person **by construction**, rather than by an argument that happens to hold
@@ -2050,6 +2050,8 @@ The distinction is the direction the question is asked from. A search starts fro
 
 What travels with it is decided by the surface rather than by this list. A membership list carries the names and Member IDs this section already publishes and nothing further — no birthday, no contact detail, no classification. Section 12's **roster view** carries each member's attendance for the month as well, because that is what it is for, and it reaches the same readers this rule admits. Neither is an exception: this list bounds what a *search* returns about a person outside the searcher's pastoral scope, and a Cell surface is bounded by authority over the Cell instead.
 
+**A person's own Cell is asked from the person, and is bounded by authority over the person** (ruling of 2026-09-15). `GET /api/v1/cells/people/{id}/membership` shows a reader who holds a person in scope under `cell.view_subtree` that person's current Cell and its leader's name, and the Cells that person leads, and nothing of any Cell's other members. Where the Cell is led outside the reader's scope, that discloses a Cell ID this list withholds from a search for its leader. It is chosen rather than derived: the question is about the person the reader is authorized over, the leader's full name is one of the five fields above, and requiring authority over the Cell would leave a leader unable to see where somebody in their own scope attends.
+
 Selecting an existing person during a duplicate-resolution workflow reuses that Person record but must not automatically transfer pastoral ownership, Cell membership, or any other relationship. Any such transfer requires its own explicit, authorized action.
 
 Senior Pastors retain authorized whole-church visibility across both Men's and Women's Networks per Section 4 and are not subject to the out-of-scope restriction above. Admin access follows explicit administrative permissions per Section 7.
@@ -2276,6 +2278,10 @@ Classification is derived from lifetime DCC attendance history:
 Classification is **evaluated as of the end of the reporting month**, from the attendance history standing at that moment. A person who was a VIP in October and attended again in November is a VIP on October's report forever. Without this rule a closed month's figures move every time someone attends again, which Section 20 forbids and Section 3 makes a reproducibility guarantee. Cell classification carries the identical rule (Section 12).
 
 Do not let leaders manually maintain classification when it can be derived from attendance history.
+
+#### One person's attendance and classification
+
+`GET /api/v1/dcc/people/{id}/attendance` returns one person's live DCC attendance records, newest event first and paginated on Section 22's terms, with their classification (ruling of 2026-09-15). It carries `dcc.view_subtree`, resolved against the person, and names no period, so it asks about now: the actor must hold the person in scope today. A person who does not exist answers `NOT_FOUND`. The classification is counted from every record standing now, by the rule the monthly report applies: present, live records on Sundays that were not removed. A record on a removed Sunday is listed, marked as removed, and not counted. The count is taken over the person's own records, because the monthly figures cover only people who attended in the month asked for, and a test holds the two in agreement. The response carries that count as `attended`: it is the number the classification is made from and not a total of the list, so Section 22's rule against total counts on a collection does not reach it. Nothing on this route changes a classification: one that looks wrong is corrected by correcting the record behind it.
 
 ### Adding a DCC VIP
 
@@ -2836,6 +2842,8 @@ The capability is `cell.manage_membership` (Section 7). It is held by:
 A person has **at most one** active Cell membership. Zero is legitimate: a Person who attends DCC but belongs to no Cell, a newly encoded Person, and an archived Person all have none.
 
 Moving a member from one Cell to another closes the current membership and opens the new one **within a single transaction**. It must never leave two open memberships, and never silently drop a person out of every Cell. Enforce with a uniqueness constraint over the person where `ended_at` is null, exactly as pastoral assignment does (Section 5).
+
+**A person's current Cell is read from the person** (ruling of 2026-09-15). `GET /api/v1/cells/people/{id}/membership` returns the Cell the person currently belongs to, with that Cell's current leader, or none, and separately the Cells the person currently leads (Section 11), because a Cell's leader holds no membership row and leading a Cell counts as having one, as it does on the people-without-a-Cell list (Section 15). It carries `cell.view_subtree`, resolved against the person, and names no period, so it asks about now: the actor must hold the person in scope today. A person who does not exist answers `NOT_FOUND`. Resolving through the person rather than through the Cell's leader shows a reader the Cell, and its leader's name, of somebody in their scope whose Cell is led outside it, and nothing of that Cell's other members (Section 8). It returns the two apart and settles nothing about whether a Cell's leader is a member of their own Cell.
 
 The member and the Cell's leader must belong to the same Network, consistent with the homogeneous-network rule (Section 4). A Network change must not leave a person holding a membership the rule no longer permits; resolve both together or reject the change (Section 4).
 
@@ -4434,6 +4442,7 @@ GET  /api/v1/dcc/events?month=YYYY-MM-01  the month's events, with coverage per 
 GET  /api/v1/dcc/events/{id}/roster
 GET  /api/v1/dcc/events/{id}/coverage-gaps  who owes a record, within the actor's scope
 POST /api/v1/dcc/events/{id}/submit       an Admin amendment is a flag on this, not a route
+GET  /api/v1/dcc/people/{id}/attendance   one person's records and the classification they give (Section 9)
 
 GET  /api/v1/cells                       the Cells of the actor's scope; ?led_by=me narrows
 POST /api/v1/cells                       direct creation, initial encoding only
@@ -4450,6 +4459,7 @@ POST /api/v1/cells/{id}/closure            with a decision about every member, a
 GET  /api/v1/cells/{id}/members
 POST /api/v1/cells/{id}/members            add, or move from another Cell
 DELETE /api/v1/cells/{id}/members/{person_id}  ends the membership
+GET  /api/v1/cells/people/{id}/membership   the person's current Cell and its leader, or none, and the Cells they lead (Sections 10, 11)
 GET  /api/v1/cells/{id}/meetings
 GET  /api/v1/cells/{id}/meetings/{meeting_id}/roster   who to record, for this meeting
 POST /api/v1/cells/{id}/meetings/{meeting_id}/submit   {meeting_id} is the scheduled date;
