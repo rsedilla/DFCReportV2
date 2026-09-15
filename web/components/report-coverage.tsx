@@ -1,0 +1,243 @@
+'use client';
+
+import { useQuery } from '@tanstack/react-query';
+import Link from 'next/link';
+
+import { CoverageFigure } from '@/components/coverage-figure';
+import { dccEventNote } from '@/components/dcc-event-note';
+import { FailureNotice } from '@/components/ui/failure-notice';
+import { HeaderCell, Table, rowClasses } from '@/components/ui/table';
+import { dayOfWeekLabel, listAllCells, type CellSummary } from '@/lib/cells';
+import { listDccEvents, type DccEvent } from '@/lib/dcc';
+import { describeFailure } from '@/lib/messages';
+import { dayLabel } from '@/lib/reporting-month';
+
+const LINK =
+  'focus-visible:outline-accent inline-flex min-h-6 items-center underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2';
+
+/**
+ * The coverage line of a report, broken down one row per Cell or per Sunday (SKILL.md
+ * sections 9, 12, 13 and 17; decisions 0224, 0225, 0226, 0227 and 0229).
+ *
+ * **No total row, deliberately.** These rows come from the Cells index and the DCC
+ * calendar, which are read under the Cell and DCC viewing capabilities, while the line
+ * above them is the report's own figure, read under the reporting capability for the
+ * period. The two agree when the actor's scope is the same for both, and nothing here
+ * can show that it is, so the rows are listed and never summed into a second figure
+ * that could disagree with the first.
+ *
+ * **Nothing is ranked or colour-graded** (sections 13, 17 and 19). The Cells come in the
+ * order the index returns, which ranks nobody (decision 0226), and the Sundays in date
+ * order. Every figure is two figures.
+ *
+ * **A table from `lg`, and cards below it**, the same rows in the same order, as on the
+ * Cells and DCC screens.
+ */
+export function CoverageByCell({ month }: { month: string }) {
+  // The same query as the report's Cell picker, so the two share one request.
+  const cells = useQuery({
+    queryKey: ['cells-all', month],
+    queryFn: ({ signal }) => listAllCells(month, signal),
+  });
+
+  return (
+    <section aria-labelledby="coverage-by-cell-heading">
+      <h2 id="coverage-by-cell-heading" className="field-label">
+        Coverage by Cell
+      </h2>
+      <p className="text-muted mt-2 max-w-2xl text-sm leading-relaxed">
+        Each Cell in your scope, in the order the Cells list gives them. The rows are not
+        added up here: the line at the top is the report&rsquo;s own figure.
+      </p>
+
+      <div className="mt-4">
+        <FailureNotice failure={cells.isError ? describeFailure(cells.error) : null} />
+      </div>
+
+      {cells.isPending ? (
+        <p className="text-muted mt-4 text-sm">Loading&hellip;</p>
+      ) : cells.data && cells.data.length === 0 ? (
+        <p className="text-muted mt-4 text-sm">There are no Cells in your scope this month.</p>
+      ) : cells.data ? (
+        <>
+          <Table caption="Recording coverage for each Cell" className="mt-4 hidden lg:block">
+            <thead>
+              <tr>
+                <HeaderCell>Cell</HeaderCell>
+                <HeaderCell>Leader</HeaderCell>
+                <HeaderCell>Meets</HeaderCell>
+                <HeaderCell>Recorded</HeaderCell>
+              </tr>
+            </thead>
+            <tbody>
+              {cells.data.map((cell) => (
+                <tr key={cell.id} className={rowClasses}>
+                  <td className="px-3 py-3">
+                    <Link href={meetingsHref(cell, month)} className={`${LINK} font-medium`}>
+                      {cell.cell_id}
+                    </Link>
+                  </td>
+                  <td className="px-3 py-3">{cell.leader.full_name}</td>
+                  <td className="px-3 py-3">
+                    {dayOfWeekLabel(cell.schedule.day_of_week)}, {cell.schedule.time_of_day}
+                  </td>
+                  <td className="px-3 py-3">
+                    <CoverageFigure
+                      recorded={cell.coverage.recorded}
+                      scheduled={cell.coverage.scheduled}
+                      unit="meetings recorded"
+                    />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </Table>
+
+          <ul className="mt-4 flex flex-col gap-3 lg:hidden">
+            {cells.data.map((cell) => (
+              <li key={cell.id} className="border-line border p-4">
+                <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+                  <h3 className="text-base font-medium">
+                    <Link href={meetingsHref(cell, month)} className={LINK}>
+                      {cell.cell_id}
+                    </Link>
+                  </h3>
+                  <CoverageFigure
+                    recorded={cell.coverage.recorded}
+                    scheduled={cell.coverage.scheduled}
+                    unit="meetings recorded"
+                  />
+                </div>
+                <dl className="text-muted mt-3 grid gap-x-6 gap-y-1 text-sm sm:grid-cols-2">
+                  <div className="flex gap-2">
+                    <dt>Leader</dt>
+                    <dd className="text-ink">{cell.leader.full_name}</dd>
+                  </div>
+                  <div className="flex gap-2">
+                    <dt>Meets</dt>
+                    <dd className="text-ink">
+                      {dayOfWeekLabel(cell.schedule.day_of_week)}, {cell.schedule.time_of_day}
+                    </dd>
+                  </div>
+                </dl>
+              </li>
+            ))}
+          </ul>
+        </>
+      ) : null}
+    </section>
+  );
+}
+
+function meetingsHref(cell: CellSummary, month: string): string {
+  return `/cells/${cell.id}/meetings?month=${month}`;
+}
+
+/**
+ * The DCC coverage line, one row per Sunday of the month.
+ *
+ * **A removed Sunday keeps its row** and says it is not counted, because section 9 asks
+ * a report covering the month to explain four Sundays where the calendar holds five. A
+ * Sunday nobody could record yet reads in words rather than as a zero (decision 0229).
+ *
+ * The caller leaves this out when a Network is chosen: the calendar's figures are not
+ * narrowed by Network, so a row here would count people the report above does not.
+ */
+export function CoverageBySunday({ month }: { month: string }) {
+  // The same query as the DCC calendar, so moving between the two reads it once.
+  const events = useQuery({
+    queryKey: ['dcc-events', month],
+    queryFn: ({ signal }) => listDccEvents(month, signal),
+  });
+
+  return (
+    <section aria-labelledby="coverage-by-sunday-heading">
+      <h2 id="coverage-by-sunday-heading" className="field-label">
+        Coverage by Sunday
+      </h2>
+      <p className="text-muted mt-2 max-w-2xl text-sm leading-relaxed">
+        Each Sunday of the month, with the records filed for it across your scope. The rows
+        are not added up here: the line at the top is the report&rsquo;s own figure.
+      </p>
+
+      <div className="mt-4">
+        <FailureNotice failure={events.isError ? describeFailure(events.error) : null} />
+      </div>
+
+      {events.isPending ? (
+        <p className="text-muted mt-4 text-sm">Loading&hellip;</p>
+      ) : events.data && events.data.data.length === 0 ? (
+        <p className="text-muted mt-4 max-w-2xl text-sm leading-relaxed">
+          The calendar holds no Sundays for this month.
+        </p>
+      ) : events.data ? (
+        <>
+          <Table caption="Records filed for each Sunday" className="mt-4 hidden lg:block">
+            <thead>
+              <tr>
+                <HeaderCell>Sunday</HeaderCell>
+                <HeaderCell>Records filed</HeaderCell>
+                <HeaderCell>Details</HeaderCell>
+              </tr>
+            </thead>
+            <tbody>
+              {events.data.data.map((event) => (
+                <tr key={event.id} className={rowClasses}>
+                  <td className="px-3 py-3">
+                    <Link href={`/dcc/${event.id}`} className={`${LINK} font-medium`}>
+                      {dayLabel(event.event_date)}
+                    </Link>
+                  </td>
+                  <td className="px-3 py-3">
+                    <SundayFigure event={event} />
+                  </td>
+                  <td className="px-3 py-3">
+                    <SundayDetails event={event} />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </Table>
+
+          <ul className="mt-4 flex flex-col gap-3 lg:hidden">
+            {events.data.data.map((event) => (
+              <li key={event.id} className="border-line border p-4">
+                <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+                  <h3 className="text-base font-medium">
+                    <Link href={`/dcc/${event.id}`} className={LINK}>
+                      {dayLabel(event.event_date)}
+                    </Link>
+                  </h3>
+                  <SundayFigure event={event} />
+                </div>
+                <p className="mt-2 max-w-2xl">
+                  <SundayDetails event={event} />
+                </p>
+              </li>
+            ))}
+          </ul>
+        </>
+      ) : null}
+    </section>
+  );
+}
+
+function SundayFigure({ event }: { event: DccEvent }) {
+  return (
+    <CoverageFigure
+      recorded={event.coverage?.met ?? null}
+      scheduled={event.coverage?.owed ?? null}
+      unit="records filed"
+      nothingOwed={event.removed ? 'No records owed — no service' : 'No records owed yet'}
+    />
+  );
+}
+
+function SundayDetails({ event }: { event: DccEvent }) {
+  return (
+    <>
+      {dccEventNote(event)}
+      {event.removed ? <span className="text-muted text-sm"> Not counted this month.</span> : null}
+    </>
+  );
+}

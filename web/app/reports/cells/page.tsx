@@ -1,23 +1,25 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
+import { useSearchParams } from 'next/navigation';
 import { useState } from 'react';
 
 import { AppShell, PAGE_WIDTH } from '@/components/app-shell';
 import { AttendanceBuckets, ClassificationFigures } from '@/components/attendance-figures';
 import { CoverageFigure } from '@/components/coverage-figure';
 import { MonthPicker } from '@/components/month-picker';
+import { CoverageByCell } from '@/components/report-coverage';
+import { ReportsSwitch } from '@/components/reports-switch';
 import { FailureNotice } from '@/components/ui/failure-notice';
-import { TextLink } from '@/components/ui/text-link';
-import { listCells } from '@/lib/cells';
+import { listAllCells } from '@/lib/cells';
 import { getMe, holdsWholeChurch } from '@/lib/me';
 import { describeFailure } from '@/lib/messages';
 import { getCellMonthlyReport, hasBuckets, type ReportScope } from '@/lib/reports';
-import { reportingMonthOf } from '@/lib/reporting-month';
+import { monthFromQuery } from '@/lib/reporting-month';
 
 /**
- * Cell attendance figures for a month (SKILL.md sections 12, 13, 17 and 20;
- * decisions 0202, 0216 and 0225).
+ * Cell attendance figures for a month, one of the two reports under Reports (SKILL.md
+ * sections 12, 13, 17, 19 and 20; decisions 0202, 0216, 0225 and 0245).
  *
  * **Coverage leads, and that is decision 0202 rather than a layout preference.**
  * It is the first thing on the screen because its denominator is derived from the
@@ -42,7 +44,12 @@ import { reportingMonthOf } from '@/lib/reporting-month';
  * validation error.
  *
  * **Nothing is ranked or colour-graded** (sections 13, 17 and 19), and the Cell
- * picker lists Cells in the order the API returns them, which ranks nobody.
+ * picker lists Cells in the order the API returns them, which ranks nobody. The
+ * section labels are red and every figure is not.
+ *
+ * **Coverage by Cell closes the aggregate view**, one row per Cell from the Cells
+ * index, and is left out once a single Cell is chosen. It carries no total row;
+ * `components/report-coverage.tsx` says why.
  */
 export default function CellReportPage() {
   return (
@@ -53,15 +60,18 @@ export default function CellReportPage() {
 }
 
 export function CellReport() {
-  const [month, setMonth] = useState(() => reportingMonthOf());
+  const search = useSearchParams();
+  const [month, setMonth] = useState(() => monthFromQuery(search.get('month')));
   const [cellId, setCellId] = useState<string>('');
 
   const me = useQuery({ queryKey: ['me'], queryFn: ({ signal }) => getMe(signal) });
   const wholeChurch = holdsWholeChurch(me.data, 'reports.view_subtree');
 
+  // Every page of the index, not the first: a picker has to offer the whole list, and
+  // the Coverage by Cell table below reads the same query.
   const cells = useQuery({
-    queryKey: ['cells', month, false],
-    queryFn: ({ signal }) => listCells({ month }, signal),
+    queryKey: ['cells-all', month],
+    queryFn: ({ signal }) => listAllCells(month, signal),
   });
 
   // The actor's own subtree by default: every leader can read it, and it is the
@@ -91,18 +101,12 @@ export function CellReport() {
 
   return (
     <main id="main" className={PAGE_WIDTH.INDEX}>
-      <h1 className="text-2xl font-semibold tracking-tight">Cell Attendance</h1>
-      <p className="text-muted mt-2 max-w-2xl text-sm leading-relaxed">
+      <h1 className="text-2xl font-semibold tracking-tight">Reports</h1>
+      <ReportsSwitch current="cells" month={month} />
+      <p className="text-muted mt-4 max-w-2xl text-sm leading-relaxed">
         What your Cells recorded this month. Recording coverage comes first, because it is
         the one figure that cannot be improved by recording less.
       </p>
-      {/* Both figures pages sit under Reports (section 19, ruling of 2026-09-14). */}
-      {/* A standalone target rather than an inline one, so it clears 2.5.8's 24px. */}
-      <div className="mt-1">
-        <TextLink href="/reports/dcc" className="text-sm">
-          Also under Reports: DCC figures
-        </TextLink>
-      </div>
 
       <MonthPicker month={month} onChange={setMonth} open={report.data?.open} />
 
@@ -119,7 +123,7 @@ export function CellReport() {
           <option value="">
             {wholeChurch ? 'Everyone in your scope' : 'Everyone you oversee'}
           </option>
-          {(cells.data?.data ?? []).map((cell) => (
+          {(cells.data ?? []).map((cell) => (
             <option key={cell.id} value={cell.id}>
               {cell.cell_id} — {cell.leader.full_name}
             </option>
@@ -149,7 +153,7 @@ export function CellReport() {
       ) : report.data ? (
         <div className="mt-8 flex flex-col gap-10">
           <section aria-labelledby="coverage-heading">
-            <h2 id="coverage-heading" className="text-lg font-medium">
+            <h2 id="coverage-heading" className="field-label">
               Recording coverage
             </h2>
             <p className="mt-2">
@@ -166,7 +170,7 @@ export function CellReport() {
           </section>
 
           <section aria-labelledby="people-heading">
-            <h2 id="people-heading" className="text-lg font-medium">
+            <h2 id="people-heading" className="field-label">
               People who attended
             </h2>
             <p className="mt-2 text-xl font-semibold tabular-nums">
@@ -177,33 +181,36 @@ export function CellReport() {
             </p>
           </section>
 
-          <ClassificationFigures
-            classification={report.data.classification}
-            total={report.data.unique_people}
-          />
+          {/* Side by side from `lg`, one under the other below it. */}
+          <div className="grid gap-10 lg:grid-cols-2">
+            <ClassificationFigures classification={report.data.classification} />
 
-          {hasBuckets(report.data) ? (
-            report.data.n === 0 ? (
-              // Section 12: where N is zero the view shows the coverage line alone
-              // and no buckets — a bucket every person satisfies is not a bucket.
-              <p className="text-muted max-w-2xl text-sm leading-relaxed">
-                This Cell recorded no meetings this month, so there is nobody to count and no
-                buckets to show. The coverage line above is what explains it.
-              </p>
-            ) : (
-              <AttendanceBuckets
-                buckets={report.data.buckets}
-                n={report.data.n}
-                // Section 12: N is the meetings that actually took place and were
-                // recorded, which is not the coverage denominator beside it.
-                summary={(n) =>
-                  n === 1
-                    ? 'One meeting was recorded this month.'
-                    : `${n} meetings were recorded this month.`
-                }
-              />
-            )
-          ) : null}
+            {hasBuckets(report.data) ? (
+              report.data.n === 0 ? (
+                // Section 12: where N is zero the view shows the coverage line alone
+                // and no buckets — a bucket every person satisfies is not a bucket.
+                <p className="text-muted max-w-2xl text-sm leading-relaxed">
+                  This Cell recorded no meetings this month, so there is nobody to count and no
+                  buckets to show. The coverage line above is what explains it.
+                </p>
+              ) : (
+                <AttendanceBuckets
+                  buckets={report.data.buckets}
+                  n={report.data.n}
+                  // Section 12: N is the meetings that actually took place and were
+                  // recorded, which is not the coverage denominator beside it.
+                  summary={(n) =>
+                    n === 1
+                      ? 'One meeting was recorded this month.'
+                      : `${n} meetings were recorded this month.`
+                  }
+                />
+              )
+            ) : null}
+          </div>
+
+          {/* One row per Cell is the aggregate broken down, so it has no place once one Cell is chosen. */}
+          {cellId === '' ? <CoverageByCell month={month} /> : null}
         </div>
       ) : null}
     </main>

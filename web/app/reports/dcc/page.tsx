@@ -1,22 +1,24 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
+import { useSearchParams } from 'next/navigation';
 import { useState } from 'react';
 
 import { AppShell, PAGE_WIDTH } from '@/components/app-shell';
 import { AttendanceBuckets, ClassificationFigures } from '@/components/attendance-figures';
 import { CoverageFigure } from '@/components/coverage-figure';
 import { MonthPicker } from '@/components/month-picker';
+import { CoverageBySunday } from '@/components/report-coverage';
+import { ReportsSwitch } from '@/components/reports-switch';
 import { FailureNotice } from '@/components/ui/failure-notice';
-import { TextLink } from '@/components/ui/text-link';
 import { getMe, holdsWholeChurch } from '@/lib/me';
 import { describeFailure } from '@/lib/messages';
 import { getDccMonthlyReport, type ReportNetwork, type ReportScope } from '@/lib/reports';
-import { dayLabel, reportingMonthOf } from '@/lib/reporting-month';
+import { dayLabel, monthFromQuery } from '@/lib/reporting-month';
 
 /**
- * DCC attendance figures for a month (SKILL.md sections 9, 12, 13, 17 and 20;
- * decisions 0216 and 0224).
+ * DCC attendance figures for a month, one of the two reports under Reports (SKILL.md
+ * sections 9, 12, 13, 17, 19 and 20; decisions 0216, 0224 and 0245).
  *
  * **Coverage here is obligations met over obligations owed** (decision 0224),
  * summed across the month's Sundays and never divided. It is a different figure
@@ -38,6 +40,10 @@ import { dayLabel, reportingMonthOf } from '@/lib/reporting-month';
  * rows the month holds whether or not their day has passed, so mid-month somebody
  * who came to both Sundays so far reads as two of three — and only the flag says
  * why.
+ *
+ * **Coverage by Sunday closes the report**, one row per Sunday from the DCC calendar,
+ * a removed Sunday kept in its place. It is left out when a Network is chosen and
+ * carries no total row; `components/report-coverage.tsx` says why.
  */
 export default function DccReportPage() {
   return (
@@ -48,7 +54,8 @@ export default function DccReportPage() {
 }
 
 export function DccReport() {
-  const [month, setMonth] = useState(() => reportingMonthOf());
+  const search = useSearchParams();
+  const [month, setMonth] = useState(() => monthFromQuery(search.get('month')));
 
   // **Section 19's Senior Pastor scope selector.** Empty means the whole church; the
   // two Networks are the only other values section 4 defines. It is offered only to
@@ -85,18 +92,12 @@ export function DccReport() {
 
   return (
     <main id="main" className={PAGE_WIDTH.INDEX}>
-      <h1 className="text-2xl font-semibold tracking-tight">DCC Figures</h1>
-      <p className="text-muted mt-2 max-w-2xl text-sm leading-relaxed">
+      <h1 className="text-2xl font-semibold tracking-tight">Reports</h1>
+      <ReportsSwitch current="dcc" month={month} />
+      <p className="text-muted mt-4 max-w-2xl text-sm leading-relaxed">
         What the people you oversee recorded for this month&rsquo;s Sundays, and how many of
         the leaders who owed a record filed one.
       </p>
-      {/* Both figures pages sit under Reports (section 19, ruling of 2026-09-14). */}
-      {/* A standalone target rather than an inline one, so it clears 2.5.8's 24px. */}
-      <div className="mt-1">
-        <TextLink href="/reports/cells" className="text-sm">
-          Also under Reports: Cell figures
-        </TextLink>
-      </div>
 
       <MonthPicker month={month} onChange={setMonth} open={report.data?.open} />
 
@@ -143,7 +144,7 @@ export function DccReport() {
       ) : report.data ? (
         <div className="mt-8 flex flex-col gap-10">
           <section aria-labelledby="coverage-heading">
-            <h2 id="coverage-heading" className="text-lg font-medium">
+            <h2 id="coverage-heading" className="field-label">
               Recording coverage
             </h2>
             <p className="mt-2">
@@ -160,63 +161,72 @@ export function DccReport() {
             </p>
           </section>
 
-          <section aria-labelledby="month-heading">
-            <h2 id="month-heading" className="text-lg font-medium">
-              The month
-            </h2>
-            <p className="mt-2 text-sm">
-              <span className="text-xl font-semibold tabular-nums">{report.data.n}</span>
-              <span className="text-muted">
-                {' '}
-                {report.data.n === 1 ? 'Sunday counted' : 'Sundays counted'}
-              </span>
-            </p>
-            {report.data.removed_events.length > 0 ? (
-              // Section 9: a removal records a decision, so it is named rather
-              // than left as a smaller number nobody can explain.
-              <p className="text-muted mt-2 max-w-2xl text-sm leading-relaxed">
-                No service was held on{' '}
-                {report.data.removed_events.map((date) => dayLabel(date)).join(', ')}, so
-                {report.data.removed_events.length === 1 ? ' that Sunday is' : ' those Sundays are'}{' '}
-                not counted.
+          {/* Two short figures, side by side from `sm`. */}
+          <div className="grid gap-10 sm:grid-cols-2">
+            <section aria-labelledby="month-heading">
+              <h2 id="month-heading" className="field-label">
+                The month
+              </h2>
+              <p className="mt-2 text-sm">
+                <span className="text-xl font-semibold tabular-nums">{report.data.n}</span>
+                <span className="text-muted">
+                  {' '}
+                  {report.data.n === 1 ? 'Sunday counted' : 'Sundays counted'}
+                </span>
               </p>
-            ) : null}
-          </section>
+              {report.data.removed_events.length > 0 ? (
+                // Section 9: a removal records a decision, so it is named rather
+                // than left as a smaller number nobody can explain.
+                <p className="text-muted mt-2 max-w-2xl text-sm leading-relaxed">
+                  No service was held on{' '}
+                  {report.data.removed_events.map((date) => dayLabel(date)).join(', ')}, so
+                  {report.data.removed_events.length === 1 ? ' that Sunday is' : ' those Sundays are'}{' '}
+                  not counted.
+                </p>
+              ) : null}
+            </section>
 
-          <section aria-labelledby="people-heading">
-            <h2 id="people-heading" className="text-lg font-medium">
-              People who attended
-            </h2>
-            <p className="mt-2 text-xl font-semibold tabular-nums">
-              {report.data.unique_people}
-            </p>
-            <p className="text-muted mt-2 max-w-2xl text-sm leading-relaxed">
-              Counted once each, however many Sundays they came to.
-            </p>
-          </section>
+            <section aria-labelledby="people-heading">
+              <h2 id="people-heading" className="field-label">
+                People who attended
+              </h2>
+              <p className="mt-2 text-xl font-semibold tabular-nums">
+                {report.data.unique_people}
+              </p>
+              <p className="text-muted mt-2 max-w-2xl text-sm leading-relaxed">
+                Counted once each, however many Sundays they came to.
+              </p>
+            </section>
+          </div>
 
-          <ClassificationFigures
-            classification={report.data.classification}
-            total={report.data.unique_people}
-          />
+          {/* Side by side from `lg`, one under the other below it. */}
+          <div className="grid gap-10 lg:grid-cols-2">
+            <ClassificationFigures classification={report.data.classification} />
 
-          {report.data.n === 0 ? (
-            <p className="text-muted max-w-2xl text-sm leading-relaxed">
-              No Sundays were counted this month, so there is nothing to break down.
-            </p>
-          ) : (
-            <AttendanceBuckets
-              buckets={report.data.buckets}
-              n={report.data.n}
-              // Section 9: N is the applicable DCC events — the Sundays the calendar
-              // carries a service on — and never a count of records filed.
-              summary={(n) =>
-                n === 1
-                  ? 'One Sunday carried a service this month.'
-                  : `${n} Sundays carried a service this month.`
-              }
-            />
-          )}
+            {report.data.n === 0 ? (
+              <p className="text-muted max-w-2xl text-sm leading-relaxed">
+                No Sundays were counted this month, so there is nothing to break down.
+              </p>
+            ) : (
+              <AttendanceBuckets
+                buckets={report.data.buckets}
+                n={report.data.n}
+                // Section 9: N is the applicable DCC events — the Sundays the calendar
+                // carries a service on — and never a count of records filed.
+                summary={(n) =>
+                  n === 1
+                    ? 'One Sunday carried a service this month.'
+                    : `${n} Sundays carried a service this month.`
+                }
+              />
+            )}
+          </div>
+
+          {/*
+            Left out for a Network: the calendar's figures are not narrowed by Network, so
+            its rows would count people the figures above do not.
+          */}
+          {network === '' ? <CoverageBySunday month={month} /> : null}
         </div>
       ) : null}
     </main>

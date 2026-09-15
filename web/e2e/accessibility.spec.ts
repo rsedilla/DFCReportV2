@@ -642,6 +642,7 @@ const SCANS = [
       await expect(page.getByRole('heading', { name: 'Recording coverage' })).toBeVisible();
       await expect(page.getByText('6 of 8 meetings recorded')).toBeVisible();
       await expect(page.getByRole('heading', { name: 'How often people came' })).toHaveCount(0);
+      await expect(page.getByText('3 of 4 meetings recorded').filter({ visible: true })).toBeVisible();
     },
   },
   {
@@ -668,11 +669,13 @@ const SCANS = [
     async before(page: import('@playwright/test').Page) {
       await mockSignedIn(page);
       await mockDccReport(page);
+      await mockDccEvents(page);
     },
     async arrange(page: import('@playwright/test').Page) {
-      await expect(page.getByRole('heading', { name: 'DCC Figures' })).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'Reports', exact: true })).toBeVisible();
       await expect(page.getByText('12 of 18 records filed')).toBeVisible();
       await expect(page.getByText(/No service was held on Sunday 14 June/)).toBeVisible();
+      await expect(page.getByText('5 of 8 records filed').filter({ visible: true })).toBeVisible();
     },
   },
   {
@@ -920,25 +923,27 @@ const TARGET_SWEEP = [
     minimum: 6,
   },
   {
-    // Two month controls, the scope select, and the link to the DCC figures that
-    // decision 0245 put beside them under Reports.
+    // The two links of the Reports switch, two month controls, the scope select, and a
+    // link per Cell in Coverage by Cell — two Cells, counted in the table and the cards
+    // alike, since the count includes whichever of the two this viewport hides.
     name: 'cell attendance report',
     route: '/reports/cells',
     settleRole: 'heading' as const,
     settle: 'Recording coverage',
-    minimum: 4,
+    minimum: 9,
   },
   {
-    // Two month controls, and the link to the Cell figures that decision 0245 put
-    // beside them under Reports. No scope select for this fixture's viewer: the DCC
-    // report offers its Network select only to a whole-church reader, and this
-    // fixture's reporting grant is one Network. That select is why a whole-church
-    // reader lands on this report rather than on the Cell figures.
+    // The two links of the Reports switch and two month controls, then Coverage by Sunday:
+    // four Sunday links and the one "who still has to record" link, in the table and the
+    // cards alike. No scope select for this fixture's viewer: the DCC report offers its
+    // Network select only to a whole-church reader, and this fixture's reporting grant is
+    // one Network. That select is why a whole-church reader lands on this report rather
+    // than on the Cell figures.
     name: 'dcc figures report',
     route: '/reports/dcc',
     settleRole: 'heading' as const,
     settle: 'Recording coverage',
-    minimum: 3,
+    minimum: 14,
   },
   {
     // Back link, two radios per person across two people, and Save. Six rather

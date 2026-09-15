@@ -36,6 +36,22 @@ export function reportingMonthOf(at: Date = new Date()): string {
 }
 
 /**
+ * The month a `?month=` value names, or the current Manila month where it names none.
+ *
+ * The Reports switch carries the month between the two reports in the address, and an
+ * address can be typed. A value that is not a month's first day, or names a month that
+ * has not begun (decision 0216), falls back to the current month rather than sending a
+ * request the API would refuse.
+ */
+export function monthFromQuery(value: string | null): string {
+  if (value !== null && /^\d{4}-(0[1-9]|1[0-2])-01$/.test(value) && !hasNotBegun(value)) {
+    return value;
+  }
+
+  return reportingMonthOf();
+}
+
+/**
  * Today's Manila date as `YYYY-MM-DD`, for comparing against a meeting or event date.
  *
  * Section 13 refuses a record for a meeting whose Manila day has not begun, so a screen

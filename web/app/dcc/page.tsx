@@ -6,9 +6,10 @@ import { useState } from 'react';
 
 import { AppShell, PAGE_WIDTH } from '@/components/app-shell';
 import { CoverageFigure } from '@/components/coverage-figure';
+import { dccEventNote } from '@/components/dcc-event-note';
 import { MonthPicker } from '@/components/month-picker';
 import { FailureNotice } from '@/components/ui/failure-notice';
-import { listDccEvents, notRecordableLabel, type DccEvent } from '@/lib/dcc';
+import { listDccEvents, type DccEvent } from '@/lib/dcc';
 import { describeFailure } from '@/lib/messages';
 import { dayLabel, reportingMonthOf } from '@/lib/reporting-month';
 
@@ -86,6 +87,8 @@ function DccCalendar() {
 }
 
 function EventRow({ event }: { event: DccEvent }) {
+  const note = dccEventNote(event);
+
   return (
     <li className="border-line rounded-lg border p-4">
       <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
@@ -107,31 +110,8 @@ function EventRow({ event }: { event: DccEvent }) {
         />
       </div>
 
-      {/*
-        The removal's reason, because section 9 requires a removal to record a
-        decision and a row saying only "removed" records none. It is not an error
-        and carries no warning colour: a Sunday the church did not meet is an
-        ordinary fact.
-      */}
-      {event.removed ? (
-        <p className="text-muted mt-2 max-w-2xl text-sm leading-relaxed">
-          No service was held.
-          {event.removal_reason ? ` ${event.removal_reason}` : ''}
-        </p>
-      ) : event.coverage && event.coverage.met < event.coverage.owed ? (
-        <p className="mt-2">
-          <Link
-            href={`/dcc/${event.id}/gaps`}
-            className="focus-visible:outline-accent inline-flex min-h-6 items-center rounded-sm text-sm underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2"
-          >
-            See who still has to record
-          </Link>
-        </p>
-      ) : event.not_recordable_reason ? (
-        <p className="text-muted mt-2 text-sm">
-          {notRecordableLabel(event.not_recordable_reason)}.
-        </p>
-      ) : null}
+      {/* Shared with the DCC report, so the two screens say the same thing of a Sunday. */}
+      {note ? <p className="mt-2 max-w-2xl">{note}</p> : null}
     </li>
   );
 }
