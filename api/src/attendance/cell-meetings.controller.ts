@@ -45,11 +45,7 @@ import { CellMeetingsQueryDto } from './dto/cell-meetings.dto';
  * outstanding work.
  *
  * Section 7's capability list is closed, so this is the existing capability read
- * against a new surface rather than a new name. Whether a Cell-scoped *read* deserves
- * a capability of its own is already open in `CLAUDE.md` for `GET
- * /api/v1/cells/{id}/members`, and this route joins that question rather than
- * reopening it: the consequence is the same one recorded there, that roster
- * visibility cannot be granted without the power the capability also carries.
+ * against a new surface rather than a new name.
  *
  * **The Cell id is validated by the route**, which section 7 requires of a path
  * parameter — except that here the guard *does* resolve against it, so the pipe is

@@ -18,11 +18,8 @@ against the meeting.** Every actor the roster admits sees what is recorded for e
 `cell.correct_subtree` guards changing a record that already stands, and nothing about
 reading it.
 
-So an actor holding `cell.take_attendance` without `cell.correct_subtree` sees a recorded
-meeting's marks and cannot change them. The recording screen built with this ruling shows
-those marks read-only and offers "Edit this record" only to an account holding
-`cell.correct_subtree`. That offer is a courtesy; the API decides, against the meeting
-(Section 1, Principle 4).
+So an actor holding `cell.take_attendance` without `cell.correct_subtree` reads a recorded
+meeting's marks and cannot change them.
 
 ## The ground
 
@@ -49,7 +46,6 @@ Admin and Leader columns give `cell.take_attendance` and `cell.correct_subtree` 
 as each other, so no default account sees anything different.
 
 **It does not settle how a meeting status recorded in error is corrected**, which stays open.
-The recording screen keeps a recorded status as it is and does not offer to change it.
 
 ---
 
