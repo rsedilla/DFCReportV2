@@ -48,12 +48,16 @@ export const CELL_WITH_NO_SCHEDULE = {
   coverage: { recorded: 0, scheduled: 0 },
 };
 
-export async function mockCells(page: Page): Promise<void> {
+/** `open` is the month's submission window, which the Record queue reads for last month. */
+export async function mockCells(
+  page: Page,
+  { open = false }: { open?: boolean } = {},
+): Promise<void> {
   await page.route('**/api/v1/cells?*', (route) =>
     route.fulfill(
       json({
         reporting_month: '2026-06-01',
-        open: false,
+        open,
         data: [CELL_WITH_MEETINGS, CELL_WITH_NO_SCHEDULE],
         next_cursor: null,
       }),
@@ -273,6 +277,95 @@ export async function mockDccRoster(page: Page): Promise<void> {
             full_name: 'Bienvenido Trinidad',
             responsible_leader_id: LEADER_ID,
             record: null,
+          },
+        ],
+        next_cursor: null,
+      }),
+    ),
+  );
+}
+
+/**
+ * A meeting already recorded, held or not held: the correction screen's locked states.
+ *
+ * Held carries a mark for each member, so a locked roster has something to show; not
+ * held carries a reason and a note, because section 13 requires the reason and the
+ * screen shows both read-only.
+ */
+export async function mockRecordedMeetingRoster(
+  page: Page,
+  status: 'HELD' | 'NOT_HELD',
+): Promise<void> {
+  const held = status === 'HELD';
+
+  await page.route('**/api/v1/cells/*/meetings/*/roster', (route) =>
+    route.fulfill(
+      json({
+        cell_id: 'C-0007',
+        meeting_id: '2026-06-27',
+        scheduled_date: '2026-06-27',
+        scheduled_time: '19:00',
+        week_starting: '2026-06-22',
+        reporting_month: '2026-06-01',
+        roster_date: '2026-06-27',
+        responsible_leader_id: LEADER_ID,
+        meeting: {
+          id: '3f1b7c6e-0000-4000-8000-000000000301',
+          status,
+          scheduled_date: '2026-06-27',
+          scheduled_time: '19:00',
+          actual_date: null,
+          actual_time: null,
+          not_held_reason: held ? null : 'WEATHER_OR_CALAMITY',
+          not_held_note: held ? null : 'Signal number two was raised that afternoon.',
+          facilitated_by: null,
+          responsible_leader_id: LEADER_ID,
+          submitted_by: SUBMITTER_ID,
+          submitted_at: '2026-06-27T13:00:00.000Z',
+          version: 3,
+        },
+        members: [
+          {
+            person_id: '3f1b7c6e-0000-4000-8000-000000000601',
+            member_id: 'M-00701',
+            first_name: 'Rosalinda',
+            last_name: 'Ocampo',
+            record: held ? { present: true } : null,
+          },
+          {
+            person_id: '3f1b7c6e-0000-4000-8000-000000000602',
+            member_id: 'M-00702',
+            first_name: 'Bienvenido',
+            last_name: 'Trinidad',
+            record: held ? { present: false } : null,
+          },
+        ],
+      }),
+    ),
+  );
+}
+
+/** A Sunday whose month has closed: it takes no record, and what was recorded still shows. */
+export async function mockClosedDccRoster(page: Page): Promise<void> {
+  await page.route('**/api/v1/dcc/events/*/roster', (route) =>
+    route.fulfill(
+      json({
+        event: {
+          id: '3f1b7c6e-0000-4000-8000-000000000501',
+          event_date: '2026-06-07',
+          recordable: false,
+          not_recordable_reason: 'MONTH_CLOSED',
+          removed: false,
+          removal_reason: null,
+          coverage: { met: 5, owed: 8 },
+        },
+        data: [
+          {
+            person_id: '3f1b7c6e-0000-4000-8000-000000000601',
+            member_id: 'M-00701',
+            full_name: 'Rosalinda Ocampo',
+            responsible_leader_id: LEADER_ID,
+            record: { present: true, version: 1, recorded_at: '2026-06-07T12:00:00.000Z' },
           },
         ],
         next_cursor: null,

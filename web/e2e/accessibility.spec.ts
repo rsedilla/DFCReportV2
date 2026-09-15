@@ -7,6 +7,7 @@ import {
   PERSON_IN_SCOPE,
   mockAccepted,
   mockAwaitingReassignment,
+  mockCellCorrector,
   mockDuplicateRefusal,
   mockPeopleWithoutACell,
   mockPeople,
@@ -29,6 +30,8 @@ import {
   mockDccReport,
   mockDccRoster,
   mockMeetingRoster,
+  mockClosedDccRoster,
+  mockRecordedMeetingRoster,
 } from './mock-attendance';
 
 /**
@@ -270,7 +273,7 @@ const SCANS = [
     },
   },
   {
-    // All four states in one month: held, not held, rescheduled, and the one that
+    // All four states in one month: met, did not meet, moved, and the one that
     // is not a status at all.
     name: 'cell meetings',
     route: '/cells/3f1b7c6e-0000-4000-8000-000000000101/meetings',
@@ -284,7 +287,7 @@ const SCANS = [
     async arrange(page: import('@playwright/test').Page) {
       await expect(page.getByRole('heading', { name: 'Cell C-0007' })).toBeVisible();
       await expect(page.getByText('Awaiting a record')).toBeVisible();
-      await expect(page.getByText('Not held')).toBeVisible();
+      await expect(page.getByText('Did not meet', { exact: true })).toBeVisible();
     },
   },
   {
@@ -319,6 +322,78 @@ const SCANS = [
     },
   },
   {
+    // A recorded meeting as an account that may correct it sees it: the marks locked,
+    // and the edit offered (decision 0246). The locked radios are the new content.
+    name: 'record a cell meeting, recorded',
+    route: '/cells/3f1b7c6e-0000-4000-8000-000000000101/meetings/2026-06-27',
+    pattern: '/cells/[id]/meetings/[date]',
+    async before(page: import('@playwright/test').Page) {
+      await mockSignedIn(page);
+      await mockCellCorrector(page);
+      await mockRecordedMeetingRoster(page, 'HELD');
+    },
+    async arrange(page: import('@playwright/test').Page) {
+      await expect(page.getByRole('button', { name: 'Edit this record' })).toBeVisible();
+    },
+  },
+  {
+    // The same meeting once "Edit this record" is pressed: the reason field and the
+    // pinned Save bar appear.
+    name: 'record a cell meeting, editing',
+    route: '/cells/3f1b7c6e-0000-4000-8000-000000000101/meetings/2026-06-27',
+    pattern: '/cells/[id]/meetings/[date]',
+    async before(page: import('@playwright/test').Page) {
+      await mockSignedIn(page);
+      await mockCellCorrector(page);
+      await mockRecordedMeetingRoster(page, 'HELD');
+    },
+    async arrange(page: import('@playwright/test').Page) {
+      await page.getByRole('button', { name: 'Edit this record' }).click();
+      await expect(page.getByLabel('Why is this changing? (optional)')).toBeVisible();
+    },
+  },
+  {
+    // A meeting recorded as did not meet: its reason and note, read-only.
+    name: 'record a cell meeting, not held',
+    route: '/cells/3f1b7c6e-0000-4000-8000-000000000101/meetings/2026-06-27',
+    pattern: '/cells/[id]/meetings/[date]',
+    async before(page: import('@playwright/test').Page) {
+      await mockSignedIn(page);
+      await mockRecordedMeetingRoster(page, 'NOT_HELD');
+    },
+    async arrange(page: import('@playwright/test').Page) {
+      await expect(page.getByText('Why: Weather or calamity')).toBeVisible();
+    },
+  },
+  {
+    // A meeting whose day has not come: no marks and no Save bar (decision 0238).
+    name: 'record a cell meeting, not yet',
+    route: '/cells/3f1b7c6e-0000-4000-8000-000000000101/meetings/2026-06-27',
+    pattern: '/cells/[id]/meetings/[date]',
+    async before(page: import('@playwright/test').Page) {
+      // 10:00 on 20 June in Manila, a week before the meeting.
+      await page.clock.setFixedTime(new Date('2026-06-20T02:00:00Z'));
+      await mockSignedIn(page);
+      await mockMeetingRoster(page);
+    },
+    async arrange(page: import('@playwright/test').Page) {
+      await expect(page.getByText('Not yet', { exact: true })).toBeVisible();
+    },
+  },
+  {
+    // A Sunday whose month has closed: the recorded mark shown in a disabled group.
+    name: 'dcc checklist, closed Sunday',
+    route: '/dcc/3f1b7c6e-0000-4000-8000-000000000501',
+    pattern: '/dcc/[id]',
+    async before(page: import('@playwright/test').Page) {
+      await mockSignedIn(page);
+      await mockClosedDccRoster(page);
+    },
+    async arrange(page: import('@playwright/test').Page) {
+      await expect(page.getByText('This Sunday takes no record')).toBeVisible();
+    },
+  },
+  {
     // Where a leader lands: outstanding work above the numbers (section 19).
     name: 'dashboard',
     route: '/dashboard',
@@ -328,13 +403,18 @@ const SCANS = [
       await mockCellMeetings(page);
       await mockCellReport(page);
       await mockDccReport(page);
+      await mockDccEvents(page);
+      await mockDccRoster(page);
       await mockAwaitingReassignment(page);
       await mockPeopleWithoutACell(page);
     },
     async arrange(page: import('@playwright/test').Page) {
-      await expect(
-        page.getByRole('heading', { name: 'Meetings awaiting a record' }),
-      ).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'Awaiting a record' })).toBeVisible();
+      // **A row of each kind in the queue, so axe scans both.** The Cell rows wait on
+      // their per-Cell meetings reads and the Sunday rows on their checklists, and
+      // nothing orders the two, so each is waited for.
+      await expect(page.getByRole('link', { name: /^Record Cell / }).first()).toBeVisible();
+      await expect(page.getByRole('link', { name: /^Record DCC Sunday/ }).first()).toBeVisible();
       // A tile carries its scope and its period, which section 19 requires of
       // every one of them.
       await expect(page.getByText(/People you oversee ·/).first()).toBeVisible();
@@ -687,7 +767,13 @@ const TARGET_SWEEP = [
     // that list, which section 15's second attention list contributes. Sixteen since
     // decision 0245 moved the way in to the DCC calendar from the sidebar onto this
     // page, so losing that link is something the floor now notices.
-    minimum: 16,
+    //
+    // **Twenty-one since UI-3**: the queue's three filter choices and its two Sunday
+    // rows' Record buttons. The two awaiting-a-record links became the Cell rows' Record
+    // buttons, one each. The queue shows "Loading…" until every read it is built from
+    // has answered, and the sweep waits for no "Loading…" to remain before counting, so
+    // both kinds of row are there when it counts.
+    minimum: 21,
   },
   {
     // The back link and one link per person: three, with no "Show more" for this
@@ -865,9 +951,47 @@ const TARGET_EXEMPT: { name: string; why: string }[] = [
       'the route a second time to re-measure three controls already covered, and would need a ' +
       'second mock on the same URL to do it.',
   },
+  {
+    name: 'record a cell meeting, recorded',
+    why:
+      'Beyond the back link its only control is "Edit this record", the same Button primitive ' +
+      'measured on every screen, and its radios are disabled. The sweep installs one roster mock ' +
+      'for the whole run, the unrecorded one measured under "record a cell meeting".',
+  },
+  {
+    name: 'record a cell meeting, editing',
+    why:
+      'It re-enables the radios and the Save button measured under "record a cell meeting" and ' +
+      'adds a full-width textarea. Measuring it would need a second roster mock on the same URL.',
+  },
+  {
+    name: 'record a cell meeting, not held',
+    why:
+      'It renders the back link and no other control: the recorded reason is text, and no edit ' +
+      'or Save bar is offered for a meeting recorded as did not meet.',
+  },
+  {
+    name: 'record a cell meeting, not yet',
+    why:
+      'It renders the back link and no other control: a meeting whose day has not come offers ' +
+      'no marks and no Save bar.',
+  },
+  {
+    name: 'dcc checklist, closed Sunday',
+    why:
+      'Its radios are disabled and no Save bar renders, so it offers no control beyond the back ' +
+      'link that "dcc checklist" does not. Measuring it would need a second roster mock on the ' +
+      'same URL.',
+  },
 ];
 
 test('every interactive target meets the 24px minimum', async ({ page }) => {
+  // One test visits every route in `TARGET_SWEEP`, so the per-test default, which is sized
+  // for one page, does not fit it: it timed out between routes while measuring nothing
+  // wrong. Each settle below keeps its own expect timeout, so a route that never renders
+  // still fails on that route.
+  test.setTimeout(120_000);
+
   await mockSignedIn(page);
   await mockPeople(page);
   // The attendance screens too, because the sweep counts the targets a route

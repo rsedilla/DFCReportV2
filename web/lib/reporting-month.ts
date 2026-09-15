@@ -35,6 +35,22 @@ export function reportingMonthOf(at: Date = new Date()): string {
   return `${String(year).padStart(4, '0')}-${String(month).padStart(2, '0')}-01`;
 }
 
+/**
+ * Today's Manila date as `YYYY-MM-DD`, for comparing against a meeting or event date.
+ *
+ * Section 13 refuses a record for a meeting whose Manila day has not begun, so a screen
+ * listing what awaits a record leaves those out rather than offering a button the API
+ * will refuse. The server still decides; this only keeps the list honest.
+ */
+export function todayInManila(at: Date = new Date()): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: MANILA,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(at);
+}
+
 /** The month before or after this one, as the same `YYYY-MM-01` spelling. */
 export function shiftMonth(reportingMonth: string, by: number): string {
   const [year, month] = reportingMonth.split('-').map(Number);

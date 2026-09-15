@@ -38,14 +38,15 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    // **Scroll padding for the two pinned bars below `lg`** (2.4.11 Focus Not
-    // Obscured). When focus moves to a control, the browser scrolls it into view
-    // clear of the bar across the top and the tab bar along the bottom rather than
-    // underneath either. At `lg` the sidebar sits beside the page and neither bar
-    // exists, so the padding is removed.
+    // **Scroll padding for what is pinned** (2.4.11 Focus Not Obscured). When focus
+    // moves to a control, the browser scrolls it into view clear of anything fixed
+    // over the page rather than underneath it. Below `lg` that is the bar across the
+    // top, and along the bottom the tab bar with a recording screen's Save bar
+    // stacked above it. At `lg` the sidebar sits beside the page, so only the Save
+    // bar remains, at the bottom.
     <html
       lang="en"
-      className={`${archivo.variable} scroll-pt-16 scroll-pb-20 lg:scroll-pt-0 lg:scroll-pb-0`}
+      className={`${archivo.variable} scroll-pt-16 scroll-pb-40 lg:scroll-pt-0 lg:scroll-pb-28`}
     >
       <body>
         {/*

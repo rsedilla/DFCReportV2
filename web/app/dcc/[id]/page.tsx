@@ -30,6 +30,10 @@ import { dayLabel } from '@/lib/reporting-month';
  * Section 9 says as much — a submission is one leader's whole checklist, "so most of
  * its lines repeat what is already recorded".
  *
+ * **One Sunday at a time, and never a person's month** (owner's choice of
+ * 2026-09-15). A grid of each person's Sundays across a month would name somebody's
+ * attendance over a period, which no screen does and `CLAUDE.md` records as open.
+ *
  * **A version per person, not one for the event** (section 14). A DCC event is
  * church-wide, so two leaders recording different people must never conflict; the
  * unit is `(event, person)` and each line carries the version that line was read at.
@@ -37,7 +41,8 @@ import { dayLabel } from '@/lib/reporting-month';
  * the meeting, and the two are deliberately not built from one shape.
  *
  * **Only marked lines are sent.** A line the leader has not touched and that has no
- * record is not a declaration, and sending it as absent would manufacture one.
+ * record is not a declaration, and sending it as absent would manufacture one. There
+ * is no "mark all present" for the same reason the Cell screen gives.
  *
  * **An event that takes no record is read-only here**, and the reason is stated: a
  * removed Sunday, a Sunday that has not happened, and a closed month are three
@@ -103,18 +108,22 @@ function DccChecklist() {
     },
   });
 
+  const unmarkedCount = lines.filter((line) => markFor(line) === undefined).length;
+  const markedCount = lines.length - unmarkedCount;
+
   return (
     <main id="main" className={PAGE_WIDTH.READING}>
       <p className="mb-4">
         <Link
           href="/dcc"
-          className="focus-visible:outline-accent text-muted inline-flex min-h-6 items-center rounded-sm text-sm underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2"
+          className="focus-visible:outline-accent text-muted inline-flex min-h-6 items-center text-sm underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2"
         >
           Back to the calendar
         </Link>
       </p>
 
-      <h1 className="text-2xl font-semibold tracking-tight">
+      {/* Red for the reason the Cell meeting screen gives. */}
+      <h1 className="text-accent text-2xl font-bold tracking-tight">
         {event ? dayLabel(event.event_date) : 'DCC attendance'}
       </h1>
       <p className="text-muted mt-2 max-w-2xl text-sm leading-relaxed">
@@ -139,7 +148,7 @@ function DccChecklist() {
       ) : roster.data && event ? (
         <>
           {!recordable && event.not_recordable_reason ? (
-            <p className="border-line mt-6 max-w-2xl rounded-lg border p-4 text-sm leading-relaxed">
+            <p className="border-edge mt-6 max-w-2xl border p-4 text-sm leading-relaxed">
               This Sunday takes no record: {notRecordableLabel(event.not_recordable_reason)}.
               {event.removed && event.removal_reason ? ` ${event.removal_reason}` : ''}
             </p>
@@ -157,19 +166,24 @@ function DccChecklist() {
               person&rsquo;s direct pastoral leader, so this is empty if you disciple nobody.
             </p>
           ) : (
-            <ul className="mt-6 flex flex-col gap-4">
-              {lines.map((line) => (
-                <PersonMark
-                  key={line.person_id}
-                  line={line}
-                  mark={markFor(line)}
-                  disabled={!recordable}
-                  onChange={(value) =>
-                    setEdits((current) => ({ ...current, [line.person_id]: value }))
-                  }
-                />
-              ))}
-            </ul>
+            <>
+              <p className="mt-6 text-right text-sm">
+                {markedCount} of {lines.length} marked
+              </p>
+              <ul className="border-line mt-2 border-t">
+                {lines.map((line) => (
+                  <PersonMark
+                    key={line.person_id}
+                    line={line}
+                    mark={markFor(line)}
+                    disabled={!recordable}
+                    onChange={(value) =>
+                      setEdits((current) => ({ ...current, [line.person_id]: value }))
+                    }
+                  />
+                ))}
+              </ul>
+            </>
           )}
 
           {/*
@@ -185,18 +199,26 @@ function DccChecklist() {
             </p>
           ) : null}
 
+          {/* Pinned for the reason the Cell meeting screen gives. */}
           {recordable && lines.length > 0 ? (
-            <div className="mt-8">
+            <div className="border-edge bg-surface sticky bottom-[calc(3.5625rem+env(safe-area-inset-bottom))] z-20 -mx-5 mt-8 flex flex-col gap-2 border-t px-5 py-3 sm:flex-row sm:items-center sm:justify-between lg:bottom-0">
+              <p aria-live="polite" className="text-sm">
+                {records.length === 0
+                  ? 'Mark at least one person to save.'
+                  : unmarkedCount === 0
+                    ? 'Everyone on this checklist is marked.'
+                    : unmarkedCount === 1
+                      ? '1 person still to mark.'
+                      : `${unmarkedCount} people still to mark.`}
+              </p>
               <Button
                 type="button"
+                className="w-full sm:w-auto"
                 onClick={() => save.mutate()}
                 disabled={records.length === 0 || save.isPending}
               >
                 {save.isPending ? 'Saving…' : 'Save'}
               </Button>
-              {records.length === 0 ? (
-                <p className="text-muted mt-2 text-sm">Mark at least one person to save.</p>
-              ) : null}
             </div>
           ) : null}
         </>
@@ -217,19 +239,23 @@ function PersonMark({
   onChange: (mark: Mark) => void;
 }) {
   return (
-    <li className="border-line rounded-lg border p-4">
+    <li className="border-line border-b py-4">
       <RadioGroup
         legend={line.full_name}
         description={
           mark === undefined
             ? 'Not recorded yet'
-            : line.record === null
+            : line.record === null || disabled
               ? undefined
               : 'Already recorded — change it only if it is wrong'
         }
         name={`person-${line.person_id}`}
-        value={disabled ? '' : (mark ?? '')}
+        // **The recorded mark is shown whether or not the Sunday takes a record.**
+        // Decision 0194 shows marks so a leader is not asked twice; blanking them on a
+        // closed Sunday hid exactly what that decision exists to show.
+        value={mark ?? ''}
         onChange={onChange}
+        disabled={disabled}
         options={[
           { value: 'present', label: 'Present' },
           { value: 'absent', label: 'Absent' },
@@ -238,4 +264,3 @@ function PersonMark({
     </li>
   );
 }
-
