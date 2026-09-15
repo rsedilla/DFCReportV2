@@ -243,10 +243,11 @@ rewritten to remove that language, because resolving each by inference is how a
 false cross-reference gets introduced, and this log records enough of those
 already. Each file carries previous/next links instead, so a positional reference
 resolves exactly as well as it did in the single file and no better. *Recounted on
-2026-09-15, the trigger being decision 0247: of 246 files, 245 carry `Previous:`, 181 carry
-`Next:`, and 180 carry both on one line. 0213 through 0247 each moved the first two and
+2026-09-15, the trigger being decision 0248: of 247 files, 246 carry `Previous:`, 181 carry
+`Next:`, and 180 carry both on one line. 0213 through 0248 each moved the first two and
 neither of the others, none of them carrying a `Next:`. The one file with no `Previous:` is
 0001, which has nothing before it. The recount before this one was dated 2026-09-15 and
+triggered by 0247, and was left stale by 0248 the same day. The one before that was dated 2026-09-15 and
 triggered by 0246, and was left stale by 0247 the same day. The one before that was dated 2026-09-14 and
 triggered by 0245, and was left stale by 0246 the next day. The one before that was dated 2026-09-13 and
 triggered by 0244, and was left stale by 0245 the next day. The one before that was dated 2026-09-11 and
@@ -543,6 +544,7 @@ one, in the paragraph whose subject is false cross-references, and
 - 2026-09-14 — [The sidebar is Record, Reports, People, Cells and Network, and a whole-church reader starts on Reports](docs/decisions/0245-the-sidebar-follows-the-design.md)
 - 2026-09-15 — [A Cell meeting's recorded marks are read under the capability that records it](docs/decisions/0246-a-cell-meetings-recorded-marks-are-read-under-the-recording-capability.md)
 - 2026-09-15 — [One person's DCC attendance is read under `dcc.view_subtree`, and their classification comes with it](docs/decisions/0247-one-persons-dcc-attendance-is-read-under-dcc-view-subtree.md)
+- 2026-09-15 — [A person's current Cell is read under `cell.view_subtree`](docs/decisions/0248-a-persons-current-cell-is-read-under-cell-view-subtree.md)
 
 ### Open — awaiting a ruling
 

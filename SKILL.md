@@ -2841,6 +2841,8 @@ A person has **at most one** active Cell membership. Zero is legitimate: a Perso
 
 Moving a member from one Cell to another closes the current membership and opens the new one **within a single transaction**. It must never leave two open memberships, and never silently drop a person out of every Cell. Enforce with a uniqueness constraint over the person where `ended_at` is null, exactly as pastoral assignment does (Section 5).
 
+**A person's current Cell is read from the person** (ruling of 2026-09-15). `GET /api/v1/cells/people/{id}/membership` returns the Cell the person currently belongs to, with that Cell's current leader, or none. It carries `cell.view_subtree`, resolved against the person, and names no period, so it asks about now: the actor must hold the person in scope today. It reads membership only and settles nothing about whether a Cell's leader is a member of their own Cell.
+
 The member and the Cell's leader must belong to the same Network, consistent with the homogeneous-network rule (Section 4). A Network change must not leave a person holding a membership the rule no longer permits; resolve both together or reject the change (Section 4).
 
 Cell membership does not have to mirror pastoral assignment. A person may be pastorally under one leader and a member of another leader's Cell. These are separate relationships (Section 1, Principle 3), and neither one changes the other.
@@ -4455,6 +4457,7 @@ POST /api/v1/cells/{id}/closure            with a decision about every member, a
 GET  /api/v1/cells/{id}/members
 POST /api/v1/cells/{id}/members            add, or move from another Cell
 DELETE /api/v1/cells/{id}/members/{person_id}  ends the membership
+GET  /api/v1/cells/people/{id}/membership   the person's current Cell and its leader, or none (Section 10)
 GET  /api/v1/cells/{id}/meetings
 GET  /api/v1/cells/{id}/meetings/{meeting_id}/roster   who to record, for this meeting
 POST /api/v1/cells/{id}/meetings/{meeting_id}/submit   {meeting_id} is the scheduled date;
