@@ -332,7 +332,8 @@ export class PeopleReadService {
 
     // `normalizeName` drops suffix tokens and collapses separators, so a term
     // that looked like two characters can arrive here empty: `Jr`, `II`, `--`,
-    // two spaces. An empty term builds the pattern `%%`, which matches every row
+    // two spaces. The search route refuses those before calling this; the guard stays
+    // for any other caller. An empty term builds the pattern `%%`, which matches every row
     // -- the directory dump `escapeLike` was added to prevent, reached by a
     // shorter route. Section 8's search is for identity resolution rather than
     // bulk export, in either mode.

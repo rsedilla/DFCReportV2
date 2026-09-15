@@ -104,3 +104,33 @@ test.describe('what the People screen says when it finds nobody', () => {
     await expect(main).not.toContainText('searched the whole church');
   });
 });
+
+test.describe('what the People screen says when a term is too short once tidied', () => {
+  // The button counts the term as typed, so `a-` enables it; the API counts it again once
+  // normalized and refuses it naming `q`. The screen owes that sentence as the API words
+  // it, rather than the pipe's "Some fields need correcting".
+  test('shows the API’s sentence for a term like a-', async ({ page }) => {
+    await mockSignedIn(page);
+    await page.route('**/api/v1/people?*', (route) =>
+      route.fulfill({
+        status: 422,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          error: {
+            code: 'VALIDATION_FAILED',
+            message: 'Enter at least two letters of a name.',
+            details: { field: 'q' },
+          },
+        }),
+      }),
+    );
+
+    await page.goto('/people');
+    await page.getByLabel('Search by name').fill('a-');
+    await page.getByRole('button', { name: 'Search' }).click();
+
+    const main = page.locator('main');
+    await expect(main).toContainText('Enter at least two letters of a name.');
+    await expect(main).not.toContainText('Some fields need correcting');
+  });
+});
