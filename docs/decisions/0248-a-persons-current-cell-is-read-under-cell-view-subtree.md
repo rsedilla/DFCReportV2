@@ -7,7 +7,8 @@ returns a person's own details and nothing about Cells.
 ## The ruling
 
 **`GET /api/v1/cells/people/{id}/membership` returns the Cell a person currently belongs
-to, with that Cell's current leader, or none.**
+to, with that Cell's current leader, or none, and separately the Cells the person currently
+leads.**
 
 - **It is guarded by `cell.view_subtree`, resolved against the person.** Section 7 gives
   `cell.*` everything under `/api/v1/cells`, and `cell.view_subtree` is that domain's read
@@ -15,8 +16,10 @@ to, with that Cell's current leader, or none.**
   from the person, and resolves through them (Sections 7 and 8).
 - **It names no period, so it asks about now** (Section 7, *An effective date does not move
   the scope decision*). The actor must hold the person in scope today.
-- **It returns the open membership only.** Section 10 gives a person at most one, and zero
-  is legitimate, so the answer is one Cell or none.
+- **It returns the open membership and the open leaderships, apart.** Section 10 gives a
+  person at most one membership, and zero is legitimate, so that half is one Cell or none.
+  Section 15 says one leader can have multiple Cells, so the other half is a list, possibly
+  empty.
 - **It changes nothing.** A move is still an add on `POST /api/v1/cells/{id}/members`.
 
 ## The ground
@@ -27,6 +30,15 @@ person is leaving.
 
 **No role changes.** Every role in Section 7's catalog holds `cell.view_subtree` at the same
 scope it holds `people.view_subtree`.
+
+**Leading a Cell counts as having one.** A Cell's leader holds no membership row (decision
+0233), so an answer carrying membership alone reads every Cell Leader as having no Cell,
+which contradicts the people-without-a-Cell list that decision 0233 excludes them from. It
+would also let a screen offer to add a leader to a Cell, and nothing refuses that: neither
+`cells.membership.service.ts` nor any trigger, constraint or index on `cell_memberships`
+checks whether the person leads a Cell. Each such addition would answer the open question
+below in the data. The owner chose to return both halves on 2026-09-15, after
+`architecture-guardian` raised it.
 
 ## What it widens
 
@@ -55,10 +67,8 @@ about now.
 ## What this does not settle
 
 - **Whether a Cell's leader is a member of their own Cell**, which `CLAUDE.md` records as
-  open. This route reads membership only, so a leader with no membership row reads as
-  having none.
-- **The Cells a person leads.** Section 11's leadership is a separate relationship and this
-  route does not return it.
+  open. The route returns membership and leadership apart, so a leader with no membership
+  row reads as leading their Cell and belonging to none, which is what the data holds today.
 - **A person's Cell attendance or Cell classification.**
 
 ---
