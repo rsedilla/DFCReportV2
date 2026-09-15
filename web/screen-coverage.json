@@ -173,13 +173,13 @@
     },
     {
       "route": "GET /api/v1/dcc/people/:id/attendance",
-      "reason": "One person's DCC classification and the Sundays behind it (decision 0247), owed to a DCC section on the person profile.",
-      "waived_to": "screens block"
+      "reason": "One person's DCC classification and the Sundays behind it (decision 0247), shown in the DCC section of the person profile.",
+      "screen": "web/app/people/[id]/page.tsx"
     },
     {
       "route": "GET /api/v1/cells/people/:id/membership",
-      "reason": "The Cell a person belongs to, with its leader, and the Cells they lead (decision 0248), owed to a Cell row on the person profile.",
-      "waived_to": "screens block"
+      "reason": "The Cell a person belongs to, with its leader, and the Cells they lead (decision 0248), shown on the person profile and on Edit.",
+      "screen": "web/app/people/[id]/page.tsx"
     },
     {
       "route": "POST /api/v1/cells",

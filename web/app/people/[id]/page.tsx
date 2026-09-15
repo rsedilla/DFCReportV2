@@ -5,6 +5,8 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 
 import { AppShell, PAGE_WIDTH } from '@/components/app-shell';
+import { PersonCells } from '@/components/person-cells';
+import { PersonDcc } from '@/components/person-dcc';
 import { buttonClasses } from '@/components/ui/button';
 import { FailureNotice } from '@/components/ui/failure-notice';
 import { TextLink } from '@/components/ui/text-link';
@@ -113,6 +115,9 @@ function PersonDetail() {
             />
             <Detail label="Mobile number" value={person.data.mobile_number} absent="Not recorded" />
           </dl>
+
+          <PersonCells personId={id} personName={person.data.full_name} />
+          <PersonDcc personId={id} />
         </>
       )}
     </main>
