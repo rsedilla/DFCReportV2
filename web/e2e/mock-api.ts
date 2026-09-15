@@ -97,6 +97,31 @@ export async function mockWholeChurchReader(page: Page): Promise<void> {
   await page.route('**/api/v1/auth/me', (route) => route.fulfill(json({ ...ME, capabilities })));
 }
 
+/** The shared account's person, for a case about viewing your own record. */
+export const SIGNED_IN_PERSON_ID = ME.person_id;
+
+/**
+ * The same account, also holding the capabilities named, each over its own subtree.
+ *
+ * **Installed after `mockSignedIn`, and overrides it for `/auth/me` alone**, as the two
+ * below do. The shared grant list holds neither `people.manage_pastoral_assignment` nor
+ * `dcc.correct_subtree`, so the controls those capabilities offer are reachable only here.
+ */
+export async function mockGrants(page: Page, extra: readonly string[]): Promise<void> {
+  const capabilities = [
+    ...CAPABILITIES,
+    ...extra.map((capability) => ({
+      capability,
+      scope_type: 'OWN_SUBTREE',
+      scope_network: null,
+      read_only: false,
+      source: 'ROLE',
+    })),
+  ];
+
+  await page.route('**/api/v1/auth/me', (route) => route.fulfill(json({ ...ME, capabilities })));
+}
+
 /**
  * The same account, also allowed to correct a recorded Cell meeting.
  *

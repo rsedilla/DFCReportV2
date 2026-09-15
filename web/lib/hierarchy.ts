@@ -21,6 +21,21 @@ export interface PastoralPath {
   next_cursor: string | null;
 }
 
+/** The person's direct pastoral leader: the entry above them on the path, or null. */
+export function directLeaderOf(path: readonly PathEntry[]): PathEntry | null {
+  return path.length >= 2 ? path[path.length - 2] : null;
+}
+
+/**
+ * What to say where nobody is above the person on the path.
+ *
+ * A Network root and a Person with no assignment both produce a one-entry path, and only
+ * `network_root` tells them apart (decision 0131), so the words follow the flag.
+ */
+export function noLeaderLabel(path: readonly PathEntry[]): string {
+  return path[0]?.network_root ? 'Network root' : 'No pastoral leader yet';
+}
+
 export async function getPastoralPath(
   personId: string,
   signal?: AbortSignal,

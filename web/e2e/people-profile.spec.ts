@@ -4,7 +4,10 @@ import {
   CELL_CHOICES,
   DCC_PAGE_ONE,
   PERSON_IN_SCOPE,
+  PERSON_WITHHELD,
+  SIGNED_IN_PERSON_ID,
   mockCellChoices,
+  mockGrants,
   mockMembershipAdd,
   mockPeople,
   mockPersonCells,
@@ -12,6 +15,10 @@ import {
   mockPersonDccRefused,
   mockSignedIn,
 } from './mock-api';
+import { mockPastoralPath } from './mock-attendance';
+
+/** The direct leader in `mockPastoralPath`: the entry above the person. */
+const PATH_LEADER = { id: '3f1b7c6e-0000-4000-8000-000000000902', full_name: 'Teofilo Ramos' };
 
 /**
  * What the People screens let a leader do with a person's Cell and DCC stage, as opposed to
@@ -175,6 +182,158 @@ test.describe('editing a person', () => {
     await expect(
       page.getByText('A move is saved as soon as you confirm it. It is not part of Save changes.'),
     ).toBeVisible();
+  });
+
+  test('shows the pastoral leader read-only and points to the move on the profile', async ({
+    page,
+  }) => {
+    await signedInWithPeople(page);
+    await mockPastoralPath(page);
+    await page.goto(`${PROFILE}/edit`);
+
+    await expect(page.getByText(PATH_LEADER.full_name, { exact: true })).toBeVisible();
+    await expect(page.getByRole('link', { name: PATH_LEADER.full_name })).toHaveCount(0);
+    await expect(
+      page.getByText('Changing it is a move, not an edit. Use Move to another leader on the profile.'),
+    ).toBeVisible();
+  });
+});
+
+test.describe('who pastors a person', () => {
+  test('names the leader under the name, linking to their record', async ({ page }) => {
+    await signedInWithPeople(page);
+    await mockPastoralPath(page);
+    await page.goto(PROFILE);
+
+    await expect(page.getByText(/^Pastored by/)).toBeVisible();
+    await expect(page.getByRole('link', { name: PATH_LEADER.full_name })).toHaveAttribute(
+      'href',
+      `/people/${PATH_LEADER.id}`,
+    );
+  });
+
+  test('moves them under a chosen leader, with the reason, from a dialog on the profile', async ({
+    page,
+  }) => {
+    await signedInWithPeople(page);
+    await mockGrants(page, ['people.manage_pastoral_assignment']);
+    await mockPastoralPath(page);
+
+    const sent: unknown[] = [];
+    await page.route('**/api/v1/people/*/pastoral-leader', async (route) => {
+      sent.push(route.request().postDataJSON());
+      await route.fulfill({ status: 200, contentType: 'application/json', body: '{}' });
+    });
+
+    await page.goto(PROFILE);
+    await page.getByRole('button', { name: 'Move to another leader' }).click();
+
+    const dialog = page.getByRole('dialog', {
+      name: `Move ${PERSON_IN_SCOPE.full_name} to another leader`,
+    });
+    await expect(dialog.getByText(`Pastored now by ${PATH_LEADER.full_name}.`)).toBeVisible();
+
+    await dialog.getByLabel('Search for a leader by name').fill('an');
+    await dialog.getByRole('button', { name: 'Find' }).click();
+    await dialog.getByRole('button', { name: 'Choose' }).nth(1).click();
+    await dialog.getByLabel('Why is this changing? (optional)').fill('Moved to a nearer leader');
+    await dialog.getByRole('button', { name: `Move under ${PERSON_WITHHELD.full_name}` }).click();
+
+    await expect(dialog).toBeHidden();
+    expect(sent).toEqual([
+      { pastoral_leader_id: PERSON_WITHHELD.id, reason: 'Moved to a nearer leader' },
+    ]);
+  });
+
+  test('offers no move to an account that may not move people', async ({ page }) => {
+    await signedInWithPeople(page);
+    await mockPastoralPath(page);
+    await page.goto(PROFILE);
+
+    await expect(page.getByRole('link', { name: 'Edit details' })).toBeVisible();
+    await expect(page.getByRole('link', { name: PATH_LEADER.full_name })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Move to another leader' })).toHaveCount(0);
+  });
+
+  test('on your own profile, names your leader without a link and offers no move', async ({
+    page,
+  }) => {
+    await signedInWithPeople(page);
+    await mockGrants(page, ['people.manage_pastoral_assignment']);
+    await mockPastoralPath(page);
+    await page.route(`**/api/v1/people/${SIGNED_IN_PERSON_ID}`, (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ ...PERSON_IN_SCOPE, id: SIGNED_IN_PERSON_ID }),
+      }),
+    );
+
+    await page.goto(`/people/${SIGNED_IN_PERSON_ID}`);
+
+    // The link disappearing is what says the account has loaded, so the button's absence
+    // below is measured against a loaded account rather than before it arrives.
+    await expect(page.getByText(PATH_LEADER.full_name, { exact: true })).toBeVisible();
+    await expect(page.getByRole('link', { name: PATH_LEADER.full_name })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Move to another leader' })).toHaveCount(0);
+  });
+
+  test('a record outside your scope is refused in plain words, without the API’s', async ({
+    page,
+  }) => {
+    await signedInWithPeople(page);
+    await page.route(`**/api/v1/people/${PERSON_WITHHELD.id}`, (route) =>
+      route.fulfill({
+        status: 403,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          error: {
+            code: 'SCOPE_DENIED',
+            message: 'You hold people.view_subtree, but not over this record.',
+            details: {},
+          },
+        }),
+      }),
+    );
+
+    await page.goto(`/people/${PERSON_WITHHELD.id}`);
+
+    await expect(
+      page.getByText(
+        'This person is not one of the people you oversee, so their details are not shown to you.',
+      ),
+    ).toBeVisible();
+    await expect(page.getByText(/ask one of those leaders/)).toBeVisible();
+    await expect(page.getByText('people.view_subtree')).toHaveCount(0);
+  });
+});
+
+test.describe('dialogs', () => {
+  test('rise from the bottom edge on a phone and sit centred on a desktop', async ({ page }) => {
+    await signedInWithPeople(page);
+    await mockCellChoices(page);
+
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto(PROFILE);
+    await page.getByRole('button', { name: 'Move to another Cell' }).click();
+
+    const dialog = page.getByRole('dialog');
+    await expect(dialog.getByRole('combobox', { name: 'Cell' })).toBeVisible();
+    const sheet = await dialog.boundingBox();
+    expect(sheet).not.toBeNull();
+    expect(sheet!.y + sheet!.height).toBeGreaterThanOrEqual(843);
+    expect(sheet!.width).toBeGreaterThanOrEqual(389);
+
+    await dialog.getByRole('button', { name: 'Cancel' }).click();
+    await expect(dialog).toBeHidden();
+
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.getByRole('button', { name: 'Move to another Cell' }).click();
+    await expect(dialog.getByRole('combobox', { name: 'Cell' })).toBeVisible();
+    const centred = await dialog.boundingBox();
+    expect(centred).not.toBeNull();
+    expect(centred!.y + centred!.height).toBeLessThan(790);
+    expect(centred!.x).toBeGreaterThan(100);
   });
 });
 

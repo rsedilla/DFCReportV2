@@ -102,6 +102,54 @@ test.describe('the report figures', () => {
   });
 });
 
+test.describe('how these are counted', () => {
+  test('each report explains its own counting, in words', async ({ page }) => {
+    await mockSignedIn(page);
+    await mockCells(page);
+    await mockCellReport(page);
+    await mockDccEvents(page);
+    await mockDccReport(page);
+
+    await page.goto('/reports/cells');
+    await page.getByRole('button', { name: 'How these are counted' }).click();
+    const cells = page.getByRole('dialog', { name: 'How these are counted' });
+    await expect(cells.getByText(/^Meetings with a record, out of the meetings/)).toBeVisible();
+    await expect(cells.getByText(/^Records filed, out of records owed/)).toHaveCount(0);
+    await cells.getByRole('button', { name: 'Close' }).click();
+    await expect(cells).toBeHidden();
+
+    await page.goto('/reports/dcc');
+    await page.getByRole('button', { name: 'How these are counted' }).click();
+    const dcc = page.getByRole('dialog', { name: 'How these are counted' });
+    await expect(dcc.getByText(/^Records filed, out of records owed/)).toBeVisible();
+    await expect(dcc.getByText(/Cell’s schedule/)).toHaveCount(0);
+  });
+});
+
+test.describe('the table header', () => {
+  // Both halves are needed for the row to stay pinned: sticky cells, and a frame that
+  // is not itself a scroll container at this width.
+  test('stays pinned to the top of the window on a desktop', async ({ page }) => {
+    await mockSignedIn(page);
+    await mockCells(page);
+    await mockCellReport(page);
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.goto('/reports/cells');
+
+    const header = page
+      .getByRole('region', { name: 'Coverage by Cell' })
+      .getByRole('columnheader', { name: 'Cell' });
+    await expect(header).toBeVisible();
+
+    expect(await header.evaluate((cell) => getComputedStyle(cell).position)).toBe('sticky');
+    expect(
+      await header.evaluate(
+        (cell) => getComputedStyle(cell.closest('table')!.parentElement!).overflowX,
+      ),
+    ).toBe('visible');
+  });
+});
+
 test.describe('the coverage tables', () => {
   test('Coverage by Cell lists each Cell with its figure, and leaves once one Cell is chosen', async ({
     page,

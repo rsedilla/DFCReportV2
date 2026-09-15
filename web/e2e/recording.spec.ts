@@ -3,6 +3,7 @@ import { expect, test, type Page } from '@playwright/test';
 import {
   mockAwaitingReassignment,
   mockCellCorrector,
+  mockGrants,
   mockPeopleWithoutACell,
   mockSignedIn,
 } from './mock-api';
@@ -108,6 +109,80 @@ test('a Sunday that takes no record still shows what was recorded, and cannot be
   await expect(present).toBeChecked();
   await expect(present).toBeDisabled();
   await expect(page.getByRole('button', { name: 'Save' })).toHaveCount(0);
+});
+
+// Changing a recorded DCC mark is a correction, which the API refuses without
+// `dcc.correct_subtree`, so the checklist locks recorded marks the way the Cell meeting
+// screen locks a recorded meeting. In the fixture one person is recorded and one is not.
+test.describe('a Sunday with a mark already recorded', () => {
+  const SUNDAY = '/dcc/3f1b7c6e-0000-4000-8000-000000000501';
+  const RECORDED = { id: '3f1b7c6e-0000-4000-8000-000000000601', name: 'Rosalinda Ocampo' };
+  const UNRECORDED = { id: '3f1b7c6e-0000-4000-8000-000000000602', name: 'Bienvenido Trinidad' };
+
+  test('locks the recorded mark, and says before Save that this account may not change it', async ({
+    page,
+  }) => {
+    await mockSignedIn(page);
+    await mockDccRoster(page);
+
+    await page.goto(SUNDAY);
+
+    await expect(page.getByText('Already recorded: 1 person')).toBeVisible();
+    await expect(
+      page.getByText('Changing a recorded mark needs permission to correct records'),
+    ).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Change recorded marks' })).toHaveCount(0);
+
+    const recorded = page.getByRole('group', { name: RECORDED.name }).getByRole('radio', {
+      name: 'Present',
+    });
+    await expect(recorded).toBeChecked();
+    await expect(recorded).toBeDisabled();
+    await expect(
+      page.getByRole('group', { name: UNRECORDED.name }).getByRole('radio', { name: 'Present' }),
+    ).toBeEnabled();
+  });
+
+  test('unlocks it for an account that may correct, sending the reason only with the changed mark', async ({
+    page,
+  }) => {
+    await mockSignedIn(page);
+    await mockGrants(page, ['dcc.correct_subtree']);
+    await mockDccRoster(page);
+
+    const sent: unknown[] = [];
+    await page.route('**/api/v1/dcc/events/*/submit', async (route) => {
+      sent.push(route.request().postDataJSON());
+      await route.fulfill({ status: 200, contentType: 'application/json', body: '{}' });
+    });
+
+    await page.goto(SUNDAY);
+    await page.getByRole('button', { name: 'Change recorded marks' }).click();
+
+    await page
+      .getByRole('group', { name: RECORDED.name })
+      .getByRole('radio', { name: 'Absent' })
+      .check();
+    await page
+      .getByRole('group', { name: UNRECORDED.name })
+      .getByRole('radio', { name: 'Present' })
+      .check();
+    await page.getByLabel('Why is this changing? (optional)').fill('Marked the wrong person');
+    await page.getByRole('button', { name: 'Save', exact: true }).click();
+
+    await expect.poll(() => sent.length).toBe(1);
+    expect(sent[0]).toEqual({
+      records: [
+        {
+          person_id: RECORDED.id,
+          present: false,
+          version: 1,
+          correction_reason: 'Marked the wrong person',
+        },
+        { person_id: UNRECORDED.id, present: true, version: null },
+      ],
+    });
+  });
 });
 
 test.describe('the Record queue', () => {

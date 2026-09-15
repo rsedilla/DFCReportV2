@@ -146,7 +146,8 @@ export function MoveCellDialog({
           }
         />
 
-        <div className="flex flex-wrap gap-3">
+        {/* A column below `lg`, so each button is full width in the sheet. */}
+        <div className="flex flex-col gap-3 lg:flex-row lg:flex-wrap">
           <Button type="submit" disabled={!chosen || move.isPending}>
             {move.isPending ? (current ? 'Moving…' : 'Adding…') : current ? 'Move' : 'Add'}
           </Button>

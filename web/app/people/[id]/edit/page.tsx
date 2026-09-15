@@ -14,6 +14,7 @@ import { FailureNotice } from '@/components/ui/failure-notice';
 import { Field } from '@/components/ui/field';
 import { RadioGroup } from '@/components/ui/radio-group';
 import { TextLink } from '@/components/ui/text-link';
+import { directLeaderOf, getPastoralPath, noLeaderLabel } from '@/lib/hierarchy';
 import { cn } from '@/lib/utils';
 import { describeFailure, fieldErrorFor, type Failure } from '@/lib/messages';
 import {
@@ -156,6 +157,14 @@ function Fields({ person, id }: { person: PersonFull; id: string }) {
     save.mutate(changes);
   }
 
+  // Read to show the leader, never to change them: that is a reassignment (section 5).
+  const path = useQuery({
+    queryKey: ['pastoral-path', id],
+    queryFn: ({ signal }) => getPastoralPath(id, signal),
+  });
+  const pathEntries = path.data?.data ?? [];
+  const leader = directLeaderOf(pathEntries);
+
   return (
     <>
       {(
@@ -179,6 +188,27 @@ function Fields({ person, id }: { person: PersonFull; id: string }) {
             <p className="text-sm">{sexLabel(person.sex)}</p>
             <p className="text-muted text-sm leading-relaxed">
               Only an Admin can correct this, because it decides which Network they belong to.
+            </p>
+          </div>
+
+          {/*
+            Shown and not editable, as the design has it (owner's choice of 2026-09-15).
+            Changing a pastoral leader is a reassignment with its own authority and audit
+            entry (section 5), so it is its own action on the profile and never part of Save.
+          */}
+          <div className="flex flex-col gap-1.5">
+            <p className="field-label">Pastoral leader</p>
+            <p className="text-sm">
+              {path.isPending
+                ? 'Loading…'
+                : path.isError
+                  ? 'Not available'
+                  : leader
+                    ? leader.full_name
+                    : noLeaderLabel(pathEntries)}
+            </p>
+            <p className="text-muted text-sm leading-relaxed">
+              Changing it is a move, not an edit. Use Move to another leader on the profile.
             </p>
           </div>
           {/*
