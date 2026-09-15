@@ -11,7 +11,8 @@ to, with that Cell's current leader, or none.**
 
 - **It is guarded by `cell.view_subtree`, resolved against the person.** Section 7 gives
   `cell.*` everything under `/api/v1/cells`, and `cell.view_subtree` is that domain's read
-  capability.
+  capability. Section 7 resolves a membership through the Cell's leader; this one is asked
+  from the person, and resolves through them (Sections 7 and 8).
 - **It names no period, so it asks about now** (Section 7, *An effective date does not move
   the scope decision*). The actor must hold the person in scope today.
 - **It returns the open membership only.** Section 10 gives a person at most one, and zero
@@ -31,7 +32,20 @@ scope it holds `people.view_subtree`.
 
 Section 10 makes membership independent of pastoral assignment, so a person in a leader's
 scope can belong to a Cell whose leader is outside it. This route shows that leader the
-Cell and its leader's name. This ruling is where that is chosen.
+Cell and its leader's name, and nothing of the Cell's other members. The Cell's ID is one
+Section 8 withholds from a search for its leader.
+
+The move does not justify that, because in that case the move is refused: a move is checked
+against the source Cell through that Cell's leader, and an actor whose scope does not reach
+the leader is refused (`cells.membership.service.ts`). What justifies it is the profile. The
+question is about the person, whom the reader holds in scope; the Cell leader's full name is
+one of the five fields Section 8 returns about anyone; and requiring authority over the Cell
+would leave a leader unable to see where somebody in their own scope attends.
+
+The owner chose this on 2026-09-15 over reading a person's Cell under authority over the
+Cell, after `architecture-guardian` found that Section 7 resolved a membership through the
+Cell's leader and Section 8 bounded every Cell surface by authority over the Cell. Sections
+7, 8 and 10 now say so.
 
 ## What it costs
 
