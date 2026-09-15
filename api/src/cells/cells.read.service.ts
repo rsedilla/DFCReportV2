@@ -12,6 +12,12 @@ import type { RosterCursor } from '../common/roster-cursor';
 import type { CellCategory, Database } from '../database/schema';
 import type { Transaction } from 'kysely';
 
+/** A person's open membership, with its Cell's current leader, and the Cells they lead. */
+export interface PersonCells {
+  membership: (NamedCell & { leaderId: string | null }) | null;
+  leads: NamedCell[];
+}
+
 /**
  * The reads other modules need of `cells`, and nothing wider.
  *
@@ -791,6 +797,49 @@ export class CellsReadService implements CellScopePort, CellRelationshipsPort {
       .executeTakeFirst();
 
     return row ? { id: row.id, cellId: row.cell_id } : null;
+  }
+
+  /**
+   * The Cell a person currently belongs to, with that Cell's current leader, and the Cells
+   * they currently lead (SKILL.md sections 10 and 11; decision 0248).
+   *
+   * **One statement, so both halves come from one snapshot.** At `READ COMMITTED` (section
+   * 24) two statements can each see a different committed state.
+   *
+   * The leader is a left join, so a membership is still reported where no open leadership is
+   * found rather than disappearing from the answer.
+   */
+  async currentCellsOf(personId: string): Promise<PersonCells> {
+    const result = await sql<{
+      membership: { id: string; cell_id: string; leader_id: string | null } | null;
+      leads: { id: string; cell_id: string }[];
+    }>`
+      SELECT
+        (SELECT json_build_object('id', c.id, 'cell_id', c.cell_id, 'leader_id', cl.person_id)
+           FROM cell_memberships cm
+           JOIN cells c ON c.id = cm.cell_id
+           LEFT JOIN cell_leaderships cl ON cl.cell_id = cm.cell_id AND cl.ended_at IS NULL
+          WHERE cm.person_id = ${personId}
+            AND cm.ended_at IS NULL) AS membership,
+        coalesce(
+          (SELECT json_agg(json_build_object('id', c.id, 'cell_id', c.cell_id) ORDER BY c.cell_id)
+             FROM cell_leaderships cl
+             JOIN cells c ON c.id = cl.cell_id
+            WHERE cl.person_id = ${personId}
+              AND cl.ended_at IS NULL),
+          '[]'::json
+        ) AS leads
+    `.execute(this.db);
+
+    const { membership, leads } = result.rows[0];
+
+    return {
+      membership:
+        membership === null
+          ? null
+          : { id: membership.id, cellId: membership.cell_id, leaderId: membership.leader_id },
+      leads: leads.map((cell) => ({ id: cell.id, cellId: cell.cell_id })),
+    };
   }
 
   /**

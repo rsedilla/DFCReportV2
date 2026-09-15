@@ -177,6 +177,11 @@
       "waived_to": "screens block"
     },
     {
+      "route": "GET /api/v1/cells/people/:id/membership",
+      "reason": "The Cell a person belongs to, with its leader, and the Cells they lead (decision 0248), owed to a Cell row on the person profile.",
+      "waived_to": "screens block"
+    },
+    {
       "route": "POST /api/v1/cells",
       "waived_to": "after the pilot — Admin screens",
       "reason": "Direct creation is Admin's during the initial-encoding phase (§2, §10). The pilot's Cells exist before it starts."
