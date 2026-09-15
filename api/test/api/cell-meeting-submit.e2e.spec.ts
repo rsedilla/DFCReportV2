@@ -3198,6 +3198,77 @@ describe('recording a Cell meeting (sections 12, 13 and 14)', () => {
       }
     });
 
+    it('refuses the conflict payload to a lost transition from an actor who may record but not correct', async () => {
+      // **The transition branch of `lostRaceAnswer` skipped the amendment capability its
+      // correction branch checks** (decision 0201). A first submission of NOT_HELD that
+      // loses its race re-reads the committed state, and where that state is RESCHEDULED
+      // the body is a legal transition. It was answered `VERSION_CONFLICT` with the stored
+      // figure and the submitter's name, while the identical body sent afterwards answers
+      // 403.
+      //
+      // A first submission cannot itself say RESCHEDULED (decision 0188), so the committed
+      // state needs a submission and then a move, both committed before the loser re-reads.
+      // The holder writes that meeting row directly.
+      const actor = await granted(['cell.take_attendance', 'cell.submit_on_behalf']);
+      const schedule = await db
+        .selectFrom('cell_schedules')
+        .select('time_of_day')
+        .where('cell_id', '=', markCell.id)
+        .where('ended_at', 'is', null)
+        .executeTakeFirstOrThrow();
+      const body = { status: 'NOT_HELD', not_held_reason: 'WEATHER_OR_CALAMITY' };
+
+      const holder = new Client({ connectionString: process.env.DATABASE_URL });
+      await holder.connect();
+
+      try {
+        await holder.query('BEGIN');
+        // The winner's first submission, recorded as met.
+        const { rows } = await holder.query<{ id: string }>(
+          `INSERT INTO cell_meetings
+             (cell_id, scheduled_date, scheduled_time, week_starting, reporting_month,
+              status, responsible_leader_id, submitted_by, submitted_at, version)
+           VALUES ($1, $2::date, $3::time,
+                   $2::date - (EXTRACT(ISODOW FROM $2::date)::int - 1),
+                   date_trunc('month', $2::date)::date,
+                   'HELD', $4, $5, clock_timestamp(), 1)
+           RETURNING id`,
+          [markCell.id, meetingDate, schedule.time_of_day, mark.id, markAccount.id],
+        );
+        // Then moved to the day before.
+        await holder.query(
+          `UPDATE cell_meetings
+              SET status = 'RESCHEDULED', actual_date = scheduled_date - 1,
+                  actual_time = scheduled_time, version = version + 1
+            WHERE id = $1`,
+          [rows[0].id],
+        );
+
+        const attempt = submit(body, actor);
+        const inFlight = track(attempt);
+
+        expect(await blockedOn(holder, inFlight)).toBeGreaterThan(0);
+
+        await holder.query('COMMIT');
+
+        const raced = await attempt;
+
+        expect(raced.status).toBe(403);
+        expect(raced.body.error.code).toBe('SCOPE_DENIED');
+        expect(raced.body.error.details.capability).toBe('cell.correct_subtree');
+        expect(JSON.stringify(raced.body)).not.toContain('present');
+
+        // The same body sent now, against the same committed state, answers the same.
+        const sequential = await submit(body, actor);
+
+        expect(sequential.status).toBe(403);
+        expect(sequential.body.error.details.capability).toBe('cell.correct_subtree');
+      } finally {
+        await holder.query('ROLLBACK').catch(() => undefined);
+        await holder.end();
+      }
+    });
+
     it('asks no correction capability of an agreeing loser, which wrote nothing', async () => {
       // **The mirror of the case above, and the first fix introduced it.** Checking the
       // amendment capability before the comparison refused this actor 403 where the

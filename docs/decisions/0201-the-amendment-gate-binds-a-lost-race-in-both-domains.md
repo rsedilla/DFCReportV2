@@ -56,6 +56,15 @@ The Cell path already had both halves and its comment already argued them. What 
 adds is that they are the rule rather than that route's arrangement, and DCC now implements
 them.
 
+> **Corrected on 2026-09-15.** "The Cell path already had both halves" was false when it was
+> written, and "The Cell path gated the disagreeing branch" above was true of one branch only.
+> `CellMeetingsService.lostRaceAnswer` checked `cell.correct_subtree` on its correction branch.
+> Where the committed state made the loser's body a legal transition, it built the conflict
+> without the check, and that branch was already in the commit that recorded this ruling
+> (`ea8ae25`). It was reachable only by a first submission of `NOT_HELD` that loses its race
+> and re-reads a meeting recorded and then moved. The ruling is unchanged; the transition branch
+> now runs the same check.
+
 ## What stays open
 
 **Whether the gate is *owed* on a submission that wrote nothing at all** is still not stated
