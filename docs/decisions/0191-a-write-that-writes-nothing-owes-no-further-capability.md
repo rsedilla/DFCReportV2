@@ -156,6 +156,9 @@ recording capability gains a read they did not have, not whether the figures exi
 > "Dead since 2026-09-09" note under **Why accepted rather than closed**, which says the
 > acceptance survives on the two grounds there. A version of this marker pointed at "the
 > blockquote above it", which resolves to the nearest one above and not to that.*
+>
+> **Settled by [decision 0246](0246-a-cell-meetings-recorded-marks-are-read-under-the-recording-capability.md)
+> (2026-09-15):** the marks are read under `cell.take_attendance`.
 
 ## What this binds
 
