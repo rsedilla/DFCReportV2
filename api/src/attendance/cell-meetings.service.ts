@@ -2043,6 +2043,30 @@ export class CellMeetingsService implements RecordedMeetingsPort {
       // has no unchanged-submission early return, so its version check is unconditional
       // and the winner has already moved the version past what this body carries. The
       // retry `RESOURCE_BUSY` prescribes was refused for ever.
+      //
+      // **The amendment capability first, as `transitionWithin` checks it** (decision 0201).
+      // The conflict carries the stored present count and the submitter's name, and this
+      // branch built it without asking for `cell.correct_subtree`, so an actor who may
+      // record but not correct was handed both by losing a race, where the identical body
+      // sent afterwards answers 403. The on-behalf check has already run on every path
+      // that reaches here.
+      try {
+        const authority = await this.authorization.authorityFor(actor.accountId);
+        await this.assertMayCorrect(this.db, {
+          cellId,
+          meetingId,
+          existing: { responsible_leader_id: meeting.responsible_leader_id },
+          actor,
+          authority,
+        });
+      } catch (error) {
+        if (error instanceof ScopeDeniedError) {
+          return error;
+        }
+
+        throw error;
+      }
+
       return this.conflictFor(this.db, {
         actor,
         submittedVersion: body.version ?? null,
