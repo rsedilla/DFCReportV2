@@ -314,7 +314,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           the home-indicator inset, so the last thing on a page can be scrolled clear
           of it rather than sitting underneath (2.4.11).
         */}
-        <div className="min-w-0 pb-[calc(3.5rem+env(safe-area-inset-bottom))] lg:flex-1 lg:pb-0">
+        <div className="min-w-0 pb-[calc(3.5625rem+env(safe-area-inset-bottom))] lg:flex-1 lg:pb-0">
           {children}
         </div>
       </div>

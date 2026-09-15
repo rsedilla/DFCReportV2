@@ -98,6 +98,29 @@ export async function mockWholeChurchReader(page: Page): Promise<void> {
 }
 
 /**
+ * The same account, also allowed to correct a recorded Cell meeting.
+ *
+ * **Installed after `mockSignedIn`, and overrides it for `/auth/me` alone**, as above.
+ * The shared grant list holds no Cell capability, which is the account a recording
+ * screen shows a recorded meeting to read-only (decision 0246); this adds
+ * `cell.correct_subtree` so the other side of that screen's gate is reachable too.
+ */
+export async function mockCellCorrector(page: Page): Promise<void> {
+  const capabilities = [
+    ...CAPABILITIES,
+    {
+      capability: 'cell.correct_subtree',
+      scope_type: 'OWN_SUBTREE',
+      scope_network: null,
+      read_only: false,
+      source: 'ROLE',
+    },
+  ];
+
+  await page.route('**/api/v1/auth/me', (route) => route.fulfill(json({ ...ME, capabilities })));
+}
+
+/**
  * A person the viewer pastors, and one they do not.
  *
  * Both shapes are here deliberately: section 8's redaction is the thing the
