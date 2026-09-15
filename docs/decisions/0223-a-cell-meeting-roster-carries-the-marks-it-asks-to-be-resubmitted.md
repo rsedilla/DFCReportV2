@@ -55,6 +55,9 @@ sets are separate.*
 > already made and withdrawn as a claim for DCC. Under which capability those marks may be
 > read is recorded as open in `CLAUDE.md`; this ruling settles that the roster carries them
 > and does not settle that.
+>
+> **Settled by [decision 0246](0246-a-cell-meetings-recorded-marks-are-read-under-the-recording-capability.md)
+> (2026-09-15):** the marks are read under `cell.take_attendance`.
 
 ## What it prevents
 

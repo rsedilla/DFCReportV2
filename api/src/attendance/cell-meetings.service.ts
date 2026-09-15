@@ -1338,12 +1338,13 @@ export class CellMeetingsService implements RecordedMeetingsPort {
     // `cell.correct_subtree` could read the record out of a refusal.
     //
     // **The ground for that sentence used to be "which `GET .../roster` does not", and
-    // the ruling of 2026-09-09 made it false**: that roster returns the submitter and now
-    // carries each member's mark, so the same actor fetches both in one `GET`. The gate
-    // stays because it is right — a refusal must not answer what the capability withholds,
-    // whatever some other route happens to publish — but it no longer rests on this being
-    // the only door. Which capability may read those marks is recorded as open in
-    // `CLAUDE.md`, and settling it settles what this comment should say.
+    // the ruling of 2026-09-09 made it false**: that roster already returned the
+    // submitting account's identifier and now carries each member's mark, and decision 0246
+    // settles that it is read under `cell.take_attendance`. What the conflict adds is the
+    // submitter's name. The gate does
+    // not rest on being the only door: a submission reaching here differs from a record
+    // that already stands, and section 7 requires `cell.correct_subtree` to amend one —
+    // after the unchanged-submission return above, which is decision 0191's order.
     //
     // *The previous batch moved the numeric-version door behind this check and left the
     // null-version one in front of it, then claimed in its own message to have closed
