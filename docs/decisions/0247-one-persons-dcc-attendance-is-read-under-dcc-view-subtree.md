@@ -32,6 +32,10 @@ classification Section 9 derives from it.**
   because the report's figures cover only the people who attended in the month asked for,
   and a test must hold the two in agreement. A person with no counted attendance has no
   classification.
+- **The response carries that count as `attended`**, beside the classification. It is the
+  number the classification is made from, counted over one person's records, and not a
+  total of the list, so Section 22's rule that a collection returns no total count does not
+  reach it.
 - **It changes nothing.** A classification that looks wrong is corrected by correcting the
   attendance record behind it, on the route and under the capabilities that already govern
   that record.
