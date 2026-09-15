@@ -36,6 +36,10 @@ classification Section 9 derives from it.**
   number the classification is made from, counted over one person's records, and not a
   total of the list, so Section 22's rule that a collection returns no total count does not
   reach it.
+- **A person who does not exist answers `NOT_FOUND`**, looked up through
+  `PeopleReadService`. A reader whose scope is narrower than Whole Church is refused by scope
+  first, exactly as for a person outside it, and Section 22 does not count a person's
+  existence as a disclosure.
 - **It changes nothing.** A classification that looks wrong is corrected by correcting the
   attendance record behind it, on the route and under the capabilities that already govern
   that record.

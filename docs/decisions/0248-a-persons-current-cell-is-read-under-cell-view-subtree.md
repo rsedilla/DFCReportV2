@@ -20,6 +20,10 @@ leads.**
   person at most one membership, and zero is legitimate, so that half is one Cell or none.
   Section 15 says one leader can have multiple Cells, so the other half is a list, possibly
   empty.
+- **A person who does not exist answers `NOT_FOUND`**, looked up through
+  `PeopleReadService`. A reader whose scope is narrower than Whole Church is refused by scope
+  first, exactly as for a person outside it, and Section 22 does not count a person's
+  existence as a disclosure.
 - **It changes nothing.** A move is still an add on `POST /api/v1/cells/{id}/members`.
 
 ## The ground
