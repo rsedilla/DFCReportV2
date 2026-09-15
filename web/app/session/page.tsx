@@ -165,6 +165,9 @@ function SessionDetail() {
           ) : (
             <Table
               className="mt-4"
+              // Shown at every width and wide enough to scroll sideways, so its frame keeps
+              // scrolling; UI-7 restyles this page.
+              pinHeader={false}
               caption="Capabilities held by this account, with scope, source, and whether the grant is read-only."
             >
                 <thead>

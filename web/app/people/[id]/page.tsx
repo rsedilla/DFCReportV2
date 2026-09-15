@@ -3,15 +3,19 @@
 import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
+import { useState } from 'react';
 
 import { AppShell, PAGE_WIDTH } from '@/components/app-shell';
+import { MoveLeaderDialog } from '@/components/move-leader-dialog';
 import { PersonCells } from '@/components/person-cells';
 import { PersonDcc } from '@/components/person-dcc';
-import { buttonClasses } from '@/components/ui/button';
+import { Button, buttonClasses } from '@/components/ui/button';
 import { FailureNotice } from '@/components/ui/failure-notice';
 import { TextLink } from '@/components/ui/text-link';
 import { ApiRequestError } from '@/lib/api-client';
-import { describeFailure } from '@/lib/messages';
+import { directLeaderOf, getPastoralPath, noLeaderLabel, type PathEntry } from '@/lib/hierarchy';
+import { getMe } from '@/lib/me';
+import { describeFailure, type Failure } from '@/lib/messages';
 import { NEGATIVE_AGE, ageFrom, civilStatusLabel, getPerson, sexLabel } from '@/lib/people';
 import { cn } from '@/lib/utils';
 
@@ -22,13 +26,22 @@ import { cn } from '@/lib/utils';
  * not a redaction, and the code is `SCOPE_DENIED`.** `GET /people/{id}` is
  * guarded on the target, so the guard refuses with 403 — deliberately *not*
  * `NOT_FOUND`, which section 22 declines to substitute here "because Section 8
- * already discloses minimal identity church-wide by design". Search has already
- * shown this viewer that the person exists; pretending otherwise on the next
- * screen would contradict it.
+ * already discloses minimal identity church-wide by design".
  *
- * So the explanation below is shown for that code and no other. Rendering it on
- * every failure asserted a domain fact for a mistyped id, a merged-away record,
- * a server error and a dropped connection alike — and it is false of all four.
+ * **The refusal is said in plain words, not the API's** (owner's choice of 2026-09-15).
+ * The API's sentence names a capability no leader has reason to know, so a refusal of this
+ * reader — scope or capability alike — reads as a fact about the person and what to do,
+ * the way the DCC section of this profile already words its own. It is shown for those
+ * two codes and no other: rendering it on every failure asserted a domain fact for a
+ * mistyped id, a merged-away record, a server error and a dropped connection alike.
+ *
+ * **Who pastors them is shown under the name**, from the pastoral path, which is read under
+ * the same capability as this record. On your own profile the leader is plain text rather
+ * than a link, because your own leader is above you and their record would refuse you.
+ *
+ * **Move to another leader is its own action** beside Edit details, offered to an account
+ * holding `people.manage_pastoral_assignment` at any scope and never on your own profile,
+ * which section 5 forbids. Whether a particular move is allowed is still the API's.
  *
  * **Age is derived here and never stored.** Section 3 keeps the birthday as the
  * authoritative value precisely because it cannot go stale, and the API returns
@@ -58,6 +71,25 @@ function PersonDetail() {
     queryFn: ({ signal }) => getPerson(id, signal),
   });
 
+  const path = useQuery({
+    queryKey: ['pastoral-path', id],
+    queryFn: ({ signal }) => getPastoralPath(id, signal),
+  });
+
+  const me = useQuery({ queryKey: ['me'], queryFn: ({ signal }) => getMe(signal) });
+  const [moving, setMoving] = useState(false);
+
+  const own = me.data?.person_id === id;
+  const mayMove =
+    !own &&
+    (me.data?.capabilities ?? []).some(
+      (grant) => grant.capability === 'people.manage_pastoral_assignment',
+    );
+
+  const refused =
+    person.error instanceof ApiRequestError &&
+    (person.error.code === 'SCOPE_DENIED' || person.error.code === 'CAPABILITY_DENIED');
+
   return (
     <main id="main" className={PAGE_WIDTH.READING}>
       <p className="text-sm">
@@ -68,12 +100,12 @@ function PersonDetail() {
         <p className="text-muted mt-6 text-sm">Loading…</p>
       ) : person.isError ? (
         <div className="mt-6">
-          <FailureNotice failure={describeFailure(person.error)} />
+          <FailureNotice failure={refused ? REFUSED : describeFailure(person.error)} />
 
-          {person.error instanceof ApiRequestError && person.error.code === 'SCOPE_DENIED' ? (
+          {refused ? (
             <p className="text-muted mt-4 max-w-xl text-sm leading-relaxed">
-              This person&rsquo;s record exists — their details are visible to the leaders who
-              pastor them. Ask the leader named on the search result.
+              Their details are visible to the leaders who pastor them. If you need something
+              from this record, ask one of those leaders.
             </p>
           ) : null}
         </div>
@@ -81,11 +113,17 @@ function PersonDetail() {
         <>
           <h1 className="mt-6 text-2xl font-semibold tracking-tight">{person.data.full_name}</h1>
           <p className="text-muted mt-1 font-mono text-sm">{person.data.member_id}</p>
+          <PastoredBy path={path.data?.data ?? null} own={own} />
 
           <div className="mt-6 flex flex-wrap gap-3">
             <Link href={`/people/${id}/edit`} className={cn(buttonClasses('secondary'))}>
               Edit details
             </Link>
+            {mayMove ? (
+              <Button variant="secondary" onClick={() => setMoving(true)}>
+                Move to another leader
+              </Button>
+            ) : null}
             <Link href={`/people/${id}/network`} className={cn(buttonClasses('secondary'))}>
               Pastoral network
             </Link>
@@ -118,9 +156,55 @@ function PersonDetail() {
 
           <PersonCells personId={id} personName={person.data.full_name} />
           <PersonDcc personId={id} />
+
+          {mayMove ? (
+            <MoveLeaderDialog
+              open={moving}
+              onClose={() => setMoving(false)}
+              personId={id}
+              personName={person.data.full_name}
+              currentLeaderName={directLeaderOf(path.data?.data ?? [])?.full_name ?? null}
+            />
+          ) : null}
         </>
       )}
     </main>
+  );
+}
+
+const REFUSED: Failure = {
+  message: 'This person is not one of the people you oversee, so their details are not shown to you.',
+  aboutInput: false,
+};
+
+/**
+ * Who pastors this person, or why nobody is shown.
+ *
+ * Nothing while the path loads or if it fails: the record above already carries this
+ * screen's refusal, and a second notice about the same reader would say it twice.
+ */
+function PastoredBy({ path, own }: { path: readonly PathEntry[] | null; own: boolean }) {
+  if (path === null || path.length === 0) {
+    return null;
+  }
+
+  const leader = directLeaderOf(path);
+
+  return (
+    <p className="mt-2 text-sm">
+      {leader ? (
+        <>
+          Pastored by{' '}
+          {own ? (
+            <span className="font-medium">{leader.full_name}</span>
+          ) : (
+            <TextLink href={`/people/${leader.id}`}>{leader.full_name}</TextLink>
+          )}
+        </>
+      ) : (
+        noLeaderLabel(path)
+      )}
+    </p>
   );
 }
 

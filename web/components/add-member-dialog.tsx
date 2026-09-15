@@ -93,7 +93,8 @@ export function AddMemberDialog({
           }
         />
 
-        <div className="flex flex-wrap gap-3">
+        {/* A column below `lg`, so each button is full width in the sheet. */}
+        <div className="flex flex-col gap-3 lg:flex-row lg:flex-wrap">
           <Button type="submit" disabled={!chosen || add.isPending}>
             {add.isPending ? 'Adding…' : 'Add'}
           </Button>
