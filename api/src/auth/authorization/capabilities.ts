@@ -1,5 +1,9 @@
 /**
- * The capabilities of SKILL.md section 7, as a closed enumeration.
+ * The capabilities of SKILL.md section 7 that guard a route today, as a closed
+ * enumeration. Section 7 names more: the Conquest, SUYNL and Training
+ * capabilities are specified (sections 27 and 28) and nothing is built that could
+ * hold one, so they join this list and the `capability` enum in the migration
+ * that builds those modules.
  *
  * A guard cannot fail closed against an open list. Adding a capability is an
  * amendment to the specification, a migration on the `capability` type, and a
@@ -43,7 +47,8 @@ export type Capability = (typeof Capability)[keyof typeof Capability];
 export const ALL_CAPABILITIES: readonly Capability[] = Object.values(Capability);
 
 /**
- * The five read capabilities. `read_only` is valid only on one of these; a write
+ * The read capabilities of the list above. Section 7 names eight and says in terms
+ * that the three homes do not agree until those modules are built. `read_only` is valid only on one of these; a write
  * capability granted read-only is rejected at creation rather than stored as a row
  * that grants nothing (SKILL.md section 7).
  */
