@@ -135,6 +135,7 @@ Principle 13 requires a modular monolith. These are the modules, and the list is
 | `reporting` | Classification, monthly attendance, coverage, Network Summary, stored figures |
 | `audit` | The audit log |
 | `admin` | Settings, the initial-encoding phase, administrative operations |
+| `conquest` | The four G12 goals: what a leader confirms about them, and their corrections (Section 27) |
 
 **A module owns its tables. No other module writes them, ever, and no other module reaches them for anything a service interface can answer.** Cross-module access goes through the owning module's service interface, never through its repository.
 
@@ -1554,6 +1555,9 @@ The capabilities are exactly:
 - `accounts.manage`
 - `roles.manage`
 - `audit.view`
+- `conquest.view_subtree`
+- `conquest.confirm`
+- `conquest.confirm_on_behalf`
 
 Each capability guards one endpoint family, and the boundaries are not left to inference:
 
@@ -1564,6 +1568,7 @@ Each capability guards one endpoint family, and the boundaries are not left to i
 - `cell.manage_configuration` governs a Cell's category and its schedule (Section 10). One capability rather than two: both are effective-dated edits to how a Cell is configured, both are audited the same way, and an administrator granting one and withholding the other would be expressing a distinction no rule makes. It confers no power to create or close a Cell, each of which has its own capability, nor to change who leads one
 - `reports.view_subtree` guards `/api/v1/reports` — the aggregate reporting surface, Network Summary, and the notification content derived from it (Section 13). It never substitutes for `dcc.view_subtree` or `cell.view_subtree` on the domain endpoints, and neither of those substitutes for it
 - `dcc.correct_subtree` and `cell.correct_subtree` guard amendment of an already-submitted record (Section 14), separately from `take_attendance`, which guards the first submission
+- `conquest.*` guards everything under `/api/v1/conquest` (Section 27). `conquest.confirm` carries correcting a confirmation as well as filing one, and `conquest.confirm_on_behalf` carries both for a downline leader, which is where this domain deliberately differs from the two attendance domains above: there a leader may record and be unable to correct (ruling of 2026-09-15), while a Conquest correction withdraws a statement attributed to the person it is attributed to, filed either by them or by an upline already authorized to file for them. Nobody acquires reach over a statement by correcting it that they did not have to make it. There is no `conquest.correct_subtree`, and adding one would be an amendment to this section
 
 This list is a **closed enumeration**, on the same terms as the scope values below. A guard cannot fail closed against an open list, and `capability_grants.capability` stores one of these identifiers. Adding a capability is an amendment to this specification, never a runtime action.
 
@@ -1614,6 +1619,9 @@ Three roles exist. Each carries the default capabilities and scopes below. Anyth
 | `accounts.manage` | — | Whole Church | — |
 | `roles.manage` | — | Whole Church | — |
 | `people.merge` | — | Whole Church | — |
+| `conquest.view_subtree` | Whole Church | Whole Church | own/subtree |
+| `conquest.confirm` | Whole Church | Whole Church | own/subtree |
+| `conquest.confirm_on_behalf` | Whole Church | Whole Church | own/subtree |
 
 Five of these defaults are deliberate and must not be widened for convenience. Two of the capabilities they cover — `roles.manage` and `accounts.manage`, for a Senior Pastor — may not be widened at all, by any grant and for any reason; the rest are defaults an Admin may deliberately exceed.
 
@@ -1887,10 +1895,12 @@ Those conditions are enforced in the owning module's domain layer — `hierarchy
 
 A grant is revoked by setting `revoked_at`, never by deleting the row. The history of who could do what, and when, is part of the audit record.
 
-**`read_only` is valid only on a read capability.** The twenty-seven divide cleanly:
+**`read_only` is valid only on a read capability.** The thirty divide cleanly:
 
-- **Read:** `people.view_subtree`, `dcc.view_subtree`, `cell.view_subtree`, `reports.view_subtree`, `audit.view`
+- **Read:** `people.view_subtree`, `dcc.view_subtree`, `cell.view_subtree`, `reports.view_subtree`, `audit.view`, `conquest.view_subtree`
 - **Write:** every other capability in the list
+
+**This list is enforced by the database as well as by this section**, and a capability added here owes **two** migrations before any grant of it can exist: `capability`, the enumerated type `capability_grants.capability` stores, must gain the identifier — without which no grant of it can be stored at all, whatever the flag says — and `capability_grants_read_only_is_a_read`, which enumerates the read capabilities by name, must gain it if it is one. All three Conquest capabilities owe the enum migration when Conquest is built (Section 27); `conquest.view_subtree` owes the CHECK constraint as well, and the other two must stay out of it, since adding a write capability there would make a `read_only` grant of it storable. **The read list has a third home and it is in the application**, where the same five names are declared and a `read_only` grant of anything else is dropped at runtime; a capability added to the list above owes an edit in all three places, and naming two of them is how one gets missed. The role defaults in the catalog above are a separate mechanism and neither migration gates them: they are declared in code, and what makes a Conquest default unholdable today is simply that no module, capability declaration or route exists yet.
 
 A grant of a read capability may set `read_only` true or false; true is the default and the normal case, and false is meaningless there but harmless. A grant of a **write** capability with `read_only` true is **rejected at creation**, not stored and silently ineffective. Without that rejection an Admin granting a management capability and leaving the flag at its default creates a row that grants nothing, with nothing to indicate why the holder is being denied.
 
@@ -3954,21 +3964,24 @@ No dashboard ranks leaders, scores them, or colour-grades them (Section 13, Meet
 
 ### Sidebar
 
-The sidebar has five items (ruling of 2026-09-14). What a person fills in is under `Record`, and what they read is under `Reports`. Each module keeps its section and its name; the label is what reaches it.
+The sidebar has six items (ruling of 2026-09-14, extended by the ruling of 2026-09-16 which added `Conquest`), and the sixth is not built: the application ships five while Conquest waits for the code the ruling of 2026-09-16 defers past the pilot. What a person fills in is under `Record`, and what they read is under `Reports`. Each module keeps its section and its name; the label is what reaches it.
 
 ```text
 Record     the Dashboard, and recording DCC and Cell attendance (Sections 9, 12, 13)
 Reports    DCC and Cell figures, and Network Summary when it is built (Section 16)
 People     My People and Search (Sections 3 and 8)
 Cells      the Cell Leaders module (Section 15)
+Conquest   the four G12 goals of the people a leader cares for (Section 27), when it is built
 Network    My Network, the pastoral tree (Section 5)
 ```
+
+**`Conquest` is its own item rather than a screen under `Record`**, even though a leader files confirmations there. `Record` is the recording of attendance against a dated event — a Sunday, a meeting — with a submission window closing behind it (Sections 9 and 13). A goal is reached on a day nobody scheduled, and three of the four are filed only where a leader is confirming history the records cannot hold. Putting it under `Record` would put a screen with no window inside the one place a window always applies.
 
 `Account and session` sits in the sidebar's footer, under the signed-in person's name, and is not one of the items.
 
 **A Cell's meeting screens are recording, so they sit under `Record` wherever they are reached from** — a Cell's list of meetings and the screen a meeting is recorded on, whether a leader arrives from Record's outstanding work or from a Cell under `Cells`.
 
-**The order, and the screen a person lands on, follow the reach of `reports.view_subtree` and never a role**, because Section 7 makes a capability and its scope the thing that decides. An account holding it at `WHOLE_CHURCH` sees `Reports · Record · Network · People · Cells` and lands on `Reports`; by the role defaults that is the two Senior Pastors and Admin. Every other account sees `Record · Reports · People · Cells · Network` and lands on `Record`. `Record` stays in the first arrangement because Section 9 puts a person's DCC record on the checklist of the nearest account-holding leader above them, which a Senior Pastor is for their own direct disciples.
+**The order, and the screen a person lands on, follow the reach of `reports.view_subtree` and never a role**, because Section 7 makes a capability and its scope the thing that decides. An account holding it at `WHOLE_CHURCH` sees `Reports · Record · Network · People · Cells` and lands on `Reports`; by the role defaults that is the two Senior Pastors and Admin. Every other account sees `Record · Reports · People · Cells · Network` and lands on `Record`. Both orderings and both landing screens are what the application does today; what it does not yet carry is `Conquest`, which joins each arrangement immediately after `Cells` when it is built. **`Conquest` takes the position the rest of the arrangement gives it rather than a fixed one** (ruling of 2026-09-16): it sits between `Cells` and `Network` in the ordinary arrangement, and last in the whole-church one, where `Network` has already moved up. `Record` stays in the first arrangement because Section 9 puts a person's DCC record on the checklist of the nearest account-holding leader above them, which a Senior Pastor is for their own direct disciples.
 
 When the Admin dashboard below is built, it adds an `Admin` item for the accounts holding the capabilities that screen needs, and becomes their landing screen. Which capabilities those are is settled with that screen, and is recorded as open until then.
 
@@ -4353,6 +4366,7 @@ Audit important actions, including:
 - Account access decision at archive (Disable or Keep)
 - Account reactivation
 - System setting changed, with previous and new values
+- Conquest goal confirmed, and a confirmation corrected with its reason, each naming the Person the goal is about (Section 27). **A confirmation filed for a downline leader is one entry that says so**, carrying the confirming leader as well as the actor — the same treatment this list gives an attendance correction made for somebody else, and for the same reason: two entries would double-count one act, and recording only the confirmation loses every one an upline filed from the list that exists to find them
 
 ```text
 audit_log
@@ -4412,6 +4426,7 @@ Recommended REST areas:
 /api/v1/dcc
 /api/v1/reports
 /api/v1/search
+/api/v1/conquest                          Section 27, when it is built
 ```
 
 Examples:
@@ -5075,6 +5090,7 @@ PERSON
   +-- Cell Attendance History -> Cell classification
   +-- Cell Leadership Assignments -> 0..many Cells
   +-- Cell Membership -> 0..many Cells
+  +-- Conquest Goals -> four, three of them derived (Section 27)
 
 CELL GROUP
   |
@@ -5135,10 +5151,127 @@ Shapes are given in the section that owns each rule; this is the index.
 | `audit_log` | `audit` | Section 21 |
 | `settings` | `admin` | Section 7, `settings.manage` |
 | `idempotency_keys` | shared | Section 22 |
+| `conquest_confirmations` | `conquest` | Section 27 |
 
-Five of these carry history the specification guarantees and would otherwise be built as a column on their parent, losing it silently: `person_lifecycle`, `network_assignments`, `cell_categories`, `cell_schedules`, `cell_memberships`. A column satisfies every sentence about them and cannot answer a question about a past period.
+Six of these carry history the specification guarantees and would otherwise be built as a column on their parent, losing it silently: `person_lifecycle`, `network_assignments`, `cell_categories`, `cell_schedules`, `cell_memberships`, `conquest_confirmations` — that last one because Section 27 supersedes a confirmation rather than deleting it, and four booleans on `persons` would satisfy every sentence of Section 27 while losing every correction. A column satisfies every sentence about them and cannot answer a question about a past period.
 
 Adding a structure to this list is part of the change that introduces the rule needing it, never a follow-up.
+
+---
+
+## 27. Conquest
+
+Conquest records, for every person under a leader's care, the four G12 goals in ladder order: **Win 3**, **Open a cell**, **Completion of 12**, **Raise 12 leaders** (ruling of 2026-09-16). It is a new module, `conquest`, and it owns one table.
+
+**None of it is built.** The ruling settles the rules before the pilot and the code after it, so there is no migration, no endpoint, no screen, and the sidebar's sixth item is not in the application. Tests are owed by the change that builds it.
+
+### What each goal means
+
+- **Win 3** — the person has won three people.
+- **Open a cell** — they hold the earliest leadership of a Cell that an approved `NEW_CELL` request names (Section 10). A handover is not an opening, and the request is the discriminator rather than the leadership: a Cell recorded during initial encoding has an earliest leadership and no such request, and is what a leader is asked about below.
+- **Completion of 12** — twelve open pastoral assignments named this person as leader at one instant (Section 5). Every direct disciple counts, whether or not they lead anything; Section 16's *Cell Leaders with 12+ Members* counts a different set and stays a different figure.
+- **Raise 12 leaders** — twelve of those direct disciples each qualify as a leader (Section 11, *What "qualifies as a leader" means*).
+
+**Raise 12 leaders is not Section 16's *Leaders with 12+ Direct Leaders*.** Section 16's is a current-state snapshot (Section 3), so it falls when a leader's twelfth leader-disciple closes their Cell; this is a milestone that does not lapse. They are expected to differ, and no reconciliation is owed between them.
+
+**What a Cell closed `CREATED_IN_ERROR` does to Open a cell is recorded as open in `CLAUDE.md`.** That closure says the Cell should never have existed (Section 10); a goal reached does not lapse; nothing decides between them, and a derived goal has no confirmation to supersede.
+
+### Three goals are derived, one is stated
+
+Open a cell, Completion of 12 and Raise 12 leaders are computed from `cell_leadership_requests`, `cells`, `cell_leaderships` and `pastoral_assignments`, all of them effective-dated, so each goal and the date it was first reached are questions the database answers. A leader never ticks one to say it has been reached now; the two exceptions below are about history the records cannot hold. Section 9 forbids hand-maintaining what history can derive, and Section 5 forbids a second representation of a fact a table already holds.
+
+**`conquest` owns none of those tables and does not query them.** `cells` computes the Cell half, `hierarchy` the pastoral half, and `conquest` composes what they return with its own confirmations — Section 2's ordinary route, and the one it already names for `reporting`.
+
+**Win 3 is stated by a leader, because nothing records who won whom.** Section 9's VIP workflow captures the leader a person is *placed under*, which is a different fact. A *brought by* field on Section 3 would make it derivable and is not added here.
+
+### Reached once is reached
+
+**A goal reached stays reached and carries the date it was first reached.** Somebody who reached twelve disciples in March and holds eleven in September has reached Completion of 12, dated March. The current standing is shown beside it — `Reached March 2026 · 11 today` — never instead of it, and never colour-graded (Sections 13, 17 and 19).
+
+The ground is what the ladder means: a milestone reached is not a level somebody falls out of. Section 3's reproducibility guarantee is not a second ground and is not claimed as one, since Section 3 and Section 16 already provide for a current-state figure that is reproducible for a closed month.
+
+### What a leader confirms, and how they are asked
+
+A leader confirms three things, and each is a dated record naming them:
+
+1. **Win 3**, always.
+2. **A goal reached before the church was encoded.** The import fabricates no history (Section 2), so twelve disciples held in 2024 are in no table. The leader states it, with the date. **Who may state a date in a past period is recorded as open in `CLAUDE.md`**: Section 3 makes that backdating, behind `records.backdate_effective_date`, which Section 7 gives Admin alone.
+3. **Whether a Cell recorded at setup was opened or taken over.** Direct creation during initial encoding (Sections 2 and 10) writes one leadership for a Cell that already existed, so the data cannot tell the two apart. **Both answers are recorded** — without the second, the question could never be dismissed.
+
+**Nothing is ever inferred.** A person who opened a Cell is not thereby recorded as having won three: no rule of this church requires three before a Cell is opened, and an inferred tick would carry no date, name no confirming leader, and be uncorrectable. The screen asks in words beside the empty box — `Opened a cell · confirm?` — which is Section 15's attention-list idiom rather than a colour (Sections 13, 17 and 19).
+
+**The ladder is displayed in order and never gated.** An out-of-order state is reachable three ways: a Cell opened with Win 3 unticked; somebody who took a Cell over reaching rungs three and four while rung two stays permanently false; and a pre-encoding confirmation of a later rung while rung one stands unconfirmed. A refusal could reach only what a leader states, never what the records say.
+
+### Who sees Conquest, and who may confirm
+
+Three capabilities, in the shape Section 9 uses for DCC attendance:
+
+- `conquest.view_subtree` — read the goals of anyone in the actor's pastoral subtree. A read capability (Section 7).
+- `conquest.confirm` — confirm and correct for the actor's **own direct disciples**, the obligation following the discipling relationship exactly as a DCC record's responsible leader is the person's direct pastoral leader (Section 9).
+- `conquest.confirm_on_behalf` — confirm and correct for a downline leader within the actor's subtree, recorded as on behalf (Section 14). Without it a leader with no account yet, or one who has left, leaves their disciples with nobody able to file — the gap Section 9 closes by rolling submission up to the nearest upline leader who holds an account.
+
+**Section 14's shape is taken and its ground re-derived** (ruling of 2026-08-23). Attendance rests its responsible leader on being a reporting dimension, which Conquest is not; what carries it here is authorship, which is why the table keeps `confirmed_by` and `recorded_by` apart.
+
+**The two Network roots are reached by neither capability**, being nobody's direct disciple and nobody's downline. They are confirmed for by any actor whose `conquest.confirm` grant is Whole Church, as Section 9 puts a root on a checklist, and their rows carry no confirming leader: `confirmed_by` is null for a Network root and for nobody else, as `dcc_attendance.responsible_leader_id` is.
+
+**No new scope value is introduced.** "Own direct disciples" is a domain check inside the module, not a scope, and Section 7's scope enumeration is closed — so a Whole Church grant of `conquest.confirm` reaches every direct disciple in the church, and the two Network roots by the rule above, and nobody else.
+
+### Correcting a confirmation
+
+**Unticking requires a reason, and supersedes rather than deletes.** The original is kept and marked corrected, carrying both dates and both names (Section 5, Section 14). **Correcting travels with the capability that filed**, rather than taking one of its own as attendance does (ruling of 2026-09-15): withdrawing a statement needs no authority that making it did not, and an actor who may file for a downline leader and may not withdraw it leaves a statement nobody can take back. A correction is attributed to the confirming leader named on the row, never to the actor who filed it.
+
+Only a stated confirmation is corrected this way. A derived goal that looks wrong is wrong because a Cell leadership or a pastoral assignment is wrong, and is corrected there.
+
+### Conquest is not a report
+
+**Conquest figures do not enter the reporting surface** (Sections 18 and 20). The four counts at the head of its own screen are the whole of its aggregate view.
+
+**Those counts have a stated population.** Each is `COUNT(DISTINCT person_id)` over exactly the people the screen lists — everyone the actor's `conquest.view_subtree` grant reaches **at the scope that grant carries**, resolved as things stand **now**, the screen naming no period — of those who have reached that goal. It is stated as the grant's reach rather than as a subtree walk because an administrator outside the pastoral structure has no subtree and Section 5 provides for one. Nothing is attributed to a leader, drilled down, or compared across scopes. **A figure asked for at a scope the actor does not hold, or for a past period, is governed by Section 20 and not by this section**, and is recorded as open in `CLAUDE.md`.
+
+Section 16 counts two conditions closely related to these rungs and identical to neither: *Leaders with 12+ Direct Leaders*, and *New Cell Leaders*, which counts a first **qualifying** leadership in a period and so counts a leader who took a Cell over, whom Open a cell does not. A Reports block would put near-identical counts in front of one leader with nothing saying which question each answers. Whether Conquest counts should replace Section 16's, sit beside them, or stay separate is a reporting decision and is not taken here.
+
+**A per-leader breakdown of goals reached is not built, by this section's choice rather than by a prohibition.** Sections 13 and 17 permit sorting and filtering within a scope and forbid ranking, scoring and colour-grading, so such a table would be permitted; the figure it would carry — how many goals somebody else's people reached — reads as a standing whatever its order.
+
+### Where it appears
+
+Conquest is the sidebar's sixth item, placed as Section 19 places it, and it carries the four counts, the people a leader cares for, and the confirmations above. **A person who has reached all four carries a plain label rather than an accented tag**: a tag shown only to those who reached everything colours a person by a figure derived from their records (Sections 17 and 19). **The table is ordered by name**, which is this section's choice; a progress ordering offered later would be bound by Sections 13 and 17 as any other is.
+
+### Structure
+
+```text
+conquest_confirmations
+- id
+- person_id            the person the goal is about
+- goal                 WIN_3 | OPEN_A_CELL | COMPLETION_OF_12 | RAISE_12_LEADERS
+- cell_id              the Cell the answer is about; required on every OPEN_A_CELL row and
+                       null on every other
+- reached              the leader's statement: true where the goal was reached, false where
+                       it was not
+- reached_on           date; required where reached is true, null where it is false
+- confirmed_by         the Person whose statement this is — the confirming leader;
+                       null only for a Network root, who has none (Sections 5 and 9)
+- recorded_by          the Account that filed it; differs from confirmed_by where filed on behalf
+- confirmed_at
+- superseded_at        nullable, null while current
+- corrected_by         nullable, the Account that corrected it
+- correction_reason    nullable, required where superseded_at is set
+```
+
+**Every `OPEN_A_CELL` row names a Cell and every other row's `cell_id` is null; a row breaking either half is refused.** A leader may lead many Cells (Sections 10 and 16), so one answer per leader would let a single "took it over" suppress the question for a Cell they did open. The cost is stated rather than hidden: a Cell opened before encoding and closed before it, which no `cells` row holds, cannot be confirmed at all, and that person's Open a cell reads as not reached with no question beside it to answer.
+
+**`reached` false states that the goal was not reached.** On `OPEN_A_CELL` with a Cell named, it is "they took that Cell over".
+
+**A correction is recorded on the row it corrects, and a reason lives in one place.** Unticking stamps `superseded_at`, `corrected_by` and `correction_reason` on the current row, which stops being current; the actor column is named `corrected_by` rather than `superseded_by` deliberately, because Sections 9 and 13 give `superseded_by` a different meaning — the replacing row, never an actor — and one identifier carrying two meanings across three tables is what a migration written from this section would get wrong; a replacement answer is a new row, and a retraction leaves none, the goal reading as unconfirmed again.
+
+Two partial unique indexes, both over rows where `superseded_at` is null: one current row per person and goal where `cell_id` is null, and one per person and Cell where the goal is `OPEN_A_CELL` — partial uniqueness over live rows, as Section 5 uses for an active pastoral assignment.
+
+A derived goal has no row at all unless a leader was asked about it.
+
+Writes obey Section 22: they are idempotent, they carry `Idempotency-Key`, and each records its completion inside the transaction that performs it.
+
+### What Section 21 records
+
+`conquest_goal.confirmed` and `conquest_goal.corrected`, each naming the **Person** the goal is about as its target, with the goal and the dates in `before` and `after`, the reason on a correction, and — where it was filed for a downline leader — the confirming leader alongside the actor, as one entry rather than two (Section 21). The target is the Person because the goal is a fact about them, and because Section 7 resolves a person target through the person.
 
 ---
 
