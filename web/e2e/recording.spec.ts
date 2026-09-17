@@ -8,6 +8,8 @@ import {
   mockSignedIn,
 } from './mock-api';
 import {
+  awaitingClosedRow,
+  awaitingRow,
   mockCellMeetings,
   mockCellReport,
   mockCells,
@@ -16,6 +18,7 @@ import {
   mockDccReport,
   mockDccRoster,
   mockMeetingRoster,
+  mockMeetingsAwaiting,
   mockRecordedMeetingRoster,
 } from './mock-attendance';
 
@@ -185,11 +188,28 @@ test.describe('a Sunday with a mark already recorded', () => {
   });
 });
 
+/**
+ * Section 19's queue, since the ruling of 2026-09-17 moved its Cell half onto a route
+ * of its own.
+ *
+ * **What is testable here shrank, and deliberately.** The day bound, the "no record
+ * yet" filter and which leader a meeting belongs to are the route's now, pinned in
+ * `api/test/api/cell-meetings-awaiting.e2e.spec.ts`. Asserting them again through a
+ * mock would assert the mock. What is left is this screen's own: that it renders the
+ * rows it is given, says why a closed Cell is there, links to a meeting that is
+ * reachable, and never reports an empty queue it did not actually read.
+ */
 test.describe('the Record queue', () => {
-  async function mockRecordScreen(page: Page, { cellsOpen = false }: { cellsOpen?: boolean } = {}) {
+  const CLOSED_CELL = '3f1b7c6e-0000-4000-8000-000000000103';
+
+  async function mockRecordScreen(
+    page: Page,
+    awaiting?: Parameters<typeof mockMeetingsAwaiting>[1],
+  ) {
     await mockSignedIn(page);
-    await mockCells(page, { open: cellsOpen });
+    await mockCells(page);
     await mockCellMeetings(page);
+    await mockMeetingsAwaiting(page, awaiting);
     await mockCellReport(page);
     await mockDccReport(page);
     await mockDccEvents(page);
@@ -200,13 +220,13 @@ test.describe('the Record queue', () => {
 
   // Section 13 keeps a month open through its 7th and has every leader see their own
   // outstanding work always, so last month's open Sundays are listed until then. The
-  // mocks answer every month alike and mark the events open and recordable.
+  // DCC mocks answer every month alike and mark the events open and recordable.
   test('lists last month’s open work in the first seven days, with the day it closes', async ({
     page,
   }) => {
     // 10:00 on 3 October in Manila.
     await page.clock.setFixedTime(new Date('2026-10-03T02:00:00Z'));
-    await mockRecordScreen(page);
+    await mockRecordScreen(page, {});
 
     await page.goto('/dashboard');
 
@@ -216,7 +236,7 @@ test.describe('the Record queue', () => {
   test('lists nothing from last month once the 7th has passed', async ({ page }) => {
     // 10:00 on 8 October in Manila.
     await page.clock.setFixedTime(new Date('2026-10-08T02:00:00Z'));
-    await mockRecordScreen(page);
+    await mockRecordScreen(page, {});
 
     await page.goto('/dashboard');
 
@@ -225,37 +245,124 @@ test.describe('the Record queue', () => {
     await expect(page.getByText('open until 7 Oct')).toHaveCount(0);
   });
 
-  // The Cell half of the same rule. The server decides whether last month is open, so a
-  // Cell's meetings are listed only when the index says so.
-  test('lists last month’s Cell meetings in the first seven days while the server has it open', async ({
+  // The Cell half of the same rule. The month the route is asked about is the month it
+  // answers for, so last month's meetings arrive under last month's tag.
+  test('lists last month’s Cell meetings in the first seven days, tagged with last month', async ({
     page,
   }) => {
     await page.clock.setFixedTime(new Date('2026-10-03T02:00:00Z'));
-    await mockRecordScreen(page, { cellsOpen: true });
+    await mockRecordScreen(page, {
+      '2026-10-01': { meetings: [] },
+      '2026-09-01': { meetings: [awaitingRow('2026-09-26', '2026-09-01')] },
+    });
 
     await page.goto('/dashboard');
     await page.getByRole('radio', { name: 'Cells' }).check();
 
+    await expect(page.getByRole('link', { name: /^Record Cell C-0007/ })).toBeVisible();
     await expect(page.getByText('September · open until 7 Oct').first()).toBeVisible();
   });
 
-  test('lists no Cell meeting from last month once the server has shut it', async ({ page }) => {
+  // A month past its 7th answers shut and empty rather than refusing, so the screen has
+  // nothing to decide: it lists what it was given, which is nothing.
+  test('lists no Cell meeting from a month the server has shut', async ({ page }) => {
     await page.clock.setFixedTime(new Date('2026-10-03T02:00:00Z'));
-    await mockRecordScreen(page);
+    await mockRecordScreen(page, {
+      '2026-10-01': { meetings: [awaitingRow('2026-10-03', '2026-10-01')] },
+      '2026-09-01': { open: false, meetings: [] },
+    });
 
     await page.goto('/dashboard');
     await page.getByRole('radio', { name: 'Cells' }).check();
 
-    // This month's rows have arrived, so an absence below is not a page still loading.
-    await expect(page.getByRole('link', { name: /^Record / }).first()).toBeVisible();
+    // October's row has arrived, so an absence below is not a page still loading.
+    await expect(page.getByRole('link', { name: /^Record Cell C-0007/ })).toBeVisible();
     await expect(page.getByText('open until 7 Oct')).toHaveCount(0);
   });
 
-  // Decision 0238: a meeting takes no record before its day, so the queue does not offer one.
-  test('leaves a Cell meeting out until its day has come', async ({ page }) => {
-    // 10:00 on 20 June in Manila: the meeting of the 27th has not happened.
-    await page.clock.setFixedTime(new Date('2026-06-20T02:00:00Z'));
-    await mockRecordScreen(page);
+  /**
+   * The gap this route was written to close (section 19, ruling of 2026-09-17).
+   *
+   * A Cell closed part-way through a month keeps meetings its leader still owes a
+   * record for, and the Cells index is `ACTIVE`-only — so before this route the row
+   * could not be rendered at all. The Cell's code comes from the queue rather than
+   * from the index, which is why a closed Cell can be named here and nowhere else.
+   */
+  test('names a closed Cell’s meeting, says in words that the Cell closed, and links to it', async ({
+    page,
+  }) => {
+    await page.clock.setFixedTime(new Date('2026-10-03T02:00:00Z'));
+    await mockRecordScreen(page, {
+      '2026-10-01': {
+        meetings: [awaitingClosedRow('2026-10-03', '2026-10-01', '2026-09-20')],
+      },
+    });
+
+    await page.goto('/dashboard');
+    await page.getByRole('radio', { name: 'Cells' }).check();
+
+    // Exact, because the Record button's accessible name names the Cell too.
+    await expect(page.getByText('Cell C-0014', { exact: true })).toBeVisible();
+    await expect(
+      page.getByText('Saturday 3 October · 7:00 pm · Cell closed Sunday 20 September'),
+    ).toBeVisible();
+    await expect(page.getByRole('link', { name: /^Record Cell C-0014/ })).toHaveAttribute(
+      'href',
+      `/cells/${CLOSED_CELL}/meetings/2026-10-03`,
+    );
+  });
+
+  // Sections 13, 17 and 19 refuse to encode a record's state in colour, and a closed
+  // Cell is a state. The words carry it, so the row is neither tagged nor tinted
+  // differently from the Cell beside it that is still open.
+  test('marks a closed Cell no differently from an open one but for the words', async ({
+    page,
+  }) => {
+    await page.clock.setFixedTime(new Date('2026-10-03T02:00:00Z'));
+    await mockRecordScreen(page, {
+      '2026-10-01': {
+        meetings: [
+          awaitingRow('2026-10-03', '2026-10-01'),
+          awaitingClosedRow('2026-10-03', '2026-10-01', '2026-09-20'),
+        ],
+      },
+    });
+
+    await page.goto('/dashboard');
+    await page.getByRole('radio', { name: 'Cells' }).check();
+
+    const rows = page.locator('li', { has: page.getByRole('link', { name: /^Record Cell / }) });
+    await expect(rows).toHaveCount(2);
+
+    // The only tag either row carries is the one both carry.
+    for (const row of await rows.all()) {
+      await expect(row.getByText('Awaiting a record')).toBeVisible();
+    }
+    await expect(page.getByText('Cell closed')).toHaveCount(1);
+  });
+
+  // An open Cell's row says the time and stops there: the closure sentence is not a
+  // label every row wears with an empty value.
+  test('says only the time for a Cell that is still open', async ({ page }) => {
+    await page.clock.setFixedTime(new Date('2026-10-03T02:00:00Z'));
+    await mockRecordScreen(page, {
+      '2026-10-01': { meetings: [awaitingRow('2026-10-03', '2026-10-01')] },
+    });
+
+    await page.goto('/dashboard');
+    await page.getByRole('radio', { name: 'Cells' }).check();
+
+    await expect(page.getByText('Saturday 3 October · 7:00 pm')).toBeVisible();
+    await expect(page.getByText('Cell closed')).toHaveCount(0);
+  });
+
+  // The queue is empty when the route says it is, and says so in a sentence rather
+  // than by rendering nothing.
+  test('says no Cell meeting is awaiting a record when the route returns none', async ({
+    page,
+  }) => {
+    await page.clock.setFixedTime(new Date('2026-10-03T02:00:00Z'));
+    await mockRecordScreen(page, { '2026-10-01': { meetings: [] } });
 
     await page.goto('/dashboard');
     await page.getByRole('radio', { name: 'Cells' }).check();
@@ -263,10 +370,103 @@ test.describe('the Record queue', () => {
     await expect(page.getByText('No Cell meeting of yours is awaiting a record.')).toBeVisible();
   });
 
-  // A read that failed must not say there is nothing to do (section 19). A refusal is not
-  // retried, so the failure arrives at once.
-  test('says every Cell has recorded only when the Cells were actually read', async ({ page }) => {
-    await mockRecordScreen(page);
+  /**
+   * A read that failed must never render as "nothing to do" (section 19).
+   *
+   * This is the assertion that matters most after the ruling: the queue's Cell half is
+   * now **one** request, so one refusal empties it completely — where before a failure
+   * cost one Cell's rows. A refusal is not retried, so it arrives at once.
+   */
+  test('says nothing is awaiting a record only when the queue was actually read', async ({
+    page,
+  }) => {
+    await mockRecordScreen(page, {});
+    await page.route('**/api/v1/cells/meetings/awaiting?*', (route) =>
+      route.fulfill({
+        status: 403,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          error: { code: 'SCOPE_DENIED', message: 'Outside your scope.', details: {} },
+        }),
+      }),
+    );
+
+    await page.goto('/dashboard');
+
+    await expect(page.locator('main').getByRole('alert').first()).not.toBeEmpty();
+    await expect(page.getByText('Nothing is awaiting a record from you.')).toHaveCount(0);
+    await expect(page.getByText('No Cell meeting of yours is awaiting a record.')).toHaveCount(0);
+  });
+
+  /**
+   * Recording a meeting clears it from the queue.
+   *
+   * **This is the one thing moving the queue onto its own route broke.** It used to be
+   * keyed `['cell-meetings', id, month]`, which the recording screen's own invalidation
+   * cleared by prefix; `['meetings-awaiting', month]` is not under that prefix, so
+   * until the screen was given the bare prefix as well, a leader who recorded a meeting
+   * and went back to Record was told it was still awaiting a record. Section 19 puts
+   * this queue above the figures so a leader can trust it.
+   *
+   * It asserts the refetch rather than the row disappearing, because the mock answers
+   * every request alike: what went wrong was that no second request was made at all.
+   *
+   * **It returns through the navigation rather than reloading**, and that is what makes
+   * it a test. Invalidating a query nobody is observing marks it stale without
+   * refetching, so the second request lands when the Dashboard mounts again — and a
+   * full page load would fetch on a cold cache whether or not anything was invalidated,
+   * which is a green that proves nothing. Within the 30-second `staleTime`, a remount
+   * refetches only because the save marked it.
+   */
+  test('asks the queue again after a meeting is recorded', async ({ page }) => {
+    // 10:00 on 27 June in Manila, the meeting's own day.
+    await page.clock.setFixedTime(new Date('2026-06-27T02:00:00Z'));
+    await mockRecordScreen(page, {
+      '2026-06-01': { meetings: [awaitingRow('2026-06-27', '2026-06-01')] },
+    });
+    await mockMeetingRoster(page);
+    await page.route('**/api/v1/cells/*/meetings/*/submit', (route) =>
+      route.fulfill({ status: 200, contentType: 'application/json', body: '{}' }),
+    );
+
+    let asked = 0;
+    let submitted = 0;
+    page.on('request', (request) => {
+      if (request.url().includes('/cells/meetings/awaiting')) {
+        asked += 1;
+      }
+      if (request.url().includes('/submit')) {
+        submitted += 1;
+      }
+    });
+
+    await page.goto('/dashboard');
+    await page.getByRole('link', { name: /^Record Cell C-0007/ }).click();
+
+    await expect(page.getByRole('heading', { name: 'Saturday 27 June' })).toBeVisible();
+    await expect.poll(() => asked).toBe(1);
+
+    for (const member of ['Rosalinda Ocampo', 'Bienvenido Trinidad']) {
+      await page.getByRole('group', { name: member }).getByRole('radio', { name: 'Present' }).check();
+    }
+    await page.getByRole('button', { name: /^Save/ }).click();
+    // The roster mock answers `meeting: null` on every read, so a saved meeting does
+    // not read back as recorded; the submission having been made is what to wait for.
+    await expect.poll(() => submitted).toBe(1);
+
+    await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Record' }).click();
+
+    await expect(page.getByRole('heading', { name: 'Awaiting a record' })).toBeVisible();
+    await expect.poll(() => asked).toBe(2);
+  });
+
+  // The Cells index no longer feeds the queue, and still feeds the attention list and
+  // the "Cells you lead" tile — so its failure must still reach the notice rather than
+  // leaving a tile reading an em dash with no reason given.
+  test('reports a failed Cells read although the queue no longer depends on it', async ({
+    page,
+  }) => {
+    await mockRecordScreen(page, {});
     await page.route('**/api/v1/cells?*', (route) =>
       route.fulfill({
         status: 403,

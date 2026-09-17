@@ -22,6 +22,7 @@ import {
 } from './mock-api';
 import {
   mockCellMeetings,
+  mockMeetingsAwaiting,
   mockCells,
   mockCellsEmpty,
   mockDccEvents,
@@ -514,6 +515,7 @@ const SCANS = [
       await mockSignedIn(page);
       await mockCells(page);
       await mockCellMeetings(page);
+      await mockMeetingsAwaiting(page);
       await mockCellReport(page);
       await mockDccReport(page);
       await mockDccEvents(page);
@@ -1200,6 +1202,7 @@ test('every interactive target meets the 24px minimum', async ({ page }) => {
   // there to be counted.
   await mockCells(page);
   await mockCellMeetings(page);
+  await mockMeetingsAwaiting(page);
   await mockDccEvents(page);
   await mockMeetingRoster(page);
   await mockDccRoster(page);

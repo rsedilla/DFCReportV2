@@ -147,6 +147,11 @@
       "screen": "web/app/cells/[id]/meetings/page.tsx"
     },
     {
+      "route": "GET /api/v1/cells/meetings/awaiting",
+      "reason": "§19's recording queue, and the only surface that names a closed Cell's meetings (ruling of 2026-09-17).",
+      "screen": "web/app/dashboard/page.tsx"
+    },
+    {
       "route": "GET /api/v1/cells/:id/meetings",
       "reason": "Cell Meetings. §19 puts meetings awaiting a record above the numbers on every leader's dashboard.",
       "screen": "web/app/cells/[id]/meetings/page.tsx"

@@ -236,6 +236,16 @@ function RecordMeeting() {
       // unmarked with Save enabled after a first record, until the refetch landed.
       await queryClient.invalidateQueries({ queryKey: ['meeting-roster', params.id, params.date] });
       await queryClient.invalidateQueries({ queryKey: ['cell-meetings', params.id] });
+      // **The Dashboard's queue, by bare prefix rather than by month** (ruling of
+      // 2026-09-17). The queue used to be assembled from `['cell-meetings', id, month]`
+      // and so was cleared by the line above; it is now its own route under
+      // `['meetings-awaiting', month]`, which that prefix does not reach. The month is
+      // left off deliberately: in the close week the Dashboard holds two months and a
+      // meeting recorded now may belong to either, so naming one would leave the other
+      // asserting work that is done. Section 19 puts this queue above the figures so a
+      // leader can trust it, and a queue that still lists what was just recorded breaks
+      // that as surely as one that lists nothing because a read failed.
+      await queryClient.invalidateQueries({ queryKey: ['meetings-awaiting'] });
       resetForm();
     },
   });

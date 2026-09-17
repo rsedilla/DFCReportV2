@@ -157,6 +157,99 @@ export async function mockCellMeetings(page: Page): Promise<void> {
   );
 }
 
+/** One row of section 19's recording queue, as `GET /cells/meetings/awaiting` returns it. */
+export interface AwaitingRow {
+  cell_id: string;
+  cell_code: string;
+  scheduled_date: string;
+  scheduled_time: string;
+  reporting_month: string;
+  cell_closed_on: string | null;
+}
+
+/** A meeting of a Cell still `ACTIVE`, which is the ordinary row. */
+export function awaitingRow(date: string, month: string, time = '19:00'): AwaitingRow {
+  return {
+    cell_id: CELL_WITH_MEETINGS.id,
+    cell_code: CELL_WITH_MEETINGS.cell_id,
+    scheduled_date: date,
+    scheduled_time: time,
+    reporting_month: month,
+    cell_closed_on: null,
+  };
+}
+
+/**
+ * A meeting of a Cell that has since **closed**, which is the row this route exists for.
+ *
+ * The Cells index is `ACTIVE`-only, so no other list names it and no other fixture can
+ * stand in for it: a client stitching the Cell's code from the index would find nothing.
+ */
+export function awaitingClosedRow(date: string, month: string, closedOn: string): AwaitingRow {
+  return {
+    cell_id: '3f1b7c6e-0000-4000-8000-000000000103',
+    cell_code: 'C-0014',
+    scheduled_date: date,
+    scheduled_time: '19:00',
+    reporting_month: month,
+    cell_closed_on: closedOn,
+  };
+}
+
+/**
+ * Section 19's recording queue (ruling of 2026-09-17).
+ *
+ * **Called with no argument it answers every month alike**, which is what the sweep
+ * wants: two rows, one of an `ACTIVE` Cell and one of a **closed** one, dated inside
+ * whichever month was asked for so neither carries a month tag it should not. The
+ * closed row is there rather than for symmetry — its detail line is the longest text
+ * a queue row can hold, and 320px is where that has to wrap.
+ *
+ * **Called with an argument it is keyed by month**, because the Dashboard asks twice in
+ * the close week and the two answers differ — that is the whole of what the close-week
+ * rule does here. A month the caller does not name then answers shut and empty, which
+ * is what section 13 says a month past its 7th owes.
+ *
+ * The **day bound and the "no record yet" filter are not modelled**, deliberately: the
+ * ruling moved both into the route so a client cannot drift from them, and
+ * `api/test/api/cell-meetings-awaiting.e2e.spec.ts` is where they are pinned. What these
+ * fixtures exercise is the only thing left on this side — that the screen renders the
+ * rows it is given, and nothing it is not.
+ */
+export async function mockMeetingsAwaiting(
+  page: Page,
+  byMonth?: Record<string, { open?: boolean; meetings?: AwaitingRow[] }>,
+): Promise<void> {
+  await page.route('**/api/v1/cells/meetings/awaiting?*', (route) => {
+    const month = new URL(route.request().url()).searchParams.get('month') ?? '2026-06-01';
+
+    if (byMonth === undefined) {
+      const inMonth = (day: string) => `${month.slice(0, 8)}${day}`;
+
+      return route.fulfill(
+        json({
+          reporting_month: month,
+          open: true,
+          meetings: [
+            awaitingRow(inMonth('06'), month),
+            awaitingClosedRow(inMonth('13'), month, inMonth('20')),
+          ],
+        }),
+      );
+    }
+
+    const answer = byMonth[month];
+
+    return route.fulfill(
+      json({
+        reporting_month: month,
+        open: answer?.open ?? answer !== undefined,
+        meetings: answer?.meetings ?? [],
+      }),
+    );
+  });
+}
+
 export async function mockDccEvents(page: Page): Promise<void> {
   await page.route('**/api/v1/dcc/events?*', (route) =>
     route.fulfill(

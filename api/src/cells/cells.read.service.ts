@@ -1225,6 +1225,129 @@ export class CellsReadService implements CellScopePort, CellRelationshipsPort {
   }
 
   /**
+   * The scheduled meetings of a month that **this person is the one section 7
+   * authorizes to file**, for section 19's recording queue (ruling of 2026-09-17).
+   *
+   * **Two leader rules rather than one, and the `CASE` is where section 7's exception
+   * lives.** An `ACTIVE` Cell "resolves through its current leader, whatever any record
+   * says"; a **closed** Cell whose window is still open resolves through whoever led it
+   * on the scheduled date, and only within that exception. Stating the scheduled-date
+   * rule for both would hand the outgoing leader of a Cell handed from A to B a queue
+   * entry whose submission resolves through B and refuses A, while hiding it from B —
+   * the defect section 7's per-record rule exists to prevent, arriving from the side
+   * that shows the task rather than the side that takes the record.
+   *
+   * **Bounded to days that have begun** (decision 0238): a meeting whose Manila day has
+   * not begun takes no record, so without this the queue would carry every remaining
+   * date of the month and offer no act that resolves them, which is the one thing
+   * section 19 says an entry must never be.
+   *
+   * **The leader join is inner here where {@link scheduledMeetingsWithLeaderIn} leaves
+   * it outer, and the difference is the question.** That method feeds a coverage
+   * denominator, where section 12 refuses to let a data defect shrink the figure; this
+   * one answers "is it yours", and a pair with no leader is nobody's. Such a pair is
+   * then in no queue at all, which `CLAUDE.md` records as open. *It said so before the
+   * bullet existed: the open item was about where such a pair lands in the **coverage
+   * denominator** and said nothing about a queue, so the citation pointed at a question
+   * one domain over.* Unreachable while a Cell's schedule and its leadership open and
+   * close together.
+   *
+   * The scheduled derivation is {@link scheduledMeetingsWithLeaderIn}'s, day for day: a
+   * series against the governing schedule row, inert rows excluded, the weekday tested
+   * against that row alone. A change to one is a change to both.
+   */
+  async meetingsAwaitingFor(
+    executor: Db | Transaction<Database>,
+    leaderPersonId: string,
+    reportingMonth: string,
+  ): Promise<
+    {
+      cellId: string;
+      cellCode: string;
+      scheduledDate: string;
+      scheduledTime: string;
+      cellClosedOn: string | null;
+    }[]
+  > {
+    const result = await sql<{
+      cell_id: string;
+      cell_code: string;
+      scheduled_date: string;
+      scheduled_time: string;
+      cell_closed_on: string | null;
+    }>`
+      SELECT cell.id AS cell_id,
+             cell.cell_id AS cell_code,
+             day::date AS scheduled_date,
+             governing.time_of_day AS scheduled_time,
+             CASE
+               WHEN cell.closed_at IS NULL THEN NULL
+               ELSE to_char((cell.closed_at AT TIME ZONE 'Asia/Manila')::date, 'YYYY-MM-DD')
+             END AS cell_closed_on
+        FROM cells AS cell
+        CROSS JOIN generate_series(
+               ${reportingMonth}::date,
+               (${reportingMonth}::date + interval '1 month' - interval '1 day')::date,
+               interval '1 day'
+             ) AS day
+        CROSS JOIN LATERAL (
+          SELECT schedule.day_of_week, to_char(schedule.time_of_day, 'HH24:MI') AS time_of_day
+            FROM cell_schedules AS schedule
+           WHERE schedule.cell_id = cell.id
+             AND schedule.ended_at IS DISTINCT FROM schedule.started_at
+             AND (schedule.started_at AT TIME ZONE 'Asia/Manila')::date <= day
+             AND (schedule.ended_at IS NULL
+                  OR (schedule.ended_at AT TIME ZONE 'Asia/Manila')::date >= day)
+           ORDER BY schedule.started_at DESC,
+                    schedule.ended_at DESC NULLS FIRST,
+                    schedule.id DESC
+           LIMIT 1
+        ) AS governing
+        JOIN LATERAL (
+          SELECT held.person_id
+            FROM cell_leaderships AS held
+           WHERE held.cell_id = cell.id
+             AND CASE
+                   WHEN cell.state = 'ACTIVE' THEN held.ended_at IS NULL
+                   ELSE (held.started_at AT TIME ZONE 'Asia/Manila')::date <= day
+                        AND (held.ended_at IS NULL
+                             OR (held.ended_at AT TIME ZONE 'Asia/Manila')::date >= day)
+                 END
+           ORDER BY held.started_at ASC,
+                    held.ended_at DESC NULLS FIRST,
+                    held.id DESC
+           LIMIT 1
+        ) AS leader ON leader.person_id = ${leaderPersonId}
+       WHERE EXTRACT(ISODOW FROM day) = governing.day_of_week
+         AND day::date <= (now() AT TIME ZONE 'Asia/Manila')::date
+         -- Cells this person has ever led. Implied by the join above, which keeps a row
+         -- only where the *governing* leader is them, so this removes no row; what it
+         -- removes is the work. The actor sits in an ON clause the planner cannot push
+         -- through a LIMIT 1, so without this every Dashboard load crosses all ~800
+         -- Cells (SKILL.md section 2) with the month's days and evaluates two laterals
+         -- per pair — twice over in the close week. It has to be a separate predicate
+         -- rather than a filter inside the lateral: moving the person in there would
+         -- pick the actor's own leadership row instead of the governing one, silently
+         -- changing the rule from "is this meeting yours" to "did you ever lead it".
+         AND EXISTS (
+               SELECT 1
+                 FROM cell_leaderships AS ever
+                WHERE ever.cell_id = cell.id
+                  AND ever.person_id = ${leaderPersonId}
+             )
+       ORDER BY day, cell.id
+    `.execute(executor);
+
+    return result.rows.map((row) => ({
+      cellId: row.cell_id,
+      cellCode: row.cell_code,
+      scheduledDate: String(row.scheduled_date),
+      scheduledTime: row.scheduled_time,
+      cellClosedOn: row.cell_closed_on,
+    }));
+  }
+
+  /**
    * How many meetings each of these Cells has scheduled in the month — the
    * **denominator** of Section 12's coverage line, for a page of Cells at once.
    *
