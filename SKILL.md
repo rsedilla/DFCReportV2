@@ -3886,9 +3886,11 @@ Whole Church
                   -> Person
 ```
 
+**The Network screen shows one person's branch of the pastoral tree as it stands now** (ruling of 2026-09-18), guarded by `people.view_subtree`: a breadcrumb, a focus block giving the person's member ID, where they sit and who they report to, and their direct reports twenty at a time. It carries headcounts of that tree — Cell Leaders beneath counting current Cell Leaders (Section 11) under `cell.view_subtree` — and, on each row, DCC records behind and Cell meetings behind for the current month, never added together: each a sum over that row's branch now of each leader's own unmet obligations (Section 20), DCC on events that have happened and a Cell on meetings whose day has begun, read under `dcc.view_subtree` and `cell.view_subtree` respectively, with the month named and marked open. Rows are ordered by name, and a filter may show only rows where either figure is above zero. A row's name and its Open control focus that person; Move is offered on each row to a reader holding `people.manage_pastoral_assignment`; search finds people by name. It hands nothing to Reports.
+
 **Reports lists coverage by leader** (ruling of 2026-09-18). Every leader who owns an obligation within the report's scope and period is a row, the reader first where they own one and the rest by name, and each row counts that leader's own obligations — the leader-events Section 9 counts for DCC and the scheduled meetings Section 12 counts for a Cell, each owned by one leader (Section 20), except a scheduled meeting whose Cell had no leader that day, which `CLAUDE.md` records as open — so the rows add up to the report's coverage. A row opens that leader's report, which counts their whole branch and so can show a larger figure than the row. A row is named only where the guard would admit that leader as a `LEADER` scope selector at the period's final millisecond, decided outside the report's snapshot (Section 24); the rest are counted in one line that names nobody, does not open, and is not shown when it counts nobody.
 
-Nothing on it is ranked or coloured (Section 13).
+Nothing on either surface is ranked or coloured (Section 13).
 
 ### My 12 / Direct Leaders report
 
@@ -3939,7 +3941,7 @@ Historical reports must respect historical pastoral assignments and Cell categor
 
 ### The sidebar is navigation
 
-The sidebar carries links, never counts. Metrics belong on the Dashboard and inside the reporting modules, where they can carry the scope and period that make them meaningful. Adding live numbers to navigation means computing scoped queries on every page load and displaying figures stripped of the context needed to read them.
+The sidebar carries links, never counts. Metrics belong on the Dashboard and inside the reporting modules, where they can carry the scope and period that make them meaningful. Adding live numbers to navigation means computing scoped queries on every page load and displaying figures stripped of the context needed to read them. **The Network screen is a page reached from the sidebar rather than navigation, and carries figures with their branch and month stated** (ruling of 2026-09-18, Section 17).
 
 This is the same rule already applied to leadership-development metrics and Participation, both of which live inside Network Summary rather than earning their own sidebar link (Section 16).
 
