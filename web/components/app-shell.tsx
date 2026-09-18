@@ -67,6 +67,12 @@ const REPORTS: NavEntry = {
   icon: ChartColumn,
   matches: ['/reports'],
 };
+const NETWORK: NavEntry = {
+  href: '/network',
+  label: 'Network',
+  icon: Network,
+  matches: ['/network'],
+};
 const PEOPLE: NavEntry = { href: '/people', label: 'People', icon: Users, matches: ['/people'] };
 const CELLS: NavEntry = { href: '/cells', label: 'Cells', icon: LayoutGrid, matches: ['/cells'] };
 const ACCOUNT: NavEntry = {
@@ -145,19 +151,6 @@ export function AppShell({ children }: { children: ReactNode }) {
   // request per page.
   const me = useQuery({ queryKey: ['me'], queryFn: ({ signal }) => getMe(signal) });
 
-  // **Network appears once the viewer's own identity is known, and not before.** It
-  // is the only entry whose destination depends on who is looking, and a link to
-  // `/people/undefined/network` exists in the same sense a dead one does.
-  const network: NavEntry | null =
-    me.data === undefined
-      ? null
-      : {
-          href: `/people/${me.data.person_id}/network`,
-          label: 'Network',
-          icon: Network,
-          matches: [`/people/${me.data.person_id}/network`],
-        };
-
   // **No item renders until the account is described.** The arrangement depends on
   // it, so rendering the leader order first would move links under a whole-church
   // reader's pointer and focus on every page load. A failed request falls back to
@@ -165,19 +158,27 @@ export function AppShell({ children }: { children: ReactNode }) {
   // succeeds for a whole-church reader the navigation reorders once. That is
   // accepted because it follows a failure rather than every load.
   const ordered = readsWholeChurch(me.data)
-    ? [REPORTS, RECORD, network, PEOPLE, CELLS]
-    : [RECORD, REPORTS, PEOPLE, CELLS, network];
-  const links = me.isPending
-    ? []
-    : ordered.filter((link): link is NavEntry => link !== null);
+    ? [REPORTS, RECORD, NETWORK, PEOPLE, CELLS]
+    : [RECORD, REPORTS, PEOPLE, CELLS, NETWORK];
+  const links = me.isPending ? [] : ordered;
 
   // **One entry is current, and it is the one whose match covers most of the address.**
   //
-  // A prefix test alone marks two: Network is `/people/{id}/network`, which starts
-  // with `/people/`, so People would claim the page as well — a second answer to
-  // "where am I", announced to a screen reader as two current pages. A longer match
-  // beats a shorter one, so `/people/{id}/network` resolves to Network and
-  // `/people/{id}` still resolves to People.
+  // A prefix test alone marks two: a Cell's meeting screens are Record's, and their
+  // address begins with `/cells/`, so Cells would claim the page as well — a second
+  // answer to "where am I", announced to a screen reader as two current pages. A longer
+  // match beats a shorter one, so `/cells/{id}/meetings` resolves to Record and
+  // `/cells/{id}` still resolves to Cells.
+  //
+  // *This cited Network as the collision until 2026-09-17, when that item moved from
+  // `/people/{id}/network` to `/network` and stopped colliding with anything. The
+  // mechanism is still load-bearing for the pair above; only the example had gone
+  // stale. One consequence is deliberate and is worth saying rather than discovering:
+  // `/people/{id}/network`, the path page for one person, now resolves to People rather
+  // than to Network. It is defended on which entry owns the address, and deliberately not
+  // on where the viewer came from — that reason was written here and is false, because
+  // the page is reached from three places and one of them is the dashboard, which is
+  // Record.*
   let current: NavEntry | null = null;
   let longest = -1;
 

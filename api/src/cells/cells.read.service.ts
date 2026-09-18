@@ -934,6 +934,26 @@ export class CellsReadService implements CellScopePort, CellRelationshipsPort {
   }
 
   /**
+   * Everyone who is a current Cell Leader now (SKILL.md section 11, decision 0025): an
+   * open leadership of an `ACTIVE` Cell, the same conjunction
+   * {@link isCurrentCellLeaderWithin} states for one person.
+   *
+   * For the Network screen's *Cell Leaders beneath* (decision 0252).
+   */
+  async currentCellLeaderIds(): Promise<Set<string>> {
+    const rows = await this.db
+      .selectFrom('cell_leaderships')
+      .innerJoin('cells', 'cells.id', 'cell_leaderships.cell_id')
+      .select('cell_leaderships.person_id')
+      .distinct()
+      .where('cell_leaderships.ended_at', 'is', null)
+      .where('cells.state', '=', 'ACTIVE')
+      .execute();
+
+    return new Set(rows.map((row) => row.person_id));
+  }
+
+  /**
    * Whether this Person is a current Cell Leader (SKILL.md section 11).
    *
    * **Both halves, and the second cannot be shown to matter — which is stated here

@@ -648,3 +648,145 @@ export async function mockPastoralPath(page: Page): Promise<void> {
     ),
   );
 }
+
+/**
+ * A one-entry pastoral path whose single entry holds a root seat.
+ *
+ * **The case that broke the chain, kept so it cannot break again.** A Network root has
+ * nobody above them, and rendering that fact as a chain entry produced
+ * `Network root › You` — which tells the person reading it that somebody is above them
+ * when they are the root. Only `network_root` tells this apart from a Person with no
+ * leader at all (decision 0131), so both readings are exercised rather than one.
+ */
+export async function mockPastoralPathAtRoot(page: Page): Promise<void> {
+  await page.route('**/api/v1/people/*/pastoral-path*', (route) =>
+    route.fulfill(
+      json({
+        data: [
+          {
+            id: '9a1b2c3d-4e5f-4061-8273-8495a6b7c8d9',
+            member_id: 'M-000001',
+            full_name: 'Marilou Reyes Santos',
+            network_root: true,
+          },
+        ],
+        next_cursor: null,
+      }),
+    ),
+  );
+}
+
+/**
+ * The Network screen's routes (decision 0252): the branch, and the two figure routes.
+ *
+ * **The first page carries a cursor and the second does not**, so `Show 20 more` renders,
+ * is measured for target size, and stops rather than paging for ever. The API refuses
+ * `?cursor=` outright, so the absence of the parameter is what marks the first page.
+ *
+ * The figures add up, as the API's do: the focus person's branch equals their own gap
+ * plus each row's. Invented names throughout.
+ */
+export async function mockNetworkTree(page: Page): Promise<void> {
+  const node = (id: string, member: string, name: string, direct: number, beneath: number) => ({
+    id,
+    member_id: member,
+    full_name: name,
+    leads_anyone: direct > 0,
+    direct_reports: direct,
+    beneath,
+  });
+
+  const self = node('9a1b2c3d-4e5f-4061-8273-8495a6b7c8d9', 'M-000042', 'Marilou Reyes Santos', 3, 9);
+  const consuelo = node('3f1b7c6e-0000-4000-8000-000000000701', 'M-000801', 'Consuelo Bautista', 1, 4);
+  const efren = node('3f1b7c6e-0000-4000-8000-000000000702', 'M-000802', 'Efren Dimaculangan', 0, 0);
+  const lourdes = node('3f1b7c6e-0000-4000-8000-000000000703', 'M-000803', 'Lourdes Magsaysay', 0, 0);
+  const teresita = node('3f1b7c6e-0000-4000-8000-000000000704', 'M-000804', 'Teresita Alcantara', 0, 3);
+
+  await page.route('**/api/v1/network/my-tree*', (route) => {
+    const paged = route.request().url().includes('cursor=');
+
+    return route.fulfill(
+      json({
+        person: self,
+        data: paged ? [lourdes] : [consuelo, efren],
+        next_cursor: paged ? null : 'example-children-cursor',
+      }),
+    );
+  });
+
+  // Consuelo's own path, so the breadcrumb one generation down reads Marilou › Consuelo.
+  await page.route(`**/api/v1/people/${consuelo.id}/pastoral-path*`, (route) =>
+    route.fulfill(
+      json({
+        data: [
+          { id: self.id, member_id: self.member_id, full_name: self.full_name, network_root: true },
+          { id: consuelo.id, member_id: consuelo.member_id, full_name: consuelo.full_name, network_root: false },
+        ],
+        next_cursor: null,
+      }),
+    ),
+  );
+
+  await page.route('**/api/v1/leaders/*/children*', (route) =>
+    route.fulfill(json({ person: consuelo, data: [teresita], next_cursor: null })),
+  );
+
+  await page.route('**/api/v1/leaders/*/dcc-behind', (route) =>
+    route.fulfill(
+      json({
+        reporting_month: '2026-09-01',
+        open: true,
+        branch_behind: 4,
+        behind_by_child: { [consuelo.id]: 3, [efren.id]: 0, [lourdes.id]: 1, [teresita.id]: 2 },
+      }),
+    ),
+  );
+
+  await page.route('**/api/v1/leaders/*/cell-figures', (route) =>
+    route.fulfill(
+      json({
+        reporting_month: '2026-09-01',
+        open: true,
+        cell_leaders_beneath: 2,
+        branch_meetings_behind: 1,
+        meetings_behind_by_child: {
+          [consuelo.id]: 1,
+          [efren.id]: 0,
+          [lourdes.id]: 0,
+          [teresita.id]: 0,
+        },
+      }),
+    ),
+  );
+}
+
+/**
+ * The signed-in leader as the Network screen needs them: reading DCC and Cell figures and
+ * holding the reassignment capability, so the figures and the Move controls render.
+ */
+export async function mockNetworkReader(page: Page): Promise<void> {
+  const grant = (capability: string) => ({
+    capability,
+    scope_type: 'OWN_SUBTREE',
+    scope_network: null,
+    read_only: false,
+    source: 'ROLE',
+  });
+
+  await page.route('**/api/v1/auth/me', (route) =>
+    route.fulfill(
+      json({
+        account_id: '4f8c1d6a-0f1e-4b2a-9c3d-5e6f7a8b9c0d',
+        person_id: '9a1b2c3d-4e5f-4061-8273-8495a6b7c8d9',
+        email: 'leader@example.invalid',
+        first_name: 'Marilou',
+        capabilities: [
+          grant('people.view_subtree'),
+          grant('dcc.view_subtree'),
+          grant('cell.view_subtree'),
+          grant('people.manage_pastoral_assignment'),
+        ],
+      }),
+    ),
+  );
+}

@@ -29,6 +29,9 @@ import {
   mockCellMembers,
   mockCoverageGaps,
   mockPastoralPath,
+  mockPastoralPathAtRoot,
+  mockNetworkTree,
+  mockNetworkReader,
   mockCellMembersEmpty,
   mockCellReport,
   mockCellReportForOneCell,
@@ -609,6 +612,55 @@ const SCANS = [
     },
   },
   {
+    // The branch as a leader opens it (decision 0252): the focus block, four cards, rows
+    // by name with both figures, Move and Open on each, and `Show 20 more` because the
+    // first page carries a cursor.
+    name: 'network',
+    route: '/network',
+    async before(page: import('@playwright/test').Page) {
+      await mockSignedIn(page);
+      await mockPastoralPathAtRoot(page);
+      await mockNetworkTree(page);
+      await mockNetworkReader(page);
+    },
+    async arrange(page: import('@playwright/test').Page) {
+      await expect(page.getByRole('link', { name: 'Consuelo Bautista' }).first()).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Move Efren Dimaculangan' }).first()).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Show 20 more' })).toBeVisible();
+    },
+  },
+  {
+    // A reader holding neither figure capability: the tree without the figures, shown as
+    // dashes rather than zeros, and no Move.
+    name: 'network, without figures',
+    route: '/network',
+    async before(page: import('@playwright/test').Page) {
+      await mockSignedIn(page);
+      await mockPastoralPathAtRoot(page);
+      await mockNetworkTree(page);
+    },
+    async arrange(page: import('@playwright/test').Page) {
+      await expect(page.getByText('Network root')).toBeVisible();
+      await expect(page.getByRole('link', { name: 'Consuelo Bautista' }).first()).toBeVisible();
+    },
+  },
+  {
+    // One generation down, reached by its address as the Back button would reach it: the
+    // breadcrumb links back to the reader, and Up one level is offered.
+    name: 'network, one generation down',
+    route: '/network?focus=3f1b7c6e-0000-4000-8000-000000000701',
+    async before(page: import('@playwright/test').Page) {
+      await mockSignedIn(page);
+      await mockPastoralPathAtRoot(page);
+      await mockNetworkTree(page);
+      await mockNetworkReader(page);
+    },
+    async arrange(page: import('@playwright/test').Page) {
+      await expect(page.getByRole('link', { name: 'Teresita Alcantara' }).first()).toBeVisible();
+      await expect(page.getByRole('link', { name: 'Up one level' })).toBeVisible();
+    },
+  },
+  {
     // Two members, each removable behind a confirmation, under the Add a member button.
     name: 'cell members',
     route: '/cells/3f1b7c6e-0000-4000-8000-000000000101/members',
@@ -971,6 +1023,14 @@ const TARGET_SWEEP = [
     minimum: 4,
   },
   {
+    // Search, the disabled Up one level, the filter, two rows' Open links and Show 20
+    // more. Settled on Show 20 more, which renders only once the page has arrived.
+    name: 'network',
+    route: '/network',
+    settle: 'Show 20 more',
+    minimum: 4,
+  },
+  {
     // The back link, Add a member, and a name link and a Remove per member. Settled on a
     // member's own heading, which renders from the data, so the count runs after the list
     // arrived.
@@ -1179,6 +1239,19 @@ const TARGET_EXEMPT: { name: string; why: string }[] = [
       'no marks and no Save bar.',
   },
   {
+    name: 'network, without figures',
+    why:
+      'Renders a subset of the controls measured under "network": the same search, rows and ' +
+      'Show 20 more, without the Move buttons, which are the Button primitive measured elsewhere.',
+  },
+  {
+    name: 'network, one generation down',
+    why:
+      'Its controls are the ones measured under "network" — row links, Open, Move, the filter — ' +
+      'plus Up one level and a breadcrumb link, which are the secondary button and the ' +
+      'min-h-6 min-w-6 text link measured on other screens.',
+  },
+  {
     name: 'dcc checklist, closed Sunday',
     why:
       'Its radios are disabled and no Save bar renders, so it offers no control beyond the back ' +
@@ -1211,6 +1284,7 @@ test('every interactive target meets the 24px minimum', async ({ page }) => {
   await mockCellMembers(page);
   await mockCoverageGaps(page);
   await mockPastoralPath(page);
+  await mockNetworkTree(page);
   await mockAwaitingReassignment(page);
   await mockPeopleWithoutACell(page);
 
@@ -1458,16 +1532,20 @@ for (const viewport of VIEWPORT_WIDTHS) {
  * be unique — so every automated rule passes while a screen reader announces two
  * current pages and the eye sees two highlighted entries.
  *
- * The state that produced it: Network is `/people/{id}/network` and People is
+ * The state that produced it: Network was `/people/{id}/network` and People is
  * `/people`, so a prefix test marked both. It is asserted by *count* rather than by
  * naming People, so a third entry nested under an existing one fails here rather
  * than being noticed by eye.
  *
- * **The link is clicked rather than its route typed**, because Network is the one
- * entry whose href depends on who is signed in. Navigating to a hard-coded person's
- * network page tests a different thing entirely — somebody else's page, where People
- * *is* the right answer — and an earlier version of this case did exactly that and
- * failed against a correct implementation.
+ * **That collision is gone and this case is kept anyway.** Network moved to `/network`
+ * on 2026-09-17 and nests under nothing, so what it guards now is the count itself,
+ * on the entry most likely to be given a nested address again. The live nesting is
+ * `/cells/{id}/meetings`, which the case below owns.
+ *
+ * *The docblock said the link is clicked rather than typed "because Network is the one
+ * entry whose href depends on who is signed in". It no longer does — the entry is a
+ * constant — so the click is kept for a different and smaller reason: it asserts the
+ * sidebar sends you where this case then measures.*
  *
  * *The entry was labelled My Network until decision 0245 renamed it.*
  */
@@ -1475,13 +1553,14 @@ test('only the most specific navigation entry is marked as the current page', as
   await mockSignedIn(page);
   await mockPeople(page);
   await mockPastoralPath(page);
+  await mockNetworkTree(page);
 
   await page.goto('/people');
 
   const navigation = page.getByRole('navigation', { name: 'Main' });
   await navigation.getByRole('link', { name: 'Network', exact: true }).click();
 
-  await expect(page).toHaveURL(/\/people\/[^/]+\/network$/);
+  await expect(page).toHaveURL(/\/network$/);
 
   const current = navigation.locator('a[aria-current="page"]');
 
@@ -1489,6 +1568,32 @@ test('only the most specific navigation entry is marked as the current page', as
     1,
   );
   await expect(current).toHaveText('Network');
+});
+
+/**
+ * One person's pastoral path marks People, not Network.
+ *
+ * **The deliberate half of moving Network to its own address.** `/people/{id}/network`
+ * is a page about one person and keeps living under `/people`, so the entry that owns
+ * that address claims it — which is a behaviour change rather than a consequence
+ * anybody would infer, and is therefore pinned rather than described. Asserted by count
+ * as well, because the risk it inherits is two entries claiming one page.
+ */
+test('one person’s pastoral path marks People as the current page', async ({ page }) => {
+  await mockSignedIn(page);
+  await mockPeople(page);
+  await mockPastoralPath(page);
+
+  await page.goto('/people/3f1b7c6e-0000-4000-8000-000000000601/network');
+  await expect(page.getByRole('heading', { name: 'Corazon Villanueva' })).toBeVisible();
+
+  const navigation = page.getByRole('navigation', { name: 'Main' });
+  const current = navigation.locator('a[aria-current="page"]');
+
+  await expect(current, 'more than one navigation entry claims to be the current page').toHaveCount(
+    1,
+  );
+  await expect(current).toHaveText('People');
 });
 
 /**

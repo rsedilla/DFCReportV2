@@ -5,6 +5,8 @@ import { AuthorizationModule } from '../auth/authorization/authorization.module'
 import { HierarchyModule } from '../hierarchy/hierarchy.module';
 import { NetworksModule } from '../networks/networks.module';
 
+import { NetworkTreeService } from './network-tree.service';
+import { LeadersController, NetworkController } from './network.controller';
 import { PeopleController } from './people.controller';
 import { PeopleDuplicatesService } from './people.duplicates.service';
 import { PeopleImportService } from './people.import.service';
@@ -69,7 +71,13 @@ import { PeopleSexCorrectionService } from './people.sex-correction.service';
  */
 @Module({
   imports: [HierarchyModule, NetworksModule, AuthorizationModule, SettingsModule],
-  controllers: [PeopleController],
+  // **Three controllers, one module**, because section 22 mounts the tree routes at
+  // `/network` and `/leaders` while the data they walk is this module's and
+  // `hierarchy`'s. They live here rather than in `hierarchy` because `people` already
+  // imports it, so the other direction would be a cycle — and because `GET
+  // /people/{id}/pastoral-path`, the existing route of exactly this shape, is already
+  // served from here (decision 0252).
+  controllers: [PeopleController, NetworkController, LeadersController],
   providers: [
     PeopleService,
     PeopleReadService,
@@ -77,6 +85,7 @@ import { PeopleSexCorrectionService } from './people.sex-correction.service';
     PeopleImportService,
     PeopleSexCorrectionService,
     PeopleReassignmentService,
+    NetworkTreeService,
   ],
   exports: [
     PeopleService,

@@ -22,7 +22,8 @@
   ],
   "stages": [
     "screens block",
-    "after the pilot — Admin screens"
+    "after the pilot — Admin screens",
+    "after the pilot — flat subtree view"
   ],
   "routes": [
     {
@@ -86,6 +87,31 @@
       "route": "GET /api/v1/people/:id/pastoral-path",
       "reason": "§8 asks for the chain when a profile is opened: the profile names the person's direct leader from it, and My Network shows the whole chain.",
       "screen": "web/app/people/[id]/page.tsx"
+    },
+    {
+      "route": "GET /api/v1/network/my-tree",
+      "reason": "The branch the Network screen opens on: the signed-in person, their direct disciples by name, and the headcounts of the tree now (decision 0252).",
+      "screen": "web/app/network/page.tsx"
+    },
+    {
+      "route": "GET /api/v1/leaders/:id/children",
+      "reason": "Anybody else's branch, when the address names them — focusing a row, the breadcrumb, Up one level and a search result all land here (decision 0252).",
+      "screen": "web/app/network/page.tsx"
+    },
+    {
+      "route": "GET /api/v1/leaders/:id/dcc-behind",
+      "reason": "DCC records behind for the current month on each row and on the focus person, under dcc.view_subtree (decision 0252).",
+      "screen": "web/app/network/page.tsx"
+    },
+    {
+      "route": "GET /api/v1/leaders/:id/cell-figures",
+      "reason": "Cell Leaders beneath and Cell meetings behind for the current month, under cell.view_subtree (decision 0252).",
+      "screen": "web/app/network/page.tsx"
+    },
+    {
+      "route": "GET /api/v1/leaders/:id/descendants",
+      "reason": "Everyone beneath a leader, flat and paged. The Network screen goes one generation at a time and never needs it, and the People screen already lists the searcher's own scope (decision 0244), so no use for a second flat list has been named.",
+      "waived_to": "after the pilot — flat subtree view"
     },
     {
       "route": "PUT /api/v1/people/:id/pastoral-leader",

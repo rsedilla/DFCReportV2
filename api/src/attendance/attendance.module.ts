@@ -9,6 +9,8 @@ import { HierarchyModule } from '../hierarchy/hierarchy.module';
 import { NetworksModule } from '../networks/networks.module';
 import { PeopleModule } from '../people/people.module';
 
+import { BranchFiguresController } from './branch-figures.controller';
+import { BranchFiguresService } from './branch-figures.service';
 import { CellMeetingsController } from './cell-meetings.controller';
 import { CellMeetingsScopeService } from './cell-meetings.scope.service';
 import { CellMeetingsService } from './cell-meetings.service';
@@ -76,7 +78,7 @@ import { DccController } from './dcc.controller';
     // back here.
     SettingsModule,
   ],
-  controllers: [DccController, CellMeetingsController],
+  controllers: [DccController, CellMeetingsController, BranchFiguresController],
   providers: [
     DccCalendarService,
     DccAttendanceService,
@@ -86,6 +88,7 @@ import { DccController } from './dcc.controller';
     CellMeetingsScopeService,
     DccFiguresService,
     CellFiguresService,
+    BranchFiguresService,
   ],
   // **Two of these are exported to be bound to a port token, and for nothing else.**
   // Nest resolves a provider's dependencies in the module that *registers* it, so a

@@ -371,6 +371,59 @@ export class DccCoverageService {
   }
 
   /**
+   * How many of the month's obligations each of these leaders has left unmet — the
+   * Network screen's *DCC records behind* (decision 0252).
+   *
+   * **Each leader's own obligations and nobody else's**, in exactly the unit decision
+   * 0224 counts and decision 0254's rows count: one per event a leader held a pastoral
+   * edge at, left unmet where no live record names them as responsible leader. So a
+   * branch's figure is a plain sum over the leaders in it, with nothing counted twice.
+   *
+   * **Events nobody could yet have recorded owe nothing** (decision 0229), on the same
+   * `coverable` predicate the index uses. The leaders are the caller's — the Network
+   * screen passes a branch as it stands now — and each is measured at every event's own
+   * instant, which is what makes a leader assigned mid-month owe from that date.
+   */
+  async unmetByLeaderIn(
+    reportingMonth: string,
+    leaderIds: readonly string[],
+  ): Promise<Map<string, number>> {
+    assertReportingMonth(reportingMonth);
+
+    const counts = new Map<string, number>();
+
+    if (leaderIds.length === 0) {
+      return counts;
+    }
+
+    const now = await databaseNow(this.db);
+    const rows = await this.db
+      .selectFrom('dcc_events')
+      .select(['id', 'event_date', 'removed_at', 'removal_reason'])
+      .where('event_date', '>=', reportingMonth)
+      .where('event_date', '<', nextMonth(reportingMonth))
+      .orderBy('event_date')
+      .execute();
+
+    for (const row of rows) {
+      const event = this.describe(String(row.event_date), row, now);
+
+      if (!coverable(event)) {
+        continue;
+      }
+
+      const { owing } = await this.obligations(this.db, event, leaderIds);
+
+      for (const leaderId of owing) {
+        const key = canonicalId(leaderId);
+        counts.set(key, (counts.get(key) ?? 0) + 1);
+      }
+    }
+
+    return counts;
+  }
+
+  /**
    * The leaders a coverage denominator is narrowed to at one instant, or `null` for no
    * narrowing at all.
    *

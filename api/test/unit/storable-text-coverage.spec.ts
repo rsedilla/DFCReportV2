@@ -65,9 +65,19 @@ describe('storable text is refused at the edge, on every field that takes text',
    * patterns of digits, hyphens and hexadecimal, so neither admits a null byte or an unpaired
    * surrogate, and a cursor carrying one is refused as unresolvable before either key reaches
    * a comparison.*
+   *
+   * *The one added on 2026-09-17 was checked the same way. `TreePagingQueryDto.cursor` is
+   * the query DTO for all three tree routes, so it has **two** decoders and both were
+   * checked: `decodeDescendantsCursor` accepts a `depth` only where it is an integer within
+   * `int4` and a `personId` only where `isUuid` holds, and `decodeChildrenCursor` takes the
+   * identifier alone under the same anchored predicate. Neither admits a null byte or a
+   * lone surrogate, so no forged key reaches a comparison. A first version carried
+   * `@IsStorableText()` on the encoded string instead and cited `SearchPeopleDto.q`, which
+   * is the wrong precedent: `q` reaches the database as sent and this does not.*
    */
   const NEVER_STORED = new Set([
     'CellIndexDto.cursor',
+    'TreePagingQueryDto.cursor',
     'DccPersonAttendanceDto.cursor',
     'DccCoverageGapsDto.cursor',
     'DccRosterDto.cursor',
