@@ -243,10 +243,11 @@ rewritten to remove that language, because resolving each by inference is how a
 false cross-reference gets introduced, and this log records enough of those
 already. Each file carries previous/next links instead, so a positional reference
 resolves exactly as well as it did in the single file and no better. *Recounted on
-2026-09-18, the trigger being decisions 0252 to 0254: of 253 files, 252 carry `Previous:`, 181 carry
-`Next:`, and 180 carry both on one line. 0213 through 0254 each moved the first two and
+2026-09-19, the trigger being decision 0256: of 254 files, 253 carry `Previous:`, 181 carry
+`Next:`, and 180 carry both on one line. 0213 through 0256 each moved the first two and
 neither of the others, none of them carrying a `Next:`. The one file with no `Previous:` is
-0001, which has nothing before it. The recount before this one was dated 2026-09-17 and
+0001, which has nothing before it. Decision 0255 is on the `spec/growth` branch and not yet here, so merging it moves the first two by one. The recount before this one was dated 2026-09-18 and
+triggered by 0252 to 0254, and was left stale by 0256 the next day. The one before that was dated 2026-09-17 and
 triggered by 0251, and was left stale by 0252 the next day. The one before that was dated 2026-09-16 and
 triggered by 0250, and was left stale by 0251 the next day. The one before that was dated 2026-09-16 and
 triggered by 0249, and was left stale by 0250 the same day. The one before that was dated 2026-09-15 and
@@ -555,6 +556,7 @@ one, in the paragraph whose subject is false cross-references, and
 - 2026-09-18 — [The Network screen is a branch view, and it carries its figures with their month](docs/decisions/0252-the-network-screen-is-a-branch-view.md)
 - 2026-09-17 — [A report scope selector naming nobody answers `NOT_FOUND`, and scope is checked first](docs/decisions/0253-a-scope-selector-naming-nobody-answers-not-found.md), restored unchanged on 2026-09-18
 - 2026-09-18 — [Reports lists coverage by leader, and each row counts that leader's own obligations](docs/decisions/0254-reports-list-coverage-by-leader.md)
+- 2026-09-19 — [The leader summary route is replaced by the Network screen's routes](docs/decisions/0256-the-leader-summary-route-is-replaced.md)
 
 ### Open — awaiting a ruling
 

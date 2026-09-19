@@ -4486,7 +4486,6 @@ PUT  /api/v1/people/{id}/pastoral-leader  the reassignment of Section 5
 GET  /api/v1/network/my-tree
 GET  /api/v1/leaders/{id}/children
 GET  /api/v1/leaders/{id}/descendants
-GET  /api/v1/leaders/{id}/summary
 GET  /api/v1/leaders/{id}/dcc-behind       the Network screen's DCC figure, decision 0252
 GET  /api/v1/leaders/{id}/cell-figures     the Network screen's Cell figures, decision 0252
 
