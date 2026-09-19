@@ -404,6 +404,27 @@ export class AuthorizationService {
   }
 
   /**
+   * `covers` for many targets, reading the actor's authority once.
+   *
+   * For a list that names only the rows its reader could open (decision 0254): one answer
+   * per target, in order, on the pooled connection every other guard uses (section 24).
+   */
+  async coversEach(
+    actor: Actor,
+    capability: Capability,
+    targets: readonly Target[],
+  ): Promise<boolean[]> {
+    const authority = await this.authorityFor(actor.accountId);
+    const answers: boolean[] = [];
+
+    for (const target of targets) {
+      answers.push(await this.coversWith(this.db, actor, authority, capability, target));
+    }
+
+    return answers;
+  }
+
+  /**
    * An account's roles and grants, read together.
    *
    * Returned as one value carrying the account it was read for, so that

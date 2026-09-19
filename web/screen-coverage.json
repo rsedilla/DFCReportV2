@@ -114,6 +114,16 @@
       "waived_to": "after the pilot — flat subtree view"
     },
     {
+      "route": "GET /api/v1/reports/dcc/monthly/by-leader",
+      "reason": "The DCC report's By leader table: each leader's own records filed and owed, the rows adding up to the report's coverage (decision 0254).",
+      "screen": "web/app/reports/dcc/page.tsx"
+    },
+    {
+      "route": "GET /api/v1/reports/cells/monthly/by-leader",
+      "reason": "The Cell report's By leader table: each leader's own meetings recorded and scheduled, the rows adding up to the report's coverage (decision 0254).",
+      "screen": "web/app/reports/cells/page.tsx"
+    },
+    {
       "route": "PUT /api/v1/people/:id/pastoral-leader",
       "reason": "Reassignment is the highest-risk authorization surface in the system (§5). Move to another leader on the person's profile opens this dialog, which performs it.",
       "screen": "web/components/move-leader-dialog.tsx"

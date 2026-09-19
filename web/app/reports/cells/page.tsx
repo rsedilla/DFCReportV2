@@ -9,7 +9,9 @@ import { AttendanceBuckets, ClassificationFigures } from '@/components/attendanc
 import { CoverageFigure } from '@/components/coverage-figure';
 import { HowTheseAreCounted } from '@/components/how-counted';
 import { MonthPicker } from '@/components/month-picker';
+import { LeaderDrill } from '@/components/leader-drill';
 import { CoverageByCell } from '@/components/report-coverage';
+import { CoverageByLeader, CoverageSwitch } from '@/components/report-coverage-by-leader';
 import { ReportsSwitch } from '@/components/reports-switch';
 import { FailureNotice } from '@/components/ui/failure-notice';
 import { listAllCells } from '@/lib/cells';
@@ -64,6 +66,10 @@ export function CellReport() {
   const search = useSearchParams();
   const [month, setMonth] = useState(() => monthFromQuery(search.get('month')));
   const [cellId, setCellId] = useState<string>('');
+  // A leader opened from the By leader table (decision 0254), carried in the address so
+  // the browser's Back returns to the report it was opened from.
+  const leader = search.get('leader');
+  const [coverageBy, setCoverageBy] = useState<'first' | 'leader'>('first');
 
   const me = useQuery({ queryKey: ['me'], queryFn: ({ signal }) => getMe(signal) });
   const wholeChurch = holdsWholeChurch(me.data, 'reports.view_subtree');
@@ -85,8 +91,9 @@ export function CellReport() {
   // one person, which is the disagreement this closes.
   // Narrower than `ReportScope`: this route refuses `NETWORK`, because what such a
   // figure narrows is unstated in section 20 and recorded as open. The type says so.
-  const scope: Exclude<ReportScope, { kind: 'NETWORK' }> | null =
-    cellId !== ''
+  const scope: Exclude<ReportScope, { kind: 'NETWORK' }> | null = leader
+    ? { kind: 'LEADER', person_id: leader }
+    : cellId !== ''
       ? { kind: 'CELL', cell_id: cellId }
       : wholeChurch
         ? { kind: 'WHOLE_CHURCH' }
@@ -96,7 +103,8 @@ export function CellReport() {
 
   const report = useQuery({
     queryKey: ['cell-report', month, scope],
-    queryFn: ({ signal }) => getCellMonthlyReport(month, scope as Exclude<ReportScope, { kind: 'NETWORK' }>, signal),
+    queryFn: ({ signal }) =>
+      getCellMonthlyReport(month, scope as Exclude<ReportScope, { kind: 'NETWORK' }>, signal),
     enabled: scope !== null,
   });
 
@@ -108,13 +116,15 @@ export function CellReport() {
         <HowTheseAreCounted report="cells" />
       </div>
       <p className="text-muted mt-4 max-w-2xl text-sm leading-relaxed">
-        What your Cells recorded this month. Recording coverage comes first, because it is
-        the one figure that cannot be improved by recording less.
+        What your Cells recorded this month. Recording coverage comes first, because it is the one
+        figure that cannot be improved by recording less.
       </p>
 
       <MonthPicker month={month} onChange={setMonth} open={report.data?.open} />
 
-      <div className="mt-4">
+      {leader ? <LeaderDrill personId={leader} report="cells" month={month} /> : null}
+
+      <div className="mt-4" hidden={leader !== null}>
         <label htmlFor="cell-scope" className="field-label block">
           Figures for
         </label>
@@ -134,9 +144,9 @@ export function CellReport() {
           ))}
         </select>
         <p className="text-muted mt-2 max-w-2xl text-sm leading-relaxed">
-          How often people came is shown for a single Cell only. Across several Cells it would
-          mean &ldquo;attended everything their own Cell happened to record&rdquo;, which reads
-          best for the Cells that recorded least.
+          How often people came is shown for a single Cell only. Across several Cells it would mean
+          &ldquo;attended everything their own Cell happened to record&rdquo;, which reads best for
+          the Cells that recorded least.
         </p>
       </div>
 
@@ -177,9 +187,7 @@ export function CellReport() {
             <h2 id="people-heading" className="field-label">
               People who attended
             </h2>
-            <p className="mt-2 text-xl font-semibold tabular-nums">
-              {report.data.unique_people}
-            </p>
+            <p className="mt-2 text-xl font-semibold tabular-nums">{report.data.unique_people}</p>
             <p className="text-muted mt-2 max-w-2xl text-sm leading-relaxed">
               Counted once each, however many meetings they came to.
             </p>
@@ -213,8 +221,32 @@ export function CellReport() {
             ) : null}
           </div>
 
-          {/* One row per Cell is the aggregate broken down, so it has no place once one Cell is chosen. */}
-          {cellId === '' ? <CoverageByCell month={month} /> : null}
+          <section aria-labelledby="coverage-by-heading">
+            <h2 id="coverage-by-heading" className="field-label">
+              Row by row
+            </h2>
+            {/*
+              By Cell lists the reader's own Cells, so it is offered only where that is the
+              report's scope: not once one Cell is chosen, and not for a leader opened from
+              the list.
+            */}
+            <CoverageSwitch
+              first={cellId === '' && !leader ? 'By Cell' : null}
+              value={cellId === '' && !leader ? coverageBy : 'leader'}
+              onChange={setCoverageBy}
+            />
+            {cellId === '' && !leader && coverageBy === 'first' ? (
+              <CoverageByCell month={month} />
+            ) : scope ? (
+              <CoverageByLeader
+                key={`${month}-${JSON.stringify(scope)}`}
+                report="cells"
+                month={month}
+                scope={scope}
+                unit="meetings"
+              />
+            ) : null}
+          </section>
         </div>
       ) : null}
     </main>
