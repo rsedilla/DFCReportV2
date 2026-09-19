@@ -29,9 +29,12 @@ import {
   AuthorizationService,
   type Actor,
   type ActorAuthority,
+  type ScopeMembership,
 } from '../auth/authorization/authorization.service';
 import { Capability } from '../auth/authorization/capabilities';
 import { CellsReadService } from '../cells/cells.read.service';
+import { canonicalId } from '../common/identifiers';
+import { HierarchyService } from '../hierarchy/hierarchy.service';
 import { type RecordedMeetingsPort } from '../cells/recorded-meetings.port';
 import { CellMeetingsScopeService } from './cell-meetings.scope.service';
 import { IdempotencyService } from '../common/idempotency/idempotency.service';
@@ -447,6 +450,8 @@ export class CellMeetingsService implements RecordedMeetingsPort {
     // for where the direction would be a cycle.
     private readonly people: PeopleReadService,
     private readonly accounts: AccountsRepository,
+    // The branch view walks the pastoral tree as it stands now (decision 0258).
+    private readonly hierarchy: HierarchyService,
   ) {}
 
   /**
@@ -482,41 +487,101 @@ export class CellMeetingsService implements RecordedMeetingsPort {
    * so that the day somebody leads thirty Cells this is a paragraph to revisit rather
    * than a silence to discover.
    */
-  async awaitingFor(actorPersonId: string, month: string): Promise<Record<string, unknown>> {
+  async awaitingFor(
+    actor: Actor,
+    month: string,
+    whose: 'mine' | 'branch' = 'mine',
+  ): Promise<Record<string, unknown>> {
     const reportingMonth = reportingMonthOf(month);
 
     if (!(await isMonthOpen(this.db, reportingMonth))) {
-      return { reporting_month: reportingMonth, open: false, meetings: [] };
+      return { reporting_month: reportingMonth, open: false, whose, meetings: [] };
     }
 
-    const scheduled = await this.cells.meetingsAwaitingFor(this.db, actorPersonId, reportingMonth);
-    if (scheduled.length === 0) {
-      return { reporting_month: reportingMonth, open: true, meetings: [] };
-    }
+    // **The branch is the pastoral tree as it stands now, never the actor's grant**
+    // (decision 0258): a Whole Church grant would make it every meeting in the church.
+    const leaders =
+      whose === 'branch'
+        ? await this.hierarchy.subtreeOf(this.db, actor.personId)
+        : [actor.personId];
 
+    const scheduled = await this.cells.meetingsAwaitingFor(this.db, leaders, reportingMonth);
     const recorded = await this.recordedDatesIn(
       [...new Set(scheduled.map((entry) => entry.cellId))],
       reportingMonth,
     );
+    const isActor = (id: string) => canonicalId(id) === canonicalId(actor.personId);
+    const covers = (membership: ScopeMembership, id: string) =>
+      membership.kind === 'WHOLE_CHURCH' || membership.personIds.has(canonicalId(id));
 
-    const meetings = scheduled
-      .filter((entry) => !recorded.has(`${entry.cellId}|${entry.scheduledDate}`))
-      .map((entry) => ({
-        cell_id: entry.cellId,
-        // The human Cell ID and the time, because the row rendering this is the only
-        // one a closed Cell reaches: the Cells index cannot name it, so a client
-        // stitching the two would be back where section 19's gap started.
-        cell_code: entry.cellCode,
-        scheduled_date: entry.scheduledDate,
-        scheduled_time: entry.scheduledTime,
-        reporting_month: reportingMonth,
-        // Null while the Cell is ACTIVE. Stated as a date rather than a flag, because
-        // what a leader needs is why it is no longer in their Cells list, and sections
-        // 13, 17 and 19 refuse to encode that in colour (owner's choice of 2026-09-17).
-        cell_closed_on: entry.cellClosedOn,
-      }));
+    // **The tree sets the population and a capability authorizes each row** (section 7).
+    // Another leader's row names them and their Cell, which is what `cell.view_subtree`
+    // governs, so it is shown only where that capability covers the filing leader.
+    const cellView =
+      whose === 'branch'
+        ? await this.authorization.scopeMembership(actor, Capability.CellViewSubtree)
+        : null;
+    const outstanding = scheduled.filter(
+      (entry) =>
+        !recorded.has(`${entry.cellId}|${entry.scheduledDate}`) &&
+        (isActor(entry.leaderPersonId) ||
+          (cellView !== null && covers(cellView, entry.leaderPersonId))),
+    );
 
-    return { reporting_month: reportingMonth, open: true, meetings };
+    const leaderIds = [...new Set(outstanding.map((entry) => entry.leaderPersonId))];
+    const names = await this.people.forDecisions(leaderIds);
+    // Record is offered only where the actor may record it: their own meeting, or one
+    // they may record on the filing leader's behalf, which the submit route measures
+    // with both `cell.take_attendance` and `cell.submit_on_behalf` against that leader
+    // (section 14, decision 0192).
+    const [onBehalf, takeAttendance] =
+      whose === 'branch'
+        ? await Promise.all([
+            this.authorization.scopeMembership(actor, Capability.CellSubmitOnBehalf),
+            this.authorization.scopeMembership(actor, Capability.CellTakeAttendance),
+          ])
+        : [null, null];
+    const mayRecord = (id: string) =>
+      isActor(id) ||
+      (onBehalf !== null &&
+        takeAttendance !== null &&
+        covers(onBehalf, id) &&
+        covers(takeAttendance, id));
+
+    // **Only what the actor can record is listed** (owner's choice of 2026-09-19, decision
+    // 0258): every queue entry carries the action that resolves it (sections 15 and 19).
+    // A meeting they may see and not record stays on the attention list below the queue.
+    const meetings = outstanding
+      .filter((entry) => mayRecord(entry.leaderPersonId))
+      .map((entry) => {
+        const leader = names.get(entry.leaderPersonId);
+
+        return {
+          cell_id: entry.cellId,
+          // The human Cell ID and the time, because the row rendering this is the only
+          // one a closed Cell reaches: the Cells index cannot name it, so a client
+          // stitching the two would be back where section 19's gap started.
+          cell_code: entry.cellCode,
+          scheduled_date: entry.scheduledDate,
+          scheduled_time: entry.scheduledTime,
+          day_of_week: entry.dayOfWeek,
+          reporting_month: reportingMonth,
+          // Null while the Cell is ACTIVE. Stated as a date rather than a flag, because
+          // what a leader needs is why it is no longer in their Cells list, and sections
+          // 13, 17 and 19 refuse to encode that in colour (owner's choice of 2026-09-17).
+          cell_closed_on: entry.cellClosedOn,
+          category: entry.category,
+          member_count: entry.memberCount,
+          leader: {
+            id: entry.leaderPersonId,
+            full_name: leader?.fullName ?? null,
+            is_actor: isActor(entry.leaderPersonId),
+          },
+          may_record: mayRecord(entry.leaderPersonId),
+        };
+      });
+
+    return { reporting_month: reportingMonth, open: true, whose, meetings };
   }
 
   /**

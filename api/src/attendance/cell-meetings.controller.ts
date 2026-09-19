@@ -12,7 +12,7 @@ import { UuidParamPipe } from '../common/uuid-param.pipe';
 
 import { CellMeetingsService } from './cell-meetings.service';
 import { SubmitCellMeetingDto } from './dto/cell-meeting-submit.dto';
-import { CellMeetingsQueryDto } from './dto/cell-meetings.dto';
+import { AwaitingMeetingsQueryDto, CellMeetingsQueryDto } from './dto/cell-meetings.dto';
 
 /**
  * `/api/v1/cells/{id}/meetings` (SKILL.md sections 12, 13 and 22).
@@ -83,9 +83,9 @@ export class CellMeetingsController {
   @RequiresCapability(Capability.CellTakeAttendance, { kind: 'actor' })
   async awaiting(
     @CurrentActor() actor: Actor,
-    @Query() query: CellMeetingsQueryDto,
+    @Query() query: AwaitingMeetingsQueryDto,
   ): Promise<Record<string, unknown>> {
-    return this.meetings.awaitingFor(actor.personId, query.month);
+    return this.meetings.awaitingFor(actor, query.month, query.whose ?? 'mine');
   }
 
   /** This Cell's meetings for a reporting month, scheduled and recorded. */

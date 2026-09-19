@@ -532,15 +532,57 @@ const SCANS = [
       // **A row of each kind in the queue, so axe scans both.** The Cell rows wait on
       // their per-Cell meetings reads and the Sunday rows on their checklists, and
       // nothing orders the two, so each is waited for.
-      await expect(page.getByRole('link', { name: /^Record Cell / }).first()).toBeVisible();
-      await expect(page.getByRole('link', { name: /^Record DCC Sunday/ }).first()).toBeVisible();
+      await expect(page.getByRole('link', { name: /^Record C-/ }).first()).toBeVisible();
+      await expect(page.getByRole('link', { name: /^Record DCC,/ }).first()).toBeVisible();
       // A tile carries its scope and its period, which section 19 requires of
       // every one of them.
-      await expect(page.getByText(/People you oversee ·/).first()).toBeVisible();
+      await expect(page.getByText(/· People you oversee/).first()).toBeVisible();
       // **Both of the above render before any query resolves** — the heading is
       // static and the scope label defaults while `me.data` is undefined — so axe
       // would otherwise scan a page with no rows on it.
       await expect(page.getByRole('link', { name: 'Amihan Bacani' })).toBeVisible();
+    },
+  },
+  {
+    // The queue's branch view (decision 0258): a downline leader's meeting.
+    name: 'dashboard, people I oversee',
+    route: '/dashboard',
+    async before(page: import('@playwright/test').Page) {
+      await mockSignedIn(page);
+      await mockCells(page);
+      await mockCellMeetings(page);
+      await mockMeetingsAwaiting(page);
+      await mockCellReport(page);
+      await mockDccReport(page);
+      await mockDccEvents(page);
+      await mockDccRoster(page);
+      await mockAwaitingReassignment(page);
+      await mockPeopleWithoutACell(page);
+    },
+    async arrange(page: import('@playwright/test').Page) {
+      await page.getByRole('radio', { name: 'People I oversee' }).check();
+      await expect(page.getByRole('link', { name: /^Record C-0021,/ })).toBeVisible();
+    },
+  },
+  {
+    // The reader's own DCC checklist across the month, under the DCC filter.
+    name: 'dashboard, own DCC checklist',
+    route: '/dashboard',
+    async before(page: import('@playwright/test').Page) {
+      await mockSignedIn(page);
+      await mockCells(page);
+      await mockCellMeetings(page);
+      await mockMeetingsAwaiting(page);
+      await mockCellReport(page);
+      await mockDccReport(page);
+      await mockDccEvents(page);
+      await mockDccRoster(page);
+      await mockAwaitingReassignment(page);
+      await mockPeopleWithoutACell(page);
+    },
+    async arrange(page: import('@playwright/test').Page) {
+      await page.getByRole('radio', { name: 'DCC' }).check();
+      await expect(page.getByRole('table', { name: /Your DCC checklist by Sunday/ })).toBeVisible();
     },
   },
   {
@@ -1175,6 +1217,18 @@ const TARGET_SWEEP = [
  * prevent one list over.
  */
 const TARGET_EXEMPT: { name: string; why: string }[] = [
+  {
+    name: 'dashboard, people I oversee',
+    why:
+      'Reached by choosing People I oversee, which this sweep cannot do. Its controls are the ' +
+      'measured "dashboard" controls plus one more row button of the same Button primitive.',
+  },
+  {
+    name: 'dashboard, own DCC checklist',
+    why:
+      'Reached by choosing DCC, which this sweep cannot do. The table below the queue holds no ' +
+      'control; the rest are the measured "dashboard" controls.',
+  },
   {
     name: 'dcc figures report, by leader',
     why:

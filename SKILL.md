@@ -3969,7 +3969,7 @@ Scope must appear on the tile. The same tile reads 12 for a Cell leader and 11,4
 
 A dashboard of counts tells a leader nothing to act on. The Dashboard is the sidebar's `Record` item and the screen a leader lands on (Sidebar, below), so outstanding work belongs above the numbers:
 
-- meetings awaiting a record, for the user's own Cells (Section 13) — **and for a closed Cell, each meeting shown to the leader it names, while its month's window is open**. This is the only surface naming those meetings and the only thing that makes the permission to record them reachable, and it shows each one to the same person Section 7 authorizes to file it
+- meetings awaiting a record, for the user's own Cells (Section 13), and for their branch when they choose it (decision 0258, below) — **and for a closed Cell, each meeting shown to the leader it names, while its month's window is open**. This is the only surface naming those meetings and the only thing that makes the permission to record them reachable, and it shows each one to the same person Section 7 authorizes to file it
 - Cells needing attention within their scope (Section 15)
 - people with no active Cell membership within their scope (Section 10)
 - the outcome of a Cell leadership request the user submitted, of either kind (Section 10)
@@ -3977,11 +3977,13 @@ A dashboard of counts tells a leader nothing to act on. The Dashboard is the sid
 
 Each entry carries the action that resolves it.
 
-**The meetings half is one route of its own** (ruling of 2026-09-17). `GET /api/v1/cells/meetings/awaiting` is guarded by `cell.take_attendance` against the **actor**, the capability following the act that resolves an entry — submitting a meeting's record — rather than the rows the answer contains. **It returns the meetings the actor is the one authorized to file, and no others**: every scheduled meeting with no record, whose Manila day has begun and whose reporting month is still open, **whether its Cell is `ACTIVE` or `CLOSED`**, which is what makes the closed-Cell half of the bullet above reachable at all. The day bound is the one this section's own bullet needs — a meeting whose day has not begun takes no record (Section 13), so without it the queue would hold every remaining date of the month and offer no act that resolves them. The capability admits the caller and the restriction to the actor's own meetings is a check in the owning module, as it is for the DCC checklist. A downline leader's outstanding meetings are on the attention list one bullet down, never here; the queue is one leader's own work.
+**The meetings half is one route of its own** (ruling of 2026-09-17). `GET /api/v1/cells/meetings/awaiting` is guarded by `cell.take_attendance` against the **actor**, the capability following the act that resolves an entry — submitting a meeting's record — rather than the rows the answer contains. **In its default view it returns the meetings the actor is the one authorized to file, and no others**: every scheduled meeting with no record, whose Manila day has begun and whose reporting month is still open, **whether its Cell is `ACTIVE` or `CLOSED`**, which is what makes the closed-Cell half of the bullet above reachable at all. The day bound is the one this section's own bullet needs — a meeting whose day has not begun takes no record (Section 13), so without it the queue would hold every remaining date of the month and offer no act that resolves them. The capability admits the caller and the restriction to the actor's own meetings, in this default view, is a check in the owning module, as it is for the DCC checklist.
 
 **Who that is follows Section 7 and is two rules rather than one**, which is what the bullet above means by "the same person Section 7 authorizes to file it". On an **`ACTIVE`** Cell it is the current leader, whatever any record says: a Cell handed from A to B has B filing a meeting held under A. On a **closed** Cell whose window is open it is whoever led the Cell on the scheduled date, under Section 7's closed-Cell exception and only within it — such a meeting has no row and so carries no frozen responsible leader to read instead. Keying the whole population to the scheduled date would show one leader a task the submission route refuses them, and hide it from the leader who owes it.
 
 **Two enumerations of a leader's Cells now exist and do not agree, deliberately.** The index is `ACTIVE`-only and this queue is not, so a reader comparing them finds a Cell in one and not the other; they answer different questions. The submission window is read here too, Section 13 owning the rule and this route being one more caller of it — the fifth, counted rather than estimated.
+
+**The queue has a branch view beside the leader's own** (ruling of 2026-09-19, decision 0258). *My own Cells* is the population above and is the default. *People I oversee* adds the same outstanding work for everyone beneath the actor in the pastoral tree as it stands now, never the actor's grant, so a Whole Church grant does not make it the whole church. A Cell meeting is listed there when the leader who files it is the actor or beneath them **and `cell.view_subtree` covers that leader**; each row names that leader and is listed only where the actor may record it, so every row carries Record, under `cell.take_attendance` and `cell.submit_on_behalf` measured against that leader (decision 0192), which the API decides per row. The branch view lists Cell meetings only: DCC stays the actor's own checklist in both views, because a DCC checklist is always its leader's own and no screen yet records on another leader's behalf, so a Sunday row would offer no act. Who still owes a DCC record stays on each Sunday's coverage gaps (decision 0228).
 
 ### Dashboards differ by role
 
@@ -4499,7 +4501,7 @@ GET  /api/v1/dcc/people/{id}/attendance   one person's records and the classific
 
 GET  /api/v1/cells                       the Cells of the actor's scope; ?led_by=me narrows
 POST /api/v1/cells                       direct creation, initial encoding only
-GET  /api/v1/cells/meetings/awaiting     Section 19's recording queue, the actor's own
+GET  /api/v1/cells/meetings/awaiting     Section 19's recording queue, the actor's own or their branch (decision 0258)
 
 POST /api/v1/cells/leadership-requests     step one: a new Cell, or a handover
 GET  /api/v1/cells/leadership-requests     the Admin queue: pending, either kind

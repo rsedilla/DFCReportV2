@@ -241,7 +241,7 @@ test.describe('the Record queue', () => {
     await page.goto('/dashboard');
 
     // This month's rows have arrived, so an absence below is not a page still loading.
-    await expect(page.getByRole('link', { name: /^Record DCC Sunday/ }).first()).toBeVisible();
+    await expect(page.getByRole('link', { name: /^Record DCC,/ }).first()).toBeVisible();
     await expect(page.getByText('open until 7 Oct')).toHaveCount(0);
   });
 
@@ -257,9 +257,9 @@ test.describe('the Record queue', () => {
     });
 
     await page.goto('/dashboard');
-    await page.getByRole('radio', { name: 'Cells' }).check();
+    await page.getByRole('radio', { name: 'Cells', exact: true }).check();
 
-    await expect(page.getByRole('link', { name: /^Record Cell C-0007/ })).toBeVisible();
+    await expect(page.getByRole('link', { name: /^Record C-0007,/ })).toBeVisible();
     await expect(page.getByText('September · open until 7 Oct').first()).toBeVisible();
   });
 
@@ -273,10 +273,10 @@ test.describe('the Record queue', () => {
     });
 
     await page.goto('/dashboard');
-    await page.getByRole('radio', { name: 'Cells' }).check();
+    await page.getByRole('radio', { name: 'Cells', exact: true }).check();
 
     // October's row has arrived, so an absence below is not a page still loading.
-    await expect(page.getByRole('link', { name: /^Record Cell C-0007/ })).toBeVisible();
+    await expect(page.getByRole('link', { name: /^Record C-0007,/ })).toBeVisible();
     await expect(page.getByText('open until 7 Oct')).toHaveCount(0);
   });
 
@@ -299,14 +299,14 @@ test.describe('the Record queue', () => {
     });
 
     await page.goto('/dashboard');
-    await page.getByRole('radio', { name: 'Cells' }).check();
+    await page.getByRole('radio', { name: 'Cells', exact: true }).check();
 
     // Exact, because the Record button's accessible name names the Cell too.
-    await expect(page.getByText('Cell C-0014', { exact: true })).toBeVisible();
+    await expect(page.getByText('Youth · Saturdays 7:00 pm', { exact: true })).toBeVisible();
     await expect(
-      page.getByText('Saturday 3 October · 7:00 pm · Cell closed Sunday 20 September'),
+      page.getByText('Saturday 3 October · You · 4 members · C-0014 · Cell closed Sunday 20 September'),
     ).toBeVisible();
-    await expect(page.getByRole('link', { name: /^Record Cell C-0014/ })).toHaveAttribute(
+    await expect(page.getByRole('link', { name: /^Record C-0014,/ })).toHaveAttribute(
       'href',
       `/cells/${CLOSED_CELL}/meetings/2026-10-03`,
     );
@@ -329,9 +329,9 @@ test.describe('the Record queue', () => {
     });
 
     await page.goto('/dashboard');
-    await page.getByRole('radio', { name: 'Cells' }).check();
+    await page.getByRole('radio', { name: 'Cells', exact: true }).check();
 
-    const rows = page.locator('li', { has: page.getByRole('link', { name: /^Record Cell / }) });
+    const rows = page.locator('li', { has: page.getByRole('link', { name: /^Record C-/ }) });
     await expect(rows).toHaveCount(2);
 
     // The only tag either row carries is the one both carry.
@@ -350,9 +350,9 @@ test.describe('the Record queue', () => {
     });
 
     await page.goto('/dashboard');
-    await page.getByRole('radio', { name: 'Cells' }).check();
+    await page.getByRole('radio', { name: 'Cells', exact: true }).check();
 
-    await expect(page.getByText('Saturday 3 October · 7:00 pm')).toBeVisible();
+    await expect(page.getByText('Saturday 3 October · You · 5 members · C-0007')).toBeVisible();
     await expect(page.getByText('Cell closed')).toHaveCount(0);
   });
 
@@ -365,7 +365,7 @@ test.describe('the Record queue', () => {
     await mockRecordScreen(page, { '2026-10-01': { meetings: [] } });
 
     await page.goto('/dashboard');
-    await page.getByRole('radio', { name: 'Cells' }).check();
+    await page.getByRole('radio', { name: 'Cells', exact: true }).check();
 
     await expect(page.getByText('No Cell meeting of yours is awaiting a record.')).toBeVisible();
   });
@@ -441,7 +441,7 @@ test.describe('the Record queue', () => {
     });
 
     await page.goto('/dashboard');
-    await page.getByRole('link', { name: /^Record Cell C-0007/ }).click();
+    await page.getByRole('link', { name: /^Record C-0007,/ }).click();
 
     await expect(page.getByRole('heading', { name: 'Saturday 27 June' })).toBeVisible();
     await expect.poll(() => asked).toBe(1);
@@ -481,5 +481,125 @@ test.describe('the Record queue', () => {
 
     await expect(page.locator('main').getByRole('alert').first()).not.toBeEmpty();
     await expect(page.getByText('Every Cell in your scope has recorded')).toHaveCount(0);
+  });
+});
+
+test.describe('the Record queue as the owner designed it (decision 0258)', () => {
+  /** 10:00 on 20 June 2026 in Manila. */
+  const JUNE_20 = new Date('2026-06-20T02:00:00Z');
+
+  async function mockQueue(page: Page) {
+    await mockSignedIn(page);
+    await mockCells(page);
+    await mockCellMeetings(page);
+    await mockCellReport(page);
+    await mockDccReport(page);
+    await mockDccEvents(page);
+    await mockDccRoster(page);
+    await mockAwaitingReassignment(page);
+    await mockPeopleWithoutACell(page);
+
+    const whoseAsked: string[] = [];
+    await page.route('**/api/v1/cells/meetings/awaiting?*', (route) => {
+      const url = new URL(route.request().url());
+      const month = url.searchParams.get('month') ?? '2026-06-01';
+      const whose = url.searchParams.get('whose') ?? 'mine';
+      whoseAsked.push(whose);
+
+      const own = awaitingRow('2026-06-13', month);
+      const downline = {
+        ...awaitingRow('2026-06-12', month),
+        cell_id: '3f1b7c6e-0000-4000-8000-000000000104',
+        cell_code: 'C-0021',
+        leader: { id: '3f1b7c6e-0000-4000-8000-000000000299', full_name: 'Ana Lim', is_actor: false },
+        may_record: true,
+      };
+
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          reporting_month: month,
+          open: true,
+          whose,
+          meetings: whose === 'branch' ? [downline, own] : [own],
+        }),
+      });
+    });
+
+    return whoseAsked;
+  }
+
+  test('the reader’s own work is the default, and the branch view names whose each row is', async ({
+    page,
+  }) => {
+    await page.clock.setFixedTime(JUNE_20);
+    const whoseAsked = await mockQueue(page);
+
+    await page.goto('/dashboard');
+
+    await expect(page.getByRole('radio', { name: 'My own Cells' })).toBeChecked();
+    await expect(page.getByRole('link', { name: /^Record C-0007,/ })).toBeVisible();
+
+    await page.getByRole('radio', { name: 'People I oversee' }).check();
+
+    await expect.poll(() => whoseAsked).toContain('branch');
+    // A downline leader's meeting the reader may record names that leader and offers Record.
+    await expect(page.getByRole('link', { name: /^Record C-0021,/ })).toBeVisible();
+    await expect(page.getByText(/Ana Lim · 5 members · C-0021/)).toBeVisible();
+    // DCC stays the reader's own checklist; the branch view adds no Sunday rows (decision 0258).
+    await expect(page.getByText(/beneath you still owe/)).toHaveCount(0);
+  });
+
+  test('rows say how long a meeting has waited, in words and without colour', async ({ page }) => {
+    await page.clock.setFixedTime(JUNE_20);
+    await mockQueue(page);
+
+    await page.goto('/dashboard');
+
+    await expect(page.getByText('Young Pro · Saturdays 7:00 pm', { exact: true })).toBeVisible();
+    await expect(page.getByText('Awaiting a record · 7 days ago')).toBeVisible();
+  });
+
+  test('the filter says DCC, not Sundays', async ({ page }) => {
+    await page.clock.setFixedTime(JUNE_20);
+    await mockQueue(page);
+
+    await page.goto('/dashboard');
+
+    await expect(page.getByRole('radio', { name: 'DCC' })).toBeVisible();
+    await expect(page.getByRole('radio', { name: 'Sundays' })).toHaveCount(0);
+  });
+
+  test('the month’s cards sit beside the queue, each with last month’s figure', async ({
+    page,
+  }) => {
+    await page.clock.setFixedTime(JUNE_20);
+    await mockQueue(page);
+
+    await page.goto('/dashboard');
+
+    const cards = page.getByRole('complementary', { name: 'June so far' });
+    await expect(cards.getByRole('link', { name: /Cell meetings recorded\s*6 of 8\s*May: 6 of 8/ })).toBeVisible();
+    await expect(cards.getByRole('link', { name: /DCC records filed\s*12 of 18\s*May: 12 of 18/ })).toBeVisible();
+  });
+
+  test('DCC with My own Cells shows the reader’s own checklist across the month', async ({
+    page,
+  }) => {
+    await page.clock.setFixedTime(JUNE_20);
+    await mockQueue(page);
+
+    await page.goto('/dashboard');
+    await page.getByRole('radio', { name: 'DCC' }).check();
+
+    const grid = page.getByRole('table', { name: /Your DCC checklist by Sunday/ });
+    await expect(grid.getByRole('row', { name: /Rosalinda Ocampo/ })).toContainText('Present');
+    await expect(grid.getByRole('row', { name: /Bienvenido Trinidad/ })).toContainText(
+      'Not recorded yet',
+    );
+
+    await page.getByRole('radio', { name: 'People I oversee' }).check();
+    await expect(page.getByRole('table', { name: /Your DCC checklist by Sunday/ })).toHaveCount(0);
   });
 });

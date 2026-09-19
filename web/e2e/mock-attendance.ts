@@ -165,7 +165,22 @@ export interface AwaitingRow {
   scheduled_time: string;
   reporting_month: string;
   cell_closed_on: string | null;
+  day_of_week: number;
+  category: 'YOUTH' | 'YOUNG_PRO' | 'COUPLE' | null;
+  member_count: number;
+  leader: { id: string; full_name: string | null; is_actor: boolean };
+  may_record: boolean;
 }
+
+/** ISO weekday of a `YYYY-MM-DD` date, 1 = Monday. */
+function isoWeekday(date: string): number {
+  const day = new Date(`${date}T00:00:00Z`).getUTCDay();
+
+  return day === 0 ? 7 : day;
+}
+
+/** The queue's leader for a row that is the reader's own. */
+const OWN = { id: LEADER_ID, full_name: 'Teofilo Ramos', is_actor: true };
 
 /** A meeting of a Cell still `ACTIVE`, which is the ordinary row. */
 export function awaitingRow(date: string, month: string, time = '19:00'): AwaitingRow {
@@ -176,6 +191,11 @@ export function awaitingRow(date: string, month: string, time = '19:00'): Awaiti
     scheduled_time: time,
     reporting_month: month,
     cell_closed_on: null,
+    day_of_week: isoWeekday(date),
+    category: 'YOUNG_PRO',
+    member_count: 5,
+    leader: OWN,
+    may_record: true,
   };
 }
 
@@ -193,6 +213,11 @@ export function awaitingClosedRow(date: string, month: string, closedOn: string)
     scheduled_time: '19:00',
     reporting_month: month,
     cell_closed_on: closedOn,
+    day_of_week: isoWeekday(date),
+    category: 'YOUTH',
+    member_count: 4,
+    leader: OWN,
+    may_record: true,
   };
 }
 
@@ -225,14 +250,33 @@ export async function mockMeetingsAwaiting(
 
     if (byMonth === undefined) {
       const inMonth = (day: string) => `${month.slice(0, 8)}${day}`;
+      // The branch view (decision 0258) adds a downline leader's meeting the reader may record.
+      const branch =
+        new URL(route.request().url()).searchParams.get('whose') === 'branch';
 
       return route.fulfill(
         json({
           reporting_month: month,
           open: true,
+          whose: branch ? 'branch' : 'mine',
           meetings: [
             awaitingRow(inMonth('06'), month),
             awaitingClosedRow(inMonth('13'), month, inMonth('20')),
+            ...(branch
+              ? [
+                  {
+                    ...awaitingRow(inMonth('05'), month),
+                    cell_id: '3f1b7c6e-0000-4000-8000-000000000104',
+                    cell_code: 'C-0021',
+                    leader: {
+                      id: '3f1b7c6e-0000-4000-8000-000000000299',
+                      full_name: 'Ana Lim',
+                      is_actor: false,
+                    },
+                    may_record: true,
+                  },
+                ]
+              : []),
           ],
         }),
       );
@@ -244,6 +288,7 @@ export async function mockMeetingsAwaiting(
       json({
         reporting_month: month,
         open: answer?.open ?? answer !== undefined,
+        whose: 'mine',
         meetings: answer?.meetings ?? [],
       }),
     );

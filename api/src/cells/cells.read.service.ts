@@ -1283,7 +1283,7 @@ export class CellsReadService implements CellScopePort, CellRelationshipsPort {
    */
   async meetingsAwaitingFor(
     executor: Db | Transaction<Database>,
-    leaderPersonId: string,
+    leaderPersonIds: readonly string[],
     reportingMonth: string,
   ): Promise<
     {
@@ -1291,20 +1291,51 @@ export class CellsReadService implements CellScopePort, CellRelationshipsPort {
       cellCode: string;
       scheduledDate: string;
       scheduledTime: string;
+      dayOfWeek: number;
       cellClosedOn: string | null;
+      leaderPersonId: string;
+      category: string | null;
+      memberCount: number;
     }[]
   > {
+    if (leaderPersonIds.length === 0) {
+      return [];
+    }
+
+    const leaders = [...leaderPersonIds];
     const result = await sql<{
       cell_id: string;
       cell_code: string;
       scheduled_date: string;
       scheduled_time: string;
+      day_of_week: number;
       cell_closed_on: string | null;
+      leader_person_id: string;
+      category: string | null;
+      member_count: number;
     }>`
       SELECT cell.id AS cell_id,
              cell.cell_id AS cell_code,
              day::date AS scheduled_date,
              governing.time_of_day AS scheduled_time,
+             governing.day_of_week AS day_of_week,
+             leader.person_id AS leader_person_id,
+             (SELECT category.category::text
+                FROM cell_categories AS category
+               WHERE category.cell_id = cell.id
+                 AND (category.started_at AT TIME ZONE 'Asia/Manila')::date <= day
+                 AND (category.ended_at IS NULL
+                      OR (category.ended_at AT TIME ZONE 'Asia/Manila')::date >= day)
+               ORDER BY category.started_at DESC
+               LIMIT 1) AS category,
+             -- The roster's own rule (membersAsOfWithin), so the count is the roster the
+             -- meeting would be recorded against.
+             (SELECT count(*)::int
+                FROM cell_memberships AS membership
+               WHERE membership.cell_id = cell.id
+                 AND (membership.started_at AT TIME ZONE 'Asia/Manila')::date <= day
+                 AND (membership.ended_at IS NULL
+                      OR (membership.ended_at AT TIME ZONE 'Asia/Manila')::date >= day)) AS member_count,
              CASE
                WHEN cell.closed_at IS NULL THEN NULL
                ELSE to_char((cell.closed_at AT TIME ZONE 'Asia/Manila')::date, 'YYYY-MM-DD')
@@ -1342,7 +1373,7 @@ export class CellsReadService implements CellScopePort, CellRelationshipsPort {
                     held.ended_at DESC NULLS FIRST,
                     held.id DESC
            LIMIT 1
-        ) AS leader ON leader.person_id = ${leaderPersonId}
+        ) AS leader ON leader.person_id = ANY(${leaders}::uuid[])
        WHERE EXTRACT(ISODOW FROM day) = governing.day_of_week
          AND day::date <= (now() AT TIME ZONE 'Asia/Manila')::date
          -- Cells this person has ever led. Implied by the join above, which keeps a row
@@ -1358,7 +1389,7 @@ export class CellsReadService implements CellScopePort, CellRelationshipsPort {
                SELECT 1
                  FROM cell_leaderships AS ever
                 WHERE ever.cell_id = cell.id
-                  AND ever.person_id = ${leaderPersonId}
+                  AND ever.person_id = ANY(${leaders}::uuid[])
              )
        ORDER BY day, cell.id
     `.execute(executor);
@@ -1368,7 +1399,11 @@ export class CellsReadService implements CellScopePort, CellRelationshipsPort {
       cellCode: row.cell_code,
       scheduledDate: String(row.scheduled_date),
       scheduledTime: row.scheduled_time,
+      dayOfWeek: Number(row.day_of_week),
       cellClosedOn: row.cell_closed_on,
+      leaderPersonId: row.leader_person_id,
+      category: row.category,
+      memberCount: Number(row.member_count),
     }));
   }
 

@@ -62,9 +62,18 @@ export interface AwaitingMeeting {
   cell_code: string;
   scheduled_date: string;
   scheduled_time: string;
+  /** ISO weekday of the schedule the meeting falls under, 1 = Monday. */
+  day_of_week: number;
   reporting_month: string;
   /** Null while the Cell is `ACTIVE`; a Manila date once it has closed. */
   cell_closed_on: string | null;
+  category: CellCategory | null;
+  /** Members on the scheduled date, by the rule the meeting's roster uses. */
+  member_count: number;
+  /** The leader who files it (decision 0251), named for the branch view (decision 0258). */
+  leader: { id: string; full_name: string | null; is_actor: boolean };
+  /** Whether this actor may record it: their own, or on the leader's behalf (§14). */
+  may_record: boolean;
 }
 
 export interface AwaitingMeetings {
@@ -84,6 +93,7 @@ export interface AwaitingMeetings {
    * window is decided.
    */
   open: boolean;
+  whose: 'mine' | 'branch';
   meetings: AwaitingMeeting[];
 }
 
@@ -240,8 +250,9 @@ export interface PersonWithoutACell {
 export async function listMeetingsAwaiting(
   month: string,
   signal?: AbortSignal,
+  whose: 'mine' | 'branch' = 'mine',
 ): Promise<AwaitingMeetings> {
-  const query = new URLSearchParams({ month });
+  const query = new URLSearchParams({ month, whose });
 
   return authenticatedRequest<AwaitingMeetings>(
     `/api/v1/cells/meetings/awaiting?${query.toString()}`,
