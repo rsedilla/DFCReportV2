@@ -334,6 +334,32 @@ export class DccCoverageService {
     scope: DccCoverageScope,
     options: { executor?: Db } = {},
   ): Promise<Coverage> {
+    let met = 0;
+    let owed = 0;
+
+    // The line is the sum of the per-leader rows, so the two cannot disagree (decision 0254).
+    for (const line of (
+      await this.monthCoverageByLeader(reportingMonth, scope, options)
+    ).values()) {
+      met += line.met;
+      owed += line.owed;
+    }
+
+    return { met, owed };
+  }
+
+  /**
+   * The same month's coverage, one line per responsible leader (decision 0254).
+   *
+   * **Each line counts that leader's own obligations and no one else's**: one per event
+   * they held a pastoral edge at, met where a live record names them. An obligation has
+   * one owner, so the lines sum to {@link monthCoverage} — which is computed from them.
+   */
+  async monthCoverageByLeader(
+    reportingMonth: string,
+    scope: DccCoverageScope,
+    options: { executor?: Db } = {},
+  ): Promise<Map<string, Coverage>> {
     assertReportingMonth(reportingMonth);
 
     const executor = options.executor ?? this.db;
@@ -347,8 +373,7 @@ export class DccCoverageService {
       .orderBy('event_date')
       .execute();
 
-    let met = 0;
-    let owed = 0;
+    const lines = new Map<string, Coverage>();
 
     for (const row of rows) {
       const event = this.describe(String(row.event_date), row, now);
@@ -357,17 +382,24 @@ export class DccCoverageService {
         continue;
       }
 
-      const coverage = await this.coverageOf(
+      const { owed, owing } = await this.obligations(
         executor,
         event,
         await this.leadersAt(executor, scope, event.at),
       );
 
-      met += coverage.met;
-      owed += coverage.owed;
+      for (const leaderId of owed) {
+        const key = canonicalId(leaderId);
+        const line = lines.get(key) ?? { met: 0, owed: 0 };
+        line.owed += 1;
+        if (!owing.has(leaderId)) {
+          line.met += 1;
+        }
+        lines.set(key, line);
+      }
     }
 
-    return { met, owed };
+    return lines;
   }
 
   /**

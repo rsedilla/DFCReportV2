@@ -32,6 +32,7 @@ import {
   mockPastoralPathAtRoot,
   mockNetworkTree,
   mockNetworkReader,
+  mockCoverageByLeader,
   mockCellMembersEmpty,
   mockCellReport,
   mockCellReportForOneCell,
@@ -771,6 +772,39 @@ const SCANS = [
     },
   },
   {
+    // The By leader table (decision 0254): the reader first, one other leader, the unnamed
+    // line and the total, reached by the switch beside By Sunday.
+    name: 'dcc figures report, by leader',
+    route: '/reports/dcc',
+    async before(page: import('@playwright/test').Page) {
+      await mockSignedIn(page);
+      await mockDccReport(page);
+      await mockDccEvents(page);
+      await mockCoverageByLeader(page);
+    },
+    async arrange(page: import('@playwright/test').Page) {
+      await page.getByText('By leader', { exact: true }).click();
+      await expect(page.getByRole('link', { name: 'Consuelo Bautista' })).toBeVisible();
+      await expect(page.getByText('Leaders outside your reach')).toBeVisible();
+    },
+  },
+  {
+    // One leader opened from that table: the switch is gone, the table shows their branch,
+    // and a link returns to the reader's own report.
+    name: 'cell attendance report, one leader',
+    route: '/reports/cells?month=2026-06-01&leader=3f1b7c6e-0000-4000-8000-000000000701',
+    async before(page: import('@playwright/test').Page) {
+      await mockSignedIn(page);
+      await mockCells(page);
+      await mockCellReport(page);
+      await mockCoverageByLeader(page);
+    },
+    async arrange(page: import('@playwright/test').Page) {
+      await expect(page.getByRole('link', { name: 'Back to your report' })).toBeVisible();
+      await expect(page.getByText('Report coverage')).toBeVisible();
+    },
+  },
+  {
     // The removed Sunday is named, because section 9 requires a removal to be
     // explained rather than left as a smaller number.
     name: 'dcc figures report',
@@ -1052,6 +1086,15 @@ const TARGET_SWEEP = [
     minimum: 10,
   },
   {
+    // The Reports switch, How these are counted, two month controls and the Back link, at
+    // least; the leader links below them vary with the mock.
+    name: 'cell attendance report, one leader',
+    route: '/reports/cells?month=2026-06-01&leader=3f1b7c6e-0000-4000-8000-000000000701',
+    settleRole: 'link' as const,
+    settle: 'Back to your report',
+    minimum: 6,
+  },
+  {
     // The two links of the Reports switch, How these are counted and two month controls,
     // then Coverage by Sunday:
     // four Sunday links and the one "who still has to record" link, in the table and the
@@ -1086,6 +1129,13 @@ const TARGET_SWEEP = [
  * prevent one list over.
  */
 const TARGET_EXEMPT: { name: string; why: string }[] = [
+  {
+    name: 'dcc figures report, by leader',
+    why:
+      'Reached by clicking the By leader switch, which this sweep cannot do. Its controls are a ' +
+      'text link per leader (min-h-6, measured on other screens), the switch labels (min-h-11) ' +
+      'and the secondary Button primitive for paging.',
+  },
   {
     name: 'person profile, moving to another cell',
     why:
@@ -1287,6 +1337,7 @@ test('every interactive target meets the 24px minimum', async ({ page }) => {
   await mockNetworkTree(page);
   await mockAwaitingReassignment(page);
   await mockPeopleWithoutACell(page);
+  await mockCoverageByLeader(page);
 
   for (const entry of TARGET_SWEEP) {
     const { route, settle, minimum } = entry;

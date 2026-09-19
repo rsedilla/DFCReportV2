@@ -2,13 +2,26 @@ import { Controller, Get, Query } from '@nestjs/common';
 
 import { RequiresCapability } from '../auth/authorization/authorization.decorators';
 import { Capability } from '../auth/authorization/capabilities';
-import { ValidationFailedError } from '../common/errors/api-error';
+import { type Actor, AuthorizationService } from '../auth/authorization/authorization.service';
+import { CurrentActor } from '../auth/current-actor.decorator';
+import { NotFoundError, ValidationFailedError } from '../common/errors/api-error';
+import { canonicalId } from '../common/identifiers';
+import { decodeRosterCursor, encodeRosterCursor, type RosterCursor } from '../common/roster-cursor';
+import { reportingPeriodBounds } from '../common/time/reporting-period';
+import { CellsReadService } from '../cells/cells.read.service';
+import { PeopleReadService } from '../people/people.read.service';
 
-import { CellMonthlyReportDto, DccMonthlyReportDto } from './dto/reporting.dto';
+import {
+  CellByLeaderDto,
+  CellMonthlyReportDto,
+  DccByLeaderDto,
+  DccMonthlyReportDto,
+} from './dto/reporting.dto';
 import {
   ReportingService,
   type CellMonthlyReport,
   type CellReportScope,
+  type CoverageByLeader,
   type DccMonthlyReport,
   type DccReportScope,
 } from './reporting.service';
@@ -31,8 +44,7 @@ import {
  * answering on a spelling" — and while nothing here compares one, the next route to echo a
  * selector back would inherit the spelling.
  *
- * No client existed to break: the screens are unbuilt, and both routes are waived in
- * `web/screen-coverage.json`.
+ * No client existed to break.
  *
  * **`reports.view_subtree` guards everything here, and never substitutes for
  * `dcc.view_subtree` or `cell.view_subtree`** — section 7 states that in both directions.
@@ -51,7 +63,12 @@ import {
  */
 @Controller('reports')
 export class ReportingController {
-  constructor(private readonly reporting: ReportingService) {}
+  constructor(
+    private readonly reporting: ReportingService,
+    private readonly authorization: AuthorizationService,
+    private readonly people: PeopleReadService,
+    private readonly cells: CellsReadService,
+  ) {}
 
   /**
    * DCC classification and monthly-attendance buckets for a month (sections 9, 12, 20).
@@ -69,7 +86,10 @@ export class ReportingController {
     periodFrom: 'query.period',
   })
   async dccMonthly(@Query() query: DccMonthlyReportDto): Promise<DccMonthlyReport> {
-    return this.reporting.dccMonthly(scopeOf(query), query.period);
+    const scope = scopeOf(query);
+    await this.assertNamesSomebody(scope);
+
+    return this.reporting.dccMonthly(scope, query.period);
   }
 
   /**
@@ -107,8 +127,196 @@ export class ReportingController {
     periodFrom: 'query.period',
   })
   async cellsMonthly(@Query() query: CellMonthlyReportDto): Promise<CellMonthlyReport> {
-    return this.reporting.cellMonthly(cellScopeOf(query), query.period);
+    const scope = cellScopeOf(query);
+    await this.assertNamesSomebody(scope);
+
+    return this.reporting.cellMonthly(scope, query.period);
   }
+
+  /**
+   * `GET /api/v1/reports/dcc/monthly/by-leader` -- the DCC report's coverage line, one row per
+   * leader who owns an obligation in it (SKILL.md section 17, decision 0254).
+   *
+   * **The same guard as the report it breaks down**, on the same selector and period, so a
+   * reader who may not read the report may not read its rows. Each row counts that leader's
+   * own obligations, so the rows and the unnamed line add up to the report's coverage.
+   */
+  @Get('dcc/monthly/by-leader')
+  @RequiresCapability(Capability.ReportsViewSubtree, {
+    kind: 'report_scope',
+    scopeFrom: 'query.scope',
+    leaderFrom: 'query.leader_id',
+    networkFrom: 'query.network',
+    periodFrom: 'query.period',
+  })
+  async dccByLeader(
+    @Query() query: DccByLeaderDto,
+    @CurrentActor() actor: Actor,
+  ): Promise<Record<string, unknown>> {
+    const scope = scopeOf(query);
+    await this.assertNamesSomebody(scope);
+    const coverage = await this.reporting.dccCoverageByLeader(scope, query.period);
+
+    return this.byLeader(coverage, actor, query);
+  }
+
+  /**
+   * `GET /api/v1/reports/cells/monthly/by-leader` -- the Cell report's coverage line, one row
+   * per leader who led a scheduled meeting's Cell on its date (decision 0254, section 20).
+   */
+  @Get('cells/monthly/by-leader')
+  @RequiresCapability(Capability.ReportsViewSubtree, {
+    kind: 'report_scope',
+    scopeFrom: 'query.scope',
+    leaderFrom: 'query.leader_id',
+    cellFrom: 'query.cell_id',
+    periodFrom: 'query.period',
+  })
+  async cellsByLeader(
+    @Query() query: CellByLeaderDto,
+    @CurrentActor() actor: Actor,
+  ): Promise<Record<string, unknown>> {
+    const scope = cellScopeOf(query);
+    await this.assertNamesSomebody(scope);
+    const coverage = await this.reporting.cellCoverageByLeader(scope, query.period);
+
+    return this.byLeader(coverage, actor, query);
+  }
+
+  /**
+   * A selector naming nobody answers `NOT_FOUND` (decision 0253), checked after the guard so
+   * a narrower grant is refused whether or not the identifier names anybody.
+   */
+  private async assertNamesSomebody(scope: DccReportScope | CellReportScope): Promise<void> {
+    if (scope.kind === 'LEADER' && (await this.people.findById(scope.person_id)) === null) {
+      throw new NotFoundError('No such person.');
+    }
+
+    if (scope.kind === 'CELL' && !(await this.cells.exists(scope.cell_id))) {
+      throw new NotFoundError('No such Cell.');
+    }
+  }
+
+  /**
+   * Names the rows and pages them (decision 0254).
+   *
+   * **A row is named exactly when the guard would admit that leader as a `LEADER` selector
+   * at the period's final millisecond**, asked of `authorization` on the pooled connection
+   * after the report's transaction has closed -- section 24 forbids measuring reach against
+   * the snapshot a report is computed from. Every other line is added into one line that
+   * names nobody, does not open, and is null when it counts nothing. A meeting with no owner
+   * (`leaderId` null) can only be counted there.
+   *
+   * **The reader's own row comes first, then the rest by name** on the shared roster key.
+   * The reader's row is on the first page only; the cursor pages the rest. The total is the
+   * report's coverage, on every page.
+   */
+  private async byLeader(
+    coverage: CoverageByLeader,
+    actor: Actor,
+    page: { period: string; limit?: number; cursor?: string },
+  ): Promise<Record<string, unknown>> {
+    const owned = coverage.lines.flatMap((line) =>
+      line.leaderId === null
+        ? []
+        : [{ leaderId: line.leaderId, filed: line.filed, owed: line.owed }],
+    );
+    const at = reportingPeriodBounds(page.period).end;
+    const admitted = await this.authorization.coversEach(
+      actor,
+      Capability.ReportsViewSubtree,
+      owned.map((line) => ({
+        kind: 'report_scope' as const,
+        selector: { kind: 'LEADER' as const, personId: line.leaderId },
+        at,
+      })),
+    );
+
+    const named = owned.filter((_, index) => admitted[index]);
+    const identities = await this.people.forDecisions(named.map((line) => line.leaderId));
+
+    const total = { filed: 0, owed: 0 };
+    for (const line of coverage.lines) {
+      total.filed += line.filed;
+      total.owed += line.owed;
+    }
+
+    const rows = named.flatMap((line) => {
+      const identity = identities.get(line.leaderId);
+
+      return identity === undefined
+        ? []
+        : [
+            {
+              key: keyOf(identity),
+              isReader: canonicalId(line.leaderId) === canonicalId(actor.personId),
+              row: {
+                leader: {
+                  id: line.leaderId,
+                  member_id: identity.memberId,
+                  full_name: identity.fullName,
+                },
+                filed: line.filed,
+                owed: line.owed,
+              },
+            },
+          ];
+    });
+
+    // Everything not shown as a named row, so the rows and this line add up to the total.
+    const shown = rows.reduce(
+      (sum, entry) => ({ filed: sum.filed + entry.row.filed, owed: sum.owed + entry.row.owed }),
+      { filed: 0, owed: 0 },
+    );
+    const others = { filed: total.filed - shown.filed, owed: total.owed - shown.owed };
+
+    const reader = rows.find((entry) => entry.isReader);
+    const rest = rows
+      .filter((entry) => !entry.isReader)
+      .sort((left, right) => compareKeys(left.key, right.key));
+
+    const after = decodeRosterCursor(page.cursor);
+    const limit = page.limit ?? 50;
+    const beyond =
+      after === null ? 0 : rest.findIndex((entry) => compareKeys(entry.key, after) > 0);
+    const start = beyond === -1 ? rest.length : beyond;
+    const first = after === null && reader !== undefined;
+    // The reader's row takes a place on the first page, so every page holds `limit` rows.
+    const room = first ? limit - 1 : limit;
+    const window = rest.slice(start, start + room);
+    const last = window[window.length - 1];
+    // Where the reader's row fills the first page, the cursor sorts before every other row.
+    const resume = last?.key ?? (first ? BEFORE_EVERY_KEY : undefined);
+
+    return {
+      period: page.period,
+      open: coverage.open,
+      data: [...(first ? [reader] : []), ...window].map((entry) => entry.row),
+      others: others.filed === 0 && others.owed === 0 ? null : others,
+      total,
+      next_cursor:
+        start + room < rest.length && resume !== undefined ? encodeRosterCursor(resume) : null,
+    };
+  }
+}
+
+const BEFORE_EVERY_KEY: RosterCursor = { lastName: '', firstName: '', memberId: '' };
+
+function keyOf(identity: { lastName: string; firstName: string; memberId: string }): RosterCursor {
+  return {
+    lastName: identity.lastName,
+    firstName: identity.firstName,
+    memberId: identity.memberId,
+  };
+}
+
+/** The roster order: last name, first name, Member ID, so the sort and the cursor agree. */
+function compareKeys(left: RosterCursor, right: RosterCursor): number {
+  return (
+    left.lastName.localeCompare(right.lastName) ||
+    left.firstName.localeCompare(right.firstName) ||
+    left.memberId.localeCompare(right.memberId)
+  );
 }
 
 /**

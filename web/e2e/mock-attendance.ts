@@ -790,3 +790,39 @@ export async function mockNetworkReader(page: Page): Promise<void> {
     ),
   );
 }
+
+/**
+ * A report's coverage by leader, for either report (decision 0254). Two named rows — the
+ * reader first — and the unnamed line, adding up to the total. Invented names.
+ */
+export async function mockCoverageByLeader(page: Page): Promise<void> {
+  const body = {
+    period: '2026-06-01',
+    open: true,
+    data: [
+      {
+        leader: {
+          id: '9a1b2c3d-4e5f-4061-8273-8495a6b7c8d9',
+          member_id: 'M-000042',
+          full_name: 'Marilou Reyes Santos',
+        },
+        filed: 4,
+        owed: 4,
+      },
+      {
+        leader: {
+          id: '3f1b7c6e-0000-4000-8000-000000000701',
+          member_id: 'M-000801',
+          full_name: 'Consuelo Bautista',
+        },
+        filed: 5,
+        owed: 8,
+      },
+    ],
+    others: { filed: 3, owed: 6 },
+    total: { filed: 12, owed: 18 },
+    next_cursor: null,
+  };
+
+  await page.route('**/api/v1/reports/*/monthly/by-leader*', (route) => route.fulfill(json(body)));
+}

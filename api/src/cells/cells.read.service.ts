@@ -408,6 +408,11 @@ export class CellsReadService implements CellScopePort, CellRelationshipsPort {
     }));
   }
 
+  /** Whether a Cell exists, for a caller holding no connection of its own. */
+  async exists(cellId: string): Promise<boolean> {
+    return (await this.cellById(this.db, cellId)) !== null;
+  }
+
   /**
    * A Cell's identity and lifecycle, or null where no such Cell exists.
    *

@@ -74,6 +74,12 @@ describe('storable text is refused at the edge, on every field that takes text',
    * lone surrogate, so no forged key reaches a comparison. A first version carried
    * `@IsStorableText()` on the encoded string instead and cited `SearchPeopleDto.q`, which
    * is the wrong precedent: `q` reaches the database as sent and this does not.*
+   *
+   * *The two added with decision 0254 were checked the same way. `DccByLeaderDto.cursor` and
+   * `CellByLeaderDto.cursor` are decoded by `decodeRosterCursor`, which accepts a decoded
+   * `lastName`, `firstName` and `memberId` only where `isStorableText` holds of each, and
+   * refuses anything else as unresolvable. The keys are compared in memory by the
+   * controller and never reach the database at all.*
    */
   const NEVER_STORED = new Set([
     'CellIndexDto.cursor',
@@ -86,6 +92,8 @@ describe('storable text is refused at the edge, on every field that takes text',
     'CellMembersDto.cursor',
     'SearchPeopleDto.cursor',
     'AwaitingReassignmentDto.cursor',
+    'DccByLeaderDto.cursor',
+    'CellByLeaderDto.cursor',
     'RefreshDto.refresh_token',
     'LogoutDto.refresh_token',
     'LoginDto.password',
