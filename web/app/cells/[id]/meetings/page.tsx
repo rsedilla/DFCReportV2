@@ -13,7 +13,15 @@ import { Button, buttonClasses } from '@/components/ui/button';
 import { FailureNotice } from '@/components/ui/failure-notice';
 import { HeaderCell, Table, rowClasses } from '@/components/ui/table';
 import { Tag } from '@/components/ui/tag';
-import { listCellMeetings, meetingStateLabel, type ScheduledMeeting } from '@/lib/cells';
+import {
+  categoryLabel,
+  dayOfWeekLabel,
+  listCellMeetings,
+  meetingStateLabel,
+  timeLabel,
+  type CellMeetings,
+  type ScheduledMeeting,
+} from '@/lib/cells';
 import { describeFailure } from '@/lib/messages';
 import { dayLabel, monthLabel, reportingMonthOf, todayInManila } from '@/lib/reporting-month';
 
@@ -77,8 +85,11 @@ function CellMeetings() {
       </p>
 
       <h1 className="text-2xl font-semibold tracking-tight">
-        {handle ? `Cell ${handle}` : 'Cell meetings'}
+        {meetings.data ? cellTitle(meetings.data) : 'Cell meetings'}
       </h1>
+      {meetings.data ? (
+        <p className="text-muted mt-1 text-sm">{cellSubtitle(meetings.data)}</p>
+      ) : null}
       <p className="text-muted mt-2 max-w-2xl text-sm leading-relaxed">
         Every meeting this Cell was scheduled to hold this month, and what was recorded for
         it. A meeting with no record yet is work outstanding rather than a meeting that did
@@ -152,12 +163,12 @@ function CellMeetings() {
                       <td className="px-3 py-3 align-top">
                         <Link
                           href={`/cells/${params.id}/meetings/${entry.scheduled_date}`}
-                          className={`${LINK} font-medium`}
+                          className={`${LINK} text-accent font-medium`}
                         >
                           {dayLabel(entry.scheduled_date)}
                         </Link>
                       </td>
-                      <td className="px-3 py-3 align-top">{entry.scheduled_time}</td>
+                      <td className="px-3 py-3 align-top">{timeLabel(entry.scheduled_time)}</td>
                       <td className="px-3 py-3 align-top">
                         <MeetingState entry={entry} today={today} />
                         <MeetingDetail entry={entry} />
@@ -174,11 +185,14 @@ function CellMeetings() {
                       <h2 className="text-base font-medium">
                         <Link
                           href={`/cells/${params.id}/meetings/${entry.scheduled_date}`}
-                          className={LINK}
+                          className={`${LINK} text-accent`}
                         >
                           {dayLabel(entry.scheduled_date)}
                         </Link>
-                        <span className="text-muted font-normal"> at {entry.scheduled_time}</span>
+                        <span className="text-muted font-normal">
+                          {' '}
+                          at {timeLabel(entry.scheduled_time)}
+                        </span>
                       </h2>
                       <MeetingState entry={entry} today={today} />
                     </div>
@@ -228,4 +242,38 @@ function MeetingDetail({ entry }: { entry: ScheduledMeeting }) {
       ) : null}
     </>
   );
+}
+
+/**
+ * "Young Pro · Fridays 7:30 pm", the owner's design's way of naming a Cell, as the Cell
+ * stands today (each meeting row carries its own time); the Cell ID where there is no
+ * category or schedule to name.
+ */
+function cellTitle(data: CellMeetings): string {
+  if (data.category == null || data.day_of_week == null || data.scheduled_time == null) {
+    return `Cell ${data.cell_id}`;
+  }
+
+  return `${categoryLabel(data.category)} · ${dayOfWeekLabel(data.day_of_week)}s ${timeLabel(
+    data.scheduled_time,
+  )}`;
+}
+
+/** "C-0007 · led by Ana Reyes · 6 members", or when it closed in place of the count. */
+function cellSubtitle(data: CellMeetings): string {
+  const parts = [data.cell_id];
+
+  if (data.leader?.full_name) {
+    parts.push(`led by ${data.leader.full_name}`);
+  }
+
+  parts.push(
+    data.cell_closed_on != null
+      ? `closed on ${dayLabel(data.cell_closed_on)}`
+      : data.member_count === 1
+        ? '1 member'
+        : `${data.member_count} members`,
+  );
+
+  return parts.join(' · ');
 }

@@ -130,6 +130,13 @@ export interface ScheduledMeeting {
 
 export interface CellMeetings {
   cell_id: string;
+  /** How the page names the Cell, as it stands today (owner's choice of 2026-09-19). */
+  category: CellCategory | null;
+  day_of_week: number | null;
+  scheduled_time: string | null;
+  leader: { id: string; full_name: string | null } | null;
+  member_count: number;
+  cell_closed_on: string | null;
   reporting_month: string;
   scheduled_count: number;
   recorded_count: number;
@@ -149,6 +156,14 @@ const DAY_NAMES = [
 /** ISO 8601 weekday, 1 Monday through 7 Sunday (section 20). */
 export function dayOfWeekLabel(day: number): string {
   return DAY_NAMES[day - 1] ?? 'Unknown';
+}
+
+/** `19:00` or `19:00:00` as `7:00 pm`, the way a meeting time is said aloud. */
+export function timeLabel(time: string): string {
+  const [hours = 0, minutes = 0] = time.split(':').map(Number);
+  const hour = ((hours + 11) % 12) + 1;
+
+  return `${hour}:${String(minutes).padStart(2, '0')} ${hours >= 12 ? 'pm' : 'am'}`;
 }
 
 export function categoryLabel(category: CellCategory): string {

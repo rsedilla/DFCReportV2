@@ -270,11 +270,10 @@ function RecordMeeting() {
       </p>
 
       {/*
-        **The date is red, and on the two recording screens only** (owner's choice of
-        2026-09-15). It is the thing a leader must get right before marking anybody, so
-        the accent is doing a job here; every other page heading stays `ink`, which keeps
-        red meaningful. A date is not a meeting status, a coverage figure or a leader,
-        which is all sections 13, 17 and 19 forbid encoding in colour.
+        **The date is red** (owner's choices of 2026-09-15 and 2026-09-19, dates in the
+        accent). It is the thing a leader must get right before marking anybody. A date
+        is not a meeting status, a coverage figure or a leader, which is all sections
+        13, 17 and 19 forbid encoding in colour.
       */}
       <h1 className="text-accent text-2xl font-bold tracking-tight">{dayLabel(params.date)}</h1>
       {roster.data ? <p className="text-muted mt-1 text-sm">Cell {roster.data.cell_id}</p> : null}

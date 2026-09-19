@@ -14,6 +14,7 @@ import { HeaderCell, Table, rowClasses } from '@/components/ui/table';
 import {
   categoryLabel,
   dayOfWeekLabel,
+  timeLabel,
   listCells,
   listMeetingsAwaiting,
   type CellCategory,
@@ -775,14 +776,6 @@ function dateParts(date: string): { day: number; weekday: string } {
     day: at.getUTCDate(),
     weekday: at.toLocaleDateString('en-GB', { weekday: 'short', timeZone: 'UTC' }),
   };
-}
-
-/** `19:00` or `19:00:00` as `7:00 pm`, the way a meeting time is said aloud. */
-function timeLabel(time: string): string {
-  const [hours = 0, minutes = 0] = time.split(':').map(Number);
-  const hour = ((hours + 11) % 12) + 1;
-
-  return `${hour}:${String(minutes).padStart(2, '0')} ${hours >= 12 ? 'pm' : 'am'}`;
 }
 
 /**

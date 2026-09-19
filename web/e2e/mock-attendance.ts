@@ -77,6 +77,12 @@ export async function mockCellMeetings(page: Page): Promise<void> {
     route.fulfill(
       json({
         cell_id: 'C-0007',
+        category: 'YOUTH',
+        day_of_week: 6,
+        scheduled_time: '19:00',
+        leader: { id: LEADER_ID, full_name: 'Teofilo Ramos' },
+        member_count: 6,
+        cell_closed_on: null,
         reporting_month: '2026-06-01',
         scheduled_count: 4,
         recorded_count: 3,

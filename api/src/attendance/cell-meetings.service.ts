@@ -20,7 +20,7 @@ import {
 import { DATABASE, type Db } from '../database/database.module';
 
 import { databaseNow, isMonthOpen, reportingMonthOf } from '../common/time/submission-window';
-import { startOfManilaDay } from '../common/time/manila';
+import { manilaDayOf, startOfManilaDay } from '../common/time/manila';
 
 import { AccountsRepository } from '../auth/accounts.repository';
 import { PeopleReadService } from '../people/people.read.service';
@@ -633,6 +633,12 @@ export class CellMeetingsService implements RecordedMeetingsPort {
 
     const scheduled = await this.cells.scheduledMeetingsIn(this.db, cellId, reportingMonth);
     const recorded = await this.recordedIn(cellId, reportingMonth);
+    const heading = await this.cells.cellHeadingWithin(this.db, cellId);
+    const leaderName =
+      heading.leaderPersonId === null
+        ? null
+        : ((await this.people.forDecisions([heading.leaderPersonId])).get(heading.leaderPersonId)
+            ?.fullName ?? null);
 
     const meetings = scheduled.map((entry) => {
       const row = recorded.get(entry.scheduledDate) ?? null;
@@ -649,6 +655,16 @@ export class CellMeetingsService implements RecordedMeetingsPort {
 
     return {
       cell_id: cell.cellId,
+      // How the page names the Cell, as it stands today (owner's choice of 2026-09-19).
+      category: heading.category,
+      day_of_week: heading.dayOfWeek,
+      scheduled_time: heading.scheduledTime,
+      leader:
+        heading.leaderPersonId === null
+          ? null
+          : { id: heading.leaderPersonId, full_name: leaderName },
+      member_count: heading.memberCount,
+      cell_closed_on: cell.closedAt === null ? null : manilaDayOf(cell.closedAt),
       reporting_month: reportingMonth,
       // Section 12's coverage line, as two figures arrived at two ways. `Coverage =
       // Total Meetings / Scheduled`, reported as `recorded out of scheduled` rather

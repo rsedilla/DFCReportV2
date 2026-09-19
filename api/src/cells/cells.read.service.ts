@@ -449,6 +449,66 @@ export class CellsReadService implements CellScopePort, CellRelationshipsPort {
       : null;
   }
 
+  /**
+   * How a Cell is named on its own page, as it stands today (owner's choice of 2026-09-19):
+   * its category, schedule and leader now, or the last of each where the Cell is closed,
+   * and how many members it has now. A heading rather than a figure — each meeting row
+   * carries its own time, and no count here is reported for a period.
+   */
+  async cellHeadingWithin(
+    executor: Db | Transaction<Database>,
+    cellId: string,
+  ): Promise<{
+    category: string | null;
+    dayOfWeek: number | null;
+    scheduledTime: string | null;
+    leaderPersonId: string | null;
+    memberCount: number;
+  }> {
+    const result = await sql<{
+      category: string | null;
+      day_of_week: number | null;
+      scheduled_time: string | null;
+      member_count: number;
+    }>`
+      SELECT (SELECT category.category::text
+                FROM cell_categories AS category
+               WHERE category.cell_id = ${cellId}
+                 AND category.ended_at IS DISTINCT FROM category.started_at
+                 AND category.started_at <= now()
+               ORDER BY category.started_at DESC, category.ended_at DESC NULLS FIRST
+               LIMIT 1) AS category,
+             schedule.day_of_week,
+             schedule.scheduled_time,
+             (SELECT count(*)::int
+                FROM cell_memberships AS membership
+               WHERE membership.cell_id = ${cellId}
+                 AND membership.ended_at IS NULL) AS member_count
+        FROM (SELECT 1) AS one
+        LEFT JOIN LATERAL (
+          SELECT governing.day_of_week,
+                 to_char(governing.time_of_day, 'HH24:MI') AS scheduled_time
+            FROM cell_schedules AS governing
+           WHERE governing.cell_id = ${cellId}
+             AND governing.ended_at IS DISTINCT FROM governing.started_at
+             AND governing.started_at <= now()
+           ORDER BY governing.started_at DESC,
+                    governing.ended_at DESC NULLS FIRST,
+                    governing.id DESC
+           LIMIT 1
+        ) AS schedule ON true
+    `.execute(executor);
+    const row = result.rows[0];
+
+    return {
+      category: row?.category ?? null,
+      dayOfWeek: row?.day_of_week === null || row === undefined ? null : Number(row.day_of_week),
+      scheduledTime: row?.scheduled_time ?? null,
+      leaderPersonId: await this.leaderForScopeWithin(executor, cellId),
+      memberCount: Number(row?.member_count ?? 0),
+    };
+  }
+
   async leaderForScopeWithin(
     executor: Db | Transaction<Database>,
     cellId: string,

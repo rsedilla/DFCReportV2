@@ -366,7 +366,7 @@ const SCANS = [
       await mockCellMeetings(page);
     },
     async arrange(page: import('@playwright/test').Page) {
-      await expect(page.getByRole('heading', { name: 'Cell C-0007' })).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'Youth · Saturdays 7:00 pm' })).toBeVisible();
       // Filtered to what is visible: the rows render as a table from `lg` and as cards
       // below it, so each word is in the page twice and one copy is hidden.
       await expect(page.getByText('Awaiting a record').filter({ visible: true })).toBeVisible();
@@ -386,7 +386,7 @@ const SCANS = [
       await mockCellMeetings(page);
     },
     async arrange(page: import('@playwright/test').Page) {
-      await expect(page.getByRole('heading', { name: 'Cell C-0007' })).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'Youth · Saturdays 7:00 pm' })).toBeVisible();
       await page.getByRole('button', { name: 'Change when it meets' }).click();
       const dialog = page.getByRole('dialog', { name: 'Change when C-0007 meets' });
       await expect(dialog.getByRole('radio', { name: 'Wednesday' })).toBeVisible();
@@ -1030,7 +1030,7 @@ const TARGET_SWEEP = [
     name: 'cell meetings',
     route: '/cells/3f1b7c6e-0000-4000-8000-000000000101/meetings',
     settleRole: 'heading' as const,
-    settle: 'Cell C-0007',
+    settle: 'Youth · Saturdays 7:00 pm',
     // The back link, Members, Change when it meets, the two month controls, and a link
     // per meeting across the fixture's four.
     minimum: 9,
@@ -1765,7 +1765,7 @@ test('a Cell meeting screen marks Record as the current page, not Cells', async 
   await mockCellMeetings(page);
 
   await page.goto('/cells/3f1b7c6e-0000-4000-8000-000000000101/meetings');
-  await expect(page.getByRole('heading', { name: 'Cell C-0007' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Youth · Saturdays 7:00 pm' })).toBeVisible();
 
   const navigation = page.getByRole('navigation', { name: 'Main' });
   const current = navigation.locator('a[aria-current="page"]');

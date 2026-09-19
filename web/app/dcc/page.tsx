@@ -13,6 +13,7 @@ import {
   listCells,
   listMeetingsAwaiting,
   meetingStateLabel,
+  timeLabel,
 } from '@/lib/cells';
 import { getWholeDccRoster, listDccEvents } from '@/lib/dcc';
 import { describeFailure } from '@/lib/messages';
@@ -43,13 +44,6 @@ interface DayItem {
   label: string;
   state: string;
   href: string | null;
-}
-
-function timeLabel(time: string): string {
-  const [hours, minutes] = time.split(':').map(Number);
-  const hour = hours % 12 === 0 ? 12 : hours % 12;
-
-  return `${hour}:${String(minutes).padStart(2, '0')} ${hours >= 12 ? 'pm' : 'am'}`;
 }
 
 function YourMonth() {
