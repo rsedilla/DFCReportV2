@@ -58,6 +58,36 @@ import { CellMeetingsQueryDto } from './dto/cell-meetings.dto';
 export class CellMeetingsController {
   constructor(private readonly meetings: CellMeetingsService) {}
 
+  /**
+   * Section 19's recording queue: what this actor owes a record for (ruling of
+   * 2026-09-17).
+   *
+   * **Declared before the parameterised routes as a habit, and nothing today rests on
+   * it.** `:id/meetings` is a parameter followed by the literal `meetings`, so it can
+   * only match a path whose *second* segment is that word; this route's second segment
+   * is `awaiting`, and no other pattern here or in `CellsController` — which is mounted
+   * at the same path — has a shape that could take it either. *An earlier version of
+   * this comment claimed the opposite twice over: that `:id/meetings` would otherwise
+   * read `meetings` as a Cell identifier, and that declaration order is all that keeps
+   * the two controllers apart. Both are false, and a maintainer reordering this file
+   * would have been warned off a collision that does not exist.* The order still costs
+   * nothing and is the right habit for the day a pattern like `:id/:kind` is added.
+   *
+   * **`cell.take_attendance` against the actor.** The capability follows the act that
+   * resolves an entry — submitting a meeting's record — rather than the rows the answer
+   * contains, which is the discriminator the people-without-a-Cell list already uses.
+   * The guard admits the caller and the service keeps the answer to the caller's own
+   * meetings; section 7 names that same division for the DCC checklist.
+   */
+  @Get('meetings/awaiting')
+  @RequiresCapability(Capability.CellTakeAttendance, { kind: 'actor' })
+  async awaiting(
+    @CurrentActor() actor: Actor,
+    @Query() query: CellMeetingsQueryDto,
+  ): Promise<Record<string, unknown>> {
+    return this.meetings.awaitingFor(actor.personId, query.month);
+  }
+
   /** This Cell's meetings for a reporting month, scheduled and recorded. */
   @Get(':id/meetings')
   @RequiresCapability(Capability.CellTakeAttendance, {

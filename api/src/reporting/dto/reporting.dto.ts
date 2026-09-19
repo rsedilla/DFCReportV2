@@ -1,5 +1,17 @@
-import { IsIn, IsUUID, ValidateIf } from 'class-validator';
+import { Type } from 'class-transformer';
+import {
+  IsIn,
+  IsInt,
+  IsOptional,
+  IsString,
+  IsUUID,
+  Length,
+  Max,
+  Min,
+  ValidateIf,
+} from 'class-validator';
 
+import { CURSOR_MAX_LENGTH } from '../../common/cursor';
 import { IsManilaCalendarDate } from '../../common/time/is-manila-calendar-date';
 
 /**
@@ -133,4 +145,34 @@ export class CellMonthlyReportDto {
   @ValidateIf((dto: CellMonthlyReportDto) => dto.scope === 'CELL')
   @IsUUID()
   cell_id?: string;
+}
+
+/** `GET /reports/dcc/monthly/by-leader`: the DCC report's selector, plus paging. */
+export class DccByLeaderDto extends DccMonthlyReportDto {
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt({ message: 'limit must be a whole number' })
+  @Min(1, { message: 'limit must be at least 1' })
+  @Max(200, { message: 'limit must be at most 200' })
+  limit?: number;
+
+  @IsOptional()
+  @IsString()
+  @Length(1, CURSOR_MAX_LENGTH)
+  cursor?: string;
+}
+
+/** `GET /reports/cells/monthly/by-leader`: the Cell report's selector, plus paging. */
+export class CellByLeaderDto extends CellMonthlyReportDto {
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt({ message: 'limit must be a whole number' })
+  @Min(1, { message: 'limit must be at least 1' })
+  @Max(200, { message: 'limit must be at most 200' })
+  limit?: number;
+
+  @IsOptional()
+  @IsString()
+  @Length(1, CURSOR_MAX_LENGTH)
+  cursor?: string;
 }

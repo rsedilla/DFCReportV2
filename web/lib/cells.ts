@@ -49,6 +49,44 @@ export interface CellIndexPage {
   next_cursor: string | null;
 }
 
+/**
+ * One meeting the signed-in leader owes a record for (SKILL.md section 19).
+ *
+ * Carries the Cell's code, time and closure date rather than an identifier alone,
+ * because this is the only list a **closed** Cell reaches: the Cells index is
+ * `ACTIVE`-only, so a client that looked the rest up there would be back at the gap
+ * this route was written to close.
+ */
+export interface AwaitingMeeting {
+  cell_id: string;
+  cell_code: string;
+  scheduled_date: string;
+  scheduled_time: string;
+  reporting_month: string;
+  /** Null while the Cell is `ACTIVE`; a Manila date once it has closed. */
+  cell_closed_on: string | null;
+}
+
+export interface AwaitingMeetings {
+  reporting_month: string;
+  /**
+   * Section 17: false once the month's window has shut, and then the list is empty.
+   *
+   * **Nothing on the Dashboard reads it, and that is the point of the empty list.** The
+   * queue used to ask the Cells index whether last month was still open and then decide
+   * whether to read its meetings; a shut month now answers nothing owed, so the screen
+   * has no decision to make and cannot reach a different answer from the server's. The
+   * "open until 7 Oct" tag is the client's own arithmetic over the month it is showing,
+   * which is a label rather than a permission.
+   *
+   * It stays on the type because it is what the route returns and a client reading this
+   * file should not have to guess at the body. What it is **not** is a second place the
+   * window is decided.
+   */
+  open: boolean;
+  meetings: AwaitingMeeting[];
+}
+
 /** A recorded meeting. Absent — `meeting: null` — means awaiting a record. */
 export interface RecordedMeeting {
   id: string;
@@ -191,6 +229,24 @@ export interface PersonWithoutACell {
   id: string;
   member_id: string;
   full_name: string;
+}
+
+/**
+ * Section 19's recording queue for one open month: what this leader owes a record for.
+ *
+ * One request per open month, where the Dashboard previously issued two index calls
+ * and then one per Cell — and still could not reach a closed Cell's meetings at all.
+ */
+export async function listMeetingsAwaiting(
+  month: string,
+  signal?: AbortSignal,
+): Promise<AwaitingMeetings> {
+  const query = new URLSearchParams({ month });
+
+  return authenticatedRequest<AwaitingMeetings>(
+    `/api/v1/cells/meetings/awaiting?${query.toString()}`,
+    { signal },
+  );
 }
 
 /**

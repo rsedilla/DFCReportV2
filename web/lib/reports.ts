@@ -65,8 +65,16 @@ interface MonthlyCommon {
  * section 12's structural rule rather than a rendering choice.
  */
 export type CellMonthlyReport =
-  | (MonthlyCommon & { scope: { kind: 'CELL'; cell_id: string }; n: number; buckets: AttendanceBucket[]; coverage: CellCoverage })
-  | (MonthlyCommon & { scope: { kind: 'LEADER'; person_id: string } | { kind: 'WHOLE_CHURCH' }; coverage: CellCoverage });
+  | (MonthlyCommon & {
+      scope: { kind: 'CELL'; cell_id: string };
+      n: number;
+      buckets: AttendanceBucket[];
+      coverage: CellCoverage;
+    })
+  | (MonthlyCommon & {
+      scope: { kind: 'LEADER'; person_id: string } | { kind: 'WHOLE_CHURCH' };
+      coverage: CellCoverage;
+    });
 
 export interface DccMonthlyReport extends MonthlyCommon {
   scope: unknown;
@@ -149,3 +157,47 @@ export const CLASSIFICATION_LABELS: { key: keyof Classification; label: string }
   { key: 'fourth_timer', label: '4th Timer' },
   { key: 'regular', label: 'Regular' },
 ];
+
+/** One named row of a report's coverage by leader (decision 0254). */
+export interface ByLeaderRow {
+  leader: { id: string; member_id: string; full_name: string };
+  filed: number;
+  owed: number;
+}
+
+/**
+ * A page of a report's coverage by leader (decision 0254). Each row counts that leader's own
+ * obligations; `others` is every leader the reader could not open, named nobody, null when
+ * it counts nothing; `total` is the report's own coverage, which the rows and `others` add
+ * up to.
+ */
+export interface ByLeaderPage {
+  period: string;
+  open: boolean;
+  data: ByLeaderRow[];
+  others: { filed: number; owed: number } | null;
+  total: { filed: number; owed: number };
+  next_cursor: string | null;
+}
+
+/** Ten at a time, as the design pages the table. */
+const BY_LEADER_PAGE = '10';
+
+export async function getCoverageByLeader(
+  report: 'dcc' | 'cells',
+  period: string,
+  scope: ReportScope,
+  cursor: string | null,
+  signal?: AbortSignal,
+): Promise<ByLeaderPage> {
+  const params = new URLSearchParams(query(period, scope));
+  params.set('limit', BY_LEADER_PAGE);
+  if (cursor) {
+    params.set('cursor', cursor);
+  }
+
+  return authenticatedRequest<ByLeaderPage>(
+    `/api/v1/reports/${report}/monthly/by-leader?${params.toString()}`,
+    { signal },
+  );
+}

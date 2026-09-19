@@ -22,7 +22,8 @@
   ],
   "stages": [
     "screens block",
-    "after the pilot — Admin screens"
+    "after the pilot — Admin screens",
+    "after the pilot — flat subtree view"
   ],
   "routes": [
     {
@@ -88,6 +89,41 @@
       "screen": "web/app/people/[id]/page.tsx"
     },
     {
+      "route": "GET /api/v1/network/my-tree",
+      "reason": "The branch the Network screen opens on: the signed-in person, their direct disciples by name, and the headcounts of the tree now (decision 0252).",
+      "screen": "web/app/network/page.tsx"
+    },
+    {
+      "route": "GET /api/v1/leaders/:id/children",
+      "reason": "Anybody else's branch, when the address names them — focusing a row, the breadcrumb, Up one level and a search result all land here (decision 0252).",
+      "screen": "web/app/network/page.tsx"
+    },
+    {
+      "route": "GET /api/v1/leaders/:id/dcc-behind",
+      "reason": "DCC records behind for the current month on each row and on the focus person, under dcc.view_subtree (decision 0252).",
+      "screen": "web/app/network/page.tsx"
+    },
+    {
+      "route": "GET /api/v1/leaders/:id/cell-figures",
+      "reason": "Cell Leaders beneath and Cell meetings behind for the current month, under cell.view_subtree (decision 0252).",
+      "screen": "web/app/network/page.tsx"
+    },
+    {
+      "route": "GET /api/v1/leaders/:id/descendants",
+      "reason": "Everyone beneath a leader, flat and paged. The Network screen goes one generation at a time and never needs it, and the People screen already lists the searcher's own scope (decision 0244), so no use for a second flat list has been named.",
+      "waived_to": "after the pilot — flat subtree view"
+    },
+    {
+      "route": "GET /api/v1/reports/dcc/monthly/by-leader",
+      "reason": "The DCC report's By leader table: each leader's own records filed and owed, the rows adding up to the report's coverage (decision 0254).",
+      "screen": "web/app/reports/dcc/page.tsx"
+    },
+    {
+      "route": "GET /api/v1/reports/cells/monthly/by-leader",
+      "reason": "The Cell report's By leader table: each leader's own meetings recorded and scheduled, the rows adding up to the report's coverage (decision 0254).",
+      "screen": "web/app/reports/cells/page.tsx"
+    },
+    {
       "route": "PUT /api/v1/people/:id/pastoral-leader",
       "reason": "Reassignment is the highest-risk authorization surface in the system (§5). Move to another leader on the person's profile opens this dialog, which performs it.",
       "screen": "web/components/move-leader-dialog.tsx"
@@ -145,6 +181,11 @@
       "route": "PUT /api/v1/cells/:id/schedule",
       "reason": "A schedule change decides which meetings a month derives, so a pilot month needs it reachable (§10, §13).",
       "screen": "web/app/cells/[id]/meetings/page.tsx"
+    },
+    {
+      "route": "GET /api/v1/cells/meetings/awaiting",
+      "reason": "§19's recording queue, and the only surface that names a closed Cell's meetings (ruling of 2026-09-17).",
+      "screen": "web/app/dashboard/page.tsx"
     },
     {
       "route": "GET /api/v1/cells/:id/meetings",
