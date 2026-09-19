@@ -5210,7 +5210,7 @@ Conquest records, for every person under a leader's care, the four G12 goals in 
 ### What each goal means
 
 - **Win 3** — at least three of their direct pastoral disciples each have at least three SUYNL lessons recorded (Section 28, the second ruling of 2026-09-16). It was stated by a leader until SUYNL gave the church a record of what it means.
-- **Open a cell** — they hold the earliest leadership of a Cell that an approved `NEW_CELL` request names (Section 10). A handover is not an opening, and the request is the discriminator rather than the leadership: a Cell recorded during initial encoding has an earliest leadership and no such request, and is what a leader is asked about below.
+- **Open a cell** — they hold the earliest leadership of a Cell that an approved `NEW_CELL` request names (Section 10), or of a Cell recorded during initial encoding (Sections 2 and 10), dated the day that leadership began (ruling of 2026-09-18). A handover is not an opening. A Cell recorded at setup already existed, so the records cannot tell whether its first recorded leader opened it or took it over; it counts as opened, and the cost is stated rather than hidden: somebody who took a Cell over before the church was encoded reads as having opened it.
 - **Completion of 12** — twelve open pastoral assignments named this person as leader at one instant (Section 5). Every direct disciple counts, whether or not they lead anything; Section 16's *Cell Leaders with 12+ Members* counts a different set and stays a different figure.
 - **Raise 12 leaders** — twelve of those direct disciples each qualify as a leader (Section 11, *What "qualifies as a leader" means*).
 
@@ -5220,7 +5220,7 @@ Conquest records, for every person under a leader's care, the four G12 goals in 
 
 ### All four goals are derived
 
-All four are computed from `cell_leadership_requests`, `cells`, `cell_leaderships`, `pastoral_assignments` and `suynl_lessons` — every one of them either effective-dated or carrying the instant it was filed — so each goal and the date it was first reached are questions the database answers. A leader never ticks one to say it has been reached now; the two exceptions below are about history the records cannot hold. Section 9 states the rule for classification — do not let leaders maintain by hand what attendance history derives — and decision 0249 applies it here, a tick beside records that answer the same question being free to contradict them.
+All four are computed from `cell_leadership_requests`, `cells`, `cell_leaderships`, `pastoral_assignments` and `suynl_lessons` — every one of them either effective-dated or carrying the instant it was filed — so each goal and the date it was first reached are questions the database answers. A leader never ticks one to say it has been reached now; the one exception below is about history the records cannot hold. Section 9 states the rule for classification — do not let leaders maintain by hand what attendance history derives — and decision 0249 applies it here, a tick beside records that answer the same question being free to contradict them.
 
 **`conquest` owns none of those tables and does not query them.** `cells` computes the Cell half, `hierarchy` the pastoral half, `suynl` the lesson half, and `conquest` composes what the three return with its own confirmations — Section 2's ordinary route, and the one it already names for `reporting`. **Win 3's date does not divide that way and is recorded as open in `CLAUDE.md`**: the earliest instant at which three disciples each held three lessons is a function of two modules' tables together rather than either module's half, so which module computes it, and what it may materialise to do so, is undecided.
 
@@ -5238,16 +5238,13 @@ All four are computed from `cell_leadership_requests`, `cells`, `cell_leadership
 
 **A correction unmakes a reached goal**, and it is not an exception to this rule but what a correction means: withdrawing a confirmation, or a Cell leadership, a pastoral assignment or a SUYNL lesson a derived goal was resting on, says the record was wrong rather than that the person has fallen back (Section 28). Whether anything else does is not claimed here; the `CREATED_IN_ERROR` question above is open and is not a correction. The ground for the rule itself is what the ladder means: a milestone reached is not a level somebody falls out of. Section 3's reproducibility guarantee is not a second ground and is not claimed as one, since Section 3 and Section 16 already provide for a current-state figure that is reproducible for a closed month.
 
-### What a leader confirms, and how they are asked
+### What a leader confirms
 
-A leader confirms two things, and each is a dated record naming them:
+A leader confirms one thing, and it is a dated record naming them: **a goal reached before the church was encoded.** The import fabricates no history (Section 2), so twelve disciples held in 2024 are in no table, and neither are the lessons of somebody discipled in 2019. The leader states it, with the date, and **that date is not the backdating of Section 3** (Section 28, ruling of 2026-09-16) while no report counts these goals by period. Win 3 reaches this path exactly as the other three do, and until SUYNL has been recorded for a while it is the only path there is for most people.
 
-1. **A goal reached before the church was encoded.** The import fabricates no history (Section 2), so twelve disciples held in 2024 are in no table, and neither are the lessons of somebody discipled in 2019. The leader states it, with the date, and **that date is not the backdating of Section 3** (Section 28, ruling of 2026-09-16) while no report counts these goals by period. Win 3 reaches this path exactly as the other three do, and until SUYNL has been recorded for a while it is the only path there is for most people.
-2. **Whether a Cell recorded at setup was opened or taken over.** Direct creation during initial encoding (Sections 2 and 10) writes one leadership for a Cell that already existed, so the data cannot tell the two apart. **Both answers are recorded** — without the second, the question could never be dismissed.
+**Nothing is inferred from the rung below.** A person who opened a Cell is not thereby recorded as having won three: no rule of this church requires three before a Cell is opened, so the inference would be only as true as a rule nobody has written. Win 3 is read from SUYNL lessons instead.
 
-**Nothing is inferred from the rung below.** A person who opened a Cell is not thereby recorded as having won three: no rule of this church requires three before a Cell is opened, so the inference would be only as true as a rule nobody has written. Win 3 is read from SUYNL lessons instead. The screen asks in words beside an empty box where a question is genuinely open — `Opened a cell · confirm?` — which is Section 15's attention-list idiom rather than a colour (Sections 13, 17 and 19).
-
-**The ladder is displayed in order and never gated.** An out-of-order state is reachable three ways: a Cell opened by somebody against none of whose disciples three lessons are recorded; somebody who took a Cell over reaching rungs three and four while rung two stays permanently false; and a pre-encoding confirmation of a later rung while rung one stands unreached. A refusal could reach only what a leader states, which since 2026-09-16 is the two confirmations above — a goal reached before encoding, and whether a Cell recorded at setup was opened. The second is a rung-two reach a gate could refuse, and is the case such a gate would meet most often while Win 3 stands unreached for nearly everybody.
+**The ladder is displayed in order and never gated.** An out-of-order state is reachable three ways: a Cell opened by somebody against none of whose disciples three lessons are recorded; somebody who took a Cell over reaching rungs three and four while rung two stays permanently false; and a pre-encoding confirmation of a later rung while rung one stands unreached. A refusal could reach only what a leader states, which is the one confirmation above, a goal reached before encoding.
 
 ### Who sees Conquest, and who may confirm
 
@@ -5267,7 +5264,7 @@ Three capabilities, in the shape Section 9 uses for DCC attendance:
 
 **Unticking requires a reason, and supersedes rather than deletes.** The original is kept and marked corrected, carrying both dates and both names (Section 5, Section 14). **Correcting travels with the capability that filed**, rather than taking one of its own as attendance does (ruling of 2026-09-15): withdrawing a statement needs no authority that making it did not, and an actor who may file for a downline leader and may not withdraw it leaves a statement nobody can take back. A correction is attributed to the confirming leader named on the row, never to the actor who filed it.
 
-Only a stated confirmation is corrected this way. A derived goal that looks wrong is usually wrong because a Cell leadership, a pastoral assignment or a SUYNL lesson is wrong, and is corrected there — the third since Win 3 became derived (Section 28), on the `SUYNL` tab under `suynl.confirm`. **It is not claimed that every derived goal has such a record to correct.** Open a cell rests on an approved `NEW_CELL` request as its discriminator, and Section 10 makes that decision final — its remedy for one approved in error being to close the Cell `CREATED_IN_ERROR` rather than to rewrite the decision. That lands on the question this section records as open above, rather than on a correction.
+Only a stated confirmation is corrected this way. A derived goal that looks wrong is usually wrong because a Cell leadership, a pastoral assignment or a SUYNL lesson is wrong, and is corrected there — the third since Win 3 became derived (Section 28), on the `SUYNL` tab under `suynl.confirm`. **It is not claimed that every derived goal has such a record to correct.** Where Open a cell rests on an approved `NEW_CELL` request, Section 10 makes that decision final — its remedy for one approved in error being to close the Cell `CREATED_IN_ERROR` rather than to rewrite the decision. That lands on the question this section records as open above, rather than on a correction.
 
 ### Conquest is not a report
 
@@ -5281,7 +5278,7 @@ Section 16 counts two conditions closely related to these rungs and identical to
 
 ### Where it appears
 
-Conquest is a tab of the sidebar's `Growth` item, placed as Section 19 places it, and it carries the four counts, the people a leader cares for, and the confirmations above. *(It was given its own sidebar item by the ruling of 2026-09-16 and became a tab by the second ruling of that day; the application has carried neither.)* **Where the confirmations above are filed, that tab carrying no save bar now that every goal is derived, is recorded as open in `CLAUDE.md`** (Section 28). **A person who has reached all four carries a plain label rather than an accented tag**: a tag shown only to those who reached everything colours a person by a figure derived from their records (Sections 17 and 19). **The table is ordered by name**, which is this section's choice; a progress ordering offered later would be bound by Sections 13 and 17 as any other is.
+Conquest is a tab of the sidebar's `Growth` item, placed as Section 19 places it, and it carries the four counts, the people a leader cares for, and the confirmation above. *(It was given its own sidebar item by the ruling of 2026-09-16 and became a tab by the second ruling of that day; the application has carried neither.)* **Where the confirmation above is filed, that tab carrying no save bar now that every goal is derived, is recorded as open in `CLAUDE.md`** (Section 28). **A person who has reached all four carries a plain label rather than an accented tag**: a tag shown only to those who reached everything colours a person by a figure derived from their records (Sections 17 and 19). **The table is ordered by name**, which is this section's choice; a progress ordering offered later would be bound by Sections 13 and 17 as any other is.
 
 ### Structure
 
@@ -5290,11 +5287,7 @@ conquest_confirmations
 - id
 - person_id            the person the goal is about
 - goal                 WIN_3 | OPEN_A_CELL | COMPLETION_OF_12 | RAISE_12_LEADERS
-- cell_id              the Cell the answer is about; required on every OPEN_A_CELL row and
-                       null on every other
-- reached              the leader's statement: true where the goal was reached, false where
-                       it was not
-- reached_on           date; required where reached is true, null where it is false
+- reached_on           date, required: when the leader states the goal was reached
 - confirmed_by         the Person whose statement this is — the confirming leader;
                        null only for a Network root, who has none (Sections 5 and 9)
 - recorded_by          the Account that filed it; differs from confirmed_by where filed on behalf
@@ -5304,15 +5297,13 @@ conquest_confirmations
 - correction_reason    nullable, required where superseded_at is set
 ```
 
-**Every `OPEN_A_CELL` row names a Cell and every other row's `cell_id` is null; a row breaking either half is refused.** A leader may lead many Cells (Sections 10 and 16), so one answer per leader would let a single "took it over" suppress the question for a Cell they did open. The cost is stated rather than hidden: a Cell opened before encoding and closed before it, which no `cells` row holds, cannot be confirmed at all, and that person's Open a cell reads as not reached with no question beside it to answer.
-
-**`reached` false states that the goal was not reached.** On `OPEN_A_CELL` with a Cell named, it is "they took that Cell over".
+**A row states only that a goal was reached.** Nothing records that one was not; a person with no row for a goal has not had it confirmed.
 
 **A correction is recorded on the row it corrects, and a reason lives in one place.** Unticking stamps `superseded_at`, `corrected_by` and `correction_reason` on the current row, which stops being current; the actor column is named `corrected_by` rather than `superseded_by` deliberately, because Sections 9 and 13 give `superseded_by` a different meaning — the replacing row, never an actor — and one identifier carrying two meanings across the five tables that use it is what a migration written from this section would get wrong; a replacement answer is a new row, and a retraction leaves none, the goal reading as unconfirmed again.
 
-Two partial unique indexes, both over rows where `superseded_at` is null: one current row per person and goal where `cell_id` is null, and one per person and Cell where the goal is `OPEN_A_CELL` — partial uniqueness over live rows, as Section 5 uses for an active pastoral assignment. **A row is never deleted and the migration owes the trigger that refuses it** (Section 28, which states the same for its two tables), and `superseded_at`, `corrected_by` and `correction_reason` are set together or not at all, as a CHECK constraint rather than as a convention.
+A partial unique index over rows where `superseded_at` is null: one current row per person and goal — partial uniqueness over live rows, as Section 5 uses for an active pastoral assignment. **A row is never deleted and the migration owes the trigger that refuses it** (Section 28, which states the same for its two tables), and `superseded_at`, `corrected_by` and `correction_reason` are set together or not at all, as a CHECK constraint rather than as a convention.
 
-A derived goal has no row at all unless a leader was asked about it.
+A derived goal has no row at all unless a leader confirmed it.
 
 **Whether an archived or merged Person may be given a row, and how a merged pair is counted in the figures above, is recorded as open in `CLAUDE.md`** — a silence this section shares with Section 28, where Sections 5 and 10 both answer for their own domains.
 
@@ -5369,7 +5360,7 @@ Five graduations: `ENCOUNTER`, `LIFE_CLASS`, `SOL_1`, `SOL_2`, `SOL_3`. Each is 
 
 **A graduation carries a date where the leader knows it and none where they do not.** This is Section 3's own reason for an optional birthday and mobile number: a mandatory field somebody cannot fill gets filled with a fiction, and leaders will be asking about graduations from years back. The consequence is stated on the screen rather than hidden — any figure counting graduations within a period counts only the dated rows.
 
-**A person who has not graduated has no row.** Section 27 records both answers for `OPEN_A_CELL` because a question is asked there that must be dismissible; nothing here asks one, so no row records that somebody has not graduated.
+**A person who has not graduated has no row.**
 
 ### A graduation confers no leadership
 
@@ -5421,7 +5412,7 @@ The screen says the counts are as of now, never "this year". A Reports block wou
 
 `Growth` takes the sidebar position the first ruling of 2026-09-16 gave `Conquest`, between `Cells` and `Network` in the ordinary arrangement and last in the whole-church one (Section 19). The sidebar stays at six items, a seventh being more than the phone's bottom bar was drawn for at the narrowest width Section 23's layout check runs at — the width that section calls the one where overflow is hardest.
 
-`SUYNL` and `Training` each carry their own draft and save bar — a batch of ticks, discarded or saved together — because the two are different records with different correction rules. **The `Conquest` tab has neither**, every one of its four goals being derived since Win 3 became so. Section 27 keeps two confirmations that a leader still files, for history the records cannot hold and for a Cell recorded at setup; **where those are filed, now that the tab carries no save bar, is recorded as open in `CLAUDE.md`**.
+`SUYNL` and `Training` each carry their own draft and save bar — a batch of ticks, discarded or saved together — because the two are different records with different correction rules. **The `Conquest` tab has neither**, every one of its four goals being derived since Win 3 became so. Section 27 keeps one confirmation that a leader still files, for history the records cannot hold; **where it is filed, now that the tab carries no save bar, is recorded as open in `CLAUDE.md`**.
 
 ### What SUYNL gives Section 27
 
