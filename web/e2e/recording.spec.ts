@@ -130,7 +130,7 @@ test.describe('a Sunday with a mark already recorded', () => {
 
     await page.goto(SUNDAY);
 
-    await expect(page.getByText('Already recorded: 1 person')).toBeVisible();
+    await expect(page.getByText(/^1 of \d+ recorded$/)).toBeVisible();
     await expect(
       page.getByText('Changing a recorded mark needs permission to correct records'),
     ).toBeVisible();
@@ -656,6 +656,18 @@ test.describe('your month, from the queue (owner’s design, 2026-09-19)', () =>
     await expect(
       grid.locator('td', { hasText: 'month closed' }).locator('a[href^="/dcc/"]'),
     ).toHaveCount(0);
+  });
+
+  test('a month that has not begun shows its Sundays and says why no meeting is there', async ({
+    page,
+  }) => {
+    await page.clock.setFixedTime(JUNE_20);
+    await mockMonth(page);
+
+    await page.goto('/dcc');
+    await page.getByRole('button', { name: 'Show July 2026' }).click();
+
+    await expect(page.getByText('Cell meetings appear once the month begins.')).toBeVisible();
   });
 
   test('the queue links to it as the whole month', async ({ page }) => {

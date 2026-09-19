@@ -55,10 +55,14 @@ function timeLabel(time: string): string {
 function YourMonth() {
   const [month, setMonth] = useState(() => reportingMonthOf());
   const today = todayInManila();
+  // A month that has not begun is shown for its Sundays alone: the Cells index refuses it
+  // (decision 0216), and a removed Sunday is worth seeing ahead of time (section 9).
+  const future = month > reportingMonthOf();
 
   const cells = useQuery({
     queryKey: ['cells', month, true],
     queryFn: ({ signal }) => listCells({ month, ledBy: 'me' }, signal),
+    enabled: !future,
   });
 
   const meetings = useQueries({
@@ -73,6 +77,7 @@ function YourMonth() {
   const awaiting = useQuery({
     queryKey: ['meetings-awaiting', month, 'mine'],
     queryFn: ({ signal }) => listMeetingsAwaiting(month, signal, 'mine'),
+    enabled: !future,
   });
 
   const events = useQuery({
@@ -175,9 +180,8 @@ function YourMonth() {
     .sort((a, b) => a.date.localeCompare(b.date) || a.label.localeCompare(b.label));
 
   const pending =
-    cells.isPending ||
+    (!future && (cells.isPending || awaiting.isPending)) ||
     events.isPending ||
-    awaiting.isPending ||
     meetings.some((query) => query.isPending) ||
     checklists.some((query) => query.isPending);
 
@@ -193,7 +197,18 @@ function YourMonth() {
         opens its record.
       </p>
 
-      <MonthPicker month={month} onChange={setMonth} open={events.data?.open} />
+      {/* A month not begun has no open or closed state (section 20), so none is shown. */}
+      <MonthPicker
+        month={month}
+        onChange={setMonth}
+        open={future ? undefined : events.data?.open}
+        allowFuture
+      />
+      {future ? (
+        <p className="text-muted mt-4 max-w-2xl text-sm leading-relaxed">
+          Cell meetings appear once the month begins.
+        </p>
+      ) : null}
 
       <div className="mt-8">
         <FailureNotice failure={failed ? describeFailure(failed.error) : null} />
@@ -281,7 +296,7 @@ function MonthGrid({ month, items }: { month: string; items: DayItem[] }) {
               >
                 {date ? (
                   <>
-                    <span className="text-sm font-bold">{Number(date.slice(8))}</span>
+                    <span className="text-accent text-sm font-bold">{Number(date.slice(8))}</span>
                     {items
                       .filter((item) => item.date === date)
                       .map((item) => (
@@ -305,7 +320,7 @@ function MonthList({ items }: { items: DayItem[] }) {
     <ul className="border-line mt-6 border-t sm:hidden">
       {dates.map((date) => (
         <li key={date} className="border-line border-b py-3">
-          <p className="text-sm font-bold">{dayLabel(date)}</p>
+          <p className="text-accent text-sm font-bold">{dayLabel(date)}</p>
           {items
             .filter((item) => item.date === date)
             .map((item) => (

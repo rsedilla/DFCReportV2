@@ -861,7 +861,7 @@ function QueueRow({
   return (
     <li className="border-line grid grid-cols-[3rem_minmax(0,1fr)] items-center gap-x-4 gap-y-3 border-b py-4 sm:grid-cols-[3rem_minmax(0,1fr)_auto]">
       <p aria-hidden="true" className="text-center leading-none">
-        <span className="block text-2xl font-bold">{day}</span>
+        <span className="text-accent block text-2xl font-bold">{day}</span>
         <span className="text-muted mt-1 block text-xs font-bold tracking-[0.08em] uppercase">
           {weekday}
         </span>
