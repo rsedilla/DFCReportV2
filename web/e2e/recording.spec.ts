@@ -642,6 +642,22 @@ test.describe('your month, from the queue (owner’s design, 2026-09-19)', () =>
     await expect(grid.getByRole('link', { name: /Sunday 28 June/ })).toHaveCount(0);
   });
 
+  test('a closed month shows what was never recorded, with nothing to open', async ({ page }) => {
+    await page.clock.setFixedTime(JUNE_20);
+    await mockMonth(page);
+    // Registered last, so it answers first: the same month, its window shut.
+    await mockDccEvents(page, { open: false });
+
+    await page.goto('/dcc');
+
+    const grid = page.getByRole('table', { name: 'Every date you owe a record this month' });
+    await expect(grid.getByText('Not recorded · month closed · 1 unmarked').first()).toBeVisible();
+    await expect(grid.getByText(/Awaiting a record/)).toHaveCount(0);
+    await expect(
+      grid.locator('td', { hasText: 'month closed' }).locator('a[href^="/dcc/"]'),
+    ).toHaveCount(0);
+  });
+
   test('the queue links to it as the whole month', async ({ page }) => {
     await page.clock.setFixedTime(JUNE_20);
     await mockMonth(page);

@@ -3969,7 +3969,7 @@ Scope must appear on the tile. The same tile reads 12 for a Cell leader and 11,4
 
 A dashboard of counts tells a leader nothing to act on. The Dashboard is the sidebar's `Record` item and the screen a leader lands on (Sidebar, below), so outstanding work belongs above the numbers:
 
-- meetings awaiting a record, for the user's own Cells (Section 13), and for their branch when they choose it (decision 0258, below) — **and for a closed Cell, each meeting shown to the leader it names, while its month's window is open**. This is the only surface naming those meetings and the only thing that makes the permission to record them reachable, and it shows each one to the same person Section 7 authorizes to file it
+- meetings awaiting a record, for the user's own Cells (Section 13), and for their branch when they choose it (decision 0258, below) — **and for a closed Cell, each meeting shown to the leader it names, while its month's window is open**. It shows each one to the same person Section 7 authorizes to file it
 - Cells needing attention within their scope (Section 15)
 - people with no active Cell membership within their scope (Section 10)
 - the outcome of a Cell leadership request the user submitted, of either kind (Section 10)

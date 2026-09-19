@@ -58,10 +58,10 @@ function Gaps() {
     <main id="main" className={PAGE_WIDTH.READING}>
       <p className="mb-4">
         <Link
-          href="/dcc"
+          href="/reports/dcc"
           className="focus-visible:outline-accent text-accent inline-flex min-h-6 items-center rounded-sm text-sm font-medium underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2"
         >
-          Back to the calendar
+          Back to DCC reports
         </Link>
       </p>
 

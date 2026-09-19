@@ -120,8 +120,7 @@ type QueueItem =
  *
  * **The server decides the population now** (ruling of 2026-09-17). It was assembled
  * here from the Cells index and one request per Cell, which could not reach a **closed**
- * Cell's meetings at all — the index is `ACTIVE`-only — and section 19 calls this queue
- * "the only surface naming those meetings". The day bound and the "no record" filter
+ * Cell's meetings at all — the index is `ACTIVE`-only. The day bound and the "no record" filter
  * moved with it: both are the route's, so a client cannot drift from them.
  */
 function cellEntries(awaiting: AwaitingMeetings | undefined): QueueItem[] {

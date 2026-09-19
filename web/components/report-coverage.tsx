@@ -144,7 +144,7 @@ function meetingsHref(cell: CellSummary, month: string): string {
  * narrowed by Network, so a row here would count people the report above does not.
  */
 export function CoverageBySunday({ month }: { month: string }) {
-  // The same query as the DCC calendar, so moving between the two reads it once.
+  // The same query as /dcc, your month, so moving between the two reads it once.
   const events = useQuery({
     queryKey: ['dcc-events', month],
     queryFn: ({ signal }) => listDccEvents(month, signal),

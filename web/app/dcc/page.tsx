@@ -14,7 +14,7 @@ import {
   listMeetingsAwaiting,
   meetingStateLabel,
 } from '@/lib/cells';
-import { getDccRoster, listDccEvents } from '@/lib/dcc';
+import { getWholeDccRoster, listDccEvents } from '@/lib/dcc';
 import { describeFailure } from '@/lib/messages';
 import { dayLabel, reportingMonthOf, todayInManila } from '@/lib/reporting-month';
 
@@ -25,7 +25,7 @@ import { dayLabel, reportingMonthOf, todayInManila } from '@/lib/reporting-month
  * Reports → DCC → By Sunday already carries.
  *
  * **States are words, never colour** (sections 13, 17 and 19): Recorded, Awaiting a record,
- * Not yet. A Sunday with no service is shown in its place with its reason (section 9).
+ * Not yet, and Not recorded · month closed, which opens nothing. A Sunday with no service is shown in its place with its reason (section 9).
  *
  * **Monday first** (decision 0054). On a phone the grid becomes a list of the same dates.
  */
@@ -82,10 +82,15 @@ function YourMonth() {
 
   const heldEvents = (events.data?.data ?? []).filter((event) => !event.removed);
 
+  // A closed month offers nothing to record: what was never recorded is shown without an action.
+  // Each half reads its own route's answer, and an answer not yet read counts as closed.
+  const cellsOpen = cells.data?.open === true;
+  const dccOpen = events.data?.open === true;
+
   const checklists = useQueries({
     queries: heldEvents.map((event) => ({
-      queryKey: ['dcc-roster', event.id],
-      queryFn: ({ signal }: { signal: AbortSignal }) => getDccRoster(event.id, signal),
+      queryKey: ['dcc-roster-whole', event.id],
+      queryFn: ({ signal }: { signal: AbortSignal }) => getWholeDccRoster(event.id, signal),
     })),
   });
 
@@ -101,10 +106,15 @@ function YourMonth() {
         label: `${categoryLabel(cell.category)} · ${timeLabel(scheduled.scheduled_time)}`,
         state: notYet
           ? 'Not yet'
-          : scheduled.meeting === null
-            ? 'Awaiting a record'
-            : `Recorded · ${meetingStateLabel(scheduled.meeting).toLowerCase()}`,
-        href: notYet ? null : `/cells/${cell.id}/meetings/${scheduled.scheduled_date}`,
+          : scheduled.meeting !== null
+            ? `Recorded · ${meetingStateLabel(scheduled.meeting).toLowerCase()}`
+            : cellsOpen
+              ? 'Awaiting a record'
+              : 'Not recorded · month closed',
+        href:
+          notYet || (scheduled.meeting === null && !cellsOpen)
+            ? null
+            : `/cells/${cell.id}/meetings/${scheduled.scheduled_date}`,
       });
     }
   });
@@ -134,7 +144,7 @@ function YourMonth() {
       continue;
     }
 
-    const lines = checklists[heldEvents.indexOf(event)]?.data?.data;
+    const lines = checklists[heldEvents.indexOf(event)]?.data;
 
     // Somebody who disciples nobody owes no DCC record, so the Sunday is not theirs to show.
     if (lines === undefined || lines.length === 0) {
@@ -152,8 +162,10 @@ function YourMonth() {
         ? 'Not yet'
         : unmarked === 0
           ? 'Recorded'
-          : `Awaiting a record · ${unmarked} to mark`,
-      href: notYet ? null : `/dcc/${event.id}`,
+          : dccOpen
+            ? `Awaiting a record · ${unmarked} to mark`
+            : `Not recorded · month closed · ${unmarked} unmarked`,
+      href: notYet || (unmarked > 0 && !dccOpen) ? null : `/dcc/${event.id}`,
     });
   }
 

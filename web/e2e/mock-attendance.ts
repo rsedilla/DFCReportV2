@@ -295,12 +295,12 @@ export async function mockMeetingsAwaiting(
   });
 }
 
-export async function mockDccEvents(page: Page): Promise<void> {
+export async function mockDccEvents(page: Page, { open = true } = {}): Promise<void> {
   await page.route('**/api/v1/dcc/events?*', (route) =>
     route.fulfill(
       json({
         reporting_month: '2026-06-01',
-        open: true,
+        open,
         data: [
           {
             id: '3f1b7c6e-0000-4000-8000-000000000501',

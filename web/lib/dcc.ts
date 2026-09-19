@@ -115,6 +115,27 @@ export async function getDccRoster(
   return authenticatedRequest<DccRoster>(`/api/v1/dcc/events/${eventId}/roster`, { signal });
 }
 
+/** Every line of a leader's checklist, following `next_cursor` to the end (section 9: unbounded). */
+export async function getWholeDccRoster(
+  eventId: string,
+  signal?: AbortSignal,
+): Promise<DccRosterLine[]> {
+  const lines: DccRosterLine[] = [];
+  let cursor: string | null = null;
+
+  do {
+    const query: string = cursor ? `?cursor=${encodeURIComponent(cursor)}` : '';
+    const page: DccRoster = await authenticatedRequest<DccRoster>(
+      `/api/v1/dcc/events/${eventId}/roster${query}`,
+      { signal },
+    );
+    lines.push(...page.data);
+    cursor = page.next_cursor;
+  } while (cursor !== null);
+
+  return lines;
+}
+
 /**
  * Record or correct attendance for one event.
  *

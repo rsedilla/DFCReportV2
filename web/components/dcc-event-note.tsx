@@ -4,10 +4,10 @@ import type { ReactNode } from 'react';
 import { notRecordableLabel, type DccEvent } from '@/lib/dcc';
 
 /**
- * What one Sunday says beside its coverage figure, on the DCC calendar and on the DCC
- * report (SKILL.md section 9; decisions 0227, 0228 and 0229).
+ * What one Sunday says beside its coverage figure on the DCC report (SKILL.md
+ * section 9; decisions 0227, 0228 and 0229).
  *
- * **One function, so the two screens cannot disagree about a Sunday.** A removed Sunday
+ * A removed Sunday
  * names its reason, because section 9 requires a removal to record a decision and a row
  * saying only "removed" records none. A Sunday with records still owed links to the
  * attention list behind it (decision 0228). Otherwise, a Sunday nobody can record says
