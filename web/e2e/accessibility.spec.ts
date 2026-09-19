@@ -641,7 +641,7 @@ const SCANS = [
       await mockCoverageGaps(page);
     },
     async arrange(page: import('@playwright/test').Page) {
-      await expect(page.getByRole('heading', { name: 'Consuelo Bautista' })).toBeVisible();
+      await expect(page.getByRole('link', { name: 'Consuelo Bautista' })).toBeVisible();
     },
   },
   {
@@ -1118,13 +1118,12 @@ const TARGET_SWEEP = [
     minimum: 3,
   },
   {
-    // The back link alone: the list is names, and naming a leader is the whole of
-    // what decision 0228 permits here.
+    // The back link and each name, which opens that leader's profile.
     name: 'dcc coverage gaps',
     route: '/dcc/3f1b7c6e-0000-4000-8000-000000000501/gaps',
-    settleRole: 'heading' as const,
+    settleRole: 'link' as const,
     settle: 'Consuelo Bautista',
-    minimum: 1,
+    minimum: 3,
   },
   {
     // Back link and three people in the chain. The move moved to the profile.

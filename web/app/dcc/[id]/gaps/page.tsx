@@ -66,7 +66,13 @@ function Gaps() {
       </p>
 
       <h1 className="text-2xl font-semibold tracking-tight">
-        {event ? `Still to record — ${dayLabel(event.event_date)}` : 'Still to record'}
+        {event ? (
+          <>
+            <span className="text-accent">{dayLabel(event.event_date)}</span> · still to record
+          </>
+        ) : (
+          'Still to record'
+        )}
       </h1>
       <p className="text-muted mt-2 max-w-2xl text-sm leading-relaxed">
         The leaders in your scope who owe a record for this Sunday and have not filed one.
@@ -92,14 +98,35 @@ function Gaps() {
               Everyone in your scope who owed a record for this Sunday has filed one.
             </p>
           ) : (
-            <ul className="mt-6 flex flex-col gap-3">
-              {gaps.data.data.map((leader) => (
-                <li key={leader.person_id} className="border-line rounded-lg border p-4">
-                  <h2 className="text-base font-medium">{leader.full_name}</h2>
-                  <p className="text-muted mt-1 text-sm">{leader.member_id}</p>
-                </li>
-              ))}
-            </ul>
+            <table className="mt-6 w-full border-collapse text-sm">
+              <caption className="sr-only">Leaders still to record, by name</caption>
+              <thead>
+                <tr className="border-line border-b text-left">
+                  <th scope="col" className="text-muted py-2 pr-4 font-medium">
+                    Name
+                  </th>
+                  <th scope="col" className="text-muted py-2 font-medium">
+                    Member ID
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {gaps.data.data.map((leader) => (
+                  <tr key={leader.person_id} className="border-line border-b">
+                    <td className="py-3 pr-4">
+                      {/* The profile answers for itself, as from a Cell's members. */}
+                      <Link
+                        href={`/people/${leader.person_id}`}
+                        className="focus-visible:outline-accent text-accent inline-flex min-h-6 items-center rounded-sm font-medium underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2"
+                      >
+                        {leader.full_name}
+                      </Link>
+                    </td>
+                    <td className="text-muted py-3">{leader.member_id}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           )}
 
           {gaps.data.next_cursor !== null ? (
