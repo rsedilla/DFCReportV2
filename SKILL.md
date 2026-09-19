@@ -2043,6 +2043,8 @@ Leaders may search the Person directory by name. **Its default is the searcher's
 
 **Where that directory is offered is a separate question from what it returns, and the two are answered separately** (ruling of 2026-09-13, decision 0244). The **People screen lists only people within the searching leader's pastoral scope**, so a leader opening it is shown the people under their care rather than the whole church. The church-wide directory stays reachable wherever a task requires naming a specific person — adding a Person, adding a member to a Cell, naming a new pastoral leader on a reassignment — because those are pickers inside an operation rather than a place to look around. For an actor whose scope is the whole church the screen is unchanged, since their scope *is* the church.
 
+**The screen opens on that list rather than on an empty search** (ruling of 2026-09-19, decision 0259). With no term the route lists the actor's own scope, A to Z by surname, and each row the actor may read in full names the person's pastoral leader. Church-wide mode never lists without a term, and a term is at least two characters once normalized, in either mode. In the actor's own scope a term also matches a Member ID by prefix; never church-wide, where a prefix would page the directory.
+
 **The field rule below is untouched by that**, and so is duplicate prevention: it is answered by the church-wide duplicate-candidate lookup, which the Add a Person screen performs as a name is typed, and never by this screen. **The pickers may not be narrowed with the screen.** Section 10 makes Cell membership independent of pastoral assignment, so a Cell legitimately holds members its leader does not pastor, and narrowing the shared search rather than the screen would make exactly those people unaddable.
 
 For a person within the searching leader's authorized pastoral scope, return full profile fields as normally authorized.
@@ -2076,7 +2078,7 @@ The distinction is the direction the question is asked from. A search starts fro
 
 What travels with it is decided by the surface rather than by this list. A membership list carries the names and Member IDs this section already publishes and nothing further — no birthday, no contact detail, no classification. Section 12's **roster view** carries each member's attendance for the month as well, because that is what it is for, and it reaches the same readers this rule admits. Neither is an exception: this list bounds what a *search* returns about a person outside the searcher's pastoral scope, and a Cell surface is bounded by authority over the Cell instead.
 
-**A person's own Cell is asked from the person, and is bounded by authority over the person** (ruling of 2026-09-15). `GET /api/v1/cells/people/{id}/membership` shows a reader who holds a person in scope under `cell.view_subtree` that person's current Cell and its leader's name, and the Cells that person leads, and nothing of any Cell's other members. Where the Cell is led outside the reader's scope, that discloses a Cell ID this list withholds from a search for its leader. It is chosen rather than derived: the question is about the person the reader is authorized over, the leader's full name is one of the five fields above, and requiring authority over the Cell would leave a leader unable to see where somebody in their own scope attends.
+**A person's own Cell is asked from the person, and is bounded by authority over the person** (ruling of 2026-09-15). `GET /api/v1/cells/people/{id}/membership` shows a reader who holds a person in scope under `cell.view_subtree` that person's current Cell and its leader's name, and the Cells that person leads, each with its category and meeting day as it stands today (decision 0259), and nothing of any Cell's other members. Where the Cell is led outside the reader's scope, that discloses a Cell ID this list withholds from a search for its leader. It is chosen rather than derived: the question is about the person the reader is authorized over, the leader's full name is one of the five fields above, and requiring authority over the Cell would leave a leader unable to see where somebody in their own scope attends.
 
 Selecting an existing person during a duplicate-resolution workflow reuses that Person record but must not automatically transfer pastoral ownership, Cell membership, or any other relationship. Any such transfer requires its own explicit, authorized action.
 
@@ -4480,7 +4482,7 @@ GET  /api/v1/auth/me
 POST /api/v1/accounts                    provisioning, `accounts.manage`
 POST /api/v1/accounts/{id}/activation-email   re-send (Section 6)
 
-GET  /api/v1/people                       search, the actor's own scope; `church_wide=true` for the directory (Section 8)
+GET  /api/v1/people                       the actor's own scope, listed or searched; `church_wide=true` for the directory, term required (Section 8)
 GET  /api/v1/people/duplicate-candidates  declared before /{id}, or it is one
 GET  /api/v1/people/{id}
 GET  /api/v1/people/{id}/pastoral-path

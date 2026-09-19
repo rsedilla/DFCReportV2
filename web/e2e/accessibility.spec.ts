@@ -143,8 +143,13 @@ const SCANS = [
     async arrange(page: import('@playwright/test').Page) {
       await page.getByLabel('Search by name').fill('an');
       await page.getByRole('button', { name: 'Search' }).click();
-      await expect(page.getByText('Marilou Reyes Santos')).toBeVisible();
-      await expect(page.getByText('Details visible to their own leaders')).toBeVisible();
+      // The table from `sm` up and a list below it, so each name is in the page twice.
+      await expect(
+        page.getByText('Marilou Reyes Santos').filter({ visible: true }).first(),
+      ).toBeVisible();
+      await expect(
+        page.getByText('Details visible to their own leaders').filter({ visible: true }).first(),
+      ).toBeVisible();
     },
   },
   {

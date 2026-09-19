@@ -253,7 +253,13 @@ export async function mockPeople(page: Page): Promise<void> {
   );
 
   await page.route('**/api/v1/people?*', (route) =>
-    route.fulfill(json({ data: [PERSON_IN_SCOPE, PERSON_WITHHELD], next_cursor: null })),
+    route.fulfill(
+      json({
+        // A search row names the person's leader (owner's choice of 2026-09-19).
+        data: [{ ...PERSON_IN_SCOPE, direct_leader_name: 'Teofilo Ramos' }, PERSON_WITHHELD],
+        next_cursor: null,
+      }),
+    ),
   );
 
   await page.route(`**/api/v1/people/${PERSON_IN_SCOPE.id}`, (route) =>
@@ -262,7 +268,13 @@ export async function mockPeople(page: Page): Promise<void> {
 
   // The profile's Cell and DCC sections (decisions 0248 and 0247).
   await mockPersonCells(page, {
-    membership: { id: CELL_CHOICES[0].id, cell_id: 'C-0007', leader: CELL_LEADER },
+    membership: {
+      id: CELL_CHOICES[0].id,
+      cell_id: 'C-0007',
+      category: 'YOUTH',
+      day_of_week: 6,
+      leader: CELL_LEADER,
+    },
     leads: [],
   });
 

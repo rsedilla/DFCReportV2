@@ -128,6 +128,10 @@ describe('a person’s current Cell (sections 8 and 10, decision 0248)', () => {
       membership: {
         id: manuelCell.id,
         cell_id: manuelCell.cellId,
+        // How the People list names the Cell (owner's choice of 2026-09-19): the fixture's
+        // default category and Saturday.
+        category: 'YOUTH',
+        day_of_week: 6,
         leader: {
           person_id: manuel.id,
           member_id: expect.any(String),
@@ -147,7 +151,7 @@ describe('a person’s current Cell (sections 8 and 10, decision 0248)', () => {
     expect(response.body.leads).toEqual(
       [manuelCell, second]
         .sort((a, b) => a.cellId.localeCompare(b.cellId))
-        .map((cell) => ({ id: cell.id, cell_id: cell.cellId })),
+        .map((cell) => ({ id: cell.id, cell_id: cell.cellId, category: 'YOUTH', day_of_week: 6 })),
     );
   });
 
@@ -162,7 +166,9 @@ describe('a person’s current Cell (sections 8 and 10, decision 0248)', () => {
       cell_id: joelCell.cellId,
       leader: { person_id: joel.id },
     });
-    expect(response.body.leads).toEqual([{ id: manuelCell.id, cell_id: manuelCell.cellId }]);
+    expect(response.body.leads).toEqual([
+      { id: manuelCell.id, cell_id: manuelCell.cellId, category: 'YOUTH', day_of_week: 6 },
+    ]);
   });
 
   it('returns neither for a person who belongs to no Cell and leads none', async () => {

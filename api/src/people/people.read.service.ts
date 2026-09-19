@@ -300,7 +300,8 @@ export class PeopleReadService {
   }
 
   /**
-   * Search by name (section 8), cursor-paginated (section 22).
+   * List or search by name, or by Member ID in the searcher's own scope (section 8,
+   * decision 0259), cursor-paginated (section 22).
    *
    * Keyset rather than offset, because rows inserted while a client is paging
    * shift every subsequent offset and the directory grows during a Sunday service
@@ -321,10 +322,11 @@ export class PeopleReadService {
    * surface deserves which.
    */
   async searchByName(
-    term: string,
+    term: string | null,
     limit: number,
     cursor: SearchCursor | null = null,
     restrictTo: ReadonlySet<string> | null = null,
+    options: { memberId?: boolean } = {},
   ): Promise<{ rows: PersonRecord[]; nextCursor: SearchCursor | null }> {
     // Both sides normalized. Normalizing only the term meant `Nuñez` was searched
     // for as `nunez` against a raw stored `Nuñez` and never found -- and a miss here
@@ -333,15 +335,16 @@ export class PeopleReadService {
     // decision 0244 that is `duplicate-candidates`, which this method is not.*
     //
     // `%` and `_` are escaped: unescaped, `q=%%` pages out the whole directory.
-    const normalized = normalizeName(term);
+    // `null` is no term: every row the restriction admits, which the route allows only in
+    // the searcher's own scope (section 8, decision 0259).
+    const normalized = term === null ? null : normalizeName(term);
 
     // `normalizeName` drops suffix tokens and collapses separators, so a term
     // that looked like two characters can arrive here empty: `Jr`, `II`, `--`,
     // two spaces. The search route refuses those before calling this; the guard stays
     // for any other caller. An empty term builds the pattern `%%`, which matches every row
     // -- the directory dump `escapeLike` was added to prevent, reached by a
-    // shorter route. Section 8's search is for identity resolution rather than
-    // bulk export, in either mode.
+    // shorter route. Listing every row is what `null` asks for, never an empty string.
     if (normalized === '') {
       return { rows: [], nextCursor: null };
     }
@@ -360,7 +363,9 @@ export class PeopleReadService {
       return { rows: [], nextCursor: null };
     }
 
-    const pattern = `%${escapeLike(normalized).replace(/\s+/g, '%')}%`;
+    const pattern = normalized === null ? null : `%${escapeLike(normalized).replace(/\s+/g, '%')}%`;
+    const memberIdPrefix =
+      term !== null && options.memberId ? `${escapeLike(term.trim().toUpperCase())}%` : null;
     const normalizedFirst = sql<string>`lower(translate(first_name, ${ACCENTED}, ${UNACCENTED}))`;
     const normalizedLast = sql<string>`lower(translate(last_name, ${ACCENTED}, ${UNACCENTED}))`;
 
@@ -381,16 +386,21 @@ export class PeopleReadService {
       // identity (section 3, Person Merge).
       .where('merged_into_id', 'is', null)
       .$if(restrictTo !== null, (qb) => qb.where('id', 'in', [...(restrictTo ?? [])]))
-      .where((eb) =>
-        eb.or([
-          eb(normalizedFirst, 'like', pattern),
-          eb(normalizedLast, 'like', pattern),
-          eb(
-            sql<string>`lower(translate(first_name || ' ' || last_name, ${ACCENTED}, ${UNACCENTED}))`,
-            'like',
-            pattern,
-          ),
-        ]),
+      .$if(pattern !== null, (qb) =>
+        qb.where((eb) =>
+          eb.or([
+            eb(normalizedFirst, 'like', pattern ?? ''),
+            eb(normalizedLast, 'like', pattern ?? ''),
+            eb(
+              sql<string>`lower(translate(first_name || ' ' || last_name, ${ACCENTED}, ${UNACCENTED}))`,
+              'like',
+              pattern ?? '',
+            ),
+            ...(memberIdPrefix === null
+              ? []
+              : [eb(sql<string>`upper(member_id)`, 'like', memberIdPrefix)]),
+          ]),
+        ),
       )
       .orderBy('last_name')
       .orderBy('first_name')

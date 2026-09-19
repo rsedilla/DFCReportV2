@@ -500,9 +500,17 @@ export interface PersonCells {
   membership: {
     id: string;
     cell_id: string;
+    /** How the People list names the Cell, as it stands today (decision 0259). */
+    category: CellCategory | null;
+    day_of_week: number | null;
     leader: { person_id: string; member_id: string; full_name: string } | null;
   } | null;
-  leads: { id: string; cell_id: string }[];
+  leads: {
+    id: string;
+    cell_id: string;
+    category: CellCategory | null;
+    day_of_week: number | null;
+  }[];
 }
 
 export async function getPersonCells(personId: string, signal?: AbortSignal): Promise<PersonCells> {

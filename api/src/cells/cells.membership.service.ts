@@ -358,6 +358,14 @@ export class CellsMembershipService {
     const leaderId = membership?.leaderId ?? null;
     const names = await this.people.namesOf(leaderId === null ? [] : [leaderId]);
     const leader = leaderId === null ? undefined : names.get(leaderId);
+    // How each Cell is named on the People list, "Young Pro · Sat" (decision 0259): category and meeting day as the Cell stands today.
+    const named = async (cellId: string) => {
+      const heading = await this.cells.cellHeadingWithin(this.db, cellId);
+
+      return { category: heading.category, day_of_week: heading.dayOfWeek };
+    };
+    const membershipName = membership === null ? null : await named(membership.id);
+    const leadNames = await Promise.all(leads.map((cell) => named(cell.id)));
 
     return {
       person_id: person.id,
@@ -367,6 +375,7 @@ export class CellsMembershipService {
           : {
               id: membership.id,
               cell_id: membership.cellId,
+              ...membershipName,
               leader:
                 leaderId === null
                   ? null
@@ -376,7 +385,11 @@ export class CellsMembershipService {
                       full_name: leader?.fullName ?? '',
                     },
             },
-      leads: leads.map((cell) => ({ id: cell.id, cell_id: cell.cellId })),
+      leads: leads.map((cell, index) => ({
+        id: cell.id,
+        cell_id: cell.cellId,
+        ...leadNames[index],
+      })),
     };
   }
 

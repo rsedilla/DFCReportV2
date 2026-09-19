@@ -46,6 +46,8 @@ export interface PersonFull {
   sex: Sex;
   civil_status: CivilStatus;
   mobile_number: string | null;
+  /** On a search row only (decision 0259); absent elsewhere. */
+  direct_leader_name?: string | null;
 }
 
 export type Person = PersonIdentity | PersonFull;
@@ -91,9 +93,13 @@ export async function searchPeople(
   q: string,
   cursor: string | null,
   signal?: AbortSignal,
-  options: { churchWide?: boolean } = {},
+  options: { churchWide?: boolean; limit?: number } = {},
 ): Promise<PersonPage> {
-  const params = new URLSearchParams({ q });
+  // An empty term lists the searcher's own scope (decision 0259).
+  const params = new URLSearchParams(q === '' ? {} : { q });
+  if (options.limit !== undefined) {
+    params.set('limit', String(options.limit));
+  }
   if (cursor) {
     params.set('cursor', cursor);
   }
