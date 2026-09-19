@@ -3,7 +3,7 @@ import { sql } from 'kysely';
 
 import { Capability } from '../auth/authorization/capabilities';
 import { InvariantViolationError, ScopeDeniedError } from '../common/errors/api-error';
-import { sameId } from '../common/identifiers';
+import { NIL_UUID, sameId } from '../common/identifiers';
 import { DATABASE, type Db } from '../database/database.module';
 import { lockPersonsWithin } from '../database/person-lock';
 
@@ -1081,6 +1081,126 @@ export class HierarchyService {
       .execute();
 
     return rows.map((row) => row.person_id);
+  }
+
+  /**
+   * Everyone below the person, **excluding the person**, with the depth each sits at.
+   *
+   * `subtreeOf` computes this depth and discards it, and the two are kept apart rather
+   * than merged: every existing caller of that method wants a membership set and would
+   * have to ignore a second column, while the `descendants` route pages by
+   * depth and cannot. Depth 0 is dropped here because a descendant is not oneself —
+   * section 5 keeps direct leaders and descendants distinct, and a route named for the
+   * second must not quietly answer with the person in it.
+   *
+   * **Ordered by depth then identifier, which is what makes it pageable.** A tree read
+   * top down is the order somebody expanding it reads in, and neither term needs a name
+   * — which matters because names live in `people` and sorting by one would put this
+   * collection's page boundary in a module that cannot see the edges.
+   *
+   * **The page is taken in the database rather than sliced in the caller**, and both
+   * halves of that matter. A subtree at a Network root is the whole Network, so slicing
+   * in memory reads every row of it on every request and ships it over the wire to
+   * discard most of it — the shape `CLAUDE.md` records as open about what a re-homed
+   * read may materialise. And the cursor
+   * comparison is then PostgreSQL's own `uuid` ordering: comparing identifiers as
+   * JavaScript strings agrees with it for the canonical lowercase form
+   * `gen_random_uuid()` produces and not for any other, so a re-cased cursor would have
+   * resolved to the wrong position instead of being refused.
+   *
+   * **The cycle flag is computed over the whole subtree and not over the page**, so a
+   * cycle beyond the slice still refuses. A page past the end returns no rows and so
+   * carries no flag, which is acceptable because an earlier page of the same collection
+   * carried it.
+   *
+   * Current state, per decision 0252: no period, `ended_at IS NULL`.
+   */
+  async descendantsPageOf(
+    personId: string,
+    page: { after: { depth: number; personId: string } | null; limit: number },
+  ): Promise<{ personId: string; depth: number }[]> {
+    // `(0, nil)` sorts before every row, because every descendant is at depth 1 or
+    // deeper. So the first page needs no second query shape.
+    const afterDepth = page.after === null ? 0 : page.after.depth;
+    const afterId = page.after === null ? NIL_UUID : page.after.personId;
+
+    const result = await sql<{ person_id: string; depth: number; is_cycle: boolean }>`
+      WITH RECURSIVE subtree AS (
+        SELECT ${personId}::uuid AS person_id, 0 AS depth
+        UNION ALL
+        SELECT pa.person_id, s.depth + 1
+          FROM pastoral_assignments pa
+          JOIN subtree s ON pa.leader_id = s.person_id
+         WHERE pa.ended_at IS NULL
+      ) CYCLE person_id SET is_cycle USING path,
+      descendants AS (
+        SELECT person_id, depth, bool_or(is_cycle) OVER () AS is_cycle
+          FROM subtree
+         WHERE depth > 0
+      )
+      SELECT person_id, depth, is_cycle
+        FROM descendants
+       WHERE (depth, person_id) > (${afterDepth}::int, ${afterId}::uuid)
+       ORDER BY depth, person_id
+       LIMIT ${page.limit}
+    `.execute(this.db);
+
+    this.rejectCycle(result.rows, personId);
+
+    return result.rows.map((row) => ({ personId: row.person_id, depth: Number(row.depth) }));
+  }
+
+  /**
+   * Which of these people currently lead anybody.
+   *
+   * A tree node needs to know whether it opens.
+   *
+   * One statement for a page rather than one per node.
+   */
+  async whichLeadAnyone(personIds: readonly string[]): Promise<Set<string>> {
+    if (personIds.length === 0) {
+      return new Set();
+    }
+
+    const rows = await this.db
+      .selectFrom('pastoral_assignments')
+      .select('leader_id')
+      .distinct()
+      .where('leader_id', 'in', [...personIds])
+      .where('ended_at', 'is', null)
+      .execute();
+
+    return new Set(rows.flatMap((row) => (row.leader_id === null ? [] : [row.leader_id])));
+  }
+
+  /**
+   * Everyone below the person as it stands now, **excluding the person**, each with the
+   * leader they hang from (decision 0252).
+   *
+   * The Network screen's headcounts and its per-branch figures are all sums over one
+   * branch, and every row's branch is a part of the focus person's. So the edges are read
+   * once and the caller folds them bottom-up, rather than walking once per row.
+   *
+   * Current state, `ended_at IS NULL`, and cycle-safe as every recursive walk here is.
+   */
+  async subtreeEdgesOf(personId: string): Promise<{ personId: string; leaderId: string }[]> {
+    const result = await sql<{ person_id: string; leader_id: string; is_cycle: boolean }>`
+      WITH RECURSIVE subtree AS (
+        SELECT ${personId}::uuid AS person_id, NULL::uuid AS leader_id
+        UNION ALL
+        SELECT pa.person_id, pa.leader_id
+          FROM pastoral_assignments pa
+          JOIN subtree s ON pa.leader_id = s.person_id
+         WHERE pa.ended_at IS NULL
+      ) CYCLE person_id SET is_cycle USING path
+      SELECT person_id, leader_id, is_cycle FROM subtree
+    `.execute(this.db);
+
+    this.rejectCycle(result.rows, personId);
+
+    return result.rows.flatMap((row) =>
+      row.leader_id === null ? [] : [{ personId: row.person_id, leaderId: row.leader_id }],
+    );
   }
 
   /** The immediate children of a leader, whether or not they qualify as leaders. */

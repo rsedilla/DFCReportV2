@@ -11,10 +11,10 @@ import { FailureNotice } from '@/components/ui/failure-notice';
 import { RadioGroup } from '@/components/ui/radio-group';
 import { Tag } from '@/components/ui/tag';
 import {
-  listCellMeetings,
   listCells,
+  listMeetingsAwaiting,
   peopleWithoutACell,
-  type CellMeetings,
+  type AwaitingMeetings,
   type CellSummary,
 } from '@/lib/cells';
 import { getDccRoster, listDccEvents, type DccEvent, type DccRoster } from '@/lib/dcc';
@@ -97,33 +97,37 @@ export default function DashboardPage() {
 type QueueFilter = 'ALL' | 'CELLS' | 'SUNDAYS';
 
 type QueueItem =
-  | { kind: 'cell'; month: string; date: string; time: string; cell: CellSummary }
+  | {
+      kind: 'cell';
+      month: string;
+      date: string;
+      time: string;
+      cellId: string;
+      cellCode: string;
+      /** Null while the Cell is `ACTIVE`; a Manila date once it has closed. */
+      closedOn: string | null;
+    }
   | { kind: 'dcc'; month: string; date: string; eventId: string; marked: number; total: number };
 
 /**
- * A month's Cell meetings still awaiting a record, from the leader's own Cells.
+ * A month's Cell meetings still awaiting a record from this leader.
  *
- * **Only meetings whose Manila day has begun.** The listing returns the month's whole
- * schedule with no record for a date not yet reached, and section 13 refuses a record
- * for one, so offering it here would offer a button the API refuses.
+ * **The server decides the population now** (ruling of 2026-09-17). It was assembled
+ * here from the Cells index and one request per Cell, which could not reach a **closed**
+ * Cell's meetings at all — the index is `ACTIVE`-only — and section 19 calls this queue
+ * "the only surface naming those meetings". The day bound and the "no record" filter
+ * moved with it: both are the route's, so a client cannot drift from them.
  */
-function cellEntries(
-  cells: readonly CellSummary[],
-  meetings: readonly { data?: CellMeetings }[],
-  month: string,
-  today: string,
-): QueueItem[] {
-  return cells.flatMap((cell, index) =>
-    (meetings[index]?.data?.meetings ?? [])
-      .filter((entry) => entry.meeting === null && entry.scheduled_date <= today)
-      .map((entry) => ({
-        kind: 'cell' as const,
-        month,
-        date: entry.scheduled_date,
-        time: entry.scheduled_time,
-        cell,
-      })),
-  );
+function cellEntries(awaiting: AwaitingMeetings | undefined): QueueItem[] {
+  return (awaiting?.meetings ?? []).map((entry) => ({
+    kind: 'cell' as const,
+    month: entry.reporting_month,
+    date: entry.scheduled_date,
+    time: entry.scheduled_time,
+    cellId: entry.cell_id,
+    cellCode: entry.cell_code,
+    closedOn: entry.cell_closed_on,
+  }));
 }
 
 /**
@@ -197,6 +201,22 @@ function Dashboard() {
     queryFn: ({ signal }) => peopleWithoutACell({ limit: UNPLACED_TILE + 1 }, signal),
   });
 
+  // **One request per open month**, replacing two index calls and one per Cell. The
+  // key is the month alone, because it is the actor's own queue and nobody else's.
+  //
+  // **The recording screen clears it by the bare `meetings-awaiting` prefix**, which
+  // it had to be given: the queue used to be keyed `['cell-meetings', id, month]` and
+  // was cleared by the invalidation that screen already made, and this key is not
+  // under that prefix. Said the other way round, moving the queue onto its own route
+  // moved it out of the reach of the only thing that refreshed it.
+  const awaiting = useQuery({
+    queryKey: ['meetings-awaiting', month],
+    queryFn: ({ signal }) => listMeetingsAwaiting(month, signal),
+  });
+
+  // **The tile's own read, and no longer the queue's.** "Cells you lead" is a
+  // current-state figure and the `ACTIVE`-only index is exactly right for it: a closed
+  // Cell is not one you lead. The queue needs the opposite and now asks its own route.
   const mine = useQuery({
     queryKey: ['cells', month, true],
     queryFn: ({ signal }) => listCells({ month, ledBy: 'me' }, signal),
@@ -205,16 +225,6 @@ function Dashboard() {
   const scoped = useQuery({
     queryKey: ['cells', month, false],
     queryFn: ({ signal }) => listCells({ month }, signal),
-  });
-
-  // One request per Cell the actor leads, because a meeting awaiting a record is
-  // a property of a meeting rather than of the Cell — the index carries the two
-  // coverage figures and never which meetings are missing.
-  const meetings = useQueries({
-    queries: (mine.data?.data ?? []).map((cell) => ({
-      queryKey: ['cell-meetings', cell.id, month],
-      queryFn: ({ signal }: { signal: AbortSignal }) => listCellMeetings(cell.id, month, signal),
-    })),
   });
 
   // **The Sundays on the leader's own checklist.** The events index says which of
@@ -238,24 +248,13 @@ function Dashboard() {
     })),
   });
 
-  // **Last month's outstanding work, read only in the close week**, under the same keys
-  // the recording screens refresh, so saving there clears the entry here.
-  const minePrevious = useQuery({
-    queryKey: ['cells', previousMonth, true],
-    queryFn: ({ signal }) => listCells({ month: previousMonth, ledBy: 'me' }, signal),
+  // **Last month's outstanding work, read only in the close week.** A month that has
+  // shut answers `open: false` and an empty list rather than refusing, so nothing here
+  // has to decide whether it is still the leader's to record.
+  const awaitingPrevious = useQuery({
+    queryKey: ['meetings-awaiting', previousMonth],
+    queryFn: ({ signal }) => listMeetingsAwaiting(previousMonth, signal),
     enabled: inCloseWeek,
-  });
-
-  // A Cell meeting of a month that has closed is not the leader's to record any more, so
-  // its meetings are not even read once the server says the month is shut.
-  const cellsPrevious = minePrevious.data?.open ? minePrevious.data.data : [];
-
-  const meetingsPrevious = useQueries({
-    queries: cellsPrevious.map((cell) => ({
-      queryKey: ['cell-meetings', cell.id, previousMonth],
-      queryFn: ({ signal }: { signal: AbortSignal }) =>
-        listCellMeetings(cell.id, previousMonth, signal),
-    })),
   });
 
   const dccEventsPrevious = useQuery({
@@ -310,8 +309,8 @@ function Dashboard() {
   // Sunday on the same date keep that order, because the sort is stable and the Cell
   // entries come first.
   const queue = [
-    ...cellEntries(mine.data?.data ?? [], meetings, month, today),
-    ...cellEntries(cellsPrevious, meetingsPrevious, previousMonth, today),
+    ...cellEntries(awaiting.data),
+    ...cellEntries(awaitingPrevious.data),
     ...dccEntries(recordableEvents, checklists, month),
     ...dccEntries(recordablePrevious, checklistsPrevious, previousMonth),
   ].sort((a, b) => a.date.localeCompare(b.date));
@@ -331,27 +330,21 @@ function Dashboard() {
   // Last month's two indexes count only in the close week: a query that is not enabled
   // stays pending for ever, and would otherwise hold the queue on "Loading…".
   const queuePending =
-    mine.isPending ||
+    awaiting.isPending ||
     dccEvents.isPending ||
-    meetings.some((query) => query.isPending) ||
     checklists.some((query) => query.isPending) ||
-    (inCloseWeek && (minePrevious.isPending || dccEventsPrevious.isPending)) ||
-    meetingsPrevious.some((query) => query.isPending) ||
+    (inCloseWeek && (awaitingPrevious.isPending || dccEventsPrevious.isPending)) ||
     checklistsPrevious.some((query) => query.isPending);
 
   // A queue built from a read that failed is not a queue, so it says nothing at all
   // and leaves the failure notice above to speak.
-  const previousFailed = [
-    minePrevious,
-    dccEventsPrevious,
-    ...meetingsPrevious,
-    ...checklistsPrevious,
-  ].find((query) => query.isError);
+  const previousFailed = [awaitingPrevious, dccEventsPrevious, ...checklistsPrevious].find(
+    (query) => query.isError,
+  );
 
   const queueFailed =
-    mine.isError ||
+    awaiting.isError ||
     dccEvents.isError ||
-    meetings.some((query) => query.isError) ||
     checklists.some((query) => query.isError) ||
     previousFailed !== undefined;
 
@@ -362,21 +355,22 @@ function Dashboard() {
   // **Every query on this page, not the ones it started with.** Section 19 puts
   // outstanding work above the figures precisely so a leader can trust it, and a
   // failed load that renders as an empty queue says "nothing to do" on this screen's
-  // authority. The per-Cell meetings and per-Sunday checklists matter most: without
-  // them the queue is empty, which is the opposite of the truth.
-  const meetingsFailed = meetings.find((query) => query.isError);
+  // authority. The queue's own reads matter most and come first: without them it is
+  // empty, which is the opposite of the truth. `mine` is named here although it now
+  // feeds only a tile — a tile reading `—` because its read failed says nothing about
+  // why, and this rule is about every query rather than about the queue's.
   const checklistFailed = checklists.find((query) => query.isError);
 
-  const failure = mine.isError
-    ? describeFailure(mine.error)
-    : meetingsFailed
-      ? describeFailure(meetingsFailed.error)
-      : dccEvents.isError
+  const failure = awaiting.isError
+    ? describeFailure(awaiting.error)
+    : dccEvents.isError
         ? describeFailure(dccEvents.error)
         : checklistFailed
           ? describeFailure(checklistFailed.error)
           : previousFailed
             ? describeFailure(previousFailed.error)
+            : mine.isError
+            ? describeFailure(mine.error)
             : scoped.isError
             ? describeFailure(scoped.error)
             : unplaced.isError
@@ -446,7 +440,7 @@ function Dashboard() {
           <ul className="border-line mt-4 border-t">
             {shown.map((item) => (
               <QueueRow
-                key={`${item.month}-${item.kind === 'cell' ? `${item.cell.id}-${item.date}` : item.eventId}`}
+                key={`${item.month}-${item.kind === 'cell' ? `${item.cellId}-${item.date}` : item.eventId}`}
                 item={item}
                 currentMonth={month}
               />
@@ -769,12 +763,18 @@ function openUntilLabel(itemMonth: string, currentMonth: string): string {
  */
 function QueueRow({ item, currentMonth }: { item: QueueItem; currentMonth: string }) {
   const { day, weekday } = dateParts(item.date);
-  const title = item.kind === 'cell' ? `Cell ${item.cell.cell_id}` : 'DCC Sunday';
+  const title = item.kind === 'cell' ? `Cell ${item.cellCode}` : 'DCC Sunday';
   const href =
-    item.kind === 'cell' ? `/cells/${item.cell.id}/meetings/${item.date}` : `/dcc/${item.eventId}`;
+    item.kind === 'cell' ? `/cells/${item.cellId}/meetings/${item.date}` : `/dcc/${item.eventId}`;
+  // **A closed Cell says so in words and carries the date** (owner's choice of
+  // 2026-09-17). The meeting is still recordable while its month is open; what a leader
+  // needs is why the Cell is no longer in their Cells list, and sections 13, 17 and 19
+  // refuse to encode that in colour — so it is neither a tag nor a tint.
   const detail =
     item.kind === 'cell'
-      ? timeLabel(item.time)
+      ? item.closedOn === null
+        ? timeLabel(item.time)
+        : `${timeLabel(item.time)} · Cell closed ${dayLabel(item.closedOn)}`
       : `${item.marked} of ${item.total} of your people marked`;
   const outstanding =
     item.kind === 'cell' ? 'Awaiting a record' : `${item.total - item.marked} awaiting`;

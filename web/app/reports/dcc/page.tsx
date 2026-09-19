@@ -10,6 +10,8 @@ import { CoverageFigure } from '@/components/coverage-figure';
 import { HowTheseAreCounted } from '@/components/how-counted';
 import { MonthPicker } from '@/components/month-picker';
 import { CoverageBySunday } from '@/components/report-coverage';
+import { CoverageByLeader, CoverageSwitch } from '@/components/report-coverage-by-leader';
+import { LeaderDrill } from '@/components/leader-drill';
 import { ReportsSwitch } from '@/components/reports-switch';
 import { FailureNotice } from '@/components/ui/failure-notice';
 import { getMe, holdsWholeChurch } from '@/lib/me';
@@ -64,6 +66,10 @@ export function DccReport() {
   // Pastor by — a leader-scoped viewer has one scope and a control with one option
   // is a control that lies about having a choice.
   const [network, setNetwork] = useState<ReportNetwork | ''>('');
+  // A leader opened from the By leader table (decision 0254), carried in the address so
+  // the browser's Back returns to the report it was opened from.
+  const leader = search.get('leader');
+  const [coverageBy, setCoverageBy] = useState<'first' | 'leader'>('first');
 
   const me = useQuery({ queryKey: ['me'], queryFn: ({ signal }) => getMe(signal) });
 
@@ -76,13 +82,15 @@ export function DccReport() {
   // **A Network narrows that grant and never widens a leader's**, which is why the
   // selector is gated above rather than the scope being chosen here: a leader-scoped
   // viewer reaches the `LEADER` branch whatever `network` holds.
-  const scope: Exclude<ReportScope, { kind: 'CELL' }> | null = wholeChurch
-    ? network === ''
-      ? { kind: 'WHOLE_CHURCH' }
-      : { kind: 'NETWORK', network }
-    : me.data
-      ? { kind: 'LEADER', person_id: me.data.person_id }
-      : null;
+  const scope: Exclude<ReportScope, { kind: 'CELL' }> | null = leader
+    ? { kind: 'LEADER', person_id: leader }
+    : wholeChurch
+      ? network === ''
+        ? { kind: 'WHOLE_CHURCH' }
+        : { kind: 'NETWORK', network }
+      : me.data
+        ? { kind: 'LEADER', person_id: me.data.person_id }
+        : null;
 
   const report = useQuery({
     queryKey: ['dcc-report', month, scope],
@@ -99,13 +107,15 @@ export function DccReport() {
         <HowTheseAreCounted report="dcc" />
       </div>
       <p className="text-muted mt-4 max-w-2xl text-sm leading-relaxed">
-        What the people you oversee recorded for this month&rsquo;s Sundays, and how many of
-        the leaders who owed a record filed one.
+        What the people you oversee recorded for this month&rsquo;s Sundays, and how many of the
+        leaders who owed a record filed one.
       </p>
 
       <MonthPicker month={month} onChange={setMonth} open={report.data?.open} />
 
-      {wholeChurch ? (
+      {leader ? <LeaderDrill personId={leader} report="dcc" month={month} /> : null}
+
+      {wholeChurch && !leader ? (
         <div className="mt-4">
           <label htmlFor="dcc-scope" className="field-label block">
             Figures for
@@ -121,12 +131,11 @@ export function DccReport() {
             <option value="WOMENS">Women&rsquo;s Network</option>
           </select>
           <p className="text-muted mt-2 max-w-2xl text-sm leading-relaxed">
-            A Network counts the people who belong to it, not the people under its root
-            (decision 0219). For the people who attended, the two Networks add up to the
-            whole church wherever everybody holds one Network — which section 20 states as a
-            property of the data rather than one the schema enforces. It claims nothing of
-            the kind for the coverage figures above, which count obligations rather than
-            people.
+            A Network counts the people who belong to it, not the people under its root (decision
+            0219). For the people who attended, the two Networks add up to the whole church wherever
+            everybody holds one Network — which section 20 states as a property of the data rather
+            than one the schema enforces. It claims nothing of the kind for the coverage figures
+            above, which count obligations rather than people.
           </p>
         </div>
       ) : null}
@@ -159,9 +168,9 @@ export function DccReport() {
               />
             </p>
             <p className="text-muted mt-2 max-w-2xl text-sm leading-relaxed">
-              Counted across every Sunday of the month. A leader owes one record for each
-              Sunday they were responsible for somebody, and a Sunday that has not happened
-              owes nobody anything.
+              Counted across every Sunday of the month. A leader owes one record for each Sunday
+              they were responsible for somebody, and a Sunday that has not happened owes nobody
+              anything.
             </p>
           </section>
 
@@ -184,7 +193,9 @@ export function DccReport() {
                 <p className="text-muted mt-2 max-w-2xl text-sm leading-relaxed">
                   No service was held on{' '}
                   {report.data.removed_events.map((date) => dayLabel(date)).join(', ')}, so
-                  {report.data.removed_events.length === 1 ? ' that Sunday is' : ' those Sundays are'}{' '}
+                  {report.data.removed_events.length === 1
+                    ? ' that Sunday is'
+                    : ' those Sundays are'}{' '}
                   not counted.
                 </p>
               ) : null}
@@ -194,9 +205,7 @@ export function DccReport() {
               <h2 id="people-heading" className="field-label">
                 People who attended
               </h2>
-              <p className="mt-2 text-xl font-semibold tabular-nums">
-                {report.data.unique_people}
-              </p>
+              <p className="mt-2 text-xl font-semibold tabular-nums">{report.data.unique_people}</p>
               <p className="text-muted mt-2 max-w-2xl text-sm leading-relaxed">
                 Counted once each, however many Sundays they came to.
               </p>
@@ -226,11 +235,32 @@ export function DccReport() {
             )}
           </div>
 
-          {/*
-            Left out for a Network: the calendar's figures are not narrowed by Network, so
-            its rows would count people the figures above do not.
-          */}
-          {network === '' ? <CoverageBySunday month={month} /> : null}
+          <section aria-labelledby="coverage-by-heading">
+            <h2 id="coverage-by-heading" className="field-label">
+              Row by row
+            </h2>
+            {/*
+              By Sunday reads the calendar under the reader's own scope, so it is offered only
+              where that is the report's scope too: not for a Network, and not for a leader
+              opened from the list.
+            */}
+            <CoverageSwitch
+              first={network === '' && !leader ? 'By Sunday' : null}
+              value={network === '' && !leader ? coverageBy : 'leader'}
+              onChange={setCoverageBy}
+            />
+            {network === '' && !leader && coverageBy === 'first' ? (
+              <CoverageBySunday month={month} />
+            ) : scope ? (
+              <CoverageByLeader
+                key={`${month}-${JSON.stringify(scope)}`}
+                report="dcc"
+                month={month}
+                scope={scope}
+                unit="records"
+              />
+            ) : null}
+          </section>
         </div>
       ) : null}
     </main>

@@ -7,12 +7,18 @@ import { ALL_SCOPE_TYPES } from '../../src/auth/authorization/scopes';
 
 /**
  * SKILL.md section 7 calls the capability list and the scope list closed
- * enumerations, because a guard cannot fail closed against an open one. These
- * tests are a second transcription of both lists: if the enumeration in the code
- * drifts from the specification, one of the two has to change deliberately.
+ * enumerations, because a guard cannot fail closed against an open one. The scope
+ * test is a second transcription of section 7's four. The capability test is not:
+ * it pins what the application declares, which is a subset of what section 7
+ * names.
+ *
+ * Section 7 names more capabilities than this file does, and deliberately: the
+ * Conquest, SUYNL and Training capabilities are specified (sections 27 and 28)
+ * and nothing is built that could hold one, so they are absent here and from the
+ * `capability` enum until the migration that builds those modules adds them.
  */
-describe('the capability enumeration (SKILL.md section 7)', () => {
-  const SPECIFIED = [
+describe('the capability enumeration the application declares', () => {
+  const DECLARED = [
     'people.view_subtree',
     'people.create',
     'people.edit_basic',
@@ -42,8 +48,8 @@ describe('the capability enumeration (SKILL.md section 7)', () => {
     'audit.view',
   ];
 
-  it('is exactly the twenty-seven the specification names', () => {
-    expect([...ALL_CAPABILITIES]).toEqual(SPECIFIED);
+  it('is exactly the capabilities the application declares', () => {
+    expect([...ALL_CAPABILITIES]).toEqual(DECLARED);
   });
 
   it('holds no duplicates', () => {

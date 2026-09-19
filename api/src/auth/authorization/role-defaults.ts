@@ -1,5 +1,8 @@
 /**
- * The role catalog of SKILL.md section 7, transcribed.
+ * The role catalog of SKILL.md section 7, transcribed for the capabilities this
+ * application declares. Section 7's table carries more rows: the Conquest, SUYNL
+ * and Training capabilities are specified (sections 27 and 28) and nothing is
+ * built that could hold one, so their defaults arrive with those modules.
  *
  * Role defaults are specification, not data. This table is not editable at
  * runtime, and `roles.manage` governs which roles an account holds, never what a

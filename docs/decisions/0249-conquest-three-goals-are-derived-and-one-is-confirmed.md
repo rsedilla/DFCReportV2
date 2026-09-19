@@ -20,6 +20,10 @@ owner to overturn; what would be wrong is presenting them among the six.
 **1. What each goal means, and which the records already hold.** Section 27 states them. Open a
 cell, Completion of 12 and Raise 12 leaders are computed from `cell_leadership_requests`,
 `cells`, `cell_leaderships` and `pastoral_assignments`; Win 3 is stated by a leader.
+*(Amended by decision 0250 later the same day: SUYNL gave the church a record Win 3 can be read
+from, so all four are derived and a leader states only history the records cannot hold. The
+ground below — that nothing records who won whom — is still true and is not what 0250
+overturned.)*
 
 **2. A goal reached stays reached**, carrying the date it was first reached, with the current
 standing shown beside it.
@@ -35,7 +39,9 @@ its own screen, and a per-leader breakdown is not built.
 **6. The specification is written now; the code is built after the pilot.**
 
 **7. Conquest is the sidebar's sixth item**, extending decision 0245 from five, placed as
-Section 19 places it, and its own item rather than a screen under `Record` — `Record` is
+Section 19 places it, and its own item rather than a screen under `Record`
+*(amended by decision 0250: the sixth item is `Growth` and Conquest is one of its three tabs;
+the argument against `Record` carried over unchanged)* — `Record` is
 attendance against a dated event with a submission window closing behind it (Sections 9 and
 13), and a goal is reached on a day nobody scheduled. **Not an owner answer.**
 
@@ -50,9 +56,12 @@ Section 9's own answer to the identical problem applied one domain over rather t
 
 ## The ground
 
-**Deriving is Section 5's rule rather than a preference.** Section 9 forbids hand-maintaining a
-classification attendance history can derive, and Section 5 forbids a second representation of
-a fact a table already holds, in the sentence refusing a `status` column beside `ended_at`.
+**Deriving is Section 9's rule rather than a preference.** Section 9 forbids hand-maintaining a
+classification attendance history can derive, and Section 5 refuses a `status` column beside
+`ended_at` for the same reason — a second copy free to contradict the rows it duplicates. *(That
+sentence read "Section 5 forbids a second representation of a fact a table already holds" until
+decision 0250: Section 5 states no such general rule, and denormalizes the root seat where two
+triggers keep the copy honest.)*
 Raise 12 leaders is the sharper case: Section 16 already evaluates that condition from the
 tree, so a tick would be free to contradict the rows it reads — different figures, one being a
 current-state snapshot and the other a milestone, over the same records.
@@ -121,7 +130,7 @@ carried beside it.
 
 **A derived goal nobody stated cannot be corrected on this screen.** It looks wrong because a
 Cell leadership or a pastoral assignment is wrong, which is the right place to fix it and is
-further away. Where a leader did state one — a pre-encoding confirmation, or a setup Cell's
+further away. *(Decision 0250 adds a third source: a SUYNL lesson, once Win 3 became derived.)* Where a leader did state one — a pre-encoding confirmation, or a setup Cell's
 answer — it is corrected here like any other.
 
 **A Cell opened before encoding and closed before it cannot be confirmed at all**, since every
@@ -132,8 +141,11 @@ had already ended before the church was encoded.
 
 ## What this does not settle
 
-- **What date a confirmation of a pre-encoding goal carries, and who may set it.** Section 3
-  makes a past effective date backdating, behind a capability no Leader holds. Escalated.
+- ~~**What date a confirmation of a pre-encoding goal carries, and who may set it.**~~
+  **Settled by decision 0250 the same day**: the confirming leader states it, without
+  `records.backdate_effective_date`, while no report counts these goals by period — which
+  condition is part of that ruling and is itself recorded as open. It is an owner ruling and not
+  a deduction: 0250 records two attempts to derive it from Section 7 and why both failed.
 - **Whether Conquest counts replace Section 16's two metrics, sit beside them, or stay
   separate**, owed by the first Reports block that carries them.
 - **What a Cell closed `CREATED_IN_ERROR` does to Open a cell.** Section 27 states two rules
@@ -144,7 +156,8 @@ had already ended before the church was encoded.
   capabilities that resolve as of the period viewed and makes every other resolve as a write;
   this is a fourth, and the closed form answers it by default rather than by decision.
 - **What a Win 3 confirmation records beyond a boolean**, and therefore what a leader disputing
-  one can point at.
+  one can point at. *Narrowed by decision 0250 to a pre-encoding confirmation alone: a derived
+  Win 3 points at three disciples and their lesson rows.*
 - **Whether the ladder should ever be enforced.** A refusal reaches only what a leader states,
   never what the records say; a rule requiring three before a Cell is opened belongs in
   Section 10.

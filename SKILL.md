@@ -136,6 +136,8 @@ Principle 13 requires a modular monolith. These are the modules, and the list is
 | `audit` | The audit log |
 | `admin` | Settings, the initial-encoding phase, administrative operations |
 | `conquest` | The four G12 goals: what a leader confirms about them, and their corrections (Section 27) |
+| `suynl` | SUYNL lessons and their corrections (Section 28) |
+| `training` | Graduation from the Encounter, Life Class and SOL 1 to 3, and their corrections (Section 28) |
 
 **A module owns its tables. No other module writes them, ever, and no other module reaches them for anything a service interface can answer.** Cross-module access goes through the owning module's service interface, never through its repository.
 
@@ -1558,6 +1560,12 @@ The capabilities are exactly:
 - `conquest.view_subtree`
 - `conquest.confirm`
 - `conquest.confirm_on_behalf`
+- `suynl.view_subtree`
+- `suynl.confirm`
+- `suynl.confirm_on_behalf`
+- `training.view_subtree`
+- `training.confirm`
+- `training.confirm_on_behalf`
 
 Each capability guards one endpoint family, and the boundaries are not left to inference:
 
@@ -1569,6 +1577,7 @@ Each capability guards one endpoint family, and the boundaries are not left to i
 - `reports.view_subtree` guards `/api/v1/reports` — the aggregate reporting surface, Network Summary, and the notification content derived from it (Section 13). It never substitutes for `dcc.view_subtree` or `cell.view_subtree` on the domain endpoints, and neither of those substitutes for it
 - `dcc.correct_subtree` and `cell.correct_subtree` guard amendment of an already-submitted record (Section 14), separately from `take_attendance`, which guards the first submission
 - `conquest.*` guards everything under `/api/v1/conquest` (Section 27). `conquest.confirm` carries correcting a confirmation as well as filing one, and `conquest.confirm_on_behalf` carries both for a downline leader, which is where this domain deliberately differs from the two attendance domains above: there a leader may record and be unable to correct (ruling of 2026-09-15), while a Conquest correction withdraws a statement attributed to the person it is attributed to, filed either by them or by an upline already authorized to file for them. Nobody acquires reach over a statement by correcting it that they did not have to make it. There is no `conquest.correct_subtree`, and adding one would be an amendment to this section
+- `suynl.*` and `training.*` guard `/api/v1/suynl` and `/api/v1/training` (Section 28), on the terms of the bullet above and with the same absence of a correcting capability. **The two sets are separate and neither reaches the other**, although their screens are tabs of one sidebar item: a SUYNL lesson and a graduation from a school are different records, and an administrator must be able to let a leader file one and not the other. `conquest.*` reaches neither, even though Section 27 now derives Win 3 from what `suynl` holds — a derived figure is read under the capability guarding the route that returns it, never under the capabilities of the modules it was composed from
 
 This list is a **closed enumeration**, on the same terms as the scope values below. A guard cannot fail closed against an open list, and `capability_grants.capability` stores one of these identifiers. Adding a capability is an amendment to this specification, never a runtime action.
 
@@ -1622,6 +1631,12 @@ Three roles exist. Each carries the default capabilities and scopes below. Anyth
 | `conquest.view_subtree` | Whole Church | Whole Church | own/subtree |
 | `conquest.confirm` | Whole Church | Whole Church | own/subtree |
 | `conquest.confirm_on_behalf` | Whole Church | Whole Church | own/subtree |
+| `suynl.view_subtree` | Whole Church | Whole Church | own/subtree |
+| `suynl.confirm` | Whole Church | Whole Church | own/subtree |
+| `suynl.confirm_on_behalf` | Whole Church | Whole Church | own/subtree |
+| `training.view_subtree` | Whole Church | Whole Church | own/subtree |
+| `training.confirm` | Whole Church | Whole Church | own/subtree |
+| `training.confirm_on_behalf` | Whole Church | Whole Church | own/subtree |
 
 Five of these defaults are deliberate and must not be widened for convenience. Two of the capabilities they cover — `roles.manage` and `accounts.manage`, for a Senior Pastor — may not be widened at all, by any grant and for any reason; the rest are defaults an Admin may deliberately exceed.
 
@@ -1674,7 +1689,8 @@ Scope resolves against a target. Where the target is a Person, it resolves throu
   - **A `NETWORK` selector is covered by a Whole Church grant, or by a `NETWORK` grant naming that Network, and by no subtree grant at all** (ruling of 2026-09-07). That last clause is not a separate rule and does not depend on anybody actually being unplaced: a `NETWORK` selector names **no Person**, so there is no containment for a subtree grant to be tested against, and Section 20 makes a Network's population its *membership* rather than any subtree. *An earlier version argued it from the residual — that a root's subtree "still excludes" one — which is a fact about the rows on a given day: with nobody unplaced a root's subtree and the Network's membership coincide, and the argument would evaporate while the rule stayed right. Admitting a subtree grant would then make an authorization answer depend on whether somebody had been encoded and not yet placed, which is the reasoning this section refuses everywhere else.* Nobody is affected in practice: both Senior Pastors hold Whole Church (Section 4), which is what makes the two Network selectors Section 17 offers them work
   - **It resolves as of the period being reported** (ruling of 2026-09-05), which is the capability rule above applied to the one target that had no instant — `reports.view_subtree` is named there and the selector's instant was not. An open period resolves at the same instant a closed one does — the period's final millisecond (ruling of 2026-09-07). *This section said "as of now" until then, repeating the half of Section 20 that its own neighbouring sentence contradicted.* So a leader may read October's figures for a downline leader who left their subtree in November, and may drill into them: the total is computed from the October tree and already contains that leader's people, so authorizing undated would show a figure while refusing the breakdown that explains it, against Section 20's additivity — on the actor's own screen rather than in the arithmetic, since the identity still holds and what breaks is the actor's ability to see one of its addends. Historical visibility follows historical responsibility, which is this section's own reason, given in the base bullet above where a Cell target "resolves through the Cell's leader **as of the period being viewed**" and cited there to Sections 10 and 15. *A first version cited those two sections as giving the reason. They do not: §10 says a closed Cell's recorded attendance and prior reports are unaffected and gives no visibility rule, and §15's only closed-Cell provision is the attention list, which is bounded by the submission window and justified by a recording obligation rather than by historical visibility. It also cited the closed-Cell **fallback**, which is the undated half of that bullet, where the dated half is what carries this.*
   - **It resolves through the pastoral tree in force at that instant, and never through Section 20's placement graph** (ruling of 2026-09-06). The two are different graphs and the placement graph is strictly wider: it exists so that a report's totals sum, placing a person with no open assignment at the period's end by the last one they held, and continuing the chain past a leader who left. Section 20 requires the condition that widens it to be **surfaced on an attention list** as a gap needing repair, so reading the same fact as a grant of visibility would turn a defect into a licence — a leader could read the figures of somebody whose only connection to them is a chain through a person who left years earlier, which Principle 5 refuses. **The wider graph computes and the narrower graph authorizes.** What that costs is accepted and stated: an aggregate may cover people the actor could not reach one at a time, which is tolerable exactly while the report discloses no identity. A per-person view is a different question and is not settled by this.
-  - **A `CELL` selector resolves through the Cell's leader in force at that instant, and where the Cell holds none there, through its last leader** (ruling of 2026-09-07). The base Cell bullet above is the only sentence in this section that says what a Cell resolves *through*; this bullet has only ever supplied an instant, because `LEADER` names its person and `NETWORK` names none. So the two are read together rather than chosen between, and the closed-Cell fallback reaches this target as it reaches every other Cell target. **The fallback fires only where the instant finds nobody** — after a closure, in the period a closure falls in, and before the Cell existed — so a **handover** never invokes it: each past period resolves to whoever held the Cell at that period's end. **That answer was confirmed deliberately rather than left incidental** (ruling of 2026-09-10), against the argument that Section 13 and decision 0187 settle the structurally identical question one unit down — which leader a meeting on the handover day belongs to — as the **outgoing** one. The two do not conflict, because they are asked at different granularities: a meeting has a date of its own, and 0187’s reason is that attribution must not depend on when the record was entered, while a period has no date of its own but two ends. Resolving it at its final instant is a choice of end rather than a choice of clerk, so that reason does not reach it, and carrying it upward would resolve a period through whoever held the Cell when it *began* — the mirror-image loss rather than an improvement. The period a closure falls in is what makes this worth stating: Section 12 says a Cell "closed part-way through a month has fewer" scheduled meetings "and that is not an anomaly", so that month is reportable and holds real recorded attendance, and resolving through nobody would withhold it from the leader who recorded every row of it. **A `CELL` selector names a Person once resolved, so a subtree grant covers it** where that leader is within the actor's subtree at the same instant, and a `NETWORK` grant covers it where that leader's Network at that instant is the granted one — the `NETWORK` selector's "no subtree grant" clause above rests on naming no Person at all and does not reach this. A Cell that does not exist resolves through nobody, so **every grant narrower than Whole Church** refuses it exactly as it refuses an out-of-scope Cell. A **Whole Church** grant covers a selector before the target is read at all, so it receives a report of zeroes instead — which is not this bullet's rule failing but the open question about a selector naming somebody who does not exist, arriving at a second target kind and recorded in `CLAUDE.md` as such
+  - **A `CELL` selector resolves through the Cell's leader in force at that instant, and where the Cell holds none there, through its last leader** (ruling of 2026-09-07). The base Cell bullet above is the only sentence in this section that says what a Cell resolves *through*; this bullet has only ever supplied an instant, because `LEADER` names its person and `NETWORK` names none. So the two are read together rather than chosen between, and the closed-Cell fallback reaches this target as it reaches every other Cell target. **The fallback fires only where the instant finds nobody** — after a closure, in the period a closure falls in, and before the Cell existed — so a **handover** never invokes it: each past period resolves to whoever held the Cell at that period's end. **That answer was confirmed deliberately rather than left incidental** (ruling of 2026-09-10), against the argument that Section 13 and decision 0187 settle the structurally identical question one unit down — which leader a meeting on the handover day belongs to — as the **outgoing** one. The two do not conflict, because they are asked at different granularities: a meeting has a date of its own, and 0187’s reason is that attribution must not depend on when the record was entered, while a period has no date of its own but two ends. Resolving it at its final instant is a choice of end rather than a choice of clerk, so that reason does not reach it, and carrying it upward would resolve a period through whoever held the Cell when it *began* — the mirror-image loss rather than an improvement. The period a closure falls in is what makes this worth stating: Section 12 says a Cell "closed part-way through a month has fewer" scheduled meetings "and that is not an anomaly", so that month is reportable and holds real recorded attendance, and resolving through nobody would withhold it from the leader who recorded every row of it. **A `CELL` selector names a Person once resolved, so a subtree grant covers it** where that leader is within the actor's subtree at the same instant, and a `NETWORK` grant covers it where that leader's Network at that instant is the granted one — the `NETWORK` selector's "no subtree grant" clause above rests on naming no Person at all and does not reach this. A Cell that does not exist resolves through nobody, so **every grant narrower than Whole Church** refuses it exactly as it refuses an out-of-scope Cell. A **Whole Church** grant covers a selector before the target is read at all, so it reaches the existence check rather than this bullet's resolution — which was never this bullet's rule failing but the open question about a selector naming somebody who does not exist, arriving at a second target kind. **It is settled by the *selector naming nobody* bullet below** (ruling of 2026-09-17), which binds this target kind on the same terms: a Cell that does not exist answers `NOT_FOUND` to a Whole Church grant and the same `SCOPE_DENIED` as before to every narrower one
+  - **A selector whose identifier names no Person or Cell answers `NOT_FOUND`, and scope is resolved before existence is consulted** (ruling of 2026-09-17). *Not the `NETWORK` selector, which names no Person by design and is governed by its own bullet above; this is about an identifier that refers to nobody.* A report is a figure about a subject, and where there is no subject there is no figure: a well-formed identifier that names no Person — `NIL_UUID` included, which this application hands over everywhere else precisely so that a request refuses — answers `NOT_FOUND`. **The ordering is the rule and not an implementation detail.** A grant narrower than the selector keeps receiving the refusal it receives today whether or not the identifier names anybody, so that each actor gets one consistent answer and which one they get is decided by their own scope rather than by the record — which is Section 22's rule for a Cell, applied to the one target kind it had not been read against. *A draft grounded this on closing an existence oracle, which Section 22 refutes for this target kind in terms: "People are not such a case: Section 8 already discloses minimal identity church-wide by design."* It binds a `CELL` selector on the same terms, because one silence in two places is one rule. `GET /api/v1/people/{id}/pastoral-path` already works this way and says why in its own comment; this states it as the rule the next such route follows. *`VALIDATION_FAILED` was refused: the request is well formed and names nobody, which is a different thing from malformed, and Section 22 keeps that code for a request's shape rather than for what it refers to.*
   - **A `NETWORK` grant resolves through `network_as_of` at the instant the target carries** (ruling of 2026-09-07). For this target that instant is the one the selector itself resolves at, so a grant naming the Men's Network covers a leader who was in it **at that instant**, whoever they are today. Not "at any point during the period": a leader who moved Network mid-period is covered by the grant naming the Network they held at the instant, and not by both. That is the same single-instant rule the subtree walk beside it uses, and it holds whichever instant that is — which is the period's final millisecond whether the period is open or closed (ruling of 2026-09-07). *Until that ruling this clause said there was no settled answer to inherit for an open period, because Section 20 stated two — and it was right to decline: the Network axis follows the subtree axis to whatever instant it resolves at, and nothing about Networks turned on which.* Section 4 states the reason the history exists in these terms — "every Network-scoped report for a closed period depends on that answer" — and resolving the subtree dated while resolving the Network undated would have made the two axes disagree about one request. A Network unknown at that instant covers nothing: `network_as_of` answers null before the person was encoded, Section 4 is deliberate that nothing is inferred from before then, and the comparison therefore refuses rather than guesses. *This replaces an earlier ruling of the same day, which refused such a grant outright on the ground that no dated Network resolution existed. One did — `network_as_of`, already called from three modules — and that ruling's own text said so while this section said the opposite.*
   - **The walk runs outside the report's own transaction** (ruling of 2026-09-06). Authorization is decided before the reporting transaction opens, on the pooled connection every other guard in this system uses, which is what keeps the third clause of Section 24's isolation exception true. Deciding scope from the snapshot the figures are computed in would be that section's *lock-then-decide* staleness with the lock removed. The cost is that the guard and the figures read at two instants, and it is stated in both directions. For a closed month both resolve against fixed history and cannot differ except under a **concurrent backdate**, which is left as a residual — Section 20's invalidation list governs when a *stored* figure is recomputed and does not make two live reads agree. For an open period a person moving **under** the selector after the guard ran was already within the actor's reach through that selector, while the selector itself moving **out** of the actor's subtree returns figures to an actor no longer authorized over it, bounded by one request. Neither is a statement about what a subtree scope means generally; both are properties of deciding before the transaction opens.
   - **This moves no write.** The rule below — authority resolves through the current leader, and a write carrying an effective date other than now is still authorized now — is untouched, and it is what stops privilege being reclaimed through a date field. A viewing capability confers no write, `read_only` is valid on it, and a reported period is one that already happened rather than a date an actor picks to act at.
@@ -1895,12 +1911,12 @@ Those conditions are enforced in the owning module's domain layer — `hierarchy
 
 A grant is revoked by setting `revoked_at`, never by deleting the row. The history of who could do what, and when, is part of the audit record.
 
-**`read_only` is valid only on a read capability.** The thirty divide cleanly:
+**`read_only` is valid only on a read capability.** The thirty-six divide cleanly:
 
-- **Read:** `people.view_subtree`, `dcc.view_subtree`, `cell.view_subtree`, `reports.view_subtree`, `audit.view`, `conquest.view_subtree`
+- **Read:** `people.view_subtree`, `dcc.view_subtree`, `cell.view_subtree`, `reports.view_subtree`, `audit.view`, `conquest.view_subtree`, `suynl.view_subtree`, `training.view_subtree`
 - **Write:** every other capability in the list
 
-**This list is enforced by the database as well as by this section**, and a capability added here owes **two** migrations before any grant of it can exist: `capability`, the enumerated type `capability_grants.capability` stores, must gain the identifier — without which no grant of it can be stored at all, whatever the flag says — and `capability_grants_read_only_is_a_read`, which enumerates the read capabilities by name, must gain it if it is one. All three Conquest capabilities owe the enum migration when Conquest is built (Section 27); `conquest.view_subtree` owes the CHECK constraint as well, and the other two must stay out of it, since adding a write capability there would make a `read_only` grant of it storable. **The read list has a third home and it is in the application**, where the same five names are declared and a `read_only` grant of anything else is dropped at runtime; a capability added to the list above owes an edit in all three places, and naming two of them is how one gets missed. The role defaults in the catalog above are a separate mechanism and neither migration gates them: they are declared in code, and what makes a Conquest default unholdable today is simply that no module, capability declaration or route exists yet.
+**This list is enforced by the database as well as by this section**, and a capability added here owes **two** migrations before any grant of it can exist: `capability`, the enumerated type `capability_grants.capability` stores, must gain the identifier — without which no grant of it can be stored at all, whatever the flag says — and `capability_grants_read_only_is_a_read`, which enumerates the read capabilities by name, must gain it if it is one. All nine Conquest, SUYNL and Training capabilities owe the enum migration when those modules are built (Sections 27 and 28); the three `view_subtree` ones among them owe the CHECK constraint as well, and the six confirming capabilities must stay out of it, since adding a write capability there would make a `read_only` grant of it storable. **The read list has a third home and it is in the application**, where a `read_only` grant of anything else is dropped at runtime; a capability added to the list above owes an edit in all three places, and naming two of them is how one gets missed. **The three do not agree today and are not meant to**: this list names eight and the other two homes declare five, the three outstanding being Conquest's, SUYNL's and Training's, which join both homes in the migration that builds those modules. It is stated here so that a reader comparing the three finds the difference explained rather than apparently unnoticed. The role defaults in the catalog above are a separate mechanism and neither migration gates them: they are declared in code, and what makes a Conquest, SUYNL or Training default unholdable today is simply that no module, capability declaration or route exists yet.
 
 A grant of a read capability may set `read_only` true or false; true is the default and the normal case, and false is meaningless there but harmless. A grant of a **write** capability with `read_only` true is **rejected at creation**, not stored and silently ineffective. Without that rejection an Admin granting a management capability and leaving the flag at its default creates a row that grants nothing, with nothing to indicate why the holder is being denied.
 
@@ -2912,7 +2928,9 @@ Cell Leader is the normal qualification for a standard Leader login account.
 
 For counting — Direct Leaders (Section 5) and Leaders with 12+ Direct Leaders (Section 16) — a person qualifies as a leader when they are a **current Cell Leader**: they hold at least one active Cell leadership assignment on an `ACTIVE` Cell.
 
-Leadership is earned by leading a Cell, not conferred by designation. There is no commissioning flag, no graduation status, and no leader role existing apart from actually leading a Cell.
+Leadership is earned by leading a Cell, not conferred by designation. There is no commissioning flag and no leader role existing apart from actually leading a Cell.
+
+**Section 28 records graduation from the church's schools, SOL 3 among them, and a graduation confers no leadership** (the second ruling of 2026-09-16). It records that somebody completed a school. It grants no role, no capability and no authorization anywhere (Section 1, Principle 3), and it puts nobody into the count this passage defines: a person qualifies as a leader by holding an active leadership on an `ACTIVE` Cell and by nothing else. This church has SOL 3 graduates who lead no Cell, which is why the rule is stated here rather than assumed. *This paragraph read "no commissioning flag, no graduation status" until 2026-09-16, when a graduation status was created; the clause that mattered is the one that survives.*
 
 A person with disciples but no Cell is not counted as a leader. They remain in Total People, they appear in the pastoral tree, and their own disciples count normally. They enter the leader count when their Cell opens.
 
@@ -3868,6 +3886,12 @@ Whole Church
                   -> Person
 ```
 
+**The Network screen shows one person's branch of the pastoral tree as it stands now** (ruling of 2026-09-18), guarded by `people.view_subtree`: a breadcrumb, a focus block giving the person's member ID, where they sit and who they report to, and their direct reports twenty at a time. It carries headcounts of that tree — Cell Leaders beneath counting current Cell Leaders (Section 11) under `cell.view_subtree` — and, on each row, DCC records behind and Cell meetings behind for the current month, never added together: each a sum over that row's branch now of each leader's own unmet obligations (Section 20), DCC on events that have happened and a Cell on meetings whose day has begun, read under `dcc.view_subtree` and `cell.view_subtree` respectively, with the month named and marked open. Rows are ordered by name, and a filter may show only rows where either figure is above zero. A row's name and its Open control focus that person; Move is offered on each row to a reader holding `people.manage_pastoral_assignment`; search finds people by name. It hands nothing to Reports.
+
+**Reports lists coverage by leader** (ruling of 2026-09-18). Every leader who owns an obligation within the report's scope and period is a row, the reader first where they own one and the rest by name, and each row counts that leader's own obligations — the leader-events Section 9 counts for DCC and the scheduled meetings Section 12 counts for a Cell, each owned by one leader (Section 20), except a scheduled meeting whose Cell had no leader that day, which `CLAUDE.md` records as open — so the rows add up to the report's coverage. A row opens that leader's report, which counts their whole branch and so can show a larger figure than the row. A row is named only where the guard would admit that leader as a `LEADER` scope selector at the period's final millisecond, decided outside the report's snapshot (Section 24); the rest are counted in one line that names nobody, does not open, and is not shown when it counts nobody.
+
+Nothing on either surface is ranked or coloured (Section 13).
+
 ### My 12 / Direct Leaders report
 
 For any leader, support a Direct Leaders report. Do not build an Oriel-only special report; use the same recursive report engine scoped to the current selected leader.
@@ -3917,7 +3941,7 @@ Historical reports must respect historical pastoral assignments and Cell categor
 
 ### The sidebar is navigation
 
-The sidebar carries links, never counts. Metrics belong on the Dashboard and inside the reporting modules, where they can carry the scope and period that make them meaningful. Adding live numbers to navigation means computing scoped queries on every page load and displaying figures stripped of the context needed to read them.
+The sidebar carries links, never counts. Metrics belong on the Dashboard and inside the reporting modules, where they can carry the scope and period that make them meaningful. Adding live numbers to navigation means computing scoped queries on every page load and displaying figures stripped of the context needed to read them. **The Network screen is a page reached from the sidebar rather than navigation, and carries figures with their branch and month stated** (ruling of 2026-09-18, Section 17).
 
 This is the same rule already applied to leadership-development metrics and Participation, both of which live inside Network Summary rather than earning their own sidebar link (Section 16).
 
@@ -3951,6 +3975,12 @@ A dashboard of counts tells a leader nothing to act on. The Dashboard is the sid
 
 Each entry carries the action that resolves it.
 
+**The meetings half is one route of its own** (ruling of 2026-09-17). `GET /api/v1/cells/meetings/awaiting` is guarded by `cell.take_attendance` against the **actor**, the capability following the act that resolves an entry — submitting a meeting's record — rather than the rows the answer contains. **It returns the meetings the actor is the one authorized to file, and no others**: every scheduled meeting with no record, whose Manila day has begun and whose reporting month is still open, **whether its Cell is `ACTIVE` or `CLOSED`**, which is what makes the closed-Cell half of the bullet above reachable at all. The day bound is the one this section's own bullet needs — a meeting whose day has not begun takes no record (Section 13), so without it the queue would hold every remaining date of the month and offer no act that resolves them. The capability admits the caller and the restriction to the actor's own meetings is a check in the owning module, as it is for the DCC checklist. A downline leader's outstanding meetings are on the attention list one bullet down, never here; the queue is one leader's own work.
+
+**Who that is follows Section 7 and is two rules rather than one**, which is what the bullet above means by "the same person Section 7 authorizes to file it". On an **`ACTIVE`** Cell it is the current leader, whatever any record says: a Cell handed from A to B has B filing a meeting held under A. On a **closed** Cell whose window is open it is whoever led the Cell on the scheduled date, under Section 7's closed-Cell exception and only within it — such a meeting has no row and so carries no frozen responsible leader to read instead. Keying the whole population to the scheduled date would show one leader a task the submission route refuses them, and hide it from the leader who owes it.
+
+**Two enumerations of a leader's Cells now exist and do not agree, deliberately.** The index is `ACTIVE`-only and this queue is not, so a reader comparing them finds a Cell in one and not the other; they answer different questions. The submission window is read here too, Section 13 owning the rule and this route being one more caller of it — the fifth, counted rather than estimated.
+
 ### Dashboards differ by role
 
 One fixed set of tiles serves nobody. A Cell leader has no downline leaders to count; a Senior Pastor has no attendance of their own to record.
@@ -3964,24 +3994,26 @@ No dashboard ranks leaders, scores them, or colour-grades them (Section 13, Meet
 
 ### Sidebar
 
-The sidebar has six items (ruling of 2026-09-14, extended by the ruling of 2026-09-16 which added `Conquest`), and the sixth is not built: the application ships five while Conquest waits for the code the ruling of 2026-09-16 defers past the pilot. What a person fills in is under `Record`, and what they read is under `Reports`. Each module keeps its section and its name; the label is what reaches it.
+The sidebar has six items (ruling of 2026-09-14, extended by the first ruling of 2026-09-16 which added `Conquest`, and renamed by the second, which made Conquest one tab of `Growth` alongside SUYNL and Training). The sixth is not built: the application ships five while Growth waits for code both of those rulings defer past the pilot. What a person fills in is under `Record`, and what they read is under `Reports`. Each module keeps its section and its name; the label is what reaches it.
 
 ```text
 Record     the Dashboard, and recording DCC and Cell attendance (Sections 9, 12, 13)
 Reports    DCC and Cell figures, and Network Summary when it is built (Section 16)
 People     My People and Search (Sections 3 and 8)
 Cells      the Cell Leaders module (Section 15)
-Conquest   the four G12 goals of the people a leader cares for (Section 27), when it is built
+Growth     SUYNL, Training and the four G12 goals (Sections 27 and 28), when it is built
 Network    My Network, the pastoral tree (Section 5)
 ```
 
-**`Conquest` is its own item rather than a screen under `Record`**, even though a leader files confirmations there. `Record` is the recording of attendance against a dated event — a Sunday, a meeting — with a submission window closing behind it (Sections 9 and 13). A goal is reached on a day nobody scheduled, and three of the four are filed only where a leader is confirming history the records cannot hold. Putting it under `Record` would put a screen with no window inside the one place a window always applies.
+**`Growth` is its own item rather than a screen under `Record`**, even though a leader files lessons, graduations and confirmations there. `Record` is the recording of attendance against a dated event — a Sunday, a meeting — with a submission window closing behind it (Sections 9 and 13). A lesson is done, a school is graduated and a goal is reached on days nobody scheduled, and none of them shuts. Putting Growth under `Record` would put screens with no window inside the one place a window always applies.
+
+**`Growth` carries three tabs — `SUYNL`, `Training`, `Conquest` — rather than three items**, which keeps the sidebar at six, a seventh being more than that bar was drawn for at the narrowest width Section 23's layout check runs at. The three are also what one leader asks one person about in one sitting.
 
 `Account and session` sits in the sidebar's footer, under the signed-in person's name, and is not one of the items.
 
 **A Cell's meeting screens are recording, so they sit under `Record` wherever they are reached from** — a Cell's list of meetings and the screen a meeting is recorded on, whether a leader arrives from Record's outstanding work or from a Cell under `Cells`.
 
-**The order, and the screen a person lands on, follow the reach of `reports.view_subtree` and never a role**, because Section 7 makes a capability and its scope the thing that decides. An account holding it at `WHOLE_CHURCH` sees `Reports · Record · Network · People · Cells` and lands on `Reports`; by the role defaults that is the two Senior Pastors and Admin. Every other account sees `Record · Reports · People · Cells · Network` and lands on `Record`. Both orderings and both landing screens are what the application does today; what it does not yet carry is `Conquest`, which joins each arrangement immediately after `Cells` when it is built. **`Conquest` takes the position the rest of the arrangement gives it rather than a fixed one** (ruling of 2026-09-16): it sits between `Cells` and `Network` in the ordinary arrangement, and last in the whole-church one, where `Network` has already moved up. `Record` stays in the first arrangement because Section 9 puts a person's DCC record on the checklist of the nearest account-holding leader above them, which a Senior Pastor is for their own direct disciples.
+**The order, and the screen a person lands on, follow the reach of `reports.view_subtree` and never a role**, because Section 7 makes a capability and its scope the thing that decides. An account holding it at `WHOLE_CHURCH` sees `Reports · Record · Network · People · Cells` and lands on `Reports`; by the role defaults that is the two Senior Pastors and Admin. Every other account sees `Record · Reports · People · Cells · Network` and lands on `Record`. Both orderings and both landing screens are what the application does today; what it does not yet carry is `Growth`, which joins each arrangement immediately after `Cells` when it is built. **`Growth` takes the position the rest of the arrangement gives it rather than a fixed one** (ruling of 2026-09-16): it sits between `Cells` and `Network` in the ordinary arrangement, and last in the whole-church one, where `Network` has already moved up. `Record` stays in the first arrangement because Section 9 puts a person's DCC record on the checklist of the nearest account-holding leader above them, which a Senior Pastor is for their own direct disciples.
 
 When the Admin dashboard below is built, it adds an `Admin` item for the accounts holding the capabilities that screen needs, and becomes their landing screen. Which capabilities those are is settled with that screen, and is recorded as open until then.
 
@@ -4366,6 +4398,7 @@ Audit important actions, including:
 - Account access decision at archive (Disable or Keep)
 - Account reactivation
 - System setting changed, with previous and new values
+- SUYNL lesson confirmed, and a confirmation corrected with its reason; school graduation confirmed, and a confirmation corrected with its reason — each naming the Person the record is about (Section 28), and each carrying the confirming leader beside the actor where it was filed for a downline leader, on the terms the entry below states
 - Conquest goal confirmed, and a confirmation corrected with its reason, each naming the Person the goal is about (Section 27). **A confirmation filed for a downline leader is one entry that says so**, carrying the confirming leader as well as the actor — the same treatment this list gives an attendance correction made for somebody else, and for the same reason: two entries would double-count one act, and recording only the confirmation loses every one an upline filed from the list that exists to find them
 
 ```text
@@ -4427,6 +4460,8 @@ Recommended REST areas:
 /api/v1/reports
 /api/v1/search
 /api/v1/conquest                          Section 27, when it is built
+/api/v1/suynl                             Section 28, when it is built
+/api/v1/training                          Section 28, when it is built
 ```
 
 Examples:
@@ -4451,7 +4486,8 @@ PUT  /api/v1/people/{id}/pastoral-leader  the reassignment of Section 5
 GET  /api/v1/network/my-tree
 GET  /api/v1/leaders/{id}/children
 GET  /api/v1/leaders/{id}/descendants
-GET  /api/v1/leaders/{id}/summary
+GET  /api/v1/leaders/{id}/dcc-behind       the Network screen's DCC figure, decision 0252
+GET  /api/v1/leaders/{id}/cell-figures     the Network screen's Cell figures, decision 0252
 
 GET  /api/v1/dcc/events?month=YYYY-MM-01  the month's events, with coverage per event
 GET  /api/v1/dcc/events/{id}/roster
@@ -4461,6 +4497,7 @@ GET  /api/v1/dcc/people/{id}/attendance   one person's records and the classific
 
 GET  /api/v1/cells                       the Cells of the actor's scope; ?led_by=me narrows
 POST /api/v1/cells                       direct creation, initial encoding only
+GET  /api/v1/cells/meetings/awaiting     Section 19's recording queue, the actor's own
 
 POST /api/v1/cells/leadership-requests     step one: a new Cell, or a handover
 GET  /api/v1/cells/leadership-requests     the Admin queue: pending, either kind
@@ -4482,7 +4519,9 @@ POST /api/v1/cells/{id}/meetings/{meeting_id}/submit   {meeting_id} is the sched
 
 GET  /api/v1/reports/dcc/monthly
 GET  /api/v1/reports/dcc/yearly
+GET  /api/v1/reports/dcc/monthly/by-leader    the coverage line, one row per leader (decision 0254)
 GET  /api/v1/reports/cells/monthly
+GET  /api/v1/reports/cells/monthly/by-leader  the coverage line, one row per leader (decision 0254)
 GET  /api/v1/reports/cells/yearly
 GET  /api/v1/reports/network-summary
 ```
@@ -5090,7 +5129,9 @@ PERSON
   +-- Cell Attendance History -> Cell classification
   +-- Cell Leadership Assignments -> 0..many Cells
   +-- Cell Membership -> 0..many Cells
-  +-- Conquest Goals -> four, three of them derived (Section 27)
+  +-- SUYNL Lessons -> ten; ten of ten is graduation (Section 28)
+  +-- School Graduations -> Encounter, Life Class, SOL 1, SOL 2, SOL 3 (Section 28)
+  +-- Conquest Goals -> four, derived, with a confirmation path for history (Sections 27 and 28)
 
 CELL GROUP
   |
@@ -5152,8 +5193,10 @@ Shapes are given in the section that owns each rule; this is the index.
 | `settings` | `admin` | Section 7, `settings.manage` |
 | `idempotency_keys` | shared | Section 22 |
 | `conquest_confirmations` | `conquest` | Section 27 |
+| `suynl_lessons` | `suynl` | Section 28 |
+| `training_graduations` | `training` | Section 28 |
 
-Six of these carry history the specification guarantees and would otherwise be built as a column on their parent, losing it silently: `person_lifecycle`, `network_assignments`, `cell_categories`, `cell_schedules`, `cell_memberships`, `conquest_confirmations` — that last one because Section 27 supersedes a confirmation rather than deleting it, and four booleans on `persons` would satisfy every sentence of Section 27 while losing every correction. A column satisfies every sentence about them and cannot answer a question about a past period.
+Eight of these carry history the specification guarantees and would otherwise be built as a column on their parent, losing it silently: `person_lifecycle`, `network_assignments`, `cell_categories`, `cell_schedules`, `cell_memberships`, `conquest_confirmations`, `suynl_lessons`, `training_graduations` — the last three because Sections 27 and 28 supersede a record rather than deleting it, and a column per goal, lesson and school on `persons` would satisfy every sentence of those sections while losing every correction. A column satisfies every sentence about them and cannot answer a question about a past period.
 
 Adding a structure to this list is part of the change that introduces the rule needing it, never a follow-up.
 
@@ -5163,12 +5206,12 @@ Adding a structure to this list is part of the change that introduces the rule n
 
 Conquest records, for every person under a leader's care, the four G12 goals in ladder order: **Win 3**, **Open a cell**, **Completion of 12**, **Raise 12 leaders** (ruling of 2026-09-16). It is a new module, `conquest`, and it owns one table.
 
-**None of it is built.** The ruling settles the rules before the pilot and the code after it, so there is no migration, no endpoint, no screen, and the sidebar's sixth item is not in the application. Tests are owed by the change that builds it.
+**None of it is built.** The ruling settles the rules before the pilot and the code after it, so there is no migration, no endpoint, no screen, and the sidebar item whose tab it is does not exist either (Section 28). Tests are owed by the change that builds it.
 
 ### What each goal means
 
-- **Win 3** — the person has won three people.
-- **Open a cell** — they hold the earliest leadership of a Cell that an approved `NEW_CELL` request names (Section 10). A handover is not an opening, and the request is the discriminator rather than the leadership: a Cell recorded during initial encoding has an earliest leadership and no such request, and is what a leader is asked about below.
+- **Win 3** — at least three of their direct pastoral disciples each have at least three SUYNL lessons recorded (Section 28, the second ruling of 2026-09-16). It was stated by a leader until SUYNL gave the church a record of what it means.
+- **Open a cell** — they hold the earliest leadership of a Cell that an approved `NEW_CELL` request names (Section 10), or of a Cell recorded during initial encoding (Sections 2 and 10), dated the day that leadership began (ruling of 2026-09-18). A handover is not an opening. A Cell recorded at setup already existed, so the records cannot tell whether its first recorded leader opened it or took it over; it counts as opened, and the cost is stated rather than hidden: somebody who took a Cell over before the church was encoded reads as having opened it.
 - **Completion of 12** — twelve open pastoral assignments named this person as leader at one instant (Section 5). Every direct disciple counts, whether or not they lead anything; Section 16's *Cell Leaders with 12+ Members* counts a different set and stays a different figure.
 - **Raise 12 leaders** — twelve of those direct disciples each qualify as a leader (Section 11, *What "qualifies as a leader" means*).
 
@@ -5176,31 +5219,33 @@ Conquest records, for every person under a leader's care, the four G12 goals in 
 
 **What a Cell closed `CREATED_IN_ERROR` does to Open a cell is recorded as open in `CLAUDE.md`.** That closure says the Cell should never have existed (Section 10); a goal reached does not lapse; nothing decides between them, and a derived goal has no confirmation to supersede.
 
-### Three goals are derived, one is stated
+### All four goals are derived
 
-Open a cell, Completion of 12 and Raise 12 leaders are computed from `cell_leadership_requests`, `cells`, `cell_leaderships` and `pastoral_assignments`, all of them effective-dated, so each goal and the date it was first reached are questions the database answers. A leader never ticks one to say it has been reached now; the two exceptions below are about history the records cannot hold. Section 9 forbids hand-maintaining what history can derive, and Section 5 forbids a second representation of a fact a table already holds.
+All four are computed from `cell_leadership_requests`, `cells`, `cell_leaderships`, `pastoral_assignments` and `suynl_lessons` — every one of them either effective-dated or carrying the instant it was filed — so each goal and the date it was first reached are questions the database answers. A leader never ticks one to say it has been reached now; the one exception below is about history the records cannot hold. Section 9 states the rule for classification — do not let leaders maintain by hand what attendance history derives — and decision 0249 applies it here, a tick beside records that answer the same question being free to contradict them.
 
-**`conquest` owns none of those tables and does not query them.** `cells` computes the Cell half, `hierarchy` the pastoral half, and `conquest` composes what they return with its own confirmations — Section 2's ordinary route, and the one it already names for `reporting`.
+**`conquest` owns none of those tables and does not query them.** `cells` computes the Cell half, `hierarchy` the pastoral half, `suynl` the lesson half, and `conquest` composes what the three return with its own confirmations — Section 2's ordinary route, and the one it already names for `reporting`. **Win 3's date does not divide that way and is recorded as open in `CLAUDE.md`**: the earliest instant at which three disciples each held three lessons is a function of two modules' tables together rather than either module's half, so which module computes it, and what it may materialise to do so, is undecided.
 
-**Win 3 is stated by a leader, because nothing records who won whom.** Section 9's VIP workflow captures the leader a person is *placed under*, which is a different fact. A *brought by* field on Section 3 would make it derivable and is not added here.
+**Win 3 was stated by a leader until 2026-09-16, and is now derived** (Section 28). Nothing records who brought whom, and nothing has been added that does: Section 9's VIP workflow captures the leader a person is *placed under*, which is a different fact, and a *brought by* field on Section 3 is still not added. What SUYNL supplies is not that record but the church's own evidence of discipling one to one — three direct disciples each carrying at least three lessons. **It is a proxy and its two edges are stated rather than hidden**: somebody who won three people placed under another leader reads as not reached, and somebody handed three disciples who did their lessons under a previous leader reads as reached. Both follow from counting placement, which this paragraph has just called a different fact.
+
+**Its date is computed rather than stored**, as the other three goals' dates are: the earliest instant at which three of this person's direct disciples each held three lessons, read from the lesson filing instants and from pastoral assignment history. Materialising it the day the condition first holds was considered and not taken. Section 5 does denormalize where something keeps the copy honest — the root seat carries two triggers for exactly that — and a materialised Win 3 date would have nothing checking it against the rows it was computed from, so the copy could disagree with them permanently and silently. The cost is stated rather than hidden — a later change to what Win 3 means rewrites every date it ever gave, with nothing recording what the old one was.
+
+**A disciple who leaves still counts toward a Win 3 already reached.** Both terms are dated, so an instant in the past is unaffected by who is a disciple today; the milestone rule below arrives here by derivation rather than by exception.
+
+**What a confirmation and a derivation together say about one goal is not settled here.** A `WIN_3` row stating a date, and a derived first-reached instant, can both exist for one person — and since Win 3 became derived that is true of all four goals rather than three. Which the screen shows, whether the earlier wins, whether a confirmation suppresses the derivation, and whether a stated `reached_on` may fall after the encoding date, are recorded as open in `CLAUDE.md`. It is owed by the write endpoint rather than by the screen, because it decides what that endpoint refuses.
 
 ### Reached once is reached
 
 **A goal reached stays reached and carries the date it was first reached.** Somebody who reached twelve disciples in March and holds eleven in September has reached Completion of 12, dated March. The current standing is shown beside it — `Reached March 2026 · 11 today` — never instead of it, and never colour-graded (Sections 13, 17 and 19).
 
-The ground is what the ladder means: a milestone reached is not a level somebody falls out of. Section 3's reproducibility guarantee is not a second ground and is not claimed as one, since Section 3 and Section 16 already provide for a current-state figure that is reproducible for a closed month.
+**A correction unmakes a reached goal**, and it is not an exception to this rule but what a correction means: withdrawing a confirmation, or a Cell leadership, a pastoral assignment or a SUYNL lesson a derived goal was resting on, says the record was wrong rather than that the person has fallen back (Section 28). Whether anything else does is not claimed here; the `CREATED_IN_ERROR` question above is open and is not a correction. The ground for the rule itself is what the ladder means: a milestone reached is not a level somebody falls out of. Section 3's reproducibility guarantee is not a second ground and is not claimed as one, since Section 3 and Section 16 already provide for a current-state figure that is reproducible for a closed month.
 
-### What a leader confirms, and how they are asked
+### What a leader confirms
 
-A leader confirms three things, and each is a dated record naming them:
+A leader confirms one thing, and it is a dated record naming them: **a goal reached before the church was encoded.** The import fabricates no history (Section 2), so twelve disciples held in 2024 are in no table, and neither are the lessons of somebody discipled in 2019. The leader states it, with the date, and **that date is not the backdating of Section 3** (Section 28, ruling of 2026-09-16) while no report counts these goals by period. Win 3 reaches this path exactly as the other three do, and until SUYNL has been recorded for a while it is the only path there is for most people.
 
-1. **Win 3**, always.
-2. **A goal reached before the church was encoded.** The import fabricates no history (Section 2), so twelve disciples held in 2024 are in no table. The leader states it, with the date. **Who may state a date in a past period is recorded as open in `CLAUDE.md`**: Section 3 makes that backdating, behind `records.backdate_effective_date`, which Section 7 gives Admin alone.
-3. **Whether a Cell recorded at setup was opened or taken over.** Direct creation during initial encoding (Sections 2 and 10) writes one leadership for a Cell that already existed, so the data cannot tell the two apart. **Both answers are recorded** — without the second, the question could never be dismissed.
+**Nothing is inferred from the rung below.** A person who opened a Cell is not thereby recorded as having won three: no rule of this church requires three before a Cell is opened, so the inference would be only as true as a rule nobody has written. Win 3 is read from SUYNL lessons instead.
 
-**Nothing is ever inferred.** A person who opened a Cell is not thereby recorded as having won three: no rule of this church requires three before a Cell is opened, and an inferred tick would carry no date, name no confirming leader, and be uncorrectable. The screen asks in words beside the empty box — `Opened a cell · confirm?` — which is Section 15's attention-list idiom rather than a colour (Sections 13, 17 and 19).
-
-**The ladder is displayed in order and never gated.** An out-of-order state is reachable three ways: a Cell opened with Win 3 unticked; somebody who took a Cell over reaching rungs three and four while rung two stays permanently false; and a pre-encoding confirmation of a later rung while rung one stands unconfirmed. A refusal could reach only what a leader states, never what the records say.
+**The ladder is displayed in order and never gated.** An out-of-order state is reachable three ways: a Cell opened by somebody against none of whose disciples three lessons are recorded; somebody who took a Cell over reaching rungs three and four while rung two stays permanently false; and a pre-encoding confirmation of a later rung while rung one stands unreached. A refusal could reach only what a leader states, which is the one confirmation above, a goal reached before encoding.
 
 ### Who sees Conquest, and who may confirm
 
@@ -5212,7 +5257,7 @@ Three capabilities, in the shape Section 9 uses for DCC attendance:
 
 **Section 14's shape is taken and its ground re-derived** (ruling of 2026-08-23). Attendance rests its responsible leader on being a reporting dimension, which Conquest is not; what carries it here is authorship, which is why the table keeps `confirmed_by` and `recorded_by` apart.
 
-**The two Network roots are reached by neither capability**, being nobody's direct disciple and nobody's downline. They are confirmed for by any actor whose `conquest.confirm` grant is Whole Church, as Section 9 puts a root on a checklist, and their rows carry no confirming leader: `confirmed_by` is null for a Network root and for nobody else, as `dcc_attendance.responsible_leader_id` is.
+**The two Network roots are reached by neither confirming capability**, being nobody's direct disciple and nobody's downline. They are confirmed for by any actor whose `conquest.confirm` grant is Whole Church, as Section 9 puts a root on a checklist — **and since a Senior Pastor is a root and holds that grant, whether a root may file their own is recorded as open in `CLAUDE.md`**, and their rows carry no confirming leader: `confirmed_by` is null for a Network root and for nobody else, as `dcc_attendance.responsible_leader_id` is.
 
 **No new scope value is introduced.** "Own direct disciples" is a domain check inside the module, not a scope, and Section 7's scope enumeration is closed — so a Whole Church grant of `conquest.confirm` reaches every direct disciple in the church, and the two Network roots by the rule above, and nobody else.
 
@@ -5220,21 +5265,21 @@ Three capabilities, in the shape Section 9 uses for DCC attendance:
 
 **Unticking requires a reason, and supersedes rather than deletes.** The original is kept and marked corrected, carrying both dates and both names (Section 5, Section 14). **Correcting travels with the capability that filed**, rather than taking one of its own as attendance does (ruling of 2026-09-15): withdrawing a statement needs no authority that making it did not, and an actor who may file for a downline leader and may not withdraw it leaves a statement nobody can take back. A correction is attributed to the confirming leader named on the row, never to the actor who filed it.
 
-Only a stated confirmation is corrected this way. A derived goal that looks wrong is wrong because a Cell leadership or a pastoral assignment is wrong, and is corrected there.
+Only a stated confirmation is corrected this way. A derived goal that looks wrong is usually wrong because a Cell leadership, a pastoral assignment or a SUYNL lesson is wrong, and is corrected there — the third since Win 3 became derived (Section 28), on the `SUYNL` tab under `suynl.confirm`. **It is not claimed that every derived goal has such a record to correct.** Where Open a cell rests on an approved `NEW_CELL` request, Section 10 makes that decision final — its remedy for one approved in error being to close the Cell `CREATED_IN_ERROR` rather than to rewrite the decision. That lands on the question this section records as open above, rather than on a correction.
 
 ### Conquest is not a report
 
-**Conquest figures do not enter the reporting surface** (Sections 18 and 20). The four counts at the head of its own screen are the whole of its aggregate view.
+**Conquest figures do not enter the reporting surface** (Sections 18 and 20). The four counts at the head of its tab are the whole of its aggregate view.
 
-**Those counts have a stated population.** Each is `COUNT(DISTINCT person_id)` over exactly the people the screen lists — everyone the actor's `conquest.view_subtree` grant reaches **at the scope that grant carries**, resolved as things stand **now**, the screen naming no period — of those who have reached that goal. It is stated as the grant's reach rather than as a subtree walk because an administrator outside the pastoral structure has no subtree and Section 5 provides for one. Nothing is attributed to a leader, drilled down, or compared across scopes. **A figure asked for at a scope the actor does not hold, or for a past period, is governed by Section 20 and not by this section**, and is recorded as open in `CLAUDE.md`.
+**Those counts have a stated population.** Each is `COUNT(DISTINCT person_id)` over exactly the people the screen lists — everyone the actor's `conquest.view_subtree` grant reaches **at the scope that grant carries**, resolved as things stand **now**, the screen naming no period — of those who have reached that goal. It is stated as the grant's reach rather than as a subtree walk because an administrator outside the pastoral structure has no subtree and Section 5 provides for one. A count filters this tab's own list to the people behind it. Nothing is attributed to a leader or compared across scopes. **A figure asked for at a scope the actor does not hold, or for a past period, is governed by Section 20 and not by this section**, and is recorded as open in `CLAUDE.md`.
 
 Section 16 counts two conditions closely related to these rungs and identical to neither: *Leaders with 12+ Direct Leaders*, and *New Cell Leaders*, which counts a first **qualifying** leadership in a period and so counts a leader who took a Cell over, whom Open a cell does not. A Reports block would put near-identical counts in front of one leader with nothing saying which question each answers. Whether Conquest counts should replace Section 16's, sit beside them, or stay separate is a reporting decision and is not taken here.
 
-**A per-leader breakdown of goals reached is not built, by this section's choice rather than by a prohibition.** Sections 13 and 17 permit sorting and filtering within a scope and forbid ranking, scoring and colour-grading, so such a table would be permitted; the figure it would carry — how many goals somebody else's people reached — reads as a standing whatever its order.
+**A per-leader breakdown of goals reached is not built, by this section's choice rather than by a prohibition.** The figure it would carry — how many goals somebody else's people reached — reads as a standing whatever its order, and Section 13's list of what a dashboard may not do reaches at least as far as a side-by-side comparison of leaders who do not oversee one another. Whether it would be permitted is therefore not claimed either way.
 
 ### Where it appears
 
-Conquest is the sidebar's sixth item, placed as Section 19 places it, and it carries the four counts, the people a leader cares for, and the confirmations above. **A person who has reached all four carries a plain label rather than an accented tag**: a tag shown only to those who reached everything colours a person by a figure derived from their records (Sections 17 and 19). **The table is ordered by name**, which is this section's choice; a progress ordering offered later would be bound by Sections 13 and 17 as any other is.
+Conquest is a tab of the sidebar's `Growth` item, placed as Section 19 places it, and it carries the four counts, the people a leader cares for, and the confirmation above. *(It was given its own sidebar item by the ruling of 2026-09-16 and became a tab by the second ruling of that day; the application has carried neither.)* **Where the confirmation above is filed, that tab carrying no save bar now that every goal is derived, is recorded as open in `CLAUDE.md`** (Section 28). **A person who has reached all four carries a plain label rather than an accented tag**: a tag shown only to those who reached everything colours a person by a figure derived from their records (Sections 17 and 19). **The table is ordered by name**, which is this section's choice; a progress ordering offered later would be bound by Sections 13 and 17 as any other is.
 
 ### Structure
 
@@ -5243,11 +5288,7 @@ conquest_confirmations
 - id
 - person_id            the person the goal is about
 - goal                 WIN_3 | OPEN_A_CELL | COMPLETION_OF_12 | RAISE_12_LEADERS
-- cell_id              the Cell the answer is about; required on every OPEN_A_CELL row and
-                       null on every other
-- reached              the leader's statement: true where the goal was reached, false where
-                       it was not
-- reached_on           date; required where reached is true, null where it is false
+- reached_on           date, required: when the leader states the goal was reached
 - confirmed_by         the Person whose statement this is — the confirming leader;
                        null only for a Network root, who has none (Sections 5 and 9)
 - recorded_by          the Account that filed it; differs from confirmed_by where filed on behalf
@@ -5257,21 +5298,170 @@ conquest_confirmations
 - correction_reason    nullable, required where superseded_at is set
 ```
 
-**Every `OPEN_A_CELL` row names a Cell and every other row's `cell_id` is null; a row breaking either half is refused.** A leader may lead many Cells (Sections 10 and 16), so one answer per leader would let a single "took it over" suppress the question for a Cell they did open. The cost is stated rather than hidden: a Cell opened before encoding and closed before it, which no `cells` row holds, cannot be confirmed at all, and that person's Open a cell reads as not reached with no question beside it to answer.
+**A row states only that a goal was reached.** Nothing records that one was not; a person with no row for a goal has not had it confirmed.
 
-**`reached` false states that the goal was not reached.** On `OPEN_A_CELL` with a Cell named, it is "they took that Cell over".
+**A correction is recorded on the row it corrects, and a reason lives in one place.** Unticking stamps `superseded_at`, `corrected_by` and `correction_reason` on the current row, which stops being current; the actor column is named `corrected_by` rather than `superseded_by` deliberately, because Sections 9 and 13 give `superseded_by` a different meaning — the replacing row, never an actor — and one identifier carrying two meanings across the five tables that use it is what a migration written from this section would get wrong; a replacement answer is a new row, and a retraction leaves none, the goal reading as unconfirmed again.
 
-**A correction is recorded on the row it corrects, and a reason lives in one place.** Unticking stamps `superseded_at`, `corrected_by` and `correction_reason` on the current row, which stops being current; the actor column is named `corrected_by` rather than `superseded_by` deliberately, because Sections 9 and 13 give `superseded_by` a different meaning — the replacing row, never an actor — and one identifier carrying two meanings across three tables is what a migration written from this section would get wrong; a replacement answer is a new row, and a retraction leaves none, the goal reading as unconfirmed again.
+A partial unique index over rows where `superseded_at` is null: one current row per person and goal — partial uniqueness over live rows, as Section 5 uses for an active pastoral assignment. **A row is never deleted and the migration owes the trigger that refuses it** (Section 28, which states the same for its two tables), and `superseded_at`, `corrected_by` and `correction_reason` are set together or not at all, as a CHECK constraint rather than as a convention.
 
-Two partial unique indexes, both over rows where `superseded_at` is null: one current row per person and goal where `cell_id` is null, and one per person and Cell where the goal is `OPEN_A_CELL` — partial uniqueness over live rows, as Section 5 uses for an active pastoral assignment.
+A derived goal has no row at all unless a leader confirmed it.
 
-A derived goal has no row at all unless a leader was asked about it.
+**Whether an archived or merged Person may be given a row, and how a merged pair is counted in the figures above, is recorded as open in `CLAUDE.md`** — a silence this section shares with Section 28, where Sections 5 and 10 both answer for their own domains.
 
 Writes obey Section 22: they are idempotent, they carry `Idempotency-Key`, and each records its completion inside the transaction that performs it.
 
 ### What Section 21 records
 
 `conquest_goal.confirmed` and `conquest_goal.corrected`, each naming the **Person** the goal is about as its target, with the goal and the dates in `before` and `after`, the reason on a correction, and — where it was filed for a downline leader — the confirming leader alongside the actor, as one entry rather than two (Section 21). The target is the Person because the goal is a fact about them, and because Section 7 resolves a person target through the person.
+
+---
+
+## 28. Growth
+
+`Growth` records the discipleship pathway a person has travelled: the **SUYNL** lessons they have done, the **Encounter** and the four schools they have graduated from, and the Conquest goals of Section 27 (the second ruling of 2026-09-16). It is a sidebar item with three tabs — `SUYNL`, `Training`, `Conquest` — and behind it are three modules, `suynl`, `training` and `conquest`, each owning its own table.
+
+**None of it is built.** The ruling settles the rules before the pilot and the code after it, so there is no migration, no endpoint and no screen. Tests are owed by the change that builds it.
+
+**`Growth` is the label on a sidebar item and never a module.** Section 2 names a module for what it owns, and these are three domains with different records, different correction rules and different capabilities; they are grouped because a leader asks about them in one sitting, not because they are one thing. A `growth` module owning all three tables would be a module named after a screen.
+
+### The pathway
+
+SUYNL, then the Encounter, then Life Class, then SOL 1, SOL 2, SOL 3.
+
+- **SUYNL** — ten lessons, taken one to one. Recorded lesson by lesson.
+- **The Encounter** — a three-day retreat, recorded as one graduation.
+- **Life Class** — new life, healing, freedom, a personal relationship with Christ: a believer established in faith and ready for discipleship.
+- **SOL 1** — biblical foundations and family: a disciple rooted in doctrine and godly living.
+- **SOL 2** — vision, intercession, evangelism and ministry: a disciple reaching, praying for and caring for people.
+- **SOL 3** — leadership, cell ministry and multiplication: a trained leader ready to lead and develop other disciples.
+
+Together they run from a personal foundation in Christ to leadership and disciple-making.
+
+**The order is displayed and never enforced.** No rule of this church makes one step a condition of the next, so there is nothing for a refusal to refuse. An eligibility gate on the Encounter — four SUYNL lessons first — was considered while the screens were drawn and withdrawn, because the church applies none.
+
+**Only SUYNL is recorded lesson by lesson, and that is a recording decision rather than a claim about the materials.** Life Class also runs to ten lessons and is recorded here as a single graduation. An enrolment application planned elsewhere will own enrolment and lesson progress for the schools; recording their lessons here as well would give the church two records of one fact, free to disagree, with nothing able to keep them in step.
+
+### SUYNL
+
+Ten lessons, numbered 1 to 10. A leader records a lesson once it has been done.
+
+**A lesson tick carries the day it was filed, and no date is stated.** What a stated date would buy is a lesson's real day where a leader knows it. What it would cost is a second date to keep honest: Section 27's derivation would have to read the stated day rather than the instant the row already holds, and nothing would keep the two in step for the lessons where a leader states one and not the others. The day is the Asia/Manila date of `confirmed_at` (Section 20), derived rather than stored.
+
+The cost is that a lesson done long before it was recorded carries the later day, and it is accepted: SUYNL is being recorded from the pilot forward, and history the records cannot hold is confirmed under Section 27 rather than invented here.
+
+**Graduation is ten of ten, and is not itself recorded.** A person has graduated SUYNL when ten current lesson rows exist for them, and the day they graduated is the day the tenth was filed. **Only current rows ever count, at every instant** — a lesson corrected away never counted, which is what a correction says, so a graduation and a Win 3 date both move when one is withdrawn. A graduation tick beside the ten lessons would be free to contradict them, which is the argument Section 9 makes for classification and decision 0249 applied to a goal.
+
+**A person who has graduated collapses to one line** on the screen, carrying the date and a `Correct` action, rather than ten boxes nobody will tick again.
+
+### Training
+
+Five graduations: `ENCOUNTER`, `LIFE_CLASS`, `SOL_1`, `SOL_2`, `SOL_3`. Each is filed by a leader and each is a dated record naming them.
+
+**Nothing here is derived, and that is not an exception to Section 27's rule.** No enrolment, class, lesson or attendance record exists for these schools, so there is nothing to derive from. The rule refuses a tick that duplicates a record; where no record exists, a leader asking their people and recording the answer is the only source there is.
+
+**A graduation carries a date where the leader knows it and none where they do not.** This is Section 3's own reason for an optional birthday and mobile number: a mandatory field somebody cannot fill gets filled with a fiction, and leaders will be asking about graduations from years back. The consequence is stated on the screen rather than hidden — any figure counting graduations within a period counts only the dated rows.
+
+**A person who has not graduated has no row.**
+
+### A graduation confers no leadership
+
+SOL 3 is called Leadership and graduating it makes nobody a leader. Section 11 is amended rather than glossed: it said there is "no graduation status", and this section creates one.
+
+**A graduation is a record that somebody completed a school.** It confers no leadership, no role, no capability, no place in any leader count, and no authorization anywhere (Section 1, Principle 3). Leadership is still earned by leading a Cell, and Section 11's definition of qualifying as a leader is untouched. The church has SOL 3 graduates who lead no Cell, which is why the sentence had to be amended rather than read narrowly.
+
+### Why a graduation date is not backdating
+
+**Stating a past graduation date does not require `records.backdate_effective_date`, and a leader may state one** (owner ruling, the second of 2026-09-16). The same answer reaches Section 27's pre-encoding `reached_on`.
+
+**It is a ruling and not a deduction, which is stated because two attempts to derive it failed.** Section 7 lists what that capability reaches and says the list is "not a rule from which the next item can be derived"; and one item on it — amending attendance after a month has closed — carries no effective date at all, so the capability's reach is not bounded by what an effective date is either. So the specification settles neither that a graduation date falls inside the capability nor that it falls outside, and **whether that list is a rule or an enumeration is recorded as open in `CLAUDE.md`**. What the owner ruled is that the confirming leader states the date: leaders are being asked about graduations from years back, and the alternative leaves the church's own history unrecordable by the people who know it.
+
+**The ruling carries a condition, and the condition is a trigger.** It holds only while no report counts these by period. The first report that does moves such a date into the class Section 3 protects — one that rewrites totals already reported — and who may state one is open again. That is recorded as a Stop Condition.
+
+### Who sees Growth, and who may file
+
+Six capabilities, three for each of the two modules this section introduces, in the shape Section 9 uses for DCC attendance and Section 27 for Conquest:
+
+- `suynl.view_subtree` and `training.view_subtree` — read the lessons and graduations of anyone in the actor's pastoral subtree. Read capabilities (Section 7).
+- `suynl.confirm` and `training.confirm` — file and correct for the actor's **own direct disciples**, the obligation following the discipling relationship as a DCC record's responsible leader does (Section 9).
+- `suynl.confirm_on_behalf` and `training.confirm_on_behalf` — file and correct for a downline leader within the actor's subtree, recorded as on behalf (Section 14). Without them a leader with no account yet, or one who has left, leaves their disciples with nobody able to file.
+
+**Each module carries its own three, and a grant of one reaches nothing in another.** The tabs sit together on one screen and are three records; an administrator who wants a leader to record lessons and not graduations must be able to say so.
+
+**The separation is of the records and not of everything derivable from them.** A holder of `conquest.view_subtree` alone reads Win 3, and so learns that three of a person's disciples each carry three lessons — a fact about rows they hold no `suynl.view_subtree` over. Nothing leaves the reach of the grant that returned it, the derived fact being about people inside the Conquest grant's own scope, and it is stated here because the sentence above would otherwise read as a completeness it does not have.
+
+**The two Network roots are reached by neither confirming capability**, being nobody's direct disciple and nobody's downline. They are filed for by any actor whose `suynl.confirm` or `training.confirm` grant is Whole Church, as Section 9 puts a root on a checklist — **and whether a root may file their own is recorded as open in `CLAUDE.md`**, as it is for Conquest, and their rows carry no confirming leader: `confirmed_by` is null for a Network root and for nobody else.
+
+**No new scope value is introduced.** "Own direct disciples" is a domain check inside each module, not a scope, and Section 7's scope enumeration is closed.
+
+### Correcting
+
+**Unticking requires a reason, and supersedes rather than deletes.** The original is kept and marked corrected, carrying both dates and both names (Section 5, Section 14). **Correcting travels with the capability that filed**, as it does in Section 27: withdrawing a statement needs no authority that making it did not. A correction is attributed to the confirming leader named on the row, never to the actor who filed it.
+
+**A correction moves whatever derives from it.** Correcting away one of a person's ten SUYNL lessons takes their graduation with it; correcting one that took a disciple to three takes them out of a leader's Win 3, and moves the date that goal was first reached or removes it (Section 27). That is right rather than regrettable: the correction says the tick was wrong, and a derived figure follows the records it derives from.
+
+### Growth is not a report
+
+**Growth figures do not enter the reporting surface** (Sections 18 and 20). The counts at the head of the `SUYNL` and `Training` tabs are the whole of their aggregate view.
+
+**Those counts have a stated population.** Each is `COUNT(DISTINCT person_id)` over exactly the people the tab lists — everyone the actor's `suynl.view_subtree` or `training.view_subtree` grant reaches **at the scope that grant carries**, resolved as things stand **now**, the screen naming no period — of those who have reached that step. **A count filters this tab's own list to the people behind it**, which Section 27's four also do. Nothing is attributed to a leader, ranked or compared across scopes (Sections 13, 17 and 19), and nothing is colour-graded.
+
+The screen says the counts are as of now, never "this year". A Reports block would make them period figures, which is the trigger the date ruling above turns on, and Section 16 defines no metric these duplicate.
+
+**A figure asked for at a scope the actor does not hold, or for a past period, is governed by Section 20 and not by this section**, exactly as Section 27 says of its own four, and is recorded as open in `CLAUDE.md`.
+
+### Where it appears
+
+`Growth` takes the sidebar position the first ruling of 2026-09-16 gave `Conquest`, between `Cells` and `Network` in the ordinary arrangement and last in the whole-church one (Section 19). The sidebar stays at six items, a seventh being more than the phone's bottom bar was drawn for at the narrowest width Section 23's layout check runs at — the width that section calls the one where overflow is hardest.
+
+`SUYNL` and `Training` each carry their own draft and save bar — a batch of ticks, discarded or saved together — because the two are different records with different correction rules. **The `Conquest` tab has neither**, every one of its four goals being derived since Win 3 became so. Section 27 keeps one confirmation that a leader still files, for history the records cannot hold; **where it is filed, now that the tab carries no save bar, is recorded as open in `CLAUDE.md`**.
+
+### What SUYNL gives Section 27
+
+**Win 3 is derived from SUYNL lessons**, which is the amendment this section makes to Section 27: a person has won three when at least three of their direct pastoral disciples each have at least three SUYNL lessons recorded. Section 27 states what follows from it, including the date it was first reached.
+
+### Structure
+
+```text
+suynl_lessons
+- id
+- person_id
+- lesson               1 to 10
+- confirmed_by         the Person whose statement this is — the confirming leader;
+                       null only for a Network root, who has none (Sections 5 and 9)
+- recorded_by          the Account that filed it; differs from confirmed_by where filed on behalf
+- confirmed_at         when it was filed; its Asia/Manila date is the day the tick carries
+- superseded_at        nullable, null while current
+- corrected_by         nullable, the Account that corrected it
+- correction_reason    nullable, required where superseded_at is set
+```
+
+```text
+training_graduations
+- id
+- person_id
+- program              ENCOUNTER | LIFE_CLASS | SOL_1 | SOL_2 | SOL_3
+- graduated_on         date, nullable — the day the leader states, null where they do not know it
+- confirmed_by         as above; null only for a Network root
+- recorded_by
+- confirmed_at
+- superseded_at        nullable, null while current
+- corrected_by         nullable
+- correction_reason    nullable, required where superseded_at is set
+```
+
+One partial unique index on each, over rows where `superseded_at` is null: one current row per person and lesson, and one per person and program — partial uniqueness over live rows, as Section 5 uses for an active pastoral assignment. On each, `superseded_at`, `corrected_by` and `correction_reason` are set together or not at all, as a CHECK constraint rather than as a convention.
+
+**A row of either table is never deleted, and the migration that creates them owes the trigger that refuses it.** Section 5 refuses deletion on the tables holding history and names its own by their effective dating; these two hold history and are superseded-dated instead, so the obligation is stated here rather than left to inference. Section 27's `conquest_confirmations` is the third table in that position and is covered by this sentence. A correction supersedes; nothing removes a row.
+
+**`corrected_by` carries the name it does for Section 27's reason.** Sections 9 and 13 give `superseded_by` a different meaning — the replacing row, never an actor — and one identifier meaning two things across five tables is what a migration written from these sections would get wrong. A retraction leaves no replacement: the lesson or the graduation reads as unrecorded again.
+
+Writes obey Section 22: they are idempotent, they carry `Idempotency-Key`, and each records its completion inside the transaction that performs it.
+
+**Whether an archived or merged Person may be given a row of either table, and how a merged pair is counted in the figures above, is recorded as open in `CLAUDE.md`** — a silence this section shares with Section 27, where Sections 5 and 10 both answer for their own domains.
+
+### What Section 21 records
+
+`suynl_lesson.confirmed`, `suynl_lesson.corrected`, `training_graduation.confirmed` and `training_graduation.corrected`, each naming the **Person** the record is about as its target, with the lesson or the program and the dates in `before` and `after`, the reason on a correction, and — where it was filed for a downline leader — the confirming leader alongside the actor, as one entry rather than two (Section 21).
 
 ---
 

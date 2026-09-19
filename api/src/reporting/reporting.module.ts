@@ -1,9 +1,11 @@
 import { Module } from '@nestjs/common';
 
 import { AttendanceModule } from '../attendance/attendance.module';
+import { AuthorizationModule } from '../auth/authorization/authorization.module';
 import { CellsModule } from '../cells/cells.module';
 import { HierarchyModule } from '../hierarchy/hierarchy.module';
 import { NetworksModule } from '../networks/networks.module';
+import { PeopleModule } from '../people/people.module';
 import { ReportingController } from './reporting.controller';
 import { ReportingService } from './reporting.service';
 
@@ -25,7 +27,17 @@ import { ReportingService } from './reporting.service';
 @Module({
   // `CellsModule` arrives with the Cell coverage denominator, which section 2 assigns to
   // that module by name. Not a cycle: `cells` imports neither `attendance` nor this.
-  imports: [AttendanceModule, CellsModule, HierarchyModule, NetworksModule],
+  // Decision 0254: the by-leader lists name a leader only where the reader could open
+  // them, which `authorization` answers, and name them through `people`. Neither imports
+  // this module, so neither is a cycle.
+  imports: [
+    AttendanceModule,
+    AuthorizationModule,
+    CellsModule,
+    HierarchyModule,
+    NetworksModule,
+    PeopleModule,
+  ],
   controllers: [ReportingController],
   providers: [ReportingService],
   exports: [ReportingService],
