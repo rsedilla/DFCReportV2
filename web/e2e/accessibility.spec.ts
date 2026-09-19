@@ -394,18 +394,23 @@ const SCANS = [
     },
   },
   {
-    // A removed Sunday in its place with its reason, and one that has not
-    // happened, whose coverage is words rather than a zero.
-    name: 'dcc calendar',
+    // The reader's month (owner's choice of 2026-09-19): their Cell meetings and their DCC
+    // checklist by date, a removed Sunday in its place with its reason, states in words.
+    name: 'your month',
     route: '/dcc',
     async before(page: import('@playwright/test').Page) {
+      await page.clock.setFixedTime(new Date('2026-06-20T02:00:00Z'));
       await mockSignedIn(page);
+      await mockCells(page);
+      await mockCellMeetings(page);
+      await mockMeetingsAwaiting(page);
       await mockDccEvents(page);
+      await mockDccRoster(page);
     },
     async arrange(page: import('@playwright/test').Page) {
-      await expect(page.getByRole('heading', { name: 'DCC Attendance' })).toBeVisible();
-      await expect(page.getByText('No service was held.')).toBeVisible();
-      await expect(page.getByText('No records owed yet')).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'Your month' })).toBeVisible();
+      await expect(page.getByText(/^No service/).filter({ visible: true }).first()).toBeVisible();
+      await expect(page.getByText('Loading…')).toHaveCount(0);
     },
   },
   {
@@ -1031,10 +1036,11 @@ const TARGET_SWEEP = [
     minimum: 9,
   },
   {
-    name: 'dcc calendar',
+    // The two month controls, and a link per dated item the reader owes.
+    name: 'your month',
     route: '/dcc',
     settleRole: 'heading' as const,
-    settle: 'DCC Attendance',
+    settle: 'Your month',
     minimum: 2,
   },
   {

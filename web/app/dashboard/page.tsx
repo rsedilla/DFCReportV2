@@ -515,7 +515,7 @@ function Dashboard() {
               href="/dcc"
               className="text-accent focus-visible:outline-accent inline-flex min-h-11 items-center text-sm underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2"
             >
-              Open the DCC calendar
+              See the whole month
             </Link>
           </p>
         </section>

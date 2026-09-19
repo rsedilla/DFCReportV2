@@ -603,3 +603,58 @@ test.describe('the Record queue as the owner designed it (decision 0258)', () =>
     await expect(page.getByRole('table', { name: /Your DCC checklist by Sunday/ })).toHaveCount(0);
   });
 });
+
+test.describe('your month, from the queue (owner’s design, 2026-09-19)', () => {
+  /** 10:00 on 20 June 2026 in Manila. */
+  const JUNE_20 = new Date('2026-06-20T02:00:00Z');
+
+  async function mockMonth(page: Page) {
+    await mockSignedIn(page);
+    await mockCells(page);
+    await mockCellMeetings(page);
+    await mockMeetingsAwaiting(page, {});
+    await mockDccEvents(page);
+    await mockDccRoster(page);
+  }
+
+  test('lists every date the reader owes, in words, each opening its record', async ({ page }) => {
+    await page.clock.setFixedTime(JUNE_20);
+    await mockMonth(page);
+
+    await page.goto('/dcc');
+
+    await expect(page.getByRole('heading', { name: 'Your month' })).toBeVisible();
+    const grid = page.getByRole('table', { name: 'Every date you owe a record this month' });
+
+    // A recorded Cell meeting says so and opens its record.
+    await expect(
+      grid.locator('a[href="/cells/3f1b7c6e-0000-4000-8000-000000000101/meetings/2026-06-06"]'),
+    ).toBeVisible();
+    await expect(grid.getByText('Recorded · met').first()).toBeVisible();
+    // A Sunday with somebody still unmarked, which opens that checklist.
+    await expect(grid.getByText('Awaiting a record · 1 to mark').first()).toBeVisible();
+    // A Sunday with no service, in its place and with its reason (section 9).
+    await expect(
+      grid.getByText('No service: The church held a combined regional service.'),
+    ).toBeVisible();
+    // A Sunday that has not happened offers no link.
+    await expect(grid.getByText('Not yet').first()).toBeVisible();
+    await expect(grid.getByRole('link', { name: /Sunday 28 June/ })).toHaveCount(0);
+  });
+
+  test('the queue links to it as the whole month', async ({ page }) => {
+    await page.clock.setFixedTime(JUNE_20);
+    await mockMonth(page);
+    await mockCellReport(page);
+    await mockDccReport(page);
+    await mockAwaitingReassignment(page);
+    await mockPeopleWithoutACell(page);
+
+    await page.goto('/dashboard');
+
+    await expect(page.getByRole('link', { name: 'See the whole month' })).toHaveAttribute(
+      'href',
+      '/dcc',
+    );
+  });
+});
