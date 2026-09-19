@@ -2311,6 +2311,8 @@ Do not let leaders manually maintain classification when it can be derived from 
 
 `GET /api/v1/dcc/people/{id}/attendance` returns one person's live DCC attendance records, newest event first and paginated on Section 22's terms, with their classification (ruling of 2026-09-15). It carries `dcc.view_subtree`, resolved against the person, and names no period, so it asks about now: the actor must hold the person in scope today. A person who does not exist answers `NOT_FOUND`. The classification is counted from every record standing now, by the rule the monthly report applies: present, live records on Sundays that were not removed. A record on a removed Sunday is listed, marked as removed, and not counted. The count is taken over the person's own records, because the monthly figures cover only people who attended in the month asked for, and a test holds the two in agreement. The response carries that count as `attended`: it is the number the classification is made from and not a total of the list, so Section 22's rule against total counts on a collection does not reach it. Nothing on this route changes a classification: one that looks wrong is corrected by correcting the record behind it.
 
+**A person's page also shows their Sundays attended in the current month and the month before, each as attended of N** (ruling of 2026-09-19, decision 0260). Attended is counted as above; N is the one defined below, Sundays still to come included, so the page and the monthly report never disagree about one person's month. Each figure names its month and says so while it is open. The month's Sundays are read under `dcc.view_subtree` against the reader.
+
 ### Adding a DCC VIP
 
 When adding a VIP:
@@ -3945,7 +3947,7 @@ Historical reports must respect historical pastoral assignments and Cell categor
 
 ### The sidebar is navigation
 
-The sidebar carries links, never counts. Metrics belong on the Dashboard and inside the reporting modules, where they can carry the scope and period that make them meaningful. Adding live numbers to navigation means computing scoped queries on every page load and displaying figures stripped of the context needed to read them. **The Network screen is a page reached from the sidebar rather than navigation, and carries figures with their branch and month stated** (ruling of 2026-09-18, Section 17).
+The sidebar carries links, never counts. Metrics belong on the Dashboard and inside the reporting modules, where they can carry the scope and period that make them meaningful. Adding live numbers to navigation means computing scoped queries on every page load and displaying figures stripped of the context needed to read them. **The Network screen is a page reached from the sidebar rather than navigation, and carries figures with their branch and month stated** (ruling of 2026-09-18, Section 17). **A person's page carries that person's DCC figures** (decisions 0247 and 0260, Section 9).
 
 This is the same rule already applied to leadership-development metrics and Participation, both of which live inside Network Summary rather than earning their own sidebar link (Section 16).
 

@@ -183,6 +183,17 @@ export function cellName(
   )}`;
 }
 
+/** "Young Pro · Sat", how a list names a Cell (decision 0259); the Cell ID with nothing to name. */
+export function cellShortName(cell: {
+  cell_id: string;
+  category: CellCategory | null;
+  day_of_week: number | null;
+}): string {
+  return cell.category != null && cell.day_of_week != null
+    ? `${categoryLabel(cell.category)} · ${dayOfWeekLabel(cell.day_of_week).slice(0, 3)}`
+    : cell.cell_id;
+}
+
 export function categoryLabel(category: CellCategory): string {
   switch (category) {
     case 'YOUTH':

@@ -11,13 +11,7 @@ import { Button } from '@/components/ui/button';
 import { FailureNotice } from '@/components/ui/failure-notice';
 import { Field } from '@/components/ui/field';
 import { HeaderCell, Table, rowClasses } from '@/components/ui/table';
-import {
-  categoryLabel,
-  dayOfWeekLabel,
-  getPersonCells,
-  type CellCategory,
-  type PersonCells,
-} from '@/lib/cells';
+import { cellShortName, getPersonCells, type PersonCells } from '@/lib/cells';
 import { describeFailure } from '@/lib/messages';
 import {
   MINIMUM_SEARCH_LENGTH,
@@ -263,18 +257,9 @@ function cellOf(person: Person, cells: PersonCells | undefined): string {
     return '';
   }
 
-  const named = (cell: {
-    cell_id: string;
-    category: CellCategory | null;
-    day_of_week: number | null;
-  }) =>
-    cell.category !== null && cell.day_of_week !== null
-      ? `${categoryLabel(cell.category)} · ${dayOfWeekLabel(cell.day_of_week).slice(0, 3)}`
-      : cell.cell_id;
-
   const parts = [
-    ...cells.leads.map((cell) => `Leads ${named(cell)}`),
-    ...(cells.membership ? [named(cells.membership)] : []),
+    ...cells.leads.map((cell) => `Leads ${cellShortName(cell)}`),
+    ...(cells.membership ? [cellShortName(cells.membership)] : []),
   ];
 
   return parts.length > 0 ? parts.join('; ') : 'Not in a Cell';

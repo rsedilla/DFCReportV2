@@ -13,6 +13,7 @@ import { Button, buttonClasses } from '@/components/ui/button';
 import { FailureNotice } from '@/components/ui/failure-notice';
 import { TextLink } from '@/components/ui/text-link';
 import { ApiRequestError } from '@/lib/api-client';
+import { cellShortName, getPersonCells, type PersonCells as PersonCellsData } from '@/lib/cells';
 import { directLeaderOf, getPastoralPath, noLeaderLabel, type PathEntry } from '@/lib/hierarchy';
 import { getMe } from '@/lib/me';
 import { describeFailure, type Failure } from '@/lib/messages';
@@ -77,6 +78,12 @@ function PersonDetail() {
   });
 
   const me = useQuery({ queryKey: ['me'], queryFn: ({ signal }) => getMe(signal) });
+  // The same read the Cell section below makes, so the header line costs no request.
+  const cells = useQuery({
+    queryKey: ['person-cells', id],
+    queryFn: ({ signal }) => getPersonCells(id, signal),
+    retry: false,
+  });
   const [moving, setMoving] = useState(false);
 
   const own = me.data?.person_id === id;
@@ -112,7 +119,10 @@ function PersonDetail() {
       ) : (
         <>
           <h1 className="mt-6 text-2xl font-semibold tracking-tight">{person.data.full_name}</h1>
-          <p className="text-muted mt-1 font-mono text-sm">{person.data.member_id}</p>
+          <p className="text-muted mt-1 text-sm">
+            <span className="font-mono">{person.data.member_id}</span>
+            {cells.data ? ` · ${cellLine(cells.data)}` : null}
+          </p>
           <PastoredBy path={path.data?.data ?? null} own={own} />
 
           <div className="mt-6 flex flex-wrap gap-3">
@@ -129,7 +139,14 @@ function PersonDetail() {
             </Link>
           </div>
 
-          <dl className="border-line mt-8 grid gap-x-6 gap-y-4 border-t pt-6 sm:grid-cols-[12rem_1fr]">
+
+          <PersonDcc personId={id} />
+          <PersonCells personId={id} personName={person.data.full_name} />
+          <section aria-labelledby="details-heading" className="border-line mt-8 border-t pt-6">
+            <h2 id="details-heading" className="text-lg font-semibold tracking-tight">
+              Details
+            </h2>
+          <dl className="mt-4 grid gap-x-6 gap-y-4 sm:grid-cols-[12rem_1fr]">
             <Detail label="First name" value={person.data.first_name} />
             <Detail label="Middle name" value={person.data.middle_name} />
             <Detail label="Last name" value={person.data.last_name} />
@@ -153,9 +170,7 @@ function PersonDetail() {
             />
             <Detail label="Mobile number" value={person.data.mobile_number} absent="Not recorded" />
           </dl>
-
-          <PersonCells personId={id} personName={person.data.full_name} />
-          <PersonDcc personId={id} />
+          </section>
 
           {mayMove ? (
             <MoveLeaderDialog
@@ -241,4 +256,14 @@ function Detail({
       <dd className={value ? 'text-sm' : 'text-muted text-sm'}>{value || absent}</dd>
     </>
   );
+}
+
+/** "Young Pro · Sat", or "Leads Young Pro · Sat", for the line under the name. */
+function cellLine(cells: PersonCellsData): string {
+  const parts = [
+    ...cells.leads.map((cell) => `Leads ${cellShortName(cell)}`),
+    ...(cells.membership ? [cellShortName(cells.membership)] : []),
+  ];
+
+  return parts.length > 0 ? parts.join('; ') : 'Not in a Cell';
 }

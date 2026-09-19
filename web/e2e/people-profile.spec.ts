@@ -59,6 +59,51 @@ test.describe('a person’s DCC stage', () => {
     await expect(page.getByRole('button', { name: 'Show older Sundays' })).toHaveCount(0);
   });
 
+  // Decision 0260: this month's Sundays attended out of section 9's N, and last month's.
+  test('leads with the stage and the month’s Sundays attended out of section 9’s N', async ({
+    page,
+  }) => {
+    // Saturday 19 September in Manila, so the 20th has not begun.
+    await page.clock.setFixedTime(new Date('2026-09-19T02:00:00Z'));
+    await signedInWithPeople(page);
+    await page.route('**/api/v1/dcc/events?*', (route) => {
+      const month = new URL(route.request().url()).searchParams.get('month') ?? '';
+      const event = (date: string, reason: string | null) => ({
+        id: `6b000000-0000-4000-8000-0000000${date.replaceAll('-', '').slice(3)}`,
+        event_date: date,
+        recordable: reason === null && !date.startsWith('2026-08'),
+        // August closed on 7 September, so a held August Sunday is refused as MONTH_CLOSED.
+        not_recordable_reason: reason ?? (date.startsWith('2026-08') ? 'MONTH_CLOSED' : null),
+        removed: reason === 'REMOVED',
+        removal_reason: reason === 'REMOVED' ? 'Combined service.' : null,
+        coverage: null,
+      });
+      const data = month.startsWith('2026-09')
+        ? [
+            event('2026-09-06', null),
+            event('2026-09-13', null),
+            event('2026-09-20', 'NOT_YET_HELD'),
+            event('2026-09-27', 'NOT_YET_HELD'),
+          ]
+        : [
+            event('2026-08-02', null),
+            event('2026-08-09', null),
+            event('2026-08-16', null),
+            event('2026-08-23', null),
+            event('2026-08-30', 'REMOVED'),
+          ];
+      return route.fulfill({ json: { reporting_month: month, open: month.startsWith('2026-09'), data } });
+    });
+
+    await page.goto(PROFILE);
+
+    // N counts every Sunday not removed, the 20th and 27th included, as the report does.
+    await expect(page.getByText('1 of 4', { exact: true }).first()).toBeVisible();
+    await expect(page.getByText('Open until 7 October')).toBeVisible();
+    await expect(page.getByText('August: 1 of 4', { exact: true })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Recent Sundays' })).toBeVisible();
+  });
+
   test('on a phone, keeps Open Sunday level with the date of a removed Sunday', async ({ page }) => {
     await signedInWithPeople(page);
     await page.setViewportSize({ width: 390, height: 844 });
@@ -93,7 +138,7 @@ test.describe('a person’s Cell', () => {
     await mockPersonCells(page, { membership: null, leads: [{ id: CELL_CHOICES[2].id, cell_id: 'C-0014' }] });
     await page.goto(PROFILE);
 
-    await expect(page.getByText('Leads C-0014')).toBeVisible();
+    await expect(page.getByText('Leads C-0014', { exact: true })).toBeVisible();
     await expect(page.getByText('Not in a Cell.')).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Move to another Cell' })).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Add to a Cell' })).toHaveCount(0);

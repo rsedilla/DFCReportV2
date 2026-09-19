@@ -1,6 +1,6 @@
 'use client';
 
-import { useInfiniteQuery } from '@tanstack/react-query';
+import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { useId } from 'react';
 
 import { Button } from '@/components/ui/button';
@@ -8,9 +8,15 @@ import { FailureNotice } from '@/components/ui/failure-notice';
 import { Tag } from '@/components/ui/tag';
 import { TextLink } from '@/components/ui/text-link';
 import { ApiRequestError } from '@/lib/api-client';
-import { classificationLabel, getPersonDccAttendance, type PersonDccRecord } from '@/lib/dcc';
+import {
+  classificationLabel,
+  getPersonDccAttendance,
+  listDccEvents,
+  type DccEvent,
+  type PersonDccRecord,
+} from '@/lib/dcc';
 import { describeFailure } from '@/lib/messages';
-import { dayLabel } from '@/lib/reporting-month';
+import { dayLabel, monthLabel, reportingMonthOf, shiftMonth } from '@/lib/reporting-month';
 
 /**
  * A person's DCC stage and the Sundays it is made from (SKILL.md section 9; decision 0247).
@@ -24,9 +30,14 @@ import { dayLabel } from '@/lib/reporting-month';
  * saying so beside it explains a stage that would otherwise look one short.
  *
  * **Grouped by year, newest first, and paged by cursor.** The route returns no total
- * (section 22), so older Sundays are fetched on request rather than counted. The stage
- * tag is solid, which `docs/DESIGN_RECONCILIATION.md` settles, and every stage carries
- * the same colour.
+ * (section 22), so older Sundays are fetched on request rather than counted.
+ *
+ * **Two cards lead it, the owner's design adjusted** (decision 0260): the stage with the
+ * Sundays it counts, and this month's Sundays attended out of section 9's N, with last
+ * month's beside it, each naming its month and saying so while it is open. The month's Sundays are read under `dcc.view_subtree`
+ * against the reader rather than the person, so a grant that reaches the person and not the
+ * reader leaves the figure out and says so. There is no Cell card: nothing reads one person's Cell
+ * attendance, a Cell record being read one meeting at a time (decision 0246).
  */
 export function PersonDcc({ personId }: { personId: string }) {
   const headingId = useId();
@@ -38,10 +49,21 @@ export function PersonDcc({ personId }: { personId: string }) {
     getNextPageParam: (last) => last.next_cursor,
   });
 
+  const thisMonth = reportingMonthOf();
+  const lastMonth = shiftMonth(thisMonth, -1);
+  const current = useQuery({
+    queryKey: ['dcc-events', thisMonth],
+    queryFn: ({ signal }) => listDccEvents(thisMonth, signal),
+  });
+  const previous = useQuery({
+    queryKey: ['dcc-events', lastMonth],
+    queryFn: ({ signal }) => listDccEvents(lastMonth, signal),
+  });
+
   return (
-    <section aria-labelledby={headingId} className="border-line mt-8 border-t pt-6">
-      <h2 id={headingId} className="text-lg font-semibold tracking-tight">
-        DCC stage
+    <section aria-labelledby={headingId} className="mt-8">
+      <h2 id={headingId} className="sr-only">
+        DCC
       </h2>
 
       {attendance.isPending ? (
@@ -60,29 +82,143 @@ export function PersonDcc({ personId }: { personId: string }) {
           <FailureNotice failure={describeFailure(attendance.error)} />
         </div>
       ) : (
-        <DccHistory
-          classification={attendance.data.pages[0].classification}
-          attended={attendance.data.pages[0].attended}
-          records={attendance.data.pages.flatMap((page) => page.data)}
-          more={attendance.hasNextPage}
-          loadingMore={attendance.isFetchingNextPage}
-          onMore={() => attendance.fetchNextPage()}
-        />
+        <>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Card kicker="Journey">
+              <p className="text-xl font-bold">
+                {attendance.data.pages[0].classification
+                  ? classificationLabel(attendance.data.pages[0].classification)
+                  : 'No stage yet'}
+              </p>
+              <p className="text-muted mt-1 text-sm">
+                {sundaysAttended(attendance.data.pages[0].attended)}
+              </p>
+            </Card>
+            <Card kicker={`Sundays in ${monthName(thisMonth)}`}>
+              <MonthFigure
+                records={attendance.data.pages.flatMap((page) => page.data)}
+                events={monthEvents(current)}
+                month={thisMonth}
+                big
+              />
+              {current.data?.open ? (
+                <p className="text-muted mt-1 text-sm">{openUntil(thisMonth)}</p>
+              ) : null}
+              <p className="text-muted mt-1 text-sm">
+                {monthName(lastMonth)}:{' '}
+                <MonthFigure
+                  records={attendance.data.pages.flatMap((page) => page.data)}
+                  events={monthEvents(previous)}
+                  month={lastMonth}
+                />
+                {previous.data?.open ? ` · ${openUntil(lastMonth).toLowerCase()}` : ''}
+              </p>
+            </Card>
+          </div>
+          <DccHistory
+            records={attendance.data.pages.flatMap((page) => page.data)}
+            more={attendance.hasNextPage}
+            loadingMore={attendance.isFetchingNextPage}
+            onMore={() => attendance.fetchNextPage()}
+          />
+        </>
       )}
     </section>
   );
 }
 
+function Card({ kicker, children }: { kicker: string; children: React.ReactNode }) {
+  return (
+    <div className="bg-raised rounded-lg p-4">
+      <p className="text-muted text-xs font-bold tracking-[0.08em] uppercase">{kicker}</p>
+      <div className="mt-1">{children}</div>
+    </div>
+  );
+}
+
+/** The month's Sundays, or why they are not shown: a refusal is not a failure. */
+function monthEvents(query: {
+  data?: { data: DccEvent[] };
+  isError: boolean;
+  error: unknown;
+}): DccEvent[] | 'denied' | 'failed' | undefined {
+  if (!query.isError) {
+    return query.data?.data;
+  }
+
+  return query.error instanceof ApiRequestError &&
+    (query.error.code === 'CAPABILITY_DENIED' || query.error.code === 'SCOPE_DENIED')
+    ? 'denied'
+    : 'failed';
+}
+
+/** "September". */
+function monthName(month: string): string {
+  return monthLabel(month).split(' ')[0];
+}
+
+/** "Open until 7 October": the 7th of the month after (section 13, decision 0170). */
+function openUntil(month: string): string {
+  return `Open until 7 ${monthName(shiftMonth(month, 1))}`;
+}
+
+function sundaysAttended(attended: number): string {
+  return attended === 0
+    ? 'No Sundays attended yet'
+    : `${attended} ${attended === 1 ? 'Sunday' : 'Sundays'} attended`;
+}
+
+/**
+ * "1 of 4": Sundays attended out of section 9's N, the month's Sundays that were not
+ * removed, those still to come included, so it agrees with the monthly report (decision
+ * 0260). Nothing until both are read.
+ * The first page of records covers both months: fifty, newest first, one per Sunday.
+ */
+function MonthFigure({
+  records,
+  events,
+  month,
+  big = false,
+}: {
+  records: PersonDccRecord[];
+  /** `undefined` while loading; a refusal or a failure is said in words. */
+  events: DccEvent[] | 'denied' | 'failed' | undefined;
+  month: string;
+  big?: boolean;
+}) {
+  if (events === undefined) {
+    return <span className={big ? 'text-xl font-bold' : undefined}>&hellip;</span>;
+  }
+  if (events === 'denied') {
+    return <span className="text-muted text-sm">Not available to your account</span>;
+  }
+  if (events === 'failed') {
+    return <span className="text-muted text-sm">Couldn&rsquo;t load this month&rsquo;s Sundays</span>;
+  }
+
+  const prefix = month.slice(0, 8);
+  const held = events.filter((event) => !event.removed).length;
+  const attended = records.filter(
+    (record) => record.event_date.startsWith(prefix) && record.present && !record.removed,
+  ).length;
+
+  return big ? (
+    <p className="text-xl font-bold">
+      {attended} of {held}
+    </p>
+  ) : (
+    <span>
+      {attended} of {held}
+    </span>
+  );
+}
+
 function DccHistory({
-  classification,
-  attended,
   records,
   more,
   loadingMore,
   onMore,
 }: {
-  classification: Parameters<typeof classificationLabel>[0] | null;
-  attended: number;
   records: PersonDccRecord[];
   more: boolean;
   loadingMore: boolean;
@@ -96,16 +232,9 @@ function DccHistory({
 
   return (
     <>
-      <p className="mt-3 flex flex-wrap items-center gap-3 text-sm">
-        {classification ? <Tag>{classificationLabel(classification)}</Tag> : null}
-        <span>
-          {attended === 0
-            ? 'No Sundays attended yet'
-            : `${attended} ${attended === 1 ? 'Sunday' : 'Sundays'} attended`}
-        </span>
-      </p>
-      <p className="text-muted mt-2 max-w-2xl text-sm leading-relaxed">
-        Worked out from the Sundays below. If it looks wrong, correct the Sunday it comes from.
+      <h3 className="mt-6 text-lg font-semibold tracking-tight">Recent Sundays</h3>
+      <p className="text-muted mt-1 max-w-2xl text-sm leading-relaxed">
+        The stage is worked out from these. If it looks wrong, correct the Sunday it comes from.
       </p>
 
       {records.length === 0 ? (
@@ -113,7 +242,7 @@ function DccHistory({
       ) : (
         [...years].map(([year, lines]) => (
           <div key={year} className="mt-6">
-            <h3 className="text-sm font-semibold">{year}</h3>
+            <h4 className="text-sm font-semibold">{year}</h4>
             <ul className="border-line divide-line mt-2 divide-y border-t border-b">
               {lines.map((line) => (
                 <li
@@ -125,7 +254,7 @@ function DccHistory({
                 >
                   <div className="flex flex-col items-start gap-1 py-2.5 text-sm sm:flex-row sm:items-center sm:gap-x-3 sm:py-0">
                     <span>
-                      <span className="font-medium">{dayLabel(line.event_date)}</span>
+                      <span className="text-accent font-medium">{dayLabel(line.event_date)}</span>
                       <span className={line.removed ? 'text-muted ml-3' : 'ml-3'}>
                         {line.present ? 'Present' : 'Absent'}
                       </span>

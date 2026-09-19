@@ -243,10 +243,11 @@ rewritten to remove that language, because resolving each by inference is how a
 false cross-reference gets introduced, and this log records enough of those
 already. Each file carries previous/next links instead, so a positional reference
 resolves exactly as well as it did in the single file and no better. *Recounted on
-2026-09-19, the trigger being decision 0259: of 258 files, 257 carry `Previous:`, 181 carry
-`Next:`, and 180 carry both on one line. 0213 through 0259 each moved the first two and
+2026-09-19, the trigger being decision 0260: of 259 files, 258 carry `Previous:`, 181 carry
+`Next:`, and 180 carry both on one line. 0213 through 0260 each moved the first two and
 neither of the others, none of them carrying a `Next:`. The one file with no `Previous:` is
 0001, which has nothing before it. The recount before this one was dated 2026-09-19 and
+triggered by 0259, and was left stale by 0260 the same day. The one before that was dated 2026-09-19 and
 triggered by 0258, and was left stale by 0259 the same day. The one before that was dated 2026-09-19 and
 triggered by 0257, and was left stale by 0258 the same day. The one before that was dated 2026-09-19 and
 triggered by 0255 and 0256, and was left stale by 0257 the same day. The one before that was dated 2026-09-19 and
@@ -565,6 +566,7 @@ one, in the paragraph whose subject is false cross-references, and
 - 2026-09-19 — [The year view is its months, and its year row adds up two figures](docs/decisions/0257-the-year-view-is-its-months.md)
 - 2026-09-19 — [The recording queue has a branch view beside the leader's own](docs/decisions/0258-the-recording-queue-has-a-branch-view.md)
 - 2026-09-19 — [The People screen opens on the searcher's scope, and a Member ID finds a person in it](docs/decisions/0259-the-people-screen-opens-on-the-searchers-scope.md)
+- 2026-09-19 — [A person's page carries their Sundays of the month, counted out of N](docs/decisions/0260-a-persons-page-carries-their-sundays-of-the-month.md)
 
 ### Open — awaiting a ruling
 
