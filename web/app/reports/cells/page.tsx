@@ -12,6 +12,7 @@ import { MonthPicker } from '@/components/month-picker';
 import { LeaderDrill } from '@/components/leader-drill';
 import { CoverageByCell } from '@/components/report-coverage';
 import { CoverageByLeader, CoverageSwitch } from '@/components/report-coverage-by-leader';
+import { PeriodSwitch, YearPicker, YearTable, currentYear } from '@/components/report-year';
 import { ReportsSwitch } from '@/components/reports-switch';
 import { FailureNotice } from '@/components/ui/failure-notice';
 import { listAllCells } from '@/lib/cells';
@@ -65,6 +66,11 @@ export default function CellReportPage() {
 export function CellReport() {
   const search = useSearchParams();
   const [month, setMonth] = useState(() => monthFromQuery(search.get('month')));
+  // A month or a year of this report (decision 0257). The year is the month's own year.
+  const [period, setPeriod] = useState<'month' | 'year'>(() =>
+    search.get('period') === 'year' ? 'year' : 'month',
+  );
+  const [year, setYear] = useState(() => Math.min(Number(month.slice(0, 4)), currentYear()));
   const [cellId, setCellId] = useState<string>('');
   // A leader opened from the By leader table (decision 0254), carried in the address so
   // the browser's Back returns to the report it was opened from.
@@ -105,7 +111,7 @@ export function CellReport() {
     queryKey: ['cell-report', month, scope],
     queryFn: ({ signal }) =>
       getCellMonthlyReport(month, scope as Exclude<ReportScope, { kind: 'NETWORK' }>, signal),
-    enabled: scope !== null,
+    enabled: scope !== null && period === 'month',
   });
 
   return (
@@ -120,7 +126,13 @@ export function CellReport() {
         figure that cannot be improved by recording less.
       </p>
 
-      <MonthPicker month={month} onChange={setMonth} open={report.data?.open} />
+      <PeriodSwitch value={period} onChange={setPeriod} />
+
+      {period === 'month' ? (
+        <MonthPicker month={month} onChange={setMonth} open={report.data?.open} />
+      ) : (
+        <YearPicker year={year} onChange={setYear} />
+      )}
 
       {leader ? <LeaderDrill personId={leader} report="cells" month={month} /> : null}
 
@@ -162,7 +174,18 @@ export function CellReport() {
         />
       </div>
 
-      {report.isPending || scope === null ? (
+      {period === 'year' ? (
+        scope === null ? (
+          <p className="text-muted mt-6 text-sm">Loading&hellip;</p>
+        ) : (
+          <YearTable
+            key={`${year}-${JSON.stringify(scope)}`}
+            report="cells"
+            year={year}
+            scope={scope}
+          />
+        )
+      ) : report.isPending || scope === null ? (
         <p className="text-muted mt-6 text-sm">Loading&hellip;</p>
       ) : report.data ? (
         <div className="mt-8 flex flex-col gap-10">

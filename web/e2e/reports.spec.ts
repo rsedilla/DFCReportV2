@@ -203,3 +203,75 @@ test.describe('the coverage tables', () => {
     await expect(page.getByRole('region', { name: 'Coverage by Sunday' })).toHaveCount(0);
   });
 });
+
+test.describe('the year view (decision 0257)', () => {
+  /** Owed and Filed differ by month, so a wrong sum cannot pass by coincidence. */
+  const FIGURES: Record<string, { owed: number; met: number }> = {
+    '2026-01-01': { owed: 10, met: 9 },
+    '2026-02-01': { owed: 12, met: 8 },
+    '2026-04-01': { owed: 14, met: 14 },
+    '2026-05-01': { owed: 16, met: 11 },
+    '2026-06-01': { owed: 18, met: 5 },
+  };
+
+  test('one row per month begun, and a year row adding up Owed and Filed of the months read', async ({
+    page,
+  }) => {
+    await page.clock.setFixedTime(NOW);
+    await mockSignedIn(page);
+    await page.route('**/api/v1/reports/dcc/monthly*', (route) => {
+      const period = new URL(route.request().url()).searchParams.get('period') ?? '';
+      const figures = FIGURES[period];
+
+      // March is refused, as a month outside the reader's reach would be.
+      return figures
+        ? route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({
+              scope: { kind: 'WHOLE_CHURCH' },
+              period,
+              open: period === '2026-06-01',
+              n: 4,
+              removed_events: [],
+              unique_people: 5,
+              classification: { vip: 1, second_timer: 1, third_timer: 1, fourth_timer: 1, regular: 1 },
+              buckets: [],
+              coverage: figures,
+            }),
+          })
+        : route.fulfill({
+            status: 403,
+            contentType: 'application/json',
+            body: JSON.stringify({
+              error: { code: 'SCOPE_DENIED', message: 'Outside your scope.', details: {} },
+            }),
+          });
+    });
+
+    await page.goto('/reports/dcc?period=year');
+
+    await expect(page.getByRole('heading', { name: 'Month by month, January to June 2026' })).toBeVisible();
+
+    const table = page.getByRole('table');
+    const rows = table.getByRole('row');
+    // A header, six months and the year row: July has not begun and is not shown.
+    await expect(rows).toHaveCount(8);
+    await expect(table.getByRole('row', { name: /^July/ })).toHaveCount(0);
+
+    // March could not be read: no figures on its row, and it is left out of the year row.
+    const march = table.getByRole('row', { name: /^March/ });
+    await expect(march.getByRole('cell')).toHaveCount(2);
+    await expect(march).toContainText('Outside your scope.');
+    await expect(page.getByText('One month could not be read and is not in the year row.')).toBeVisible();
+
+    const year = table.getByRole('row', { name: /^Year so far/ });
+    const cells = year.getByRole('cell');
+    await expect(cells.nth(1)).toHaveText('70');
+    await expect(cells.nth(2)).toHaveText('47');
+    // No people count for the year: a person who came in two months is one person.
+    await expect(cells.nth(3)).toHaveText('');
+    // Section 17: the year row includes a month still open, and says which.
+    await expect(cells.nth(4)).toHaveText('Includes June, still open');
+  });
+});

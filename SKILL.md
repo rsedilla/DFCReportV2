@@ -3935,6 +3935,8 @@ Monthly reports must be generated from underlying individual attendance and rela
 
 Historical reports must respect historical pastoral assignments and Cell category history where applicable.
 
+**The year view is its months** (ruling of 2026-09-19, decision 0257). The Reports screen shows a year as one row per month that has begun, each row being that month's own report, requested and authorized as the monthly report is: Owed and Filed, never divided, the unique people it counts, and whether the month is open. The year row adds up Owed and Filed and nothing else, because those two count obligations, each of which falls in one month; unique people and classification do not add across months. A month the screen cannot read is said so on its row and left out of the year row. The yearly routes in Section 22 stay unbuilt.
+
 ---
 
 ## 19. Dashboard / Sidebar Guidance

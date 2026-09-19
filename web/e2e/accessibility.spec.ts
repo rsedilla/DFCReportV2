@@ -789,6 +789,36 @@ const SCANS = [
     },
   },
   {
+    // A year of the DCC report (decision 0257): one row per month that has begun, and a year
+    // row adding up Owed and Filed only.
+    name: 'dcc figures report, year',
+    route: '/reports/dcc?period=year&month=2026-06-01',
+    async before(page: import('@playwright/test').Page) {
+      await mockSignedIn(page);
+      await mockDccReport(page);
+    },
+    async arrange(page: import('@playwright/test').Page) {
+      await expect(page.getByRole('heading', { name: /Month by month/ })).toBeVisible();
+      await expect(page.getByText('Year so far')).toBeVisible();
+      await expect(page.getByText('Loading…')).toHaveCount(0);
+    },
+  },
+  {
+    // The same for the Cell report.
+    name: 'cell attendance report, year',
+    route: '/reports/cells?period=year&month=2026-06-01',
+    async before(page: import('@playwright/test').Page) {
+      await mockSignedIn(page);
+      await mockCells(page);
+      await mockCellReport(page);
+    },
+    async arrange(page: import('@playwright/test').Page) {
+      await expect(page.getByRole('heading', { name: /Month by month/ })).toBeVisible();
+      await expect(page.getByText('Year so far')).toBeVisible();
+      await expect(page.getByText('Loading…')).toHaveCount(0);
+    },
+  },
+  {
     // One leader opened from that table: the switch is gone, the table shows their branch,
     // and a link returns to the reader's own report.
     name: 'cell attendance report, one leader',
@@ -1084,6 +1114,22 @@ const TARGET_SWEEP = [
     settleRole: 'heading' as const,
     settle: 'Recording coverage',
     minimum: 10,
+  },
+  {
+    // The Reports switch, How these are counted, the Month and Year choices and the two year
+    // controls; the table itself holds no control.
+    name: 'dcc figures report, year',
+    route: '/reports/dcc?period=year&month=2026-06-01',
+    settleRole: 'heading' as const,
+    settle: 'Month by month',
+    minimum: 7,
+  },
+  {
+    name: 'cell attendance report, year',
+    route: '/reports/cells?period=year&month=2026-06-01',
+    settleRole: 'heading' as const,
+    settle: 'Month by month',
+    minimum: 7,
   },
   {
     // The Reports switch, How these are counted, two month controls and the Back link, at

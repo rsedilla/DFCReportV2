@@ -11,6 +11,7 @@ import { HowTheseAreCounted } from '@/components/how-counted';
 import { MonthPicker } from '@/components/month-picker';
 import { CoverageBySunday } from '@/components/report-coverage';
 import { CoverageByLeader, CoverageSwitch } from '@/components/report-coverage-by-leader';
+import { PeriodSwitch, YearPicker, YearTable, currentYear } from '@/components/report-year';
 import { LeaderDrill } from '@/components/leader-drill';
 import { ReportsSwitch } from '@/components/reports-switch';
 import { FailureNotice } from '@/components/ui/failure-notice';
@@ -59,6 +60,11 @@ export default function DccReportPage() {
 export function DccReport() {
   const search = useSearchParams();
   const [month, setMonth] = useState(() => monthFromQuery(search.get('month')));
+  // A month or a year of this report (decision 0257). The year is the month's own year.
+  const [period, setPeriod] = useState<'month' | 'year'>(() =>
+    search.get('period') === 'year' ? 'year' : 'month',
+  );
+  const [year, setYear] = useState(() => Math.min(Number(month.slice(0, 4)), currentYear()));
 
   // **Section 19's Senior Pastor scope selector.** Empty means the whole church; the
   // two Networks are the only other values section 4 defines. It is offered only to
@@ -96,7 +102,7 @@ export function DccReport() {
     queryKey: ['dcc-report', month, scope],
     queryFn: ({ signal }) =>
       getDccMonthlyReport(month, scope as Exclude<ReportScope, { kind: 'CELL' }>, signal),
-    enabled: scope !== null,
+    enabled: scope !== null && period === 'month',
   });
 
   return (
@@ -107,11 +113,18 @@ export function DccReport() {
         <HowTheseAreCounted report="dcc" />
       </div>
       <p className="text-muted mt-4 max-w-2xl text-sm leading-relaxed">
-        What the people you oversee recorded for this month&rsquo;s Sundays, and how many of the
-        leaders who owed a record filed one.
+        What the people you oversee recorded for{' '}
+        {period === 'year' ? 'each month’s' : 'this month’s'} Sundays, and how many of the leaders
+        who owed a record filed one.
       </p>
 
-      <MonthPicker month={month} onChange={setMonth} open={report.data?.open} />
+      <PeriodSwitch value={period} onChange={setPeriod} />
+
+      {period === 'month' ? (
+        <MonthPicker month={month} onChange={setMonth} open={report.data?.open} />
+      ) : (
+        <YearPicker year={year} onChange={setYear} />
+      )}
 
       {leader ? <LeaderDrill personId={leader} report="dcc" month={month} /> : null}
 
@@ -152,7 +165,18 @@ export function DccReport() {
         />
       </div>
 
-      {report.isPending || scope === null ? (
+      {period === 'year' ? (
+        scope === null ? (
+          <p className="text-muted mt-6 text-sm">Loading&hellip;</p>
+        ) : (
+          <YearTable
+            key={`${year}-${JSON.stringify(scope)}`}
+            report="dcc"
+            year={year}
+            scope={scope}
+          />
+        )
+      ) : report.isPending || scope === null ? (
         <p className="text-muted mt-6 text-sm">Loading&hellip;</p>
       ) : report.data ? (
         <div className="mt-8 flex flex-col gap-10">

@@ -243,10 +243,11 @@ rewritten to remove that language, because resolving each by inference is how a
 false cross-reference gets introduced, and this log records enough of those
 already. Each file carries previous/next links instead, so a positional reference
 resolves exactly as well as it did in the single file and no better. *Recounted on
-2026-09-19, the trigger being decisions 0255 and 0256: of 255 files, 254 carry `Previous:`, 181 carry
-`Next:`, and 180 carry both on one line. 0213 through 0256 each moved the first two and
+2026-09-19, the trigger being decision 0257: of 256 files, 255 carry `Previous:`, 181 carry
+`Next:`, and 180 carry both on one line. 0213 through 0257 each moved the first two and
 neither of the others, none of them carrying a `Next:`. The one file with no `Previous:` is
 0001, which has nothing before it. The recount before this one was dated 2026-09-19 and
+triggered by 0255 and 0256, and was left stale by 0257 the same day. The one before that was dated 2026-09-19 and
 triggered by 0255 arriving from `spec/growth`, and was left stale by 0256 the same day. The one before that was dated 2026-09-18 and
 triggered by 0252 to 0254, and was left stale by 0255 arriving the next day. The one before that was dated 2026-09-17 and
 triggered by 0251, and was left stale by 0252 the next day. The one before that was dated 2026-09-16 and
@@ -559,6 +560,7 @@ one, in the paragraph whose subject is false cross-references, and
 - 2026-09-18 — [Reports lists coverage by leader, and each row counts that leader's own obligations](docs/decisions/0254-reports-list-coverage-by-leader.md)
 - 2026-09-18 — [A Cell recorded at setup counts as opened, and nobody is asked](docs/decisions/0255-a-cell-recorded-at-setup-counts-as-opened.md)
 - 2026-09-19 — [The leader summary route is replaced by the Network screen's routes](docs/decisions/0256-the-leader-summary-route-is-replaced.md)
+- 2026-09-19 — [The year view is its months, and its year row adds up two figures](docs/decisions/0257-the-year-view-is-its-months.md)
 
 ### Open — awaiting a ruling
 
