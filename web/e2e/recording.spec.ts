@@ -73,6 +73,22 @@ test.describe('a recorded Cell meeting', () => {
     await expect(page.getByRole('radio', { name: 'Did not meet' })).toHaveCount(0);
   });
 
+  // Owner's design, adjusted (2026-09-19): the Cell by name under the date, and the
+  // record's day and counts with no name on it (decision 0201's reasoning).
+  test('names the Cell and says when it was recorded and what, never by whom', async ({
+    page,
+  }) => {
+    await mockSignedIn(page);
+    await mockRecordedMeetingRoster(page, 'HELD');
+    await mockCellMeetings(page);
+
+    await page.goto(MEETING);
+
+    await expect(page.getByText('Youth · 7:00 pm · C-0007')).toBeVisible();
+    const summary = page.getByText(/^First recorded on/);
+    await expect(summary).toHaveText('First recorded on 27 Jun · 1 present, 1 absent');
+  });
+
   test('recorded as did not meet is shown with its reason, and offers no edit', async ({ page }) => {
     await mockSignedIn(page);
     await mockCellCorrector(page);

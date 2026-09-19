@@ -11,9 +11,12 @@ import { FailureNotice } from '@/components/ui/failure-notice';
 import { RadioGroup, type RadioOption } from '@/components/ui/radio-group';
 import { Tag } from '@/components/ui/tag';
 import {
+  categoryLabel,
   getMeetingRoster,
+  listCellMeetings,
   meetingStateLabel,
   submitMeeting,
+  timeLabel,
   type CellMeetingStatus,
   type CellSubmission,
   type RosterMember,
@@ -124,6 +127,17 @@ function RecordMeeting() {
   const [note, setNote] = useState('');
   const [correctionReason, setCorrectionReason] = useState('');
   const [editing, setEditing] = useState(false);
+
+  // The Cell's category for the line under the date. Same capability as the roster, but
+  // resolved against the Cell rather than the meeting, so a leader who led on the meeting's
+  // date and no longer leads the Cell may be refused it (CLAUDE.md records the gap); the
+  // line then names the Cell ID.
+  const cell = useQuery({
+    queryKey: ['cell-meetings', params.id, roster.data?.reporting_month],
+    queryFn: ({ signal }) =>
+      listCellMeetings(params.id, roster.data?.reporting_month ?? '', signal),
+    enabled: roster.data !== undefined,
+  });
 
   const members = useMemo(() => roster.data?.members ?? [], [roster.data]);
   const recorded = roster.data?.meeting ?? null;
@@ -276,7 +290,13 @@ function RecordMeeting() {
         13, 17 and 19 forbid encoding in colour.
       */}
       <h1 className="text-accent text-2xl font-bold tracking-tight">{dayLabel(params.date)}</h1>
-      {roster.data ? <p className="text-muted mt-1 text-sm">Cell {roster.data.cell_id}</p> : null}
+      {roster.data ? (
+        <p className="text-muted mt-1 text-sm">
+          {cell.data?.category
+            ? `${categoryLabel(cell.data.category)} · ${timeLabel(roster.data.scheduled_time)} · ${roster.data.cell_id}`
+            : `Cell ${roster.data.cell_id}`}
+        </p>
+      ) : null}
       {recorded !== null ? (
         <p className="mt-2">
           {/*
@@ -355,6 +375,7 @@ function RecordMeeting() {
               ) : (
                 <>
                   <p className="text-sm font-bold">Already recorded</p>
+                  <p className="text-muted mt-1 text-sm">{recordedSummary(recorded, members)}</p>
                   {me.data ? (
                     canCorrect ? (
                       <Button variant="secondary" className="mt-3" onClick={() => setEditing(true)}>
@@ -376,11 +397,12 @@ function RecordMeeting() {
           {correcting ? null : (
             <div className="mt-8">
               <RadioGroup
-                legend="Did the Cell meet?"
+                legend="Did the meeting take place?"
                 name="status"
                 value={status === 'NOT_HELD' ? 'NOT_HELD' : 'HELD'}
                 onChange={setStatusChoice}
                 options={[
+                  // Section 13 fixes these labels so wording cannot drift between screens.
                   { value: 'HELD', label: 'Met' },
                   { value: 'NOT_HELD', label: 'Did not meet' },
                 ]}
@@ -491,14 +513,26 @@ function RecordMeeting() {
                       ? '1 member still to mark.'
                       : `${unmarked.length} members still to mark.`}
               </p>
-              <Button
-                type="button"
-                className="w-full sm:w-auto"
-                onClick={() => save.mutate()}
-                disabled={submission === null || save.isPending}
-              >
-                {save.isPending ? 'Saving…' : correcting ? 'Save the correction' : 'Save'}
-              </Button>
+              <div className="flex flex-col-reverse gap-2 sm:flex-row sm:items-center">
+                <Link
+                  href={`/cells/${params.id}/meetings`}
+                  className="focus-visible:outline-accent inline-flex min-h-11 items-center justify-center px-3 text-sm font-medium underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2"
+                >
+                  Cancel
+                </Link>
+                <Button
+                  type="button"
+                  className="w-full sm:w-auto"
+                  onClick={() => save.mutate()}
+                  disabled={submission === null || save.isPending}
+                >
+                  {save.isPending
+                    ? 'Saving…'
+                    : correcting
+                      ? 'Save the correction'
+                      : 'Save this meeting'}
+                </Button>
+              </div>
             </div>
           )}
         </>
@@ -534,4 +568,32 @@ function MemberMark({
       />
     </li>
   );
+}
+
+/**
+ * "First recorded on 12 Sep · 4 present, 1 absent". A correction keeps the first
+ * submission's time (section 14). No name, on decision 0201's reasoning that the
+ * recording account's name is not handed to a reader who cannot correct the record.
+ */
+function recordedSummary(
+  recorded: { submitted_at: string | null },
+  members: RosterMember[],
+): string {
+  const present = members.filter((member) => member.record?.present === true).length;
+  const absent = members.filter((member) => member.record?.present === false).length;
+  const unmarked = members.length - present - absent;
+  const counts = `${present} present, ${absent} absent${unmarked > 0 ? `, ${unmarked} not marked` : ''}`;
+
+  if (recorded.submitted_at === null) {
+    return counts;
+  }
+
+  const day = todayInManila(new Date(recorded.submitted_at));
+  const label = new Date(`${day}T00:00:00Z`).toLocaleDateString('en-GB', {
+    day: 'numeric',
+    month: 'short',
+    timeZone: 'UTC',
+  });
+
+  return `First recorded on ${label} · ${counts}`;
 }

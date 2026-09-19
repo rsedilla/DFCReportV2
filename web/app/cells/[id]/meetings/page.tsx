@@ -14,8 +14,7 @@ import { FailureNotice } from '@/components/ui/failure-notice';
 import { HeaderCell, Table, rowClasses } from '@/components/ui/table';
 import { Tag } from '@/components/ui/tag';
 import {
-  categoryLabel,
-  dayOfWeekLabel,
+  cellName,
   listCellMeetings,
   meetingStateLabel,
   timeLabel,
@@ -85,7 +84,7 @@ function CellMeetings() {
       </p>
 
       <h1 className="text-2xl font-semibold tracking-tight">
-        {meetings.data ? cellTitle(meetings.data) : 'Cell meetings'}
+        {meetings.data ? cellName(meetings.data) : 'Cell meetings'}
       </h1>
       {meetings.data ? (
         <p className="text-muted mt-1 text-sm">{cellSubtitle(meetings.data)}</p>
@@ -242,21 +241,6 @@ function MeetingDetail({ entry }: { entry: ScheduledMeeting }) {
       ) : null}
     </>
   );
-}
-
-/**
- * "Young Pro · Fridays 7:30 pm", the owner's design's way of naming a Cell, as the Cell
- * stands today (each meeting row carries its own time); the Cell ID where there is no
- * category or schedule to name.
- */
-function cellTitle(data: CellMeetings): string {
-  if (data.category == null || data.day_of_week == null || data.scheduled_time == null) {
-    return `Cell ${data.cell_id}`;
-  }
-
-  return `${categoryLabel(data.category)} · ${dayOfWeekLabel(data.day_of_week)}s ${timeLabel(
-    data.scheduled_time,
-  )}`;
 }
 
 /** "C-0007 · led by Ana Reyes · 6 members", or when it closed in place of the count. */

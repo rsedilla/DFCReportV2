@@ -166,6 +166,23 @@ export function timeLabel(time: string): string {
   return `${hour}:${String(minutes).padStart(2, '0')} ${hours >= 12 ? 'pm' : 'am'}`;
 }
 
+/**
+ * "Young Pro · Fridays 7:30 pm", the owner's design's way of naming a Cell, as the Cell
+ * stands today (each meeting row carries its own time); the Cell ID where there is no
+ * category or schedule to name.
+ */
+export function cellName(
+  data: Pick<CellMeetings, 'cell_id' | 'category' | 'day_of_week' | 'scheduled_time'>,
+): string {
+  if (data.category == null || data.day_of_week == null || data.scheduled_time == null) {
+    return `Cell ${data.cell_id}`;
+  }
+
+  return `${categoryLabel(data.category)} · ${dayOfWeekLabel(data.day_of_week)}s ${timeLabel(
+    data.scheduled_time,
+  )}`;
+}
+
 export function categoryLabel(category: CellCategory): string {
   switch (category) {
     case 'YOUTH':
