@@ -111,9 +111,9 @@ export function PossibleMatches({
   });
 
   if (!ready || matches.isPending || matches.isError || matches.data.data.length === 0) {
-    // Silent when there is nothing to say. A panel reading "no possible matches"
-    // on every record adds a line to dismiss and nothing to decide — and a
-    // failed lookup must not imply there are none, so it says nothing either.
+    // Silent when there is nothing to say, and never "nobody matches": a match resting on a
+    // birthday or mobile number outside the reader's scope is withheld from them (section 3),
+    // so an empty list is not evidence that nobody does. A failed lookup says nothing either.
     return null;
   }
 

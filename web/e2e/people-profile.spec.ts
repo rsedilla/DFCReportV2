@@ -382,6 +382,41 @@ test.describe('dialogs', () => {
   });
 });
 
+// Owner's design adjusted (2026-09-19): the adder starts as the leader where they hold an
+// assignment, and a stage is shown and never set by hand.
+test.describe('the Add and Edit person forms', () => {
+  test('start the pastoral leader as the person adding', async ({
+    page,
+  }) => {
+    await signedInWithPeople(page);
+    await mockPastoralPath(page);
+    // The adder's own record, which says which Network they lead in (sections 4 and 5).
+    await page.route(`**/api/v1/people/${SIGNED_IN_PERSON_ID}`, (route) =>
+      route.fulfill({ json: { ...PERSON_IN_SCOPE, id: SIGNED_IN_PERSON_ID, sex: 'FEMALE' } }),
+    );
+    await page.goto('/people/new');
+
+    await expect(page.getByText('Rosalinda Ocampo (you)')).toBeVisible();
+    await expect(page.getByText('None yet — it’s worked out from their Sundays.')).toBeVisible();
+
+    // A man cannot be led from the Women's Network, so the default is withdrawn.
+    await page.getByRole('radio', { name: 'Male', exact: true }).check();
+    await expect(page.getByText('Rosalinda Ocampo (you)')).toHaveCount(0);
+  });
+
+  test('shows the journey stage on the edit form without offering to change it', async ({
+    page,
+  }) => {
+    await signedInWithPeople(page);
+    await mockPastoralPath(page);
+    await page.goto(`${PROFILE}/edit`);
+
+    await expect(page.getByText('Journey stage')).toBeVisible();
+    await expect(page.getByText('Regular', { exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: /Correct this stage/ })).toHaveCount(0);
+  });
+});
+
 test.describe('adding a person with a Cell', () => {
   async function fillTheForm(page: Page) {
     await page.goto('/people/new');
@@ -402,7 +437,7 @@ test.describe('adding a person with a Cell', () => {
 
     await fillTheForm(page);
     await page.getByRole('combobox', { name: 'Cell' }).selectOption(CELL_CHOICES[1].id);
-    await page.getByRole('button', { name: 'Add person' }).click();
+    await page.getByRole('button', { name: 'Add this person' }).click();
 
     await expect(page).toHaveURL(new RegExp(`${PROFILE}$`));
     expect(sent).toEqual([
@@ -420,7 +455,7 @@ test.describe('adding a person with a Cell', () => {
     const sent = await mockMembershipAdd(page, 'accepted');
 
     await fillTheForm(page);
-    await page.getByRole('button', { name: 'Add person' }).click();
+    await page.getByRole('button', { name: 'Add this person' }).click();
 
     await expect(page).toHaveURL(new RegExp(`${PROFILE}$`));
     expect(sent).toEqual([]);
@@ -434,7 +469,7 @@ test.describe('adding a person with a Cell', () => {
 
     await fillTheForm(page);
     await page.getByRole('combobox', { name: 'Cell' }).selectOption(CELL_CHOICES[1].id);
-    await page.getByRole('button', { name: 'Add person' }).click();
+    await page.getByRole('button', { name: 'Add this person' }).click();
 
     await expect(
       page.getByRole('heading', { name: `${PERSON_IN_SCOPE.full_name} was added` }),

@@ -14,6 +14,8 @@ import { FailureNotice } from '@/components/ui/failure-notice';
 import { Field } from '@/components/ui/field';
 import { RadioGroup } from '@/components/ui/radio-group';
 import { TextLink } from '@/components/ui/text-link';
+import { ApiRequestError } from '@/lib/api-client';
+import { classificationLabel, getPersonDccAttendance } from '@/lib/dcc';
 import { directLeaderOf, getPastoralPath, noLeaderLabel } from '@/lib/hierarchy';
 import { cn } from '@/lib/utils';
 import { describeFailure, fieldErrorFor, type Failure } from '@/lib/messages';
@@ -165,6 +167,24 @@ function Fields({ person, id }: { person: PersonFull; id: string }) {
   const pathEntries = path.data?.data ?? [];
   const leader = directLeaderOf(pathEntries);
 
+  // Read to show the stage, never to change it: it is worked out from Sundays (section 9,
+  // decision 0247), under `dcc.view_subtree` against the person.
+  const dcc = useQuery({
+    queryKey: ['person-dcc-stage', id],
+    queryFn: ({ signal }) => getPersonDccAttendance(id, null, signal),
+    retry: false,
+  });
+  const stage = dcc.isPending
+    ? 'Loading…'
+    : dcc.isError
+      ? dcc.error instanceof ApiRequestError &&
+        (dcc.error.code === 'CAPABILITY_DENIED' || dcc.error.code === 'SCOPE_DENIED')
+        ? 'Not available to your account'
+        : 'Couldn’t load'
+      : dcc.data.classification
+        ? classificationLabel(dcc.data.classification)
+        : 'None yet';
+
   return (
     <>
       {(
@@ -209,6 +229,14 @@ function Fields({ person, id }: { person: PersonFull; id: string }) {
             </p>
             <p className="text-muted text-sm leading-relaxed">
               Changing it is a move, not an edit. Use Move to another leader on the profile.
+            </p>
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <p className="field-label">Journey stage</p>
+            <p className="text-sm">{stage}</p>
+            <p className="text-muted text-sm leading-relaxed">
+              Worked out from their Sundays. If it looks wrong, correct the Sunday on their page.
             </p>
           </div>
           {/*

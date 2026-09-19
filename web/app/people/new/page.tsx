@@ -16,13 +16,21 @@ import { RadioGroup } from '@/components/ui/radio-group';
 import { SelectField } from '@/components/ui/select-field';
 import { TextLink } from '@/components/ui/text-link';
 import { ApiRequestError } from '@/lib/api-client';
-import { addCellMember, categoryLabel, listAllCells, membershipFailure } from '@/lib/cells';
+import {
+  addCellMember,
+  cellShortName,
+  listAllCells,
+  membershipFailure,
+} from '@/lib/cells';
+import { getPastoralPath } from '@/lib/hierarchy';
+import { getMe } from '@/lib/me';
 import { idempotencyKeyFor } from '@/lib/idempotency';
 import { describeFailure, fieldErrorFor, type Failure } from '@/lib/messages';
 import {
   CIVIL_STATUS_OPTIONS,
   SEX_OPTIONS,
   createPerson,
+  getPerson,
   isWithheld,
   type CivilStatus,
   type DuplicateCandidate,
@@ -78,6 +86,35 @@ function NewPersonForm() {
   const [values, setValues] = useState(EMPTY);
   const [leaderId, setLeaderId] = useState<string | null>(null);
   const [leaderName, setLeaderName] = useState<string | null>(null);
+  const [leaderTouched, setLeaderTouched] = useState(false);
+
+  // **The leader starts as the person adding, where they hold an assignment or a root seat**
+  // (owner's design, 2026-09-19), and only while the new person's sex allows it: a leader
+  // leads within their own Network (sections 4 and 5), so a default the server would refuse
+  // is not offered. An administrator outside the pastoral structure is not offered at all,
+  // which `CLAUDE.md` records as open. The picker still changes it.
+  const me = useQuery({ queryKey: ['me'], queryFn: ({ signal }) => getMe(signal) });
+  const myPath = useQuery({
+    queryKey: ['pastoral-path', me.data?.person_id],
+    queryFn: ({ signal }) => getPastoralPath(me.data?.person_id ?? '', signal),
+    enabled: me.data?.person_id !== undefined,
+    retry: false,
+  });
+  const mine = useQuery({
+    queryKey: ['person', me.data?.person_id],
+    queryFn: ({ signal }) => getPerson(me.data?.person_id ?? '', signal),
+    enabled: me.data?.person_id !== undefined,
+    retry: false,
+  });
+  const myEntries = myPath.data?.data ?? [];
+  const self =
+    (myEntries.length >= 2 || myEntries[0]?.network_root) &&
+    mine.data !== undefined &&
+    (values.sex === '' || values.sex === mine.data.sex)
+      ? myEntries[myEntries.length - 1]
+      : null;
+  const chosenLeaderId = leaderTouched ? leaderId : (self?.id ?? null);
+  const chosenLeaderName = leaderTouched ? leaderName : self ? `${self.full_name} (you)` : null;
   const [candidates, setCandidates] = useState<DuplicateCandidate[] | null>(null);
   const [failure, setFailure] = useState<Failure | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string | null>>({});
@@ -158,7 +195,7 @@ function NewPersonForm() {
           civil_status: values.civil_status as CivilStatus,
           birth_date: values.birth_date || null,
           mobile_number: values.mobile_number.trim() || null,
-          pastoral_leader_id: leaderId as string,
+          pastoral_leader_id: chosenLeaderId as string,
           acknowledged_duplicate_ids: acknowledgedIds.length > 0 ? acknowledgedIds : undefined,
         },
         key,
@@ -306,6 +343,9 @@ function NewPersonForm() {
   return (
     <main id="main" className={PAGE_WIDTH.READING}>
       <h1 className="text-2xl font-semibold tracking-tight">Add a person</h1>
+      <p className="text-muted mt-2 max-w-2xl text-sm leading-relaxed">
+        Search first — most &ldquo;new&rdquo; people already have a record somewhere in the church.
+      </p>
 
       <form onSubmit={onSubmit} className="mt-8 flex flex-col gap-5" noValidate>
         <FailureNotice failure={failure} />
@@ -383,9 +423,10 @@ function NewPersonForm() {
           legend="Pastoral leader"
           description="Who will pastor this person? Required, and it decides who can see and edit their details."
           searchLabel="Search for a leader by name"
-          selectedId={leaderId}
-          selectedName={leaderName}
+          selectedId={chosenLeaderId}
+          selectedName={chosenLeaderName}
           onSelect={(person) => {
+            setLeaderTouched(true);
             setLeaderId(person?.id ?? null);
             setLeaderName(person?.full_name ?? null);
             // The leader is in the body, so changing it is a different write.
@@ -411,14 +452,21 @@ function NewPersonForm() {
           <option value="">No Cell for now</option>
           {(cells.data ?? []).map((cell) => (
             <option key={cell.id} value={cell.id}>
-              {cell.cell_id} · {categoryLabel(cell.category)} · led by {cell.leader.full_name}
+              {cellShortName({ ...cell, day_of_week: cell.schedule.day_of_week })} · led by{' '}
+              {cell.leader.full_name} ({cell.cell_id})
             </option>
           ))}
         </SelectField>
 
+        {/* A stage is worked out from Sundays and never set by hand (section 9, decision 0247). */}
+        <div className="flex flex-col gap-1.5">
+          <p className="field-label">Journey stage</p>
+          <p className="text-muted text-sm">None yet — it&rsquo;s worked out from their Sundays.</p>
+        </div>
+
         <div>
-          <Button type="submit" disabled={create.isPending || !leaderId}>
-            {create.isPending ? 'Adding…' : 'Add person'}
+          <Button type="submit" disabled={create.isPending || !chosenLeaderId}>
+            {create.isPending ? 'Adding…' : 'Add this person'}
           </Button>
         </div>
       </form>

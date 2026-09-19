@@ -228,7 +228,7 @@ const SCANS = [
       await page.getByRole('button', { name: 'Find' }).click();
       await page.getByRole('button', { name: 'Choose' }).first().click();
       await page.getByRole('combobox', { name: 'Cell' }).selectOption({ index: 2 });
-      await page.getByRole('button', { name: 'Add person' }).click();
+      await page.getByRole('button', { name: 'Add this person' }).click();
       await expect(
         page.getByRole('heading', { name: 'Marilou Reyes Santos was added' }),
       ).toBeVisible();
@@ -306,7 +306,7 @@ const SCANS = [
       await page.getByLabel('Search for a leader by name').fill('an');
       await page.getByRole('button', { name: 'Find' }).click();
       await page.getByRole('button', { name: 'Choose' }).first().click();
-      await page.getByRole('button', { name: 'Add person' }).click();
+      await page.getByRole('button', { name: 'Add this person' }).click();
       await expect(
         page.getByRole('heading', { name: 'Is this someone already recorded?' }),
       ).toBeVisible();
