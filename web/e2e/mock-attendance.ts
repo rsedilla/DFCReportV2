@@ -885,6 +885,7 @@ export async function mockNetworkReader(page: Page): Promise<void> {
         person_id: '9a1b2c3d-4e5f-4061-8273-8495a6b7c8d9',
         email: 'leader@example.invalid',
         first_name: 'Marilou',
+        roles: ['LEADER'],
         capabilities: [
           grant('people.view_subtree'),
           grant('dcc.view_subtree'),

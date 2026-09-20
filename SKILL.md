@@ -1988,6 +1988,8 @@ case that first established the rule above. The catalog above gives it one scope
 
 `read_only` belongs to `capability_grants` and to nothing else. **A role default carries no such flag**, and none is to be derived for one: a role's authority is exactly what the catalog above says it is. Anywhere an account's effective authority is presented — `/api/v1/auth/me` is the case that exists — authority carried by a role reports no `read_only` value rather than an invented one, because a client branching on a value this specification never defined is branching on a rule that does not exist.
 
+**That response also names the roles this system honours** (ruling of 2026-09-20). Honoured rather than held: a `SENIOR_PASTOR` row on an account whose Person is not one Section 4 names authorizes nothing, and naming it would tell a reader they hold an authority every request they make will refuse. It is a list, because `account_roles` permits more than one active row and provisioning's one-role rule is a rule about provisioning. A client still derives no role from the capabilities. It could: the response marks each one `role` or `grant`, and the role defaults differ. But a client that mapped a set of role-sourced capabilities back onto a role name would be keeping its own copy of this section's catalog, and would start lying the day a default moves here — which is the reimplementation this section keeps out of clients.
+
 The backend/API is the sole authority for authorization. Web and mobile UI filtering is never sufficient security on its own (Section 1, Principle 4).
 
 ---

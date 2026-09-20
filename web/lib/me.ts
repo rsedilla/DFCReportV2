@@ -26,7 +26,31 @@ export interface SessionDescription {
   person_id: string;
   email: string | null;
   first_name: string | null;
+  /**
+   * The roles the server honours for this account (decision 0263).
+   *
+   * A list because `account_roles` permits more than one row; provisioning issues one,
+   * which is a rule about provisioning rather than about this field. Empty where every
+   * row an account holds is one this system refuses to honour.
+   */
+  roles: AccountRole[];
   capabilities: GrantSummary[];
+}
+
+export type AccountRole = 'ADMIN' | 'SENIOR_PASTOR' | 'LEADER';
+
+/** Section 7's roles, in the words a leader would use for them. */
+export function roleLabel(role: AccountRole): string {
+  switch (role) {
+    case 'ADMIN':
+      return 'Administrator';
+    case 'SENIOR_PASTOR':
+      return 'Senior Pastor';
+    case 'LEADER':
+      return 'Leader';
+    default:
+      return role;
+  }
 }
 
 export async function getMe(signal?: AbortSignal): Promise<SessionDescription> {
@@ -37,8 +61,9 @@ export async function getMe(signal?: AbortSignal): Promise<SessionDescription> {
  * Whether this account advertises a church-wide grant of a capability.
  *
  * Read off the grant list rather than from a role, because section 7 makes the
- * capability and its scope the thing that decides, and `/auth/me` deliberately
- * returns no role at all.
+ * capability and its scope the thing that decides. `/auth/me` names the account's role
+ * since decision 0263, and it is still not what this asks: a role says which defaults
+ * an account started with, and a grant says what it holds now.
  */
 export function holdsWholeChurch(me: SessionDescription | undefined, capability: string): boolean {
   return (me?.capabilities ?? []).some(

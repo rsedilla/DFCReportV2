@@ -715,6 +715,10 @@ describe('accounts: provisioning, activation and reset (section 6)', () => {
       // The role confers nothing because it is unhonoured, and the grant confers
       // nothing because the row is there. The account holds no authority at all.
       expect(response.body.capabilities).toEqual([]);
+      // And the response does not name the role either (decision 0263). It is held and
+      // not honoured, so publishing it would tell this reader they are a Senior Pastor
+      // while every request they make is refused.
+      expect(response.body.roles).toEqual([]);
     });
 
     it('answers CAPABILITY_DENIED, since the capability is held at no scope', async () => {

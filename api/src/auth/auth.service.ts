@@ -264,7 +264,7 @@ export class AuthService {
    */
   async describe(actor: Actor): Promise<Record<string, unknown>> {
     const account = await this.accounts.findById(actor.accountId);
-    const grants = await this.authorization.grantsFor(actor.accountId);
+    const { roles, grants } = await this.authorization.rolesAndGrantsFor(actor.accountId);
     const person = await this.people.forDecision(actor.personId);
 
     return {
@@ -285,6 +285,17 @@ export class AuthService {
       //
       // Additive, which section 22 permits within `v1`.
       first_name: person?.firstName ?? null,
+      // **The roles this system honours, which is not the same as the rows held**
+      // (decision 0263). A client could work one out — each capability below carries its
+      // `source`, and the role defaults differ — and doing so would keep a copy of
+      // section 7's catalog in the client, which starts lying the day a default moves
+      // here. The catalog is this side's, so the role is named on this side.
+      //
+      // It discloses nothing beyond the reader's own authority, which the capability
+      // list below already describes in more detail. Additive, which section 22 permits
+      // within `v1`, and a list rather than a value because the table permits more than
+      // one row and provisioning's one-role rule is a rule about provisioning.
+      roles,
       // **A grant that covers nothing is not advertised.** Section 7 gives some
       // capabilities Whole Church and nothing narrower, and a narrower grant of one
       // authorizes no request at all — so publishing it invites a client to render

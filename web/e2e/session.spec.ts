@@ -1,5 +1,7 @@
 import { expect, test } from '@playwright/test';
 
+import { mockSignedIn } from './mock-api';
+
 /**
  * The section 6 rules this client has to keep, none of which is visible in a
  * passing UI.
@@ -20,6 +22,7 @@ const SESSION = {
   person_id: '9a1b2c3d-4e5f-4061-8273-8495a6b7c8d9',
   email: 'admin@example.invalid',
   first_name: 'Marilou',
+  roles: ['LEADER'],
   capabilities: [],
 };
 
@@ -397,6 +400,7 @@ test('a sign-out forgets what the previous session cached', async ({ page }) => 
         person_id: '9a1b2c3d-4e5f-4061-8273-8495a6b7c8d9',
         email: 'someone@example.invalid',
         first_name: whoAmI,
+        roles: ['LEADER'],
         capabilities: [],
       }),
     }),
@@ -407,9 +411,10 @@ test('a sign-out forgets what the previous session cached', async ({ page }) => 
   // per mount, so a test that called `goto` between the two sessions would pass
   // with the fix removed. It did, before this was rewritten.
   await page.goto('/session');
-  await expect(page.getByRole('heading', { level: 1 })).toContainText('Your session');
+  await expect(page.getByRole('heading', { level: 1 })).toContainText('Account and session');
 
-  await page.getByRole('button', { name: 'Sign out on every device' }).click();
+  await page.getByRole('button', { name: /^Sign out on every device/ }).click();
+  await page.getByRole('button', { name: 'Yes, sign out everywhere' }).click();
   await expect(page.getByRole('heading', { level: 1 })).toContainText('Sign in');
 
   whoAmI = 'Oriel';
@@ -419,4 +424,44 @@ test('a sign-out forgets what the previous session cached', async ({ page }) => 
 
   await expect(page.getByRole('heading', { level: 1 })).toContainText('Oriel');
   await expect(page.getByRole('heading', { level: 1 })).not.toContainText('Geraldine');
+});
+
+test('names the role the server honours, and asks before ending every other session', async ({
+  page,
+}) => {
+  await mockSignedIn(page);
+
+  let endedEverywhere = 0;
+  await page.route('**/api/v1/auth/logout-all', (route) => {
+    endedEverywhere += 1;
+
+    return route.fulfill({ status: 204, body: '' });
+  });
+
+  await page.goto('/session');
+
+  // Decision 0263: said by the server, never worked out from the capabilities.
+  await expect(page.getByRole('term').filter({ hasText: 'Role' })).toBeVisible();
+  await expect(page.getByText('Leader', { exact: true })).toBeVisible();
+
+  // The question comes first, and nothing has happened while it stands.
+  await page.getByRole('button', { name: /^Sign out on every device/ }).click();
+  await expect(page.getByText(/including any phone you are not holding/)).toBeVisible();
+  expect(endedEverywhere).toBe(0);
+
+  // A second click on the trigger cannot reach the confirmation: it re-opens the panel
+  // that is already open, which is why the confirmation renders below the trigger rather
+  // than in its slot.
+  await page.getByRole('button', { name: /^Sign out on every device/ }).dblclick();
+  expect(endedEverywhere).toBe(0);
+
+  await page.getByRole('button', { name: 'Keep them' }).click();
+  await expect(page.getByRole('button', { name: 'Yes, sign out everywhere' })).toBeHidden();
+  expect(endedEverywhere).toBe(0);
+
+  // And the confirmation does what it says, which the first version of this case never
+  // asserted — it pinned the guard and left the guarded action untested.
+  await page.getByRole('button', { name: /^Sign out on every device/ }).click();
+  await page.getByRole('button', { name: 'Yes, sign out everywhere' }).click();
+  await expect.poll(() => endedEverywhere).toBe(1);
 });

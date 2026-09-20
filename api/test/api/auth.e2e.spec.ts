@@ -156,6 +156,9 @@ describe('authentication (SKILL.md section 6)', () => {
       // deletable with the whole suite green — it is read by one screen and
       // guarded there by a truthiness check that fails silent.
       expect(response.body.first_name).toBe('Raymond');
+      // The role this system honours, said by the server (decision 0263). A client
+      // cannot derive it: a role default and an explicit grant arrive looking alike.
+      expect(response.body.roles).toEqual(['LEADER']);
       expect(response.body.capabilities).toContainEqual(
         expect.objectContaining({
           capability: 'people.view_subtree',

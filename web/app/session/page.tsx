@@ -2,13 +2,13 @@
 
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
-import { useSyncExternalStore } from 'react';
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 
 import { AppShell, PAGE_WIDTH } from '@/components/app-shell';
 import { Button } from '@/components/ui/button';
 import { FailureNotice } from '@/components/ui/failure-notice';
 import { HeaderCell, rowClasses, Table } from '@/components/ui/table';
-import { getMe } from '@/lib/me';
+import { getMe, roleLabel } from '@/lib/me';
 import { describeFailure } from '@/lib/messages';
 import {
   isHalted,
@@ -28,12 +28,11 @@ import {
  * screen of empty tiles teaches people that the landing screen is worth
  * skipping, and that habit outlives the emptiness.
  *
- * Section 19 also requires dashboards to differ by role, which this client
- * cannot yet do honestly: `GET /auth/me` returns capabilities and no role, and
- * deriving one here would be this client deciding an authorization question that
- * section 7 reserves to the API — wrongly, in the case that matters, since a
- * `SENIOR_PASTOR` row the server refuses to honour confers nothing and looks
- * from here exactly like one it honours.
+ * Section 19 also requires dashboards to differ by role, which this client still
+ * does not do: `GET /auth/me` names the roles the server honours (decision 0263),
+ * and what a client may do with that field beyond displaying it is not settled —
+ * decision 0245 rests the sidebar on capabilities rather than on a role, and that
+ * ground is untouched.
  *
  * What this screen does instead is show what the server says about this session.
  * That is worth having on its own: the first time a grant does not behave as an
@@ -67,6 +66,15 @@ function SessionDetail() {
     queryFn: ({ signal }) => getMe(signal),
   });
 
+  const [endingEverywhere, setEndingEverywhere] = useState(false);
+  const confirmRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (endingEverywhere) {
+      confirmRef.current?.focus();
+    }
+  }, [endingEverywhere]);
+
   const endSession = useMutation({
     mutationFn: (scope: 'this-device' | 'everywhere') =>
       scope === 'everywhere' ? signOutEverywhere() : signOut(),
@@ -75,7 +83,7 @@ function SessionDetail() {
 
   return (
     <main id="main" className={PAGE_WIDTH.READING}>
-      <h1 className="text-2xl font-semibold tracking-tight">Your session</h1>
+      <h1 className="text-2xl font-semibold tracking-tight">Account and session</h1>
 
       {/*
         The greeting comes from `/auth/me`, so it names the person the server
@@ -149,6 +157,21 @@ function SessionDetail() {
 
             <dt className="text-sm font-medium">Person</dt>
             <dd className="text-muted font-mono text-sm break-all">{session.data.person_id}</dd>
+
+            {/*
+              The role the server honours, never one worked out here (decision 0263).
+              A role row this system refuses to honour confers nothing and arrives
+              filtered out, so an account holding only such a row reads as having none
+              rather than as a Senior Pastor whose every request is refused.
+            */}
+            <dt className="text-sm font-medium">
+              {(session.data.roles ?? []).length === 1 ? 'Role' : 'Roles'}
+            </dt>
+            <dd className="text-muted text-sm">
+              {(session.data.roles ?? []).length === 0
+                ? 'None the server honours'
+                : (session.data.roles ?? []).map(roleLabel).join(', ')}
+            </dd>
           </dl>
 
           <h2 className="mt-10 text-base font-medium">Authority</h2>
@@ -198,12 +221,36 @@ function SessionDetail() {
         </>
       )}
 
+      <h2 className="mt-10 text-base font-medium">Your password</h2>
+      {/*
+        **What is true of this deployment, rather than of the flow that exists.** The
+        sign-in screen's reset does send a link, and no email provider is configured: the
+        two transports that exist write to a log or to a development outbox, and section 6
+        deliberately withholds a reset token from that outbox (ruling of 2026-09-11). A
+        reset token is stored as a digest, so nobody can read one out of the database
+        either. Saying "use the reset link" would send a leader to a dead end, and telling
+        them to sign out first would cost them a working session on the way.
+      */}
+      <p className="text-muted mt-1 max-w-2xl text-sm leading-relaxed">
+        There is no change-password screen. The sign-in screen offers &ldquo;I have forgotten
+        my password&rdquo;, which sends a reset link by email and, once used, signs out every
+        device on the account &mdash; but no email provider is configured yet, so that link
+        is not delivered. Until one is, a forgotten password cannot be reset from inside the
+        product.
+      </p>
+
       <h2 className="border-line mt-12 border-t pt-8 text-base font-medium">Sign out</h2>
       <p className="text-muted mt-1 text-sm leading-relaxed">
         Signing out ends this device&rsquo;s session. Several devices may be signed in to one
         account at once, so ending them all is a separate action.
       </p>
 
+      {/*
+        **The question is on the second button only** (the owner's design, 2026-09-20).
+        Signing out of this device is undone by signing back in; ending every other
+        device's session is not, and section 6 makes that a revocation across the
+        account. A dialog on the harmless one teaches people to dismiss dialogs.
+      */}
       <div className="mt-4 flex flex-wrap gap-3">
         <Button
           variant="secondary"
@@ -215,11 +262,47 @@ function SessionDetail() {
         <Button
           variant="secondary"
           disabled={endSession.isPending}
-          onClick={() => endSession.mutate('everywhere')}
+          onClick={() => setEndingEverywhere(true)}
         >
-          Sign out on every device
+          Sign out on every device&hellip;
         </Button>
       </div>
+
+      {/*
+        **The trigger stays where it is and the question opens below it.** A first version
+        put the confirm in the trigger's own slot, where a double-click landed its second
+        click on `Yes` — a revocation section 6 makes immediate and account-wide, reached
+        by a gesture nobody meant. A second click on the trigger now re-opens the panel
+        that is already open.
+
+        Focus moves to the confirmation when it opens and back to the trigger when it is
+        declined, because a control that replaces the page's focus with nothing leaves a
+        keyboard user tabbing from the top of the document (section 23, 2.4.3 and 2.4.7).
+      */}
+      {endingEverywhere ? (
+        <div className="border-line mt-4 max-w-2xl border p-4">
+          <p className="text-sm leading-relaxed">
+            Every device signed in to this account is signed out, including any phone you are
+            not holding. Nothing else about the account changes.
+          </p>
+          <div className="mt-3 flex flex-wrap gap-3">
+            <Button
+              ref={confirmRef}
+              disabled={endSession.isPending}
+              onClick={() => endSession.mutate('everywhere')}
+            >
+              Yes, sign out everywhere
+            </Button>
+            <Button
+              variant="secondary"
+              disabled={endSession.isPending}
+              onClick={() => setEndingEverywhere(false)}
+            >
+              Keep them
+            </Button>
+          </div>
+        </div>
+      ) : null}
     </main>
   );
 }
