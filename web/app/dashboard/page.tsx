@@ -597,7 +597,9 @@ function Dashboard() {
           <p className="text-muted mt-2 text-sm">Loading&hellip;</p>
         ) : scoped.isError ? null : needingAttention.length === 0 ? (
           <p className="text-muted mt-2 max-w-2xl text-sm leading-relaxed">
-            Every Cell in your scope has recorded all of this month&rsquo;s meetings.
+            Every Cell still open in your scope has recorded all of this month&rsquo;s
+            meetings. A Cell closed this month is not on this list, although section 15 asks
+            for one while its window is open.
           </p>
         ) : (
           <ul className="mt-4 flex flex-col gap-3">
@@ -633,7 +635,9 @@ function Dashboard() {
           <>
             {unplaced.data.data.length === 0 ? (
               <p className="text-muted mt-2 max-w-2xl text-sm leading-relaxed">
-                Everyone in your scope has a pastoral leader who is still in place.
+                Nobody in your scope is waiting for a leader. Somebody whose own leader
+                holds no assignment can fall outside your branch as they go, so a reader
+                with a wider scope may see them.
               </p>
             ) : (
               <ul className="mt-4 flex flex-col gap-3">
@@ -675,7 +679,7 @@ function Dashboard() {
                 className="focus-visible:outline-accent inline-flex min-h-6 items-center text-sm underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2"
               >
                 {unplaced.data.data.length > UNPLACED_TILE || unplaced.data.next_cursor !== null
-                  ? 'See everyone waiting for a leader'
+                  ? 'See everyone needing a leader'
                   : 'Open the full list'}
               </Link>
             </p>
@@ -701,7 +705,9 @@ function Dashboard() {
           <>
             {withoutACell.data.data.length === 0 ? (
               <p className="text-muted mt-2 max-w-2xl text-sm leading-relaxed">
-                Everyone in your scope is in a Cell.
+                Nobody in your scope is without a Cell. Somebody whose own leader holds
+                no assignment can fall outside your branch, so a reader with a wider scope
+                may see them.
               </p>
             ) : (
               <ul className="mt-4 flex flex-col gap-3">

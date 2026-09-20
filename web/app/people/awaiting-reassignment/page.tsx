@@ -32,6 +32,16 @@ import { awaitingReassignment } from '@/lib/people';
  * ranking of neglect whatever it is called (sections 13 and 17). There is no sort
  * control here for that reason, and no colour grading.
  *
+ * **The empty state says what the query established and not more.** It used to say that
+ * everyone in the reader's scope had a leader still in place, which is false in exactly
+ * the case this screen exists for: the broken edge that puts somebody here also drops
+ * them out of their upline's subtree walk, so an ordinary leader is answered empty while
+ * people beneath them wait. That is an open Stop Condition rather than a defect of this
+ * screen, and it is open in both directions: decision 0214 refuses to let section 20's
+ * placement graph authorize an aggregate report, and section 7 says in terms that a
+ * per-person view — which this list is — "is a different question and is not settled by
+ * this". So the sentence names the limit instead of asserting past it.
+ *
  * **Each entry carries the action that resolves it** (section 19): the link goes to
  * the person's place in the tree, which is the screen that performs a reassignment.
  * Section 5 governs who may actually perform one, and appearing here confers nothing
@@ -70,7 +80,7 @@ function AwaitingReassignmentList() {
         </Link>
       </p>
 
-      <h1 className="text-2xl font-semibold tracking-tight">A leader to be found</h1>
+      <h1 className="text-2xl font-semibold tracking-tight">People needing a leader</h1>
       <p className="text-muted mt-2 max-w-2xl text-sm leading-relaxed">
         People in your scope whose own pastoral leader no longer holds an assignment. Listed
         by name; nothing here counts or ranks how long anybody has been waiting.
@@ -86,7 +96,9 @@ function AwaitingReassignmentList() {
         <>
           {people.data.data.length === 0 ? (
             <p className="text-muted mt-6 max-w-2xl text-sm leading-relaxed">
-              Everyone in your scope has a pastoral leader who is still in place.
+              Nobody in your scope is waiting for a leader. Somebody whose own leader
+              holds no assignment can fall outside your branch as they go, so a reader with
+              a wider scope may see them.
             </p>
           ) : (
             <ul className="mt-6 flex flex-col gap-3">

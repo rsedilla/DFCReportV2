@@ -690,7 +690,7 @@ const SCANS = [
   },
   {
     // A reader holding neither figure capability: the tree without the figures, shown as
-    // dashes rather than zeros, and no Move.
+    // dashes rather than zeros, no Move, and the line that says why there is none.
     name: 'network, without figures',
     route: '/network',
     async before(page: import('@playwright/test').Page) {
@@ -701,6 +701,10 @@ const SCANS = [
     async arrange(page: import('@playwright/test').Page) {
       await expect(page.getByText('Network root')).toBeVisible();
       await expect(page.getByRole('link', { name: 'Consuelo Bautista' }).first()).toBeVisible();
+      await expect(
+        page.getByText('ask a leader who pastors them, or an administrator', { exact: false }),
+      ).toBeVisible();
+      await expect(page.getByRole('button', { name: /^Move / })).toHaveCount(0);
     },
   },
   {

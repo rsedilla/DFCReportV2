@@ -240,6 +240,23 @@ function NetworkScreen() {
             ) : null}
           </div>
 
+          {/*
+            Why no row carries a Move, for a reader holding no
+            `people.manage_pastoral_assignment` grant. It says nothing about anybody on
+            the screen: it is a fact about the reader's own permissions, and section 5
+            names who may act — an administrator, a leader upline of *the person* acting
+            inside their own subtree, or a Senior Pastor. That is why the sentence says a
+            leader who pastors them rather than the reader's own leader, who is upline of
+            nobody on a branch the reader reached from outside. Once, under the list,
+            rather than beside each name.
+          */}
+          {mayMove ? null : (
+            <p className="text-muted mt-2 max-w-2xl text-sm leading-relaxed">
+              To move somebody to another pastoral leader, ask a leader who pastors them, or
+              an administrator.
+            </p>
+          )}
+
           {shown.length === 0 ? (
             <p className="text-muted mt-4 max-w-2xl text-sm leading-relaxed">
               {filtering

@@ -95,7 +95,9 @@ function WithoutACell() {
         <>
           {people.data.data.length === 0 ? (
             <p className="text-muted mt-6 max-w-2xl text-sm leading-relaxed">
-              Everyone in your scope is in a Cell.
+              Nobody in your scope is without a Cell. Somebody whose own leader holds no
+              assignment can fall outside your branch, so a reader with a wider scope may
+              see them.
             </p>
           ) : (
             <>
