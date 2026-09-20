@@ -51,6 +51,8 @@ interface PendingRequest {
   category: CellCategory | null;
   day_of_week: number | null;
   time_of_day: string | null;
+  /** The closed Cell this request resumes, where it is a restart (decision 0264). */
+  restart_of_cell_id: string | null;
 }
 
 /** What an approval did, shared by both kinds so the caller writes one record. */
@@ -69,6 +71,8 @@ export interface LeadershipRequestInput {
   dayOfWeek?: number;
   timeOfDay?: string;
   cellId?: string;
+  /** The closed Cell a new-Cell request asks to resume (decision 0264). */
+  restartOfCellId?: string;
 }
 
 /**
@@ -194,11 +198,27 @@ export class CellsLeadershipRequestService {
       );
     }
 
+    if (input.kind === 'HANDOVER' && input.restartOfCellId !== undefined) {
+      // A handover moves a Cell that is still running, so it resumes nothing (decision
+      // 0264). Refused rather than ignored, for the reason the sibling refusal above
+      // gives: the database says the same thing, and a client that sent it meant
+      // something the workflow cannot do.
+      throw new ValidationFailedError(
+        'Only a new-Cell request restarts a Cell. A handover moves a Cell that is still ' +
+          'running (SKILL.md section 10).',
+        { field: 'restart_of_cell_id' },
+      );
+    }
+
     return this.db.transaction().execute(async (trx) => {
       const cell =
         input.kind === 'HANDOVER'
           ? await this.assertHandoverCellWithin(trx, input, actor, authority)
           : null;
+
+      if (input.restartOfCellId !== undefined) {
+        await this.assertRestartableWithin(trx, input, actor, authority);
+      }
 
       // **Two uniqueness rules, one per kind, and they are not the same rule** (section
       // 10). Both are partial unique indexes and both stay the enforcement; these reads
@@ -218,6 +238,7 @@ export class CellsLeadershipRequestService {
           day_of_week: input.kind === 'NEW_CELL' ? (input.dayOfWeek as number) : null,
           time_of_day: input.kind === 'NEW_CELL' ? (input.timeOfDay as string) : null,
           cell_id: input.kind === 'HANDOVER' ? (input.cellId as string) : null,
+          restart_of_cell_id: input.restartOfCellId ?? null,
         })
         .returning(['id', 'state', 'requested_at'])
         .executeTakeFirstOrThrow();
@@ -241,6 +262,12 @@ export class CellsLeadershipRequestService {
           // refuses it rather than storing a hole nobody notices.
           ...(input.kind === 'NEW_CELL'
             ? {
+                // The one fact distinguishing a restart request from an ordinary
+                // new-Cell request (decision 0264). Section 21 asks the entry to carry
+                // what the decision was about, and the approval entry already carries
+                // it; recording it on one side of the workflow and not the other would
+                // lose what the requester actually asked for.
+                restart_of_cell_id: input.restartOfCellId ?? null,
                 category: input.category ?? null,
                 day_of_week: input.dayOfWeek ?? null,
                 time_of_day: input.timeOfDay ?? null,
@@ -261,6 +288,11 @@ export class CellsLeadershipRequestService {
         // names one until approval mints it.
         cell_id: cell?.cell_id ?? null,
         cell_uuid: cell?.id ?? null,
+        // What this request resumes, where it is a restart (decision 0264). Read back
+        // rather than assumed: the screen that submitted it goes on to offer the closed
+        // Cell's former members, and reading the field it sent from the response it got
+        // is what makes a replay carry the same answer as the original.
+        restart_of_cell_uuid: input.restartOfCellId ?? null,
         category: input.kind === 'NEW_CELL' ? (input.category ?? null) : null,
         day_of_week: input.kind === 'NEW_CELL' ? (input.dayOfWeek ?? null) : null,
         time_of_day: input.kind === 'NEW_CELL' ? (input.timeOfDay ?? null) : null,
@@ -526,6 +558,7 @@ export class CellsLeadershipRequestService {
           'prospective_leader_id',
           'requested_by',
           'cell_id',
+          'restart_of_cell_id',
           'category',
           'day_of_week',
           'time_of_day',
@@ -735,6 +768,10 @@ export class CellsLeadershipRequestService {
         // not resolved here — it would be a join per page for a field the queue does
         // not decide anything by, and the Cell's own route carries it.
         cell_uuid: row.cell_id,
+        // What a restart resumes, where the request is one (decision 0264). The
+        // approver is being asked whether this person should lead this Cell again, and
+        // a queue that did not say so would be asking a different question.
+        restart_of_cell_uuid: row.restart_of_cell_id,
       })),
       next_cursor:
         rows.length > limit && last !== undefined
@@ -1078,6 +1115,27 @@ export class CellsLeadershipRequestService {
     request: PendingRequest,
     actor: Actor,
   ): Promise<AppliedApproval> {
+    if (request.restart_of_cell_id !== null) {
+      // **One of decision 0264's four rules is revalidated here, and the other three
+      // cannot move**: a closure is never reversed (decision 0133), a closed Cell's
+      // leadership cannot reopen, and `CREATED_IN_ERROR` is not rewritten. Whether the
+      // Cell has been restarted meanwhile is the one that can, so section 10's "the
+      // state at approval governs" reaches it. `cells_one_restart_per_cell` is the
+      // enforcement; this read is what makes the ordinary case a sentence.
+      const already = await trx
+        .selectFrom('cells')
+        .select('cell_id')
+        .where('restarted_from_cell_id', '=', request.restart_of_cell_id)
+        .executeTakeFirst();
+
+      if (already) {
+        throw new InvariantViolationError(
+          'That Cell has already been restarted since this request was made.',
+          { restarted_as: already.cell_id },
+        );
+      }
+    }
+
     const created = await insertCellWithin(
       trx,
       {
@@ -1085,6 +1143,9 @@ export class CellsLeadershipRequestService {
         category: request.category as CellCategory,
         dayOfWeek: request.day_of_week as number,
         timeOfDay: request.time_of_day as string,
+        // Carried from the request, so the Cell records what it resumes at the instant
+        // it is minted rather than by a second write (decision 0264).
+        restartedFromCellId: request.restart_of_cell_id ?? undefined,
       },
       actor.accountId,
     );
@@ -1104,6 +1165,8 @@ export class CellsLeadershipRequestService {
         // The counterpart of `created_during_initial_encoding` on the direct path:
         // this Cell came through request-and-approve, and the entry says which.
         approved_request_id: request.id,
+        // Null on an ordinary creation, which is most of them (decision 0264).
+        restarted_from_cell_id: request.restart_of_cell_id,
       },
     });
 
@@ -1216,6 +1279,94 @@ export class CellsLeadershipRequestService {
       cellUuid,
       outgoingLeaderId: decision.outgoingLeaderId,
     };
+  }
+
+  /**
+   * What a restart request may name (SKILL.md section 10; decision 0264).
+   *
+   * **Scope before existence**, as the handover check below does and for the same
+   * reason: answering `NOT_FOUND` first would be an existence oracle over Cell
+   * identifiers (section 22). The scope is resolved against the Cell's leader, which
+   * for a closed Cell is its last one — the same terms that govern closing it.
+   *
+   * The four refusals after it are decision 0264's own, and the last is the one worth
+   * reading twice: a restart names the Cell's **last leader**, because what the link
+   * asserts is that this Cell resumes under the person who led it. A different person
+   * taking those people on is an ordinary new Cell, which is what they would request.
+   * Nothing downstream reads the link today — it is inert to every figure — so this is
+   * a rule about what the record means rather than about what any total counts.
+   */
+  private async assertRestartableWithin(
+    trx: Transaction<Database>,
+    input: LeadershipRequestInput,
+    actor: Actor,
+    authority: ActorAuthority,
+  ): Promise<void> {
+    const cell = await trx
+      .selectFrom('cells')
+      .select(['id', 'cell_id', 'state', 'closure_reason'])
+      .where('id', '=', input.restartOfCellId as string)
+      .executeTakeFirst();
+
+    const leaderId = cell ? await this.cells.leaderForScopeWithin(trx, cell.id) : NIL_UUID;
+
+    if (
+      !(await this.authorization.coversWith(trx, actor, authority, Capability.CellManageLifecycle, {
+        kind: 'person',
+        personId: leaderId ?? NIL_UUID,
+      }))
+    ) {
+      throw new ScopeDeniedError(
+        'That Cell is outside your authorized scope. A restart is requested by a leader ' +
+          'upline of the leader who led it (SKILL.md section 10).',
+        { capability: Capability.CellManageLifecycle },
+      );
+    }
+
+    if (!cell) {
+      throw new NotFoundError('No such Cell.');
+    }
+
+    if (cell.state !== 'CLOSED') {
+      throw new InvariantViolationError(
+        'That Cell is still running, so there is nothing to restart.',
+        { cell_id: cell.cell_id, state: cell.state },
+      );
+    }
+
+    if (cell.closure_reason === 'CREATED_IN_ERROR') {
+      // The reason states the Cell should never have existed, so resuming it would
+      // carry that assertion forward (decision 0264).
+      throw new InvariantViolationError(
+        'That Cell was closed as created in error, so it cannot be restarted. A new Cell ' +
+          'is requested without naming it.',
+        { cell_id: cell.cell_id, closure_reason: cell.closure_reason },
+      );
+    }
+
+    const already = await trx
+      .selectFrom('cells')
+      .select('cell_id')
+      .where('restarted_from_cell_id', '=', cell.id)
+      .executeTakeFirst();
+
+    if (already) {
+      // `cells_one_restart_per_cell` is the enforcement and a race still lands on it;
+      // this read exists so the ordinary case is a sentence rather than a `23505`.
+      throw new InvariantViolationError(
+        'That Cell has already been restarted. Two Cells resuming one Cell claim one ' +
+          'history between them (SKILL.md section 10).',
+        { cell_id: cell.cell_id, restarted_as: already.cell_id },
+      );
+    }
+
+    if (!sameId(input.prospectiveLeaderId, leaderId ?? NIL_UUID)) {
+      throw new InvariantViolationError(
+        'A restart names the leader who led that Cell. Somebody else taking these people ' +
+          'on is a new Cell rather than a restart (SKILL.md section 10).',
+        { cell_id: cell.cell_id },
+      );
+    }
   }
 
   /**

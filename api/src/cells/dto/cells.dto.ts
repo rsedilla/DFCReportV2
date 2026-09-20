@@ -159,6 +159,17 @@ export class CreateLeadershipRequestDto {
   @ValidateIf((dto: CreateLeadershipRequestDto) => dto.kind === 'HANDOVER')
   @IsUUID()
   cell_id?: string;
+
+  /**
+   * The closed Cell this request asks to resume (decision 0264).
+   *
+   * Optional, and only on a new Cell: a handover moves a Cell that is still running, so
+   * it resumes nothing, and the refusal is in the service for the reason `cell_id`'s is
+   * — two `@ValidateIf`s on one property are ANDed rather than replaced.
+   */
+  @ValidateIf((dto: CreateLeadershipRequestDto) => dto.restart_of_cell_id !== undefined)
+  @IsUUID()
+  restart_of_cell_id?: string;
 }
 
 /**

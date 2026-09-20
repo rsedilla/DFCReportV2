@@ -96,6 +96,8 @@ export interface LeadershipRequestRow {
   kind: CellRequestKind;
   prospective_leader_id: string;
   requested_by: string;
+  /** The closed Cell a restart resumes, where the request is one (decision 0264). */
+  restart_of_cell_id: string | null;
   requested_at: Date;
   /**
    * The same instant at the column's own precision, rendered by PostgreSQL.

@@ -450,6 +450,7 @@ export class CellsController {
         dayOfWeek: body.day_of_week,
         timeOfDay: body.time_of_day,
         cellId: body.cell_id,
+        restartOfCellId: body.restart_of_cell_id,
       },
       actor,
       claim,

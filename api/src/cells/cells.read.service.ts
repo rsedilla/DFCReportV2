@@ -663,6 +663,7 @@ export class CellsReadService implements CellScopePort, CellRelationshipsPort {
           'requested_by',
           'requested_at',
           'cell_id',
+          'restart_of_cell_id',
           // **The ordering key at the column's own precision**, which the `Date` beside
           // it is not: `timestamptz` holds microseconds and the driver parses it into a
           // JS `Date`, which holds milliseconds. A cursor built from

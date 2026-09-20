@@ -10,6 +10,12 @@ export interface NewCellInput {
   dayOfWeek: number;
   /** Wall-clock time in Asia/Manila, `HH:MM` or `HH:MM:SS`. */
   timeOfDay: string;
+  /**
+   * The closed Cell this one resumes, where approval is applying a restart request
+   * (decision 0264). Absent everywhere else, including on the direct path: a Cell
+   * created during initial encoding resumes nothing.
+   */
+  restartedFromCellId?: string;
 }
 
 export interface NewCell {
@@ -74,7 +80,8 @@ export async function insertCellWithin(
     created_at: Date;
   }>`
       WITH new_cell AS (
-        INSERT INTO cells (created_at) VALUES (clock_timestamp())
+        INSERT INTO cells (created_at, restarted_from_cell_id)
+        VALUES (clock_timestamp(), ${input.restartedFromCellId ?? null}::uuid)
         RETURNING id, cell_id, created_at
       ), category AS (
         INSERT INTO cell_categories (cell_id, category, actor_id, started_at)
