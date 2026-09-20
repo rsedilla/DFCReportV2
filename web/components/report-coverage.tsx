@@ -2,8 +2,10 @@
 
 import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
+import { useState } from 'react';
 
 import { CoverageFigure } from '@/components/coverage-figure';
+import { Button } from '@/components/ui/button';
 import { dccEventNote } from '@/components/dcc-event-note';
 import { FailureNotice } from '@/components/ui/failure-notice';
 import { HeaderCell, Table, rowClasses } from '@/components/ui/table';
@@ -14,6 +16,9 @@ import { dayLabel } from '@/lib/reporting-month';
 
 const LINK =
   'focus-visible:outline-accent inline-flex min-h-6 items-center underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2';
+
+/** Ten rows a page, as on the Cells and People lists. */
+const PAGE_SIZE = 10;
 
 /**
  * The coverage line of a report, broken down one row per Cell or per Sunday (SKILL.md
@@ -32,6 +37,10 @@ const LINK =
  *
  * **A table from `lg`, and cards below it**, the same rows in the same order, as on the
  * Cells and DCC screens.
+ *
+ * **The Cells page ten at a time and the Sundays do not.** Section 2 records roughly 800
+ * Cells, so a whole-church reader had every one of them in one table; a month holds four
+ * or five Sundays whatever the scope, so that table is bounded by the calendar.
  */
 export function CoverageByCell({ month }: { month: string }) {
   // The same query as the report's Cell picker, so the two share one request.
@@ -40,14 +49,21 @@ export function CoverageByCell({ month }: { month: string }) {
     queryFn: ({ signal }) => listAllCells(month, signal),
   });
 
+  const [page, setPage] = useState(0);
+
+  const rows = cells.data ?? [];
+  // A page that no longer exists is the first one: the month changes the set underneath it.
+  const start = Math.min(page, Math.max(0, Math.ceil(rows.length / PAGE_SIZE) - 1)) * PAGE_SIZE;
+  const shown = rows.slice(start, start + PAGE_SIZE);
+
   return (
     <section aria-labelledby="coverage-by-cell-heading">
       <h2 id="coverage-by-cell-heading" className="field-label">
         Coverage by Cell
       </h2>
       <p className="text-muted mt-2 max-w-2xl text-sm leading-relaxed">
-        Each Cell in your scope, in the order the Cells list gives them. The rows are not
-        added up here: the line at the top is the report&rsquo;s own figure.
+        Each Cell in your scope, ten at a time, in the order the Cells list gives them. The
+        rows are not added up here: the line at the top is the report&rsquo;s own figure.
       </p>
 
       <div className="mt-4">
@@ -70,7 +86,7 @@ export function CoverageByCell({ month }: { month: string }) {
               </tr>
             </thead>
             <tbody>
-              {cells.data.map((cell) => (
+              {shown.map((cell) => (
                 <tr key={cell.id} className={rowClasses}>
                   <td className="px-3 py-3">
                     <Link href={meetingsHref(cell, month)} className={`${LINK} font-medium`}>
@@ -94,7 +110,7 @@ export function CoverageByCell({ month }: { month: string }) {
           </Table>
 
           <ul className="mt-4 flex flex-col gap-3 lg:hidden">
-            {cells.data.map((cell) => (
+            {shown.map((cell) => (
               <li key={cell.id} className="border-line border p-4">
                 <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
                   <h3 className="text-base font-medium">
@@ -123,6 +139,24 @@ export function CoverageByCell({ month }: { month: string }) {
               </li>
             ))}
           </ul>
+
+          {/*
+            Previous and Next, and no page number and no count: a count of the Cells
+            behind is a figure section 20 does not define, and the by-leader table says
+            the same of itself.
+          */}
+          <div className="mt-6 flex gap-3">
+            {start > 0 ? (
+              <Button type="button" variant="secondary" onClick={() => setPage((p) => p - 1)}>
+                Previous
+              </Button>
+            ) : null}
+            {start + PAGE_SIZE < rows.length ? (
+              <Button type="button" variant="secondary" onClick={() => setPage((p) => p + 1)}>
+                Next
+              </Button>
+            ) : null}
+          </div>
         </>
       ) : null}
     </section>

@@ -50,6 +50,31 @@ export const CELL_WITH_NO_SCHEDULE = {
   coverage: { recorded: 0, scheduled: 0 },
 };
 
+/**
+ * Eleven Cells for the coverage table's pager, with the two furthest behind at the end.
+ *
+ * Section 2 records roughly 800 Cells, so a whole-church coverage table is long. The
+ * order matters more than the length: the Cells that have recorded least are the last
+ * two, so a table that ranked them would put them first and a test can tell the two
+ * apart (sections 13 and 17, decision 0226).
+ */
+export async function mockCellsAtScale(page: Page): Promise<void> {
+  const cells = Array.from({ length: 11 }, (_, index) => ({
+    ...CELL_WITH_MEETINGS,
+    id: `3f1b7c6e-0000-4000-8000-0000000001${String(index + 10).padStart(2, '0')}`,
+    cell_id: `CELL-${String(index + 1).padStart(6, '0')}`,
+    // Complete but for the last two, which are the rows a ranked table would lift to
+    // the top and this one leaves where the index put them.
+    coverage: { recorded: index < 9 ? 4 : 10 - index, scheduled: 4 },
+  }));
+
+  await page.route('**/api/v1/cells?*', (route) =>
+    route.fulfill(
+      json({ reporting_month: '2026-06-01', open: false, data: cells, next_cursor: null }),
+    ),
+  );
+}
+
 /** `open` is the month's submission window, which the Record queue reads for last month. */
 export async function mockCells(
   page: Page,

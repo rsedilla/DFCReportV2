@@ -3603,6 +3603,8 @@ Ranking is prohibited. Never present:
 
 The reason is practical as well as pastoral. `NOT_HELD` exists to obtain honest reporting of Cells that are not meeting. If declaring it places a leader at the bottom of a visible ranking, leaders will record `HELD` instead, and the signal the status was created to capture is lost. Ranking the measure destroys the measure.
 
+**A count may carry a proportion bar; a coverage figure may not** (ruling of 2026-09-20). A list of counts that sums to a total of its own — classification and the monthly-attendance buckets, which Sections 9 and 12 each define for their own domain — may draw each row's share of that total beside the count. Four conditions bound it: the bar never reorders the rows, it carries no meaning in colour, the count is always beside it and the mark is hidden from assistive technology, and it is never drawn against coverage. The fourth is the load-bearing one. Coverage is two figures this section forbids dividing, and a bar is a division, so a coverage bar is the prohibited ratio drawn rather than written. A share of a reconciled total compares a scope with itself; coverage compares a leader with an expectation.
+
 This mirrors the existing treatment of `Cell Leaders with 12+ Members` (Section 16): show the number, never label the person.
 
 "Scheduled" is a calendar concept (derived from a Cell's configured Day and Time against the calendar when needed, e.g. to calculate applicable meetings for Section 12), not a meeting status. Do not introduce `SCHEDULED` or any other value as a Cell meeting status.

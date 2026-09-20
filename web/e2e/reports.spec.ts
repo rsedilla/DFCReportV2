@@ -5,6 +5,7 @@ import {
   mockCellReport,
   mockCellReportForOneCell,
   mockCells,
+  mockCellsAtScale,
   mockDccEvents,
   mockDccReport,
 } from './mock-attendance';
@@ -173,6 +174,35 @@ test.describe('the coverage tables', () => {
 
     await page.getByLabel('Figures for').selectOption('3f1b7c6e-0000-4000-8000-000000000101');
     await expect(page.getByRole('region', { name: 'Coverage by Cell' })).toHaveCount(0);
+  });
+
+  test('the coverage table pages at ten, and a ranked table would not look like this', async ({
+    page,
+  }) => {
+    await page.clock.setFixedTime(NOW);
+    await mockSignedIn(page);
+    await mockCellsAtScale(page);
+    await mockCellReport(page);
+    await page.goto('/reports/cells');
+
+    const table = page.getByRole('region', { name: 'Coverage by Cell' });
+    const rows = table.getByRole('link', { name: /^CELL-/ }).filter({ visible: true });
+
+    // Ten of the eleven, in the order the index returned them. The two that have
+    // recorded least are CELL-000010 and CELL-000011, so a table ordered worst-first
+    // would open with them and this one closes with them (sections 13 and 17).
+    await expect(rows).toHaveCount(10);
+    await expect(rows.first()).toHaveText('CELL-000001');
+    await expect(rows.nth(9)).toHaveText('CELL-000010');
+    await expect(table.getByRole('button', { name: 'Previous' })).toHaveCount(0);
+
+    await table.getByRole('button', { name: 'Next' }).click();
+    await expect(rows).toHaveCount(1);
+    await expect(rows.first()).toHaveText('CELL-000011');
+
+    // No count of the Cells behind, in any phrasing: that figure is one section 20 does
+    // not define.
+    await expect(table.getByText(/behind/)).toHaveCount(0);
   });
 
   test('Coverage by Sunday keeps a removed Sunday in its place, and leaves for a Network', async ({
