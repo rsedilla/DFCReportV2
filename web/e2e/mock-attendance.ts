@@ -157,6 +157,99 @@ export async function mockCellMeetings(page: Page): Promise<void> {
   );
 }
 
+/** One row of section 19's recording queue, as `GET /cells/meetings/awaiting` returns it. */
+export interface AwaitingRow {
+  cell_id: string;
+  cell_code: string;
+  scheduled_date: string;
+  scheduled_time: string;
+  reporting_month: string;
+  cell_closed_on: string | null;
+}
+
+/** A meeting of a Cell still `ACTIVE`, which is the ordinary row. */
+export function awaitingRow(date: string, month: string, time = '19:00'): AwaitingRow {
+  return {
+    cell_id: CELL_WITH_MEETINGS.id,
+    cell_code: CELL_WITH_MEETINGS.cell_id,
+    scheduled_date: date,
+    scheduled_time: time,
+    reporting_month: month,
+    cell_closed_on: null,
+  };
+}
+
+/**
+ * A meeting of a Cell that has since **closed**, which is the row this route exists for.
+ *
+ * The Cells index is `ACTIVE`-only, so no other list names it and no other fixture can
+ * stand in for it: a client stitching the Cell's code from the index would find nothing.
+ */
+export function awaitingClosedRow(date: string, month: string, closedOn: string): AwaitingRow {
+  return {
+    cell_id: '3f1b7c6e-0000-4000-8000-000000000103',
+    cell_code: 'C-0014',
+    scheduled_date: date,
+    scheduled_time: '19:00',
+    reporting_month: month,
+    cell_closed_on: closedOn,
+  };
+}
+
+/**
+ * Section 19's recording queue (ruling of 2026-09-17).
+ *
+ * **Called with no argument it answers every month alike**, which is what the sweep
+ * wants: two rows, one of an `ACTIVE` Cell and one of a **closed** one, dated inside
+ * whichever month was asked for so neither carries a month tag it should not. The
+ * closed row is there rather than for symmetry — its detail line is the longest text
+ * a queue row can hold, and 320px is where that has to wrap.
+ *
+ * **Called with an argument it is keyed by month**, because the Dashboard asks twice in
+ * the close week and the two answers differ — that is the whole of what the close-week
+ * rule does here. A month the caller does not name then answers shut and empty, which
+ * is what section 13 says a month past its 7th owes.
+ *
+ * The **day bound and the "no record yet" filter are not modelled**, deliberately: the
+ * ruling moved both into the route so a client cannot drift from them, and
+ * `api/test/api/cell-meetings-awaiting.e2e.spec.ts` is where they are pinned. What these
+ * fixtures exercise is the only thing left on this side — that the screen renders the
+ * rows it is given, and nothing it is not.
+ */
+export async function mockMeetingsAwaiting(
+  page: Page,
+  byMonth?: Record<string, { open?: boolean; meetings?: AwaitingRow[] }>,
+): Promise<void> {
+  await page.route('**/api/v1/cells/meetings/awaiting?*', (route) => {
+    const month = new URL(route.request().url()).searchParams.get('month') ?? '2026-06-01';
+
+    if (byMonth === undefined) {
+      const inMonth = (day: string) => `${month.slice(0, 8)}${day}`;
+
+      return route.fulfill(
+        json({
+          reporting_month: month,
+          open: true,
+          meetings: [
+            awaitingRow(inMonth('06'), month),
+            awaitingClosedRow(inMonth('13'), month, inMonth('20')),
+          ],
+        }),
+      );
+    }
+
+    const answer = byMonth[month];
+
+    return route.fulfill(
+      json({
+        reporting_month: month,
+        open: answer?.open ?? answer !== undefined,
+        meetings: answer?.meetings ?? [],
+      }),
+    );
+  });
+}
+
 export async function mockDccEvents(page: Page): Promise<void> {
   await page.route('**/api/v1/dcc/events?*', (route) =>
     route.fulfill(
@@ -554,4 +647,182 @@ export async function mockPastoralPath(page: Page): Promise<void> {
       }),
     ),
   );
+}
+
+/**
+ * A one-entry pastoral path whose single entry holds a root seat.
+ *
+ * **The case that broke the chain, kept so it cannot break again.** A Network root has
+ * nobody above them, and rendering that fact as a chain entry produced
+ * `Network root › You` — which tells the person reading it that somebody is above them
+ * when they are the root. Only `network_root` tells this apart from a Person with no
+ * leader at all (decision 0131), so both readings are exercised rather than one.
+ */
+export async function mockPastoralPathAtRoot(page: Page): Promise<void> {
+  await page.route('**/api/v1/people/*/pastoral-path*', (route) =>
+    route.fulfill(
+      json({
+        data: [
+          {
+            id: '9a1b2c3d-4e5f-4061-8273-8495a6b7c8d9',
+            member_id: 'M-000001',
+            full_name: 'Marilou Reyes Santos',
+            network_root: true,
+          },
+        ],
+        next_cursor: null,
+      }),
+    ),
+  );
+}
+
+/**
+ * The Network screen's routes (decision 0252): the branch, and the two figure routes.
+ *
+ * **The first page carries a cursor and the second does not**, so `Show 20 more` renders,
+ * is measured for target size, and stops rather than paging for ever. The API refuses
+ * `?cursor=` outright, so the absence of the parameter is what marks the first page.
+ *
+ * The figures add up, as the API's do: the focus person's branch equals their own gap
+ * plus each row's. Invented names throughout.
+ */
+export async function mockNetworkTree(page: Page): Promise<void> {
+  const node = (id: string, member: string, name: string, direct: number, beneath: number) => ({
+    id,
+    member_id: member,
+    full_name: name,
+    leads_anyone: direct > 0,
+    direct_reports: direct,
+    beneath,
+  });
+
+  const self = node('9a1b2c3d-4e5f-4061-8273-8495a6b7c8d9', 'M-000042', 'Marilou Reyes Santos', 3, 9);
+  const consuelo = node('3f1b7c6e-0000-4000-8000-000000000701', 'M-000801', 'Consuelo Bautista', 1, 4);
+  const efren = node('3f1b7c6e-0000-4000-8000-000000000702', 'M-000802', 'Efren Dimaculangan', 0, 0);
+  const lourdes = node('3f1b7c6e-0000-4000-8000-000000000703', 'M-000803', 'Lourdes Magsaysay', 0, 0);
+  const teresita = node('3f1b7c6e-0000-4000-8000-000000000704', 'M-000804', 'Teresita Alcantara', 0, 3);
+
+  await page.route('**/api/v1/network/my-tree*', (route) => {
+    const paged = route.request().url().includes('cursor=');
+
+    return route.fulfill(
+      json({
+        person: self,
+        data: paged ? [lourdes] : [consuelo, efren],
+        next_cursor: paged ? null : 'example-children-cursor',
+      }),
+    );
+  });
+
+  // Consuelo's own path, so the breadcrumb one generation down reads Marilou › Consuelo.
+  await page.route(`**/api/v1/people/${consuelo.id}/pastoral-path*`, (route) =>
+    route.fulfill(
+      json({
+        data: [
+          { id: self.id, member_id: self.member_id, full_name: self.full_name, network_root: true },
+          { id: consuelo.id, member_id: consuelo.member_id, full_name: consuelo.full_name, network_root: false },
+        ],
+        next_cursor: null,
+      }),
+    ),
+  );
+
+  await page.route('**/api/v1/leaders/*/children*', (route) =>
+    route.fulfill(json({ person: consuelo, data: [teresita], next_cursor: null })),
+  );
+
+  await page.route('**/api/v1/leaders/*/dcc-behind', (route) =>
+    route.fulfill(
+      json({
+        reporting_month: '2026-09-01',
+        open: true,
+        branch_behind: 4,
+        behind_by_child: { [consuelo.id]: 3, [efren.id]: 0, [lourdes.id]: 1, [teresita.id]: 2 },
+      }),
+    ),
+  );
+
+  await page.route('**/api/v1/leaders/*/cell-figures', (route) =>
+    route.fulfill(
+      json({
+        reporting_month: '2026-09-01',
+        open: true,
+        cell_leaders_beneath: 2,
+        branch_meetings_behind: 1,
+        meetings_behind_by_child: {
+          [consuelo.id]: 1,
+          [efren.id]: 0,
+          [lourdes.id]: 0,
+          [teresita.id]: 0,
+        },
+      }),
+    ),
+  );
+}
+
+/**
+ * The signed-in leader as the Network screen needs them: reading DCC and Cell figures and
+ * holding the reassignment capability, so the figures and the Move controls render.
+ */
+export async function mockNetworkReader(page: Page): Promise<void> {
+  const grant = (capability: string) => ({
+    capability,
+    scope_type: 'OWN_SUBTREE',
+    scope_network: null,
+    read_only: false,
+    source: 'ROLE',
+  });
+
+  await page.route('**/api/v1/auth/me', (route) =>
+    route.fulfill(
+      json({
+        account_id: '4f8c1d6a-0f1e-4b2a-9c3d-5e6f7a8b9c0d',
+        person_id: '9a1b2c3d-4e5f-4061-8273-8495a6b7c8d9',
+        email: 'leader@example.invalid',
+        first_name: 'Marilou',
+        capabilities: [
+          grant('people.view_subtree'),
+          grant('dcc.view_subtree'),
+          grant('cell.view_subtree'),
+          grant('people.manage_pastoral_assignment'),
+        ],
+      }),
+    ),
+  );
+}
+
+/**
+ * A report's coverage by leader, for either report (decision 0254). Two named rows — the
+ * reader first — and the unnamed line, adding up to the total. Invented names.
+ */
+export async function mockCoverageByLeader(page: Page): Promise<void> {
+  const body = {
+    period: '2026-06-01',
+    open: true,
+    data: [
+      {
+        leader: {
+          id: '9a1b2c3d-4e5f-4061-8273-8495a6b7c8d9',
+          member_id: 'M-000042',
+          full_name: 'Marilou Reyes Santos',
+        },
+        filed: 4,
+        owed: 4,
+      },
+      {
+        leader: {
+          id: '3f1b7c6e-0000-4000-8000-000000000701',
+          member_id: 'M-000801',
+          full_name: 'Consuelo Bautista',
+        },
+        filed: 5,
+        owed: 8,
+      },
+    ],
+    others: { filed: 3, owed: 6 },
+    total: { filed: 12, owed: 18 },
+    next_cursor: null,
+  };
+
+  await page.route('**/api/v1/reports/*/monthly/by-leader*', (route) => route.fulfill(json(body)));
 }

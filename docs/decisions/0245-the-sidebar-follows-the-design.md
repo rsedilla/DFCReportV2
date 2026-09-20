@@ -12,10 +12,11 @@ about the sidebar, the design wins.
 ## The ruling
 
 **The sidebar has five items: `Record`, `Reports`, `People`, `Cells` and `Network`.** *(Extended
-to six by decision 0249 on 2026-09-16, which added `Conquest` between `Cells` and `Network`.
-The reasoning below stands. What is stale is the count here and the two arrangements stated
-further down, each of which now carries `Conquest` — the ordinary one before `Network`, the
-whole-church one last.)*
+to six by decision 0249 on 2026-09-16, which added `Conquest` between `Cells` and `Network`,
+and the sixth item was renamed `Growth` by decision 0250 later the same day, Conquest becoming
+one of its three tabs. The reasoning below stands. What is stale is the count here and the two
+arrangements stated further down, each of which now carries `Growth` — the ordinary one before
+`Network`, the whole-church one last.)*
 `Account and session` sits in the sidebar's footer under the signed-in person's name, and
 is not a navigation item.
 

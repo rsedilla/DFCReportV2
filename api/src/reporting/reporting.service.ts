@@ -5,6 +5,7 @@ import { DccCoverageService, type DccCoverageScope } from '../attendance/dcc-cov
 import { DccFiguresService } from '../attendance/dcc-figures.service';
 import { CellsReadService } from '../cells/cells.read.service';
 import { endOfManilaDay } from '../common/time/manila';
+import { isMonthOpen } from '../common/time/submission-window';
 import { canonicalId } from '../common/identifiers';
 import { DATABASE, type Db } from '../database/database.module';
 import type { Database, NetworkName } from '../database/schema';
@@ -222,6 +223,18 @@ export type CellMonthlyReport =
     });
 
 /**
+ * A report's coverage, one line per leader who owns an obligation in it (decision 0254).
+ *
+ * `leaderId` is null only for a scheduled Cell meeting whose Cell had no leader on its date,
+ * which has no owner (recorded as open in `CLAUDE.md`, and unreachable while a Cell's schedule
+ * and leadership open and close together). The lines sum to the report's own coverage line.
+ */
+export interface CoverageByLeader {
+  open: boolean;
+  lines: { leaderId: string | null; filed: number; owed: number }[];
+}
+
+/**
  * Composes what the owning modules compute (decision 0206).
  *
  * `reporting` owns `report_snapshots` and `notifications` and roots no query anywhere
@@ -407,6 +420,57 @@ export class ReportingService {
   }
 
   /**
+   * The DCC report's coverage line, broken down by the leader who owns each obligation
+   * (decision 0254). Same scope, same period and same transaction seam as `dccMonthly`, and
+   * the same per-event narrowing, so the lines sum to that report's coverage.
+   */
+  async dccCoverageByLeader(scope: DccReportScope, period: string): Promise<CoverageByLeader> {
+    return this.overPeriod(period, async (trx) => {
+      const lines = await this.dccCoverage.monthCoverageByLeader(period, coverageScopeOf(scope), {
+        executor: trx,
+      });
+
+      return {
+        open: await isMonthOpen(trx, period),
+        lines: [...lines].map(([leaderId, line]) => ({
+          leaderId,
+          filed: line.met,
+          owed: line.owed,
+        })),
+      };
+    });
+  }
+
+  /**
+   * The Cell report's coverage line, broken down by the leader who led each scheduled
+   * meeting's Cell on its date (decision 0254, section 20). The same pairs `cellCoverage`
+   * counts, grouped rather than totalled, so the lines sum to that report's coverage.
+   */
+  async cellCoverageByLeader(scope: CellReportScope, period: string): Promise<CoverageByLeader> {
+    return this.overPeriod(period, async (trx) => {
+      const pairs = await this.cells.scheduledMeetingsWithLeaderIn(trx, period);
+      const recorded = await this.cellFigures.recordedScheduledDatesIn(trx, period);
+      const inScope = await this.scheduledPairsInScope(trx, pairs, scope);
+
+      const lines = new Map<string | null, { filed: number; owed: number }>();
+      for (const pair of inScope) {
+        const key = pair.leaderId === null ? null : canonicalId(pair.leaderId);
+        const line = lines.get(key) ?? { filed: 0, owed: 0 };
+        line.owed += 1;
+        if (recorded.has(`${pair.cellId}|${pair.scheduledDate}`)) {
+          line.filed += 1;
+        }
+        lines.set(key, line);
+      }
+
+      return {
+        open: await isMonthOpen(trx, period),
+        lines: [...lines].map(([leaderId, line]) => ({ leaderId, ...line })),
+      };
+    });
+  }
+
+  /**
    * The month's Cell coverage over a scope: meetings recorded over meetings scheduled
    * (SKILL.md sections 12, 13 and 20; decisions 0221 and 0225).
    *
@@ -481,7 +545,7 @@ export class ReportingService {
     trx: Transaction<Database>,
     pairs: readonly { cellId: string; scheduledDate: string; leaderId: string | null }[],
     scope: CellReportScope,
-  ): Promise<readonly { cellId: string; scheduledDate: string }[]> {
+  ): Promise<readonly { cellId: string; scheduledDate: string; leaderId: string | null }[]> {
     if (scope.kind === 'CELL') {
       return pairs.filter((pair) => canonicalId(pair.cellId) === canonicalId(scope.cell_id));
     }

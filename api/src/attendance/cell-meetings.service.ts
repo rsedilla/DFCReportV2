@@ -450,6 +450,101 @@ export class CellMeetingsService implements RecordedMeetingsPort {
   ) {}
 
   /**
+   * Section 19's recording queue: the meetings of a month this actor owes a record for
+   * (ruling of 2026-09-17).
+   *
+   * **The queue is the actor's own work and nobody else's** (owner's choice of
+   * 2026-09-15). The capability admits the caller; this method is the check that keeps
+   * the answer to their own meetings, which is the shape section 7 already names for the
+   * DCC checklist. A downline leader's outstanding meetings are section 15's attention
+   * list, never this.
+   *
+   * **The closed-Cell half is the whole reason this exists.** The Cells index is
+   * `ACTIVE`-only, so a Cell closed part-way through a month took its already-scheduled
+   * meetings out of every client's reach with it, and section 19 says this queue is "the
+   * only surface naming those meetings and the only thing that makes the permission to
+   * record them reachable". `CellsReadService.meetingsAwaitingFor` needs no state filter:
+   * it derives from the schedule, and a closed Cell has none in force after its closure.
+   *
+   * **A month that has shut answers empty rather than refusing.** The route takes a month
+   * so a client can ask for each one still open, and section 13's window is what decides
+   * whether anything is owed; a closed month owes nothing, and saying so is not an error.
+   * The submit route refuses on its own terms and this read does not duplicate them.
+   *
+   * **Not paginated, and the argument is weaker than {@link meetingsIn}'s rather than the
+   * same one.** Section 22 asks every collection to page because its size is a function
+   * of the data; that method's is a function of the calendar alone, four or five per
+   * month. This one's is that times the Cells the actor leads, and nothing bounds the
+   * second factor — `cell_leaderships_one_open_per_cell` is unique per *Cell*, not per
+   * person. What bounds it in fact is the G12 shape: a leader disciples twelve, and a
+   * leader of more than a handful of Cells is a state the church does not produce. That
+   * is an argument from the ministry rather than from arithmetic, and it is written here
+   * so that the day somebody leads thirty Cells this is a paragraph to revisit rather
+   * than a silence to discover.
+   */
+  async awaitingFor(actorPersonId: string, month: string): Promise<Record<string, unknown>> {
+    const reportingMonth = reportingMonthOf(month);
+
+    if (!(await isMonthOpen(this.db, reportingMonth))) {
+      return { reporting_month: reportingMonth, open: false, meetings: [] };
+    }
+
+    const scheduled = await this.cells.meetingsAwaitingFor(this.db, actorPersonId, reportingMonth);
+    if (scheduled.length === 0) {
+      return { reporting_month: reportingMonth, open: true, meetings: [] };
+    }
+
+    const recorded = await this.recordedDatesIn(
+      [...new Set(scheduled.map((entry) => entry.cellId))],
+      reportingMonth,
+    );
+
+    const meetings = scheduled
+      .filter((entry) => !recorded.has(`${entry.cellId}|${entry.scheduledDate}`))
+      .map((entry) => ({
+        cell_id: entry.cellId,
+        // The human Cell ID and the time, because the row rendering this is the only
+        // one a closed Cell reaches: the Cells index cannot name it, so a client
+        // stitching the two would be back where section 19's gap started.
+        cell_code: entry.cellCode,
+        scheduled_date: entry.scheduledDate,
+        scheduled_time: entry.scheduledTime,
+        reporting_month: reportingMonth,
+        // Null while the Cell is ACTIVE. Stated as a date rather than a flag, because
+        // what a leader needs is why it is no longer in their Cells list, and sections
+        // 13, 17 and 19 refuse to encode that in colour (owner's choice of 2026-09-17).
+        cell_closed_on: entry.cellClosedOn,
+      }));
+
+    return { reporting_month: reportingMonth, open: true, meetings };
+  }
+
+  /**
+   * Which `(Cell, scheduled date)` pairs of a month already carry a record.
+   *
+   * One statement for a page of Cells rather than {@link recordedIn} per Cell, which is
+   * a round trip per row and is what the Dashboard did through the client until this
+   * route replaced it.
+   */
+  private async recordedDatesIn(cellIds: string[], reportingMonth: string): Promise<Set<string>> {
+    if (cellIds.length === 0) {
+      return new Set();
+    }
+
+    const rows = await this.db
+      .selectFrom('cell_meetings')
+      .select((eb) => [
+        'cell_id',
+        sql<string>`to_char(${eb.ref('scheduled_date')}, 'YYYY-MM-DD')`.as('scheduled_date'),
+      ])
+      .where('cell_id', 'in', cellIds)
+      .where('reporting_month', '=', reportingMonth)
+      .execute();
+
+    return new Set(rows.map((row) => `${row.cell_id}|${row.scheduled_date}`));
+  }
+
+  /**
    * The meetings of one Cell in one reporting month, scheduled and recorded.
    *
    * **Not paginated, and that is a property of the month rather than a choice.**

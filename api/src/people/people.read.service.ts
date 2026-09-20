@@ -225,6 +225,11 @@ export class PeopleReadService {
     return this.forDecisionWithin(this.db, personId);
   }
 
+  /** {@link forDecisionsWithin} on the pooled connection, for a caller holding no transaction. */
+  async forDecisions(personIds: readonly string[]): Promise<Map<string, PersonForDecision>> {
+    return this.forDecisionsWithin(this.db, personIds);
+  }
+
   /**
    * A Person by id, or null.
    *

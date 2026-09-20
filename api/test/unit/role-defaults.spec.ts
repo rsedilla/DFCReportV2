@@ -5,7 +5,9 @@ import type { Capability } from '../../src/auth/authorization/capabilities';
 import type { AccountRole } from '../../src/database/schema';
 
 /**
- * The role catalog of SKILL.md section 7, transcribed a second time, cell by cell.
+ * The role catalog of SKILL.md section 7, transcribed a second time, cell by
+ * cell, for the capabilities this application declares — section 7's table
+ * carries more rows than that, and says so.
  *
  * A dash in the specification's table is an absence here. The five deliberate
  * absences have their own cases below, because each of them looks like an

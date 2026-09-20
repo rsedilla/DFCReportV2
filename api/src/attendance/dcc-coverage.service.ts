@@ -334,6 +334,32 @@ export class DccCoverageService {
     scope: DccCoverageScope,
     options: { executor?: Db } = {},
   ): Promise<Coverage> {
+    let met = 0;
+    let owed = 0;
+
+    // The line is the sum of the per-leader rows, so the two cannot disagree (decision 0254).
+    for (const line of (
+      await this.monthCoverageByLeader(reportingMonth, scope, options)
+    ).values()) {
+      met += line.met;
+      owed += line.owed;
+    }
+
+    return { met, owed };
+  }
+
+  /**
+   * The same month's coverage, one line per responsible leader (decision 0254).
+   *
+   * **Each line counts that leader's own obligations and no one else's**: one per event
+   * they held a pastoral edge at, met where a live record names them. An obligation has
+   * one owner, so the lines sum to {@link monthCoverage} — which is computed from them.
+   */
+  async monthCoverageByLeader(
+    reportingMonth: string,
+    scope: DccCoverageScope,
+    options: { executor?: Db } = {},
+  ): Promise<Map<string, Coverage>> {
     assertReportingMonth(reportingMonth);
 
     const executor = options.executor ?? this.db;
@@ -347,8 +373,7 @@ export class DccCoverageService {
       .orderBy('event_date')
       .execute();
 
-    let met = 0;
-    let owed = 0;
+    const lines = new Map<string, Coverage>();
 
     for (const row of rows) {
       const event = this.describe(String(row.event_date), row, now);
@@ -357,17 +382,77 @@ export class DccCoverageService {
         continue;
       }
 
-      const coverage = await this.coverageOf(
+      const { owed, owing } = await this.obligations(
         executor,
         event,
         await this.leadersAt(executor, scope, event.at),
       );
 
-      met += coverage.met;
-      owed += coverage.owed;
+      for (const leaderId of owed) {
+        const key = canonicalId(leaderId);
+        const line = lines.get(key) ?? { met: 0, owed: 0 };
+        line.owed += 1;
+        if (!owing.has(leaderId)) {
+          line.met += 1;
+        }
+        lines.set(key, line);
+      }
     }
 
-    return { met, owed };
+    return lines;
+  }
+
+  /**
+   * How many of the month's obligations each of these leaders has left unmet — the
+   * Network screen's *DCC records behind* (decision 0252).
+   *
+   * **Each leader's own obligations and nobody else's**, in exactly the unit decision
+   * 0224 counts and decision 0254's rows count: one per event a leader held a pastoral
+   * edge at, left unmet where no live record names them as responsible leader. So a
+   * branch's figure is a plain sum over the leaders in it, with nothing counted twice.
+   *
+   * **Events nobody could yet have recorded owe nothing** (decision 0229), on the same
+   * `coverable` predicate the index uses. The leaders are the caller's — the Network
+   * screen passes a branch as it stands now — and each is measured at every event's own
+   * instant, which is what makes a leader assigned mid-month owe from that date.
+   */
+  async unmetByLeaderIn(
+    reportingMonth: string,
+    leaderIds: readonly string[],
+  ): Promise<Map<string, number>> {
+    assertReportingMonth(reportingMonth);
+
+    const counts = new Map<string, number>();
+
+    if (leaderIds.length === 0) {
+      return counts;
+    }
+
+    const now = await databaseNow(this.db);
+    const rows = await this.db
+      .selectFrom('dcc_events')
+      .select(['id', 'event_date', 'removed_at', 'removal_reason'])
+      .where('event_date', '>=', reportingMonth)
+      .where('event_date', '<', nextMonth(reportingMonth))
+      .orderBy('event_date')
+      .execute();
+
+    for (const row of rows) {
+      const event = this.describe(String(row.event_date), row, now);
+
+      if (!coverable(event)) {
+        continue;
+      }
+
+      const { owing } = await this.obligations(this.db, event, leaderIds);
+
+      for (const leaderId of owing) {
+        const key = canonicalId(leaderId);
+        counts.set(key, (counts.get(key) ?? 0) + 1);
+      }
+    }
+
+    return counts;
   }
 
   /**
