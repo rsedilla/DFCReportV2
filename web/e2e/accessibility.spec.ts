@@ -343,12 +343,12 @@ const SCANS = [
       // The table from `lg` up and cards below it, so each Cell is in the page twice and
       // only one rendering is on screen at a width.
       await expect(
-        page.getByRole('link', { name: /Youth · Sat|C-0007/ }).filter({ visible: true }).first(),
+        page.getByRole('link', { name: /Youth · Sat|CELL-000007/ }).filter({ visible: true }).first(),
       ).toBeVisible();
       // The `0 of 0` row, asserted rather than assumed: settling on the heading
       // alone would pass on a page where the second row never rendered.
       await expect(
-        page.getByRole('link', { name: /Couple · Wed|C-0011/ }).filter({ visible: true }).first(),
+        page.getByRole('link', { name: /Couple · Wed|CELL-000011/ }).filter({ visible: true }).first(),
       ).toBeVisible();
     },
   },
@@ -399,7 +399,7 @@ const SCANS = [
     async arrange(page: import('@playwright/test').Page) {
       await expect(page.getByRole('heading', { name: 'Youth · Saturdays 7:00 pm' })).toBeVisible();
       await page.getByRole('button', { name: 'Change when it meets' }).click();
-      const dialog = page.getByRole('dialog', { name: 'Change when C-0007 meets' });
+      const dialog = page.getByRole('dialog', { name: 'Change when CELL-000007 meets' });
       await expect(dialog.getByRole('radio', { name: 'Wednesday' })).toBeVisible();
       await expect(dialog.getByText(/^Meets now on/)).toBeVisible();
     },
@@ -548,7 +548,7 @@ const SCANS = [
       // **A row of each kind in the queue, so axe scans both.** The Cell rows wait on
       // their per-Cell meetings reads and the Sunday rows on their checklists, and
       // nothing orders the two, so each is waited for.
-      await expect(page.getByRole('link', { name: /^Record C-/ }).first()).toBeVisible();
+      await expect(page.getByRole('link', { name: /^Record CELL-/ }).first()).toBeVisible();
       await expect(page.getByRole('link', { name: /^Record DCC,/ }).first()).toBeVisible();
       // A tile carries its scope and its period, which section 19 requires of
       // every one of them.
@@ -577,7 +577,7 @@ const SCANS = [
     },
     async arrange(page: import('@playwright/test').Page) {
       await page.getByRole('radio', { name: 'People I oversee' }).check();
-      await expect(page.getByRole('link', { name: /^Record C-0021,/ })).toBeVisible();
+      await expect(page.getByRole('link', { name: /^Record CELL-000021,/ })).toBeVisible();
     },
   },
   {
@@ -726,9 +726,10 @@ const SCANS = [
     pattern: '/cells/[id]/members',
     async before(page: import('@playwright/test').Page) {
       await mockSignedIn(page);
+      await mockCellMeetings(page);
       await mockCellMembers(page);
-  await mockCoverageGaps(page);
-  await mockPastoralPath(page);
+      await mockCoverageGaps(page);
+      await mockPastoralPath(page);
     },
     async arrange(page: import('@playwright/test').Page) {
       await expect(page.getByRole('heading', { name: 'Rosalinda Ocampo' })).toBeVisible();
@@ -741,6 +742,7 @@ const SCANS = [
     route: '/cells/3f1b7c6e-0000-4000-8000-000000000101/members',
     async before(page: import('@playwright/test').Page) {
       await mockSignedIn(page);
+      await mockCellMeetings(page);
       await mockCellMembers(page);
     },
     async arrange(page: import('@playwright/test').Page) {
@@ -754,6 +756,7 @@ const SCANS = [
     route: '/cells/3f1b7c6e-0000-4000-8000-000000000101/members',
     async before(page: import('@playwright/test').Page) {
       await mockSignedIn(page);
+      await mockCellMeetings(page);
       await mockCellMembersEmpty(page);
     },
     async arrange(page: import('@playwright/test').Page) {
@@ -774,7 +777,7 @@ const SCANS = [
     async arrange(page: import('@playwright/test').Page) {
       await expect(page.getByRole('heading', { name: 'Rosalinda Ocampo' })).toBeVisible();
       await page.getByRole('button', { name: 'Add a member' }).click();
-      const dialog = page.getByRole('dialog', { name: 'Add a member to C-0007' });
+      const dialog = page.getByRole('dialog', { name: 'Add a member to CELL-000007' });
       await dialog.getByLabel('Search for a person by name').fill('Marilou');
       await dialog.getByRole('button', { name: 'Find' }).click();
       await expect(dialog.getByRole('button', { name: 'Choose' }).first()).toBeVisible();

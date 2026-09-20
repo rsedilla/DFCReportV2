@@ -31,22 +31,22 @@ const SUBMITTER_ID = '3f1b7c6e-0000-4000-8000-000000000401';
 
 export const CELL_WITH_MEETINGS = {
   id: '3f1b7c6e-0000-4000-8000-000000000101',
-  cell_id: 'C-0007',
+  cell_id: 'CELL-000007',
   category: 'YOUTH',
   member_count: 6,
   schedule: { day_of_week: 6, time_of_day: '19:00' },
-  leader: { person_id: LEADER_ID, member_id: 'M-00412', full_name: 'Teofilo Ramos' },
+  leader: { person_id: LEADER_ID, member_id: 'M-000412', full_name: 'Teofilo Ramos' },
   coverage: { recorded: 3, scheduled: 4 },
 };
 
 /** Decision 0225: it reads `0 of 0`, it is shown, and it is not dropped. */
 export const CELL_WITH_NO_SCHEDULE = {
   id: '3f1b7c6e-0000-4000-8000-000000000102',
-  cell_id: 'C-0011',
+  cell_id: 'CELL-000011',
   category: 'COUPLE',
   member_count: 4,
   schedule: { day_of_week: 3, time_of_day: '20:00' },
-  leader: { person_id: '3f1b7c6e-0000-4000-8000-000000000202', member_id: 'M-00518', full_name: 'Herminia Lazaro' },
+  leader: { person_id: '3f1b7c6e-0000-4000-8000-000000000202', member_id: 'M-000518', full_name: 'Herminia Lazaro' },
   coverage: { recorded: 0, scheduled: 0 },
 };
 
@@ -78,12 +78,14 @@ export async function mockCellMeetings(page: Page): Promise<void> {
   await page.route('**/api/v1/cells/*/meetings?*', (route) =>
     route.fulfill(
       json({
-        cell_id: 'C-0007',
+        cell_id: 'CELL-000007',
         category: 'YOUTH',
         day_of_week: 6,
         scheduled_time: '19:00',
         leader: { id: LEADER_ID, full_name: 'Teofilo Ramos' },
-        member_count: 6,
+        // Two, which is what `mockCellMembers` pages in full: the count is over the same
+        // set, so a complete list of two cannot sit under a count of six.
+        member_count: 2,
         cell_closed_on: null,
         reporting_month: '2026-06-01',
         scheduled_count: 4,
@@ -216,7 +218,7 @@ export function awaitingRow(date: string, month: string, time = '19:00'): Awaiti
 export function awaitingClosedRow(date: string, month: string, closedOn: string): AwaitingRow {
   return {
     cell_id: '3f1b7c6e-0000-4000-8000-000000000103',
-    cell_code: 'C-0014',
+    cell_code: 'CELL-000014',
     scheduled_date: date,
     scheduled_time: '19:00',
     reporting_month: month,
@@ -275,7 +277,7 @@ export async function mockMeetingsAwaiting(
                   {
                     ...awaitingRow(inMonth('05'), month),
                     cell_id: '3f1b7c6e-0000-4000-8000-000000000104',
-                    cell_code: 'C-0021',
+                    cell_code: 'CELL-000021',
                     leader: {
                       id: '3f1b7c6e-0000-4000-8000-000000000299',
                       full_name: 'Ana Lim',
@@ -365,7 +367,7 @@ export async function mockMeetingRoster(page: Page): Promise<void> {
   await page.route('**/api/v1/cells/*/meetings/*/roster', (route) =>
     route.fulfill(
       json({
-        cell_id: 'C-0007',
+        cell_id: 'CELL-000007',
         meeting_id: '2026-06-27',
         scheduled_date: '2026-06-27',
         scheduled_time: '19:00',
@@ -377,14 +379,14 @@ export async function mockMeetingRoster(page: Page): Promise<void> {
         members: [
           {
             person_id: '3f1b7c6e-0000-4000-8000-000000000601',
-            member_id: 'M-00701',
+            member_id: 'M-000701',
             first_name: 'Rosalinda',
             last_name: 'Ocampo',
             record: null,
           },
           {
             person_id: '3f1b7c6e-0000-4000-8000-000000000602',
-            member_id: 'M-00702',
+            member_id: 'M-000702',
             first_name: 'Bienvenido',
             last_name: 'Trinidad',
             record: null,
@@ -412,14 +414,14 @@ export async function mockDccRoster(page: Page): Promise<void> {
         data: [
           {
             person_id: '3f1b7c6e-0000-4000-8000-000000000601',
-            member_id: 'M-00701',
+            member_id: 'M-000701',
             full_name: 'Rosalinda Ocampo',
             responsible_leader_id: LEADER_ID,
             record: { present: true, version: 1, recorded_at: '2026-06-07T12:00:00.000Z' },
           },
           {
             person_id: '3f1b7c6e-0000-4000-8000-000000000602',
-            member_id: 'M-00702',
+            member_id: 'M-000702',
             full_name: 'Bienvenido Trinidad',
             responsible_leader_id: LEADER_ID,
             record: null,
@@ -447,7 +449,7 @@ export async function mockRecordedMeetingRoster(
   await page.route('**/api/v1/cells/*/meetings/*/roster', (route) =>
     route.fulfill(
       json({
-        cell_id: 'C-0007',
+        cell_id: 'CELL-000007',
         meeting_id: '2026-06-27',
         scheduled_date: '2026-06-27',
         scheduled_time: '19:00',
@@ -473,14 +475,14 @@ export async function mockRecordedMeetingRoster(
         members: [
           {
             person_id: '3f1b7c6e-0000-4000-8000-000000000601',
-            member_id: 'M-00701',
+            member_id: 'M-000701',
             first_name: 'Rosalinda',
             last_name: 'Ocampo',
             record: held ? { present: true } : null,
           },
           {
             person_id: '3f1b7c6e-0000-4000-8000-000000000602',
-            member_id: 'M-00702',
+            member_id: 'M-000702',
             first_name: 'Bienvenido',
             last_name: 'Trinidad',
             record: held ? { present: false } : null,
@@ -508,7 +510,7 @@ export async function mockClosedDccRoster(page: Page): Promise<void> {
         data: [
           {
             person_id: '3f1b7c6e-0000-4000-8000-000000000601',
-            member_id: 'M-00701',
+            member_id: 'M-000701',
             full_name: 'Rosalinda Ocampo',
             responsible_leader_id: LEADER_ID,
             record: { present: true, version: 1, recorded_at: '2026-06-07T12:00:00.000Z' },
@@ -609,13 +611,13 @@ export async function mockCellMembers(page: Page): Promise<void> {
         data: [
           {
             person_id: '3f1b7c6e-0000-4000-8000-000000000601',
-            member_id: 'M-00701',
+            member_id: 'M-000701',
             full_name: 'Rosalinda Ocampo',
             started_at: '2026-03-01T00:00:00.000Z',
           },
           {
             person_id: '3f1b7c6e-0000-4000-8000-000000000602',
-            member_id: 'M-00702',
+            member_id: 'M-000702',
             full_name: 'Bienvenido Trinidad',
             started_at: '2026-05-12T00:00:00.000Z',
           },
@@ -624,6 +626,31 @@ export async function mockCellMembers(page: Page): Promise<void> {
       }),
     );
   });
+}
+
+/**
+ * The same Cell after it was closed (section 10). Closure ends the schedule and every
+ * membership, so the month holds no scheduled meeting and the count is zero: the screens
+ * read `cell_closed_on` to say so rather than showing an empty list with no reason.
+ */
+export async function mockClosedCellMeetings(page: Page): Promise<void> {
+  await page.route('**/api/v1/cells/*/meetings?*', (route) =>
+    route.fulfill(
+      json({
+        cell_id: 'CELL-000007',
+        category: 'YOUTH',
+        day_of_week: 6,
+        scheduled_time: '19:00',
+        leader: { id: LEADER_ID, full_name: 'Teofilo Ramos' },
+        member_count: 0,
+        cell_closed_on: '2026-06-20',
+        reporting_month: '2026-06-01',
+        scheduled_count: 0,
+        recorded_count: 0,
+        meetings: [],
+      }),
+    ),
+  );
 }
 
 /** A Cell with nobody in it, which is a sentence rather than an error. */
@@ -650,12 +677,12 @@ export async function mockCoverageGaps(page: Page): Promise<void> {
         data: [
           {
             person_id: '3f1b7c6e-0000-4000-8000-000000000801',
-            member_id: 'M-00901',
+            member_id: 'M-000901',
             full_name: 'Consuelo Bautista',
           },
           {
             person_id: '3f1b7c6e-0000-4000-8000-000000000802',
-            member_id: 'M-00902',
+            member_id: 'M-000902',
             full_name: 'Ferdinand Salazar',
           },
         ],
@@ -679,19 +706,19 @@ export async function mockPastoralPath(page: Page): Promise<void> {
         data: [
           {
             id: '3f1b7c6e-0000-4000-8000-000000000901',
-            member_id: 'M-00001',
+            member_id: 'M-000001',
             full_name: 'Corazon Villanueva',
             network_root: true,
           },
           {
             id: '3f1b7c6e-0000-4000-8000-000000000902',
-            member_id: 'M-00044',
+            member_id: 'M-000044',
             full_name: 'Teofilo Ramos',
             network_root: false,
           },
           {
             id: '3f1b7c6e-0000-4000-8000-000000000601',
-            member_id: 'M-00701',
+            member_id: 'M-000701',
             full_name: 'Rosalinda Ocampo',
             network_root: false,
           },

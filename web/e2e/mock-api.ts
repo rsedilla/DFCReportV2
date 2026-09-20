@@ -188,10 +188,10 @@ const CELL_LEADER = {
  * The first is the Cell `PERSON_IN_SCOPE` already belongs to.
  */
 export const CELL_CHOICES = [
-  { id: '3f1b7c6e-0000-4000-8000-000000000101', cell_id: 'C-0007', category: 'YOUTH', leader: CELL_LEADER },
+  { id: '3f1b7c6e-0000-4000-8000-000000000101', cell_id: 'CELL-000007', category: 'YOUTH', leader: CELL_LEADER },
   {
     id: '3f1b7c6e-0000-4000-8000-000000000102',
-    cell_id: 'C-0011',
+    cell_id: 'CELL-000011',
     category: 'YOUNG_PRO',
     leader: {
       person_id: '33333333-4444-4555-8666-777777777777',
@@ -201,7 +201,7 @@ export const CELL_CHOICES = [
   },
   {
     id: '3f1b7c6e-0000-4000-8000-000000000103',
-    cell_id: 'C-0014',
+    cell_id: 'CELL-000014',
     category: 'COUPLE',
     leader: {
       person_id: '44444444-5555-4666-8777-888888888888',
@@ -270,7 +270,7 @@ export async function mockPeople(page: Page): Promise<void> {
   await mockPersonCells(page, {
     membership: {
       id: CELL_CHOICES[0].id,
-      cell_id: 'C-0007',
+      cell_id: 'CELL-000007',
       category: 'YOUTH',
       day_of_week: 6,
       leader: CELL_LEADER,
@@ -376,12 +376,12 @@ export async function mockPeopleWithoutACell(page: Page): Promise<void> {
         data: [
           {
             id: '3f1b7c6e-0000-4000-8000-000000000921',
-            member_id: 'M-01101',
+            member_id: 'M-001101',
             full_name: 'Bituin Carreon',
           },
           {
             id: '3f1b7c6e-0000-4000-8000-000000000922',
-            member_id: 'M-01102',
+            member_id: 'M-001102',
             full_name: 'Rodolfo Villamor',
           },
         ],
@@ -405,21 +405,21 @@ export async function mockAwaitingReassignment(page: Page): Promise<void> {
         data: [
           {
             id: '3f1b7c6e-0000-4000-8000-000000000901',
-            member_id: 'M-01001',
+            member_id: 'M-001001',
             full_name: 'Amihan Bacani',
             former_leader: {
               person_id: '3f1b7c6e-0000-4000-8000-000000000903',
-              member_id: 'M-01003',
+              member_id: 'M-001003',
               full_name: 'Rogelio Mendoza',
             },
           },
           {
             id: '3f1b7c6e-0000-4000-8000-000000000902',
-            member_id: 'M-01002',
+            member_id: 'M-001002',
             full_name: 'Teodoro Cruz',
             former_leader: {
               person_id: '3f1b7c6e-0000-4000-8000-000000000903',
-              member_id: 'M-01003',
+              member_id: 'M-001003',
               full_name: 'Rogelio Mendoza',
             },
           },

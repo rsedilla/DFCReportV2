@@ -41,7 +41,10 @@ export function AddMemberDialog({
     mutationFn: (person: { id: string; full_name: string }) =>
       addCellMember(cellId, person.id, idempotencyKeyFor('add', cellId, person.id)),
     onSuccess: async (_result, person) => {
+      // The list, and the Cell's own line above it, which carries the member count this
+      // addition has just moved.
       await queryClient.invalidateQueries({ queryKey: ['cell-members', cellId] });
+      await queryClient.invalidateQueries({ queryKey: ['cell-meetings', cellId] });
       onAdded(person.full_name);
       close();
     },

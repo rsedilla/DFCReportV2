@@ -1,5 +1,6 @@
 import { ApiRequestError } from './api-client';
 import { describeFailure, type Failure } from './messages';
+import { dayLabel } from './reporting-month';
 import { authenticatedRequest } from './session';
 
 /**
@@ -185,7 +186,33 @@ export function cellName(
   )}`;
 }
 
-/** "Young Pro · Sat", how a list names a Cell (decision 0259); the Cell ID with nothing to name. */
+/**
+ * "CELL-000007 · led by Ana Reyes · 6 members", the line beneath a Cell's name on the
+ * two screens that use it, its meetings and its members. The meeting form composes a
+ * shorter line of its own. A closed Cell says when it closed in place of the count, because
+ * closing a Cell ends every membership in it (section 10).
+ */
+export function cellSubtitle(
+  data: Pick<CellMeetings, 'cell_id' | 'leader' | 'member_count' | 'cell_closed_on'>,
+): string {
+  const parts = [data.cell_id];
+
+  if (data.leader?.full_name) {
+    parts.push(`led by ${data.leader.full_name}`);
+  }
+
+  parts.push(
+    data.cell_closed_on != null
+      ? `closed on ${dayLabel(data.cell_closed_on)}`
+      : data.member_count === 1
+        ? '1 member'
+        : `${data.member_count} members`,
+  );
+
+  return parts.join(' · ');
+}
+
+/** "Young Pro · Sat", how a list names a Cell (decision 0259, restated by 0261); the Cell ID with nothing to name. */
 export function cellShortName(cell: {
   cell_id: string;
   category: CellCategory | null;

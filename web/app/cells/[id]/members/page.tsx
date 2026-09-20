@@ -11,6 +11,8 @@ import { Button } from '@/components/ui/button';
 import { FailureNotice } from '@/components/ui/failure-notice';
 import { HeaderCell, Table, rowClasses } from '@/components/ui/table';
 import {
+  cellName,
+  cellSubtitle,
   listCellMeetings,
   listCellMembers,
   removeCellMember,
@@ -40,12 +42,23 @@ const LINK =
  * **A name opens the person's profile**, where Move to another Cell already lives, so
  * this page carries no move of its own.
  *
- * **The Cell's identifier is read from this month's meetings**, which the Cell's own page
- * asks for with the same key: the members route returns people, not the Cell.
+ * **The Cell is named the way every other Cells screen names it**, from this month's
+ * meetings, which the Cell's own page asks for with the same key: the members route returns
+ * people, not the Cell.
+ *
+ * **The leader is named on that line, and nothing puts them in the list below it.** The only
+ * two inserters of `cell_memberships` are adding a member and a closure's dispersal, and
+ * neither runs when a Cell is created or handed over, so a leader opening this screen would
+ * otherwise look for themselves and find nothing. Adding a member does not refuse the
+ * leader, so this is how the rows arise rather than a rule: whether a Cell's leader is a
+ * member of their own Cell is undecided (`CLAUDE.md`, Open — awaiting a ruling), and the
+ * line says who leads the Cell and claims nothing further.
  *
  * **The list is ordered by name and nothing here ranks anybody** (sections 13
- * and 15). It pages by cursor, because section 22 returns no total and a page
- * number would be invented.
+ * and 15). It pages by cursor, because section 22 returns no total for a collection and a
+ * page number would be invented. The count on the line above the list is the Cell's own
+ * figure from the meetings read, which is a field of the Cell rather than a total of this
+ * page.
  */
 export default function CellMembersPage() {
   return (
@@ -81,7 +94,11 @@ function CellMembers() {
       removeCellMember(params.id, personId, idempotencyKeyFor('remove', params.id, personId)),
     onSuccess: async () => {
       setRemoving(null);
+      // Both, because the line above the list carries the Cell's member count and this
+      // screen is what changes it: the count comes from the meetings read, not from the
+      // collection.
       await queryClient.invalidateQueries({ queryKey: ['cell-members', params.id] });
+      await queryClient.invalidateQueries({ queryKey: ['cell-meetings', params.id] });
     },
   });
 
@@ -92,6 +109,9 @@ function CellMembers() {
       : null;
 
   const handle = cell.data?.cell_id ?? null;
+  // Three states rather than two: a Cell whose read has not landed is not an open one,
+  // and the button and the sentences below turn on knowing which.
+  const closedOn = cell.data === undefined ? undefined : cell.data.cell_closed_on;
 
   return (
     <main id="main" className={PAGE_WIDTH.INDEX}>
@@ -104,21 +124,37 @@ function CellMembers() {
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">
-            {handle ? `Members of ${handle}` : 'Members'}
+            {cell.data ? cellName(cell.data) : 'Members'}
           </h1>
-          <p className="text-muted mt-2 max-w-2xl text-sm leading-relaxed">
-            Who is in this Cell now. Removing somebody ends their membership from today; it
-            does not erase the months they were part of, and past figures keep counting them.
-          </p>
+          {cell.data ? (
+            <p className="text-muted mt-1 text-sm">{cellSubtitle(cell.data)}</p>
+          ) : null}
+          {closedOn === undefined ? null : closedOn === null ? (
+            <p className="text-muted mt-2 max-w-2xl text-sm leading-relaxed">
+              Who is in this Cell now. Removing somebody ends their membership from today; it
+              does not erase the months they were part of, and past figures keep counting them.
+            </p>
+          ) : (
+            <p className="text-muted mt-2 max-w-2xl text-sm leading-relaxed">
+              This Cell is closed. Closing it ended every membership in it, and the months it
+              was open keep counting the people who were in it.
+            </p>
+          )}
         </div>
-        <Button
-          onClick={() => {
-            setAdded(null);
-            setAdding(true);
-          }}
-        >
-          Add a member
-        </Button>
+        {/*
+          A closed Cell is offered nothing to add: section 10 ends every membership at
+          closure and the route refuses an addition, so the button would always fail.
+        */}
+        {closedOn === null ? (
+          <Button
+            onClick={() => {
+              setAdded(null);
+              setAdding(true);
+            }}
+          >
+            Add a member
+          </Button>
+        ) : null}
       </div>
 
       <AddMemberDialog
@@ -143,8 +179,11 @@ function CellMembers() {
         <p className="text-muted mt-4 text-sm">Loading&hellip;</p>
       ) : members.data && members.data.data.length === 0 ? (
         <p className="text-muted mt-4 max-w-2xl text-sm leading-relaxed">
-          This Cell has no members yet. A meeting can still be recorded as met with nobody
-          to mark, which counts towards its coverage.
+          {closedOn === undefined
+            ? 'Nobody is in this Cell.'
+            : closedOn !== null
+              ? 'Closing this Cell ended every membership in it. The months it was open keep counting the people who were in it.'
+              : 'This Cell has no members yet. A meeting can still be recorded as met with nobody to mark, which counts towards its coverage.'}
         </p>
       ) : members.data ? (
         <>

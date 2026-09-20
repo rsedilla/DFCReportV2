@@ -135,10 +135,10 @@ test.describe('a person’s DCC stage', () => {
 test.describe('a person’s Cell', () => {
   test('a leader reads as leading their Cell and is offered no Cell to join', async ({ page }) => {
     await signedInWithPeople(page);
-    await mockPersonCells(page, { membership: null, leads: [{ id: CELL_CHOICES[2].id, cell_id: 'C-0014' }] });
+    await mockPersonCells(page, { membership: null, leads: [{ id: CELL_CHOICES[2].id, cell_id: 'CELL-000014' }] });
     await page.goto(PROFILE);
 
-    await expect(page.getByText('Leads C-0014', { exact: true })).toBeVisible();
+    await expect(page.getByText('Leads CELL-000014', { exact: true })).toBeVisible();
     await expect(page.getByText('Not in a Cell.')).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Move to another Cell' })).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Add to a Cell' })).toHaveCount(0);
@@ -177,10 +177,10 @@ test.describe('a person’s Cell', () => {
     const dialog = page.getByRole('dialog', {
       name: `Move ${PERSON_IN_SCOPE.full_name} to another Cell`,
     });
-    await expect(dialog.getByText('Leaving C-0007, led by Corazon Batac.')).toBeVisible();
+    await expect(dialog.getByText('Leaving CELL-000007, led by Corazon Batac.')).toBeVisible();
 
     const choice = dialog.getByRole('combobox', { name: 'Cell' });
-    await expect(choice.locator('option')).toHaveText(['Choose a Cell', /^C-0011/, /^C-0014/]);
+    await expect(choice.locator('option')).toHaveText(['Choose a Cell', /^CELL-000011/, /^CELL-000014/]);
 
     await choice.selectOption(CELL_CHOICES[1].id);
     await dialog.getByRole('button', { name: 'Move', exact: true }).click();
@@ -208,7 +208,7 @@ test.describe('a person’s Cell', () => {
 
     await expect(
       dialog.getByText(
-        'Marilou Reyes Santos is in the Women’s Network and C-0011 is in the Men’s, so they can’t join it.',
+        'Marilou Reyes Santos is in the Women’s Network and CELL-000011 is in the Men’s, so they can’t join it.',
       ),
     ).toBeVisible();
     await expect(dialog.getByText('SKILL.md')).toHaveCount(0);
@@ -476,7 +476,7 @@ test.describe('adding a person with a Cell', () => {
     ).toBeVisible();
     await expect(
       page.getByText(
-        'Marilou Reyes Santos is in the Women’s Network and C-0011 is in the Men’s, so they can’t join it.',
+        'Marilou Reyes Santos is in the Women’s Network and CELL-000011 is in the Men’s, so they can’t join it.',
       ),
     ).toBeVisible();
     await expect(page.getByRole('link', { name: 'Open their record' })).toHaveAttribute(

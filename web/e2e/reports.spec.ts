@@ -162,7 +162,7 @@ test.describe('the coverage tables', () => {
 
     const table = page.getByRole('region', { name: 'Coverage by Cell' });
     // Table from `lg`, cards below it: whichever this viewport shows.
-    await expect(table.getByRole('link', { name: 'C-0007' }).filter({ visible: true })).toHaveAttribute(
+    await expect(table.getByRole('link', { name: 'CELL-000007' }).filter({ visible: true })).toHaveAttribute(
       'href',
       '/cells/3f1b7c6e-0000-4000-8000-000000000101/meetings?month=2026-06-01',
     );

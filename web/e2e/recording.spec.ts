@@ -84,7 +84,7 @@ test.describe('a recorded Cell meeting', () => {
 
     await page.goto(MEETING);
 
-    await expect(page.getByText('Youth · 7:00 pm · C-0007')).toBeVisible();
+    await expect(page.getByText('Youth · 7:00 pm · CELL-000007')).toBeVisible();
     const summary = page.getByText(/^First recorded on/);
     await expect(summary).toHaveText('First recorded on 27 Jun · 1 present, 1 absent');
   });
@@ -275,7 +275,7 @@ test.describe('the Record queue', () => {
     await page.goto('/dashboard');
     await page.getByRole('radio', { name: 'Cells', exact: true }).check();
 
-    await expect(page.getByRole('link', { name: /^Record C-0007,/ })).toBeVisible();
+    await expect(page.getByRole('link', { name: /^Record CELL-000007,/ })).toBeVisible();
     await expect(page.getByText('September · open until 7 Oct').first()).toBeVisible();
   });
 
@@ -292,7 +292,7 @@ test.describe('the Record queue', () => {
     await page.getByRole('radio', { name: 'Cells', exact: true }).check();
 
     // October's row has arrived, so an absence below is not a page still loading.
-    await expect(page.getByRole('link', { name: /^Record C-0007,/ })).toBeVisible();
+    await expect(page.getByRole('link', { name: /^Record CELL-000007,/ })).toBeVisible();
     await expect(page.getByText('open until 7 Oct')).toHaveCount(0);
   });
 
@@ -320,9 +320,9 @@ test.describe('the Record queue', () => {
     // Exact, because the Record button's accessible name names the Cell too.
     await expect(page.getByText('Youth · Saturdays 7:00 pm', { exact: true })).toBeVisible();
     await expect(
-      page.getByText('Saturday 3 October · You · 4 members · C-0014 · Cell closed Sunday 20 September'),
+      page.getByText('Saturday 3 October · You · 4 members · CELL-000014 · Cell closed Sunday 20 September'),
     ).toBeVisible();
-    await expect(page.getByRole('link', { name: /^Record C-0014,/ })).toHaveAttribute(
+    await expect(page.getByRole('link', { name: /^Record CELL-000014,/ })).toHaveAttribute(
       'href',
       `/cells/${CLOSED_CELL}/meetings/2026-10-03`,
     );
@@ -347,7 +347,7 @@ test.describe('the Record queue', () => {
     await page.goto('/dashboard');
     await page.getByRole('radio', { name: 'Cells', exact: true }).check();
 
-    const rows = page.locator('li', { has: page.getByRole('link', { name: /^Record C-/ }) });
+    const rows = page.locator('li', { has: page.getByRole('link', { name: /^Record CELL-/ }) });
     await expect(rows).toHaveCount(2);
 
     // The only tag either row carries is the one both carry.
@@ -368,7 +368,7 @@ test.describe('the Record queue', () => {
     await page.goto('/dashboard');
     await page.getByRole('radio', { name: 'Cells', exact: true }).check();
 
-    await expect(page.getByText('Saturday 3 October · You · 5 members · C-0007')).toBeVisible();
+    await expect(page.getByText('Saturday 3 October · You · 5 members · CELL-000007')).toBeVisible();
     await expect(page.getByText('Cell closed')).toHaveCount(0);
   });
 
@@ -457,7 +457,7 @@ test.describe('the Record queue', () => {
     });
 
     await page.goto('/dashboard');
-    await page.getByRole('link', { name: /^Record C-0007,/ }).click();
+    await page.getByRole('link', { name: /^Record CELL-000007,/ }).click();
 
     await expect(page.getByRole('heading', { name: 'Saturday 27 June' })).toBeVisible();
     await expect.poll(() => asked).toBe(1);
@@ -526,7 +526,7 @@ test.describe('the Record queue as the owner designed it (decision 0258)', () =>
       const downline = {
         ...awaitingRow('2026-06-12', month),
         cell_id: '3f1b7c6e-0000-4000-8000-000000000104',
-        cell_code: 'C-0021',
+        cell_code: 'CELL-000021',
         leader: { id: '3f1b7c6e-0000-4000-8000-000000000299', full_name: 'Ana Lim', is_actor: false },
         may_record: true,
       };
@@ -555,14 +555,14 @@ test.describe('the Record queue as the owner designed it (decision 0258)', () =>
     await page.goto('/dashboard');
 
     await expect(page.getByRole('radio', { name: 'My own Cells' })).toBeChecked();
-    await expect(page.getByRole('link', { name: /^Record C-0007,/ })).toBeVisible();
+    await expect(page.getByRole('link', { name: /^Record CELL-000007,/ })).toBeVisible();
 
     await page.getByRole('radio', { name: 'People I oversee' }).check();
 
     await expect.poll(() => whoseAsked).toContain('branch');
     // A downline leader's meeting the reader may record names that leader and offers Record.
-    await expect(page.getByRole('link', { name: /^Record C-0021,/ })).toBeVisible();
-    await expect(page.getByText(/Ana Lim · 5 members · C-0021/)).toBeVisible();
+    await expect(page.getByRole('link', { name: /^Record CELL-000021,/ })).toBeVisible();
+    await expect(page.getByText(/Ana Lim · 5 members · CELL-000021/)).toBeVisible();
     // DCC stays the reader's own checklist; the branch view adds no Sunday rows (decision 0258).
     await expect(page.getByText(/beneath you still owe/)).toHaveCount(0);
   });

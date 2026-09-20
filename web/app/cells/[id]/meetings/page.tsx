@@ -15,10 +15,10 @@ import { HeaderCell, Table, rowClasses } from '@/components/ui/table';
 import { Tag } from '@/components/ui/tag';
 import {
   cellName,
+  cellSubtitle,
   listCellMeetings,
   meetingStateLabel,
   timeLabel,
-  type CellMeetings,
   type ScheduledMeeting,
 } from '@/lib/cells';
 import { describeFailure } from '@/lib/messages';
@@ -241,23 +241,4 @@ function MeetingDetail({ entry }: { entry: ScheduledMeeting }) {
       ) : null}
     </>
   );
-}
-
-/** "C-0007 · led by Ana Reyes · 6 members", or when it closed in place of the count. */
-function cellSubtitle(data: CellMeetings): string {
-  const parts = [data.cell_id];
-
-  if (data.leader?.full_name) {
-    parts.push(`led by ${data.leader.full_name}`);
-  }
-
-  parts.push(
-    data.cell_closed_on != null
-      ? `closed on ${dayLabel(data.cell_closed_on)}`
-      : data.member_count === 1
-        ? '1 member'
-        : `${data.member_count} members`,
-  );
-
-  return parts.join(' · ');
 }

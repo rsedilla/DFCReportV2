@@ -12,6 +12,8 @@ import {
   CELL_WITH_NO_SCHEDULE,
   mockCellMeetings,
   mockCellMembers,
+  mockCellMembersEmpty,
+  mockClosedCellMeetings,
   mockCells,
 } from './mock-attendance';
 
@@ -53,7 +55,7 @@ test.describe('the Cells list', () => {
 
     await page.setViewportSize({ width: 390, height: 844 });
     await expect(table).toBeHidden();
-    await expect(page.getByRole('heading', { name: 'C-0011' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'CELL-000011' })).toBeVisible();
   });
 });
 
@@ -90,7 +92,7 @@ test.describe('a Cell’s meetings', () => {
     await page.goto(MEETINGS);
     await page.getByRole('button', { name: 'Change when it meets' }).click();
 
-    const dialog = page.getByRole('dialog', { name: 'Change when C-0007 meets' });
+    const dialog = page.getByRole('dialog', { name: 'Change when CELL-000007 meets' });
     await expect(dialog.getByText('Meets now on Saturday at 19:00.')).toBeVisible();
     await expect(dialog.getByRole('group', { name: 'Which day, from July 2026' })).toBeVisible();
 
@@ -115,9 +117,19 @@ test.describe('a Cell’s members', () => {
     const sent = await mockMembershipAdd(page, 'accepted');
 
     await page.goto(MEMBERS);
+
+    // The Cell is named the way every other Cells screen names it, over its identifier,
+    // its leader and its size.
+    await expect(
+      page.getByRole('heading', { level: 1, name: 'Youth · Saturdays 7:00 pm' }),
+    ).toBeVisible();
+    await expect(
+      page.getByText('CELL-000007 · led by Teofilo Ramos · 2 members'),
+    ).toBeVisible();
+
     await page.getByRole('button', { name: 'Add a member' }).click();
 
-    const dialog = page.getByRole('dialog', { name: 'Add a member to C-0007' });
+    const dialog = page.getByRole('dialog', { name: 'Add a member to CELL-000007' });
     await dialog.getByLabel('Search for a person by name').fill('Marilou');
     await dialog.getByRole('button', { name: 'Find' }).click();
     await dialog.getByRole('button', { name: 'Choose' }).first().click();
@@ -128,6 +140,24 @@ test.describe('a Cell’s members', () => {
       { path: `/api/v1/cells/${CELL_WITH_MEETINGS.id}/members`, body: { person_id: PERSON_IN_SCOPE.id } },
     ]);
     await expect(page.getByText(`Added ${PERSON_IN_SCOPE.full_name}.`)).toBeVisible();
+  });
+
+  test('a closed Cell says so and is offered nothing to add', async ({ page }) => {
+    await mockSignedIn(page);
+    await mockClosedCellMeetings(page);
+    await mockCellMembersEmpty(page);
+
+    await page.goto(MEMBERS);
+
+    // Section 10 ends every membership at closure, and the route refuses an addition, so
+    // the screen says what happened rather than offering a control that always fails.
+    await expect(
+      page.getByText('CELL-000007 · led by Teofilo Ramos · closed on Saturday 20 June'),
+    ).toBeVisible();
+    await expect(
+      page.getByText('Closing this Cell ended every membership in it.', { exact: false }),
+    ).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Add a member' })).toBeHidden();
   });
 
   test('a member’s name opens their profile', async ({ page }) => {
