@@ -39,11 +39,13 @@ test.describe('the Cells list', () => {
     await expect(table.getByRole('columnheader')).toHaveText([
       'Cell',
       'Leader',
-      'Category',
+      'Members',
       'Meets',
       'Recorded',
     ]);
-    await expect(table.getByRole('link', { name: 'C-0011' })).toBeVisible();
+    // The Cell is named rather than coded, with its identifier beneath (decision 0261).
+    await expect(table.getByRole('link', { name: 'Couple · Wed' })).toBeVisible();
+    await expect(table.getByRole('row', { name: /Couple · Wed/ })).toContainText('4');
     await expect(page.getByRole('link', { name: 'People without a Cell' })).toHaveAttribute(
       'href',
       '/cells/people-without-a-cell',

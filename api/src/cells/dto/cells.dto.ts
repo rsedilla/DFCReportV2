@@ -15,7 +15,7 @@ import {
 } from 'class-validator';
 import { Max, Min, ValidateIf } from 'class-validator';
 
-import { CURSOR_MAX_LENGTH } from '../../common/cursor';
+import { CURSOR_MAX_LENGTH, NAME_FIELD_MAX_LENGTH } from '../../common/cursor';
 import { IsManilaCalendarDate } from '../../common/time/is-manila-calendar-date';
 
 import type {
@@ -563,6 +563,19 @@ export class CellIndexDto {
   @IsOptional()
   @IsIn(['me'], { message: 'led_by accepts only the value "me" (SKILL.md section 22).' })
   led_by?: 'me';
+
+  /**
+   * Narrows the page to Cells whose identifier contains the term, where the term carries a
+   * digit, or whose leader's name contains it (decision 0261). Two characters minimum, for
+   * the reason the Person search has one: a one-letter term pages the list rather than
+   * finding a row in it, and the index service counts it on the term as searched. It narrows
+   * what the scope already lists and widens nothing.
+   */
+  @IsOptional()
+  @IsString()
+  @Length(2, NAME_FIELD_MAX_LENGTH)
+  @IsStorableText()
+  q?: string;
 
   /** Section 22: defaults to 50, maximum 200. */
   @IsOptional()

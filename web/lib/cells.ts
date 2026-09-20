@@ -36,6 +36,8 @@ export interface CellSummary {
   id: string;
   cell_id: string;
   category: CellCategory;
+  /** How many members it holds now (decision 0261). */
+  member_count: number;
   schedule: CellSchedule;
   leader: { person_id: string; member_id: string; full_name: string };
   coverage: CellCoverage;
@@ -263,7 +265,7 @@ export async function peopleWithoutACell(
 }
 
 export async function listCells(
-  params: { month: string; ledBy?: 'me'; cursor?: string | null },
+  params: { month: string; ledBy?: 'me'; cursor?: string | null; q?: string; limit?: number },
   signal?: AbortSignal,
 ): Promise<CellIndexPage> {
   const query = new URLSearchParams({ month: params.month });
@@ -272,6 +274,13 @@ export async function listCells(
   }
   if (params.cursor) {
     query.set('cursor', params.cursor);
+  }
+  // Narrows the whole scope, never the page on screen (decision 0261).
+  if (params.q) {
+    query.set('q', params.q);
+  }
+  if (params.limit !== undefined) {
+    query.set('limit', String(params.limit));
   }
 
   return authenticatedRequest<CellIndexPage>(`/api/v1/cells?${query.toString()}`, { signal });

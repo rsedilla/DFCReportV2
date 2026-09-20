@@ -11,6 +11,8 @@ import type { LeadershipRequestCursor, LeadershipRequestRow } from './leadership
 import type { RosterCursor } from '../common/roster-cursor';
 import type { CellCategory, Database } from '../database/schema';
 import type { Transaction } from 'kysely';
+import { ACCENTED, UNACCENTED, escapeLike } from '../people/people.shared';
+import { normalizeName } from '../people/duplicate-matching';
 
 /** A person's open membership, with its Cell's current leader, and the Cells they lead. */
 export interface PersonCells {
@@ -1125,7 +1127,7 @@ export class CellsReadService implements CellScopePort, CellRelationshipsPort {
      * so that a page describes one state rather than one per join.
      */
     at: Date,
-    page: { limit: number; after?: string | null },
+    page: { limit: number; after?: string | null; search?: string | null },
   ): Promise<
     {
       id: string;
@@ -1134,9 +1136,27 @@ export class CellsReadService implements CellScopePort, CellRelationshipsPort {
       category: CellCategory;
       dayOfWeek: number;
       timeOfDay: string;
+      memberCount: number;
     }[]
   > {
     const after = page.after ?? null;
+
+    // **The search narrows and never reorders** (decision 0261, decision 0009): a Cell ID by its
+    // digits, or a leader's name, normalized so `Nuñez` is found by `nunez`. The
+    // leader's name is reached by joining `persons` onto a query rooted in `cells`, which is
+    // section 2's exempt shape and is named in `module-boundaries.json`.
+    const term =
+      page.search === null || page.search === undefined ? null : normalizeName(page.search);
+    const namePattern =
+      term === null || term === '' ? null : `%${escapeLike(term).replace(/\s+/g, '%')}%`;
+    // **A Cell ID is matched where the term carries a digit, and anywhere in the identifier.**
+    // Every identifier begins `CELL-`, so a letter prefix matches every Cell in scope, and the
+    // part a leader reads off a row, `000042`, is not at the start. A digit-bearing term still
+    // searches both halves; `00` still matches everything, which is in scope, ordered and
+    // paged, and is the term's own fault rather than the rule's.
+    const rawTerm = page.search === null || page.search === undefined ? null : page.search.trim();
+    const codePattern =
+      rawTerm === null || !/[0-9]/.test(rawTerm) ? null : `%${escapeLike(rawTerm.toUpperCase())}%`;
 
     const rows = await executor
       .selectFrom('cells')
@@ -1175,6 +1195,9 @@ export class CellsReadService implements CellScopePort, CellRelationshipsPort {
             ]),
           ),
       )
+      // The leader's row, for the search predicate. Unconditional and total: the leadership's
+      // `person_id` is `NOT NULL REFERENCES persons (id)`, so it drops and duplicates nothing.
+      .innerJoin('persons', 'persons.id', 'cell_leaderships.person_id')
       .select([
         'cells.id as id',
         'cells.cell_id as cell_id',
@@ -1182,12 +1205,39 @@ export class CellsReadService implements CellScopePort, CellRelationshipsPort {
         'cell_categories.category as category',
         'cell_schedules.day_of_week as day_of_week',
         'cell_schedules.time_of_day as time_of_day',
+        // How many members the Cell holds now, for the list's own column (decision 0261):
+        // the roster's own rule, open memberships, on a table `cells` owns.
+        sql<number>`(SELECT count(*)::int FROM cell_memberships AS m
+                      WHERE m.cell_id = cells.id AND m.ended_at IS NULL)`.as('member_count'),
       ])
       .where('cells.state', '=', 'ACTIVE')
       .$if(leaderIds !== null, (query) =>
         query.where('cell_leaderships.person_id', 'in', leaderIds as readonly string[]),
       )
       .$if(after !== null, (query) => query.where('cells.cell_id', '>', after as string))
+      .$if(codePattern !== null || namePattern !== null, (query) =>
+        query.where((eb) =>
+          eb.or([
+            ...(codePattern === null
+              ? []
+              : [eb(sql<string>`upper(cells.cell_id)`, 'like', codePattern)]),
+            ...(namePattern === null
+              ? []
+              : [
+                  eb(
+                    sql<string>`lower(translate(persons.first_name || ' ' || persons.last_name, ${ACCENTED}, ${UNACCENTED}))`,
+                    'like',
+                    namePattern,
+                  ),
+                  eb(
+                    sql<string>`lower(translate(persons.last_name, ${ACCENTED}, ${UNACCENTED}))`,
+                    'like',
+                    namePattern,
+                  ),
+                ]),
+          ]),
+        ),
+      )
       .orderBy('cells.cell_id')
       .limit(page.limit)
       .execute();
@@ -1199,6 +1249,7 @@ export class CellsReadService implements CellScopePort, CellRelationshipsPort {
       category: row.category,
       dayOfWeek: Number(row.day_of_week),
       timeOfDay: String(row.time_of_day).slice(0, 5),
+      memberCount: Number(row.member_count),
     }));
   }
 

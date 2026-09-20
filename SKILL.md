@@ -3700,6 +3700,8 @@ Purpose:
 
 **A leader lists the Cells of their scope** (ruling of 2026-09-09). `GET /api/v1/cells` returns the Cells whose leader falls within the actor's pastoral scope **at the instant Section 7 gives a collection naming a period** (ruling of 2026-09-10), guarded by `cell.view_subtree` and paginated by cursor (Section 22); `?led_by=me` narrows it to the Cells the actor personally leads. Section 19 wants both readings — its Cell-leader dashboard leads with "the user's own Cells" and its upline dashboard with "within their scope" — so the narrower one is a **filter over one authorized set** rather than a second route or a second rule. A Cell the actor leads is inside the actor's own subtree by definition, so the filter grants nothing and only removes rows the caller may already see.
 
+**That list is searched and paged** (ruling of 2026-09-20, decision 0261). `q` narrows it to Cells whose identifier contains the term, where the term carries a digit — every identifier begins `CELL-`, so a letter prefix would match the whole scope and the digits a leader reads off a row are not at its start — or whose leader's name contains it, normalized. Two characters minimum, counted on the term as it is searched, and it never reorders the list: a list of Cells ordered by anything readable as a score is what decision 0009 refuses. Each row carries the Cell's name, its identifier and its current member count. The church runs roughly 800 Cells, so a screen that reads one page and offers no second is a list that lies about its own length.
+
 No new capability: `cell.view_subtree` is a Read capability, is grantable `read_only`, and already guards `GET /api/v1/cells/{id}/members` after the ruling of 2026-09-04, which moved that read for exactly this reason. A list of Cells is the same kind of read as the roster of one, a level up.
 
 Each row carries the Cell's identifier, category, schedule, the leader in force at the period's instant (Section 7, ruling of 2026-09-10), and the month's coverage line as **two figures** — recorded out of scheduled, never divided (Section 12, Section 13). **The list is never ordered by coverage and no row is colour-graded**: a list of Cells ordered worst-first is a leaderboard whatever it is called, and Sections 13, 17 and 19 forbid it.
@@ -4503,7 +4505,7 @@ GET  /api/v1/dcc/events/{id}/coverage-gaps  who owes a record, within the actor'
 POST /api/v1/dcc/events/{id}/submit       an Admin amendment is a flag on this, not a route
 GET  /api/v1/dcc/people/{id}/attendance   one person's records and the classification they give (Section 9)
 
-GET  /api/v1/cells                       the Cells of the actor's scope; ?led_by=me narrows
+GET  /api/v1/cells                       the Cells of the actor's scope; ?led_by=me narrows, ?q= searches (Section 15)
 POST /api/v1/cells                       direct creation, initial encoding only
 GET  /api/v1/cells/meetings/awaiting     Section 19's recording queue, the actor's own or their branch (decision 0258)
 

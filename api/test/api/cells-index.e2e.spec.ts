@@ -1,3 +1,4 @@
+import { sql } from 'kysely';
 import request from 'supertest';
 
 import { manilaDayOf } from '../../src/common/time/manila';
@@ -234,6 +235,62 @@ describe('the Cells index (sections 10, 12 and 22)', () => {
     // together: a Cell the list carries is one the per-Cell route serves.
     expect(listed.includes(driftingCell.id)).toBe(roster.status === 200);
     expect(roster.status).toBe(403);
+  });
+
+  // Decision 0261: the search narrows the whole scope by Cell ID or leader's name, and
+  // never reorders it, so a leader with hundreds of Cells can find one.
+  it('narrows the list by a leader’s name, and by a Cell ID prefix', async () => {
+    const byName = await list(manuelAccount, { q: 'Mark' });
+
+    expect(byName.status).toBe(200);
+    expect(cellIdsOf(byName)).toEqual([markCell.id]);
+
+    const byCode = await list(manuelAccount, { q: nathanCell.cellId });
+
+    expect(cellIdsOf(byCode)).toEqual([nathanCell.id]);
+  });
+
+  it('refuses a term of one character, which would page the list rather than search it', async () => {
+    for (const q of ['a', 'a-', ' a']) {
+      const response = await list(manuelAccount, { q });
+
+      expect(response.status).toBe(422);
+      expect(response.body.error.code).toBe('VALIDATION_FAILED');
+    }
+  });
+
+  it('keeps the scope for a Cell ID as well as for a name', async () => {
+    const response = await list(markAccount, { q: nathanCell.cellId });
+
+    expect(response.status).toBe(200);
+    expect(response.body.data).toEqual([]);
+  });
+
+  it('finds a Cell by the digits of its identifier, which is what a leader reads off a row', async () => {
+    const digits = manuelCell.cellId.replace(/^CELL-/, '');
+    const response = await list(manuelAccount, { q: digits });
+
+    expect(cellIdsOf(response)).toEqual([manuelCell.id]);
+  });
+
+  it('carries each Cell’s current member count (decision 0261)', async () => {
+    const member = await createPerson(db, { firstName: 'Tomas', network: 'MENS' });
+    await assignTo(db, member.id, manuel.id);
+    await sql`
+      INSERT INTO cell_memberships (person_id, cell_id, started_at)
+      VALUES (${member.id}::uuid, ${manuelCell.id}::uuid, ${CREATED})
+    `.execute(db);
+
+    const response = await list(manuelAccount, { led_by: 'me' });
+
+    expect(response.body.data[0]).toMatchObject({ member_count: 1 });
+  });
+
+  it('keeps the scope while searching: a sibling branch’s Cell is not found by name', async () => {
+    const response = await list(markAccount, { q: 'Nathan' });
+
+    expect(response.status).toBe(200);
+    expect(response.body.data).toEqual([]);
   });
 
   it('refuses an account holding no capability at all', async () => {

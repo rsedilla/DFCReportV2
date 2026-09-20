@@ -168,6 +168,7 @@ export class CellsController {
       ledBy: query.led_by,
       limit: query.limit,
       cursor: query.cursor,
+      q: query.q,
     });
   }
 

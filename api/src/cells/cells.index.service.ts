@@ -15,6 +15,8 @@ import { PeopleReadService } from '../people/people.read.service';
 import { decodeCellIndexCursor, encodeCellIndexCursor } from './cell-index-cursor';
 import { CellsReadService } from './cells.read.service';
 import { RECORDED_MEETINGS_PORT, type RecordedMeetingsPort } from './recorded-meetings.port';
+import { ValidationFailedError } from '../common/errors/api-error';
+import { normalizeName } from '../people/duplicate-matching';
 
 /** Section 22: `limit` defaults to 50. The DTO bounds it at 200. */
 const DEFAULT_PAGE = 50;
@@ -79,7 +81,7 @@ export class CellsIndexService {
 
   async list(
     actor: Actor,
-    query: { month: string; ledBy?: 'me'; limit?: number; cursor?: string },
+    query: { month: string; ledBy?: 'me'; limit?: number; cursor?: string; q?: string },
   ): Promise<Record<string, unknown>> {
     const reportingMonth = reportingMonthOf(query.month);
 
@@ -113,6 +115,15 @@ export class CellsIndexService {
     const limit = query.limit ?? DEFAULT_PAGE;
     const after = decodeCellIndexCursor(query.cursor);
 
+    // **The minimum is counted on the term as it is searched**, as the Person search counts
+    // it (decision 0259): `a-`, ` a` and `  ` each pass the DTO's bound and would search for
+    // one letter, or for nothing at all.
+    if (query.q !== undefined && normalizeName(query.q).replace(/\s+/g, '').length < 2) {
+      throw new ValidationFailedError('Enter at least two letters of a name or Cell ID.', {
+        field: 'q',
+      });
+    }
+
     const membership = await this.authorization.scopeMembership(actor, Capability.CellViewSubtree);
     const leaderIds = leadersToList(membership, actor, query.ledBy === 'me');
 
@@ -130,6 +141,7 @@ export class CellsIndexService {
         : await this.cells.cellsInScope(this.db, leaderIds, now, {
             limit: limit + 1,
             after: after?.cellId ?? null,
+            search: query.q ?? null,
           });
 
     const visible = rows.slice(0, limit);
@@ -163,6 +175,7 @@ export class CellsIndexService {
           cell_id: row.cellId,
           category: row.category,
           schedule: { day_of_week: row.dayOfWeek, time_of_day: row.timeOfDay },
+          member_count: row.memberCount,
           leader: {
             person_id: row.leaderId,
             member_id: leader?.memberId ?? '',

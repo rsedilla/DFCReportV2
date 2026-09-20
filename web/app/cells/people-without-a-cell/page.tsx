@@ -49,12 +49,14 @@ export default function PeopleWithoutACellPage() {
 }
 
 function WithoutACell() {
-  const [cursor, setCursor] = useState<string | undefined>(undefined);
+  const [cursors, setCursors] = useState<(string | null)[]>([null]);
+  const [page, setPage] = useState(0);
   const [placing, setPlacing] = useState<PersonWithoutACell | null>(null);
 
   const people = useQuery({
-    queryKey: ['people-without-a-cell', cursor ?? null],
-    queryFn: ({ signal }) => peopleWithoutACell({ cursor }, signal),
+    queryKey: ['people-without-a-cell', cursors[page]],
+    queryFn: ({ signal }) =>
+      peopleWithoutACell({ cursor: cursors[page] ?? undefined }, signal),
   });
 
   return (
@@ -140,28 +142,31 @@ function WithoutACell() {
             </>
           )}
 
-          {people.data.next_cursor !== null ? (
-            <p className="mt-4">
-              <Button
-                variant="secondary"
-                onClick={() => setCursor(people.data.next_cursor ?? undefined)}
-              >
-                Show more
-              </Button>
-            </p>
-          ) : null}
-
-          {cursor !== undefined ? (
-            <p className="mt-4">
-              <button
-                type="button"
-                onClick={() => setCursor(undefined)}
-                className={`${LINK} text-muted min-h-11 text-sm`}
-              >
-                Back to the first page
-              </button>
-            </p>
-          ) : null}
+          {/* Previous and Next rather than "show more": a cursor names one page, and
+              section 22 returns no total to count pages against. */}
+          <nav aria-label="People without a Cell" className="mt-6 flex items-center gap-3">
+            <Button
+              variant="secondary"
+              disabled={page === 0}
+              onClick={() => setPage((current) => Math.max(0, current - 1))}
+            >
+              Previous
+            </Button>
+            <Button
+              variant="secondary"
+              disabled={!people.data.next_cursor}
+              onClick={() => {
+                const next = people.data.next_cursor;
+                if (!next) {
+                  return;
+                }
+                setCursors((current) => [...current.slice(0, page + 1), next]);
+                setPage((current) => current + 1);
+              }}
+            >
+              Next
+            </Button>
+          </nav>
         </>
       ) : null}
     </main>

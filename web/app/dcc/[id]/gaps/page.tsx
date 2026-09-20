@@ -3,8 +3,10 @@
 import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
+import { useState } from 'react';
 
 import { AppShell, PAGE_WIDTH } from '@/components/app-shell';
+import { Button } from '@/components/ui/button';
 import { FailureNotice } from '@/components/ui/failure-notice';
 import { getCoverageGaps, notRecordableLabel } from '@/lib/dcc';
 import { describeFailure } from '@/lib/messages';
@@ -47,9 +49,12 @@ export default function CoverageGapsPage() {
 function Gaps() {
   const params = useParams<{ id: string }>();
 
+  const [cursors, setCursors] = useState<(string | null)[]>([null]);
+  const [page, setPage] = useState(0);
+
   const gaps = useQuery({
-    queryKey: ['coverage-gaps', params.id],
-    queryFn: ({ signal }) => getCoverageGaps(params.id, signal),
+    queryKey: ['coverage-gaps', params.id, cursors[page]],
+    queryFn: ({ signal }) => getCoverageGaps(params.id, cursors[page], signal),
   });
 
   const event = gaps.data?.event ?? null;
@@ -129,11 +134,31 @@ function Gaps() {
             </table>
           )}
 
-          {gaps.data.next_cursor !== null ? (
-            <p className="text-muted mt-4 max-w-2xl text-sm leading-relaxed">
-              More leaders owe a record than fit one page.
-            </p>
-          ) : null}
+          {/* Previous and Next rather than "show more": a cursor names one page, and
+              section 22 returns no total to count pages against. */}
+          <nav aria-label="Leaders still to record" className="mt-6 flex items-center gap-3">
+            <Button
+              variant="secondary"
+              disabled={page === 0}
+              onClick={() => setPage((current) => Math.max(0, current - 1))}
+            >
+              Previous
+            </Button>
+            <Button
+              variant="secondary"
+              disabled={!gaps.data.next_cursor}
+              onClick={() => {
+                const next = gaps.data.next_cursor;
+                if (!next) {
+                  return;
+                }
+                setCursors((current) => [...current.slice(0, page + 1), next]);
+                setPage((current) => current + 1);
+              }}
+            >
+              Next
+            </Button>
+          </nav>
         </>
       ) : null}
     </main>

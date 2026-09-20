@@ -340,10 +340,16 @@ const SCANS = [
     },
     async arrange(page: import('@playwright/test').Page) {
       await expect(page.getByRole('heading', { name: 'Cells', exact: true })).toBeVisible();
-      await expect(page.getByRole('link', { name: 'C-0007' })).toBeVisible();
+      // The table from `lg` up and cards below it, so each Cell is in the page twice and
+      // only one rendering is on screen at a width.
+      await expect(
+        page.getByRole('link', { name: /Youth · Sat|C-0007/ }).filter({ visible: true }).first(),
+      ).toBeVisible();
       // The `0 of 0` row, asserted rather than assumed: settling on the heading
       // alone would pass on a page where the second row never rendered.
-      await expect(page.getByRole('link', { name: 'C-0011' })).toBeVisible();
+      await expect(
+        page.getByRole('link', { name: /Couple · Wed|C-0011/ }).filter({ visible: true }).first(),
+      ).toBeVisible();
     },
   },
   {
@@ -1028,7 +1034,7 @@ const TARGET_SWEEP = [
     name: 'cells',
     route: '/cells',
     settleRole: 'link' as const,
-    settle: 'C-0007',
+    settle: 'Youth · Sat',
     minimum: 6,
   },
   {
@@ -1100,8 +1106,8 @@ const TARGET_SWEEP = [
     minimum: 21,
   },
   {
-    // The back link, and a name link and an Add to a Cell button per person: five, with no
-    // "Show more" for this fixture. Settled on a person rather than the page heading, which
+    // The back link, a name link and an Add to a Cell button per person, and the pager's two
+    // buttons (decision 0261). Settled on a person rather than the page heading, which
     // renders before the list arrives.
     name: 'people without a cell',
     route: '/cells/people-without-a-cell',
@@ -1110,8 +1116,8 @@ const TARGET_SWEEP = [
     minimum: 5,
   },
   {
-    // The back link and one link per person, which is the reassignment section 19
-    // asks each entry to carry. No "Show more": the fixture fits one page.
+    // The back link, one link per person — the reassignment section 19 asks each entry to
+    // carry — and the pager's two buttons (decision 0261).
     //
     // **Settled on a person rather than on the page heading**, which renders before
     // the list arrives — the lesson the meeting-roster entry above records, and the
@@ -1120,7 +1126,7 @@ const TARGET_SWEEP = [
     route: '/people/awaiting-reassignment',
     settleRole: 'heading' as const,
     settle: 'Amihan Bacani',
-    minimum: 3,
+    minimum: 5,
   },
   {
     // The back link and each name, which opens that leader's profile.

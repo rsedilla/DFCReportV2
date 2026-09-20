@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useState } from 'react';
 
 import { AppShell, PAGE_WIDTH } from '@/components/app-shell';
+import { Button } from '@/components/ui/button';
 import { FailureNotice } from '@/components/ui/failure-notice';
 import { describeFailure } from '@/lib/messages';
 import { awaitingReassignment } from '@/lib/people';
@@ -49,11 +50,13 @@ function AwaitingReassignmentList() {
   // One page at a time, and the cursor is carried rather than accumulated: section 22
   // returns no total, so there is nothing to show a reader but the page they asked for
   // and whether another exists.
-  const [cursor, setCursor] = useState<string | undefined>(undefined);
+  const [cursors, setCursors] = useState<(string | null)[]>([null]);
+  const [page, setPage] = useState(0);
 
   const people = useQuery({
-    queryKey: ['awaiting-reassignment', cursor ?? null],
-    queryFn: ({ signal }) => awaitingReassignment({ cursor }, signal),
+    queryKey: ['awaiting-reassignment', cursors[page]],
+    queryFn: ({ signal }) =>
+      awaitingReassignment({ cursor: cursors[page] ?? undefined }, signal),
   });
 
   return (
@@ -108,29 +111,31 @@ function AwaitingReassignmentList() {
             </ul>
           )}
 
-          {people.data.next_cursor !== null ? (
-            <p className="mt-6">
-              <button
-                type="button"
-                onClick={() => setCursor(people.data.next_cursor ?? undefined)}
-                className="border-line focus-visible:outline-accent inline-flex min-h-11 items-center rounded-lg border px-4 text-sm focus-visible:outline-2 focus-visible:outline-offset-2"
-              >
-                Show more
-              </button>
-            </p>
-          ) : null}
-
-          {cursor !== undefined ? (
-            <p className="mt-4">
-              <button
-                type="button"
-                onClick={() => setCursor(undefined)}
-                className="focus-visible:outline-accent text-muted inline-flex min-h-11 items-center rounded-sm text-sm underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2"
-              >
-                Back to the first page
-              </button>
-            </p>
-          ) : null}
+          {/* Previous and Next rather than "show more": a cursor names one page, and
+              section 22 returns no total to count pages against. */}
+          <nav aria-label="People awaiting reassignment" className="mt-6 flex items-center gap-3">
+            <Button
+              variant="secondary"
+              disabled={page === 0}
+              onClick={() => setPage((current) => Math.max(0, current - 1))}
+            >
+              Previous
+            </Button>
+            <Button
+              variant="secondary"
+              disabled={!people.data.next_cursor}
+              onClick={() => {
+                const next = people.data.next_cursor;
+                if (!next) {
+                  return;
+                }
+                setCursors((current) => [...current.slice(0, page + 1), next]);
+                setPage((current) => current + 1);
+              }}
+            >
+              Next
+            </Button>
+          </nav>
         </>
       ) : null}
     </main>

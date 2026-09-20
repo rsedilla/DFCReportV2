@@ -184,11 +184,15 @@ export interface CoverageGaps {
  */
 export async function getCoverageGaps(
   eventId: string,
+  cursor?: string | null,
   signal?: AbortSignal,
 ): Promise<CoverageGaps> {
-  return authenticatedRequest<CoverageGaps>(`/api/v1/dcc/events/${eventId}/coverage-gaps`, {
-    signal,
-  });
+  const query = cursor ? `?cursor=${encodeURIComponent(cursor)}` : '';
+
+  return authenticatedRequest<CoverageGaps>(
+    `/api/v1/dcc/events/${eventId}/coverage-gaps${query}`,
+    { signal },
+  );
 }
 
 /** Section 9's classification, as the API names it. */
