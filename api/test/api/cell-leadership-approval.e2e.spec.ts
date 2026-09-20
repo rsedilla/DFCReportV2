@@ -525,6 +525,25 @@ describe('Cell leadership approval (section 10)', () => {
       expect(response.body.error.message).toContain('created in error');
     });
 
+    it('admits a leader upline of the closed Cell’s last leader (decision 0265)', async () => {
+      // The case section 10 was amended for, and the one nothing else in this file
+      // reached: every other successful restart here is submitted by an administrator,
+      // whose Whole Church grant answers before the target is read, so removing the
+      // fallback would leave them all green. Ben holds `cell.manage_lifecycle` at
+      // `OWN_SUBTREE` and is Carlo’s upline, so this passes only because section 7
+      // resolves a closed Cell through its last leader. Under "resolves through
+      // nobody" it answers 403.
+      await closeCellDirectly(db, carloCell.id, { reason: 'MEMBERS_DISPERSED' });
+
+      const response = await restart(benAccount, {
+        prospective_leader_id: carlo.id,
+        restart_of_cell_id: carloCell.id,
+      });
+
+      expect(response.status).toBe(201);
+      expect(response.body.restart_of_cell_uuid).toBe(carloCell.id);
+    });
+
     it('refuses a second restart of one Cell', async () => {
       const first = await restart(admin);
       await approve(approver, first.body.id as string);

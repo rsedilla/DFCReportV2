@@ -1289,6 +1289,13 @@ export class CellsLeadershipRequestService {
    * identifiers (section 22). The scope is resolved against the Cell's leader, which
    * for a closed Cell is its last one — the same terms that govern closing it.
    *
+   * **That the fallback reaches this check is decision 0265**, which is why a leader
+   * upline of the former leader may restart rather than only a Whole Church holder.
+   * Section 7's closed-Cell clause governs an operation whose *target* is the closed
+   * Cell; here the target is the prospective leader and the Cell is the second object
+   * section 10 gives a handover, so the base bullet's fallback governs the read. It
+   * settles this shape alone — `GET /cells/{id}/meetings` is still an open question.
+   *
    * The four refusals after it are decision 0264's own, and the last is the one worth
    * reading twice: a restart names the Cell's **last leader**, because what the link
    * asserts is that this Cell resumes under the person who led it. A different person
