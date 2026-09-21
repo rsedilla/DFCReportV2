@@ -5337,7 +5337,7 @@ Writes obey Section 22: they are idempotent, they carry `Idempotency-Key`, and e
 
 ## 28. Growth
 
-`Growth` records the discipleship pathway a person has travelled: the **SUYNL** lessons they have done, the **Encounter** and the four schools they have graduated from, and the Conquest goals of Section 27 (the second ruling of 2026-09-16). It is a sidebar item with three tabs — `SUYNL`, `Training`, `Conquest` — and behind it are three modules, `suynl`, `training` and `conquest`, each owning its own table.
+`Growth` records the discipleship pathway a person has travelled: the **SUYNL** lessons they have done, the five schools they have graduated from — the **Encounter** first — and the Conquest goals of Section 27 (the second ruling of 2026-09-16). It is a sidebar item with three tabs — `SUYNL`, `Training`, `Conquest` — and behind it are three modules, `suynl`, `training` and `conquest`, each owning its own table.
 
 **None of it is built.** The ruling settles the rules before the pilot and the code after it, so there is no migration, no endpoint and no screen. Tests are owed by the change that builds it.
 
@@ -5348,7 +5348,7 @@ Writes obey Section 22: they are idempotent, they carry `Idempotency-Key`, and e
 SUYNL, then the Encounter, then Life Class, then SOL 1, SOL 2, SOL 3.
 
 - **SUYNL** — ten lessons, taken one to one. Recorded lesson by lesson.
-- **The Encounter** — a three-day retreat, recorded as one graduation.
+- **The Encounter** — a three-day retreat and the first of the five schools, recorded as one graduation (owner's choice of 2026-09-21).
 - **Life Class** — new life, healing, freedom, a personal relationship with Christ: a believer established in faith and ready for discipleship.
 - **SOL 1** — biblical foundations and family: a disciple rooted in doctrine and godly living.
 - **SOL 2** — vision, intercession, evangelism and ministry: a disciple reaching, praying for and caring for people.
