@@ -13,6 +13,7 @@ import { Tag } from '@/components/ui/tag';
 import { HeaderCell, Table, rowClasses } from '@/components/ui/table';
 import {
   categoryLabel,
+  behindOf,
   closedOnLabel,
   dayOfWeekLabel,
   timeLabel,
@@ -243,12 +244,8 @@ function Dashboard() {
   });
 
   // **Section 15's attention list includes a closed Cell while its month is open**, and
-  // the running view cannot carry one. The closed view (decision 0266) can. A closed
-  // Cell's schedule ends at its closure, so every meeting it counts has already happened
-  // and a shortfall there is a meeting genuinely awaiting a record — which is **not** true
-  // of the running half, whose denominator is the month's whole schedule (decision 0239),
-  // so mid-month it names Cells whose meetings have not come. Both that and what a page
-  // bound owes this list are recorded as open in `CLAUDE.md`; neither is introduced here.
+  // the running view cannot carry one. The closed view (decision 0266) can. What a page
+  // bound owes this list is recorded as open in `CLAUDE.md`.
   const scopedClosed = useQuery({
     queryKey: ['cells', month, false, 'CLOSED'],
     queryFn: ({ signal }) => listCells({ month, state: 'CLOSED' }, signal),
@@ -394,11 +391,13 @@ function Dashboard() {
     previousFailed !== undefined;
 
   // Bounded by the window rather than by how recently the Cell closed, so the list never
-  // shows a meeting only Admin could act on (section 15).
+  // shows a meeting only Admin could act on (section 15). **One predicate for both views**
+  // (decision 0267): a meeting that has come and has no record. It used to compare with
+  // the whole month's schedule, which named a running Cell for meetings not yet held.
   const needingAttention = [
     ...(scoped.data?.data ?? []),
     ...(scopedClosed.data?.open ? scopedClosed.data.data : []),
-  ].filter((cell) => cell.coverage.recorded < cell.coverage.scheduled);
+  ].filter((cell) => behindOf(cell.coverage) > 0);
 
   // **Every query on this page, not the ones it started with.** Section 19 puts
   // outstanding work above the figures precisely so a leader can trust it, and a

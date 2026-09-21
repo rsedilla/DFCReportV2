@@ -2691,6 +2691,34 @@ export class CellMeetingsService implements RecordedMeetingsPort {
   }
 
   /**
+   * `RecordedMeetingsPort`. The same rows as {@link recordedCountsIn}, by scheduled date,
+   * so a caller can tell which due meetings have a record (decision 0267) rather than
+   * subtracting one count from another — which a record left outside the schedule by a
+   * backdated closure would silently offset.
+   */
+  async recordedDaysIn(
+    cellIds: readonly string[],
+    reportingMonth: string,
+  ): Promise<Map<string, Set<string>>> {
+    if (cellIds.length === 0) {
+      return new Map();
+    }
+
+    const rows = await this.db
+      .selectFrom('cell_meetings')
+      .select(['cell_id', sql<string>`to_char(scheduled_date, 'YYYY-MM-DD')`.as('day')])
+      .where('cell_id', 'in', [...cellIds])
+      .where('reporting_month', '=', reportingMonth)
+      .execute();
+
+    const dates = new Map<string, Set<string>>();
+    for (const row of rows) {
+      dates.set(row.cell_id, (dates.get(row.cell_id) ?? new Set<string>()).add(row.day));
+    }
+    return dates;
+  }
+
+  /**
    * The meetings actually recorded for this Cell in a month, by scheduled date.
    *
    * Keyed on `scheduled_date` because that is the meeting's identity (section 13):

@@ -200,9 +200,36 @@ test.describe('the coverage tables', () => {
     await expect(rows).toHaveCount(1);
     await expect(rows.first()).toHaveText('CELL-000011');
 
-    // No count of the Cells behind, in any phrasing: that figure is one section 20 does
-    // not define.
-    await expect(table.getByText(/behind/)).toHaveCount(0);
+    // The count of Cells behind is over every page and by decision 0267's predicate — two
+    // of the eleven have a meeting that came with no record — and it is in words beside
+    // its complement, never a share.
+    await expect(table.getByText('2 behind · 9 not behind')).toBeVisible();
+  });
+
+  test('the behind filter keeps the Cells a meeting that came is missing from, in their order', async ({
+    page,
+  }) => {
+    // Decision 0267: behind is meetings due so far minus meetings recorded. The filter was
+    // built and removed on 2026-09-20 because it compared with the whole month's schedule,
+    // which counts meetings that have not happened (decision 0239).
+    await page.clock.setFixedTime(NOW);
+    await mockSignedIn(page);
+    await mockCellsAtScale(page);
+    await mockCellReport(page);
+    await page.goto('/reports/cells');
+
+    const table = page.getByRole('region', { name: 'Coverage by Cell' });
+    await table.getByRole('button', { name: 'Show only Cells behind' }).click();
+
+    const rows = table.getByRole('link', { name: /^CELL-/ }).filter({ visible: true });
+    await expect(rows).toHaveText(['CELL-000010', 'CELL-000011']);
+    await expect(table.getByRole('button', { name: 'Show only Cells behind' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    const grid = table.getByRole('table', { name: 'Recording coverage for each Cell' });
+    await expect(grid.getByRole('row', { name: /CELL-000010/ })).toContainText('3 behind');
+    await expect(grid.getByRole('row', { name: /CELL-000011/ })).toContainText('4 behind');
   });
 
   test('Coverage by Sunday keeps a removed Sunday in its place, and leaves for a Network', async ({

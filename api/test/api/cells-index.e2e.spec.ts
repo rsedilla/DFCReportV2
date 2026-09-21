@@ -369,7 +369,9 @@ describe('the Cells index (sections 10, 12 and 22)', () => {
     if (stillToCome > 0) {
       expect(coverage.scheduled).toBeGreaterThan(saturdaysUpTo(await today()));
     }
-    expect(Object.keys(coverage).sort()).toEqual(['recorded', 'scheduled']);
+    // Three counts and no ratio: `behind` is how many meetings that have come have no
+    // record (decision 0267), a count beside the two and never a division of them.
+    expect(Object.keys(coverage).sort()).toEqual(['behind', 'recorded', 'scheduled']);
     expect(response.body.reporting_month).toBe(month);
   });
 
@@ -403,6 +405,8 @@ describe('the Cells index (sections 10, 12 and 22)', () => {
     expect(response.body.data[0].coverage).toEqual({
       recorded: 1,
       scheduled: saturdaysIn(month),
+      // Before the first Saturday the recorded meeting is not yet due, so nothing is behind.
+      behind: Math.max(0, saturdaysUpTo(await today()) - 1),
     });
   });
 
@@ -424,7 +428,7 @@ describe('the Cells index (sections 10, 12 and 22)', () => {
     );
 
     expect(row).toBeDefined();
-    expect(row?.coverage).toEqual({ recorded: 0, scheduled: 0 });
+    expect(row?.coverage).toEqual({ recorded: 0, scheduled: 0, behind: 0 });
   });
 
   /**
@@ -691,6 +695,83 @@ describe('the Cells index (sections 10, 12 and 22)', () => {
 
     expect(response.status).toBe(422);
     expect(response.body.error.code).toBe('VALIDATION_FAILED');
+  });
+
+  describe('which meetings are behind (decision 0267)', () => {
+    type Coverage = { recorded: number; scheduled: number; behind: number };
+    const coverageOf = (response: request.Response, cellId: string): Coverage =>
+      (response.body.data as { id: string; coverage: Coverage }[]).find((row) => row.id === cellId)!
+        .coverage;
+
+    const previousMonth = async (): Promise<string> => {
+      const [year, month] = (await thisMonth()).split('-').map(Number);
+      return month === 1 ? `${year - 1}-12-01` : `${year}-${String(month - 1).padStart(2, '0')}-01`;
+    };
+
+    const record = async (cellId: string, leaderId: string, accountId: string, day: string) =>
+      db
+        .insertInto('cell_meetings')
+        .values({
+          cell_id: cellId,
+          scheduled_date: day,
+          scheduled_time: '19:00',
+          week_starting: mondayOf(day),
+          reporting_month: `${day.slice(0, 7)}-01`,
+          status: 'HELD',
+          responsible_leader_id: leaderId,
+          submitted_by: accountId,
+          submitted_at: new Date(),
+        })
+        .execute();
+
+    it('counts only the meetings whose day has begun, never the rest of the month', async () => {
+      // Every fixture Cell meets on Saturdays. Nothing is recorded, so every Saturday that
+      // has come is behind and every one still to come is not (section 17).
+      const coverage = coverageOf(await list(manuelAccount), markCell.id);
+
+      expect(coverage.behind).toBe(saturdaysUpTo(await today()));
+      expect(coverage.behind).toBeLessThanOrEqual(coverage.scheduled);
+    });
+
+    it('is every unrecorded meeting of a month that is over', async () => {
+      const previous = await previousMonth();
+      await record(markCell.id, mark.id, markAccount.id, firstSaturdayOf(previous));
+
+      const coverage = coverageOf(await list(manuelAccount, { month: previous }), markCell.id);
+
+      expect(coverage.recorded).toBe(1);
+      expect(coverage.behind).toBe(coverage.scheduled - 1);
+    });
+
+    it('is not offset by a record a backdated closure left outside the schedule', async () => {
+      // A meeting on the third Saturday is recorded, then the Cell is closed effective the
+      // day after the second, and the first two were never recorded. Subtracting counts
+      // would read the record against a meeting it is not, and call the Cell one less
+      // behind than it is; matched date by date, both earlier Saturdays stay behind.
+      const previous = await previousMonth();
+      const first = firstSaturdayOf(previous);
+      const plusDays = (day: string, n: number): string => {
+        const [y, m, d] = day.split('-').map(Number);
+        return new Date(Date.UTC(y, m - 1, d + n)).toISOString().slice(0, 10);
+      };
+      const second = plusDays(first, 7);
+      const third = plusDays(first, 14);
+
+      await record(markCell.id, mark.id, markAccount.id, third);
+      await closeCellDirectly(db, markCell.id, {
+        reason: 'MEMBERS_DISPERSED',
+        at: new Date(`${plusDays(second, 1)}T10:00:00+08:00`),
+      });
+
+      const coverage = coverageOf(
+        await list(manuelAccount, { month: previous, state: 'CLOSED' }),
+        markCell.id,
+      );
+
+      expect(coverage.recorded).toBe(1);
+      expect(coverage.scheduled).toBe(2);
+      expect(coverage.behind).toBe(2);
+    });
   });
 
   it('refuses a led_by it does not offer', async () => {

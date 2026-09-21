@@ -13,6 +13,7 @@ import {
   mockCellMeetings,
   mockCellReport,
   mockCells,
+  mockCellsAtScale,
   mockClosedDccRoster,
   mockDccEvents,
   mockDccReport,
@@ -497,6 +498,24 @@ test.describe('the Record queue', () => {
 
     await expect(page.locator('main').getByRole('alert').first()).not.toBeEmpty();
     await expect(page.getByText('is missing a record for this month')).toHaveCount(0);
+  });
+
+  // Decision 0267: the attention list names a Cell a meeting that came is missing from,
+  // by the server's `behind`. CELL-000001 has recorded two of the month's four and is not
+  // behind — its other two have not come — so a list keyed on the whole month would name it.
+  test('lists the Cells behind, and not a Cell whose unrecorded meetings have not come', async ({
+    page,
+  }) => {
+    await mockRecordScreen(page, {});
+    await mockCellsAtScale(page);
+
+    await page.goto('/dashboard');
+
+    const attention = page.getByRole('region', { name: 'Cells with meetings still to record' });
+    await expect(attention.getByRole('link', { name: /^CELL-/ })).toHaveText([
+      'CELL-000010',
+      'CELL-000011',
+    ]);
   });
 });
 

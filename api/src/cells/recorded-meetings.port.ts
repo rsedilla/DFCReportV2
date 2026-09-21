@@ -69,4 +69,13 @@ export interface RecordedMeetingsPort {
     cellIds: readonly string[],
     reportingMonth: string,
   ): Promise<Map<string, number>>;
+
+  /**
+   * The same records, by scheduled date (`YYYY-MM-DD`), for matching each due meeting to a
+   * record (decision 0267). A Cell that recorded nothing is absent.
+   */
+  recordedDaysIn(
+    cellIds: readonly string[],
+    reportingMonth: string,
+  ): Promise<Map<string, Set<string>>>;
 }

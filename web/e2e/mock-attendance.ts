@@ -36,7 +36,7 @@ export const CELL_WITH_MEETINGS = {
   member_count: 6,
   schedule: { day_of_week: 6, time_of_day: '19:00' },
   leader: { person_id: LEADER_ID, member_id: 'M-000412', full_name: 'Teofilo Ramos' },
-  coverage: { recorded: 3, scheduled: 4 },
+  coverage: { recorded: 3, scheduled: 4, behind: 1 },
 };
 
 /** Decision 0225: it reads `0 of 0`, it is shown, and it is not dropped. */
@@ -47,7 +47,7 @@ export const CELL_WITH_NO_SCHEDULE = {
   member_count: 4,
   schedule: { day_of_week: 3, time_of_day: '20:00' },
   leader: { person_id: '3f1b7c6e-0000-4000-8000-000000000202', member_id: 'M-000518', full_name: 'Herminia Lazaro' },
-  coverage: { recorded: 0, scheduled: 0 },
+  coverage: { recorded: 0, scheduled: 0, behind: 0 },
 };
 
 /**
@@ -63,9 +63,16 @@ export async function mockCellsAtScale(page: Page): Promise<void> {
     ...CELL_WITH_MEETINGS,
     id: `3f1b7c6e-0000-4000-8000-0000000001${String(index + 10).padStart(2, '0')}`,
     cell_id: `CELL-${String(index + 1).padStart(6, '0')}`,
-    // Complete but for the last two, which are the rows a ranked table would lift to
-    // the top and this one leaves where the index put them.
-    coverage: { recorded: index < 9 ? 4 : 10 - index, scheduled: 4 },
+    // Behind only in the last two, which are the rows a ranked table would lift to the
+    // top and this one leaves where the index put them. The first has recorded two of the
+    // month's four and **is not behind** — its other two have not come — so a screen that
+    // keyed on the whole month instead of the server's `behind` would count it (decision
+    // 0267, and the reason the filter was removed on 2026-09-20).
+    coverage: {
+      recorded: index === 0 ? 2 : index < 9 ? 4 : 10 - index,
+      scheduled: 4,
+      behind: index < 9 ? 0 : index - 6,
+    },
   }));
 
   await page.route('**/api/v1/cells?*', (route) =>
@@ -964,7 +971,7 @@ export const CLOSED_CELL = {
     member_id: 'M-000418',
     full_name: 'Paolo Reyes',
   },
-  coverage: { recorded: 1, scheduled: 2 },
+  coverage: { recorded: 1, scheduled: 2, behind: 1 },
   closed_on: '2026-06-12',
   closure_reason: 'MEMBERS_DISPERSED',
   restarted_as: null,

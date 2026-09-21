@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import { dccEventNote } from '@/components/dcc-event-note';
 import { FailureNotice } from '@/components/ui/failure-notice';
 import { HeaderCell, Table, rowClasses } from '@/components/ui/table';
-import { dayOfWeekLabel, listAllCells, type CellSummary } from '@/lib/cells';
+import { behindOf, dayOfWeekLabel, listAllCells, type CellSummary } from '@/lib/cells';
 import { listDccEvents, type DccEvent } from '@/lib/dcc';
 import { describeFailure } from '@/lib/messages';
 import { dayLabel } from '@/lib/reporting-month';
@@ -33,7 +33,8 @@ const PAGE_SIZE = 10;
  *
  * **Nothing is ranked or colour-graded** (sections 13, 17 and 19). The Cells come in the
  * order the index returns, which ranks nobody (decision 0226), and the Sundays in date
- * order. Every figure is two figures.
+ * order. Every coverage line is two figures; the Behind column beside it is a count of
+ * meetings, never a division of them (decision 0267).
  *
  * **A table from `lg`, and cards below it**, the same rows in the same order, as on the
  * Cells and DCC screens.
@@ -50,8 +51,14 @@ export function CoverageByCell({ month }: { month: string }) {
   });
 
   const [page, setPage] = useState(0);
+  const [behindOnly, setBehindOnly] = useState(false);
 
-  const rows = cells.data ?? [];
+  // **Behind is the meetings that have come and have no record** (decision 0267) — never
+  // the whole month's schedule, which counts meetings that have not happened (decision
+  // 0239) and is why a filter keyed on it was built and removed on 2026-09-20.
+  const all = cells.data ?? [];
+  const behindCount = all.filter((cell) => behindOf(cell.coverage) > 0).length;
+  const rows = behindOnly ? all.filter((cell) => behindOf(cell.coverage) > 0) : all;
   // A page that no longer exists is the first one: the month changes the set underneath it.
   const start = Math.min(page, Math.max(0, Math.ceil(rows.length / PAGE_SIZE) - 1)) * PAGE_SIZE;
   const shown = rows.slice(start, start + PAGE_SIZE);
@@ -63,8 +70,25 @@ export function CoverageByCell({ month }: { month: string }) {
       </h2>
       <p className="text-muted mt-2 max-w-2xl text-sm leading-relaxed">
         Each Cell in your scope, ten at a time, in the order the Cells list gives them. The
-        rows are not added up here: the line at the top is the report&rsquo;s own figure.
+        rows are not added up here: the line at the top is the report&rsquo;s own figure. A
+        Cell is behind when a meeting whose day has come has no record.
       </p>
+
+      {cells.data && cells.data.length > 0 ? (
+        <Button
+          type="button"
+          variant="secondary"
+          className="mt-4"
+          aria-pressed={behindOnly}
+          onClick={() => {
+            setBehindOnly((on) => !on);
+            setPage(0);
+          }}
+        >
+          {/* A fixed label with `aria-pressed`, so a screen reader hears one state, once. */}
+          Show only Cells behind
+        </Button>
+      ) : null}
 
       <div className="mt-4">
         <FailureNotice failure={cells.isError ? describeFailure(cells.error) : null} />
@@ -74,6 +98,10 @@ export function CoverageByCell({ month }: { month: string }) {
         <p className="text-muted mt-4 text-sm">Loading&hellip;</p>
       ) : cells.data && cells.data.length === 0 ? (
         <p className="text-muted mt-4 text-sm">There are no Cells in your scope this month.</p>
+      ) : cells.data && rows.length === 0 ? (
+        <p className="text-muted mt-4 text-sm">
+          No Cell in your scope is behind: every meeting that has come has a record.
+        </p>
       ) : cells.data ? (
         <>
           <Table caption="Recording coverage for each Cell" className="mt-4 hidden lg:block">
@@ -83,6 +111,7 @@ export function CoverageByCell({ month }: { month: string }) {
                 <HeaderCell>Leader</HeaderCell>
                 <HeaderCell>Meets</HeaderCell>
                 <HeaderCell>Recorded</HeaderCell>
+                <HeaderCell>Behind</HeaderCell>
               </tr>
             </thead>
             <tbody>
@@ -104,6 +133,7 @@ export function CoverageByCell({ month }: { month: string }) {
                       unit="meetings recorded"
                     />
                   </td>
+                  <td className="px-3 py-3">{behindLabel(cell)}</td>
                 </tr>
               ))}
             </tbody>
@@ -135,16 +165,24 @@ export function CoverageByCell({ month }: { month: string }) {
                       {dayOfWeekLabel(cell.schedule.day_of_week)}, {cell.schedule.time_of_day}
                     </dd>
                   </div>
+                  <div className="flex gap-2">
+                    <dt>Behind</dt>
+                    <dd className="text-ink">{behindLabel(cell)}</dd>
+                  </div>
                 </dl>
               </li>
             ))}
           </ul>
 
           {/*
-            Previous and Next, and no page number and no count: a count of the Cells
-            behind is a figure section 20 does not define, and the by-leader table says
-            the same of itself.
+            **How many Cells of this list are behind, not a figure of the report.** It counts
+            rows of the Cells list in scope, every page of it, by decision 0267's predicate,
+            and it is in words beside its complement rather than as a share of anything.
           */}
+          <p className="text-muted mt-4 text-sm">
+            {behindCount} behind · {all.length - behindCount} not behind
+          </p>
+
           <div className="mt-6 flex gap-3">
             {start > 0 ? (
               <Button type="button" variant="secondary" onClick={() => setPage((p) => p - 1)}>
@@ -161,6 +199,12 @@ export function CoverageByCell({ month }: { month: string }) {
       ) : null}
     </section>
   );
+}
+
+/** In words, and only where it is above zero (sections 13 and 23: never colour alone). */
+function behindLabel(cell: CellSummary): string {
+  const behind = behindOf(cell.coverage);
+  return behind === 0 ? 'None' : `${behind} behind`;
 }
 
 function meetingsHref(cell: CellSummary, month: string): string {

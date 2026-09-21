@@ -1693,19 +1693,76 @@ export class CellsReadService implements CellScopePort, CellRelationshipsPort {
 
     const result = await sql<{ cell_id: string; scheduled: string }>`
       SELECT asked.cell_id AS cell_id, count(*) AS scheduled
+        ${scheduledDays(cellIds, reportingMonth, null)}
+       GROUP BY asked.cell_id
+    `.execute(executor);
+
+    return new Map(result.rows.map((row) => [row.cell_id, Number(row.scheduled)]));
+  }
+
+  /**
+   * The scheduled meetings of each Cell whose Manila day has begun, by date — the meetings
+   * **due** so far (decision 0267).
+   *
+   * **The same derivation as {@link scheduledCountsIn}, through one fragment**, bounded at
+   * `throughDay` rather than at the month's end. Listed rather than counted because the
+   * caller matches each due date to a record, which is what Section 17's "behind" asks
+   * and what `BranchFiguresService` already does: a record whose date is no longer among
+   * the due ones — a meeting recorded before a closure backdated past it — must not
+   * offset a due meeting that has none.
+   */
+  async dueDaysIn(
+    executor: Db | Transaction<Database>,
+    cellIds: readonly string[],
+    reportingMonth: string,
+    throughDay: string,
+  ): Promise<Map<string, string[]>> {
+    if (cellIds.length === 0) {
+      return new Map();
+    }
+
+    const result = await sql<{ cell_id: string; day: string }>`
+      SELECT asked.cell_id AS cell_id, to_char(day, 'YYYY-MM-DD') AS day
+        ${scheduledDays(cellIds, reportingMonth, throughDay)}
+    `.execute(executor);
+
+    const days = new Map<string, string[]>();
+    for (const row of result.rows) {
+      days.set(row.cell_id, [...(days.get(row.cell_id) ?? []), row.day]);
+    }
+    return days;
+  }
+}
+
+/**
+ * The one derivation of a Cell's scheduled days in a month (Section 12): a day-by-day
+ * series against the schedule rows in force, one governing row per day, inert rows
+ * excluded, the weekday tested against the governing row alone. {@link
+ * CellsReadService.scheduledCountsIn} counts it and {@link CellsReadService.dueDaysIn}
+ * lists it bounded at a day, so the denominator and the due count cannot drift apart.
+ * `scheduledMeetingsIn` performs the identical derivation for one Cell; a change here is a
+ * change there.
+ */
+function scheduledDays(
+  cellIds: readonly string[],
+  reportingMonth: string,
+  throughDay: string | null,
+) {
+  return sql`
         -- DISTINCT on the input, because unnest multiplies where = ANY(...) did not: a
-        -- repeated identifier doubled that Cell's denominator. The caller passes a page's
-        -- ids, which are unique while the listing cannot duplicate a Cell, and this does
-        -- not depend on that holding.
+        -- repeated identifier doubled that Cell's denominator.
         FROM (SELECT DISTINCT unnest(${sql.val(cellIds)}::uuid[]) AS cell_id) AS asked
         CROSS JOIN generate_series(
                ${reportingMonth}::date,
-               (${reportingMonth}::date + interval '1 month' - interval '1 day')::date,
+               LEAST(
+                 (${reportingMonth}::date + interval '1 month' - interval '1 day')::date,
+                 COALESCE(
+                   ${throughDay}::date,
+                   (${reportingMonth}::date + interval '1 month' - interval '1 day')::date
+                 )
+               ),
                interval '1 day'
              ) AS day
-        -- The identical derivation scheduledMeetingsIn performs, counted rather than
-        -- listed: one governing schedule per day, inert rows excluded, the weekday
-        -- tested against the governing row alone. A change to one is a change to both.
         CROSS JOIN LATERAL (
           SELECT schedule.day_of_week
             FROM cell_schedules AS schedule
@@ -1720,9 +1777,5 @@ export class CellsReadService implements CellScopePort, CellRelationshipsPort {
            LIMIT 1
         ) AS governing
        WHERE EXTRACT(ISODOW FROM day) = governing.day_of_week
-       GROUP BY asked.cell_id
-    `.execute(executor);
-
-    return new Map(result.rows.map((row) => [row.cell_id, Number(row.scheduled)]));
-  }
+  `;
 }

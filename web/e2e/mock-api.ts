@@ -213,7 +213,7 @@ export const CELL_CHOICES = [
 ].map((cell) => ({
   ...cell,
   schedule: { day_of_week: 6, time_of_day: '19:00' },
-  coverage: { recorded: 3, scheduled: 4 },
+  coverage: { recorded: 3, scheduled: 4, behind: 1 },
 }));
 
 /**

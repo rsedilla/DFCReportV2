@@ -164,9 +164,11 @@ export class CellsIndexService {
     // from rows a leader wrote. That difference is the property section 13 depends on —
     // recording less makes coverage worse and never better — and it is why they are two
     // reads rather than one join.
-    const [scheduled, recorded, leaders] = await Promise.all([
+    const [scheduled, dueDays, recorded, recordedDates, leaders] = await Promise.all([
       this.cells.scheduledCountsIn(this.db, cellIds, reportingMonth),
+      this.cells.dueDaysIn(this.db, cellIds, reportingMonth, manilaDayOf(now)),
       this.recordedCounts(cellIds, reportingMonth),
+      this.recordedDates(cellIds, reportingMonth),
       this.people.namesOf(visible.map((row) => row.leaderId)),
     ]);
 
@@ -195,10 +197,13 @@ export class CellsIndexService {
             full_name: leader?.fullName ?? '',
           },
           // Two figures, never divided (section 12, section 13). A Cell that scheduled
-          // nothing reads `0 of 0`, is shown, and is not dropped (decision 0225).
+          // nothing reads `0 of 0`, is shown, and is not dropped (decision 0225). `behind`
+          // is the meetings whose day has begun that have no record (decision 0267); nothing
+          // keys on `scheduled`, which is the whole month (decision 0239).
           coverage: {
             recorded: recorded.get(row.id) ?? 0,
             scheduled: scheduled.get(row.id) ?? 0,
+            behind: behindIn(dueDays, recordedDates, row.id),
           },
         };
       }),
@@ -243,13 +248,16 @@ export class CellsIndexService {
     const visible = rows.slice(0, limit);
     const cellIds = visible.map((row) => row.id);
 
-    const [scheduled, recorded, leaders, mayRequest, mayManage] = await Promise.all([
-      this.cells.scheduledCountsIn(this.db, cellIds, reportingMonth),
-      this.recordedCounts(cellIds, reportingMonth),
-      this.people.namesOf(visible.map((row) => row.leaderId)),
-      this.authorization.scopeMembership(actor, Capability.CellRequestLeadership),
-      this.authorization.scopeMembership(actor, Capability.CellManageLifecycle),
-    ]);
+    const [scheduled, dueDays, recorded, recordedDates, leaders, mayRequest, mayManage] =
+      await Promise.all([
+        this.cells.scheduledCountsIn(this.db, cellIds, reportingMonth),
+        this.cells.dueDaysIn(this.db, cellIds, reportingMonth, manilaDayOf(now)),
+        this.recordedCounts(cellIds, reportingMonth),
+        this.recordedDates(cellIds, reportingMonth),
+        this.people.namesOf(visible.map((row) => row.leaderId)),
+        this.authorization.scopeMembership(actor, Capability.CellRequestLeadership),
+        this.authorization.scopeMembership(actor, Capability.CellManageLifecycle),
+      ]);
 
     const last = visible.at(-1);
 
@@ -274,6 +282,7 @@ export class CellsIndexService {
           coverage: {
             recorded: recorded.get(row.id) ?? 0,
             scheduled: scheduled.get(row.id) ?? 0,
+            behind: behindIn(dueDays, recordedDates, row.id),
           },
           closed_on: manilaDayOf(row.closedAt),
           closure_reason: row.closureReason,
@@ -323,6 +332,21 @@ export class CellsIndexService {
    * application, and without it the application cannot be built at all — which the
    * `null`-only suite stayed green through.*
    */
+  /** The records by date, or a refusal where the port is unbound (as {@link recordedCounts}). */
+  private async recordedDates(
+    cellIds: readonly string[],
+    reportingMonth: string,
+  ): Promise<Map<string, Set<string>>> {
+    if (!this.recorded) {
+      throw new Error(
+        'Cannot list Cells: RECORDED_MEETINGS_PORT is not bound, so which meetings are ' +
+          'behind cannot be known. This is a deployment fault.',
+      );
+    }
+
+    return this.recorded.recordedDaysIn(cellIds, reportingMonth);
+  }
+
   private async recordedCounts(
     cellIds: readonly string[],
     reportingMonth: string,
@@ -386,4 +410,19 @@ function leadersToList(
 
 function reaches(membership: ScopeMembership, personId: string): boolean {
   return membership.kind === 'WHOLE_CHURCH' || membership.personIds.has(canonicalId(personId));
+}
+
+/**
+ * The due meetings of one Cell that have no record (decision 0267): matched date by date,
+ * as `BranchFiguresService` matches, rather than one count subtracted from another. A
+ * record whose date is no longer due — a meeting recorded before a closure was backdated
+ * past it — offsets nothing.
+ */
+function behindIn(
+  dueDays: Map<string, string[]>,
+  recordedDates: Map<string, Set<string>>,
+  cellId: string,
+): number {
+  const recorded = recordedDates.get(cellId);
+  return (dueDays.get(cellId) ?? []).filter((day) => !recorded?.has(day)).length;
 }

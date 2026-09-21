@@ -26,6 +26,17 @@ export type CellMeetingStatus = 'HELD' | 'NOT_HELD' | 'RESCHEDULED';
 export interface CellCoverage {
   recorded: number;
   scheduled: number;
+  /**
+   * How many meetings whose day has begun have no record (decision 0267), counted by the
+   * server date by date. Nothing keys on `scheduled`, which is the whole month (decision
+   * 0239), and nothing here recomputes this from the other two.
+   */
+  behind: number;
+}
+
+/** How many meetings that have come still have no record (decision 0267). */
+export function behindOf(coverage: CellCoverage): number {
+  return coverage.behind;
 }
 
 export interface CellSchedule {
