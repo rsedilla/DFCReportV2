@@ -1,5 +1,8 @@
 import { Inject, Injectable } from '@nestjs/common';
 
+import { AuthorizationService, type Actor } from '../auth/authorization/authorization.service';
+import { Capability } from '../auth/authorization/capabilities';
+import { CapabilityDeniedError, ScopeDeniedError } from '../common/errors/api-error';
 import { decodeRosterCursor, encodeRosterCursor, type RosterCursor } from '../common/roster-cursor';
 import { DATABASE, type Db } from '../database/database.module';
 import { HierarchyService } from '../hierarchy/hierarchy.service';
@@ -43,7 +46,47 @@ export class NetworkTreeService {
     @Inject(DATABASE) private readonly db: Db,
     private readonly hierarchy: HierarchyService,
     private readonly read: PeopleReadService,
+    private readonly authorization: AuthorizationService,
   ) {}
+
+  /**
+   * Where the screen starts for a reader outside the pastoral tree (decision 0268): the
+   * Network roots their `people.view_subtree` reaches, by name. Empty for anybody holding
+   * an assignment, a root included, who starts on their own branch as before.
+   *
+   * **Each root is asked of the same guard `GET /leaders/{id}/children` declares**, so the
+   * list offers no root whose branch the reader would then be refused.
+   */
+  async rootsReachedBy(actor: Actor): Promise<BranchNode[]> {
+    if ((await this.hierarchy.openAssignmentOf(this.db, actor.personId)) !== null) {
+      return [];
+    }
+
+    const nodes: BranchNode[] = [];
+
+    for (const rootId of await this.hierarchy.rootsAsOf(this.db, new Date())) {
+      try {
+        await this.authorization.authorize(actor, Capability.PeopleViewSubtree, {
+          kind: 'person',
+          personId: rootId,
+        });
+      } catch (error) {
+        if (error instanceof ScopeDeniedError || error instanceof CapabilityDeniedError) {
+          continue;
+        }
+
+        throw error;
+      }
+
+      const { person } = await this.branchOf(rootId, { limit: 1 });
+
+      if (person !== null) {
+        nodes.push(person);
+      }
+    }
+
+    return nodes.sort((left, right) => left.full_name.localeCompare(right.full_name));
+  }
 
   /** The focus person and one page of their direct disciples, by name. */
   async branchOf(
