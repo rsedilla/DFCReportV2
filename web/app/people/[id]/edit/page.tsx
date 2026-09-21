@@ -225,7 +225,7 @@ function Fields({ person, id }: { person: PersonFull; id: string }) {
                   ? 'Not available'
                   : leader
                     ? leader.full_name
-                    : noLeaderLabel(pathEntries)}
+                    : noLeaderLabel(pathEntries, path.data?.no_leader_reason ?? null)}
             </p>
             <p className="text-muted text-sm leading-relaxed">
               Changing it is a move, not an edit. Use Move to another leader on the profile.

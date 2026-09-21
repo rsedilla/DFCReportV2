@@ -19,6 +19,8 @@ export interface PathEntry {
 export interface PastoralPath {
   data: PathEntry[];
   next_cursor: string | null;
+  /** Why a person with no leader has none, where it is not "not yet" (decision 0270). */
+  no_leader_reason?: 'ARCHIVED' | 'OUTSIDE_TREE' | null;
 }
 
 /** The person's direct pastoral leader: the entry above them on the path, or null. */
@@ -30,10 +32,22 @@ export function directLeaderOf(path: readonly PathEntry[]): PathEntry | null {
  * What to say where nobody is above the person on the path.
  *
  * A Network root and a Person with no assignment both produce a one-entry path, and only
- * `network_root` tells them apart (decision 0131), so the words follow the flag.
+ * `network_root` tells them apart (decision 0131). Of the rest, the server says which of
+ * section 5's situations a person is in (decision 0270); the words follow what it says.
  */
-export function noLeaderLabel(path: readonly PathEntry[]): string {
-  return path[0]?.network_root ? 'Network root' : 'No pastoral leader yet';
+export function noLeaderLabel(
+  path: readonly PathEntry[],
+  reason: PastoralPath['no_leader_reason'] = null,
+): string {
+  if (path[0]?.network_root) {
+    return 'Network root';
+  }
+
+  return reason === 'ARCHIVED'
+    ? 'Archived'
+    : reason === 'OUTSIDE_TREE'
+      ? 'Outside the pastoral tree'
+      : 'No pastoral leader yet';
 }
 
 export async function getPastoralPath(

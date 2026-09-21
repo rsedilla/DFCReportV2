@@ -297,9 +297,11 @@ export class PeopleController {
    */
   @Get(':id/pastoral-path')
   @RequiresCapability(Capability.PeopleViewSubtree, { kind: 'person', from: 'params.id' })
-  async pastoralPath(
-    @Param('id') id: string,
-  ): Promise<{ data: Record<string, unknown>[]; next_cursor: string | null }> {
+  async pastoralPath(@Param('id') id: string): Promise<{
+    data: Record<string, unknown>[];
+    next_cursor: string | null;
+    no_leader_reason: 'ARCHIVED' | 'OUTSIDE_TREE' | null;
+  }> {
     // Asked before the path, so an unknown identifier is a 404 rather than a
     // one-element path naming a person who does not exist. The guard resolved
     // scope against this id and does not establish that the row is there.
@@ -342,6 +344,9 @@ export class PeopleController {
         };
       }),
       next_cursor: null,
+      // Which of section 5's situations a person with no leader is in (decision 0270).
+      // Null wherever the path has a leader or the person is a root.
+      no_leader_reason: ids.length === 1 && !topIsRoot ? await this.read.noLeaderReason(id) : null,
     };
   }
 

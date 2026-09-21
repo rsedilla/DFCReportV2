@@ -912,6 +912,22 @@ export class HierarchyService {
   }
 
   /**
+   * Whether the person has ever held a pastoral assignment, open or closed. Half of
+   * section 5's "outside the pastoral tree" (decision 0270): rows are never deleted,
+   * so a closed one still answers yes.
+   */
+  async hasEverHeldAssignment(executor: Db, personId: string): Promise<boolean> {
+    const row = await executor
+      .selectFrom('pastoral_assignments')
+      .select('id')
+      .where('person_id', '=', personId)
+      .limit(1)
+      .executeTakeFirst();
+
+    return row !== undefined;
+  }
+
+  /**
    * The name of the person's current direct leader, or null.
    *
    * Section 8 permits this church-wide, for a person outside the viewer's own

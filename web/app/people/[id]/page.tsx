@@ -14,7 +14,13 @@ import { FailureNotice } from '@/components/ui/failure-notice';
 import { TextLink } from '@/components/ui/text-link';
 import { ApiRequestError } from '@/lib/api-client';
 import { cellShortName, getPersonCells, type PersonCells as PersonCellsData } from '@/lib/cells';
-import { directLeaderOf, getPastoralPath, noLeaderLabel, type PathEntry } from '@/lib/hierarchy';
+import {
+  directLeaderOf,
+  getPastoralPath,
+  noLeaderLabel,
+  type PastoralPath,
+  type PathEntry,
+} from '@/lib/hierarchy';
 import { getMe } from '@/lib/me';
 import { describeFailure, type Failure } from '@/lib/messages';
 import { NEGATIVE_AGE, ageFrom, civilStatusLabel, getPerson, sexLabel } from '@/lib/people';
@@ -123,7 +129,11 @@ function PersonDetail() {
             <span className="font-mono">{person.data.member_id}</span>
             {cells.data ? ` · ${cellLine(cells.data)}` : null}
           </p>
-          <PastoredBy path={path.data?.data ?? null} own={own} />
+          <PastoredBy
+            path={path.data?.data ?? null}
+            reason={path.data?.no_leader_reason ?? null}
+            own={own}
+          />
 
           <div className="mt-6 flex flex-wrap gap-3">
             <Link href={`/people/${id}/edit`} className={cn(buttonClasses('secondary'))}>
@@ -198,7 +208,15 @@ const REFUSED: Failure = {
  * Nothing while the path loads or if it fails: the record above already carries this
  * screen's refusal, and a second notice about the same reader would say it twice.
  */
-function PastoredBy({ path, own }: { path: readonly PathEntry[] | null; own: boolean }) {
+function PastoredBy({
+  path,
+  reason,
+  own,
+}: {
+  path: readonly PathEntry[] | null;
+  reason: PastoralPath['no_leader_reason'];
+  own: boolean;
+}) {
   if (path === null || path.length === 0) {
     return null;
   }
@@ -217,7 +235,7 @@ function PastoredBy({ path, own }: { path: readonly PathEntry[] | null; own: boo
           )}
         </>
       ) : (
-        noLeaderLabel(path)
+        noLeaderLabel(path, reason)
       )}
     </p>
   );

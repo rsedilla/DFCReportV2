@@ -225,6 +225,42 @@ export class PeopleReadService {
     return this.forDecisionWithin(this.db, personId);
   }
 
+  /**
+   * Why a person holds no pastoral assignment, of section 5's three situations
+   * (decision 0270), or null where they hold one. Derived from what is stored:
+   * `ARCHIVED` from their lifecycle, `OUTSIDE_TREE` for an `ADMIN` account that has
+   * never held an assignment, otherwise null — no pastoral leader yet.
+   *
+   * **The port refuses when unbound**, as section 2 requires of an inversion port:
+   * answering without it would read an administrator as somebody waiting for a leader.
+   */
+  async noLeaderReason(personId: string): Promise<'ARCHIVED' | 'OUTSIDE_TREE' | null> {
+    const adminAccounts = this.adminAccounts;
+
+    if (!adminAccounts) {
+      throw new Error(
+        'Cannot say why a person has no pastoral leader: ADMIN_ACCOUNTS_PORT is not bound. ' +
+          'This is a deployment fault.',
+      );
+    }
+
+    if ((await this.hierarchy.openAssignmentOf(this.db, personId)) !== null) {
+      return null;
+    }
+
+    const person = await this.forDecisionWithin(this.db, personId);
+    if (person?.isArchived) {
+      return 'ARCHIVED';
+    }
+
+    const [admins, everAssigned] = await Promise.all([
+      adminAccounts.personsHoldingAdminWithin(this.db, [personId]),
+      this.hierarchy.hasEverHeldAssignment(this.db, personId),
+    ]);
+
+    return admins.has(personId) && !everAssigned ? 'OUTSIDE_TREE' : null;
+  }
+
   /** {@link forDecisionsWithin} on the pooled connection, for a caller holding no transaction. */
   async forDecisions(personIds: readonly string[]): Promise<Map<string, PersonForDecision>> {
     return this.forDecisionsWithin(this.db, personIds);
