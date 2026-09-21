@@ -490,15 +490,20 @@ function CellCard({ cell, month }: { cell: CellSummary; month: string }) {
           <dt>Leader</dt>
           <dd className="text-ink">{cell.leader.full_name}</dd>
         </div>
+        {/* The table's Members column, which the cards had left out (decision 0261). */}
         <div className="flex gap-2">
-          <dt>Category</dt>
-          <dd className="text-ink">{categoryLabel(cell.category)}</dd>
+          <dt>Members</dt>
+          <dd className="text-ink tabular-nums">{cell.member_count}</dd>
         </div>
         <div className="flex gap-2">
           <dt>Meets</dt>
           <dd className="text-ink">
             {dayOfWeekLabel(cell.schedule.day_of_week)}, {cell.schedule.time_of_day}
           </dd>
+        </div>
+        <div className="flex gap-2">
+          <dt>Category</dt>
+          <dd className="text-ink">{categoryLabel(cell.category)}</dd>
         </div>
       </dl>
     </li>

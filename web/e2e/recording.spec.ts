@@ -8,6 +8,7 @@ import {
   mockSignedIn,
 } from './mock-api';
 import {
+  CELL_WITH_MEETINGS,
   awaitingClosedRow,
   awaitingRow,
   mockCellMeetings,
@@ -161,6 +162,14 @@ test.describe('a Sunday with a mark already recorded', () => {
     await expect(
       page.getByRole('group', { name: UNRECORDED.name }).getByRole('radio', { name: 'Present' }),
     ).toBeEnabled();
+
+    // Save is offered only once something differs from what is stored.
+    await expect(page.getByRole('button', { name: 'Save', exact: true })).toHaveCount(0);
+    await page
+      .getByRole('group', { name: UNRECORDED.name })
+      .getByRole('radio', { name: 'Present' })
+      .check();
+    await expect(page.getByRole('button', { name: 'Save', exact: true })).toBeVisible();
   });
 
   test('unlocks it for an account that may correct, sending the reason only with the changed mark', async ({
@@ -465,11 +474,17 @@ test.describe('the Record queue', () => {
 
     for (const member of ['Rosalinda Ocampo', 'Bienvenido Trinidad']) {
       await page.getByRole('group', { name: member }).getByRole('radio', { name: 'Present' }).check();
+      // Kept until Save, so a tap never moves the rows beneath it (walkthrough, 2026-09-21).
+      await expect(page.getByText('Not recorded yet')).toHaveCount(2);
     }
     await page.getByRole('button', { name: /^Save/ }).click();
     // The roster mock answers `meeting: null` on every read, so a saved meeting does
     // not read back as recorded; the submission having been made is what to wait for.
     await expect.poll(() => submitted).toBe(1);
+    await expect(page.getByRole('link', { name: 'Back to what’s awaiting a record' })).toHaveAttribute(
+      'href',
+      '/dashboard',
+    );
 
     await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Record' }).click();
 
@@ -497,7 +512,7 @@ test.describe('the Record queue', () => {
     await page.goto('/dashboard');
 
     await expect(page.locator('main').getByRole('alert').first()).not.toBeEmpty();
-    await expect(page.getByText('is missing a record for this month')).toHaveCount(0);
+    await expect(page.getByText('is behind this month')).toHaveCount(0);
   });
 
   // Decision 0267: the attention list names a Cell a meeting that came is missing from,
@@ -516,6 +531,41 @@ test.describe('the Record queue', () => {
       'CELL-000010',
       'CELL-000011',
     ]);
+  });
+
+  // The walkthrough of 2026-09-21: "this page of your scope" was our word. The sentence
+  // claims the whole scope only when every Cell was read, and names the limit otherwise.
+  test('says no Cell is behind in plain words, and names the limit when there is more', async ({
+    page,
+  }) => {
+    await mockRecordScreen(page, {});
+    const notBehind = (url: string, nextCursor: string | null) =>
+      JSON.stringify({
+        reporting_month: '2026-06-01',
+        open: true,
+        data: new URL(url).searchParams.get('state') === 'CLOSED' ? [] : [
+          { ...CELL_WITH_MEETINGS, coverage: { recorded: 4, scheduled: 4, behind: 0 } },
+        ],
+        next_cursor: nextCursor,
+      });
+
+    await page.route('**/api/v1/cells?*', (route) =>
+      route.fulfill({ status: 200, contentType: 'application/json', body: notBehind(route.request().url(), null) }),
+    );
+    await page.goto('/dashboard');
+    const attention = page.getByRole('region', { name: 'Cells with meetings still to record' });
+    await expect(attention.getByText('No Cell in your scope is behind this month.', { exact: false })).toBeVisible();
+
+    await page.unroute('**/api/v1/cells?*');
+    await page.route('**/api/v1/cells?*', (route) =>
+      route.fulfill({ status: 200, contentType: 'application/json', body: notBehind(route.request().url(), 'more') }),
+    );
+    await page.reload();
+    await expect(attention.getByText('None of the first 50 Cells in your scope is behind this month.', { exact: false })).toBeVisible();
+    await expect(attention.getByRole('link', { name: 'See every Cell behind in Reports' })).toHaveAttribute(
+      'href',
+      /\/reports\/cells\?month=\d{4}-\d{2}-01&behind=1$/,
+    );
   });
 });
 

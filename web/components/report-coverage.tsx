@@ -43,7 +43,14 @@ const PAGE_SIZE = 10;
  * Cells, so a whole-church reader had every one of them in one table; a month holds four
  * or five Sundays whatever the scope, so that table is bounded by the calendar.
  */
-export function CoverageByCell({ month }: { month: string }) {
+export function CoverageByCell({
+  month,
+  behindOnlyAtFirst = false,
+}: {
+  month: string;
+  /** `?behind=1`: opened from the Record page, filtered to the Cells behind. */
+  behindOnlyAtFirst?: boolean;
+}) {
   // The same query as the report's Cell picker, so the two share one request.
   const cells = useQuery({
     queryKey: ['cells-all', month],
@@ -51,7 +58,7 @@ export function CoverageByCell({ month }: { month: string }) {
   });
 
   const [page, setPage] = useState(0);
-  const [behindOnly, setBehindOnly] = useState(false);
+  const [behindOnly, setBehindOnly] = useState(behindOnlyAtFirst);
 
   // **Behind is the meetings that have come and have no record** (decision 0267) — never
   // the whole month's schedule, which counts meetings that have not happened (decision

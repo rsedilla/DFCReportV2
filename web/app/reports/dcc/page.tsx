@@ -144,11 +144,9 @@ export function DccReport() {
             <option value="WOMENS">Women&rsquo;s Network</option>
           </select>
           <p className="text-muted mt-2 max-w-2xl text-sm leading-relaxed">
-            A Network counts the people who belong to it, not the people under its root (decision
-            0219). For the people who attended, the two Networks add up to the whole church wherever
-            everybody holds one Network — which section 20 states as a property of the data rather
-            than one the schema enforces. It claims nothing of the kind for the coverage figures
-            above, which count obligations rather than people.
+            A Network counts the people who belong to it. The people who attended in the two
+            Networks normally add up to the whole church. Recording coverage doesn&rsquo;t split
+            that way, because it counts records owed, not people.
           </p>
         </div>
       ) : null}

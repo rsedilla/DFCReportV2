@@ -259,7 +259,7 @@ export function CellReport() {
               onChange={setCoverageBy}
             />
             {cellId === '' && !leader && coverageBy === 'first' ? (
-              <CoverageByCell month={month} />
+              <CoverageByCell month={month} behindOnlyAtFirst={search.get('behind') === '1'} />
             ) : scope ? (
               <CoverageByLeader
                 key={`${month}-${JSON.stringify(scope)}`}

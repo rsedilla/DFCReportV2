@@ -1220,14 +1220,15 @@ const TARGET_SWEEP = [
     minimum: 15,
   },
   {
-    // Back link, two radios per person across two people, and Save. Six rather
-    // than the meeting screen's eight: a DCC event has no held-or-not question,
-    // because section 9 records a person's attendance and never the event's status.
+    // Back link and two radios per person across two people. No Save: it appears once
+    // a mark differs from what is stored, and nothing is marked here. Fewer than the
+    // meeting screen: a DCC event has no held-or-not question, because section 9
+    // records a person's attendance and never the event's status.
     name: 'dcc checklist',
     route: '/dcc/3f1b7c6e-0000-4000-8000-000000000501',
     settleRole: 'heading' as const,
     settle: 'Sunday 7 June',
-    minimum: 6,
+    minimum: 5,
   },
 ] as const;
 
