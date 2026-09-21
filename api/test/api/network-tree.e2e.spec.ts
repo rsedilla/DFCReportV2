@@ -238,6 +238,64 @@ describe('the pastoral tree routes (SKILL.md sections 5, 19 and 22)', () => {
     });
   });
 
+  describe('where a reader outside the tree starts (decision 0268)', () => {
+    let grace: TestPerson;
+
+    beforeEach(async () => {
+      grace = await createPerson(db, { firstName: 'Grace', network: 'WOMENS' });
+      await assignTo(db, grace.id, null);
+    });
+
+    it('answers a Whole Church reader outside the tree with both roots, by name', async () => {
+      const response = await myTree(adminAccount);
+
+      expect(response.status).toBe(200);
+      expect(namesOf(response.body.roots)).toEqual(['Grace Testfixture', 'Oriel Testfixture']);
+      const orielRoot = (response.body.roots as { id: string }[]).find(
+        (node) => node.id === oriel.id,
+      );
+      expect(orielRoot).toMatchObject({ direct_reports: 2, beneath: 7 });
+      for (const node of response.body.roots as object[]) {
+        expect(Object.keys(node).sort()).toEqual(BRANCH_NODE_KEYS);
+      }
+    });
+
+    it('answers anybody holding an assignment, a root included, with no roots', async () => {
+      const orielAccount = await createAccount(app, db, { person: oriel, roles: ['LEADER'] });
+
+      expect((await myTree(raymondAccount)).body.roots).toEqual([]);
+      expect((await myTree(orielAccount)).body.roots).toEqual([]);
+    });
+
+    it('offers a Network-scoped reader outside the tree only the root their grant reaches', async () => {
+      const observer = await createAccount(app, db, {
+        person: await createPerson(db, { firstName: 'Owen', network: 'MENS' }),
+        roles: [],
+      });
+
+      await db
+        .insertInto('capability_grants')
+        .values({
+          account_id: observer.id,
+          capability: 'people.view_subtree',
+          scope_type: 'NETWORK',
+          scope_network: 'MENS',
+          read_only: true,
+          reason: 'Invented for this case (CLAUDE.md, Secrets).',
+          granted_by: adminAccount.id,
+        })
+        .execute();
+
+      const response = await myTree(observer);
+
+      expect(response.status).toBe(200);
+      expect((response.body.roots as { id: string }[]).map((node) => node.id)).toEqual([oriel.id]);
+      // The branch it offers is one the reader may open.
+      expect((await children(observer, oriel.id)).status).toBe(200);
+      expect((await children(observer, grace.id)).status).toBe(403);
+    });
+  });
+
   describe('GET /api/v1/leaders/{id}/children (SKILL.md section 5, decision 0252)', () => {
     it('returns the focus person and their direct disciples, never a grandchild', async () => {
       const response = await children(adminAccount, raymond.id);

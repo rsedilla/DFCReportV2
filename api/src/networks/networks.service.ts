@@ -106,6 +106,35 @@ export class NetworksService {
   }
 
   /**
+   * `networkAsOf` for many people in one read, keyed by person. Someone with no Network
+   * at `at` is absent from the map. Same predicate and same total ordering, so the two
+   * agree person by person.
+   */
+  async networksOf(
+    executor: Db,
+    personIds: readonly string[],
+    at: Date,
+  ): Promise<Map<string, NetworkName>> {
+    if (personIds.length === 0) {
+      return new Map();
+    }
+
+    const rows = await executor
+      .selectFrom('network_assignments')
+      .distinctOn('person_id')
+      .select(['person_id', 'network'])
+      .where('person_id', 'in', [...personIds])
+      .where('started_at', '<=', at)
+      .where((eb) => eb.or([eb('ended_at', 'is', null), eb('ended_at', '>', at)]))
+      .orderBy('person_id')
+      .orderBy('started_at', 'desc')
+      .orderBy('id', 'desc')
+      .execute();
+
+    return new Map(rows.map((row) => [row.person_id, row.network]));
+  }
+
+  /**
    * Everyone in a Network at an instant — a Network-scoped report's population
    * (SKILL.md section 20, decision 0219).
    *

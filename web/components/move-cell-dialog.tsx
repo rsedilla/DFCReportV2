@@ -12,10 +12,14 @@ import {
   categoryLabel,
   listAllCells,
   membershipFailure,
+  pickerGroups,
+  type CellSummary,
   type PersonCells,
 } from '@/lib/cells';
+import { directLeaderOf, getPastoralPath } from '@/lib/hierarchy';
 import { idempotencyKeyFor } from '@/lib/idempotency';
 import { describeFailure } from '@/lib/messages';
+import { getPerson, networkLabel, networkOfSex } from '@/lib/people';
 import { reportingMonthOf } from '@/lib/reporting-month';
 
 /**
@@ -57,6 +61,26 @@ export function MoveCellDialog({
     enabled: open,
   });
 
+  // Whose Cell to lift to the top (owner's choice, 2026-09-21). Read under the key the
+  // Network screen uses. A path that cannot be read leaves the list as it was rather than
+  // failing the dialog: the grouping is a convenience, and choosing still works without it.
+  const path = useQuery({
+    queryKey: ['pastoral-path', personId],
+    queryFn: ({ signal }) => getPastoralPath(personId, signal),
+    enabled: open && personId !== '',
+  });
+  const leaderId = directLeaderOf(path.data?.data ?? [])?.id ?? null;
+
+  // Their Network, which follows their sex (section 4), narrows the list to the Cells section
+  // 10 lets them join. Unread, the list stays whole and the add route refuses as before.
+  const person = useQuery({
+    queryKey: ['person', personId],
+    queryFn: ({ signal }) => getPerson(personId, signal),
+    enabled: open && personId !== '',
+    retry: false,
+  });
+  const network = person.data ? networkOfSex(person.data.sex) : null;
+
   const move = useMutation({
     mutationFn: (cellId: string) =>
       addCellMember(cellId, personId, idempotencyKeyFor('add', cellId, personId)),
@@ -75,6 +99,8 @@ export function MoveCellDialog({
   }
 
   const choices = (cells.data ?? []).filter((cell) => cell.id !== current?.id);
+  const groups = pickerGroups(choices, leaderId, network);
+  const listed = groups.leaders.length + groups.others.length;
 
   return (
     <Dialog
@@ -103,13 +129,15 @@ export function MoveCellDialog({
           Nothing while closed: the list is only fetched once the dialog opens, and a
           closed dialog saying "Loading…" is a loading marker that never clears.
         */}
-        {!open ? null : cells.isPending ? (
+        {!open ? null : cells.isPending || person.isLoading ? (
           <p className="text-muted text-sm">Loading&hellip;</p>
         ) : cells.isError ? (
           <FailureNotice failure={describeFailure(cells.error)} />
-        ) : choices.length === 0 ? (
+        ) : listed === 0 ? (
           <p className="text-muted text-sm leading-relaxed">
-            There is no other Cell in your scope to choose.
+            {network === null
+              ? 'There is no other Cell in your scope to choose.'
+              : `There is no other ${networkLabel(network)} Cell in your scope to choose.`}
           </p>
         ) : (
           <SelectField
@@ -120,13 +148,33 @@ export function MoveCellDialog({
             onChange={(event) => setChosen(event.target.value)}
           >
             <option value="">Choose a Cell</option>
-            {choices.map((cell) => (
-              <option key={cell.id} value={cell.id}>
-                {cell.cell_id} · {categoryLabel(cell.category)} · led by {cell.leader.full_name}
-              </option>
-            ))}
+            {groups.leaders.length === 0 ? (
+              groups.others.map(cellOption)
+            ) : (
+              <>
+                <optgroup
+                  label={
+                    groups.leaders.length === 1
+                      ? 'Their pastoral leader’s Cell'
+                      : 'Their pastoral leader’s Cells'
+                  }
+                >
+                  {groups.leaders.map(cellOption)}
+                </optgroup>
+                {groups.others.length > 0 ? (
+                  <optgroup label="Other Cells you oversee">{groups.others.map(cellOption)}</optgroup>
+                ) : null}
+              </>
+            )}
           </SelectField>
         )}
+
+        {open && network !== null ? (
+          <p className="text-muted text-sm leading-relaxed">
+            Only {networkLabel(network)} Cells are listed: a member and their Cell&rsquo;s
+            leader share one Network.
+          </p>
+        ) : null}
 
         <p className="text-muted text-sm leading-relaxed">
           {current
@@ -157,5 +205,13 @@ export function MoveCellDialog({
         </div>
       </form>
     </Dialog>
+  );
+}
+
+function cellOption(cell: CellSummary) {
+  return (
+    <option key={cell.id} value={cell.id}>
+      {cell.cell_id} · {categoryLabel(cell.category)} · led by {cell.leader.full_name}
+    </option>
   );
 }

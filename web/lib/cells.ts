@@ -1,5 +1,6 @@
 import { ApiRequestError } from './api-client';
 import { describeFailure, type Failure } from './messages';
+import { dayLabel } from './reporting-month';
 import { authenticatedRequest } from './session';
 
 /**
@@ -25,6 +26,17 @@ export type CellMeetingStatus = 'HELD' | 'NOT_HELD' | 'RESCHEDULED';
 export interface CellCoverage {
   recorded: number;
   scheduled: number;
+  /**
+   * How many meetings whose day has begun have no record (decision 0267), counted by the
+   * server date by date. Nothing keys on `scheduled`, which is the whole month (decision
+   * 0239), and nothing here recomputes this from the other two.
+   */
+  behind: number;
+}
+
+/** How many meetings that have come still have no record (decision 0267). */
+export function behindOf(coverage: CellCoverage): number {
+  return coverage.behind;
 }
 
 export interface CellSchedule {
@@ -36,9 +48,79 @@ export interface CellSummary {
   id: string;
   cell_id: string;
   category: CellCategory;
+  /** How many members it holds now (decision 0261). */
+  member_count: number;
+  /** The Running view only: the Cell's Network, which is its leader's today (section 10). */
+  network?: 'MENS' | 'WOMENS' | null;
   schedule: CellSchedule;
   leader: { person_id: string; member_id: string; full_name: string };
   coverage: CellCoverage;
+  /** `ACTIVE`, or `CLOSED` in the closed view (decision 0266). */
+  state?: 'ACTIVE' | 'CLOSED';
+  /** The closed view only: the Manila day it closed, and why (section 10). */
+  closed_on?: string;
+  closure_reason?: CellClosureReason;
+  /** The closed view only: the Cell that resumed it, where one has (decision 0264). */
+  restarted_as?: string | null;
+  /**
+   * The closed view only: whether this reader may ask for it to restart. The server's
+   * answer, never derived here (section 7).
+   */
+  may_restart?: boolean;
+}
+
+export type CellClosureReason =
+  | 'MERGED_INTO_ANOTHER_CELL'
+  | 'LEADER_STEPPED_DOWN'
+  | 'MEMBERS_DISPERSED'
+  | 'CREATED_IN_ERROR'
+  | 'OTHER';
+
+export function closureReasonLabel(reason: CellClosureReason): string {
+  switch (reason) {
+    case 'MERGED_INTO_ANOTHER_CELL':
+      return 'Merged into another Cell';
+    case 'LEADER_STEPPED_DOWN':
+      return 'Leader stepped down';
+    case 'MEMBERS_DISPERSED':
+      return 'Members dispersed';
+    case 'CREATED_IN_ERROR':
+      return 'Created in error';
+    default:
+      return 'Other';
+  }
+}
+
+/** A `YYYY-MM-DD` day with its year, because a Cell may have closed years ago. */
+export function closedOnLabel(date: string): string {
+  const [year, month, day] = date.split('-').map(Number);
+
+  return new Intl.DateTimeFormat('en-GB', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  }).format(new Date(Date.UTC(year, month - 1, day)));
+}
+
+/**
+ * Ask for a closed Cell to restart (decisions 0264 and 0265): a new-Cell request naming
+ * the Cell it resumes and the leader who led it. Admin approves it like any other.
+ */
+export async function requestCellRestart(
+  body: {
+    restart_of_cell_id: string;
+    prospective_leader_id: string;
+    category: CellCategory;
+    day_of_week: number;
+    time_of_day: string;
+  },
+  idempotencyKey: string,
+): Promise<unknown> {
+  return authenticatedRequest<unknown>('/api/v1/cells/leadership-requests', {
+    method: 'POST',
+    body: { kind: 'NEW_CELL', ...body },
+    idempotencyKey,
+  });
 }
 
 export interface CellIndexPage {
@@ -62,9 +144,18 @@ export interface AwaitingMeeting {
   cell_code: string;
   scheduled_date: string;
   scheduled_time: string;
+  /** ISO weekday of the schedule the meeting falls under, 1 = Monday. */
+  day_of_week: number;
   reporting_month: string;
   /** Null while the Cell is `ACTIVE`; a Manila date once it has closed. */
   cell_closed_on: string | null;
+  category: CellCategory | null;
+  /** Members on the scheduled date, by the rule the meeting's roster uses. */
+  member_count: number;
+  /** The leader who files it (decision 0251), named for the branch view (decision 0258). */
+  leader: { id: string; full_name: string | null; is_actor: boolean };
+  /** Whether this actor may record it: their own, or on the leader's behalf (§14). */
+  may_record: boolean;
 }
 
 export interface AwaitingMeetings {
@@ -84,6 +175,7 @@ export interface AwaitingMeetings {
    * window is decided.
    */
   open: boolean;
+  whose: 'mine' | 'branch';
   meetings: AwaitingMeeting[];
 }
 
@@ -120,6 +212,13 @@ export interface ScheduledMeeting {
 
 export interface CellMeetings {
   cell_id: string;
+  /** How the page names the Cell, as it stands today (owner's choice of 2026-09-19). */
+  category: CellCategory | null;
+  day_of_week: number | null;
+  scheduled_time: string | null;
+  leader: { id: string; full_name: string | null } | null;
+  member_count: number;
+  cell_closed_on: string | null;
   reporting_month: string;
   scheduled_count: number;
   recorded_count: number;
@@ -139,6 +238,68 @@ const DAY_NAMES = [
 /** ISO 8601 weekday, 1 Monday through 7 Sunday (section 20). */
 export function dayOfWeekLabel(day: number): string {
   return DAY_NAMES[day - 1] ?? 'Unknown';
+}
+
+/** `19:00` or `19:00:00` as `7:00 pm`, the way a meeting time is said aloud. */
+export function timeLabel(time: string): string {
+  const [hours = 0, minutes = 0] = time.split(':').map(Number);
+  const hour = ((hours + 11) % 12) + 1;
+
+  return `${hour}:${String(minutes).padStart(2, '0')} ${hours >= 12 ? 'pm' : 'am'}`;
+}
+
+/**
+ * "Young Pro · Fridays 7:30 pm", the owner's design's way of naming a Cell, as the Cell
+ * stands today (each meeting row carries its own time); the Cell ID where there is no
+ * category or schedule to name.
+ */
+export function cellName(
+  data: Pick<CellMeetings, 'cell_id' | 'category' | 'day_of_week' | 'scheduled_time'>,
+): string {
+  if (data.category == null || data.day_of_week == null || data.scheduled_time == null) {
+    return `Cell ${data.cell_id}`;
+  }
+
+  return `${categoryLabel(data.category)} · ${dayOfWeekLabel(data.day_of_week)}s ${timeLabel(
+    data.scheduled_time,
+  )}`;
+}
+
+/**
+ * "CELL-000007 · led by Ana Reyes · 6 members", the line beneath a Cell's name on the
+ * two screens that use it, its meetings and its members. The meeting form composes a
+ * shorter line of its own. A closed Cell says when it closed in place of the count, because
+ * closing a Cell ends every membership in it (section 10).
+ */
+export function cellSubtitle(
+  data: Pick<CellMeetings, 'cell_id' | 'leader' | 'member_count' | 'cell_closed_on'>,
+): string {
+  const parts = [data.cell_id];
+
+  if (data.leader?.full_name) {
+    parts.push(`led by ${data.leader.full_name}`);
+  }
+
+  parts.push(
+    data.cell_closed_on != null
+      ? `closed on ${dayLabel(data.cell_closed_on)}`
+      : data.member_count === 1
+        ? '1 member'
+        : `${data.member_count} members`,
+  );
+
+  return parts.join(' · ');
+}
+
+/** "Young Pro · Sat", how a list names a Cell (decision 0259, restated by 0261); the Cell ID with nothing to name. */
+export function cellShortName(cell: {
+  cell_id: string;
+  category: CellCategory | null;
+  day_of_week: number | null;
+}): string {
+  return cell.category != null && cell.day_of_week != null
+    ? `${categoryLabel(cell.category)} · ${dayOfWeekLabel(cell.day_of_week).slice(0, 3)}`
+    : cell.cell_id;
 }
 
 export function categoryLabel(category: CellCategory): string {
@@ -210,15 +371,32 @@ export async function peopleWithoutACell(
 }
 
 export async function listCells(
-  params: { month: string; ledBy?: 'me'; cursor?: string | null },
+  params: {
+    month: string;
+    ledBy?: 'me';
+    cursor?: string | null;
+    q?: string;
+    limit?: number;
+    state?: 'ACTIVE' | 'CLOSED';
+  },
   signal?: AbortSignal,
 ): Promise<CellIndexPage> {
   const query = new URLSearchParams({ month: params.month });
   if (params.ledBy) {
     query.set('led_by', params.ledBy);
   }
+  if (params.state === 'CLOSED') {
+    query.set('state', 'CLOSED');
+  }
   if (params.cursor) {
     query.set('cursor', params.cursor);
+  }
+  // Narrows the whole scope, never the page on screen (decision 0261).
+  if (params.q) {
+    query.set('q', params.q);
+  }
+  if (params.limit !== undefined) {
+    query.set('limit', String(params.limit));
   }
 
   return authenticatedRequest<CellIndexPage>(`/api/v1/cells?${query.toString()}`, { signal });
@@ -240,8 +418,9 @@ export interface PersonWithoutACell {
 export async function listMeetingsAwaiting(
   month: string,
   signal?: AbortSignal,
+  whose: 'mine' | 'branch' = 'mine',
 ): Promise<AwaitingMeetings> {
-  const query = new URLSearchParams({ month });
+  const query = new URLSearchParams({ month, whose });
 
   return authenticatedRequest<AwaitingMeetings>(
     `/api/v1/cells/meetings/awaiting?${query.toString()}`,
@@ -457,9 +636,17 @@ export interface PersonCells {
   membership: {
     id: string;
     cell_id: string;
+    /** How the People list names the Cell, as it stands today (decision 0259). */
+    category: CellCategory | null;
+    day_of_week: number | null;
     leader: { person_id: string; member_id: string; full_name: string } | null;
   } | null;
-  leads: { id: string; cell_id: string }[];
+  leads: {
+    id: string;
+    cell_id: string;
+    category: CellCategory | null;
+    day_of_week: number | null;
+  }[];
 }
 
 export async function getPersonCells(personId: string, signal?: AbortSignal): Promise<PersonCells> {
@@ -517,4 +704,37 @@ function isNetwork(value: unknown): value is 'MENS' | 'WOMENS' {
 
 function networkWord(network: 'MENS' | 'WOMENS'): string {
   return network === 'MENS' ? 'Men’s' : 'Women’s';
+}
+
+/**
+ * A Cell picker's options, with the person's pastoral leader's Cell lifted out (owner's
+ * choice, 2026-09-21).
+ *
+ * **A grouping, not a ranking** (decision 0009). One group is lifted out under a heading
+ * that says why — the Cell a disciple usually joins in G12 is their own leader's — and
+ * every other Cell keeps the order the API gave, which is `cell_id` and meaningless by
+ * design (section 10). Nothing is preselected: the leader still chooses.
+ *
+ * With no leader known, or none of theirs among the choices, there is one group and no
+ * heading, which is the list exactly as it was.
+ *
+ * **Only the person's own Network's Cells, where their Network is known** (owner's choice,
+ * 2026-09-21). Section 10 refuses the other Network's, so offering them offered a choice
+ * that always failed. The add route still decides.
+ */
+export function pickerGroups(
+  all: readonly CellSummary[],
+  leaderId: string | null,
+  network: 'MENS' | 'WOMENS' | null = null,
+): { leaders: CellSummary[]; others: CellSummary[] } {
+  const cells = network === null ? all : all.filter((cell) => cell.network === network);
+
+  if (leaderId === null) {
+    return { leaders: [], others: [...cells] };
+  }
+
+  const leaders = cells.filter((cell) => cell.leader.person_id === leaderId);
+  const others = cells.filter((cell) => cell.leader.person_id !== leaderId);
+
+  return { leaders, others };
 }

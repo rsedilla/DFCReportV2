@@ -6,15 +6,19 @@ import {
   type ScopeMembership,
 } from '../auth/authorization/authorization.service';
 import { Capability } from '../auth/authorization/capabilities';
-import { canonicalId } from '../common/identifiers';
+import { canonicalId, sameId } from '../common/identifiers';
+import { manilaDayOf } from '../common/time/manila';
 import { assertReportingPeriodHasBegun } from '../common/time/reporting-period';
 import { databaseNow, reportingMonthOf, windowClosesAt } from '../common/time/submission-window';
 import { DATABASE, type Db } from '../database/database.module';
+import { NetworksService } from '../networks/networks.service';
 import { PeopleReadService } from '../people/people.read.service';
 
 import { decodeCellIndexCursor, encodeCellIndexCursor } from './cell-index-cursor';
 import { CellsReadService } from './cells.read.service';
 import { RECORDED_MEETINGS_PORT, type RecordedMeetingsPort } from './recorded-meetings.port';
+import { ValidationFailedError } from '../common/errors/api-error';
+import { normalizeName } from '../people/duplicate-matching';
 
 /** Section 22: `limit` defaults to 50. The DTO bounds it at 200. */
 const DEFAULT_PAGE = 50;
@@ -62,6 +66,7 @@ export class CellsIndexService {
     private readonly cells: CellsReadService,
     private readonly people: PeopleReadService,
     private readonly authorization: AuthorizationService,
+    private readonly networks: NetworksService,
     /**
      * The coverage numerator, from the module owning `cell_meetings` (section 2).
      *
@@ -79,7 +84,14 @@ export class CellsIndexService {
 
   async list(
     actor: Actor,
-    query: { month: string; ledBy?: 'me'; limit?: number; cursor?: string },
+    query: {
+      month: string;
+      ledBy?: 'me';
+      limit?: number;
+      cursor?: string;
+      q?: string;
+      state?: 'ACTIVE' | 'CLOSED';
+    },
   ): Promise<Record<string, unknown>> {
     const reportingMonth = reportingMonthOf(query.month);
 
@@ -113,6 +125,15 @@ export class CellsIndexService {
     const limit = query.limit ?? DEFAULT_PAGE;
     const after = decodeCellIndexCursor(query.cursor);
 
+    // **The minimum is counted on the term as it is searched**, as the Person search counts
+    // it (decision 0259): `a-`, ` a` and `  ` each pass the DTO's bound and would search for
+    // one letter, or for nothing at all.
+    if (query.q !== undefined && normalizeName(query.q).replace(/\s+/g, '').length < 2) {
+      throw new ValidationFailedError('Enter at least two letters of a name or Cell ID.', {
+        field: 'q',
+      });
+    }
+
     const membership = await this.authorization.scopeMembership(actor, Capability.CellViewSubtree);
     const leaderIds = leadersToList(membership, actor, query.ledBy === 'me');
 
@@ -122,6 +143,10 @@ export class CellsIndexService {
     // straddle a month boundary.
     const now = await databaseNow(this.db);
 
+    if (query.state === 'CLOSED') {
+      return this.listClosed(actor, leaderIds, reportingMonth, now, limit, after, query.q);
+    }
+
     // One more than asked for, so whether another page exists is answered by the read
     // rather than by a second count, and the extra row is dropped before it is returned.
     const rows =
@@ -130,6 +155,7 @@ export class CellsIndexService {
         : await this.cells.cellsInScope(this.db, leaderIds, now, {
             limit: limit + 1,
             after: after?.cellId ?? null,
+            search: query.q ?? null,
           });
 
     const visible = rows.slice(0, limit);
@@ -140,10 +166,17 @@ export class CellsIndexService {
     // from rows a leader wrote. That difference is the property section 13 depends on —
     // recording less makes coverage worse and never better — and it is why they are two
     // reads rather than one join.
-    const [scheduled, recorded, leaders] = await Promise.all([
+    const [scheduled, dueDays, recorded, recordedDates, leaders, networks] = await Promise.all([
       this.cells.scheduledCountsIn(this.db, cellIds, reportingMonth),
+      this.cells.dueDaysIn(this.db, cellIds, reportingMonth, manilaDayOf(now)),
       this.recordedCounts(cellIds, reportingMonth),
+      this.recordedDates(cellIds, reportingMonth),
       this.people.namesOf(visible.map((row) => row.leaderId)),
+      this.networks.networksOf(
+        this.db,
+        visible.map((row) => row.leaderId),
+        now,
+      ),
     ]);
 
     const open = now.getTime() < windowClosesAt(reportingMonth).getTime();
@@ -161,19 +194,116 @@ export class CellsIndexService {
         return {
           id: row.id,
           cell_id: row.cellId,
+          state: 'ACTIVE',
           category: row.category,
           schedule: { day_of_week: row.dayOfWeek, time_of_day: row.timeOfDay },
+          member_count: row.memberCount,
+          // The Cell's Network is its leader's (section 10), read now rather than as of the
+          // month: it is what a membership added today is checked against. A picker narrows
+          // on it; the add route still decides.
+          network: networks.get(row.leaderId) ?? null,
           leader: {
             person_id: row.leaderId,
             member_id: leader?.memberId ?? '',
             full_name: leader?.fullName ?? '',
           },
           // Two figures, never divided (section 12, section 13). A Cell that scheduled
-          // nothing reads `0 of 0`, is shown, and is not dropped (decision 0225).
+          // nothing reads `0 of 0`, is shown, and is not dropped (decision 0225). `behind`
+          // is the meetings whose day has begun that have no record (decision 0267); nothing
+          // keys on `scheduled`, which is the whole month (decision 0239).
           coverage: {
             recorded: recorded.get(row.id) ?? 0,
             scheduled: scheduled.get(row.id) ?? 0,
+            behind: behindIn(dueDays, recordedDates, row.id),
           },
+        };
+      }),
+      next_cursor:
+        rows.length > limit && last !== undefined
+          ? encodeCellIndexCursor({ cellId: last.cellId })
+          : null,
+    };
+  }
+
+  /**
+   * The `CLOSED` view (decision 0266): the closed Cells whose last leader the actor's
+   * `cell.view_subtree` reaches, each with what it closed on and why, and whether this
+   * actor may request its restart (decision 0264).
+   *
+   * **`may_restart` is the server's answer and never a client's derivation** (section 7).
+   * It is the scope half of what a restart request checks — `cell.request_leadership`
+   * over the last leader, who must never be the actor, and `cell.manage_lifecycle` over the
+   * same person (decision 0265) — with the Cell's own state: not closed as created in
+   * error, and not already restarted. It does not replay the request's refusals about
+   * the leader themselves; a submission refused for one of those answers in its own
+   * words.
+   */
+  private async listClosed(
+    actor: Actor,
+    leaderIds: string[] | null,
+    reportingMonth: string,
+    now: Date,
+    limit: number,
+    after: ReturnType<typeof decodeCellIndexCursor>,
+    q: string | undefined,
+  ): Promise<Record<string, unknown>> {
+    const rows =
+      leaderIds !== null && leaderIds.length === 0
+        ? []
+        : await this.cells.closedCellsInScope(this.db, leaderIds, {
+            limit: limit + 1,
+            after: after?.cellId ?? null,
+            search: q ?? null,
+          });
+
+    const visible = rows.slice(0, limit);
+    const cellIds = visible.map((row) => row.id);
+
+    const [scheduled, dueDays, recorded, recordedDates, leaders, mayRequest, mayManage] =
+      await Promise.all([
+        this.cells.scheduledCountsIn(this.db, cellIds, reportingMonth),
+        this.cells.dueDaysIn(this.db, cellIds, reportingMonth, manilaDayOf(now)),
+        this.recordedCounts(cellIds, reportingMonth),
+        this.recordedDates(cellIds, reportingMonth),
+        this.people.namesOf(visible.map((row) => row.leaderId)),
+        this.authorization.scopeMembership(actor, Capability.CellRequestLeadership),
+        this.authorization.scopeMembership(actor, Capability.CellManageLifecycle),
+      ]);
+
+    const last = visible.at(-1);
+
+    return {
+      reporting_month: reportingMonth,
+      open: now.getTime() < windowClosesAt(reportingMonth).getTime(),
+      data: visible.map((row) => {
+        const leader = leaders.get(row.leaderId);
+
+        return {
+          id: row.id,
+          cell_id: row.cellId,
+          state: 'CLOSED',
+          category: row.category,
+          schedule: { day_of_week: row.dayOfWeek, time_of_day: row.timeOfDay },
+          member_count: 0,
+          leader: {
+            person_id: row.leaderId,
+            member_id: leader?.memberId ?? '',
+            full_name: leader?.fullName ?? '',
+          },
+          coverage: {
+            recorded: recorded.get(row.id) ?? 0,
+            scheduled: scheduled.get(row.id) ?? 0,
+            behind: behindIn(dueDays, recordedDates, row.id),
+          },
+          closed_on: manilaDayOf(row.closedAt),
+          closure_reason: row.closureReason,
+          restarted_as: row.restartedAs,
+          may_restart:
+            row.closureReason !== 'CREATED_IN_ERROR' &&
+            row.restartedAs === null &&
+            !sameId(row.leaderId, actor.personId) &&
+            reaches(mayRequest, row.leaderId) &&
+            reaches(mayManage, row.leaderId),
         };
       }),
       next_cursor:
@@ -213,6 +343,21 @@ export class CellsIndexService {
    * application, and without it the application cannot be built at all — which the
    * `null`-only suite stayed green through.*
    */
+  /** The records by date, or a refusal where the port is unbound (as {@link recordedCounts}). */
+  private async recordedDates(
+    cellIds: readonly string[],
+    reportingMonth: string,
+  ): Promise<Map<string, Set<string>>> {
+    if (!this.recorded) {
+      throw new Error(
+        'Cannot list Cells: RECORDED_MEETINGS_PORT is not bound, so which meetings are ' +
+          'behind cannot be known. This is a deployment fault.',
+      );
+    }
+
+    return this.recorded.recordedDaysIn(cellIds, reportingMonth);
+  }
+
   private async recordedCounts(
     cellIds: readonly string[],
     reportingMonth: string,
@@ -272,4 +417,23 @@ function leadersToList(
   }
 
   return membership.personIds.has(canonicalId(actor.personId)) ? [actor.personId] : [];
+}
+
+function reaches(membership: ScopeMembership, personId: string): boolean {
+  return membership.kind === 'WHOLE_CHURCH' || membership.personIds.has(canonicalId(personId));
+}
+
+/**
+ * The due meetings of one Cell that have no record (decision 0267): matched date by date,
+ * as `BranchFiguresService` matches, rather than one count subtracted from another. A
+ * record whose date is no longer due — a meeting recorded before a closure was backdated
+ * past it — offsets nothing.
+ */
+function behindIn(
+  dueDays: Map<string, string[]>,
+  recordedDates: Map<string, Set<string>>,
+  cellId: string,
+): number {
+  const recorded = recordedDates.get(cellId);
+  return (dueDays.get(cellId) ?? []).filter((day) => !recorded?.has(day)).length;
 }

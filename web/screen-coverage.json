@@ -154,12 +154,12 @@
     },
     {
       "route": "GET /api/v1/dcc/events",
-      "reason": "The DCC calendar a leader picks an event from (decision 0227). DCC Attendance is the screen in that block which shows it; the roster below is unreachable without it.",
+      "reason": "The month's DCC events (decision 0227), read by the reader's month to place their own checklist on each Sunday and to show a removed Sunday with its reason.",
       "screen": "web/app/dcc/page.tsx"
     },
     {
       "route": "GET /api/v1/dcc/events/:id/coverage-gaps",
-      "reason": "The attention list behind each event's coverage figure (decision 0228, §15). It belongs beside DCC Attendance and on Dashboard's outstanding work, and neither screen exists yet.",
+      "reason": "The attention list behind each event's coverage figure (decision 0228, §15), reached from Reports, DCC, By Sunday.",
       "screen": "web/app/dcc/[id]/gaps/page.tsx"
     },
     {
@@ -239,8 +239,7 @@
     },
     {
       "route": "POST /api/v1/cells/leadership-requests",
-      "waived_to": "after the pilot — Admin screens",
-      "reason": "Request-and-approve is how a Cell is created or changes hands (§10). One branch running one month needs neither."
+      "screen": "web/components/restart-cell-dialog.tsx"
     },
     {
       "route": "GET /api/v1/cells/leadership-requests",

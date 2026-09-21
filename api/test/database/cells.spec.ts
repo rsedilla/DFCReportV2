@@ -60,6 +60,53 @@ describe('the Cell tables (SKILL.md sections 10 and 11)', () => {
       expect(cell.cellId).toMatch(/^CELL-[0-9]{6,}$/);
     });
 
+    it('refuses a Cell that resumes itself', async () => {
+      const cell = await createCell(db, { leader });
+
+      // `cells_restart_is_another_cell` (migration 0015). The one shape a foreign key
+      // to the same table cannot refuse on its own.
+      await expect(
+        db
+          .updateTable('cells')
+          .set({ restarted_from_cell_id: cell.id })
+          .where('id', '=', cell.id)
+          .execute(),
+      ).rejects.toThrow(/cells_restart_is_another_cell/);
+    });
+
+    it('refuses a second Cell resuming one Cell, and permits a restart of a restart', async () => {
+      const closed = await createCell(db, { leader });
+      const first = await createCell(db, { leader });
+      const second = await createCell(db, { leader });
+
+      await db
+        .updateTable('cells')
+        .set({ restarted_from_cell_id: closed.id })
+        .where('id', '=', first.id)
+        .execute();
+
+      // `cells_one_restart_per_cell` (decision 0264, item 3): two Cells naming one
+      // ancestor claim one history between them. This is the enforcement, and the
+      // service read that answers in a sentence is deliberately not it.
+      await expect(
+        db
+          .updateTable('cells')
+          .set({ restarted_from_cell_id: closed.id })
+          .where('id', '=', second.id)
+          .execute(),
+      ).rejects.toThrow(/cells_one_restart_per_cell/);
+
+      // The chain runs backwards and never branches, so resuming the resumption is
+      // permitted.
+      await expect(
+        db
+          .updateTable('cells')
+          .set({ restarted_from_cell_id: first.id })
+          .where('id', '=', second.id)
+          .execute(),
+      ).resolves.toBeDefined();
+    });
+
     it('never lets a Cell ID be rewritten', async () => {
       const cell = await createCell(db, { leader });
 
@@ -1195,6 +1242,25 @@ describe('the Cell tables (SKILL.md sections 10 and 11)', () => {
           })
           .execute(),
       ).rejects.toThrow(/handover_names_a_cell/);
+    });
+
+    it('refuses a handover that names a Cell to restart', async () => {
+      const cell = await createCell(db, { leader });
+
+      // `cell_leadership_requests_restart_is_a_new_cell` (migration 0015): a handover
+      // moves a Cell that is still running, so it resumes nothing (decision 0264).
+      await expect(
+        db
+          .insertInto('cell_leadership_requests')
+          .values({
+            kind: 'HANDOVER',
+            prospective_leader_id: prospective.id,
+            requested_by: requester,
+            cell_id: cell.id,
+            restart_of_cell_id: cell.id,
+          })
+          .execute(),
+      ).rejects.toThrow(/restart_is_a_new_cell/);
     });
 
     it('requires category, day and time on a new Cell', async () => {

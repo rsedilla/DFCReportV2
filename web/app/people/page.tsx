@@ -1,6 +1,6 @@
 'use client';
 
-import { useQuery } from '@tanstack/react-query';
+import { useQueries, useQuery } from '@tanstack/react-query';
 import { Lock } from 'lucide-react';
 import Link from 'next/link';
 import { useState } from 'react';
@@ -10,12 +10,13 @@ import { buttonClasses } from '@/components/ui/button';
 import { Button } from '@/components/ui/button';
 import { FailureNotice } from '@/components/ui/failure-notice';
 import { Field } from '@/components/ui/field';
+import { HeaderCell, Table, rowClasses } from '@/components/ui/table';
+import { cellShortName, getPersonCells, type PersonCells } from '@/lib/cells';
 import { describeFailure } from '@/lib/messages';
 import {
   MINIMUM_SEARCH_LENGTH,
   networkLabel,
   searchPeople,
-  sexLabel,
   type Person,
 } from '@/lib/people';
 import { cn } from '@/lib/utils';
@@ -50,56 +51,76 @@ import { cn } from '@/lib/utils';
  * 13, 17 and 19 forbid the last of those, and section 23 keeps the one state
  * token for form fields.
  *
+ * **It opens on everyone the searcher oversees, ten a page, A to Z by surname** (decision
+ * 0259, the owner's design adjusted). Each row names the person's pastoral
+ * leader and Cell; a search narrows it by name or Member ID. The design's journey stage
+ * and "Last recorded" columns are not here: each needs a ruling first.
+ *
  * **No result count and no page numbers.** Section 22 paginates by cursor and
  * returns no total, so both would be invented.
  */
 export default function PeoplePage() {
   return (
     <AppShell>
-      <PeopleSearch />
+      <PeopleList />
     </AppShell>
   );
 }
 
-function PeopleSearch() {
+const PAGE_SIZE = 10;
+
+function PeopleList() {
   const [term, setTerm] = useState('');
   const [submitted, setSubmitted] = useState('');
   const [cursors, setCursors] = useState<(string | null)[]>([null]);
   const [page, setPage] = useState(0);
 
   const results = useQuery({
-    queryKey: ['people', submitted, cursors[page]],
-    queryFn: ({ signal }) => searchPeople(submitted, cursors[page], signal),
-    enabled: submitted.trim().length > 0,
+    queryKey: ['people', submitted, cursors[page], PAGE_SIZE],
+    queryFn: ({ signal }) => searchPeople(submitted, cursors[page], signal, { limit: PAGE_SIZE }),
   });
+
+  const rows = results.data?.data ?? [];
+  // Each person's Cell, read one person at a time under `cell.view_subtree` (decision 0248).
+  const cells = useQueries({
+    queries: rows.map((person) => ({
+      queryKey: ['person-cells', person.id],
+      queryFn: ({ signal }: { signal: AbortSignal }) => getPersonCells(person.id, signal),
+      enabled: person.scope === 'FULL',
+      retry: false,
+    })),
+  });
+
+  const trimmed = term.trim();
+  const tooShort = trimmed.length > 0 && trimmed.length < MINIMUM_SEARCH_LENGTH;
 
   function onSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (tooShort) {
+      return;
+    }
     setCursors([null]);
     setPage(0);
-    setSubmitted(term);
+    setSubmitted(trimmed);
   }
 
   return (
     <main id="main" className={PAGE_WIDTH.INDEX}>
       <h1 className="text-2xl font-semibold tracking-tight">People</h1>
       <p className="text-muted mt-2 max-w-2xl text-sm leading-relaxed">
-        Search the people you oversee, by name. Somebody outside that will not appear
-        here; when you add a person or add a member to a Cell, that search still reaches
-        the whole church, so you can find an existing record rather than create a second
-        one.
+        Everyone within your pastoral scope, you included. Adding a person, or a member to a
+        Cell, still searches the whole church, so you can find an existing record rather than
+        create a second one.
       </p>
 
-      {/*
-        Stacked on a phone and inline from `sm` up. Wrapping all three onto one
-        row left the search box 107px wide at 375px — narrower than the two
-        buttons beside it, on the control the screen exists for. Section 23 makes
-        the phone a current surface, so this is the layout that has to be right
-        first.
-      */}
-      <form onSubmit={onSubmit} className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-end" noValidate>
+      {/* Stacked on a phone and inline from `sm` up, so the search box keeps its width. */}
+      <form
+        onSubmit={onSubmit}
+        className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-end"
+        noValidate
+      >
         <Field
-          label="Search by name"
+          label="Search by name or Member ID"
           type="search"
           name="q"
           autoComplete="off"
@@ -108,8 +129,8 @@ function PeopleSearch() {
           className="min-w-0 sm:flex-1"
         />
         <div className="flex gap-3">
-          <Button type="submit" disabled={term.trim().length < MINIMUM_SEARCH_LENGTH}>
-            Search
+          <Button type="submit" disabled={tooShort}>
+            {trimmed.length === 0 && submitted !== '' ? 'Show everyone' : 'Search'}
           </Button>
           <Link href="/people/new" className={cn(buttonClasses('secondary'))}>
             Add a person
@@ -117,38 +138,60 @@ function PeopleSearch() {
         </div>
       </form>
 
-      {/*
-        The live region is mounted always and only its contents change, per
-        `FailureNotice`'s own rule: one inserted together with its text is
-        frequently not announced at all.
-      */}
+      {/* Mounted always, per `FailureNotice`'s own rule. */}
       <div className="mt-8">
         <FailureNotice failure={results.isError ? describeFailure(results.error) : null} />
       </div>
 
       <div className="mt-4">
-        {submitted.trim().length === 0 ? (
-          <p className="text-muted text-sm">Type a name to begin.</p>
-        ) : results.isPending ? (
-          <p className="text-muted text-sm">Searching…</p>
-        ) : results.isError ? null : results.data.data.length === 0 ? (
-          <div>
-            <p className="text-sm">Nobody you oversee matches &ldquo;{submitted}&rdquo;.</p>
-            <p className="text-muted mt-2 text-sm leading-relaxed">
-              They may still be elsewhere in the church. Adding a person searches every
-              branch as you type, so start there rather than assuming they are new.
-            </p>
-          </div>
+        {results.isPending ? (
+          <p className="text-muted text-sm">Loading&hellip;</p>
+        ) : results.isError ? null : rows.length === 0 ? (
+          submitted === '' ? (
+            <p className="text-sm">Nobody is within your scope.</p>
+          ) : (
+            <div>
+              <p className="text-sm">Nobody you oversee matches &ldquo;{submitted}&rdquo;.</p>
+              <p className="text-muted mt-2 text-sm leading-relaxed">
+                They may still be elsewhere in the church. Adding a person searches every branch
+                as you type, so start there rather than assuming they are new.
+              </p>
+            </div>
+          )
         ) : (
           <>
-            <ul className="border-line divide-line divide-y border-t border-b">
-              {results.data.data.map((person) => (
-                <li key={person.id}>
-                  <PersonRow person={person} />
+            <Table caption="People within your scope" className="hidden sm:block">
+              <thead>
+                <tr>
+                  <HeaderCell>Name</HeaderCell>
+                  <HeaderCell>Pastoral leader</HeaderCell>
+                  <HeaderCell>Cell</HeaderCell>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((person, index) => (
+                  <tr key={person.id} className={rowClasses}>
+                    <td className="px-3 py-3 align-top">
+                      <PersonName person={person} />
+                    </td>
+                    <td className="px-3 py-3 align-top">{leaderOf(person)}</td>
+                    <td className="px-3 py-3 align-top">{cellOf(person, cells[index]?.data)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </Table>
+            <ul className="border-line divide-line divide-y border-t border-b sm:hidden">
+              {rows.map((person, index) => (
+                <li key={person.id} className="py-3">
+                  <PersonName person={person} />
+                  <p className="text-muted mt-1 text-sm">
+                    {[leaderOf(person), cellOf(person, cells[index]?.data)]
+                      .filter((part) => part !== '')
+                      .join(' · ')}
+                  </p>
                 </li>
               ))}
             </ul>
-
             <nav aria-label="Results" className="mt-6 flex items-center gap-3">
               <Button
                 variant="secondary"
@@ -183,41 +226,41 @@ function PeopleSearch() {
   );
 }
 
-function PersonRow({ person }: { person: Person }) {
-  const withheld = person.scope === 'IDENTITY_ONLY';
-
+function PersonName({ person }: { person: Person }) {
   return (
-    <Link
-      href={`/people/${person.id}`}
-      className={
-        // `min-h-11` rather than relying on `py-3` plus however many lines the
-        // name happens to wrap to. A row's height was incidental, which made the
-        // 2.5.8 exemption for this state true only by accident.
-        'focus-visible:outline-accent hover:bg-raised flex min-h-11 flex-wrap items-baseline ' +
-        'gap-x-3 gap-y-1 rounded-md px-2 py-3 focus-visible:outline-2 focus-visible:outline-offset-2'
-      }
-    >
-      <span className="text-base font-medium">{person.full_name}</span>
-      <span className="text-muted font-mono text-sm">{person.member_id}</span>
-
-      {withheld ? (
-        <span className="text-muted flex basis-full items-center gap-1.5 text-sm">
-          {/*
-            Decorative: the sentence beside it carries the meaning. An icon is
-            not text, and colour is never the only indicator (1.4.1).
-          */}
-          <Lock aria-hidden="true" className="size-3.5 shrink-0" />
-          {networkLabel(person.network)}
-          {person.direct_leader_name ? ` · led by ${person.direct_leader_name}` : ''}
-          {' · '}
-          <span>Details visible to their own leaders</span>
+    <>
+      <Link
+        href={`/people/${person.id}`}
+        className="focus-visible:outline-accent inline-flex min-h-6 items-center font-medium underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2"
+      >
+        {person.full_name}
+      </Link>
+      <span className="text-muted block font-mono text-xs">{person.member_id}</span>
+      {person.scope === 'IDENTITY_ONLY' ? (
+        <span className="text-muted flex items-center gap-1.5 text-xs">
+          {/* Decorative: the words beside it carry the meaning (1.4.1). */}
+          <Lock aria-hidden="true" className="size-3 shrink-0" />
+          {networkLabel(person.network)} · Details visible to their own leaders
         </span>
-      ) : (
-        <span className="text-muted basis-full text-sm">
-          {sexLabel(person.sex)}
-          {person.mobile_number ? ` · ${person.mobile_number}` : ''}
-        </span>
-      )}
-    </Link>
+      ) : null}
+    </>
   );
+}
+
+function leaderOf(person: Person): string {
+  return person.direct_leader_name ?? '';
+}
+
+/** "Young Pro · Sat", "Leads Young Pro · Sat", or "Not in a Cell"; nothing while unread. */
+function cellOf(person: Person, cells: PersonCells | undefined): string {
+  if (person.scope !== 'FULL' || cells === undefined) {
+    return '';
+  }
+
+  const parts = [
+    ...cells.leads.map((cell) => `Leads ${cellShortName(cell)}`),
+    ...(cells.membership ? [cellShortName(cells.membership)] : []),
+  ];
+
+  return parts.length > 0 ? parts.join('; ') : 'Not in a Cell';
 }

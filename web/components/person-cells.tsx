@@ -6,7 +6,7 @@ import { useId, useState } from 'react';
 import { MoveCellDialog } from '@/components/move-cell-dialog';
 import { Button } from '@/components/ui/button';
 import { FailureNotice } from '@/components/ui/failure-notice';
-import { getPersonCells } from '@/lib/cells';
+import { cellShortName, getPersonCells } from '@/lib/cells';
 import { describeFailure } from '@/lib/messages';
 
 /**
@@ -56,13 +56,14 @@ export function PersonCells({
         <>
           {cells.data.membership ? (
             <p className="mt-3 text-sm">
-              <span className="font-medium">{cells.data.membership.cell_id}</span>
-              {cells.data.membership.leader ? (
-                <span className="text-muted">
-                  {' '}
-                  · led by {cells.data.membership.leader.full_name}
-                </span>
-              ) : null}
+              <span className="font-medium">{cellShortName(cells.data.membership)}</span>
+              <span className="text-muted">
+                {' '}
+                · {cells.data.membership.cell_id}
+                {cells.data.membership.leader
+                  ? ` · led by ${cells.data.membership.leader.full_name}`
+                  : ''}
+              </span>
             </p>
           ) : cells.data.leads.length === 0 ? (
             <p className="text-muted mt-3 text-sm">Not in a Cell.</p>
@@ -70,7 +71,14 @@ export function PersonCells({
 
           {cells.data.leads.length > 0 ? (
             <p className="mt-3 text-sm">
-              Leads {cells.data.leads.map((cell) => cell.cell_id).join(', ')}
+              Leads{' '}
+              {cells.data.leads
+                .map((cell) =>
+                  cellShortName(cell) === cell.cell_id
+                    ? cell.cell_id
+                    : `${cellShortName(cell)} (${cell.cell_id})`,
+                )
+                .join(', ')}
             </p>
           ) : null}
 

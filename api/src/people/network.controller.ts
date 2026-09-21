@@ -76,6 +76,9 @@ async function nodesFor(
  *
  * Current state, with headcounts of the tree now (decision 0252). The figures that carry
  * a month are read under their own capabilities, on routes of their own.
+ *
+ * **`roots` is where a reader outside the tree starts** (decision 0268): the Network roots
+ * their scope reaches, and empty for anybody holding an assignment.
  */
 @Controller('network')
 export class NetworkController {
@@ -96,7 +99,7 @@ export class NetworkController {
       throw new NotFoundError('No such person.');
     }
 
-    return { ...branch };
+    return { ...branch, roots: await this.tree.rootsReachedBy(actor) };
   }
 }
 

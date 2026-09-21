@@ -408,6 +408,14 @@ export interface CellsTable {
   closure_reason: CellClosureReason | null;
   /** Required where the reason is `OTHER`, and forbidden where there is no reason. */
   closure_note: string | null;
+  /**
+   * The closed Cell this one resumes, where it is a restart (decision 0264).
+   *
+   * Set by approval from the request's `restart_of_cell_id` and never afterwards. At
+   * most one Cell may name any given ancestor, so the chain runs backwards and never
+   * branches.
+   */
+  restarted_from_cell_id: string | null;
   created_at: ServerTimestamp;
 }
 
@@ -485,6 +493,8 @@ export interface CellLeadershipRequestsTable {
   decided_by: string | null;
   /** Required for a handover; null on a new Cell until approval sets it. */
   cell_id: string | null;
+  /** The closed Cell a `NEW_CELL` request asks to resume, where it is one (decision 0264). */
+  restart_of_cell_id: string | null;
   requested_at: ServerTimestamp;
   decided_at: ColumnType<Date | null, Date | string | null, Date | string | null>;
 }

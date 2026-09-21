@@ -430,6 +430,188 @@ describe('Cell leadership approval (section 10)', () => {
     });
   });
 
+  describe('restarting a closed Cell (decision 0264)', () => {
+    let approver: TestAccount;
+
+    beforeEach(async () => {
+      await closeCellDirectly(db, markCell.id, { reason: 'MEMBERS_DISPERSED' });
+
+      // Root requests the restart, being Mark's upline, so the approval needs a second
+      // administrator: section 10 refuses an approval by the account that submitted it.
+      const second = await createPerson(db, { firstName: 'Ester', network: 'WOMENS' });
+      approver = await createAccount(app, db, { person: second, roles: ['ADMIN'] });
+    });
+
+    const restart = (actor: TestAccount, overrides: Record<string, unknown> = {}) =>
+      submit(actor, {
+        kind: 'NEW_CELL',
+        prospective_leader_id: mark.id,
+        category: 'YOUTH',
+        day_of_week: 6,
+        time_of_day: '17:00',
+        restart_of_cell_id: markCell.id,
+        ...overrides,
+      });
+
+    it('mints a new Cell that records the one it resumes, leaving the closed Cell alone', async () => {
+      const submitted = await restart(admin);
+
+      expect(submitted.status).toBe(201);
+
+      const approved = await approve(approver, submitted.body.id as string);
+
+      expect(approved.status).toBe(200);
+
+      const minted = await db
+        .selectFrom('cells')
+        .select(['id', 'cell_id', 'state', 'restarted_from_cell_id'])
+        .where('restarted_from_cell_id', '=', markCell.id)
+        .executeTakeFirstOrThrow();
+
+      expect(minted.state).toBe('ACTIVE');
+      expect(minted.cell_id).not.toBe(markCell.cellId);
+
+      // Decision 0133: a closure is never reversed, and a restart does not reverse one
+      // by another route.
+      const closed = await db
+        .selectFrom('cells')
+        .select(['state', 'closure_reason'])
+        .where('id', '=', markCell.id)
+        .executeTakeFirstOrThrow();
+
+      expect(closed.state).toBe('CLOSED');
+      expect(closed.closure_reason).toBe('MEMBERS_DISPERSED');
+    });
+
+    it('shows the queue what the request resumes', async () => {
+      const submitted = await restart(admin);
+
+      const queue = await request(app.getHttpServer())
+        .get('/api/v1/cells/leadership-requests')
+        .set('Authorization', `Bearer ${approver.accessToken}`);
+
+      const row = (queue.body.data as { id: string; restart_of_cell_uuid: string | null }[]).find(
+        (entry) => entry.id === submitted.body.id,
+      );
+
+      // The approver is being asked whether this person should lead this Cell again.
+      expect(row?.restart_of_cell_uuid).toBe(markCell.id);
+    });
+
+    it('refuses a Cell that is still running', async () => {
+      // Ben oversees Carlo, and Carlo leads this Cell — so the scope check and the
+      // last-leader check both pass, and the state refusal is the only one that can
+      // answer. A first version named Mark's leader against Carlo's Cell, where the
+      // last-leader refusal carries the same status and the same code, so deleting the
+      // state branch left the case green.
+      const response = await restart(benAccount, {
+        prospective_leader_id: carlo.id,
+        restart_of_cell_id: carloCell.id,
+      });
+
+      expect(response.status).toBe(409);
+      expect(response.body.error.message).toContain('still running');
+    });
+
+    it('refuses a Cell closed as created in error', async () => {
+      await closeCellDirectly(db, carloCell.id, { reason: 'CREATED_IN_ERROR' });
+
+      const response = await restart(admin, {
+        prospective_leader_id: carlo.id,
+        restart_of_cell_id: carloCell.id,
+      });
+
+      expect(response.status).toBe(409);
+      expect(response.body.error.message).toContain('created in error');
+    });
+
+    it('admits a leader upline of the closed Cell’s last leader (decision 0265)', async () => {
+      // The case section 10 was amended for, and the one nothing else in this file
+      // reached: every other successful restart here is submitted by an administrator,
+      // whose Whole Church grant answers before the target is read, so removing the
+      // fallback would leave them all green. Ben holds `cell.manage_lifecycle` at
+      // `OWN_SUBTREE` and is Carlo’s upline, so this passes only because section 7
+      // resolves a closed Cell through its last leader. Under "resolves through
+      // nobody" it answers 403.
+      await closeCellDirectly(db, carloCell.id, { reason: 'MEMBERS_DISPERSED' });
+
+      const response = await restart(benAccount, {
+        prospective_leader_id: carlo.id,
+        restart_of_cell_id: carloCell.id,
+      });
+
+      expect(response.status).toBe(201);
+      expect(response.body.restart_of_cell_uuid).toBe(carloCell.id);
+    });
+
+    it('refuses a second restart of one Cell', async () => {
+      const first = await restart(admin);
+      await approve(approver, first.body.id as string);
+
+      const second = await restart(admin);
+
+      expect(second.status).toBe(409);
+      expect(second.body.error.message).toContain('already been restarted');
+    });
+
+    it('refuses a restart naming somebody other than the Cell’s last leader', async () => {
+      const response = await restart(admin, { prospective_leader_id: juan.id });
+
+      expect(response.status).toBe(409);
+      expect(response.body.error.message).toContain('names the leader who led that Cell');
+    });
+
+    it('refuses a handover that names a Cell to restart', async () => {
+      const response = await submit(admin, {
+        kind: 'HANDOVER',
+        prospective_leader_id: juan.id,
+        cell_id: carloCell.id,
+        restart_of_cell_id: markCell.id,
+      });
+
+      expect(response.status).toBe(422);
+      expect(response.body.error.details?.field).toBe('restart_of_cell_id');
+    });
+
+    it('answers a Cell outside the actor’s scope as it answers an absent one', async () => {
+      await closeCellDirectly(db, carloCell.id, { reason: 'MEMBERS_DISPERSED' });
+
+      // Ben passes the guard — Carlo is his disciple — so both of these reach the
+      // restart check itself. Section 22: an out-of-scope Cell and an absent one answer
+      // alike for him, or the refusal is an existence oracle over Cell identifiers.
+      const outOfScope = await restart(benAccount, {
+        prospective_leader_id: carlo.id,
+        restart_of_cell_id: markCell.id,
+      });
+      const absent = await restart(benAccount, {
+        prospective_leader_id: carlo.id,
+        restart_of_cell_id: '11111111-2222-4333-8444-555555555555',
+      });
+
+      expect(outOfScope.status).toBe(403);
+      expect(absent.status).toBe(403);
+      expect(absent.body.error.code).toBe(outOfScope.body.error.code);
+
+      // And the ordering is what produces that: an actor whose scope *would* have
+      // covered it reaches the absence instead. Invert the two and Ben's absent Cell
+      // answers 404, which is the oracle.
+      const seenByWholeChurch = await restart(admin, {
+        restart_of_cell_id: '11111111-2222-4333-8444-555555555555',
+      });
+
+      expect(seenByWholeChurch.status).toBe(404);
+    });
+
+    it('refuses the former leader restarting their own Cell', async () => {
+      // Section 10's self-exclusion, which decision 0264 relies on rather than restating:
+      // Mark may not name himself, whatever scope his grant carries.
+      const response = await restart(markAccount);
+
+      expect(response.status).toBe(403);
+      expect(response.body.error.code).toBe('SCOPE_DENIED');
+    });
+  });
+
   describe('approving a handover', () => {
     it('ends the outgoing assignment and opens the incoming one at the identical instant', async () => {
       const requestId = await pendingHandover(markAccount, juan.id, markCell.id);

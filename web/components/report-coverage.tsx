@@ -2,18 +2,23 @@
 
 import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
+import { useState } from 'react';
 
 import { CoverageFigure } from '@/components/coverage-figure';
+import { Button } from '@/components/ui/button';
 import { dccEventNote } from '@/components/dcc-event-note';
 import { FailureNotice } from '@/components/ui/failure-notice';
 import { HeaderCell, Table, rowClasses } from '@/components/ui/table';
-import { dayOfWeekLabel, listAllCells, type CellSummary } from '@/lib/cells';
+import { behindOf, dayOfWeekLabel, listAllCells, type CellSummary } from '@/lib/cells';
 import { listDccEvents, type DccEvent } from '@/lib/dcc';
 import { describeFailure } from '@/lib/messages';
 import { dayLabel } from '@/lib/reporting-month';
 
 const LINK =
   'focus-visible:outline-accent inline-flex min-h-6 items-center underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2';
+
+/** Ten rows a page, as on the Cells and People lists. */
+const PAGE_SIZE = 10;
 
 /**
  * The coverage line of a report, broken down one row per Cell or per Sunday (SKILL.md
@@ -28,10 +33,15 @@ const LINK =
  *
  * **Nothing is ranked or colour-graded** (sections 13, 17 and 19). The Cells come in the
  * order the index returns, which ranks nobody (decision 0226), and the Sundays in date
- * order. Every figure is two figures.
+ * order. Every coverage line is two figures; the Behind column beside it is a count of
+ * meetings, never a division of them (decision 0267).
  *
  * **A table from `lg`, and cards below it**, the same rows in the same order, as on the
  * Cells and DCC screens.
+ *
+ * **The Cells page ten at a time and the Sundays do not.** Section 2 records roughly 800
+ * Cells, so a whole-church reader had every one of them in one table; a month holds four
+ * or five Sundays whatever the scope, so that table is bounded by the calendar.
  */
 export function CoverageByCell({ month }: { month: string }) {
   // The same query as the report's Cell picker, so the two share one request.
@@ -40,15 +50,45 @@ export function CoverageByCell({ month }: { month: string }) {
     queryFn: ({ signal }) => listAllCells(month, signal),
   });
 
+  const [page, setPage] = useState(0);
+  const [behindOnly, setBehindOnly] = useState(false);
+
+  // **Behind is the meetings that have come and have no record** (decision 0267) — never
+  // the whole month's schedule, which counts meetings that have not happened (decision
+  // 0239) and is why a filter keyed on it was built and removed on 2026-09-20.
+  const all = cells.data ?? [];
+  const behindCount = all.filter((cell) => behindOf(cell.coverage) > 0).length;
+  const rows = behindOnly ? all.filter((cell) => behindOf(cell.coverage) > 0) : all;
+  // A page that no longer exists is the first one: the month changes the set underneath it.
+  const start = Math.min(page, Math.max(0, Math.ceil(rows.length / PAGE_SIZE) - 1)) * PAGE_SIZE;
+  const shown = rows.slice(start, start + PAGE_SIZE);
+
   return (
     <section aria-labelledby="coverage-by-cell-heading">
       <h2 id="coverage-by-cell-heading" className="field-label">
         Coverage by Cell
       </h2>
       <p className="text-muted mt-2 max-w-2xl text-sm leading-relaxed">
-        Each Cell in your scope, in the order the Cells list gives them. The rows are not
-        added up here: the line at the top is the report&rsquo;s own figure.
+        Each Cell in your scope, ten at a time, in the order the Cells list gives them. The
+        rows are not added up here: the line at the top is the report&rsquo;s own figure. A
+        Cell is behind when a meeting whose day has come has no record.
       </p>
+
+      {cells.data && cells.data.length > 0 ? (
+        <Button
+          type="button"
+          variant="secondary"
+          className="mt-4"
+          aria-pressed={behindOnly}
+          onClick={() => {
+            setBehindOnly((on) => !on);
+            setPage(0);
+          }}
+        >
+          {/* A fixed label with `aria-pressed`, so a screen reader hears one state, once. */}
+          Show only Cells behind
+        </Button>
+      ) : null}
 
       <div className="mt-4">
         <FailureNotice failure={cells.isError ? describeFailure(cells.error) : null} />
@@ -58,6 +98,10 @@ export function CoverageByCell({ month }: { month: string }) {
         <p className="text-muted mt-4 text-sm">Loading&hellip;</p>
       ) : cells.data && cells.data.length === 0 ? (
         <p className="text-muted mt-4 text-sm">There are no Cells in your scope this month.</p>
+      ) : cells.data && rows.length === 0 ? (
+        <p className="text-muted mt-4 text-sm">
+          No Cell in your scope is behind: every meeting that has come has a record.
+        </p>
       ) : cells.data ? (
         <>
           <Table caption="Recording coverage for each Cell" className="mt-4 hidden lg:block">
@@ -67,10 +111,11 @@ export function CoverageByCell({ month }: { month: string }) {
                 <HeaderCell>Leader</HeaderCell>
                 <HeaderCell>Meets</HeaderCell>
                 <HeaderCell>Recorded</HeaderCell>
+                <HeaderCell>Behind</HeaderCell>
               </tr>
             </thead>
             <tbody>
-              {cells.data.map((cell) => (
+              {shown.map((cell) => (
                 <tr key={cell.id} className={rowClasses}>
                   <td className="px-3 py-3">
                     <Link href={meetingsHref(cell, month)} className={`${LINK} font-medium`}>
@@ -88,13 +133,14 @@ export function CoverageByCell({ month }: { month: string }) {
                       unit="meetings recorded"
                     />
                   </td>
+                  <td className="px-3 py-3">{behindLabel(cell)}</td>
                 </tr>
               ))}
             </tbody>
           </Table>
 
           <ul className="mt-4 flex flex-col gap-3 lg:hidden">
-            {cells.data.map((cell) => (
+            {shown.map((cell) => (
               <li key={cell.id} className="border-line border p-4">
                 <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
                   <h3 className="text-base font-medium">
@@ -119,14 +165,46 @@ export function CoverageByCell({ month }: { month: string }) {
                       {dayOfWeekLabel(cell.schedule.day_of_week)}, {cell.schedule.time_of_day}
                     </dd>
                   </div>
+                  <div className="flex gap-2">
+                    <dt>Behind</dt>
+                    <dd className="text-ink">{behindLabel(cell)}</dd>
+                  </div>
                 </dl>
               </li>
             ))}
           </ul>
+
+          {/*
+            **How many Cells of this list are behind, not a figure of the report.** It counts
+            rows of the Cells list in scope, every page of it, by decision 0267's predicate,
+            and it is in words beside its complement rather than as a share of anything.
+          */}
+          <p className="text-muted mt-4 text-sm">
+            {behindCount} behind · {all.length - behindCount} not behind
+          </p>
+
+          <div className="mt-6 flex gap-3">
+            {start > 0 ? (
+              <Button type="button" variant="secondary" onClick={() => setPage((p) => p - 1)}>
+                Previous
+              </Button>
+            ) : null}
+            {start + PAGE_SIZE < rows.length ? (
+              <Button type="button" variant="secondary" onClick={() => setPage((p) => p + 1)}>
+                Next
+              </Button>
+            ) : null}
+          </div>
         </>
       ) : null}
     </section>
   );
+}
+
+/** In words, and only where it is above zero (sections 13 and 23: never colour alone). */
+function behindLabel(cell: CellSummary): string {
+  const behind = behindOf(cell.coverage);
+  return behind === 0 ? 'None' : `${behind} behind`;
 }
 
 function meetingsHref(cell: CellSummary, month: string): string {
@@ -144,7 +222,7 @@ function meetingsHref(cell: CellSummary, month: string): string {
  * narrowed by Network, so a row here would count people the report above does not.
  */
 export function CoverageBySunday({ month }: { month: string }) {
-  // The same query as the DCC calendar, so moving between the two reads it once.
+  // The same query as /dcc, your month, so moving between the two reads it once.
   const events = useQuery({
     queryKey: ['dcc-events', month],
     queryFn: ({ signal }) => listDccEvents(month, signal),

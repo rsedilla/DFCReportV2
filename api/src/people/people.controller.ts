@@ -359,7 +359,8 @@ export class PeopleController {
   }
 
   /**
-   * Search by name (section 8), narrowed to the searcher's scope unless asked wider.
+   * List or search the searcher's scope, or search the church when asked (section 8,
+   * decision 0259).
    *
    * **Both the rows and the fields are scoped, and they are scoped separately.**
    * The fields have always been: a person outside the actor's pastoral scope comes
@@ -398,7 +399,16 @@ export class PeopleController {
     // and searched for a single letter, across the church in church-wide mode, and `Jr`
     // passed it and was answered with an empty list. Refused here with the field named, which is the shape a client shows as
     // a sentence rather than as "some fields need correcting".
-    if (normalizeName(query.q).replace(/\s+/g, '').length < SEARCH_MINIMUM) {
+    // **No term lists the searcher's own scope** (decision 0259): section 8
+    // makes the People screen that list. The church-wide directory is never listed whole,
+    // so it still needs a term.
+    if (query.q === undefined && query.church_wide) {
+      throw new ValidationFailedError('Enter at least two letters of a name.', { field: 'q' });
+    }
+    if (
+      query.q !== undefined &&
+      normalizeName(query.q).replace(/\s+/g, '').length < SEARCH_MINIMUM
+    ) {
       throw new ValidationFailedError('Enter at least two letters of a name.', { field: 'q' });
     }
 
@@ -411,16 +421,24 @@ export class PeopleController {
       membership === null || membership.kind === 'WHOLE_CHURCH' ? null : membership.personIds;
 
     const { rows, nextCursor } = await this.read.searchByName(
-      query.q,
+      query.q ?? null,
       query.limit ?? 50,
       decodeCursor(query.cursor),
       restrictTo,
+      // A Member ID matches only inside the searcher's own scope: church-wide, a prefix
+      // such as `M-00` would page the directory the two-letter minimum exists to protect.
+      { memberId: !query.church_wide },
     );
 
     const data = await Promise.all(
       rows.map(async (person) => {
         if (await this.read.isWithinViewScope(actor, person.id)) {
-          return fullProfile(person);
+          // The pastoral leader's name, as an out-of-scope row already carries it, for the
+          // People list's leader column (decision 0259).
+          return {
+            ...fullProfile(person),
+            direct_leader_name: await this.hierarchy.directLeaderNameOf(person.id),
+          };
         }
 
         return this.read.minimalIdentity(person);

@@ -38,6 +38,28 @@ async function recordSearches(page: import('@playwright/test').Page): Promise<st
 }
 
 test.describe('which search each surface asks for', () => {
+  test('the People screen opens on everyone, with each leader and Cell (decision 0259)', async ({
+    page,
+  }) => {
+    await mockSignedIn(page);
+    await mockPeople(page);
+    const searches = await recordSearches(page);
+
+    await page.goto('/people');
+
+    const table = page.getByRole('table', { name: 'People within your scope' });
+    await expect(table.getByRole('row', { name: /Marilou Reyes Santos/ })).toContainText(
+      'Teofilo Ramos',
+    );
+    await expect(table.getByRole('row', { name: /Marilou Reyes Santos/ })).toContainText(
+      'Youth · Sat',
+    );
+    // No term was typed, and the first request asked for ten of the searcher's own scope.
+    expect(searches[0]).not.toContain('q=');
+    expect(searches[0]).toContain('limit=10');
+    expect(searches[0]).not.toContain('church_wide');
+  });
+
   test('the People screen asks for its own scope', async ({ page }) => {
     await mockSignedIn(page);
     await mockPeople(page);

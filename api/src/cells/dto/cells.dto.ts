@@ -15,7 +15,7 @@ import {
 } from 'class-validator';
 import { Max, Min, ValidateIf } from 'class-validator';
 
-import { CURSOR_MAX_LENGTH } from '../../common/cursor';
+import { CURSOR_MAX_LENGTH, NAME_FIELD_MAX_LENGTH } from '../../common/cursor';
 import { IsManilaCalendarDate } from '../../common/time/is-manila-calendar-date';
 
 import type {
@@ -159,6 +159,17 @@ export class CreateLeadershipRequestDto {
   @ValidateIf((dto: CreateLeadershipRequestDto) => dto.kind === 'HANDOVER')
   @IsUUID()
   cell_id?: string;
+
+  /**
+   * The closed Cell this request asks to resume (decision 0264).
+   *
+   * Optional, and only on a new Cell: a handover moves a Cell that is still running, so
+   * it resumes nothing, and the refusal is in the service for the reason `cell_id`'s is
+   * — two `@ValidateIf`s on one property are ANDed rather than replaced.
+   */
+  @ValidateIf((dto: CreateLeadershipRequestDto) => dto.restart_of_cell_id !== undefined)
+  @IsUUID()
+  restart_of_cell_id?: string;
 }
 
 /**
@@ -563,6 +574,30 @@ export class CellIndexDto {
   @IsOptional()
   @IsIn(['me'], { message: 'led_by accepts only the value "me" (SKILL.md section 22).' })
   led_by?: 'me';
+
+  /**
+   * `CLOSED` for the closed Cells whose last leader is in scope, `ACTIVE` (the default)
+   * for the running ones (decision 0266). Two views of one list rather than a mixed one,
+   * because every count of Cells means active Cells unless it says otherwise (section 10).
+   */
+  @IsOptional()
+  @IsIn(['ACTIVE', 'CLOSED'], {
+    message: 'state accepts ACTIVE or CLOSED (SKILL.md section 22).',
+  })
+  state?: 'ACTIVE' | 'CLOSED';
+
+  /**
+   * Narrows the page to Cells whose identifier contains the term, where the term carries a
+   * digit, or whose leader's name contains it (decision 0261). Two characters minimum, for
+   * the reason the Person search has one: a one-letter term pages the list rather than
+   * finding a row in it, and the index service counts it on the term as searched. It narrows
+   * what the scope already lists and widens nothing.
+   */
+  @IsOptional()
+  @IsString()
+  @Length(2, NAME_FIELD_MAX_LENGTH)
+  @IsStorableText()
+  q?: string;
 
   /** Section 22: defaults to 50, maximum 200. */
   @IsOptional()

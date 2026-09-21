@@ -108,6 +108,20 @@
       "table": "cells",
       "kind": "root",
       "reason": "Shared infrastructure rather than a domain module: it takes the row lock section 24 orders, in one place, so that every caller takes the same strength in the same order. It selects the row and reads no column but id."
+    },
+    {
+      "file": "src/cells/cells.read.service.ts",
+      "method": "cellsInScope",
+      "table": "persons",
+      "kind": "join",
+      "reason": "Decision 0261 lets the Cells list be searched by a leader's name. Rooted in cells and joined for that predicate; returning identifiers would mean searching the church's people to filter a page of Cells. Section 2 argues the shape; the instances are not enumerated there."
+    },
+    {
+      "file": "src/cells/cells.read.service.ts",
+      "method": "closedCellsInScope",
+      "table": "persons",
+      "kind": "join",
+      "reason": "Decision 0266 gives the Cells list a closed view, searched as the running view is (decision 0261) by Cell ID or by the last leader’s name. Rooted in cells and joined for that predicate, for the same reason as cellsInScope. Section 2 argues the shape; the instances are not enumerated there."
     }
   ]
 }

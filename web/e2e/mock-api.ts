@@ -62,6 +62,7 @@ const ME = {
   person_id: '9a1b2c3d-4e5f-4061-8273-8495a6b7c8d9',
   email: 'admin@example.invalid',
   first_name: 'Marilou',
+  roles: ['LEADER'],
   capabilities: CAPABILITIES,
 };
 
@@ -188,10 +189,10 @@ const CELL_LEADER = {
  * The first is the Cell `PERSON_IN_SCOPE` already belongs to.
  */
 export const CELL_CHOICES = [
-  { id: '3f1b7c6e-0000-4000-8000-000000000101', cell_id: 'C-0007', category: 'YOUTH', leader: CELL_LEADER },
+  { id: '3f1b7c6e-0000-4000-8000-000000000101', cell_id: 'CELL-000007', category: 'YOUTH', leader: CELL_LEADER },
   {
     id: '3f1b7c6e-0000-4000-8000-000000000102',
-    cell_id: 'C-0011',
+    cell_id: 'CELL-000011',
     category: 'YOUNG_PRO',
     leader: {
       person_id: '33333333-4444-4555-8666-777777777777',
@@ -201,7 +202,7 @@ export const CELL_CHOICES = [
   },
   {
     id: '3f1b7c6e-0000-4000-8000-000000000103',
-    cell_id: 'C-0014',
+    cell_id: 'CELL-000014',
     category: 'COUPLE',
     leader: {
       person_id: '44444444-5555-4666-8777-888888888888',
@@ -211,8 +212,10 @@ export const CELL_CHOICES = [
   },
 ].map((cell) => ({
   ...cell,
+  // `PERSON_IN_SCOPE`'s own Network, so a picker narrowing to it keeps all three.
+  network: 'WOMENS',
   schedule: { day_of_week: 6, time_of_day: '19:00' },
-  coverage: { recorded: 3, scheduled: 4 },
+  coverage: { recorded: 3, scheduled: 4, behind: 1 },
 }));
 
 /**
@@ -253,7 +256,13 @@ export async function mockPeople(page: Page): Promise<void> {
   );
 
   await page.route('**/api/v1/people?*', (route) =>
-    route.fulfill(json({ data: [PERSON_IN_SCOPE, PERSON_WITHHELD], next_cursor: null })),
+    route.fulfill(
+      json({
+        // A search row names the person's leader (owner's choice of 2026-09-19).
+        data: [{ ...PERSON_IN_SCOPE, direct_leader_name: 'Teofilo Ramos' }, PERSON_WITHHELD],
+        next_cursor: null,
+      }),
+    ),
   );
 
   await page.route(`**/api/v1/people/${PERSON_IN_SCOPE.id}`, (route) =>
@@ -262,7 +271,13 @@ export async function mockPeople(page: Page): Promise<void> {
 
   // The profile's Cell and DCC sections (decisions 0248 and 0247).
   await mockPersonCells(page, {
-    membership: { id: CELL_CHOICES[0].id, cell_id: 'C-0007', leader: CELL_LEADER },
+    membership: {
+      id: CELL_CHOICES[0].id,
+      cell_id: 'CELL-000007',
+      category: 'YOUTH',
+      day_of_week: 6,
+      leader: CELL_LEADER,
+    },
     leads: [],
   });
 
@@ -288,11 +303,34 @@ export async function mockPersonDccRefused(page: Page): Promise<void> {
   );
 }
 
-/** The Cells index, for the Cell pickers. */
-export async function mockCellChoices(page: Page): Promise<void> {
+/** A Men's Network Cell, which a picker for `PERSON_IN_SCOPE` must not offer. */
+export const MENS_CELL_CHOICE = {
+  id: '3f1b7c6e-0000-4000-8000-000000000104',
+  cell_id: 'CELL-000019',
+  category: 'YOUTH',
+  network: 'MENS',
+  leader: {
+    person_id: '55555555-6666-4777-8888-999999999999',
+    member_id: 'M-000044',
+    full_name: 'Ernesto Villanueva',
+  },
+  schedule: { day_of_week: 5, time_of_day: '19:30' },
+  coverage: { recorded: 0, scheduled: 4, behind: 0 },
+};
+
+/** The Cells index, for the Cell pickers; `extra` adds rows after the three. */
+export async function mockCellChoices(
+  page: Page,
+  extra: readonly unknown[] = [],
+): Promise<void> {
   await page.route('**/api/v1/cells?*', (route) =>
     route.fulfill(
-      json({ reporting_month: '2026-09-01', open: true, data: CELL_CHOICES, next_cursor: null }),
+      json({
+        reporting_month: '2026-09-01',
+        open: true,
+        data: [...CELL_CHOICES, ...extra],
+        next_cursor: null,
+      }),
     ),
   );
 }
@@ -364,12 +402,12 @@ export async function mockPeopleWithoutACell(page: Page): Promise<void> {
         data: [
           {
             id: '3f1b7c6e-0000-4000-8000-000000000921',
-            member_id: 'M-01101',
+            member_id: 'M-001101',
             full_name: 'Bituin Carreon',
           },
           {
             id: '3f1b7c6e-0000-4000-8000-000000000922',
-            member_id: 'M-01102',
+            member_id: 'M-001102',
             full_name: 'Rodolfo Villamor',
           },
         ],
@@ -393,21 +431,21 @@ export async function mockAwaitingReassignment(page: Page): Promise<void> {
         data: [
           {
             id: '3f1b7c6e-0000-4000-8000-000000000901',
-            member_id: 'M-01001',
+            member_id: 'M-001001',
             full_name: 'Amihan Bacani',
             former_leader: {
               person_id: '3f1b7c6e-0000-4000-8000-000000000903',
-              member_id: 'M-01003',
+              member_id: 'M-001003',
               full_name: 'Rogelio Mendoza',
             },
           },
           {
             id: '3f1b7c6e-0000-4000-8000-000000000902',
-            member_id: 'M-01002',
+            member_id: 'M-001002',
             full_name: 'Teodoro Cruz',
             former_leader: {
               person_id: '3f1b7c6e-0000-4000-8000-000000000903',
-              member_id: 'M-01003',
+              member_id: 'M-001003',
               full_name: 'Rogelio Mendoza',
             },
           },

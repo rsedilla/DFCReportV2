@@ -5,6 +5,7 @@ import {
   mockCellReport,
   mockCellReportForOneCell,
   mockCells,
+  mockCellsAtScale,
   mockDccEvents,
   mockDccReport,
 } from './mock-attendance';
@@ -162,7 +163,7 @@ test.describe('the coverage tables', () => {
 
     const table = page.getByRole('region', { name: 'Coverage by Cell' });
     // Table from `lg`, cards below it: whichever this viewport shows.
-    await expect(table.getByRole('link', { name: 'C-0007' }).filter({ visible: true })).toHaveAttribute(
+    await expect(table.getByRole('link', { name: 'CELL-000007' }).filter({ visible: true })).toHaveAttribute(
       'href',
       '/cells/3f1b7c6e-0000-4000-8000-000000000101/meetings?month=2026-06-01',
     );
@@ -173,6 +174,62 @@ test.describe('the coverage tables', () => {
 
     await page.getByLabel('Figures for').selectOption('3f1b7c6e-0000-4000-8000-000000000101');
     await expect(page.getByRole('region', { name: 'Coverage by Cell' })).toHaveCount(0);
+  });
+
+  test('the coverage table pages at ten, and a ranked table would not look like this', async ({
+    page,
+  }) => {
+    await page.clock.setFixedTime(NOW);
+    await mockSignedIn(page);
+    await mockCellsAtScale(page);
+    await mockCellReport(page);
+    await page.goto('/reports/cells');
+
+    const table = page.getByRole('region', { name: 'Coverage by Cell' });
+    const rows = table.getByRole('link', { name: /^CELL-/ }).filter({ visible: true });
+
+    // Ten of the eleven, in the order the index returned them. The two that have
+    // recorded least are CELL-000010 and CELL-000011, so a table ordered worst-first
+    // would open with them and this one closes with them (sections 13 and 17).
+    await expect(rows).toHaveCount(10);
+    await expect(rows.first()).toHaveText('CELL-000001');
+    await expect(rows.nth(9)).toHaveText('CELL-000010');
+    await expect(table.getByRole('button', { name: 'Previous' })).toHaveCount(0);
+
+    await table.getByRole('button', { name: 'Next' }).click();
+    await expect(rows).toHaveCount(1);
+    await expect(rows.first()).toHaveText('CELL-000011');
+
+    // The count of Cells behind is over every page and by decision 0267's predicate — two
+    // of the eleven have a meeting that came with no record — and it is in words beside
+    // its complement, never a share.
+    await expect(table.getByText('2 behind · 9 not behind')).toBeVisible();
+  });
+
+  test('the behind filter keeps the Cells a meeting that came is missing from, in their order', async ({
+    page,
+  }) => {
+    // Decision 0267: behind is meetings due so far minus meetings recorded. The filter was
+    // built and removed on 2026-09-20 because it compared with the whole month's schedule,
+    // which counts meetings that have not happened (decision 0239).
+    await page.clock.setFixedTime(NOW);
+    await mockSignedIn(page);
+    await mockCellsAtScale(page);
+    await mockCellReport(page);
+    await page.goto('/reports/cells');
+
+    const table = page.getByRole('region', { name: 'Coverage by Cell' });
+    await table.getByRole('button', { name: 'Show only Cells behind' }).click();
+
+    const rows = table.getByRole('link', { name: /^CELL-/ }).filter({ visible: true });
+    await expect(rows).toHaveText(['CELL-000010', 'CELL-000011']);
+    await expect(table.getByRole('button', { name: 'Show only Cells behind' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    const grid = table.getByRole('table', { name: 'Recording coverage for each Cell' });
+    await expect(grid.getByRole('row', { name: /CELL-000010/ })).toContainText('3 behind');
+    await expect(grid.getByRole('row', { name: /CELL-000011/ })).toContainText('4 behind');
   });
 
   test('Coverage by Sunday keeps a removed Sunday in its place, and leaves for a Network', async ({
@@ -201,5 +258,77 @@ test.describe('the coverage tables', () => {
 
     await page.getByLabel('Figures for').selectOption('MENS');
     await expect(page.getByRole('region', { name: 'Coverage by Sunday' })).toHaveCount(0);
+  });
+});
+
+test.describe('the year view (decision 0257)', () => {
+  /** Owed and Filed differ by month, so a wrong sum cannot pass by coincidence. */
+  const FIGURES: Record<string, { owed: number; met: number }> = {
+    '2026-01-01': { owed: 10, met: 9 },
+    '2026-02-01': { owed: 12, met: 8 },
+    '2026-04-01': { owed: 14, met: 14 },
+    '2026-05-01': { owed: 16, met: 11 },
+    '2026-06-01': { owed: 18, met: 5 },
+  };
+
+  test('one row per month begun, and a year row adding up Owed and Filed of the months read', async ({
+    page,
+  }) => {
+    await page.clock.setFixedTime(NOW);
+    await mockSignedIn(page);
+    await page.route('**/api/v1/reports/dcc/monthly*', (route) => {
+      const period = new URL(route.request().url()).searchParams.get('period') ?? '';
+      const figures = FIGURES[period];
+
+      // March is refused, as a month outside the reader's reach would be.
+      return figures
+        ? route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({
+              scope: { kind: 'WHOLE_CHURCH' },
+              period,
+              open: period === '2026-06-01',
+              n: 4,
+              removed_events: [],
+              unique_people: 5,
+              classification: { vip: 1, second_timer: 1, third_timer: 1, fourth_timer: 1, regular: 1 },
+              buckets: [],
+              coverage: figures,
+            }),
+          })
+        : route.fulfill({
+            status: 403,
+            contentType: 'application/json',
+            body: JSON.stringify({
+              error: { code: 'SCOPE_DENIED', message: 'Outside your scope.', details: {} },
+            }),
+          });
+    });
+
+    await page.goto('/reports/dcc?period=year');
+
+    await expect(page.getByRole('heading', { name: 'Month by month, January to June 2026' })).toBeVisible();
+
+    const table = page.getByRole('table');
+    const rows = table.getByRole('row');
+    // A header, six months and the year row: July has not begun and is not shown.
+    await expect(rows).toHaveCount(8);
+    await expect(table.getByRole('row', { name: /^July/ })).toHaveCount(0);
+
+    // March could not be read: no figures on its row, and it is left out of the year row.
+    const march = table.getByRole('row', { name: /^March/ });
+    await expect(march.getByRole('cell')).toHaveCount(2);
+    await expect(march).toContainText('Outside your scope.');
+    await expect(page.getByText('One month could not be read and is not in the year row.')).toBeVisible();
+
+    const year = table.getByRole('row', { name: /^Year so far/ });
+    const cells = year.getByRole('cell');
+    await expect(cells.nth(1)).toHaveText('70');
+    await expect(cells.nth(2)).toHaveText('47');
+    // No people count for the year: a person who came in two months is one person.
+    await expect(cells.nth(3)).toHaveText('');
+    // Section 17: the year row includes a month still open, and says which.
+    await expect(cells.nth(4)).toHaveText('Includes June, still open');
   });
 });

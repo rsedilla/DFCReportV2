@@ -11,11 +11,40 @@ import { CLASSIFICATION_LABELS, type AttendanceBucket, type Classification } fro
  * and without one the last row is not the list's last child, so a rule below each row
  * would stack against the Total's. A rule above each row but the first does not.
  */
-function FigureRow({ label, value }: { label: React.ReactNode; value: number }) {
+function FigureRow({
+  label,
+  value,
+  share,
+}: {
+  label: React.ReactNode;
+  value: number;
+  /**
+   * This row's share of the list's total, which draws the bar beside the count.
+   *
+   * **The bar is a proportion of the rows below it and never a grade.** Sections 13 and
+   * 17 forbid ranking and forbid a figure's meaning being carried by colour: this is one
+   * ink, the rows keep their own order, and the count is always beside it, so a reader
+   * who cannot see the bar loses nothing. The shares add up to the Total the list ends
+   * with, which is what makes drawing them honest.
+   */
+  share?: number;
+}) {
   return (
     <div className="border-line flex items-baseline justify-between gap-4 border-t py-2 first:border-t-0">
       <dt className="text-sm">{label}</dt>
-      <dd className="text-base font-semibold tabular-nums">{value}</dd>
+      <dd className="flex items-baseline gap-3">
+        {share === undefined ? null : (
+          <span aria-hidden="true" className="bg-line hidden h-2 w-24 sm:block">
+            {/* A row with people in it always draws something, so a small share does not
+                read as none. */}
+            <span
+              className="bg-ink block h-2"
+              style={{ width: value === 0 ? '0' : `max(2px, ${(share * 100).toFixed(1)}%)` }}
+            />
+          </span>
+        )}
+        <span className="text-base font-semibold tabular-nums">{value}</span>
+      </dd>
     </div>
   );
 }
@@ -61,7 +90,12 @@ export function ClassificationFigures({ classification }: { classification: Clas
 
       <dl className="mt-3">
         {CLASSIFICATION_LABELS.map(({ key, label }) => (
-          <FigureRow key={key} label={label} value={classification[key]} />
+          <FigureRow
+            key={key}
+            label={label}
+            value={classification[key]}
+            share={total === 0 ? 0 : classification[key] / total}
+          />
         ))}
         <TotalRow value={total} />
       </dl>
@@ -126,6 +160,7 @@ export function AttendanceBuckets({
               </>
             }
             value={bucket.people}
+            share={total === 0 ? 0 : bucket.people / total}
           />
         ))}
         <TotalRow value={total} />

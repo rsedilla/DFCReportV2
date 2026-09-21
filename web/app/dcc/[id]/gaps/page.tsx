@@ -3,8 +3,10 @@
 import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
+import { useState } from 'react';
 
 import { AppShell, PAGE_WIDTH } from '@/components/app-shell';
+import { Button } from '@/components/ui/button';
 import { FailureNotice } from '@/components/ui/failure-notice';
 import { getCoverageGaps, notRecordableLabel } from '@/lib/dcc';
 import { describeFailure } from '@/lib/messages';
@@ -47,9 +49,12 @@ export default function CoverageGapsPage() {
 function Gaps() {
   const params = useParams<{ id: string }>();
 
+  const [cursors, setCursors] = useState<(string | null)[]>([null]);
+  const [page, setPage] = useState(0);
+
   const gaps = useQuery({
-    queryKey: ['coverage-gaps', params.id],
-    queryFn: ({ signal }) => getCoverageGaps(params.id, signal),
+    queryKey: ['coverage-gaps', params.id, cursors[page]],
+    queryFn: ({ signal }) => getCoverageGaps(params.id, cursors[page], signal),
   });
 
   const event = gaps.data?.event ?? null;
@@ -58,15 +63,21 @@ function Gaps() {
     <main id="main" className={PAGE_WIDTH.READING}>
       <p className="mb-4">
         <Link
-          href="/dcc"
+          href="/reports/dcc"
           className="focus-visible:outline-accent text-accent inline-flex min-h-6 items-center rounded-sm text-sm font-medium underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2"
         >
-          Back to the calendar
+          Back to DCC reports
         </Link>
       </p>
 
       <h1 className="text-2xl font-semibold tracking-tight">
-        {event ? `Still to record — ${dayLabel(event.event_date)}` : 'Still to record'}
+        {event ? (
+          <>
+            <span className="text-accent">{dayLabel(event.event_date)}</span> · still to record
+          </>
+        ) : (
+          'Still to record'
+        )}
       </h1>
       <p className="text-muted mt-2 max-w-2xl text-sm leading-relaxed">
         The leaders in your scope who owe a record for this Sunday and have not filed one.
@@ -92,21 +103,62 @@ function Gaps() {
               Everyone in your scope who owed a record for this Sunday has filed one.
             </p>
           ) : (
-            <ul className="mt-6 flex flex-col gap-3">
-              {gaps.data.data.map((leader) => (
-                <li key={leader.person_id} className="border-line rounded-lg border p-4">
-                  <h2 className="text-base font-medium">{leader.full_name}</h2>
-                  <p className="text-muted mt-1 text-sm">{leader.member_id}</p>
-                </li>
-              ))}
-            </ul>
+            <table className="mt-6 w-full border-collapse text-sm">
+              <caption className="sr-only">Leaders still to record, by name</caption>
+              <thead>
+                <tr className="border-line border-b text-left">
+                  <th scope="col" className="text-muted py-2 pr-4 font-medium">
+                    Name
+                  </th>
+                  <th scope="col" className="text-muted py-2 font-medium">
+                    Member ID
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {gaps.data.data.map((leader) => (
+                  <tr key={leader.person_id} className="border-line border-b">
+                    <td className="py-3 pr-4">
+                      {/* The profile answers for itself, as from a Cell's members. */}
+                      <Link
+                        href={`/people/${leader.person_id}`}
+                        className="focus-visible:outline-accent text-accent inline-flex min-h-6 items-center rounded-sm font-medium underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2"
+                      >
+                        {leader.full_name}
+                      </Link>
+                    </td>
+                    <td className="text-muted py-3">{leader.member_id}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           )}
 
-          {gaps.data.next_cursor !== null ? (
-            <p className="text-muted mt-4 max-w-2xl text-sm leading-relaxed">
-              More leaders owe a record than fit one page.
-            </p>
-          ) : null}
+          {/* Previous and Next rather than "show more": a cursor names one page, and
+              section 22 returns no total to count pages against. */}
+          <nav aria-label="Leaders still to record" className="mt-6 flex items-center gap-3">
+            <Button
+              variant="secondary"
+              disabled={page === 0}
+              onClick={() => setPage((current) => Math.max(0, current - 1))}
+            >
+              Previous
+            </Button>
+            <Button
+              variant="secondary"
+              disabled={!gaps.data.next_cursor}
+              onClick={() => {
+                const next = gaps.data.next_cursor;
+                if (!next) {
+                  return;
+                }
+                setCursors((current) => [...current.slice(0, page + 1), next]);
+                setPage((current) => current + 1);
+              }}
+            >
+              Next
+            </Button>
+          </nav>
         </>
       ) : null}
     </main>

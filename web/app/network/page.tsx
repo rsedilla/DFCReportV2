@@ -1,6 +1,6 @@
 'use client';
 
-import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useInfiniteQuery, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ChevronRight } from 'lucide-react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
@@ -122,6 +122,8 @@ function NetworkScreen() {
 
   const person = branch.data?.pages[0]?.person;
   const rows = branch.data?.pages.flatMap((page) => page.data) ?? [];
+  // A reader outside the tree starts at the roots their scope reaches (decision 0268).
+  const roots = focusParam === null ? (branch.data?.pages[0]?.roots ?? []) : [];
   const entries = path.data?.data ?? [];
   const dccOf = (id: string): number | null =>
     dcc.data === undefined ? null : (dcc.data.behind_by_child[id] ?? 0);
@@ -190,6 +192,8 @@ function NetworkScreen() {
 
       {branch.isPending && failure === null ? (
         <p className="text-muted mt-6 text-sm">Loading&hellip;</p>
+      ) : roots.length > 0 ? (
+        <RootsView roots={roots} readsDcc={readsDcc} readsCells={readsCells} />
       ) : person === undefined ? null : (
         <>
           <FocusBlock
@@ -239,6 +243,23 @@ function NetworkScreen() {
               </label>
             ) : null}
           </div>
+
+          {/*
+            Why no row carries a Move, for a reader holding no
+            `people.manage_pastoral_assignment` grant. It says nothing about anybody on
+            the screen: it is a fact about the reader's own permissions, and section 5
+            names who may act — an administrator, a leader upline of *the person* acting
+            inside their own subtree, or a Senior Pastor. That is why the sentence says a
+            leader who pastors them rather than the reader's own leader, who is upline of
+            nobody on a branch the reader reached from outside. Once, under the list,
+            rather than beside each name.
+          */}
+          {mayMove ? null : (
+            <p className="text-muted mt-2 max-w-2xl text-sm leading-relaxed">
+              To move somebody to another pastoral leader, ask a leader who pastors them, or
+              an administrator.
+            </p>
+          )}
 
           {shown.length === 0 ? (
             <p className="text-muted mt-4 max-w-2xl text-sm leading-relaxed">
@@ -373,6 +394,102 @@ function NetworkScreen() {
         />
       )}
     </main>
+  );
+}
+
+/**
+ * Where a reader outside the pastoral tree starts (decision 0268): the Network roots their
+ * scope reaches, by name, each with their whole branch's figures for the month. A root is
+ * never moved (section 5), so a row offers Open and nothing else.
+ */
+function RootsView({
+  roots,
+  readsDcc,
+  readsCells,
+}: {
+  roots: BranchNode[];
+  readsDcc: boolean;
+  readsCells: boolean;
+}) {
+  const dcc = useQueries({
+    queries: roots.map((root) => ({
+      queryKey: ['network-dcc', root.id],
+      queryFn: ({ signal }: { signal: AbortSignal }) => getDccBehind(root.id, signal),
+      enabled: readsDcc,
+      retry: false,
+    })),
+  });
+  const cells = useQueries({
+    queries: roots.map((root) => ({
+      queryKey: ['network-cells', root.id],
+      queryFn: ({ signal }: { signal: AbortSignal }) => getCellFigures(root.id, signal),
+      enabled: readsCells,
+      retry: false,
+    })),
+  });
+
+  // The month these rows' figures are for, from the rows' own figures rather than the
+  // reader's, which a reader outside the tree may not be able to read (section 17).
+  const answered = [...dcc, ...cells].find((query) => query.data !== undefined)?.data;
+
+  return (
+    <section aria-labelledby="roots-heading" className="mt-6">
+      <h2 id="roots-heading" className="text-lg font-semibold">
+        Network roots
+      </h2>
+      <p className="text-muted mt-2 max-w-2xl text-sm leading-relaxed">
+        You aren&rsquo;t in the pastoral tree, so this starts at the Network roots your scope
+        reaches.
+        {answered === undefined
+          ? null
+          : ` Figures for ${monthLabel(answered.reporting_month)}${answered.open ? ', a month still open' : ''}.`}
+      </p>
+      <ul className="mt-4 flex flex-col gap-3">
+        {roots.map((root, index) => (
+          <li key={root.id} className="border-line border p-4">
+            <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+              <h3 className="text-base font-medium">
+                <Link href={focusHref(root.id)} className={LINK}>
+                  {root.full_name}
+                </Link>
+              </h3>
+              <span className="text-muted text-xs">{root.member_id}</span>
+            </div>
+            <dl className="text-muted mt-2 grid grid-cols-2 gap-2 text-sm lg:grid-cols-4">
+              <div>
+                <dt>Direct reports</dt>
+                <dd className="text-ink tabular-nums">{root.direct_reports}</dd>
+              </div>
+              <div>
+                <dt>Beneath</dt>
+                <dd className="text-ink tabular-nums">{root.beneath}</dd>
+              </div>
+              <div>
+                <dt>DCC behind</dt>
+                <dd className="text-ink tabular-nums">
+                  {figure(dcc[index]?.data?.branch_behind ?? null)}
+                </dd>
+              </div>
+              <div>
+                <dt>Cell behind</dt>
+                <dd className="text-ink tabular-nums">
+                  {figure(cells[index]?.data?.branch_meetings_behind ?? null)}
+                </dd>
+              </div>
+            </dl>
+            <div className="mt-3">
+              <Link
+                href={focusHref(root.id)}
+                className={buttonClasses('secondary')}
+                aria-label={`Open ${root.full_name}`}
+              >
+                Open
+              </Link>
+            </div>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }
 

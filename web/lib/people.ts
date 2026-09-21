@@ -46,6 +46,8 @@ export interface PersonFull {
   sex: Sex;
   civil_status: CivilStatus;
   mobile_number: string | null;
+  /** On a search row only (decision 0259); absent elsewhere. */
+  direct_leader_name?: string | null;
 }
 
 export type Person = PersonIdentity | PersonFull;
@@ -91,9 +93,13 @@ export async function searchPeople(
   q: string,
   cursor: string | null,
   signal?: AbortSignal,
-  options: { churchWide?: boolean } = {},
+  options: { churchWide?: boolean; limit?: number } = {},
 ): Promise<PersonPage> {
-  const params = new URLSearchParams({ q });
+  // An empty term lists the searcher's own scope (decision 0259).
+  const params = new URLSearchParams(q === '' ? {} : { q });
+  if (options.limit !== undefined) {
+    params.set('limit', String(options.limit));
+  }
   if (cursor) {
     params.set('cursor', cursor);
   }
@@ -330,6 +336,11 @@ export function ageFrom(birthDate: string | null): number | null {
  * cannot yield an age, which is different from no date at all.
  */
 export const NEGATIVE_AGE = -1;
+
+/** The Network a person of this sex is assigned to (section 4, decision 0037). */
+export function networkOfSex(sex: Sex | ''): Network | null {
+  return sex === 'MALE' ? 'MENS' : sex === 'FEMALE' ? 'WOMENS' : null;
+}
 
 export function networkLabel(network: Network | null): string {
   if (network === 'MENS') {

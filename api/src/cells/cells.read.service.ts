@@ -11,6 +11,8 @@ import type { LeadershipRequestCursor, LeadershipRequestRow } from './leadership
 import type { RosterCursor } from '../common/roster-cursor';
 import type { CellCategory, Database } from '../database/schema';
 import type { Transaction } from 'kysely';
+import { ACCENTED, UNACCENTED, escapeLike } from '../people/people.shared';
+import { normalizeName } from '../people/duplicate-matching';
 
 /** A person's open membership, with its Cell's current leader, and the Cells they lead. */
 export interface PersonCells {
@@ -449,6 +451,66 @@ export class CellsReadService implements CellScopePort, CellRelationshipsPort {
       : null;
   }
 
+  /**
+   * How a Cell is named on its own page, as it stands today (owner's choice of 2026-09-19):
+   * its category, schedule and leader now, or the last of each where the Cell is closed,
+   * and how many members it has now. A heading rather than a figure — each meeting row
+   * carries its own time, and no count here is reported for a period.
+   */
+  async cellHeadingWithin(
+    executor: Db | Transaction<Database>,
+    cellId: string,
+  ): Promise<{
+    category: string | null;
+    dayOfWeek: number | null;
+    scheduledTime: string | null;
+    leaderPersonId: string | null;
+    memberCount: number;
+  }> {
+    const result = await sql<{
+      category: string | null;
+      day_of_week: number | null;
+      scheduled_time: string | null;
+      member_count: number;
+    }>`
+      SELECT (SELECT category.category::text
+                FROM cell_categories AS category
+               WHERE category.cell_id = ${cellId}
+                 AND category.ended_at IS DISTINCT FROM category.started_at
+                 AND category.started_at <= now()
+               ORDER BY category.started_at DESC, category.ended_at DESC NULLS FIRST
+               LIMIT 1) AS category,
+             schedule.day_of_week,
+             schedule.scheduled_time,
+             (SELECT count(*)::int
+                FROM cell_memberships AS membership
+               WHERE membership.cell_id = ${cellId}
+                 AND membership.ended_at IS NULL) AS member_count
+        FROM (SELECT 1) AS one
+        LEFT JOIN LATERAL (
+          SELECT governing.day_of_week,
+                 to_char(governing.time_of_day, 'HH24:MI') AS scheduled_time
+            FROM cell_schedules AS governing
+           WHERE governing.cell_id = ${cellId}
+             AND governing.ended_at IS DISTINCT FROM governing.started_at
+             AND governing.started_at <= now()
+           ORDER BY governing.started_at DESC,
+                    governing.ended_at DESC NULLS FIRST,
+                    governing.id DESC
+           LIMIT 1
+        ) AS schedule ON true
+    `.execute(executor);
+    const row = result.rows[0];
+
+    return {
+      category: row?.category ?? null,
+      dayOfWeek: row?.day_of_week === null || row === undefined ? null : Number(row.day_of_week),
+      scheduledTime: row?.scheduled_time ?? null,
+      leaderPersonId: await this.leaderForScopeWithin(executor, cellId),
+      memberCount: Number(row?.member_count ?? 0),
+    };
+  }
+
   async leaderForScopeWithin(
     executor: Db | Transaction<Database>,
     cellId: string,
@@ -601,6 +663,7 @@ export class CellsReadService implements CellScopePort, CellRelationshipsPort {
           'requested_by',
           'requested_at',
           'cell_id',
+          'restart_of_cell_id',
           // **The ordering key at the column's own precision**, which the `Date` beside
           // it is not: `timestamptz` holds microseconds and the driver parses it into a
           // JS `Date`, which holds milliseconds. A cursor built from
@@ -1065,7 +1128,7 @@ export class CellsReadService implements CellScopePort, CellRelationshipsPort {
      * so that a page describes one state rather than one per join.
      */
     at: Date,
-    page: { limit: number; after?: string | null },
+    page: { limit: number; after?: string | null; search?: string | null },
   ): Promise<
     {
       id: string;
@@ -1074,9 +1137,27 @@ export class CellsReadService implements CellScopePort, CellRelationshipsPort {
       category: CellCategory;
       dayOfWeek: number;
       timeOfDay: string;
+      memberCount: number;
     }[]
   > {
     const after = page.after ?? null;
+
+    // **The search narrows and never reorders** (decision 0261, decision 0009): a Cell ID by its
+    // digits, or a leader's name, normalized so `Nuñez` is found by `nunez`. The
+    // leader's name is reached by joining `persons` onto a query rooted in `cells`, which is
+    // section 2's exempt shape and is named in `module-boundaries.json`.
+    const term =
+      page.search === null || page.search === undefined ? null : normalizeName(page.search);
+    const namePattern =
+      term === null || term === '' ? null : `%${escapeLike(term).replace(/\s+/g, '%')}%`;
+    // **A Cell ID is matched where the term carries a digit, and anywhere in the identifier.**
+    // Every identifier begins `CELL-`, so a letter prefix matches every Cell in scope, and the
+    // part a leader reads off a row, `000042`, is not at the start. A digit-bearing term still
+    // searches both halves; `00` still matches everything, which is in scope, ordered and
+    // paged, and is the term's own fault rather than the rule's.
+    const rawTerm = page.search === null || page.search === undefined ? null : page.search.trim();
+    const codePattern =
+      rawTerm === null || !/[0-9]/.test(rawTerm) ? null : `%${escapeLike(rawTerm.toUpperCase())}%`;
 
     const rows = await executor
       .selectFrom('cells')
@@ -1115,6 +1196,9 @@ export class CellsReadService implements CellScopePort, CellRelationshipsPort {
             ]),
           ),
       )
+      // The leader's row, for the search predicate. Unconditional and total: the leadership's
+      // `person_id` is `NOT NULL REFERENCES persons (id)`, so it drops and duplicates nothing.
+      .innerJoin('persons', 'persons.id', 'cell_leaderships.person_id')
       .select([
         'cells.id as id',
         'cells.cell_id as cell_id',
@@ -1122,12 +1206,39 @@ export class CellsReadService implements CellScopePort, CellRelationshipsPort {
         'cell_categories.category as category',
         'cell_schedules.day_of_week as day_of_week',
         'cell_schedules.time_of_day as time_of_day',
+        // How many members the Cell holds now, for the list's own column (decision 0261):
+        // the roster's own rule, open memberships, on a table `cells` owns.
+        sql<number>`(SELECT count(*)::int FROM cell_memberships AS m
+                      WHERE m.cell_id = cells.id AND m.ended_at IS NULL)`.as('member_count'),
       ])
       .where('cells.state', '=', 'ACTIVE')
       .$if(leaderIds !== null, (query) =>
         query.where('cell_leaderships.person_id', 'in', leaderIds as readonly string[]),
       )
       .$if(after !== null, (query) => query.where('cells.cell_id', '>', after as string))
+      .$if(codePattern !== null || namePattern !== null, (query) =>
+        query.where((eb) =>
+          eb.or([
+            ...(codePattern === null
+              ? []
+              : [eb(sql<string>`upper(cells.cell_id)`, 'like', codePattern)]),
+            ...(namePattern === null
+              ? []
+              : [
+                  eb(
+                    sql<string>`lower(translate(persons.first_name || ' ' || persons.last_name, ${ACCENTED}, ${UNACCENTED}))`,
+                    'like',
+                    namePattern,
+                  ),
+                  eb(
+                    sql<string>`lower(translate(persons.last_name, ${ACCENTED}, ${UNACCENTED}))`,
+                    'like',
+                    namePattern,
+                  ),
+                ]),
+          ]),
+        ),
+      )
       .orderBy('cells.cell_id')
       .limit(page.limit)
       .execute();
@@ -1139,6 +1250,146 @@ export class CellsReadService implements CellScopePort, CellRelationshipsPort {
       category: row.category,
       dayOfWeek: Number(row.day_of_week),
       timeOfDay: String(row.time_of_day).slice(0, 5),
+      memberCount: Number(row.member_count),
+    }));
+  }
+  /**
+   * One page of the `CLOSED` Cells whose **last** leader is one of these people, in
+   * `cell_id` order (decision 0266). `leaderIds` null means every closed Cell.
+   *
+   * **The last leader, because that is what section 7 resolves a closed Cell through.**
+   * Its base bullet falls back to the Cell's last leader where the Cell is closed, and
+   * `cell.view_subtree` is a viewing capability, which that bullet governs without the
+   * tension the closed-Cell clause raises for a write. The ordering is
+   * `leaderForScopeWithin`'s, so the leader this list names is the leader every
+   * Cell-scoped check on the same Cell resolves through.
+   *
+   * **Category and schedule are the last rows each held that were ever in force**, which a
+   * closure ends at its effective date (section 10), and which a restart request pre-fills
+   * from. **A zero-length row is excluded**, as every other configuration derivation in
+   * this file excludes one: a closure ends a configuration row at `GREATEST(effective_at,
+   * started_at)`, so a change queued for next month, or any row starting after a backdated
+   * closure's date, is left zero-length with the latest `started_at` on the Cell — and
+   * section 5 says no instant resolves to such a row. Taking it would publish a day and
+   * time the Cell never met on, beside a coverage denominator derived from the row that
+   * governed. Reproduced by `architecture-guardian` against the database.
+   */
+  async closedCellsInScope(
+    executor: Db | Transaction<Database>,
+    leaderIds: readonly string[] | null,
+    page: { limit: number; after?: string | null; search?: string | null },
+  ): Promise<
+    {
+      id: string;
+      cellId: string;
+      leaderId: string;
+      category: CellCategory;
+      dayOfWeek: number;
+      timeOfDay: string;
+      closedAt: Date;
+      closureReason: string;
+      restartedAs: string | null;
+    }[]
+  > {
+    const after = page.after ?? null;
+
+    const term =
+      page.search === null || page.search === undefined ? null : normalizeName(page.search);
+    const namePattern =
+      term === null || term === '' ? null : `%${escapeLike(term).replace(/\s+/g, '%')}%`;
+    const rawTerm = page.search === null || page.search === undefined ? null : page.search.trim();
+    const codePattern =
+      rawTerm === null || !/[0-9]/.test(rawTerm) ? null : `%${escapeLike(rawTerm.toUpperCase())}%`;
+
+    const rows = await executor
+      .selectFrom('cells')
+      .innerJoin('cell_leaderships as last_leader', (join) =>
+        join.onRef('last_leader.cell_id', '=', 'cells.id').on(
+          'last_leader.id',
+          '=',
+          sql<string>`(SELECT l.id FROM cell_leaderships AS l
+                        WHERE l.cell_id = cells.id
+                        ORDER BY l.started_at DESC, l.ended_at DESC NULLS FIRST, l.id DESC
+                        LIMIT 1)`,
+        ),
+      )
+      .innerJoin('cell_categories as last_category', (join) =>
+        join.onRef('last_category.cell_id', '=', 'cells.id').on(
+          'last_category.id',
+          '=',
+          sql<string>`(SELECT c.id FROM cell_categories AS c
+                        WHERE c.cell_id = cells.id
+                          AND c.ended_at IS DISTINCT FROM c.started_at
+                        ORDER BY c.started_at DESC, c.ended_at DESC NULLS FIRST, c.id DESC
+                        LIMIT 1)`,
+        ),
+      )
+      .innerJoin('cell_schedules as last_schedule', (join) =>
+        join.onRef('last_schedule.cell_id', '=', 'cells.id').on(
+          'last_schedule.id',
+          '=',
+          sql<string>`(SELECT sc.id FROM cell_schedules AS sc
+                        WHERE sc.cell_id = cells.id
+                          AND sc.ended_at IS DISTINCT FROM sc.started_at
+                        ORDER BY sc.started_at DESC, sc.ended_at DESC NULLS FIRST, sc.id DESC
+                        LIMIT 1)`,
+        ),
+      )
+      .leftJoin('cells as restart', 'restart.restarted_from_cell_id', 'cells.id')
+      .innerJoin('persons', 'persons.id', 'last_leader.person_id')
+      .select([
+        'cells.id as id',
+        'cells.cell_id as cell_id',
+        'last_leader.person_id as leader_id',
+        'last_category.category as category',
+        'last_schedule.day_of_week as day_of_week',
+        'last_schedule.time_of_day as time_of_day',
+        'cells.closed_at as closed_at',
+        'cells.closure_reason as closure_reason',
+        'restart.cell_id as restarted_as',
+      ])
+      .where('cells.state', '=', 'CLOSED')
+      .$if(leaderIds !== null, (query) =>
+        query.where('last_leader.person_id', 'in', leaderIds as readonly string[]),
+      )
+      .$if(after !== null, (query) => query.where('cells.cell_id', '>', after as string))
+      .$if(codePattern !== null || namePattern !== null, (query) =>
+        query.where((eb) =>
+          eb.or([
+            ...(codePattern === null
+              ? []
+              : [eb(sql<string>`upper(cells.cell_id)`, 'like', codePattern)]),
+            ...(namePattern === null
+              ? []
+              : [
+                  eb(
+                    sql<string>`lower(translate(persons.first_name || ' ' || persons.last_name, ${ACCENTED}, ${UNACCENTED}))`,
+                    'like',
+                    namePattern,
+                  ),
+                  eb(
+                    sql<string>`lower(translate(persons.last_name, ${ACCENTED}, ${UNACCENTED}))`,
+                    'like',
+                    namePattern,
+                  ),
+                ]),
+          ]),
+        ),
+      )
+      .orderBy('cells.cell_id')
+      .limit(page.limit)
+      .execute();
+
+    return rows.map((row) => ({
+      id: row.id,
+      cellId: row.cell_id,
+      leaderId: row.leader_id,
+      category: row.category,
+      dayOfWeek: Number(row.day_of_week),
+      timeOfDay: String(row.time_of_day).slice(0, 5),
+      closedAt: row.closed_at as Date,
+      closureReason: row.closure_reason as string,
+      restartedAs: row.restarted_as ?? null,
     }));
   }
 
@@ -1283,7 +1534,7 @@ export class CellsReadService implements CellScopePort, CellRelationshipsPort {
    */
   async meetingsAwaitingFor(
     executor: Db | Transaction<Database>,
-    leaderPersonId: string,
+    leaderPersonIds: readonly string[],
     reportingMonth: string,
   ): Promise<
     {
@@ -1291,20 +1542,51 @@ export class CellsReadService implements CellScopePort, CellRelationshipsPort {
       cellCode: string;
       scheduledDate: string;
       scheduledTime: string;
+      dayOfWeek: number;
       cellClosedOn: string | null;
+      leaderPersonId: string;
+      category: string | null;
+      memberCount: number;
     }[]
   > {
+    if (leaderPersonIds.length === 0) {
+      return [];
+    }
+
+    const leaders = [...leaderPersonIds];
     const result = await sql<{
       cell_id: string;
       cell_code: string;
       scheduled_date: string;
       scheduled_time: string;
+      day_of_week: number;
       cell_closed_on: string | null;
+      leader_person_id: string;
+      category: string | null;
+      member_count: number;
     }>`
       SELECT cell.id AS cell_id,
              cell.cell_id AS cell_code,
              day::date AS scheduled_date,
              governing.time_of_day AS scheduled_time,
+             governing.day_of_week AS day_of_week,
+             leader.person_id AS leader_person_id,
+             (SELECT category.category::text
+                FROM cell_categories AS category
+               WHERE category.cell_id = cell.id
+                 AND (category.started_at AT TIME ZONE 'Asia/Manila')::date <= day
+                 AND (category.ended_at IS NULL
+                      OR (category.ended_at AT TIME ZONE 'Asia/Manila')::date >= day)
+               ORDER BY category.started_at DESC
+               LIMIT 1) AS category,
+             -- The roster's own rule (membersAsOfWithin), so the count is the roster the
+             -- meeting would be recorded against.
+             (SELECT count(*)::int
+                FROM cell_memberships AS membership
+               WHERE membership.cell_id = cell.id
+                 AND (membership.started_at AT TIME ZONE 'Asia/Manila')::date <= day
+                 AND (membership.ended_at IS NULL
+                      OR (membership.ended_at AT TIME ZONE 'Asia/Manila')::date >= day)) AS member_count,
              CASE
                WHEN cell.closed_at IS NULL THEN NULL
                ELSE to_char((cell.closed_at AT TIME ZONE 'Asia/Manila')::date, 'YYYY-MM-DD')
@@ -1342,7 +1624,7 @@ export class CellsReadService implements CellScopePort, CellRelationshipsPort {
                     held.ended_at DESC NULLS FIRST,
                     held.id DESC
            LIMIT 1
-        ) AS leader ON leader.person_id = ${leaderPersonId}
+        ) AS leader ON leader.person_id = ANY(${leaders}::uuid[])
        WHERE EXTRACT(ISODOW FROM day) = governing.day_of_week
          AND day::date <= (now() AT TIME ZONE 'Asia/Manila')::date
          -- Cells this person has ever led. Implied by the join above, which keeps a row
@@ -1358,7 +1640,7 @@ export class CellsReadService implements CellScopePort, CellRelationshipsPort {
                SELECT 1
                  FROM cell_leaderships AS ever
                 WHERE ever.cell_id = cell.id
-                  AND ever.person_id = ${leaderPersonId}
+                  AND ever.person_id = ANY(${leaders}::uuid[])
              )
        ORDER BY day, cell.id
     `.execute(executor);
@@ -1368,7 +1650,11 @@ export class CellsReadService implements CellScopePort, CellRelationshipsPort {
       cellCode: row.cell_code,
       scheduledDate: String(row.scheduled_date),
       scheduledTime: row.scheduled_time,
+      dayOfWeek: Number(row.day_of_week),
       cellClosedOn: row.cell_closed_on,
+      leaderPersonId: row.leader_person_id,
+      category: row.category,
+      memberCount: Number(row.member_count),
     }));
   }
 
@@ -1407,19 +1693,76 @@ export class CellsReadService implements CellScopePort, CellRelationshipsPort {
 
     const result = await sql<{ cell_id: string; scheduled: string }>`
       SELECT asked.cell_id AS cell_id, count(*) AS scheduled
+        ${scheduledDays(cellIds, reportingMonth, null)}
+       GROUP BY asked.cell_id
+    `.execute(executor);
+
+    return new Map(result.rows.map((row) => [row.cell_id, Number(row.scheduled)]));
+  }
+
+  /**
+   * The scheduled meetings of each Cell whose Manila day has begun, by date — the meetings
+   * **due** so far (decision 0267).
+   *
+   * **The same derivation as {@link scheduledCountsIn}, through one fragment**, bounded at
+   * `throughDay` rather than at the month's end. Listed rather than counted because the
+   * caller matches each due date to a record, which is what Section 17's "behind" asks
+   * and what `BranchFiguresService` already does: a record whose date is no longer among
+   * the due ones — a meeting recorded before a closure backdated past it — must not
+   * offset a due meeting that has none.
+   */
+  async dueDaysIn(
+    executor: Db | Transaction<Database>,
+    cellIds: readonly string[],
+    reportingMonth: string,
+    throughDay: string,
+  ): Promise<Map<string, string[]>> {
+    if (cellIds.length === 0) {
+      return new Map();
+    }
+
+    const result = await sql<{ cell_id: string; day: string }>`
+      SELECT asked.cell_id AS cell_id, to_char(day, 'YYYY-MM-DD') AS day
+        ${scheduledDays(cellIds, reportingMonth, throughDay)}
+    `.execute(executor);
+
+    const days = new Map<string, string[]>();
+    for (const row of result.rows) {
+      days.set(row.cell_id, [...(days.get(row.cell_id) ?? []), row.day]);
+    }
+    return days;
+  }
+}
+
+/**
+ * The one derivation of a Cell's scheduled days in a month (Section 12): a day-by-day
+ * series against the schedule rows in force, one governing row per day, inert rows
+ * excluded, the weekday tested against the governing row alone. {@link
+ * CellsReadService.scheduledCountsIn} counts it and {@link CellsReadService.dueDaysIn}
+ * lists it bounded at a day, so the denominator and the due count cannot drift apart.
+ * `scheduledMeetingsIn` performs the identical derivation for one Cell; a change here is a
+ * change there.
+ */
+function scheduledDays(
+  cellIds: readonly string[],
+  reportingMonth: string,
+  throughDay: string | null,
+) {
+  return sql`
         -- DISTINCT on the input, because unnest multiplies where = ANY(...) did not: a
-        -- repeated identifier doubled that Cell's denominator. The caller passes a page's
-        -- ids, which are unique while the listing cannot duplicate a Cell, and this does
-        -- not depend on that holding.
+        -- repeated identifier doubled that Cell's denominator.
         FROM (SELECT DISTINCT unnest(${sql.val(cellIds)}::uuid[]) AS cell_id) AS asked
         CROSS JOIN generate_series(
                ${reportingMonth}::date,
-               (${reportingMonth}::date + interval '1 month' - interval '1 day')::date,
+               LEAST(
+                 (${reportingMonth}::date + interval '1 month' - interval '1 day')::date,
+                 COALESCE(
+                   ${throughDay}::date,
+                   (${reportingMonth}::date + interval '1 month' - interval '1 day')::date
+                 )
+               ),
                interval '1 day'
              ) AS day
-        -- The identical derivation scheduledMeetingsIn performs, counted rather than
-        -- listed: one governing schedule per day, inert rows excluded, the weekday
-        -- tested against the governing row alone. A change to one is a change to both.
         CROSS JOIN LATERAL (
           SELECT schedule.day_of_week
             FROM cell_schedules AS schedule
@@ -1434,9 +1777,5 @@ export class CellsReadService implements CellScopePort, CellRelationshipsPort {
            LIMIT 1
         ) AS governing
        WHERE EXTRACT(ISODOW FROM day) = governing.day_of_week
-       GROUP BY asked.cell_id
-    `.execute(executor);
-
-    return new Map(result.rows.map((row) => [row.cell_id, Number(row.scheduled)]));
-  }
+  `;
 }

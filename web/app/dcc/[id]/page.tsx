@@ -19,7 +19,7 @@ import {
 import { idempotencyKeyFor } from '@/lib/idempotency';
 import { getMe } from '@/lib/me';
 import { describeFailure } from '@/lib/messages';
-import { dayLabel } from '@/lib/reporting-month';
+import { dayLabel, todayInManila } from '@/lib/reporting-month';
 
 /**
  * A leader's DCC checklist for one Sunday (SKILL.md sections 9, 13, 14 and 22;
@@ -151,6 +151,11 @@ function DccChecklist() {
   });
 
   const unmarkedCount = lines.filter((line) => markFor(line) === undefined).length;
+  // What is saved, not what is tapped, so this screen and Your month say the same thing.
+  const awaitingCount = lines.filter((line) => line.record === null).length;
+  const newlyMarked = lines.some(
+    (line) => line.record === null && edits[line.person_id] !== undefined,
+  );
   const markedCount = lines.length - unmarkedCount;
 
   return (
@@ -160,7 +165,7 @@ function DccChecklist() {
           href="/dcc"
           className="focus-visible:outline-accent text-accent inline-flex min-h-6 items-center text-sm font-medium underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2"
         >
-          Back to the calendar
+          Back to your month
         </Link>
       </p>
 
@@ -169,8 +174,10 @@ function DccChecklist() {
         {event ? dayLabel(event.event_date) : 'DCC attendance'}
       </h1>
       <p className="text-muted mt-2 max-w-2xl text-sm leading-relaxed">
-        Everyone you are responsible for, and what is recorded for them. Lines somebody else
-        has already recorded are shown as they stand, so you are not asked twice.
+        {lines.length === 1
+          ? 'The 1 person you are responsible for.'
+          : `The ${lines.length} people you are responsible for.`}
+        {recordable && awaitingCount > 0 ? ` Awaiting a record · ${awaitingCount} to mark.` : ''}
       </p>
 
       <div className="mt-8">
@@ -217,7 +224,10 @@ function DccChecklist() {
               ) : (
                 <>
                   <p className="text-sm font-bold">
-                    Already recorded: {recordedCount === 1 ? '1 person' : `${recordedCount} people`}
+                    {recordedCount} of {lines.length} recorded
+                  </p>
+                  <p className="text-muted mt-1 text-sm leading-relaxed">
+                    Recorded marks are locked so a stray tap cannot change them.
                   </p>
                   {me.data ? (
                     canCorrect ? (
@@ -299,9 +309,7 @@ function DccChecklist() {
                   ? 'Mark at least one person to save.'
                   : unmarkedCount === 0
                     ? 'Everyone on this checklist is marked.'
-                    : unmarkedCount === 1
-                      ? '1 person still to mark.'
-                      : `${unmarkedCount} people still to mark.`}
+                    : `${unmarkedCount === 1 ? '1 person' : `${unmarkedCount} people`} still to mark.${newlyMarked ? ' You can save the rest now.' : ''}`}
               </p>
               <Button
                 type="button"
@@ -334,7 +342,9 @@ function PersonMark({
     <li className="border-line border-b py-4">
       <RadioGroup
         legend={line.full_name}
-        description={mark === undefined ? 'Not recorded yet' : undefined}
+        description={`${line.member_id} · ${
+          line.record === null ? 'Not recorded yet' : `Last recorded ${shortDate(line.record.recorded_at)}`
+        }`}
         name={`person-${line.person_id}`}
         // **The recorded mark is shown whether or not the Sunday takes a record.**
         // Decision 0194 shows marks so a leader is not asked twice; blanking them on a
@@ -349,4 +359,15 @@ function PersonMark({
       />
     </li>
   );
+}
+
+/** "6 Sep", the Manila day an instant fell on. */
+function shortDate(instant: string): string {
+  const day = todayInManila(new Date(instant));
+
+  return new Date(`${day}T00:00:00Z`).toLocaleDateString('en-GB', {
+    day: 'numeric',
+    month: 'short',
+    timeZone: 'UTC',
+  });
 }

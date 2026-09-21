@@ -13,7 +13,14 @@ import { Button, buttonClasses } from '@/components/ui/button';
 import { FailureNotice } from '@/components/ui/failure-notice';
 import { HeaderCell, Table, rowClasses } from '@/components/ui/table';
 import { Tag } from '@/components/ui/tag';
-import { listCellMeetings, meetingStateLabel, type ScheduledMeeting } from '@/lib/cells';
+import {
+  cellName,
+  cellSubtitle,
+  listCellMeetings,
+  meetingStateLabel,
+  timeLabel,
+  type ScheduledMeeting,
+} from '@/lib/cells';
 import { describeFailure } from '@/lib/messages';
 import { dayLabel, monthLabel, reportingMonthOf, todayInManila } from '@/lib/reporting-month';
 
@@ -77,8 +84,11 @@ function CellMeetings() {
       </p>
 
       <h1 className="text-2xl font-semibold tracking-tight">
-        {handle ? `Cell ${handle}` : 'Cell meetings'}
+        {meetings.data ? cellName(meetings.data) : 'Cell meetings'}
       </h1>
+      {meetings.data ? (
+        <p className="text-muted mt-1 text-sm">{cellSubtitle(meetings.data)}</p>
+      ) : null}
       <p className="text-muted mt-2 max-w-2xl text-sm leading-relaxed">
         Every meeting this Cell was scheduled to hold this month, and what was recorded for
         it. A meeting with no record yet is work outstanding rather than a meeting that did
@@ -89,9 +99,12 @@ function CellMeetings() {
         <Link href={`/cells/${params.id}/members`} className={buttonClasses('secondary')}>
           Members
         </Link>
-        <Button variant="secondary" onClick={() => setChanging(true)}>
-          Change when it meets
-        </Button>
+        {/* A closed Cell's schedule is refused by the route, so it is not offered. */}
+        {meetings.data && meetings.data.cell_closed_on == null ? (
+          <Button variant="secondary" onClick={() => setChanging(true)}>
+            Change when it meets
+          </Button>
+        ) : null}
       </div>
 
       {savedFrom ? (
@@ -152,12 +165,12 @@ function CellMeetings() {
                       <td className="px-3 py-3 align-top">
                         <Link
                           href={`/cells/${params.id}/meetings/${entry.scheduled_date}`}
-                          className={`${LINK} font-medium`}
+                          className={`${LINK} text-accent font-medium`}
                         >
                           {dayLabel(entry.scheduled_date)}
                         </Link>
                       </td>
-                      <td className="px-3 py-3 align-top">{entry.scheduled_time}</td>
+                      <td className="px-3 py-3 align-top">{timeLabel(entry.scheduled_time)}</td>
                       <td className="px-3 py-3 align-top">
                         <MeetingState entry={entry} today={today} />
                         <MeetingDetail entry={entry} />
@@ -174,11 +187,14 @@ function CellMeetings() {
                       <h2 className="text-base font-medium">
                         <Link
                           href={`/cells/${params.id}/meetings/${entry.scheduled_date}`}
-                          className={LINK}
+                          className={`${LINK} text-accent`}
                         >
                           {dayLabel(entry.scheduled_date)}
                         </Link>
-                        <span className="text-muted font-normal"> at {entry.scheduled_time}</span>
+                        <span className="text-muted font-normal">
+                          {' '}
+                          at {timeLabel(entry.scheduled_time)}
+                        </span>
                       </h2>
                       <MeetingState entry={entry} today={today} />
                     </div>

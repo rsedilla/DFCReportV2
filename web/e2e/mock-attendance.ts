@@ -31,22 +31,72 @@ const SUBMITTER_ID = '3f1b7c6e-0000-4000-8000-000000000401';
 
 export const CELL_WITH_MEETINGS = {
   id: '3f1b7c6e-0000-4000-8000-000000000101',
-  cell_id: 'C-0007',
+  cell_id: 'CELL-000007',
   category: 'YOUTH',
+  member_count: 6,
+  network: 'MENS',
   schedule: { day_of_week: 6, time_of_day: '19:00' },
-  leader: { person_id: LEADER_ID, member_id: 'M-00412', full_name: 'Teofilo Ramos' },
-  coverage: { recorded: 3, scheduled: 4 },
+  leader: { person_id: LEADER_ID, member_id: 'M-000412', full_name: 'Teofilo Ramos' },
+  coverage: { recorded: 3, scheduled: 4, behind: 1 },
 };
 
 /** Decision 0225: it reads `0 of 0`, it is shown, and it is not dropped. */
 export const CELL_WITH_NO_SCHEDULE = {
   id: '3f1b7c6e-0000-4000-8000-000000000102',
-  cell_id: 'C-0011',
+  cell_id: 'CELL-000011',
   category: 'COUPLE',
+  member_count: 4,
+  network: 'WOMENS',
   schedule: { day_of_week: 3, time_of_day: '20:00' },
-  leader: { person_id: '3f1b7c6e-0000-4000-8000-000000000202', member_id: 'M-00518', full_name: 'Herminia Lazaro' },
-  coverage: { recorded: 0, scheduled: 0 },
+  leader: { person_id: '3f1b7c6e-0000-4000-8000-000000000202', member_id: 'M-000518', full_name: 'Herminia Lazaro' },
+  coverage: { recorded: 0, scheduled: 0, behind: 0 },
 };
+
+/**
+ * Eleven Cells for the coverage table's pager, with the two furthest behind at the end.
+ *
+ * Section 2 records roughly 800 Cells, so a whole-church coverage table is long. The
+ * order matters more than the length: the Cells that have recorded least are the last
+ * two, so a table that ranked them would put them first and a test can tell the two
+ * apart (sections 13 and 17, decision 0226).
+ */
+export async function mockCellsAtScale(page: Page): Promise<void> {
+  const cells = Array.from({ length: 11 }, (_, index) => ({
+    ...CELL_WITH_MEETINGS,
+    id: `3f1b7c6e-0000-4000-8000-0000000001${String(index + 10).padStart(2, '0')}`,
+    cell_id: `CELL-${String(index + 1).padStart(6, '0')}`,
+    // Behind only in the last two, which are the rows a ranked table would lift to the
+    // top and this one leaves where the index put them. The first has recorded two of the
+    // month's four and **is not behind** — its other two have not come — so a screen that
+    // keyed on the whole month instead of the server's `behind` would count it (decision
+    // 0267, and the reason the filter was removed on 2026-09-20).
+    coverage: {
+      recorded: index === 0 ? 2 : index < 9 ? 4 : 10 - index,
+      scheduled: 4,
+      behind: index < 9 ? 0 : index - 6,
+    },
+  }));
+
+  await page.route('**/api/v1/cells?*', (route) =>
+    closedAsked(route.request().url())
+      ? route.fulfill(noClosedCells())
+      : route.fulfill(
+      json({ reporting_month: '2026-06-01', open: false, data: cells, next_cursor: null }),
+    ),
+  );
+}
+
+/**
+ * Whether a request asked for the closed view (decision 0266). The running-Cell mocks answer
+ * it with nothing, so a screen that asks for both is not handed the running rows twice.
+ */
+export function closedAsked(url: string): boolean {
+  return new URL(url).searchParams.get('state') === 'CLOSED';
+}
+
+function noClosedCells() {
+  return json({ reporting_month: '2026-06-01', open: false, data: [], next_cursor: null });
+}
 
 /** `open` is the month's submission window, which the Record queue reads for last month. */
 export async function mockCells(
@@ -54,7 +104,9 @@ export async function mockCells(
   { open = false }: { open?: boolean } = {},
 ): Promise<void> {
   await page.route('**/api/v1/cells?*', (route) =>
-    route.fulfill(
+    closedAsked(route.request().url())
+      ? route.fulfill(noClosedCells())
+      : route.fulfill(
       json({
         reporting_month: '2026-06-01',
         open,
@@ -68,7 +120,9 @@ export async function mockCells(
 /** A leader who oversees no Cell this month, which is a sentence rather than an error. */
 export async function mockCellsEmpty(page: Page): Promise<void> {
   await page.route('**/api/v1/cells?*', (route) =>
-    route.fulfill(json({ reporting_month: '2026-06-01', open: false, data: [], next_cursor: null })),
+    closedAsked(route.request().url())
+      ? route.fulfill(noClosedCells())
+      : route.fulfill(json({ reporting_month: '2026-06-01', open: false, data: [], next_cursor: null })),
   );
 }
 
@@ -76,7 +130,15 @@ export async function mockCellMeetings(page: Page): Promise<void> {
   await page.route('**/api/v1/cells/*/meetings?*', (route) =>
     route.fulfill(
       json({
-        cell_id: 'C-0007',
+        cell_id: 'CELL-000007',
+        category: 'YOUTH',
+        day_of_week: 6,
+        scheduled_time: '19:00',
+        leader: { id: LEADER_ID, full_name: 'Teofilo Ramos' },
+        // Two, which is what `mockCellMembers` pages in full: the count is over the same
+        // set, so a complete list of two cannot sit under a count of six.
+        member_count: 2,
+        cell_closed_on: null,
         reporting_month: '2026-06-01',
         scheduled_count: 4,
         recorded_count: 3,
@@ -165,7 +227,22 @@ export interface AwaitingRow {
   scheduled_time: string;
   reporting_month: string;
   cell_closed_on: string | null;
+  day_of_week: number;
+  category: 'YOUTH' | 'YOUNG_PRO' | 'COUPLE' | null;
+  member_count: number;
+  leader: { id: string; full_name: string | null; is_actor: boolean };
+  may_record: boolean;
 }
+
+/** ISO weekday of a `YYYY-MM-DD` date, 1 = Monday. */
+function isoWeekday(date: string): number {
+  const day = new Date(`${date}T00:00:00Z`).getUTCDay();
+
+  return day === 0 ? 7 : day;
+}
+
+/** The queue's leader for a row that is the reader's own. */
+const OWN = { id: LEADER_ID, full_name: 'Teofilo Ramos', is_actor: true };
 
 /** A meeting of a Cell still `ACTIVE`, which is the ordinary row. */
 export function awaitingRow(date: string, month: string, time = '19:00'): AwaitingRow {
@@ -176,6 +253,11 @@ export function awaitingRow(date: string, month: string, time = '19:00'): Awaiti
     scheduled_time: time,
     reporting_month: month,
     cell_closed_on: null,
+    day_of_week: isoWeekday(date),
+    category: 'YOUNG_PRO',
+    member_count: 5,
+    leader: OWN,
+    may_record: true,
   };
 }
 
@@ -188,11 +270,16 @@ export function awaitingRow(date: string, month: string, time = '19:00'): Awaiti
 export function awaitingClosedRow(date: string, month: string, closedOn: string): AwaitingRow {
   return {
     cell_id: '3f1b7c6e-0000-4000-8000-000000000103',
-    cell_code: 'C-0014',
+    cell_code: 'CELL-000014',
     scheduled_date: date,
     scheduled_time: '19:00',
     reporting_month: month,
     cell_closed_on: closedOn,
+    day_of_week: isoWeekday(date),
+    category: 'YOUTH',
+    member_count: 4,
+    leader: OWN,
+    may_record: true,
   };
 }
 
@@ -225,14 +312,33 @@ export async function mockMeetingsAwaiting(
 
     if (byMonth === undefined) {
       const inMonth = (day: string) => `${month.slice(0, 8)}${day}`;
+      // The branch view (decision 0258) adds a downline leader's meeting the reader may record.
+      const branch =
+        new URL(route.request().url()).searchParams.get('whose') === 'branch';
 
       return route.fulfill(
         json({
           reporting_month: month,
           open: true,
+          whose: branch ? 'branch' : 'mine',
           meetings: [
             awaitingRow(inMonth('06'), month),
             awaitingClosedRow(inMonth('13'), month, inMonth('20')),
+            ...(branch
+              ? [
+                  {
+                    ...awaitingRow(inMonth('05'), month),
+                    cell_id: '3f1b7c6e-0000-4000-8000-000000000104',
+                    cell_code: 'CELL-000021',
+                    leader: {
+                      id: '3f1b7c6e-0000-4000-8000-000000000299',
+                      full_name: 'Ana Lim',
+                      is_actor: false,
+                    },
+                    may_record: true,
+                  },
+                ]
+              : []),
           ],
         }),
       );
@@ -244,18 +350,19 @@ export async function mockMeetingsAwaiting(
       json({
         reporting_month: month,
         open: answer?.open ?? answer !== undefined,
+        whose: 'mine',
         meetings: answer?.meetings ?? [],
       }),
     );
   });
 }
 
-export async function mockDccEvents(page: Page): Promise<void> {
+export async function mockDccEvents(page: Page, { open = true } = {}): Promise<void> {
   await page.route('**/api/v1/dcc/events?*', (route) =>
     route.fulfill(
       json({
         reporting_month: '2026-06-01',
-        open: true,
+        open,
         data: [
           {
             id: '3f1b7c6e-0000-4000-8000-000000000501',
@@ -312,7 +419,7 @@ export async function mockMeetingRoster(page: Page): Promise<void> {
   await page.route('**/api/v1/cells/*/meetings/*/roster', (route) =>
     route.fulfill(
       json({
-        cell_id: 'C-0007',
+        cell_id: 'CELL-000007',
         meeting_id: '2026-06-27',
         scheduled_date: '2026-06-27',
         scheduled_time: '19:00',
@@ -324,14 +431,14 @@ export async function mockMeetingRoster(page: Page): Promise<void> {
         members: [
           {
             person_id: '3f1b7c6e-0000-4000-8000-000000000601',
-            member_id: 'M-00701',
+            member_id: 'M-000701',
             first_name: 'Rosalinda',
             last_name: 'Ocampo',
             record: null,
           },
           {
             person_id: '3f1b7c6e-0000-4000-8000-000000000602',
-            member_id: 'M-00702',
+            member_id: 'M-000702',
             first_name: 'Bienvenido',
             last_name: 'Trinidad',
             record: null,
@@ -359,14 +466,14 @@ export async function mockDccRoster(page: Page): Promise<void> {
         data: [
           {
             person_id: '3f1b7c6e-0000-4000-8000-000000000601',
-            member_id: 'M-00701',
+            member_id: 'M-000701',
             full_name: 'Rosalinda Ocampo',
             responsible_leader_id: LEADER_ID,
             record: { present: true, version: 1, recorded_at: '2026-06-07T12:00:00.000Z' },
           },
           {
             person_id: '3f1b7c6e-0000-4000-8000-000000000602',
-            member_id: 'M-00702',
+            member_id: 'M-000702',
             full_name: 'Bienvenido Trinidad',
             responsible_leader_id: LEADER_ID,
             record: null,
@@ -394,7 +501,7 @@ export async function mockRecordedMeetingRoster(
   await page.route('**/api/v1/cells/*/meetings/*/roster', (route) =>
     route.fulfill(
       json({
-        cell_id: 'C-0007',
+        cell_id: 'CELL-000007',
         meeting_id: '2026-06-27',
         scheduled_date: '2026-06-27',
         scheduled_time: '19:00',
@@ -420,14 +527,14 @@ export async function mockRecordedMeetingRoster(
         members: [
           {
             person_id: '3f1b7c6e-0000-4000-8000-000000000601',
-            member_id: 'M-00701',
+            member_id: 'M-000701',
             first_name: 'Rosalinda',
             last_name: 'Ocampo',
             record: held ? { present: true } : null,
           },
           {
             person_id: '3f1b7c6e-0000-4000-8000-000000000602',
-            member_id: 'M-00702',
+            member_id: 'M-000702',
             first_name: 'Bienvenido',
             last_name: 'Trinidad',
             record: held ? { present: false } : null,
@@ -455,7 +562,7 @@ export async function mockClosedDccRoster(page: Page): Promise<void> {
         data: [
           {
             person_id: '3f1b7c6e-0000-4000-8000-000000000601',
-            member_id: 'M-00701',
+            member_id: 'M-000701',
             full_name: 'Rosalinda Ocampo',
             responsible_leader_id: LEADER_ID,
             record: { present: true, version: 1, recorded_at: '2026-06-07T12:00:00.000Z' },
@@ -556,13 +663,13 @@ export async function mockCellMembers(page: Page): Promise<void> {
         data: [
           {
             person_id: '3f1b7c6e-0000-4000-8000-000000000601',
-            member_id: 'M-00701',
+            member_id: 'M-000701',
             full_name: 'Rosalinda Ocampo',
             started_at: '2026-03-01T00:00:00.000Z',
           },
           {
             person_id: '3f1b7c6e-0000-4000-8000-000000000602',
-            member_id: 'M-00702',
+            member_id: 'M-000702',
             full_name: 'Bienvenido Trinidad',
             started_at: '2026-05-12T00:00:00.000Z',
           },
@@ -571,6 +678,31 @@ export async function mockCellMembers(page: Page): Promise<void> {
       }),
     );
   });
+}
+
+/**
+ * The same Cell after it was closed (section 10). Closure ends the schedule and every
+ * membership, so the month holds no scheduled meeting and the count is zero: the screens
+ * read `cell_closed_on` to say so rather than showing an empty list with no reason.
+ */
+export async function mockClosedCellMeetings(page: Page): Promise<void> {
+  await page.route('**/api/v1/cells/*/meetings?*', (route) =>
+    route.fulfill(
+      json({
+        cell_id: 'CELL-000007',
+        category: 'YOUTH',
+        day_of_week: 6,
+        scheduled_time: '19:00',
+        leader: { id: LEADER_ID, full_name: 'Teofilo Ramos' },
+        member_count: 0,
+        cell_closed_on: '2026-06-20',
+        reporting_month: '2026-06-01',
+        scheduled_count: 0,
+        recorded_count: 0,
+        meetings: [],
+      }),
+    ),
+  );
 }
 
 /** A Cell with nobody in it, which is a sentence rather than an error. */
@@ -597,12 +729,12 @@ export async function mockCoverageGaps(page: Page): Promise<void> {
         data: [
           {
             person_id: '3f1b7c6e-0000-4000-8000-000000000801',
-            member_id: 'M-00901',
+            member_id: 'M-000901',
             full_name: 'Consuelo Bautista',
           },
           {
             person_id: '3f1b7c6e-0000-4000-8000-000000000802',
-            member_id: 'M-00902',
+            member_id: 'M-000902',
             full_name: 'Ferdinand Salazar',
           },
         ],
@@ -626,19 +758,19 @@ export async function mockPastoralPath(page: Page): Promise<void> {
         data: [
           {
             id: '3f1b7c6e-0000-4000-8000-000000000901',
-            member_id: 'M-00001',
+            member_id: 'M-000001',
             full_name: 'Corazon Villanueva',
             network_root: true,
           },
           {
             id: '3f1b7c6e-0000-4000-8000-000000000902',
-            member_id: 'M-00044',
+            member_id: 'M-000044',
             full_name: 'Teofilo Ramos',
             network_root: false,
           },
           {
             id: '3f1b7c6e-0000-4000-8000-000000000601',
-            member_id: 'M-00701',
+            member_id: 'M-000701',
             full_name: 'Rosalinda Ocampo',
             network_root: false,
           },
@@ -780,6 +912,7 @@ export async function mockNetworkReader(page: Page): Promise<void> {
         person_id: '9a1b2c3d-4e5f-4061-8273-8495a6b7c8d9',
         email: 'leader@example.invalid',
         first_name: 'Marilou',
+        roles: ['LEADER'],
         capabilities: [
           grant('people.view_subtree'),
           grant('dcc.view_subtree'),
@@ -825,4 +958,65 @@ export async function mockCoverageByLeader(page: Page): Promise<void> {
   };
 
   await page.route('**/api/v1/reports/*/monthly/by-leader*', (route) => route.fulfill(json(body)));
+}
+
+/** A closed Cell a restart may be asked for (decisions 0264 to 0266). */
+export const CLOSED_CELL = {
+  id: '4a2c8d90-0000-4000-8000-000000000601',
+  cell_id: 'CELL-000014',
+  state: 'CLOSED',
+  category: 'YOUNG_PRO',
+  member_count: 0,
+  schedule: { day_of_week: 5, time_of_day: '19:30' },
+  leader: {
+    person_id: '4a2c8d90-0000-4000-8000-000000000701',
+    member_id: 'M-000418',
+    full_name: 'Paolo Reyes',
+  },
+  coverage: { recorded: 1, scheduled: 2, behind: 1 },
+  closed_on: '2026-06-12',
+  closure_reason: 'MEMBERS_DISPERSED',
+  restarted_as: null,
+  may_restart: true,
+};
+
+/** One already restarted, and one closed as created in error: neither offers a restart. */
+const CLOSED_CELLS_WITHOUT_RESTART = [
+  {
+    ...CLOSED_CELL,
+    id: '4a2c8d90-0000-4000-8000-000000000602',
+    cell_id: 'CELL-000009',
+    closure_reason: 'LEADER_STEPPED_DOWN',
+    restarted_as: 'CELL-000021',
+    may_restart: false,
+  },
+  {
+    ...CLOSED_CELL,
+    id: '4a2c8d90-0000-4000-8000-000000000603',
+    cell_id: 'CELL-000004',
+    closure_reason: 'CREATED_IN_ERROR',
+    may_restart: false,
+  },
+];
+
+/**
+ * The Cells index in both views: the running rows as `mockCells` gives them, and the
+ * closed rows when the closed view is asked for. `open` is the month's window.
+ */
+export async function mockCellsWithClosed(
+  page: Page,
+  { open = false }: { open?: boolean } = {},
+): Promise<void> {
+  await page.route('**/api/v1/cells?*', (route) =>
+    route.fulfill(
+      json({
+        reporting_month: '2026-06-01',
+        open,
+        data: closedAsked(route.request().url())
+          ? [CLOSED_CELL, ...CLOSED_CELLS_WITHOUT_RESTART]
+          : [CELL_WITH_MEETINGS, CELL_WITH_NO_SCHEDULE],
+        next_cursor: null,
+      }),
+    ),
+  );
 }

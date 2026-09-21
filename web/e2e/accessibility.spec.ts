@@ -112,7 +112,7 @@ const SCANS = [
       await mockSignedIn(page);
     },
     async arrange(page: import('@playwright/test').Page) {
-      await expect(page.getByRole('heading', { name: 'Your session' })).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'Account and session', exact: true })).toBeVisible();
       // The greeting, asserted rather than assumed: settling on the heading and
       // the table would scan and pass on a page where it never rendered, and the
       // client's guard on it is a truthiness check that fails silent.
@@ -143,8 +143,13 @@ const SCANS = [
     async arrange(page: import('@playwright/test').Page) {
       await page.getByLabel('Search by name').fill('an');
       await page.getByRole('button', { name: 'Search' }).click();
-      await expect(page.getByText('Marilou Reyes Santos')).toBeVisible();
-      await expect(page.getByText('Details visible to their own leaders')).toBeVisible();
+      // The table from `sm` up and a list below it, so each name is in the page twice.
+      await expect(
+        page.getByText('Marilou Reyes Santos').filter({ visible: true }).first(),
+      ).toBeVisible();
+      await expect(
+        page.getByText('Details visible to their own leaders').filter({ visible: true }).first(),
+      ).toBeVisible();
     },
   },
   {
@@ -223,7 +228,7 @@ const SCANS = [
       await page.getByRole('button', { name: 'Find' }).click();
       await page.getByRole('button', { name: 'Choose' }).first().click();
       await page.getByRole('combobox', { name: 'Cell' }).selectOption({ index: 2 });
-      await page.getByRole('button', { name: 'Add person' }).click();
+      await page.getByRole('button', { name: 'Add this person' }).click();
       await expect(
         page.getByRole('heading', { name: 'Marilou Reyes Santos was added' }),
       ).toBeVisible();
@@ -301,7 +306,7 @@ const SCANS = [
       await page.getByLabel('Search for a leader by name').fill('an');
       await page.getByRole('button', { name: 'Find' }).click();
       await page.getByRole('button', { name: 'Choose' }).first().click();
-      await page.getByRole('button', { name: 'Add person' }).click();
+      await page.getByRole('button', { name: 'Add this person' }).click();
       await expect(
         page.getByRole('heading', { name: 'Is this someone already recorded?' }),
       ).toBeVisible();
@@ -335,10 +340,16 @@ const SCANS = [
     },
     async arrange(page: import('@playwright/test').Page) {
       await expect(page.getByRole('heading', { name: 'Cells', exact: true })).toBeVisible();
-      await expect(page.getByRole('link', { name: 'C-0007' })).toBeVisible();
+      // The table from `lg` up and cards below it, so each Cell is in the page twice and
+      // only one rendering is on screen at a width.
+      await expect(
+        page.getByRole('link', { name: /Youth · Sat|CELL-000007/ }).filter({ visible: true }).first(),
+      ).toBeVisible();
       // The `0 of 0` row, asserted rather than assumed: settling on the heading
       // alone would pass on a page where the second row never rendered.
-      await expect(page.getByRole('link', { name: 'C-0011' })).toBeVisible();
+      await expect(
+        page.getByRole('link', { name: /Couple · Wed|CELL-000011/ }).filter({ visible: true }).first(),
+      ).toBeVisible();
     },
   },
   {
@@ -366,7 +377,7 @@ const SCANS = [
       await mockCellMeetings(page);
     },
     async arrange(page: import('@playwright/test').Page) {
-      await expect(page.getByRole('heading', { name: 'Cell C-0007' })).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'Youth · Saturdays 7:00 pm' })).toBeVisible();
       // Filtered to what is visible: the rows render as a table from `lg` and as cards
       // below it, so each word is in the page twice and one copy is hidden.
       await expect(page.getByText('Awaiting a record').filter({ visible: true })).toBeVisible();
@@ -386,26 +397,31 @@ const SCANS = [
       await mockCellMeetings(page);
     },
     async arrange(page: import('@playwright/test').Page) {
-      await expect(page.getByRole('heading', { name: 'Cell C-0007' })).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'Youth · Saturdays 7:00 pm' })).toBeVisible();
       await page.getByRole('button', { name: 'Change when it meets' }).click();
-      const dialog = page.getByRole('dialog', { name: 'Change when C-0007 meets' });
+      const dialog = page.getByRole('dialog', { name: 'Change when CELL-000007 meets' });
       await expect(dialog.getByRole('radio', { name: 'Wednesday' })).toBeVisible();
       await expect(dialog.getByText(/^Meets now on/)).toBeVisible();
     },
   },
   {
-    // A removed Sunday in its place with its reason, and one that has not
-    // happened, whose coverage is words rather than a zero.
-    name: 'dcc calendar',
+    // The reader's month (owner's choice of 2026-09-19): their Cell meetings and their DCC
+    // checklist by date, a removed Sunday in its place with its reason, states in words.
+    name: 'your month',
     route: '/dcc',
     async before(page: import('@playwright/test').Page) {
+      await page.clock.setFixedTime(new Date('2026-06-20T02:00:00Z'));
       await mockSignedIn(page);
+      await mockCells(page);
+      await mockCellMeetings(page);
+      await mockMeetingsAwaiting(page);
       await mockDccEvents(page);
+      await mockDccRoster(page);
     },
     async arrange(page: import('@playwright/test').Page) {
-      await expect(page.getByRole('heading', { name: 'DCC Attendance' })).toBeVisible();
-      await expect(page.getByText('No service was held.')).toBeVisible();
-      await expect(page.getByText('No records owed yet')).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'Your month' })).toBeVisible();
+      await expect(page.getByText(/^No service/).filter({ visible: true }).first()).toBeVisible();
+      await expect(page.getByText('Loading…')).toHaveCount(0);
     },
   },
   {
@@ -532,15 +548,57 @@ const SCANS = [
       // **A row of each kind in the queue, so axe scans both.** The Cell rows wait on
       // their per-Cell meetings reads and the Sunday rows on their checklists, and
       // nothing orders the two, so each is waited for.
-      await expect(page.getByRole('link', { name: /^Record Cell / }).first()).toBeVisible();
-      await expect(page.getByRole('link', { name: /^Record DCC Sunday/ }).first()).toBeVisible();
+      await expect(page.getByRole('link', { name: /^Record CELL-/ }).first()).toBeVisible();
+      await expect(page.getByRole('link', { name: /^Record DCC,/ }).first()).toBeVisible();
       // A tile carries its scope and its period, which section 19 requires of
       // every one of them.
-      await expect(page.getByText(/People you oversee ·/).first()).toBeVisible();
+      await expect(page.getByText(/· People you oversee/).first()).toBeVisible();
       // **Both of the above render before any query resolves** — the heading is
       // static and the scope label defaults while `me.data` is undefined — so axe
       // would otherwise scan a page with no rows on it.
       await expect(page.getByRole('link', { name: 'Amihan Bacani' })).toBeVisible();
+    },
+  },
+  {
+    // The queue's branch view (decision 0258): a downline leader's meeting.
+    name: 'dashboard, people I oversee',
+    route: '/dashboard',
+    async before(page: import('@playwright/test').Page) {
+      await mockSignedIn(page);
+      await mockCells(page);
+      await mockCellMeetings(page);
+      await mockMeetingsAwaiting(page);
+      await mockCellReport(page);
+      await mockDccReport(page);
+      await mockDccEvents(page);
+      await mockDccRoster(page);
+      await mockAwaitingReassignment(page);
+      await mockPeopleWithoutACell(page);
+    },
+    async arrange(page: import('@playwright/test').Page) {
+      await page.getByRole('radio', { name: 'People I oversee' }).check();
+      await expect(page.getByRole('link', { name: /^Record CELL-000021,/ })).toBeVisible();
+    },
+  },
+  {
+    // The reader's own DCC checklist across the month, under the DCC filter.
+    name: 'dashboard, own DCC checklist',
+    route: '/dashboard',
+    async before(page: import('@playwright/test').Page) {
+      await mockSignedIn(page);
+      await mockCells(page);
+      await mockCellMeetings(page);
+      await mockMeetingsAwaiting(page);
+      await mockCellReport(page);
+      await mockDccReport(page);
+      await mockDccEvents(page);
+      await mockDccRoster(page);
+      await mockAwaitingReassignment(page);
+      await mockPeopleWithoutACell(page);
+    },
+    async arrange(page: import('@playwright/test').Page) {
+      await page.getByRole('radio', { name: 'DCC' }).check();
+      await expect(page.getByRole('table', { name: /Your DCC checklist by Sunday/ })).toBeVisible();
     },
   },
   {
@@ -594,7 +652,7 @@ const SCANS = [
       await mockCoverageGaps(page);
     },
     async arrange(page: import('@playwright/test').Page) {
-      await expect(page.getByRole('heading', { name: 'Consuelo Bautista' })).toBeVisible();
+      await expect(page.getByRole('link', { name: 'Consuelo Bautista' })).toBeVisible();
     },
   },
   {
@@ -632,7 +690,7 @@ const SCANS = [
   },
   {
     // A reader holding neither figure capability: the tree without the figures, shown as
-    // dashes rather than zeros, and no Move.
+    // dashes rather than zeros, no Move, and the line that says why there is none.
     name: 'network, without figures',
     route: '/network',
     async before(page: import('@playwright/test').Page) {
@@ -643,6 +701,10 @@ const SCANS = [
     async arrange(page: import('@playwright/test').Page) {
       await expect(page.getByText('Network root')).toBeVisible();
       await expect(page.getByRole('link', { name: 'Consuelo Bautista' }).first()).toBeVisible();
+      await expect(
+        page.getByText('ask a leader who pastors them, or an administrator', { exact: false }),
+      ).toBeVisible();
+      await expect(page.getByRole('button', { name: /^Move / })).toHaveCount(0);
     },
   },
   {
@@ -668,9 +730,10 @@ const SCANS = [
     pattern: '/cells/[id]/members',
     async before(page: import('@playwright/test').Page) {
       await mockSignedIn(page);
+      await mockCellMeetings(page);
       await mockCellMembers(page);
-  await mockCoverageGaps(page);
-  await mockPastoralPath(page);
+      await mockCoverageGaps(page);
+      await mockPastoralPath(page);
     },
     async arrange(page: import('@playwright/test').Page) {
       await expect(page.getByRole('heading', { name: 'Rosalinda Ocampo' })).toBeVisible();
@@ -683,6 +746,7 @@ const SCANS = [
     route: '/cells/3f1b7c6e-0000-4000-8000-000000000101/members',
     async before(page: import('@playwright/test').Page) {
       await mockSignedIn(page);
+      await mockCellMeetings(page);
       await mockCellMembers(page);
     },
     async arrange(page: import('@playwright/test').Page) {
@@ -696,6 +760,7 @@ const SCANS = [
     route: '/cells/3f1b7c6e-0000-4000-8000-000000000101/members',
     async before(page: import('@playwright/test').Page) {
       await mockSignedIn(page);
+      await mockCellMeetings(page);
       await mockCellMembersEmpty(page);
     },
     async arrange(page: import('@playwright/test').Page) {
@@ -716,7 +781,7 @@ const SCANS = [
     async arrange(page: import('@playwright/test').Page) {
       await expect(page.getByRole('heading', { name: 'Rosalinda Ocampo' })).toBeVisible();
       await page.getByRole('button', { name: 'Add a member' }).click();
-      const dialog = page.getByRole('dialog', { name: 'Add a member to C-0007' });
+      const dialog = page.getByRole('dialog', { name: 'Add a member to CELL-000007' });
       await dialog.getByLabel('Search for a person by name').fill('Marilou');
       await dialog.getByRole('button', { name: 'Find' }).click();
       await expect(dialog.getByRole('button', { name: 'Choose' }).first()).toBeVisible();
@@ -786,6 +851,36 @@ const SCANS = [
       await page.getByText('By leader', { exact: true }).click();
       await expect(page.getByRole('link', { name: 'Consuelo Bautista' })).toBeVisible();
       await expect(page.getByText('Leaders outside your reach')).toBeVisible();
+    },
+  },
+  {
+    // A year of the DCC report (decision 0257): one row per month that has begun, and a year
+    // row adding up Owed and Filed only.
+    name: 'dcc figures report, year',
+    route: '/reports/dcc?period=year&month=2026-06-01',
+    async before(page: import('@playwright/test').Page) {
+      await mockSignedIn(page);
+      await mockDccReport(page);
+    },
+    async arrange(page: import('@playwright/test').Page) {
+      await expect(page.getByRole('heading', { name: /Month by month/ })).toBeVisible();
+      await expect(page.getByText('Year so far')).toBeVisible();
+      await expect(page.getByText('Loading…')).toHaveCount(0);
+    },
+  },
+  {
+    // The same for the Cell report.
+    name: 'cell attendance report, year',
+    route: '/reports/cells?period=year&month=2026-06-01',
+    async before(page: import('@playwright/test').Page) {
+      await mockSignedIn(page);
+      await mockCells(page);
+      await mockCellReport(page);
+    },
+    async arrange(page: import('@playwright/test').Page) {
+      await expect(page.getByRole('heading', { name: /Month by month/ })).toBeVisible();
+      await expect(page.getByText('Year so far')).toBeVisible();
+      await expect(page.getByText('Loading…')).toHaveCount(0);
     },
   },
   {
@@ -946,23 +1041,24 @@ const TARGET_SWEEP = [
     name: 'cells',
     route: '/cells',
     settleRole: 'link' as const,
-    settle: 'C-0007',
+    settle: 'Youth · Sat',
     minimum: 6,
   },
   {
     name: 'cell meetings',
     route: '/cells/3f1b7c6e-0000-4000-8000-000000000101/meetings',
     settleRole: 'heading' as const,
-    settle: 'Cell C-0007',
+    settle: 'Youth · Saturdays 7:00 pm',
     // The back link, Members, Change when it meets, the two month controls, and a link
     // per meeting across the fixture's four.
     minimum: 9,
   },
   {
-    name: 'dcc calendar',
+    // The two month controls, and a link per dated item the reader owes.
+    name: 'your month',
     route: '/dcc',
     settleRole: 'heading' as const,
-    settle: 'DCC Attendance',
+    settle: 'Your month',
     minimum: 2,
   },
   {
@@ -1017,8 +1113,8 @@ const TARGET_SWEEP = [
     minimum: 21,
   },
   {
-    // The back link, and a name link and an Add to a Cell button per person: five, with no
-    // "Show more" for this fixture. Settled on a person rather than the page heading, which
+    // The back link, a name link and an Add to a Cell button per person, and the pager's two
+    // buttons (decision 0261). Settled on a person rather than the page heading, which
     // renders before the list arrives.
     name: 'people without a cell',
     route: '/cells/people-without-a-cell',
@@ -1027,8 +1123,8 @@ const TARGET_SWEEP = [
     minimum: 5,
   },
   {
-    // The back link and one link per person, which is the reassignment section 19
-    // asks each entry to carry. No "Show more": the fixture fits one page.
+    // The back link, one link per person — the reassignment section 19 asks each entry to
+    // carry — and the pager's two buttons (decision 0261).
     //
     // **Settled on a person rather than on the page heading**, which renders before
     // the list arrives — the lesson the meeting-roster entry above records, and the
@@ -1037,16 +1133,15 @@ const TARGET_SWEEP = [
     route: '/people/awaiting-reassignment',
     settleRole: 'heading' as const,
     settle: 'Amihan Bacani',
-    minimum: 3,
+    minimum: 5,
   },
   {
-    // The back link alone: the list is names, and naming a leader is the whole of
-    // what decision 0228 permits here.
+    // The back link and each name, which opens that leader's profile.
     name: 'dcc coverage gaps',
     route: '/dcc/3f1b7c6e-0000-4000-8000-000000000501/gaps',
-    settleRole: 'heading' as const,
+    settleRole: 'link' as const,
     settle: 'Consuelo Bautista',
-    minimum: 1,
+    minimum: 3,
   },
   {
     // Back link and three people in the chain. The move moved to the profile.
@@ -1084,6 +1179,22 @@ const TARGET_SWEEP = [
     settleRole: 'heading' as const,
     settle: 'Recording coverage',
     minimum: 10,
+  },
+  {
+    // The Reports switch, How these are counted, the Month and Year choices and the two year
+    // controls; the table itself holds no control.
+    name: 'dcc figures report, year',
+    route: '/reports/dcc?period=year&month=2026-06-01',
+    settleRole: 'heading' as const,
+    settle: 'Month by month',
+    minimum: 7,
+  },
+  {
+    name: 'cell attendance report, year',
+    route: '/reports/cells?period=year&month=2026-06-01',
+    settleRole: 'heading' as const,
+    settle: 'Month by month',
+    minimum: 7,
   },
   {
     // The Reports switch, How these are counted, two month controls and the Back link, at
@@ -1129,6 +1240,18 @@ const TARGET_SWEEP = [
  * prevent one list over.
  */
 const TARGET_EXEMPT: { name: string; why: string }[] = [
+  {
+    name: 'dashboard, people I oversee',
+    why:
+      'Reached by choosing People I oversee, which this sweep cannot do. Its controls are the ' +
+      'measured "dashboard" controls plus one more row button of the same Button primitive.',
+  },
+  {
+    name: 'dashboard, own DCC checklist',
+    why:
+      'Reached by choosing DCC, which this sweep cannot do. The table below the queue holds no ' +
+      'control; the rest are the measured "dashboard" controls.',
+  },
   {
     name: 'dcc figures report, by leader',
     why:
@@ -1660,7 +1783,7 @@ test('a Cell meeting screen marks Record as the current page, not Cells', async 
   await mockCellMeetings(page);
 
   await page.goto('/cells/3f1b7c6e-0000-4000-8000-000000000101/meetings');
-  await expect(page.getByRole('heading', { name: 'Cell C-0007' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Youth · Saturdays 7:00 pm' })).toBeVisible();
 
   const navigation = page.getByRole('navigation', { name: 'Main' });
   const current = navigation.locator('a[aria-current="page"]');

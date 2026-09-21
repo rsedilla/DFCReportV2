@@ -21,6 +21,11 @@ export interface Branch {
   person: BranchNode;
   data: BranchNode[];
   next_cursor: string | null;
+  /**
+   * `my-tree` only: for a reader outside the pastoral tree, the Network roots their
+   * scope reaches, which is where the screen starts (decision 0268). Empty otherwise.
+   */
+  roots?: BranchNode[];
 }
 
 /**

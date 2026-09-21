@@ -1,3 +1,4 @@
+import { sql } from 'kysely';
 import request from 'supertest';
 
 import { createTestDb, truncateAll } from '../setup/database';
@@ -92,6 +93,53 @@ describe('a Cell meetings listing (sections 12 and 13)', () => {
     expect(response.body.meetings.every((m: { meeting: unknown }) => m.meeting === null)).toBe(
       true,
     );
+  });
+
+  it('names the Cell as it stands today, for the page heading (owner, 2026-09-19)', async () => {
+    const member = await createPerson(db, { firstName: 'Tomas', network: 'MENS' });
+    await assignTo(db, member.id, mark.id);
+    await sql`
+      INSERT INTO cell_memberships (person_id, cell_id, started_at)
+      VALUES (${member.id}::uuid, ${markCell.id}::uuid, ${CREATED})
+    `.execute(db);
+
+    const response = await list(markCell.id, '2026-09-01', markAccount);
+
+    expect(response.status).toBe(200);
+    expect(response.body).toMatchObject({
+      category: 'YOUTH',
+      day_of_week: 6,
+      scheduled_time: '19:00',
+      leader: { id: mark.id },
+      member_count: 1,
+      cell_closed_on: null,
+    });
+    expect(response.body.leader.full_name).toContain('Mark');
+  });
+
+  it('names a closed Cell by the category it closed with, not one its closure voided', async () => {
+    // A category change dated after a backdated closure is left zero-length (inert) by
+    // the closure; the heading must not name the Cell by it.
+    const changedAt = new Date('2026-09-10T10:00:00+08:00');
+    await db.transaction().execute(async (trx) => {
+      await sql`
+        UPDATE cell_categories SET ended_at = ${changedAt}
+         WHERE cell_id = ${markCell.id}::uuid AND ended_at IS NULL
+      `.execute(trx);
+      await sql`
+        INSERT INTO cell_categories (cell_id, category, started_at)
+        VALUES (${markCell.id}::uuid, 'YOUNG_PRO', ${changedAt})
+      `.execute(trx);
+    });
+    await closeCellDirectly(db, markCell.id, {
+      reason: 'MEMBERS_DISPERSED',
+      at: new Date('2026-09-05T10:00:00+08:00'),
+    });
+
+    const response = await list(markCell.id, '2026-09-01', markAccount);
+
+    expect(response.status).toBe(200);
+    expect(response.body).toMatchObject({ category: 'YOUTH', cell_closed_on: '2026-09-05' });
   });
 
   it('counts five where the month holds five', async () => {

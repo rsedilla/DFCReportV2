@@ -1,3 +1,6 @@
+import { randomUUID } from 'node:crypto';
+
+import { sql } from 'kysely';
 import request from 'supertest';
 
 import { manilaDayOf } from '../../src/common/time/manila';
@@ -236,6 +239,81 @@ describe('the Cells index (sections 10, 12 and 22)', () => {
     expect(roster.status).toBe(403);
   });
 
+  // Decision 0261: the search narrows the whole scope by Cell ID or leader's name, and
+  // never reorders it, so a leader with hundreds of Cells can find one.
+  it('narrows the list by a leader’s name, and by a Cell ID prefix', async () => {
+    const byName = await list(manuelAccount, { q: 'Mark' });
+
+    expect(byName.status).toBe(200);
+    expect(cellIdsOf(byName)).toEqual([markCell.id]);
+
+    const byCode = await list(manuelAccount, { q: nathanCell.cellId });
+
+    expect(cellIdsOf(byCode)).toEqual([nathanCell.id]);
+  });
+
+  it('refuses a term of one character, which would page the list rather than search it', async () => {
+    for (const q of ['a', 'a-', ' a']) {
+      const response = await list(manuelAccount, { q });
+
+      expect(response.status).toBe(422);
+      expect(response.body.error.code).toBe('VALIDATION_FAILED');
+    }
+  });
+
+  it('keeps the scope for a Cell ID as well as for a name', async () => {
+    const response = await list(markAccount, { q: nathanCell.cellId });
+
+    expect(response.status).toBe(200);
+    expect(response.body.data).toEqual([]);
+  });
+
+  it('finds a Cell by the digits of its identifier, which is what a leader reads off a row', async () => {
+    const digits = manuelCell.cellId.replace(/^CELL-/, '');
+    const response = await list(manuelAccount, { q: digits });
+
+    expect(cellIdsOf(response)).toEqual([manuelCell.id]);
+  });
+
+  it('carries each Cell’s current member count (decision 0261)', async () => {
+    const member = await createPerson(db, { firstName: 'Tomas', network: 'MENS' });
+    await assignTo(db, member.id, manuel.id);
+    await sql`
+      INSERT INTO cell_memberships (person_id, cell_id, started_at)
+      VALUES (${member.id}::uuid, ${manuelCell.id}::uuid, ${CREATED})
+    `.execute(db);
+
+    const response = await list(manuelAccount, { led_by: 'me' });
+
+    expect(response.body.data[0]).toMatchObject({ member_count: 1 });
+  });
+
+  it('carries each Cell’s Network, which is its leader’s today', async () => {
+    // A picker narrows to the person's Network on this (owner's choice, 2026-09-21), so a
+    // Cell of each Network is listed to one Whole Church reader.
+    const ruth = await createPerson(db, { firstName: 'Ruth', network: 'WOMENS' });
+    await assignTo(db, ruth.id, null);
+    const ruthCell = await createCell(db, { leader: ruth, dayOfWeek: 6, createdAt: CREATED });
+
+    const response = await list(admin);
+    const byId = new Map(
+      (response.body.data as { id: string; network: string | null }[]).map((row) => [
+        row.id,
+        row.network,
+      ]),
+    );
+
+    expect(byId.get(markCell.id)).toBe('MENS');
+    expect(byId.get(ruthCell.id)).toBe('WOMENS');
+  });
+
+  it('keeps the scope while searching: a sibling branch’s Cell is not found by name', async () => {
+    const response = await list(markAccount, { q: 'Nathan' });
+
+    expect(response.status).toBe(200);
+    expect(response.body.data).toEqual([]);
+  });
+
   it('refuses an account holding no capability at all', async () => {
     // A Person with an account and no role holds no `cell.view_subtree`, so the guard
     // refuses before any narrowing runs. Section 7: an endpoint declaring a capability is
@@ -310,7 +388,9 @@ describe('the Cells index (sections 10, 12 and 22)', () => {
     if (stillToCome > 0) {
       expect(coverage.scheduled).toBeGreaterThan(saturdaysUpTo(await today()));
     }
-    expect(Object.keys(coverage).sort()).toEqual(['recorded', 'scheduled']);
+    // Three counts and no ratio: `behind` is how many meetings that have come have no
+    // record (decision 0267), a count beside the two and never a division of them.
+    expect(Object.keys(coverage).sort()).toEqual(['behind', 'recorded', 'scheduled']);
     expect(response.body.reporting_month).toBe(month);
   });
 
@@ -344,6 +424,8 @@ describe('the Cells index (sections 10, 12 and 22)', () => {
     expect(response.body.data[0].coverage).toEqual({
       recorded: 1,
       scheduled: saturdaysIn(month),
+      // Before the first Saturday the recorded meeting is not yet due, so nothing is behind.
+      behind: Math.max(0, saturdaysUpTo(await today()) - 1),
     });
   });
 
@@ -365,7 +447,7 @@ describe('the Cells index (sections 10, 12 and 22)', () => {
     );
 
     expect(row).toBeDefined();
-    expect(row?.coverage).toEqual({ recorded: 0, scheduled: 0 });
+    expect(row?.coverage).toEqual({ recorded: 0, scheduled: 0, behind: 0 });
   });
 
   /**
@@ -634,6 +716,83 @@ describe('the Cells index (sections 10, 12 and 22)', () => {
     expect(response.body.error.code).toBe('VALIDATION_FAILED');
   });
 
+  describe('which meetings are behind (decision 0267)', () => {
+    type Coverage = { recorded: number; scheduled: number; behind: number };
+    const coverageOf = (response: request.Response, cellId: string): Coverage =>
+      (response.body.data as { id: string; coverage: Coverage }[]).find((row) => row.id === cellId)!
+        .coverage;
+
+    const previousMonth = async (): Promise<string> => {
+      const [year, month] = (await thisMonth()).split('-').map(Number);
+      return month === 1 ? `${year - 1}-12-01` : `${year}-${String(month - 1).padStart(2, '0')}-01`;
+    };
+
+    const record = async (cellId: string, leaderId: string, accountId: string, day: string) =>
+      db
+        .insertInto('cell_meetings')
+        .values({
+          cell_id: cellId,
+          scheduled_date: day,
+          scheduled_time: '19:00',
+          week_starting: mondayOf(day),
+          reporting_month: `${day.slice(0, 7)}-01`,
+          status: 'HELD',
+          responsible_leader_id: leaderId,
+          submitted_by: accountId,
+          submitted_at: new Date(),
+        })
+        .execute();
+
+    it('counts only the meetings whose day has begun, never the rest of the month', async () => {
+      // Every fixture Cell meets on Saturdays. Nothing is recorded, so every Saturday that
+      // has come is behind and every one still to come is not (section 17).
+      const coverage = coverageOf(await list(manuelAccount), markCell.id);
+
+      expect(coverage.behind).toBe(saturdaysUpTo(await today()));
+      expect(coverage.behind).toBeLessThanOrEqual(coverage.scheduled);
+    });
+
+    it('is every unrecorded meeting of a month that is over', async () => {
+      const previous = await previousMonth();
+      await record(markCell.id, mark.id, markAccount.id, firstSaturdayOf(previous));
+
+      const coverage = coverageOf(await list(manuelAccount, { month: previous }), markCell.id);
+
+      expect(coverage.recorded).toBe(1);
+      expect(coverage.behind).toBe(coverage.scheduled - 1);
+    });
+
+    it('is not offset by a record a backdated closure left outside the schedule', async () => {
+      // A meeting on the third Saturday is recorded, then the Cell is closed effective the
+      // day after the second, and the first two were never recorded. Subtracting counts
+      // would read the record against a meeting it is not, and call the Cell one less
+      // behind than it is; matched date by date, both earlier Saturdays stay behind.
+      const previous = await previousMonth();
+      const first = firstSaturdayOf(previous);
+      const plusDays = (day: string, n: number): string => {
+        const [y, m, d] = day.split('-').map(Number);
+        return new Date(Date.UTC(y, m - 1, d + n)).toISOString().slice(0, 10);
+      };
+      const second = plusDays(first, 7);
+      const third = plusDays(first, 14);
+
+      await record(markCell.id, mark.id, markAccount.id, third);
+      await closeCellDirectly(db, markCell.id, {
+        reason: 'MEMBERS_DISPERSED',
+        at: new Date(`${plusDays(second, 1)}T10:00:00+08:00`),
+      });
+
+      const coverage = coverageOf(
+        await list(manuelAccount, { month: previous, state: 'CLOSED' }),
+        markCell.id,
+      );
+
+      expect(coverage.recorded).toBe(1);
+      expect(coverage.scheduled).toBe(2);
+      expect(coverage.behind).toBe(2);
+    });
+  });
+
   it('refuses a led_by it does not offer', async () => {
     // `me` is the only value, and naming a person would be a second way of asking a scope
     // question. Refused at the edge rather than ignored, so a client that meant something
@@ -642,6 +801,166 @@ describe('the Cells index (sections 10, 12 and 22)', () => {
 
     expect(response.status).toBe(422);
     expect(response.body.error.code).toBe('VALIDATION_FAILED');
+  });
+  describe('the closed view (decision 0266)', () => {
+    type ClosedRow = {
+      id: string;
+      cell_id: string;
+      state: string;
+      leader: { person_id: string };
+      closed_on: string;
+      closure_reason: string;
+      restarted_as: string | null;
+      may_restart: boolean;
+    };
+
+    const rowsOf = (response: request.Response): ClosedRow[] => response.body.data as ClosedRow[];
+
+    it('lists a closed Cell to the upline of its last leader, and the running view does not', async () => {
+      await closeCellDirectly(db, markCell.id, { reason: 'MEMBERS_DISPERSED' });
+
+      const closed = await list(manuelAccount, { state: 'CLOSED' });
+      const running = await list(manuelAccount);
+
+      expect(closed.status).toBe(200);
+      expect(cellIdsOf(closed)).toEqual([markCell.id]);
+      expect(rowsOf(closed)[0]).toMatchObject({
+        state: 'CLOSED',
+        leader: { person_id: mark.id },
+        closed_on: await today(),
+        closure_reason: 'MEMBERS_DISPERSED',
+        restarted_as: null,
+        may_restart: true,
+      });
+      expect(cellIdsOf(running)).toEqual([manuelCell.id, nathanCell.id].sort());
+    });
+
+    it('shows the former leader their own closed Cell, and never offers them its restart', async () => {
+      // Section 10: no holder of `cell.request_leadership` may name themselves, and a
+      // restart names the Cell's last leader (decision 0264).
+      await closeCellDirectly(db, markCell.id, { reason: 'MEMBERS_DISPERSED' });
+      await closeCellDirectly(db, nathanCell.id, { reason: 'MEMBERS_DISPERSED' });
+
+      const response = await list(markAccount, { state: 'CLOSED' });
+
+      expect(cellIdsOf(response)).toEqual([markCell.id]);
+      expect(rowsOf(response)[0].may_restart).toBe(false);
+    });
+
+    it('offers no restart for a Cell closed as created in error, or one already restarted', async () => {
+      await closeCellDirectly(db, markCell.id, { reason: 'CREATED_IN_ERROR' });
+      await closeCellDirectly(db, nathanCell.id, { reason: 'LEADER_STEPPED_DOWN' });
+      await db
+        .updateTable('cells')
+        .set({ restarted_from_cell_id: nathanCell.id })
+        .where('id', '=', manuelCell.id)
+        .execute();
+
+      const response = await list(manuelAccount, { state: 'CLOSED' });
+      const byId = new Map(rowsOf(response).map((row) => [row.id, row]));
+
+      expect(byId.get(markCell.id)?.may_restart).toBe(false);
+      expect(byId.get(nathanCell.id)).toMatchObject({
+        restarted_as: manuelCell.cellId,
+        may_restart: false,
+      });
+    });
+
+    it('lists every closed Cell to a Whole Church viewer, and offers a restart only over their own subtree', async () => {
+      // Seeing is `cell.view_subtree`, Whole Church for Admin; requesting is
+      // `cell.request_leadership`, which every role holds over its own subtree excluding
+      // itself (section 7). This administrator is outside the tree, so they see the Cell
+      // and may not ask for it to restart.
+      await closeCellDirectly(db, markCell.id, { reason: 'MEMBERS_DISPERSED' });
+
+      const response = await list(admin, { state: 'CLOSED' });
+
+      expect(cellIdsOf(response)).toEqual([markCell.id]);
+      expect(rowsOf(response)[0].may_restart).toBe(false);
+    });
+
+    it('reads the schedule that governed, never a zero-length row a closure left', async () => {
+      // A closure ends a configuration row at `GREATEST(effective_at, started_at)`, so a
+      // change queued for a later month is left zero-length with the latest `started_at`
+      // on the Cell. Section 5: no instant resolves to such a row.
+      const closedAt = new Date('2026-06-15T10:00:00+08:00');
+      await closeCellDirectly(db, markCell.id, { reason: 'MEMBERS_DISPERSED', at: closedAt });
+      await db
+        .insertInto('cell_schedules')
+        .values({
+          cell_id: markCell.id,
+          day_of_week: 2,
+          time_of_day: '20:30',
+          started_at: new Date('2026-07-01T00:00:00+08:00'),
+          ended_at: new Date('2026-07-01T00:00:00+08:00'),
+        })
+        .execute();
+
+      const response = await list(manuelAccount, { state: 'CLOSED' });
+      const row = rowsOf(response)[0] as unknown as {
+        schedule: { day_of_week: number; time_of_day: string };
+      };
+
+      expect(row.schedule).toEqual({ day_of_week: 6, time_of_day: '19:00' });
+    });
+
+    it('agrees with the request route: a row offering a restart is one the route accepts', async () => {
+      // Section 15 calls `may_restart` "the scope half of what the request checks", and two
+      // API answers claimed to be equal need a case that takes one to the other. Without
+      // it each side is pinned alone and they may drift apart silently.
+      await closeCellDirectly(db, markCell.id, { reason: 'MEMBERS_DISPERSED' });
+
+      const listed = await list(manuelAccount, { state: 'CLOSED' });
+      const row = rowsOf(listed)[0];
+
+      expect(row.may_restart).toBe(true);
+
+      const accepted = await request(app.getHttpServer())
+        .post('/api/v1/cells/leadership-requests')
+        .set('Authorization', `Bearer ${manuelAccount.accessToken}`)
+        .set('Idempotency-Key', randomUUID())
+        .send({
+          kind: 'NEW_CELL',
+          prospective_leader_id: row.leader.person_id,
+          restart_of_cell_id: row.id,
+          category: 'YOUTH',
+          day_of_week: 6,
+          time_of_day: '19:00',
+        });
+
+      expect(accepted.status).toBe(201);
+    });
+
+    it('agrees with the request route: a row offering none is one the route refuses', async () => {
+      await closeCellDirectly(db, markCell.id, { reason: 'MEMBERS_DISPERSED' });
+
+      const listed = await list(markAccount, { state: 'CLOSED' });
+      const row = rowsOf(listed)[0];
+
+      expect(row.may_restart).toBe(false);
+
+      const refused = await request(app.getHttpServer())
+        .post('/api/v1/cells/leadership-requests')
+        .set('Authorization', `Bearer ${markAccount.accessToken}`)
+        .set('Idempotency-Key', randomUUID())
+        .send({
+          kind: 'NEW_CELL',
+          prospective_leader_id: row.leader.person_id,
+          restart_of_cell_id: row.id,
+          category: 'YOUTH',
+          day_of_week: 6,
+          time_of_day: '19:00',
+        });
+
+      expect(refused.status).toBeGreaterThanOrEqual(400);
+    });
+
+    it('refuses a state it does not offer', async () => {
+      const response = await list(manuelAccount, { state: 'ARCHIVED' });
+
+      expect(response.status).toBe(422);
+      expect(response.body.error.code).toBe('VALIDATION_FAILED');
+    });
   });
 });
 

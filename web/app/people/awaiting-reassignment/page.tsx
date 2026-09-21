@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useState } from 'react';
 
 import { AppShell, PAGE_WIDTH } from '@/components/app-shell';
+import { Button } from '@/components/ui/button';
 import { FailureNotice } from '@/components/ui/failure-notice';
 import { describeFailure } from '@/lib/messages';
 import { awaitingReassignment } from '@/lib/people';
@@ -31,6 +32,16 @@ import { awaitingReassignment } from '@/lib/people';
  * ranking of neglect whatever it is called (sections 13 and 17). There is no sort
  * control here for that reason, and no colour grading.
  *
+ * **The empty state says what the query established and not more.** It used to say that
+ * everyone in the reader's scope had a leader still in place, which is false in exactly
+ * the case this screen exists for: the broken edge that puts somebody here also drops
+ * them out of their upline's subtree walk, so an ordinary leader is answered empty while
+ * people beneath them wait. That is an open Stop Condition rather than a defect of this
+ * screen, and it is open in both directions: decision 0214 refuses to let section 20's
+ * placement graph authorize an aggregate report, and section 7 says in terms that a
+ * per-person view — which this list is — "is a different question and is not settled by
+ * this". So the sentence names the limit instead of asserting past it.
+ *
  * **Each entry carries the action that resolves it** (section 19): the link goes to
  * the person's place in the tree, which is the screen that performs a reassignment.
  * Section 5 governs who may actually perform one, and appearing here confers nothing
@@ -49,11 +60,13 @@ function AwaitingReassignmentList() {
   // One page at a time, and the cursor is carried rather than accumulated: section 22
   // returns no total, so there is nothing to show a reader but the page they asked for
   // and whether another exists.
-  const [cursor, setCursor] = useState<string | undefined>(undefined);
+  const [cursors, setCursors] = useState<(string | null)[]>([null]);
+  const [page, setPage] = useState(0);
 
   const people = useQuery({
-    queryKey: ['awaiting-reassignment', cursor ?? null],
-    queryFn: ({ signal }) => awaitingReassignment({ cursor }, signal),
+    queryKey: ['awaiting-reassignment', cursors[page]],
+    queryFn: ({ signal }) =>
+      awaitingReassignment({ cursor: cursors[page] ?? undefined }, signal),
   });
 
   return (
@@ -67,7 +80,7 @@ function AwaitingReassignmentList() {
         </Link>
       </p>
 
-      <h1 className="text-2xl font-semibold tracking-tight">A leader to be found</h1>
+      <h1 className="text-2xl font-semibold tracking-tight">People needing a leader</h1>
       <p className="text-muted mt-2 max-w-2xl text-sm leading-relaxed">
         People in your scope whose own pastoral leader no longer holds an assignment. Listed
         by name; nothing here counts or ranks how long anybody has been waiting.
@@ -83,7 +96,9 @@ function AwaitingReassignmentList() {
         <>
           {people.data.data.length === 0 ? (
             <p className="text-muted mt-6 max-w-2xl text-sm leading-relaxed">
-              Everyone in your scope has a pastoral leader who is still in place.
+              Nobody in your scope is waiting for a leader. Somebody whose own leader
+              holds no assignment can fall outside your branch as they go, so a reader with
+              a wider scope may see them.
             </p>
           ) : (
             <ul className="mt-6 flex flex-col gap-3">
@@ -108,29 +123,31 @@ function AwaitingReassignmentList() {
             </ul>
           )}
 
-          {people.data.next_cursor !== null ? (
-            <p className="mt-6">
-              <button
-                type="button"
-                onClick={() => setCursor(people.data.next_cursor ?? undefined)}
-                className="border-line focus-visible:outline-accent inline-flex min-h-11 items-center rounded-lg border px-4 text-sm focus-visible:outline-2 focus-visible:outline-offset-2"
-              >
-                Show more
-              </button>
-            </p>
-          ) : null}
-
-          {cursor !== undefined ? (
-            <p className="mt-4">
-              <button
-                type="button"
-                onClick={() => setCursor(undefined)}
-                className="focus-visible:outline-accent text-muted inline-flex min-h-11 items-center rounded-sm text-sm underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2"
-              >
-                Back to the first page
-              </button>
-            </p>
-          ) : null}
+          {/* Previous and Next rather than "show more": a cursor names one page, and
+              section 22 returns no total to count pages against. */}
+          <nav aria-label="People awaiting reassignment" className="mt-6 flex items-center gap-3">
+            <Button
+              variant="secondary"
+              disabled={page === 0}
+              onClick={() => setPage((current) => Math.max(0, current - 1))}
+            >
+              Previous
+            </Button>
+            <Button
+              variant="secondary"
+              disabled={!people.data.next_cursor}
+              onClick={() => {
+                const next = people.data.next_cursor;
+                if (!next) {
+                  return;
+                }
+                setCursors((current) => [...current.slice(0, page + 1), next]);
+                setPage((current) => current + 1);
+              }}
+            >
+              Next
+            </Button>
+          </nav>
         </>
       ) : null}
     </main>

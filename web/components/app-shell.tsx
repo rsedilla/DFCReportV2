@@ -22,8 +22,8 @@ import { cn } from '@/lib/utils';
 /**
  * One sidebar entry, and every path that counts as being inside it.
  *
- * **An entry can own more than one prefix.** `Record` is the Dashboard and also the
- * DCC calendar a leader records Sundays from, so being on `/dcc/...` is being on
+ * **An entry can own more than one prefix.** `Record` is the Dashboard and also
+ * `/dcc`, the reader's month of records owed, so being on `/dcc/...` is being on
  * Record. `Reports` owns both figures pages the same way.
  */
 interface NavEntry {

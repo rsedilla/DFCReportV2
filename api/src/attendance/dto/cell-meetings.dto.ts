@@ -1,3 +1,5 @@
+import { IsIn, IsOptional } from 'class-validator';
+
 import { IsManilaCalendarDate } from '../../common/time/is-manila-calendar-date';
 
 /**
@@ -41,4 +43,14 @@ export class CellMeetingsQueryDto {
     message: 'month must be a YYYY-MM-DD Asia/Manila date that exists (SKILL.md section 22).',
   })
   month!: string;
+}
+
+/**
+ * `GET /api/v1/cells/meetings/awaiting`: the month, and whose work (decision 0258). The
+ * actor's own is the default; `branch` adds everyone beneath them in the pastoral tree.
+ */
+export class AwaitingMeetingsQueryDto extends CellMeetingsQueryDto {
+  @IsOptional()
+  @IsIn(['mine', 'branch'], { message: 'whose must be mine or branch' })
+  whose?: 'mine' | 'branch';
 }

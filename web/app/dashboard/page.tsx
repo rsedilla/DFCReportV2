@@ -10,9 +10,16 @@ import { buttonClasses } from '@/components/ui/button';
 import { FailureNotice } from '@/components/ui/failure-notice';
 import { RadioGroup } from '@/components/ui/radio-group';
 import { Tag } from '@/components/ui/tag';
+import { HeaderCell, Table, rowClasses } from '@/components/ui/table';
 import {
+  categoryLabel,
+  behindOf,
+  closedOnLabel,
+  dayOfWeekLabel,
+  timeLabel,
   listCells,
   listMeetingsAwaiting,
+  type CellCategory,
   peopleWithoutACell,
   type AwaitingMeetings,
   type CellSummary,
@@ -50,18 +57,14 @@ const UNPLACED_TILE = 5;
  * carrying the button that resolves it, and the second is the Cells whose coverage
  * line shows something missing. The figures follow.
  *
- * **The queue is the leader's own work and nobody else's** (owner's choice of
- * 2026-09-15). It holds their own Cells' meetings and the Sundays on their own DCC
- * checklist. A downline leader's outstanding meetings are on "Cells with meetings
- * still to record" below, which is an attention list rather than somebody else's
- * to-do list.
+ * **The queue shows the leader's own work by default, and their branch's on request**
+ * (decision 0258, reversing the owner's choice of 2026-09-15).
  *
  * **Every tile carries what it counts, its value, its scope and its period**
  * (section 19). A tile reading `12` and a tile reading `11,480` are the same tile
  * for two different people, and a figure without its scope "cannot be discussed,
- * screenshotted, or compared". The figures are words and numbers; there are no
- * progress bars and no comparison with another month (owner's choice of
- * 2026-09-15), because a bar that reads as empty is coverage encoded as a
+ * screenshotted, or compared". The figures are words and numbers; last month's figure sits
+ * under each (owner's choice of 2026-09-19) and there are no progress bars, because a bar that reads as empty is coverage encoded as a
  * graphic, which is the thing sections 13 and 17 forbid by another route.
  *
  * **Current-state and period-based figures are in separate sections and never
@@ -75,12 +78,9 @@ const UNPLACED_TILE = 5;
  * 10). Both figures here come from the reporting routes, which count distinct
  * people; nothing on this screen sums attendances.
  *
- * **Two of section 19's five outstanding-work lists are not fully served.** One has
- * no route yet and is named here rather than faked: the outcome of a Cell leadership
- * request the actor submitted — a question `CLAUDE.md` records as open, since section
- * 7 names no capability for such a read. The other is partly served: a **closed** Cell's
- * meetings are not reachable, because the Cells index is `ACTIVE`-only and nothing
- * supplies the identifier.
+ * **One of section 19's five outstanding-work lists has no route yet** and is named here
+ * rather than faked: the outcome of a Cell leadership request the actor submitted — a
+ * question `CLAUDE.md` records as open, since section 7 names no capability for such a read.
  *
  * **Nothing here is ranked or colour-graded** (sections 13, 17 and 19). The queue is
  * in date order, oldest first, and says so; the attention list is filtered rather
@@ -94,7 +94,10 @@ export default function DashboardPage() {
   );
 }
 
-type QueueFilter = 'ALL' | 'CELLS' | 'SUNDAYS';
+type QueueFilter = 'ALL' | 'CELLS' | 'DCC';
+
+/** Whose outstanding work the queue shows (decision 0258). */
+type Whose = 'mine' | 'branch';
 
 type QueueItem =
   | {
@@ -106,6 +109,12 @@ type QueueItem =
       cellCode: string;
       /** Null while the Cell is `ACTIVE`; a Manila date once it has closed. */
       closedOn: string | null;
+      dayOfWeek: number;
+      category: CellCategory | null;
+      memberCount: number;
+      leaderName: string | null;
+      isActor: boolean;
+      mayRecord: boolean;
     }
   | { kind: 'dcc'; month: string; date: string; eventId: string; marked: number; total: number };
 
@@ -114,8 +123,7 @@ type QueueItem =
  *
  * **The server decides the population now** (ruling of 2026-09-17). It was assembled
  * here from the Cells index and one request per Cell, which could not reach a **closed**
- * Cell's meetings at all — the index is `ACTIVE`-only — and section 19 calls this queue
- * "the only surface naming those meetings". The day bound and the "no record" filter
+ * Cell's meetings at all — the index is `ACTIVE`-only. The day bound and the "no record" filter
  * moved with it: both are the route's, so a client cannot drift from them.
  */
 function cellEntries(awaiting: AwaitingMeetings | undefined): QueueItem[] {
@@ -127,6 +135,12 @@ function cellEntries(awaiting: AwaitingMeetings | undefined): QueueItem[] {
     cellId: entry.cell_id,
     cellCode: entry.cell_code,
     closedOn: entry.cell_closed_on,
+    dayOfWeek: entry.day_of_week,
+    category: entry.category,
+    memberCount: entry.member_count,
+    leaderName: entry.leader.full_name,
+    isActor: entry.leader.is_actor,
+    mayRecord: entry.may_record,
   }));
 }
 
@@ -180,6 +194,8 @@ function Dashboard() {
   const inCloseWeek = Number(today.slice(8, 10)) <= 7;
 
   const [filter, setFilter] = useState<QueueFilter>('ALL');
+  // The reader's own work is the default (decision 0258).
+  const [whose, setWhose] = useState<Whose>('mine');
 
   const me = useQuery({ queryKey: ['me'], queryFn: ({ signal }) => getMe(signal) });
 
@@ -202,7 +218,7 @@ function Dashboard() {
   });
 
   // **One request per open month**, replacing two index calls and one per Cell. The
-  // key is the month alone, because it is the actor's own queue and nobody else's.
+  // key is the month and whose view is shown (decision 0258).
   //
   // **The recording screen clears it by the bare `meetings-awaiting` prefix**, which
   // it had to be given: the queue used to be keyed `['cell-meetings', id, month]` and
@@ -210,8 +226,8 @@ function Dashboard() {
   // under that prefix. Said the other way round, moving the queue onto its own route
   // moved it out of the reach of the only thing that refreshed it.
   const awaiting = useQuery({
-    queryKey: ['meetings-awaiting', month],
-    queryFn: ({ signal }) => listMeetingsAwaiting(month, signal),
+    queryKey: ['meetings-awaiting', month, whose],
+    queryFn: ({ signal }) => listMeetingsAwaiting(month, signal, whose),
   });
 
   // **The tile's own read, and no longer the queue's.** "Cells you lead" is a
@@ -225,6 +241,14 @@ function Dashboard() {
   const scoped = useQuery({
     queryKey: ['cells', month, false],
     queryFn: ({ signal }) => listCells({ month }, signal),
+  });
+
+  // **Section 15's attention list includes a closed Cell while its month is open**, and
+  // the running view cannot carry one. The closed view (decision 0266) can. What a page
+  // bound owes this list is recorded as open in `CLAUDE.md`.
+  const scopedClosed = useQuery({
+    queryKey: ['cells', month, false, 'CLOSED'],
+    queryFn: ({ signal }) => listCells({ month, state: 'CLOSED' }, signal),
   });
 
   // **The Sundays on the leader's own checklist.** The events index says which of
@@ -252,8 +276,8 @@ function Dashboard() {
   // shut answers `open: false` and an empty list rather than refusing, so nothing here
   // has to decide whether it is still the leader's to record.
   const awaitingPrevious = useQuery({
-    queryKey: ['meetings-awaiting', previousMonth],
-    queryFn: ({ signal }) => listMeetingsAwaiting(previousMonth, signal),
+    queryKey: ['meetings-awaiting', previousMonth, whose],
+    queryFn: ({ signal }) => listMeetingsAwaiting(previousMonth, signal, whose),
     enabled: inCloseWeek,
   });
 
@@ -304,6 +328,24 @@ function Dashboard() {
     enabled: me.data !== undefined,
   });
 
+  // Last month's figures, shown under this month's on each card and named by month.
+  const cellFiguresPrevious = useQuery({
+    queryKey: ['cell-report', previousMonth, reportScope],
+    queryFn: ({ signal }) => getCellMonthlyReport(previousMonth, reportScope, signal),
+    enabled: me.data !== undefined,
+  });
+
+  // Section 19: an open period says so, and last month is open until its 7th.
+  const previousName = monthLabel(previousMonth).split(' ')[0];
+  const previousLabel = (open: boolean | undefined) =>
+    `${previousName}${open ? ' (still open)' : ''}`;
+
+  const dccFiguresPrevious = useQuery({
+    queryKey: ['dcc-report', previousMonth, reportScope],
+    queryFn: ({ signal }) => getDccMonthlyReport(previousMonth, reportScope, signal),
+    enabled: me.data !== undefined,
+  });
+
   // **Oldest first, and the page says so.** Date order is the one order that ranks
   // nobody, and it puts last month's entries before this month's. A Cell meeting and a
   // Sunday on the same date keep that order, because the sort is stable and the Cell
@@ -319,7 +361,7 @@ function Dashboard() {
     (item) =>
       filter === 'ALL' ||
       (filter === 'CELLS' && item.kind === 'cell') ||
-      (filter === 'SUNDAYS' && item.kind === 'dcc'),
+      (filter === 'DCC' && item.kind === 'dcc'),
   );
 
   // **Pending until every read the queue is built from has answered**, including the
@@ -348,9 +390,14 @@ function Dashboard() {
     checklists.some((query) => query.isError) ||
     previousFailed !== undefined;
 
-  const needingAttention = (scoped.data?.data ?? []).filter(
-    (cell) => cell.coverage.recorded < cell.coverage.scheduled,
-  );
+  // Bounded by the window rather than by how recently the Cell closed, so the list never
+  // shows a meeting only Admin could act on (section 15). **One predicate for both views**
+  // (decision 0267): a meeting that has come and has no record. It used to compare with
+  // the whole month's schedule, which named a running Cell for meetings not yet held.
+  const needingAttention = [
+    ...(scoped.data?.data ?? []),
+    ...(scopedClosed.data?.open ? scopedClosed.data.data : []),
+  ].filter((cell) => behindOf(cell.coverage) > 0);
 
   // **Every query on this page, not the ones it started with.** Section 19 puts
   // outstanding work above the figures precisely so a leader can trust it, and a
@@ -364,26 +411,28 @@ function Dashboard() {
   const failure = awaiting.isError
     ? describeFailure(awaiting.error)
     : dccEvents.isError
-        ? describeFailure(dccEvents.error)
-        : checklistFailed
-          ? describeFailure(checklistFailed.error)
-          : previousFailed
-            ? describeFailure(previousFailed.error)
-            : mine.isError
+      ? describeFailure(dccEvents.error)
+      : checklistFailed
+        ? describeFailure(checklistFailed.error)
+        : previousFailed
+          ? describeFailure(previousFailed.error)
+          : mine.isError
             ? describeFailure(mine.error)
             : scoped.isError
-            ? describeFailure(scoped.error)
-            : unplaced.isError
-              ? describeFailure(unplaced.error)
-              : cellFigures.isError
-                ? describeFailure(cellFigures.error)
-                : dccFigures.isError
-                  ? describeFailure(dccFigures.error)
-                  : withoutACell.isError
-                    ? describeFailure(withoutACell.error)
-                    : me.isError
-                      ? describeFailure(me.error)
-                      : null;
+              ? describeFailure(scoped.error)
+              : scopedClosed.isError
+                ? describeFailure(scopedClosed.error)
+              : unplaced.isError
+                ? describeFailure(unplaced.error)
+                : cellFigures.isError
+                  ? describeFailure(cellFigures.error)
+                  : dccFigures.isError
+                    ? describeFailure(dccFigures.error)
+                    : withoutACell.isError
+                      ? describeFailure(withoutACell.error)
+                      : me.isError
+                        ? describeFailure(me.error)
+                        : null;
 
   return (
     <main id="main" className={PAGE_WIDTH.INDEX}>
@@ -394,75 +443,165 @@ function Dashboard() {
         {me.data?.first_name ? `Welcome, ${me.data.first_name}` : 'Dashboard'}
       </h1>
       <p className="text-muted mt-2 max-w-2xl text-sm leading-relaxed">
-        What needs doing comes first. The figures below it are for {monthLabel(month)}, and
-        their scope is {scopeLabel}.
+        What needs doing comes first, with this month&rsquo;s figures beside it.
       </p>
 
       <div className="mt-8">
         <FailureNotice failure={failure} />
       </div>
 
-      <section className="mt-8" aria-labelledby="awaiting-heading">
-        <h2 id="awaiting-heading" className="text-lg font-bold tracking-tight">
-          Awaiting a record
-        </h2>
-        <p className="text-muted mt-1 max-w-2xl text-sm leading-relaxed">
-          Your own Cells&rsquo; meetings and your own DCC checklist, this month
-          {inCloseWeek ? ', and last month’s while it is still open' : ''}. Oldest first.
-          Nothing here is scored or ranked.
-        </p>
-
-        <div className="mt-4">
-          <RadioGroup
-            legend="Show"
-            name="queue-filter"
-            value={filter}
-            onChange={setFilter}
-            options={[
-              { value: 'ALL', label: 'All' },
-              { value: 'CELLS', label: 'Cells' },
-              { value: 'SUNDAYS', label: 'Sundays' },
-            ]}
-          />
-        </div>
-
-        {queueFailed ? null : queuePending ? (
-          <p className="text-muted mt-4 text-sm">Loading&hellip;</p>
-        ) : shown.length === 0 ? (
-          <p className="text-muted mt-4 max-w-2xl text-sm leading-relaxed">
-            {filter === 'CELLS'
-              ? 'No Cell meeting of yours is awaiting a record.'
-              : filter === 'SUNDAYS'
-                ? 'Nobody on your DCC checklist is awaiting a record.'
-                : 'Nothing is awaiting a record from you.'}
+      <div className="mt-8 grid gap-10 lg:grid-cols-[minmax(0,1fr)_18rem]">
+        <section aria-labelledby="awaiting-heading" className="min-w-0">
+          <h2 id="awaiting-heading" className="text-lg font-bold tracking-tight">
+            Awaiting a record
+          </h2>
+          <p className="text-muted mt-1 max-w-2xl text-sm leading-relaxed">
+            {whose === 'mine'
+              ? 'Your own Cells’ meetings and your own DCC checklist'
+              : 'Your own work and your branch’s, each naming the leader who records it'}
+            , this month
+            {inCloseWeek ? ', and last month’s while it is still open' : ''}. Oldest first. Nothing
+            here is scored or ranked.
           </p>
-        ) : (
-          <ul className="border-line mt-4 border-t">
-            {shown.map((item) => (
-              <QueueRow
-                key={`${item.month}-${item.kind === 'cell' ? `${item.cellId}-${item.date}` : item.eventId}`}
-                item={item}
-                currentMonth={month}
-              />
-            ))}
-          </ul>
-        )}
+
+          <div className="mt-4 flex flex-wrap gap-x-8 gap-y-4">
+            <RadioGroup
+              legend="Whose"
+              name="queue-whose"
+              value={whose}
+              onChange={setWhose}
+              options={[
+                { value: 'branch', label: 'People I oversee' },
+                { value: 'mine', label: 'My own Cells' },
+              ]}
+            />
+            <RadioGroup
+              legend="Show"
+              name="queue-filter"
+              value={filter}
+              onChange={setFilter}
+              options={[
+                { value: 'ALL', label: 'All' },
+                { value: 'CELLS', label: 'Cells' },
+                { value: 'DCC', label: 'DCC' },
+              ]}
+            />
+          </div>
+
+          {queueFailed ? null : queuePending ? (
+            <p className="text-muted mt-4 text-sm">Loading&hellip;</p>
+          ) : shown.length === 0 ? (
+            <p className="text-muted mt-4 max-w-2xl text-sm leading-relaxed">
+              {filter === 'CELLS'
+                ? whose === 'mine'
+                  ? 'No Cell meeting of yours is awaiting a record.'
+                  : 'No Cell meeting in your branch is awaiting a record.'
+                : filter === 'DCC'
+                  ? whose === 'mine'
+                    ? 'Nobody on your DCC checklist is awaiting a record.'
+                    : 'No DCC record is owed in your branch.'
+                  : whose === 'mine'
+                    ? 'Nothing is awaiting a record from you.'
+                    : 'Nothing is awaiting a record in your branch.'}
+            </p>
+          ) : (
+            <ul className="border-line mt-4 border-t">
+              {shown.map((item) => (
+                <QueueRow
+                  key={`${item.month}-${item.kind}-${item.kind === 'cell' ? `${item.cellId}-${item.date}` : item.eventId}`}
+                  item={item}
+                  currentMonth={month}
+                  today={today}
+                />
+              ))}
+            </ul>
+          )}
+
+          {filter === 'DCC' && whose === 'mine' ? (
+            <DccChecklistGrid events={recordableEvents} checklists={checklists} month={month} />
+          ) : null}
+
+          {/*
+            **Record is where DCC attendance is recorded from** (section 19, ruling of
+            2026-09-14). The queue lists the Sundays with something outstanding; the
+            calendar is the way to every Sunday of the month, including one already
+            complete that a leader needs to look at again.
+          */}
+          <p className="mt-4">
+            <Link
+              href="/dcc"
+              className="text-accent focus-visible:outline-accent inline-flex min-h-11 items-center text-sm underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2"
+            >
+              See the whole month
+            </Link>
+          </p>
+        </section>
 
         {/*
-          **Record is where DCC attendance is recorded from** (section 19, ruling of
-          2026-09-14). The queue lists the Sundays with something outstanding; the
-          calendar is the way to every Sunday of the month, including one already
-          complete that a leader needs to look at again.
+          This month so far, beside the queue as the owner's design places it (decision
+          0258's screen, owner's choice of 2026-09-19). Each figure carries last month's,
+          named by its month; no bars, because coverage is two figures and never a fraction
+          (decision 0224).
         */}
-        <p className="mt-4">
-          <Link
-            href="/dcc"
-            className="text-accent focus-visible:outline-accent inline-flex min-h-11 items-center text-sm underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2"
-          >
-            Open the DCC calendar
-          </Link>
-        </p>
-      </section>
+        <aside aria-labelledby="period-heading" className="min-w-0">
+          <h2 id="period-heading" className="text-lg font-bold tracking-tight">
+            {monthLabel(month).split(' ')[0]} so far
+          </h2>
+          <p className="text-muted mt-1 text-sm">
+            {periodLabel(month, cellFigures.data?.open)} · {scopeLabel}
+          </p>
+          <div className="mt-4 flex flex-col gap-3">
+            <MonthCard
+              label="Cell meetings recorded"
+              value={
+                cellFigures.data
+                  ? `${cellFigures.data.coverage.recorded} of ${cellFigures.data.coverage.scheduled}`
+                  : '—'
+              }
+              previous={
+                cellFiguresPrevious.data
+                  ? `${previousLabel(cellFiguresPrevious.data.open)}: ${cellFiguresPrevious.data.coverage.recorded} of ${cellFiguresPrevious.data.coverage.scheduled}`
+                  : null
+              }
+              href="/reports/cells"
+            />
+            <MonthCard
+              label="DCC records filed"
+              value={
+                dccFigures.data
+                  ? `${dccFigures.data.coverage.met} of ${dccFigures.data.coverage.owed}`
+                  : '—'
+              }
+              previous={
+                dccFiguresPrevious.data
+                  ? `${previousLabel(dccFiguresPrevious.data.open)}: ${dccFiguresPrevious.data.coverage.met} of ${dccFiguresPrevious.data.coverage.owed}`
+                  : null
+              }
+              href="/reports/dcc"
+            />
+            <MonthCard
+              label="People at a Cell"
+              value={cellFigures.data ? String(cellFigures.data.unique_people) : '—'}
+              previous={
+                cellFiguresPrevious.data
+                  ? `${previousLabel(cellFiguresPrevious.data.open)}: ${cellFiguresPrevious.data.unique_people}`
+                  : null
+              }
+              href="/reports/cells"
+            />
+            <MonthCard
+              label="People at DCC"
+              value={dccFigures.data ? String(dccFigures.data.unique_people) : '—'}
+              previous={
+                dccFiguresPrevious.data
+                  ? `${previousLabel(dccFiguresPrevious.data.open)}: ${dccFiguresPrevious.data.unique_people}`
+                  : null
+              }
+              href="/reports/dcc"
+            />
+          </div>
+        </aside>
+      </div>
 
       <section className="mt-10" aria-labelledby="attention-heading">
         <h2 id="attention-heading" className="text-lg font-bold tracking-tight">
@@ -471,11 +610,12 @@ function Dashboard() {
         <p className="text-muted mt-1 max-w-2xl text-sm leading-relaxed">
           Within your scope, in no particular order. This is a filter, not a ranking.
         </p>
-        {scoped.isPending ? (
+        {scoped.isPending || scopedClosed.isPending ? (
           <p className="text-muted mt-2 text-sm">Loading&hellip;</p>
-        ) : scoped.isError ? null : needingAttention.length === 0 ? (
+        ) : scoped.isError || scopedClosed.isError ? null : needingAttention.length === 0 ? (
           <p className="text-muted mt-2 max-w-2xl text-sm leading-relaxed">
-            Every Cell in your scope has recorded all of this month&rsquo;s meetings.
+            No Cell on this page of your scope is missing a record for this month, closed
+            Cells included while the month is still open.
           </p>
         ) : (
           <ul className="mt-4 flex flex-col gap-3">
@@ -502,8 +642,8 @@ function Dashboard() {
           People needing a leader
         </h2>
         <p className="text-muted mt-1 max-w-2xl text-sm leading-relaxed">
-          Their own pastoral leader no longer holds an assignment. Listed by name, never by
-          how long they have waited.
+          Their own pastoral leader no longer holds an assignment. Listed by name, never by how long
+          they have waited.
         </p>
         {unplaced.isPending ? (
           <p className="text-muted mt-2 text-sm">Loading&hellip;</p>
@@ -511,7 +651,9 @@ function Dashboard() {
           <>
             {unplaced.data.data.length === 0 ? (
               <p className="text-muted mt-2 max-w-2xl text-sm leading-relaxed">
-                Everyone in your scope has a pastoral leader who is still in place.
+                Nobody in your scope is waiting for a leader. Somebody whose own leader
+                holds no assignment can fall outside your branch as they go, so a reader
+                with a wider scope may see them.
               </p>
             ) : (
               <ul className="mt-4 flex flex-col gap-3">
@@ -553,7 +695,7 @@ function Dashboard() {
                 className="focus-visible:outline-accent inline-flex min-h-6 items-center text-sm underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2"
               >
                 {unplaced.data.data.length > UNPLACED_TILE || unplaced.data.next_cursor !== null
-                  ? 'See everyone waiting for a leader'
+                  ? 'See everyone needing a leader'
                   : 'Open the full list'}
               </Link>
             </p>
@@ -579,7 +721,9 @@ function Dashboard() {
           <>
             {withoutACell.data.data.length === 0 ? (
               <p className="text-muted mt-2 max-w-2xl text-sm leading-relaxed">
-                Everyone in your scope is in a Cell.
+                Nobody in your scope is without a Cell. Somebody whose own leader holds
+                no assignment can fall outside your branch, so a reader with a wider scope
+                may see them.
               </p>
             ) : (
               <ul className="mt-4 flex flex-col gap-3">
@@ -610,69 +754,6 @@ function Dashboard() {
             </p>
           </>
         ) : null}
-      </section>
-
-      {/*
-        Period-based figures, kept apart from the current-state section below.
-        Section 3 draws that line and section 19 says a dashboard is where it is
-        most easily lost.
-      */}
-      <section className="mt-12" aria-labelledby="period-heading">
-        <h2 id="period-heading" className="text-lg font-bold tracking-tight">
-          {monthLabel(month)}
-        </h2>
-        <div className="mt-4 grid gap-4 sm:grid-cols-2">
-          <Tile
-            counts="Cell attendance"
-            value={cellFigures.data ? String(cellFigures.data.unique_people) : '—'}
-            unit="people attended"
-            scope={scopeLabel}
-            period={periodLabel(month, cellFigures.data?.open)}
-            href="/reports/cells"
-          />
-          <Tile
-            counts="DCC attendance"
-            value={dccFigures.data ? String(dccFigures.data.unique_people) : '—'}
-            unit="people attended"
-            scope={scopeLabel}
-            period={periodLabel(month, dccFigures.data?.open)}
-            href="/reports/dcc"
-          />
-          <Tile
-            counts="Cell recording coverage"
-            value={
-              cellFigures.data ? (
-                <CoverageFigure
-                  recorded={cellFigures.data.coverage.recorded}
-                  scheduled={cellFigures.data.coverage.scheduled}
-                  unit="meetings recorded"
-                />
-              ) : (
-                '—'
-              )
-            }
-            scope={scopeLabel}
-            period={periodLabel(month, cellFigures.data?.open)}
-            href="/reports/cells"
-          />
-          <Tile
-            counts="DCC recording coverage"
-            value={
-              dccFigures.data ? (
-                <CoverageFigure
-                  recorded={dccFigures.data.coverage.met}
-                  scheduled={dccFigures.data.coverage.owed}
-                  unit="records filed"
-                />
-              ) : (
-                '—'
-              )
-            }
-            scope={scopeLabel}
-            period={periodLabel(month, dccFigures.data?.open)}
-            href="/reports/dcc"
-          />
-        </div>
       </section>
 
       <section className="mt-10" aria-labelledby="current-heading">
@@ -719,14 +800,6 @@ function dateParts(date: string): { day: number; weekday: string } {
   };
 }
 
-/** `19:00` or `19:00:00` as `7:00 pm`, the way a meeting time is said aloud. */
-function timeLabel(time: string): string {
-  const [hours = 0, minutes = 0] = time.split(':').map(Number);
-  const hour = ((hours + 11) % 12) + 1;
-
-  return `${hour}:${String(minutes).padStart(2, '0')} ${hours >= 12 ? 'pm' : 'am'}`;
-}
-
 /**
  * "September · open until 7 Oct": the month an entry belongs to and the day it closes.
  *
@@ -761,28 +834,49 @@ function openUntilLabel(itemMonth: string, currentMonth: string): string {
  * the entry it records in its accessible name, so a list of them is not a list of
  * identical links.
  */
-function QueueRow({ item, currentMonth }: { item: QueueItem; currentMonth: string }) {
+function QueueRow({
+  item,
+  currentMonth,
+  today,
+}: {
+  item: QueueItem;
+  currentMonth: string;
+  today: string;
+}) {
   const { day, weekday } = dateParts(item.date);
-  const title = item.kind === 'cell' ? `Cell ${item.cellCode}` : 'DCC Sunday';
-  const href =
-    item.kind === 'cell' ? `/cells/${item.cellId}/meetings/${item.date}` : `/dcc/${item.eventId}`;
-  // **A closed Cell says so in words and carries the date** (owner's choice of
-  // 2026-09-17). The meeting is still recordable while its month is open; what a leader
-  // needs is why the Cell is no longer in their Cells list, and sections 13, 17 and 19
-  // refuse to encode that in colour — so it is neither a tag nor a tint.
-  const detail =
-    item.kind === 'cell'
-      ? item.closedOn === null
-        ? timeLabel(item.time)
-        : `${timeLabel(item.time)} · Cell closed ${dayLabel(item.closedOn)}`
-      : `${item.marked} of ${item.total} of your people marked`;
-  const outstanding =
-    item.kind === 'cell' ? 'Awaiting a record' : `${item.total - item.marked} awaiting`;
+  const when = daysAgoLabel(item.date, today);
+
+  let title: string;
+  let detail: string;
+  let tag: string;
+  let href: string;
+
+  if (item.kind === 'cell') {
+    // The owner's row (choice of 2026-09-19): the Cell's category and meeting time, then
+    // whose it is, its size and its ID. Words and no colour (sections 13 and 19).
+    const category = item.category ? `${categoryLabel(item.category)} · ` : '';
+    title = `${category}${dayOfWeekLabel(item.dayOfWeek)}s ${timeLabel(item.time)}`;
+    const leader = item.isActor ? 'You' : (item.leaderName ?? 'Its leader');
+    detail = [
+      leader,
+      `${item.memberCount} ${item.memberCount === 1 ? 'member' : 'members'}`,
+      item.cellCode,
+      ...(item.closedOn === null ? [] : [`Cell closed ${dayLabel(item.closedOn)}`]),
+    ].join(' · ');
+    tag = `Awaiting a record · ${when}`;
+    href = `/cells/${item.cellId}/meetings/${item.date}`;
+  } else {
+    title = 'DCC';
+    const people = `${item.total} ${item.total === 1 ? 'person' : 'people'}`;
+    detail = `${people} you are responsible for · ${item.marked} marked`;
+    tag = `${item.total - item.marked} awaiting · ${when}`;
+    href = `/dcc/${item.eventId}`;
+  }
 
   return (
     <li className="border-line grid grid-cols-[3rem_minmax(0,1fr)] items-center gap-x-4 gap-y-3 border-b py-4 sm:grid-cols-[3rem_minmax(0,1fr)_auto]">
       <p aria-hidden="true" className="text-center leading-none">
-        <span className="block text-2xl font-bold">{day}</span>
+        <span className="text-accent block text-2xl font-bold">{day}</span>
         <span className="text-muted mt-1 block text-xs font-bold tracking-[0.08em] uppercase">
           {weekday}
         </span>
@@ -793,11 +887,9 @@ function QueueRow({ item, currentMonth }: { item: QueueItem; currentMonth: strin
           {dayLabel(item.date)} · {detail}
         </p>
         <p className="mt-2 flex flex-wrap gap-1.5">
-          <Tag appearance="outline">{outstanding}</Tag>
-          {/*
-            Allowed to wrap: at 320px the month and its closing date are longer than the
-            column, and a tag that cannot wrap pushes the page sideways.
-          */}
+          <Tag appearance="outline" className="whitespace-normal">
+            {tag}
+          </Tag>
           {item.month === currentMonth ? null : (
             <Tag className="whitespace-normal">{openUntilLabel(item.month, currentMonth)}</Tag>
           )}
@@ -807,10 +899,140 @@ function QueueRow({ item, currentMonth }: { item: QueueItem; currentMonth: strin
         Record
         <span className="sr-only">
           {' '}
-          {title}, {dayLabel(item.date)}
+          {item.kind === 'cell' ? `${item.cellCode}, ${title}` : title}, {dayLabel(item.date)}
         </span>
       </Link>
     </li>
+  );
+}
+
+/** "today", "yesterday" or "N days ago", counted in Manila days. */
+function daysAgoLabel(date: string, today: string): string {
+  const days = Math.round(
+    (Date.parse(`${today}T00:00:00Z`) - Date.parse(`${date}T00:00:00Z`)) / 86_400_000,
+  );
+
+  return days <= 0 ? 'today' : days === 1 ? 'yesterday' : `${days} days ago`;
+}
+
+/**
+ * One of the month's figures beside the queue: this month's, and last month's named by its
+ * month. No bar and no arrow: a figure is not a score (sections 13 and 19).
+ */
+function MonthCard({
+  label,
+  value,
+  previous,
+  href,
+}: {
+  label: string;
+  value: string;
+  previous: string | null;
+  href: string;
+}) {
+  return (
+    <Link
+      href={href}
+      className="border-line focus-visible:outline-accent block border p-3 focus-visible:outline-2 focus-visible:outline-offset-2"
+    >
+      <span className="text-muted block text-sm">{label}</span>
+      <span className="mt-1 block text-xl font-bold tabular-nums">{value}</span>
+      {previous === null ? null : <span className="text-muted mt-1 block text-xs">{previous}</span>}
+    </Link>
+  );
+}
+
+/**
+ * The reader's own DCC checklist across the month's Sundays (owner's choice of 2026-09-19).
+ * Only their own checklist, which the checklist screen already shows mark by mark (decision
+ * 0194). Words rather than ticks or colour; a dot is a Sunday not recorded yet.
+ */
+function DccChecklistGrid({
+  events,
+  checklists,
+  month,
+}: {
+  events: readonly DccEvent[];
+  checklists: readonly { data?: DccRoster }[];
+  month: string;
+}) {
+  const people = new Map<string, { name: string; memberId: string }>();
+  const marks = new Map<string, Map<string, boolean>>();
+
+  events.forEach((event, index) => {
+    for (const line of checklists[index]?.data?.data ?? []) {
+      people.set(line.person_id, { name: line.full_name, memberId: line.member_id });
+      if (line.record !== null) {
+        const byEvent = marks.get(line.person_id) ?? new Map<string, boolean>();
+        byEvent.set(event.id, line.record.present);
+        marks.set(line.person_id, byEvent);
+      }
+    }
+  });
+
+  if (people.size === 0) {
+    return null;
+  }
+
+  const rows = [...people.entries()].sort((a, b) => a[1].name.localeCompare(b[1].name));
+
+  return (
+    <section aria-labelledby="dcc-grid-heading" className="mt-8">
+      <h3 id="dcc-grid-heading" className="text-base font-bold">
+        Your DCC checklist, {monthLabel(month)}
+      </h3>
+      <Table caption={`Your DCC checklist by Sunday, ${monthLabel(month)}`}>
+        <thead>
+          <tr>
+            <HeaderCell>Person</HeaderCell>
+            {events.map((event) => (
+              <HeaderCell key={event.id}>{shortDayLabel(event.event_date)}</HeaderCell>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map(([personId, person]) => {
+            const byEvent = marks.get(personId);
+
+            return (
+              <tr key={personId} className={rowClasses}>
+                <td className="px-3 py-3">
+                  {person.name}
+                  <div className="text-muted text-xs">{person.memberId}</div>
+                </td>
+                {events.map((event) => {
+                  const mark = byEvent?.get(event.id);
+
+                  return (
+                    <td key={event.id} className="px-3 py-3">
+                      {mark === undefined ? (
+                        <>
+                          <span aria-hidden="true">·</span>
+                          <span className="sr-only">Not recorded yet</span>
+                        </>
+                      ) : mark ? (
+                        'Present'
+                      ) : (
+                        'Absent'
+                      )}
+                    </td>
+                  );
+                })}
+              </tr>
+            );
+          })}
+        </tbody>
+      </Table>
+    </section>
+  );
+}
+
+/** "13 Sep" for a column heading. */
+function shortDayLabel(date: string): string {
+  const [year, month, day] = date.split('-').map(Number);
+
+  return new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short' }).format(
+    new Date(Date.UTC(year, month - 1, day)),
   );
 }
 
@@ -870,7 +1092,11 @@ function AttentionRow({ cell, month }: { cell: CellSummary; month: string }) {
           unit="meetings recorded"
         />
       </div>
-      <p className="text-muted mt-2 text-sm">Led by {cell.leader.full_name}</p>
+      <p className="text-muted mt-2 text-sm">
+        {cell.state === 'CLOSED' && cell.closed_on
+          ? `Led by ${cell.leader.full_name} · closed ${closedOnLabel(cell.closed_on)}`
+          : `Led by ${cell.leader.full_name}`}
+      </p>
     </li>
   );
 }

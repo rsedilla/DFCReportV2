@@ -3,6 +3,7 @@ import { expect, test, type Page } from '@playwright/test';
 import {
   CELL_CHOICES,
   DCC_PAGE_ONE,
+  MENS_CELL_CHOICE,
   PERSON_IN_SCOPE,
   PERSON_WITHHELD,
   SIGNED_IN_PERSON_ID,
@@ -59,6 +60,51 @@ test.describe('a person’s DCC stage', () => {
     await expect(page.getByRole('button', { name: 'Show older Sundays' })).toHaveCount(0);
   });
 
+  // Decision 0260: this month's Sundays attended out of section 9's N, and last month's.
+  test('leads with the stage and the month’s Sundays attended out of section 9’s N', async ({
+    page,
+  }) => {
+    // Saturday 19 September in Manila, so the 20th has not begun.
+    await page.clock.setFixedTime(new Date('2026-09-19T02:00:00Z'));
+    await signedInWithPeople(page);
+    await page.route('**/api/v1/dcc/events?*', (route) => {
+      const month = new URL(route.request().url()).searchParams.get('month') ?? '';
+      const event = (date: string, reason: string | null) => ({
+        id: `6b000000-0000-4000-8000-0000000${date.replaceAll('-', '').slice(3)}`,
+        event_date: date,
+        recordable: reason === null && !date.startsWith('2026-08'),
+        // August closed on 7 September, so a held August Sunday is refused as MONTH_CLOSED.
+        not_recordable_reason: reason ?? (date.startsWith('2026-08') ? 'MONTH_CLOSED' : null),
+        removed: reason === 'REMOVED',
+        removal_reason: reason === 'REMOVED' ? 'Combined service.' : null,
+        coverage: null,
+      });
+      const data = month.startsWith('2026-09')
+        ? [
+            event('2026-09-06', null),
+            event('2026-09-13', null),
+            event('2026-09-20', 'NOT_YET_HELD'),
+            event('2026-09-27', 'NOT_YET_HELD'),
+          ]
+        : [
+            event('2026-08-02', null),
+            event('2026-08-09', null),
+            event('2026-08-16', null),
+            event('2026-08-23', null),
+            event('2026-08-30', 'REMOVED'),
+          ];
+      return route.fulfill({ json: { reporting_month: month, open: month.startsWith('2026-09'), data } });
+    });
+
+    await page.goto(PROFILE);
+
+    // N counts every Sunday not removed, the 20th and 27th included, as the report does.
+    await expect(page.getByText('1 of 4', { exact: true }).first()).toBeVisible();
+    await expect(page.getByText('Open until 7 October')).toBeVisible();
+    await expect(page.getByText('August: 1 of 4', { exact: true })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Recent Sundays' })).toBeVisible();
+  });
+
   test('on a phone, keeps Open Sunday level with the date of a removed Sunday', async ({ page }) => {
     await signedInWithPeople(page);
     await page.setViewportSize({ width: 390, height: 844 });
@@ -90,10 +136,10 @@ test.describe('a person’s DCC stage', () => {
 test.describe('a person’s Cell', () => {
   test('a leader reads as leading their Cell and is offered no Cell to join', async ({ page }) => {
     await signedInWithPeople(page);
-    await mockPersonCells(page, { membership: null, leads: [{ id: CELL_CHOICES[2].id, cell_id: 'C-0014' }] });
+    await mockPersonCells(page, { membership: null, leads: [{ id: CELL_CHOICES[2].id, cell_id: 'CELL-000014' }] });
     await page.goto(PROFILE);
 
-    await expect(page.getByText('Leads C-0014')).toBeVisible();
+    await expect(page.getByText('Leads CELL-000014', { exact: true })).toBeVisible();
     await expect(page.getByText('Not in a Cell.')).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Move to another Cell' })).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Add to a Cell' })).toHaveCount(0);
@@ -132,10 +178,10 @@ test.describe('a person’s Cell', () => {
     const dialog = page.getByRole('dialog', {
       name: `Move ${PERSON_IN_SCOPE.full_name} to another Cell`,
     });
-    await expect(dialog.getByText('Leaving C-0007, led by Corazon Batac.')).toBeVisible();
+    await expect(dialog.getByText('Leaving CELL-000007, led by Corazon Batac.')).toBeVisible();
 
     const choice = dialog.getByRole('combobox', { name: 'Cell' });
-    await expect(choice.locator('option')).toHaveText(['Choose a Cell', /^C-0011/, /^C-0014/]);
+    await expect(choice.locator('option')).toHaveText(['Choose a Cell', /^CELL-000011/, /^CELL-000014/]);
 
     await choice.selectOption(CELL_CHOICES[1].id);
     await dialog.getByRole('button', { name: 'Move', exact: true }).click();
@@ -148,6 +194,24 @@ test.describe('a person’s Cell', () => {
       },
     ]);
     await expect.poll(() => cellReads).toBeGreaterThan(1);
+  });
+
+  test('offers only the person’s own Network’s Cells, and says why (owner’s choice, 2026-09-21)', async ({
+    page,
+  }) => {
+    await signedInWithPeople(page);
+    await mockCellChoices(page, [MENS_CELL_CHOICE]);
+    await page.goto(PROFILE);
+
+    await page.getByRole('button', { name: 'Move to another Cell' }).click();
+    const dialog = page.getByRole('dialog');
+    const choice = dialog.getByRole('combobox', { name: 'Cell' });
+
+    // Marilou is FEMALE, so the Men's Network Cell is not offered; section 10 would refuse it.
+    await expect(choice.locator('option')).toHaveText(['Choose a Cell', /^CELL-000011/, /^CELL-000014/]);
+    await expect(
+      dialog.getByText('Only Women\'s Network Cells are listed: a member and their Cell’s leader share one Network.'),
+    ).toBeVisible();
   });
 
   test('a refusal for the other Network names both Networks in plain words', async ({ page }) => {
@@ -163,7 +227,7 @@ test.describe('a person’s Cell', () => {
 
     await expect(
       dialog.getByText(
-        'Marilou Reyes Santos is in the Women’s Network and C-0011 is in the Men’s, so they can’t join it.',
+        'Marilou Reyes Santos is in the Women’s Network and CELL-000011 is in the Men’s, so they can’t join it.',
       ),
     ).toBeVisible();
     await expect(dialog.getByText('SKILL.md')).toHaveCount(0);
@@ -337,6 +401,41 @@ test.describe('dialogs', () => {
   });
 });
 
+// Owner's design adjusted (2026-09-19): the adder starts as the leader where they hold an
+// assignment, and a stage is shown and never set by hand.
+test.describe('the Add and Edit person forms', () => {
+  test('start the pastoral leader as the person adding', async ({
+    page,
+  }) => {
+    await signedInWithPeople(page);
+    await mockPastoralPath(page);
+    // The adder's own record, which says which Network they lead in (sections 4 and 5).
+    await page.route(`**/api/v1/people/${SIGNED_IN_PERSON_ID}`, (route) =>
+      route.fulfill({ json: { ...PERSON_IN_SCOPE, id: SIGNED_IN_PERSON_ID, sex: 'FEMALE' } }),
+    );
+    await page.goto('/people/new');
+
+    await expect(page.getByText('Rosalinda Ocampo (you)')).toBeVisible();
+    await expect(page.getByText('None yet — it’s worked out from their Sundays.')).toBeVisible();
+
+    // A man cannot be led from the Women's Network, so the default is withdrawn.
+    await page.getByRole('radio', { name: 'Male', exact: true }).check();
+    await expect(page.getByText('Rosalinda Ocampo (you)')).toHaveCount(0);
+  });
+
+  test('shows the journey stage on the edit form without offering to change it', async ({
+    page,
+  }) => {
+    await signedInWithPeople(page);
+    await mockPastoralPath(page);
+    await page.goto(`${PROFILE}/edit`);
+
+    await expect(page.getByText('Journey stage')).toBeVisible();
+    await expect(page.getByText('Regular', { exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: /Correct this stage/ })).toHaveCount(0);
+  });
+});
+
 test.describe('adding a person with a Cell', () => {
   async function fillTheForm(page: Page) {
     await page.goto('/people/new');
@@ -357,7 +456,7 @@ test.describe('adding a person with a Cell', () => {
 
     await fillTheForm(page);
     await page.getByRole('combobox', { name: 'Cell' }).selectOption(CELL_CHOICES[1].id);
-    await page.getByRole('button', { name: 'Add person' }).click();
+    await page.getByRole('button', { name: 'Add this person' }).click();
 
     await expect(page).toHaveURL(new RegExp(`${PROFILE}$`));
     expect(sent).toEqual([
@@ -368,6 +467,21 @@ test.describe('adding a person with a Cell', () => {
     ]);
   });
 
+  test('narrows the Cells to the Network the chosen sex assigns', async ({ page }) => {
+    await signedInWithPeople(page);
+    await mockCellChoices(page, [MENS_CELL_CHOICE]);
+
+    await fillTheForm(page);
+    const cell = page.getByRole('combobox', { name: 'Cell' });
+    await expect(cell.locator('option', { hasText: 'CELL-000019' })).toHaveCount(0);
+
+    // A Cell chosen and then narrowed away is no longer chosen.
+    await cell.selectOption(CELL_CHOICES[1].id);
+    await page.getByRole('radio', { name: 'Male', exact: true }).check();
+    await expect(cell.locator('option', { hasText: 'CELL-000019' })).toHaveCount(1);
+    await expect(cell).toHaveValue('');
+  });
+
   test('adds nobody to a Cell when none is chosen', async ({ page }) => {
     await signedInWithPeople(page);
     await mockCellChoices(page);
@@ -375,7 +489,7 @@ test.describe('adding a person with a Cell', () => {
     const sent = await mockMembershipAdd(page, 'accepted');
 
     await fillTheForm(page);
-    await page.getByRole('button', { name: 'Add person' }).click();
+    await page.getByRole('button', { name: 'Add this person' }).click();
 
     await expect(page).toHaveURL(new RegExp(`${PROFILE}$`));
     expect(sent).toEqual([]);
@@ -389,14 +503,14 @@ test.describe('adding a person with a Cell', () => {
 
     await fillTheForm(page);
     await page.getByRole('combobox', { name: 'Cell' }).selectOption(CELL_CHOICES[1].id);
-    await page.getByRole('button', { name: 'Add person' }).click();
+    await page.getByRole('button', { name: 'Add this person' }).click();
 
     await expect(
       page.getByRole('heading', { name: `${PERSON_IN_SCOPE.full_name} was added` }),
     ).toBeVisible();
     await expect(
       page.getByText(
-        'Marilou Reyes Santos is in the Women’s Network and C-0011 is in the Men’s, so they can’t join it.',
+        'Marilou Reyes Santos is in the Women’s Network and CELL-000011 is in the Men’s, so they can’t join it.',
       ),
     ).toBeVisible();
     await expect(page.getByRole('link', { name: 'Open their record' })).toHaveAttribute(

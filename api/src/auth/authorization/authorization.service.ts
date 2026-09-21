@@ -203,6 +203,22 @@ export class AuthorizationService {
   }
 
   /**
+   * An account's honoured roles and its grants, in one pass (decision 0263).
+   *
+   * `GET /auth/me` needs both and would otherwise ask twice, which reads
+   * `account_roles` twice and logs a refused `SENIOR_PASTOR` row twice with it.
+   *
+   * **Honoured rather than held**, for the reason {@link honouredRolesWithin} gives: a
+   * role this system refuses to honour authorizes nothing, and a response that named it
+   * would tell a reader they hold authority the next request will refuse.
+   */
+  async rolesAndGrantsFor(
+    accountId: string,
+  ): Promise<{ roles: AccountRole[]; grants: EffectiveGrant[] }> {
+    return this.effective(accountId);
+  }
+
+  /**
    * An account's roles and the authority they and its explicit grants carry, from
    * one read of each table.
    *

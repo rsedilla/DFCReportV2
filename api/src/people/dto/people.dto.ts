@@ -354,12 +354,15 @@ export class SearchPeopleDto {
   // term is matched against `first_name`, `last_name` and the two joined, so a bound
   // below `NAME_FIELD_MAX_LENGTH` would leave a full-length name searchable only by
   // prefix, and would do so silently if that constant were ever raised. The minimum is
-  // its own rule — two characters, so a one-letter probe cannot page the directory — and
+  // its own rule — two characters, so a one-letter probe cannot page the church-wide directory — and
   // it is checked twice: here on the term as typed, and in the controller on the term as
   // searched, because normalizing can shorten it.
   @Length(SEARCH_MINIMUM, NAME_FIELD_MAX_LENGTH)
   @IsStorableText()
-  q!: string;
+  // Absent lists the searcher's own scope, which the People screen opens on (section 8,
+  // decision 0259). Church-wide mode still needs a term.
+  @IsOptional()
+  q?: string;
 
   /**
    * Opaque, and passed back unmodified (section 22).

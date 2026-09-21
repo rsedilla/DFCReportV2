@@ -168,6 +168,8 @@ export class CellsController {
       ledBy: query.led_by,
       limit: query.limit,
       cursor: query.cursor,
+      q: query.q,
+      state: query.state,
     });
   }
 
@@ -449,6 +451,7 @@ export class CellsController {
         dayOfWeek: body.day_of_week,
         timeOfDay: body.time_of_day,
         cellId: body.cell_id,
+        restartOfCellId: body.restart_of_cell_id,
       },
       actor,
       claim,

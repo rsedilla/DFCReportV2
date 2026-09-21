@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
+import { sql } from 'kysely';
 import request from 'supertest';
 
 import { IdempotencyService } from '../../src/common/idempotency/idempotency.service';
@@ -923,6 +924,65 @@ describe('people (SKILL.md sections 3, 7 and 8)', () => {
       expect(ids).not.toContain(juan.id);
       expect(ids).not.toContain(rico.id);
       expect(ids).not.toContain(geraldine.id);
+    });
+
+    it('lists the searcher own scope with no term, each row naming its leader (owner, 2026-09-19)', async () => {
+      const response = await request(app.getHttpServer())
+        .get('/api/v1/people')
+        .set('Authorization', `Bearer ${raymondAccount.accessToken}`);
+
+      expect(response.status).toBe(200);
+      const rows = response.body.data as { id: string; direct_leader_name: string | null }[];
+      const ids = rows.map((row) => row.id);
+
+      expect(ids).toContain(manuel.id);
+      expect(ids).not.toContain(juan.id);
+      expect(ids).not.toContain(rico.id);
+      expect(rows.find((row) => row.id === manuel.id)?.direct_leader_name).toContain('Raymond');
+    });
+
+    it('never lists the church-wide directory whole', async () => {
+      const response = await request(app.getHttpServer())
+        .get('/api/v1/people')
+        .query({ church_wide: true })
+        .set('Authorization', `Bearer ${raymondAccount.accessToken}`);
+
+      expect(response.status).toBe(422);
+      expect(response.body.error.code).toBe('VALIDATION_FAILED');
+    });
+
+    it('finds a Member ID in the searcher own scope, and never church-wide', async () => {
+      const ids = await sql<{ id: string; member_id: string }>`
+        SELECT id, member_id FROM persons WHERE id IN (${manuel.id}::uuid, ${juan.id}::uuid)
+      `.execute(db);
+      const memberIdOf = (id: string) => ids.rows.find((row) => row.id === id)?.member_id ?? '';
+
+      const own = await search(raymondAccount, memberIdOf(manuel.id));
+      expect((own.body.data as { id: string }[]).map((row) => row.id)).toEqual([manuel.id]);
+
+      const wide = await search(raymondAccount, memberIdOf(juan.id), { churchWide: true });
+      expect((wide.body.data as { id: string }[]).map((row) => row.id)).not.toContain(juan.id);
+    });
+
+    it('refuses a term under two characters in the searcher own scope too', async () => {
+      for (const q of ['a-', 'Jr']) {
+        const response = await search(raymondAccount, q);
+
+        expect(response.status).toBe(422);
+        expect(response.body.error.code).toBe('VALIDATION_FAILED');
+      }
+    });
+
+    it('matches a Member ID by prefix in the searcher own scope', async () => {
+      const found = await sql<{ member_id: string }>`
+        SELECT member_id FROM persons WHERE id = ${manuel.id}::uuid
+      `.execute(db);
+      const memberId = found.rows[0]?.member_id ?? '';
+
+      const response = await search(raymondAccount, memberId.slice(0, memberId.length - 1));
+
+      expect(response.status).toBe(200);
+      expect((response.body.data as { id: string }[]).map((row) => row.id)).toContain(manuel.id);
     });
 
     it('returns the church when asked, which is what the pickers ask', async () => {
