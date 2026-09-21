@@ -105,6 +105,18 @@ test.describe('a Cell’s meetings', () => {
     expect(sent).toEqual([{ day_of_week: 3, time_of_day: '20:00' }]);
     await expect(page.getByText('Saved. It takes effect on 1 July 2026.')).toBeVisible();
   });
+
+  test('a closed Cell is offered no schedule change', async ({ page }) => {
+    await mockSignedIn(page);
+    await mockClosedCellMeetings(page);
+    await page.goto(MEETINGS);
+
+    await expect(
+      page.getByText('CELL-000007 · led by Teofilo Ramos · closed on Saturday 20 June'),
+    ).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Members' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Change when it meets' })).toHaveCount(0);
+  });
 });
 
 test.describe('a Cell’s members', () => {

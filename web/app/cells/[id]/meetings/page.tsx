@@ -99,9 +99,12 @@ function CellMeetings() {
         <Link href={`/cells/${params.id}/members`} className={buttonClasses('secondary')}>
           Members
         </Link>
-        <Button variant="secondary" onClick={() => setChanging(true)}>
-          Change when it meets
-        </Button>
+        {/* A closed Cell's schedule is refused by the route, so it is not offered. */}
+        {meetings.data && meetings.data.cell_closed_on == null ? (
+          <Button variant="secondary" onClick={() => setChanging(true)}>
+            Change when it meets
+          </Button>
+        ) : null}
       </div>
 
       {savedFrom ? (
