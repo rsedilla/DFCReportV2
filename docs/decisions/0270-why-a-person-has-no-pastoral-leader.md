@@ -25,8 +25,12 @@ disagree.
 **"Never held an assignment" is narrower than holding `ADMIN`, on purpose.** A leader who also
 holds `ADMIN` and whose own assignment ends is waiting for a leader like anybody else, and
 reads that way. The list of people awaiting reassignment still excludes on `ADMIN` alone, which
-stays open in `CLAUDE.md`, and so does whether the path may disclose these facts to a reader
-whose scope reaches the person from outside their tree.
+stays open in `CLAUDE.md`.
+
+**Every reader the path goes to sees the reason** (owner ruling, 2026-09-22), a Network or
+Whole Church reader outside the person's branch included. `architecture-guardian` raised it
+because §8 did not list it. §8 now does: the reader already has the person in scope, and the
+reason only explains why the chain stops.
 
 ---
 

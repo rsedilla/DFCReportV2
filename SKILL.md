@@ -2040,6 +2040,11 @@ absolutely, so every node of a chain belongs to one Network, and a grant coverin
 subject covers each of them individually. Whole Church covers everything by
 construction.
 
+**A path of one node that is not a root also says why** (decisions 0270 and, for this
+line, the owner's ruling of 2026-09-22): `no_leader_reason` is `ARCHIVED`, `OUTSIDE_TREE`
+or null. It is a fact about the person asked about, so it goes to every reader the path
+goes to, a Network or Whole Church reader outside that person's branch included.
+
 ### Church-wide search and duplicate prevention
 
 Leaders may search the Person directory by name. **Its default is the searcher's own pastoral scope** (ruling of 2026-09-13, decision 0244); the church-wide directory is reached by asking for it. *This sentence read "the church-wide Person directory … primarily for identity resolution and duplicate prevention", and decision 0244 quotes it as the sentence its ground refutes: duplicate prevention is answered by the church-wide duplicate-candidate lookup of Section 3, never by this search. The glosses derived from it were corrected first and this was left, so the section stated the refuted purpose before stating the rule.*
