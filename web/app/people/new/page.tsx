@@ -20,6 +20,8 @@ import {
   addCellMember,
   cellShortName,
   listAllCells,
+  pickerGroups,
+  type CellSummary,
   membershipFailure,
 } from '@/lib/cells';
 import { getPastoralPath } from '@/lib/hierarchy';
@@ -136,6 +138,7 @@ function NewPersonForm() {
     queryKey: ['cells-all', month],
     queryFn: ({ signal }) => listAllCells(month, signal),
   });
+  const cellGroups = pickerGroups(cells.data ?? [], chosenLeaderId);
 
   /**
    * **Accumulated, never replaced.** Each refusal carries only the Tier 1
@@ -450,12 +453,31 @@ function NewPersonForm() {
           }
         >
           <option value="">No Cell for now</option>
-          {(cells.data ?? []).map((cell) => (
-            <option key={cell.id} value={cell.id}>
-              {cellShortName({ ...cell, day_of_week: cell.schedule.day_of_week })} · led by{' '}
-              {cell.leader.full_name} ({cell.cell_id})
-            </option>
-          ))}
+          {/*
+            The chosen pastoral leader's Cell first, under a heading that says why, and
+            everything else in the API's order (owner's choice, 2026-09-21). It follows the
+            leader field above, so changing the leader moves which Cell is lifted out.
+          */}
+          {cellGroups.leaders.length === 0 ? (
+            cellGroups.others.map(cellOption)
+          ) : (
+            <>
+              <optgroup
+                label={
+                  cellGroups.leaders.length === 1
+                    ? 'Their pastoral leader’s Cell'
+                    : 'Their pastoral leader’s Cells'
+                }
+              >
+                {cellGroups.leaders.map(cellOption)}
+              </optgroup>
+              {cellGroups.others.length > 0 ? (
+                <optgroup label="Other Cells you oversee">
+                  {cellGroups.others.map(cellOption)}
+                </optgroup>
+              ) : null}
+            </>
+          )}
         </SelectField>
 
         {/* A stage is worked out from Sundays and never set by hand (section 9, decision 0247). */}
@@ -471,5 +493,14 @@ function NewPersonForm() {
         </div>
       </form>
     </main>
+  );
+}
+
+function cellOption(cell: CellSummary) {
+  return (
+    <option key={cell.id} value={cell.id}>
+      {cellShortName({ ...cell, day_of_week: cell.schedule.day_of_week })} · led by{' '}
+      {cell.leader.full_name} ({cell.cell_id})
+    </option>
   );
 }

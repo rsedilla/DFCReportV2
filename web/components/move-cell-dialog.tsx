@@ -12,8 +12,11 @@ import {
   categoryLabel,
   listAllCells,
   membershipFailure,
+  pickerGroups,
+  type CellSummary,
   type PersonCells,
 } from '@/lib/cells';
+import { directLeaderOf, getPastoralPath } from '@/lib/hierarchy';
 import { idempotencyKeyFor } from '@/lib/idempotency';
 import { describeFailure } from '@/lib/messages';
 import { reportingMonthOf } from '@/lib/reporting-month';
@@ -57,6 +60,16 @@ export function MoveCellDialog({
     enabled: open,
   });
 
+  // Whose Cell to lift to the top (owner's choice, 2026-09-21). Read under the key the
+  // Network screen uses. A path that cannot be read leaves the list as it was rather than
+  // failing the dialog: the grouping is a convenience, and choosing still works without it.
+  const path = useQuery({
+    queryKey: ['pastoral-path', personId],
+    queryFn: ({ signal }) => getPastoralPath(personId, signal),
+    enabled: open && personId !== '',
+  });
+  const leaderId = directLeaderOf(path.data?.data ?? [])?.id ?? null;
+
   const move = useMutation({
     mutationFn: (cellId: string) =>
       addCellMember(cellId, personId, idempotencyKeyFor('add', cellId, personId)),
@@ -75,6 +88,7 @@ export function MoveCellDialog({
   }
 
   const choices = (cells.data ?? []).filter((cell) => cell.id !== current?.id);
+  const groups = pickerGroups(choices, leaderId);
 
   return (
     <Dialog
@@ -120,11 +134,24 @@ export function MoveCellDialog({
             onChange={(event) => setChosen(event.target.value)}
           >
             <option value="">Choose a Cell</option>
-            {choices.map((cell) => (
-              <option key={cell.id} value={cell.id}>
-                {cell.cell_id} · {categoryLabel(cell.category)} · led by {cell.leader.full_name}
-              </option>
-            ))}
+            {groups.leaders.length === 0 ? (
+              groups.others.map(cellOption)
+            ) : (
+              <>
+                <optgroup
+                  label={
+                    groups.leaders.length === 1
+                      ? 'Their pastoral leader’s Cell'
+                      : 'Their pastoral leader’s Cells'
+                  }
+                >
+                  {groups.leaders.map(cellOption)}
+                </optgroup>
+                {groups.others.length > 0 ? (
+                  <optgroup label="Other Cells you oversee">{groups.others.map(cellOption)}</optgroup>
+                ) : null}
+              </>
+            )}
           </SelectField>
         )}
 
@@ -157,5 +184,13 @@ export function MoveCellDialog({
         </div>
       </form>
     </Dialog>
+  );
+}
+
+function cellOption(cell: CellSummary) {
+  return (
+    <option key={cell.id} value={cell.id}>
+      {cell.cell_id} · {categoryLabel(cell.category)} · led by {cell.leader.full_name}
+    </option>
   );
 }

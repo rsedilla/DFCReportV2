@@ -692,3 +692,29 @@ function isNetwork(value: unknown): value is 'MENS' | 'WOMENS' {
 function networkWord(network: 'MENS' | 'WOMENS'): string {
   return network === 'MENS' ? 'Men’s' : 'Women’s';
 }
+
+/**
+ * A Cell picker's options, with the person's pastoral leader's Cell lifted out (owner's
+ * choice, 2026-09-21).
+ *
+ * **A grouping, not a ranking** (decision 0009). One group is lifted out under a heading
+ * that says why — the Cell a disciple usually joins in G12 is their own leader's — and
+ * every other Cell keeps the order the API gave, which is `cell_id` and meaningless by
+ * design (section 10). Nothing is preselected: the leader still chooses.
+ *
+ * With no leader known, or none of theirs among the choices, there is one group and no
+ * heading, which is the list exactly as it was.
+ */
+export function pickerGroups(
+  cells: readonly CellSummary[],
+  leaderId: string | null,
+): { leaders: CellSummary[]; others: CellSummary[] } {
+  if (leaderId === null) {
+    return { leaders: [], others: [...cells] };
+  }
+
+  const leaders = cells.filter((cell) => cell.leader.person_id === leaderId);
+  const others = cells.filter((cell) => cell.leader.person_id !== leaderId);
+
+  return { leaders, others };
+}

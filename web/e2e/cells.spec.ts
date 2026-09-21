@@ -289,3 +289,56 @@ test.describe('closed Cells and their restart (decisions 0264 to 0266)', () => {
     await expect(inError.getByRole('button')).toHaveCount(0);
   });
 });
+
+test.describe('the Cell picker (owner’s choice, 2026-09-21)', () => {
+  test('lifts the person’s pastoral leader’s Cell to the top, and leaves the rest in order', async ({
+    page,
+  }) => {
+    await mockSignedIn(page);
+    await mockPeopleWithoutACell(page);
+    await mockCells(page);
+    // Bituin's pastoral leader leads CELL-000011, the second Cell in the API's order.
+    await page.route('**/api/v1/people/*/pastoral-path*', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          data: [
+            {
+              id: '3f1b7c6e-0000-4000-8000-000000000990',
+              member_id: 'M-000001',
+              full_name: 'Remedios Tolentino',
+              network_root: true,
+            },
+            {
+              id: CELL_WITH_NO_SCHEDULE.leader.person_id,
+              member_id: CELL_WITH_NO_SCHEDULE.leader.member_id,
+              full_name: CELL_WITH_NO_SCHEDULE.leader.full_name,
+              network_root: false,
+            },
+            {
+              id: '3f1b7c6e-0000-4000-8000-000000000921',
+              member_id: 'M-000921',
+              full_name: 'Bituin Carreon',
+              network_root: false,
+            },
+          ],
+          next_cursor: null,
+        }),
+      }),
+    );
+
+    await page.goto('/cells/people-without-a-cell');
+    await page.getByRole('button', { name: 'Add to a Cell' }).first().click();
+
+    const dialog = page.getByRole('dialog', { name: 'Add Bituin Carreon to a Cell' });
+    const groups = dialog.locator('optgroup');
+    await expect(groups).toHaveCount(2);
+    await expect(groups.nth(0)).toHaveAttribute('label', 'Their pastoral leader’s Cell');
+    await expect(groups.nth(0).locator('option')).toHaveText([/CELL-000011/]);
+    await expect(groups.nth(1)).toHaveAttribute('label', 'Other Cells you oversee');
+    await expect(groups.nth(1).locator('option')).toHaveText([/CELL-000007/]);
+    // Nothing is chosen for them: the leader still picks.
+    await expect(dialog.getByRole('combobox', { name: 'Cell' })).toHaveValue('');
+  });
+});
