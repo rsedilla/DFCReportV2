@@ -11,6 +11,7 @@ import { manilaDayOf } from '../common/time/manila';
 import { assertReportingPeriodHasBegun } from '../common/time/reporting-period';
 import { databaseNow, reportingMonthOf, windowClosesAt } from '../common/time/submission-window';
 import { DATABASE, type Db } from '../database/database.module';
+import { NetworksService } from '../networks/networks.service';
 import { PeopleReadService } from '../people/people.read.service';
 
 import { decodeCellIndexCursor, encodeCellIndexCursor } from './cell-index-cursor';
@@ -65,6 +66,7 @@ export class CellsIndexService {
     private readonly cells: CellsReadService,
     private readonly people: PeopleReadService,
     private readonly authorization: AuthorizationService,
+    private readonly networks: NetworksService,
     /**
      * The coverage numerator, from the module owning `cell_meetings` (section 2).
      *
@@ -164,12 +166,17 @@ export class CellsIndexService {
     // from rows a leader wrote. That difference is the property section 13 depends on —
     // recording less makes coverage worse and never better — and it is why they are two
     // reads rather than one join.
-    const [scheduled, dueDays, recorded, recordedDates, leaders] = await Promise.all([
+    const [scheduled, dueDays, recorded, recordedDates, leaders, networks] = await Promise.all([
       this.cells.scheduledCountsIn(this.db, cellIds, reportingMonth),
       this.cells.dueDaysIn(this.db, cellIds, reportingMonth, manilaDayOf(now)),
       this.recordedCounts(cellIds, reportingMonth),
       this.recordedDates(cellIds, reportingMonth),
       this.people.namesOf(visible.map((row) => row.leaderId)),
+      this.networks.networksOf(
+        this.db,
+        visible.map((row) => row.leaderId),
+        now,
+      ),
     ]);
 
     const open = now.getTime() < windowClosesAt(reportingMonth).getTime();
@@ -191,6 +198,10 @@ export class CellsIndexService {
           category: row.category,
           schedule: { day_of_week: row.dayOfWeek, time_of_day: row.timeOfDay },
           member_count: row.memberCount,
+          // The Cell's Network is its leader's (section 10), read now rather than as of the
+          // month: it is what a membership added today is checked against. A picker narrows
+          // on it; the add route still decides.
+          network: networks.get(row.leaderId) ?? null,
           leader: {
             person_id: row.leaderId,
             member_id: leader?.memberId ?? '',

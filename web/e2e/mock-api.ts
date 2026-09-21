@@ -212,6 +212,8 @@ export const CELL_CHOICES = [
   },
 ].map((cell) => ({
   ...cell,
+  // `PERSON_IN_SCOPE`'s own Network, so a picker narrowing to it keeps all three.
+  network: 'WOMENS',
   schedule: { day_of_week: 6, time_of_day: '19:00' },
   coverage: { recorded: 3, scheduled: 4, behind: 1 },
 }));
@@ -301,11 +303,34 @@ export async function mockPersonDccRefused(page: Page): Promise<void> {
   );
 }
 
-/** The Cells index, for the Cell pickers. */
-export async function mockCellChoices(page: Page): Promise<void> {
+/** A Men's Network Cell, which a picker for `PERSON_IN_SCOPE` must not offer. */
+export const MENS_CELL_CHOICE = {
+  id: '3f1b7c6e-0000-4000-8000-000000000104',
+  cell_id: 'CELL-000019',
+  category: 'YOUTH',
+  network: 'MENS',
+  leader: {
+    person_id: '55555555-6666-4777-8888-999999999999',
+    member_id: 'M-000044',
+    full_name: 'Ernesto Villanueva',
+  },
+  schedule: { day_of_week: 5, time_of_day: '19:30' },
+  coverage: { recorded: 0, scheduled: 4, behind: 0 },
+};
+
+/** The Cells index, for the Cell pickers; `extra` adds rows after the three. */
+export async function mockCellChoices(
+  page: Page,
+  extra: readonly unknown[] = [],
+): Promise<void> {
   await page.route('**/api/v1/cells?*', (route) =>
     route.fulfill(
-      json({ reporting_month: '2026-09-01', open: true, data: CELL_CHOICES, next_cursor: null }),
+      json({
+        reporting_month: '2026-09-01',
+        open: true,
+        data: [...CELL_CHOICES, ...extra],
+        next_cursor: null,
+      }),
     ),
   );
 }

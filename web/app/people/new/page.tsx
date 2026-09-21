@@ -34,6 +34,8 @@ import {
   createPerson,
   getPerson,
   isWithheld,
+  networkLabel,
+  networkOfSex,
   type CivilStatus,
   type DuplicateCandidate,
   type PersonFull,
@@ -129,7 +131,7 @@ function NewPersonForm() {
    * under `cell.manage_membership`. If that refusal comes, the person is still created,
    * and `cellRefused` says so rather than leaving the Cell silently unset.
    */
-  const [cellId, setCellId] = useState('');
+  const [pickedCellId, setCellId] = useState('');
   const [cellRefused, setCellRefused] = useState<{ person: PersonFull; failure: Failure } | null>(
     null,
   );
@@ -138,7 +140,13 @@ function NewPersonForm() {
     queryKey: ['cells-all', month],
     queryFn: ({ signal }) => listAllCells(month, signal),
   });
-  const cellGroups = pickerGroups(cells.data ?? [], chosenLeaderId);
+  // Their Network follows the sex chosen above (section 4), so the Cells narrow to it; with no
+  // sex chosen yet the list is whole. A Cell chosen and then narrowed away is no longer chosen.
+  const network = networkOfSex(values.sex);
+  const cellGroups = pickerGroups(cells.data ?? [], chosenLeaderId, network);
+  const cellId = [...cellGroups.leaders, ...cellGroups.others].some((cell) => cell.id === pickedCellId)
+    ? pickedCellId
+    : '';
 
   /**
    * **Accumulated, never replaced.** Each refusal carries only the Tier 1
@@ -449,7 +457,9 @@ function NewPersonForm() {
           description={
             cells.isError
               ? 'The Cells could not be loaded, so none can be chosen here. You can add them to a Cell from their record.'
-              : 'Optional. The Cells in your scope. They can also be added to a Cell later, from their record.'
+              : network === null
+                ? 'Optional. The Cells in your scope. They can also be added to a Cell later, from their record.'
+                : `Optional. The ${networkLabel(network)} Cells in your scope, since a member and their Cell’s leader share one Network. They can also be added to a Cell later, from their record.`
           }
         >
           <option value="">No Cell for now</option>

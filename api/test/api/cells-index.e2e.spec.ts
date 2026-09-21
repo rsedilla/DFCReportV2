@@ -288,6 +288,25 @@ describe('the Cells index (sections 10, 12 and 22)', () => {
     expect(response.body.data[0]).toMatchObject({ member_count: 1 });
   });
 
+  it('carries each Cell’s Network, which is its leader’s today', async () => {
+    // A picker narrows to the person's Network on this (owner's choice, 2026-09-21), so a
+    // Cell of each Network is listed to one Whole Church reader.
+    const ruth = await createPerson(db, { firstName: 'Ruth', network: 'WOMENS' });
+    await assignTo(db, ruth.id, null);
+    const ruthCell = await createCell(db, { leader: ruth, dayOfWeek: 6, createdAt: CREATED });
+
+    const response = await list(admin);
+    const byId = new Map(
+      (response.body.data as { id: string; network: string | null }[]).map((row) => [
+        row.id,
+        row.network,
+      ]),
+    );
+
+    expect(byId.get(markCell.id)).toBe('MENS');
+    expect(byId.get(ruthCell.id)).toBe('WOMENS');
+  });
+
   it('keeps the scope while searching: a sibling branch’s Cell is not found by name', async () => {
     const response = await list(markAccount, { q: 'Nathan' });
 

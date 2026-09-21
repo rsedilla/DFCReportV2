@@ -50,6 +50,8 @@ export interface CellSummary {
   category: CellCategory;
   /** How many members it holds now (decision 0261). */
   member_count: number;
+  /** The Running view only: the Cell's Network, which is its leader's today (section 10). */
+  network?: 'MENS' | 'WOMENS' | null;
   schedule: CellSchedule;
   leader: { person_id: string; member_id: string; full_name: string };
   coverage: CellCoverage;
@@ -715,11 +717,18 @@ function networkWord(network: 'MENS' | 'WOMENS'): string {
  *
  * With no leader known, or none of theirs among the choices, there is one group and no
  * heading, which is the list exactly as it was.
+ *
+ * **Only the person's own Network's Cells, where their Network is known** (owner's choice,
+ * 2026-09-21). Section 10 refuses the other Network's, so offering them offered a choice
+ * that always failed. The add route still decides.
  */
 export function pickerGroups(
-  cells: readonly CellSummary[],
+  all: readonly CellSummary[],
   leaderId: string | null,
+  network: 'MENS' | 'WOMENS' | null = null,
 ): { leaders: CellSummary[]; others: CellSummary[] } {
+  const cells = network === null ? all : all.filter((cell) => cell.network === network);
+
   if (leaderId === null) {
     return { leaders: [], others: [...cells] };
   }

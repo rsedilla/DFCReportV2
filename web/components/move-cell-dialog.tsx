@@ -19,6 +19,7 @@ import {
 import { directLeaderOf, getPastoralPath } from '@/lib/hierarchy';
 import { idempotencyKeyFor } from '@/lib/idempotency';
 import { describeFailure } from '@/lib/messages';
+import { getPerson, networkLabel, networkOfSex } from '@/lib/people';
 import { reportingMonthOf } from '@/lib/reporting-month';
 
 /**
@@ -70,6 +71,16 @@ export function MoveCellDialog({
   });
   const leaderId = directLeaderOf(path.data?.data ?? [])?.id ?? null;
 
+  // Their Network, which follows their sex (section 4), narrows the list to the Cells section
+  // 10 lets them join. Unread, the list stays whole and the add route refuses as before.
+  const person = useQuery({
+    queryKey: ['person', personId],
+    queryFn: ({ signal }) => getPerson(personId, signal),
+    enabled: open && personId !== '',
+    retry: false,
+  });
+  const network = person.data ? networkOfSex(person.data.sex) : null;
+
   const move = useMutation({
     mutationFn: (cellId: string) =>
       addCellMember(cellId, personId, idempotencyKeyFor('add', cellId, personId)),
@@ -88,7 +99,8 @@ export function MoveCellDialog({
   }
 
   const choices = (cells.data ?? []).filter((cell) => cell.id !== current?.id);
-  const groups = pickerGroups(choices, leaderId);
+  const groups = pickerGroups(choices, leaderId, network);
+  const listed = groups.leaders.length + groups.others.length;
 
   return (
     <Dialog
@@ -117,13 +129,15 @@ export function MoveCellDialog({
           Nothing while closed: the list is only fetched once the dialog opens, and a
           closed dialog saying "Loading…" is a loading marker that never clears.
         */}
-        {!open ? null : cells.isPending ? (
+        {!open ? null : cells.isPending || person.isLoading ? (
           <p className="text-muted text-sm">Loading&hellip;</p>
         ) : cells.isError ? (
           <FailureNotice failure={describeFailure(cells.error)} />
-        ) : choices.length === 0 ? (
+        ) : listed === 0 ? (
           <p className="text-muted text-sm leading-relaxed">
-            There is no other Cell in your scope to choose.
+            {network === null
+              ? 'There is no other Cell in your scope to choose.'
+              : `There is no other ${networkLabel(network)} Cell in your scope to choose.`}
           </p>
         ) : (
           <SelectField
@@ -154,6 +168,13 @@ export function MoveCellDialog({
             )}
           </SelectField>
         )}
+
+        {open && network !== null ? (
+          <p className="text-muted text-sm leading-relaxed">
+            Only {networkLabel(network)} Cells are listed: a member and their Cell&rsquo;s
+            leader share one Network.
+          </p>
+        ) : null}
 
         <p className="text-muted text-sm leading-relaxed">
           {current

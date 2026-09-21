@@ -3,6 +3,7 @@ import { expect, test, type Page } from '@playwright/test';
 import {
   CELL_CHOICES,
   DCC_PAGE_ONE,
+  MENS_CELL_CHOICE,
   PERSON_IN_SCOPE,
   PERSON_WITHHELD,
   SIGNED_IN_PERSON_ID,
@@ -193,6 +194,24 @@ test.describe('a person’s Cell', () => {
       },
     ]);
     await expect.poll(() => cellReads).toBeGreaterThan(1);
+  });
+
+  test('offers only the person’s own Network’s Cells, and says why (owner’s choice, 2026-09-21)', async ({
+    page,
+  }) => {
+    await signedInWithPeople(page);
+    await mockCellChoices(page, [MENS_CELL_CHOICE]);
+    await page.goto(PROFILE);
+
+    await page.getByRole('button', { name: 'Move to another Cell' }).click();
+    const dialog = page.getByRole('dialog');
+    const choice = dialog.getByRole('combobox', { name: 'Cell' });
+
+    // Marilou is FEMALE, so the Men's Network Cell is not offered; section 10 would refuse it.
+    await expect(choice.locator('option')).toHaveText(['Choose a Cell', /^CELL-000011/, /^CELL-000014/]);
+    await expect(
+      dialog.getByText('Only Women\'s Network Cells are listed: a member and their Cell’s leader share one Network.'),
+    ).toBeVisible();
   });
 
   test('a refusal for the other Network names both Networks in plain words', async ({ page }) => {
@@ -446,6 +465,21 @@ test.describe('adding a person with a Cell', () => {
         body: { person_id: PERSON_IN_SCOPE.id },
       },
     ]);
+  });
+
+  test('narrows the Cells to the Network the chosen sex assigns', async ({ page }) => {
+    await signedInWithPeople(page);
+    await mockCellChoices(page, [MENS_CELL_CHOICE]);
+
+    await fillTheForm(page);
+    const cell = page.getByRole('combobox', { name: 'Cell' });
+    await expect(cell.locator('option', { hasText: 'CELL-000019' })).toHaveCount(0);
+
+    // A Cell chosen and then narrowed away is no longer chosen.
+    await cell.selectOption(CELL_CHOICES[1].id);
+    await page.getByRole('radio', { name: 'Male', exact: true }).check();
+    await expect(cell.locator('option', { hasText: 'CELL-000019' })).toHaveCount(1);
+    await expect(cell).toHaveValue('');
   });
 
   test('adds nobody to a Cell when none is chosen', async ({ page }) => {

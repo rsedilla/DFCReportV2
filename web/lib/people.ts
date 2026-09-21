@@ -337,6 +337,11 @@ export function ageFrom(birthDate: string | null): number | null {
  */
 export const NEGATIVE_AGE = -1;
 
+/** The Network a person of this sex is assigned to (section 4, decision 0037). */
+export function networkOfSex(sex: Sex | ''): Network | null {
+  return sex === 'MALE' ? 'MENS' : sex === 'FEMALE' ? 'WOMENS' : null;
+}
+
 export function networkLabel(network: Network | null): string {
   if (network === 'MENS') {
     return "Men's Network";
