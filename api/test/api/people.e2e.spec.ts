@@ -903,6 +903,46 @@ describe('people (SKILL.md sections 3, 7 and 8)', () => {
       ]);
     });
 
+    describe('why a person has no pastoral leader (decision 0270)', () => {
+      it('says nothing for a person with a leader, or for a root', async () => {
+        expect((await path(adminAccount, manuel.id)).body.no_leader_reason).toBeNull();
+        expect((await path(adminAccount, oriel.id)).body.no_leader_reason).toBeNull();
+      });
+
+      it('reads an administrator who never held an assignment as outside the tree', async () => {
+        const response = await path(adminAccount, adminAccount.personId);
+
+        expect(response.status).toBe(200);
+        expect(response.body.no_leader_reason).toBe('OUTSIDE_TREE');
+      });
+
+      it('reads an administrator whose own assignment ended as waiting, not outside', async () => {
+        const leader = await createPerson(db, { firstName: 'Lito', network: 'MENS' });
+        await assignTo(db, leader.id, raymond.id);
+        await createAccount(app, db, { person: leader, roles: ['ADMIN'] });
+        await db
+          .updateTable('pastoral_assignments')
+          .set({ ended_at: new Date() })
+          .where('person_id', '=', leader.id)
+          .where('ended_at', 'is', null)
+          .execute();
+
+        expect((await path(adminAccount, leader.id)).body.no_leader_reason).toBeNull();
+      });
+
+      it('reads an archived person as archived, and one merely unassigned as nothing', async () => {
+        const archived = await createPerson(db, {
+          firstName: 'Tomas',
+          network: 'MENS',
+          archived: true,
+        });
+        const waiting = await createPerson(db, { firstName: 'Bituin', network: 'WOMENS' });
+
+        expect((await path(adminAccount, archived.id)).body.no_leader_reason).toBe('ARCHIVED');
+        expect((await path(adminAccount, waiting.id)).body.no_leader_reason).toBeNull();
+      });
+    });
+
     function path(actor: TestAccount, id: string) {
       return request(app.getHttpServer())
         .get(`/api/v1/people/${id}/pastoral-path`)

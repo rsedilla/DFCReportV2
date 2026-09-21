@@ -21,10 +21,6 @@ import type { Transaction } from 'kysely';
  * inside the tree from also holding `ADMIN`, and if such a leader's own assignment ends,
  * this exclusion takes their whole disciple set off the list. Moving the read changes no
  * rule — it is the same proxy, asked of the module that owns the tables.
- *
- * **It takes a set and answers a set**, rather than being asked per leader. The caller
- * holds every broken edge at once and would otherwise issue one query per row, which is
- * the shape Section 2's own exemption paragraph rejects for `openDisciplesOf`.
  */
 export const ADMIN_ACCOUNTS_PORT = Symbol('ADMIN_ACCOUNTS_PORT');
 

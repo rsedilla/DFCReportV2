@@ -37,6 +37,40 @@ async function signedInWithPeople(page: Page) {
   await mockPeople(page);
 }
 
+test.describe('why a person has no pastoral leader (decision 0270)', () => {
+  for (const [reason, words] of [
+    ['OUTSIDE_TREE', 'Outside the pastoral tree'],
+    ['ARCHIVED', 'Archived'],
+    [null, 'No pastoral leader yet'],
+  ] as const) {
+    test(`says "${words}" where the server answers ${String(reason)}`, async ({ page }) => {
+      await signedInWithPeople(page);
+      await page.route(`**/api/v1/people/${PERSON_IN_SCOPE.id}/pastoral-path*`, (route) =>
+        route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            data: [
+              {
+                id: PERSON_IN_SCOPE.id,
+                member_id: PERSON_IN_SCOPE.member_id,
+                full_name: PERSON_IN_SCOPE.full_name,
+                network_root: false,
+              },
+            ],
+            next_cursor: null,
+            no_leader_reason: reason,
+          }),
+        }),
+      );
+
+      await page.goto(PROFILE);
+
+      await expect(page.getByText(words, { exact: true })).toBeVisible();
+    });
+  }
+});
+
 test.describe('a person’s DCC stage', () => {
   test('shows the stage beside its Sundays, marks a removed one, and loads older Sundays', async ({
     page,

@@ -896,7 +896,7 @@ Zero is legitimate in exactly three situations: a Person encoded but not yet ass
 
 The third is different in kind from the first two and is named separately for that reason. Both of those are transient — one is waiting to be assigned, the other used to be — so a Person sitting in either is a Person something will eventually happen to. An administrator who is not discipled by anyone in the church is in the correct and permanent state.
 
-**Nothing records which of the three a given Person is in, and this section does not pretend otherwise.** The absence of a row is the same absence in all three cases; the difference is in why, and the schema holds no `why`. So a screen or attention list that surfaces Persons without a pastoral assignment will show an administrator among people genuinely waiting for a leader, and the remedy is for that list to exclude accounts holding `ADMIN` rather than for this section to claim a distinction it cannot make. Whether the three should be told apart in the data is recorded as open rather than answered here.
+**Nothing stores which of the three a given Person is in; the API derives it from what is stored** (ruling of 2026-09-21). A Person holding no pastoral assignment is *archived* where their lifecycle says so, *outside the pastoral tree* where they hold an `ADMIN` account and have never held a pastoral assignment, and otherwise has *no pastoral leader yet*. The server answers which, on the pastoral path, and a client never works it out. "Never held" is narrower than holding `ADMIN`, deliberately: a leader who also holds `ADMIN` and whose own assignment ends is waiting for a leader like anyone else, and reads that way. A screen or attention list that surfaces Persons without a pastoral assignment still excludes accounts holding `ADMIN`, which is the remedy this section gave before the label existed.
 
 **A person whose pastoral leader holds no open pastoral assignment appears on an attention list, and it is reachable at `GET /api/v1/people/awaiting-reassignment`** (ruling of 2026-09-10). Section 20 requires the list and named its subject by lifecycle — "a person whose pastoral leader is **archived**" — where the condition that produces the gap is the wider one stated here: a leader holding no assignment, by any of the three causes above. Keyed on the flag it would surface one cause and miss two, while Section 20's reconstruction fires on all three. **It excludes a person whose leader holds an `ADMIN` account**, which is this section's own remedy one relationship over: there it keeps an administrator off a list of people waiting for a leader, and here it keeps their disciples off a list of leaders needing replacement. The exclusion prejudges nothing — whether such a Person may hold disciples at all is recorded as open, and this list is simply not where that state would be surfaced.
 
@@ -2039,6 +2039,11 @@ does not apply and a different one does: Section 5 forbids a cross-Network edge
 absolutely, so every node of a chain belongs to one Network, and a grant covering the
 subject covers each of them individually. Whole Church covers everything by
 construction.
+
+**A path of one node that is not a root also says why** (decisions 0270 and, for this
+line, the owner's ruling of 2026-09-22): `no_leader_reason` is `ARCHIVED`, `OUTSIDE_TREE`
+or null. It is a fact about the person asked about, so it goes to every reader the path
+goes to, a Network or Whole Church reader outside that person's branch included.
 
 ### Church-wide search and duplicate prevention
 

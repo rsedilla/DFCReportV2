@@ -11,7 +11,12 @@ import { MoveLeaderDialog } from '@/components/move-leader-dialog';
 import { Button, buttonClasses } from '@/components/ui/button';
 import { FailureNotice } from '@/components/ui/failure-notice';
 import { HeaderCell, Table, rowClasses } from '@/components/ui/table';
-import { getPastoralPath, noLeaderLabel, type PathEntry } from '@/lib/hierarchy';
+import {
+  getPastoralPath,
+  noLeaderLabel,
+  type PastoralPath,
+  type PathEntry,
+} from '@/lib/hierarchy';
 import { getMe, type SessionDescription } from '@/lib/me';
 import { describeFailure } from '@/lib/messages';
 import {
@@ -199,6 +204,7 @@ function NetworkScreen() {
           <FocusBlock
             person={person}
             entries={entries}
+            noLeaderReason={path.data?.no_leader_reason ?? null}
             meId={me.data?.person_id}
             isMe={isMe}
             mayMove={mayMove}
@@ -594,6 +600,7 @@ function Breadcrumb({
 function FocusBlock({
   person,
   entries,
+  noLeaderReason,
   meId,
   isMe,
   mayMove,
@@ -601,6 +608,7 @@ function FocusBlock({
 }: {
   person: BranchNode;
   entries: readonly PathEntry[];
+  noLeaderReason: PastoralPath['no_leader_reason'];
   meId: string | undefined;
   isMe: boolean;
   mayMove: boolean;
@@ -618,7 +626,7 @@ function FocusBlock({
         <h2 className="text-xl font-semibold">{person.full_name}</h2>
         <p className="text-muted mt-1 text-sm">
           {person.member_id} &middot;{' '}
-          {parent === null ? noLeaderLabel(entries) : `reports to ${parent.full_name}`}
+          {parent === null ? noLeaderLabel(entries, noLeaderReason) : `reports to ${parent.full_name}`}
         </p>
       </div>
       <div className="flex flex-wrap gap-2">
