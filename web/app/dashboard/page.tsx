@@ -614,8 +614,20 @@ function Dashboard() {
           <p className="text-muted mt-2 text-sm">Loading&hellip;</p>
         ) : scoped.isError || scopedClosed.isError ? null : needingAttention.length === 0 ? (
           <p className="text-muted mt-2 max-w-2xl text-sm leading-relaxed">
-            No Cell on this page of your scope is missing a record for this month, closed
-            Cells included while the month is still open.
+            {/* Only the first page of each view is read; say so where there is more. */}
+            {scoped.data?.next_cursor == null && scopedClosed.data?.next_cursor == null ? (
+              'No Cell in your scope is behind this month. Closed Cells count while the month is open.'
+            ) : (
+              <>
+                None of the first 50 Cells in your scope is behind this month.{' '}
+                <Link
+                  href={`/reports/cells?${new URLSearchParams({ month, behind: '1' }).toString()}`}
+                  className="focus-visible:outline-accent text-accent inline-flex min-h-6 items-center underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2"
+                >
+                  See every Cell behind in Reports
+                </Link>
+              </>
+            )}
           </p>
         ) : (
           <ul className="mt-4 flex flex-col gap-3">

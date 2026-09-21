@@ -345,7 +345,13 @@ function RecordMeeting() {
           {save.isSuccess ? (
             // Polite, because it is the result of the reader's own action.
             <p aria-live="polite" className="mt-6 text-sm font-medium">
-              Saved.
+              Saved.{' '}
+              <Link
+                href="/dashboard"
+                className="focus-visible:outline-accent text-accent inline-flex min-h-6 items-center font-normal underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2"
+              >
+                Back to what&rsquo;s awaiting a record
+              </Link>
             </p>
           ) : null}
 
@@ -463,6 +469,7 @@ function RecordMeeting() {
                       key={member.person_id}
                       member={member}
                       mark={markFor(member)}
+                      recorded={correcting}
                       disabled={locked}
                       onChange={(value) =>
                         setEdits((current) => ({ ...current, [member.person_id]: value }))
@@ -544,11 +551,13 @@ function RecordMeeting() {
 function MemberMark({
   member,
   mark,
+  recorded,
   disabled,
   onChange,
 }: {
   member: RosterMember;
   mark: Mark | undefined;
+  recorded: boolean;
   disabled: boolean;
   onChange: (mark: Mark) => void;
 }) {
@@ -556,7 +565,9 @@ function MemberMark({
     <li className="border-line border-b py-4">
       <RadioGroup
         legend={`${member.first_name} ${member.last_name}`}
-        description={mark === undefined ? 'Not recorded yet' : undefined}
+        // Kept until Save, so a first tap does not shift the rows beneath it; nothing is
+        // recorded until then, as the DCC checklist says too.
+        description={recorded ? undefined : 'Not recorded yet'}
         name={`member-${member.person_id}`}
         value={mark ?? ''}
         onChange={onChange}

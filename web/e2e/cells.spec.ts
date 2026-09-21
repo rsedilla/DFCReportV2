@@ -57,6 +57,9 @@ test.describe('the Cells list', () => {
     await page.setViewportSize({ width: 390, height: 844 });
     await expect(table).toBeHidden();
     await expect(page.getByRole('heading', { name: 'CELL-000011' })).toBeVisible();
+    // A phone card carries the member count the table does (walkthrough, 2026-09-21).
+    const card = page.getByRole('listitem').filter({ hasText: 'CELL-000011' });
+    await expect(card).toContainText(/Members\s*4/);
   });
 });
 

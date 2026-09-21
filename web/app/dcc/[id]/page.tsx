@@ -157,6 +157,12 @@ function DccChecklist() {
     (line) => line.record === null && edits[line.person_id] !== undefined,
   );
   const markedCount = lines.length - unmarkedCount;
+  // A new mark, or a recorded one changed: what makes a Save worth offering.
+  const changed = lines.some((line) => {
+    const edit = edits[line.person_id];
+
+    return edit !== undefined && (line.record === null || (edit === 'present') !== line.record.present);
+  });
 
   return (
     <main id="main" className={PAGE_WIDTH.READING}>
@@ -205,7 +211,13 @@ function DccChecklist() {
 
           {save.isSuccess ? (
             <p aria-live="polite" className="mt-6 text-sm font-medium">
-              Saved.
+              Saved.{' '}
+              <Link
+                href="/dashboard"
+                className="focus-visible:outline-accent text-accent inline-flex min-h-6 items-center font-normal underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2"
+              >
+                Back to what&rsquo;s awaiting a record
+              </Link>
             </p>
           ) : null}
 
@@ -305,20 +317,25 @@ function DccChecklist() {
           {recordable && lines.length > 0 ? (
             <div className="border-edge bg-surface sticky bottom-[calc(3.5625rem+env(safe-area-inset-bottom))] z-20 -mx-5 mt-8 flex flex-col gap-2 border-t px-5 py-3 sm:flex-row sm:items-center sm:justify-between lg:bottom-0">
               <p aria-live="polite" className="text-sm">
-                {records.length === 0
-                  ? 'Mark at least one person to save.'
-                  : unmarkedCount === 0
-                    ? 'Everyone on this checklist is marked.'
-                    : `${unmarkedCount === 1 ? '1 person' : `${unmarkedCount} people`} still to mark.${newlyMarked ? ' You can save the rest now.' : ''}`}
+                {!changed && unmarkedCount === 0
+                  ? 'Everyone here is recorded.'
+                  : records.length === 0
+                    ? 'Mark at least one person to save.'
+                    : unmarkedCount === 0
+                      ? 'Everyone on this checklist is marked.'
+                      : `${unmarkedCount === 1 ? '1 person' : `${unmarkedCount} people`} still to mark.${newlyMarked ? ' You can save the rest now.' : ''}`}
               </p>
-              <Button
-                type="button"
-                className="w-full sm:w-auto"
-                onClick={() => save.mutate()}
-                disabled={records.length === 0 || save.isPending}
-              >
-                {save.isPending ? 'Saving…' : 'Save'}
-              </Button>
+              {/* Offered only once something differs from what is stored. */}
+              {changed || save.isPending ? (
+                <Button
+                  type="button"
+                  className="w-full sm:w-auto"
+                  onClick={() => save.mutate()}
+                  disabled={save.isPending}
+                >
+                  {save.isPending ? 'Saving…' : 'Save'}
+                </Button>
+              ) : null}
             </div>
           ) : null}
         </>
