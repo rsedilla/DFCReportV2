@@ -7,7 +7,11 @@ import { type CellRelationshipsPort, type NamedCell } from '../networks/cell-rel
 
 import { CURSOR_INSTANT_FORMAT } from './leadership-request-cursor';
 
-import type { LeadershipRequestCursor, LeadershipRequestRow } from './leadership-request-cursor';
+import type {
+  LeadershipRequestCursor,
+  LeadershipRequestRow,
+  SentLeadershipRequestRow,
+} from './leadership-request-cursor';
 import type { RosterCursor } from '../common/roster-cursor';
 import type { CellCategory, Database } from '../database/schema';
 import type { Transaction } from 'kysely';
@@ -707,6 +711,61 @@ export class CellsReadService implements CellScopePort, CellRelationshipsPort {
         .limit(page.limit)
         .execute()
     );
+  }
+
+  /**
+   * The Cell leadership requests one account sent, pending or decided at or after
+   * `decidedSince`, oldest first (section 19's requester list, decision 0269). The
+   * Cells a request names are resolved to their handles here, `cells` owning both
+   * tables; the prospective leader's name is the caller's to resolve through `people`.
+   */
+  async requestsSentByWithin(
+    executor: Db | Transaction<Database>,
+    accountId: string,
+    decidedSince: Date,
+    page: { limit: number; after?: LeadershipRequestCursor | null },
+  ): Promise<SentLeadershipRequestRow[]> {
+    const after = page.after ?? null;
+
+    return executor
+      .selectFrom('cell_leadership_requests as r')
+      .leftJoin('cells as c', 'c.id', 'r.cell_id')
+      .leftJoin('cells as rc', 'rc.id', 'r.restart_of_cell_id')
+      .select([
+        'r.id',
+        'r.kind',
+        'r.state',
+        'r.prospective_leader_id',
+        'r.requested_at',
+        'r.decided_at',
+        'r.decline_reason',
+        'r.note',
+        'r.cell_id',
+        'c.cell_id as cell_handle',
+        'r.restart_of_cell_id',
+        'rc.cell_id as restart_of_cell_handle',
+        // The same key, and the same reason, as the queue above.
+        sql<string>`to_char(r.requested_at at time zone 'UTC', ${sql.lit(CURSOR_INSTANT_FORMAT)})`.as(
+          'requested_at_key',
+        ),
+      ])
+      .where('r.requested_by', '=', accountId)
+      .where((eb) => eb.or([eb('r.state', '=', 'PENDING'), eb('r.decided_at', '>=', decidedSince)]))
+      .$if(after !== null, (query) =>
+        query.where((eb) => {
+          const key = after as LeadershipRequestCursor;
+          const at = sql<Date>`${key.requestedAt}::timestamptz`;
+
+          return eb.or([
+            eb('r.requested_at', '>', at),
+            eb.and([eb('r.requested_at', '=', at), eb('r.id', '>', key.id)]),
+          ]);
+        }),
+      )
+      .orderBy('r.requested_at')
+      .orderBy('r.id')
+      .limit(page.limit)
+      .execute();
   }
 
   /**

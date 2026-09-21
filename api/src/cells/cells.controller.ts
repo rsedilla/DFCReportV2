@@ -1,6 +1,9 @@
 import { Body, Controller, Delete, Get, HttpCode, Param, Post, Put, Query } from '@nestjs/common';
 
-import { RequiresCapability } from '../auth/authorization/authorization.decorators';
+import {
+  AuthenticatedOnly,
+  RequiresCapability,
+} from '../auth/authorization/authorization.decorators';
 import { AuthorizationService, type Actor } from '../auth/authorization/authorization.service';
 import { Capability } from '../auth/authorization/capabilities';
 import { CurrentActor } from '../auth/current-actor.decorator';
@@ -466,24 +469,8 @@ export class CellsController {
    * them, and nobody else. Section 7 gives that capability one scope only, so a grant
    * issued narrower covers nothing and is refused `SCOPE_DENIED`.
    *
-   * **Section 19's other list is not this one and is not built.** It puts "the outcome
-   * of a Cell leadership request the user submitted" in every user's own outstanding
-   * work — a different population and a different reader. **Section 7 names no
-   * capability for it**: `cell.request_leadership` is `SUBTREE_EXCL_SELF`, so it
-   * resolves against neither the caller nor the church, and section 7's no-capability
-   * exemption covers an endpoint acting "on the caller's own session" rather than one
-   * returning rows their account created.
-   *
-   * *Not that none **can**, which an earlier version of this said.* `cell.view_subtree`
-   * against `{ kind: 'actor' }` is the shape `GET /people/duplicate-candidates` already
-   * uses for a church-wide read, one domain over — a new reading of an existing
-   * capability rather than a new capability, and defensible. It is recorded as open in
-   * `CLAUDE.md` with the alternatives because which of them is right is not derivable,
-   * not because the surface is unbuildable.
-   *
-   * That surface is not blocking: this queue is what approval needs, the way the roster
-   * route was what the closure needed, while the requester's view is a dashboard tile
-   * with no dashboard yet.
+   * **Section 19's other list, the requests a user sent, is `leadership-requests/sent`**
+   * below: a different population and a different reader (decision 0269).
    */
   @Get('leadership-requests')
   @RequiresCapability(Capability.CellApproveLeadership, { kind: 'church' })
@@ -491,6 +478,24 @@ export class CellsController {
     @Query() query: LeadershipRequestQueueDto,
   ): Promise<Record<string, unknown>> {
     return this.requests.pendingQueue({ limit: query.limit, cursor: query.cursor });
+  }
+
+  /**
+   * `GET /api/v1/cells/leadership-requests/sent` — the Cell leadership requests the
+   * caller's own account sent, pending or decided within 30 days (section 19, decision
+   * 0269).
+   *
+   * **Authentication and no capability**, section 7's second exemption as decision 0269
+   * widens it: the records the caller's account created, and only them. The service keys on the caller's
+   * account and takes no identifier from the request, so there is nothing to scope.
+   */
+  @Get('leadership-requests/sent')
+  @AuthenticatedOnly('Returns only the Cell leadership requests the caller’s own account sent.')
+  async sentLeadershipRequests(
+    @CurrentActor() actor: Actor,
+    @Query() query: LeadershipRequestQueueDto,
+  ): Promise<Record<string, unknown>> {
+    return this.requests.sentBy(actor, { limit: query.limit, cursor: query.cursor });
   }
 
   /**

@@ -1233,6 +1233,88 @@ describe('Cell leadership approval (section 10)', () => {
     const response = await approve(admin, randomUUID()).expect(404);
     expect(response.body.error.code).toBe('NOT_FOUND');
   });
+
+  describe('what a sender reads back (decision 0269)', () => {
+    const sent = (actor: TestAccount) =>
+      request(app.getHttpServer())
+        .get('/api/v1/cells/leadership-requests/sent')
+        .set('Authorization', `Bearer ${actor.accessToken}`);
+
+    it('answers only the requests the caller’s own account sent, with each outcome', async () => {
+      const approvedId = await pendingNewCell(markAccount, juan.id);
+      const approved = await approve(admin, approvedId).expect(200);
+      const declinedId = await pendingHandover(markAccount, juan.id, markCell.id);
+      await decline(admin, declinedId).expect(200);
+      const bensId = await pendingNewCell(benAccount, pedro.id);
+
+      const response = await sent(markAccount).expect(200);
+
+      expect(response.body.data.map((row: { id: string }) => row.id)).toEqual([
+        approvedId,
+        declinedId,
+      ]);
+      expect(response.body.data[0]).toMatchObject({
+        kind: 'NEW_CELL',
+        state: 'APPROVED',
+        prospective_leader: { person_id: juan.id, full_name: 'Juan Testfixture' },
+        cell: { id: approved.body.cell_uuid, cell_id: approved.body.cell_id },
+      });
+      expect(response.body.data[1]).toMatchObject({
+        kind: 'HANDOVER',
+        state: 'DECLINED',
+        decline_reason: 'TIMING_DEFERRED',
+        cell: { id: markCell.id, cell_id: markCell.cellId },
+      });
+      expect(response.body.next_cursor).toBeNull();
+
+      // Ben's own list holds his request and nobody else's.
+      const bens = await sent(benAccount).expect(200);
+      expect(bens.body.data.map((row: { id: string }) => row.id)).toEqual([bensId]);
+    });
+
+    it('needs no capability: an account holding none reads its own, empty, list', async () => {
+      const bare = await createAccount(app, db, {
+        person: await createPerson(db, { firstName: 'Noel', network: 'MENS' }),
+        roles: [],
+      });
+
+      const response = await sent(bare).expect(200);
+      expect(response.body).toEqual({ data: [], next_cursor: null });
+    });
+
+    it('drops a request decided more than 30 days ago, and keeps a pending one however old', async () => {
+      const oldId = await pendingNewCell(markAccount, juan.id);
+      await decline(admin, oldId).expect(200);
+      await pendingHandover(markAccount, juan.id, markCell.id);
+
+      // The finality trigger freezes a decided row, so the age is set by moving the
+      // decision back rather than by waiting, with the trigger off for this one
+      // statement and back on before the transaction commits.
+      await db.transaction().execute(async (trx) => {
+        await sql`ALTER TABLE cell_leadership_requests DISABLE TRIGGER cell_leadership_requests_final`.execute(
+          trx,
+        );
+        await trx
+          .updateTable('cell_leadership_requests')
+          .set({ decided_at: new Date(Date.now() - 31 * 24 * 60 * 60 * 1000) })
+          .where('id', '=', oldId)
+          .execute();
+        await sql`ALTER TABLE cell_leadership_requests ENABLE TRIGGER cell_leadership_requests_final`.execute(
+          trx,
+        );
+      });
+
+      const response = await sent(markAccount).expect(200);
+      expect(response.body.data.map((row: { state: string }) => row.state)).toEqual(['PENDING']);
+    });
+
+    it('refuses a caller with no session', async () => {
+      const response = await request(app.getHttpServer())
+        .get('/api/v1/cells/leadership-requests/sent')
+        .expect(401);
+      expect(response.body.error.code).toBe('UNAUTHENTICATED');
+    });
+  });
 });
 
 /**

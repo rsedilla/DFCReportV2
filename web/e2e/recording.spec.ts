@@ -533,6 +533,79 @@ test.describe('the Record queue', () => {
     ]);
   });
 
+  // Decision 0269: the requests the reader sent, each with its outcome in words.
+  test('lists the requests the reader sent, with each outcome, and nothing when there are none', async ({
+    page,
+  }) => {
+    await mockRecordScreen(page, {});
+    const sent = [
+      {
+        id: 'r1',
+        kind: 'NEW_CELL',
+        state: 'PENDING',
+        requested_at: '2026-06-18T02:00:00Z',
+        decided_at: null,
+        prospective_leader: { person_id: 'p1', full_name: 'Paolo Reyes' },
+        cell: null,
+        restart_of: { id: 'c14', cell_id: 'CELL-000014' },
+        decline_reason: null,
+        note: null,
+      },
+      {
+        id: 'r2',
+        kind: 'NEW_CELL',
+        state: 'APPROVED',
+        requested_at: '2026-06-02T02:00:00Z',
+        decided_at: '2026-06-04T02:00:00Z',
+        prospective_leader: { person_id: 'p2', full_name: 'Ramon Diaz' },
+        cell: { id: 'c21', cell_id: 'CELL-000021' },
+        restart_of: null,
+        decline_reason: null,
+        note: null,
+      },
+      {
+        id: 'r3',
+        kind: 'HANDOVER',
+        state: 'DECLINED',
+        requested_at: '2026-06-01T02:00:00Z',
+        decided_at: '2026-06-03T02:00:00Z',
+        prospective_leader: { person_id: 'p3', full_name: 'Lorna Cruz' },
+        cell: { id: 'c9', cell_id: 'CELL-000009' },
+        restart_of: null,
+        decline_reason: 'TIMING_DEFERRED',
+        note: 'Moving to another city.',
+      },
+    ];
+    let answer: unknown[] = sent;
+    await page.route('**/api/v1/cells/leadership-requests/sent*', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ data: answer, next_cursor: null }),
+      }),
+    );
+
+    await page.goto('/dashboard');
+
+    const block = page.getByRole('region', { name: 'Your requests' });
+    const rows = block.getByRole('listitem');
+    await expect(rows).toHaveCount(3);
+    await expect(rows.nth(0)).toContainText('Restart CELL-000014 with Paolo Reyes');
+    await expect(rows.nth(0)).toContainText('Waiting for approval');
+    await expect(rows.nth(1)).toContainText('New Cell led by Ramon Diaz');
+    await expect(rows.nth(1).getByRole('link', { name: 'CELL-000021' })).toHaveAttribute(
+      'href',
+      '/cells/c21/meetings',
+    );
+    await expect(rows.nth(2)).toContainText('Hand CELL-000009 to Lorna Cruz');
+    await expect(rows.nth(2)).toContainText('The timing is deferred: Moving to another city.');
+
+    answer = [];
+    await page.reload();
+    await expect(page.getByRole('heading', { name: 'Awaiting a record' })).toBeVisible();
+    await expect(page.getByRole('region', { name: 'Your requests' })).toHaveCount(0);
+  });
+
   // The walkthrough of 2026-09-21: "this page of your scope" was our word. The sentence
   // claims the whole scope only when every Cell was read, and names the limit otherwise.
   test('says no Cell is behind in plain words, and names the limit when there is more', async ({

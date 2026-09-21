@@ -6,6 +6,7 @@ import { useState } from 'react';
 
 import { AppShell, PAGE_WIDTH } from '@/components/app-shell';
 import { CoverageFigure } from '@/components/coverage-figure';
+import { SentRequests } from '@/components/sent-requests';
 import { buttonClasses } from '@/components/ui/button';
 import { FailureNotice } from '@/components/ui/failure-notice';
 import { RadioGroup } from '@/components/ui/radio-group';
@@ -77,10 +78,6 @@ const UNPLACED_TILE = 5;
  * **Attendance counts unique people and never occurrences** (section 19, principle
  * 10). Both figures here come from the reporting routes, which count distinct
  * people; nothing on this screen sums attendances.
- *
- * **One of section 19's five outstanding-work lists has no route yet** and is named here
- * rather than faked: the outcome of a Cell leadership request the actor submitted — a
- * question `CLAUDE.md` records as open, since section 7 names no capability for such a read.
  *
  * **Nothing here is ranked or colour-graded** (sections 13, 17 and 19). The queue is
  * in date order, oldest first, and says so; the attention list is filtered rather
@@ -602,6 +599,9 @@ function Dashboard() {
           </div>
         </aside>
       </div>
+
+      {/* The reader's own requests, beside their own work (decision 0269). */}
+      <SentRequests />
 
       <section className="mt-10" aria-labelledby="attention-heading">
         <h2 id="attention-heading" className="text-lg font-bold tracking-tight">

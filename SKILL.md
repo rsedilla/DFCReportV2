@@ -1896,9 +1896,9 @@ capability_grants
 Exactly two kinds of exemption exist, and each endpoint taking one names its reason where it is written:
 
 - an endpoint reachable **without authentication**, which is a closed list: sign-in, token refresh, the password reset and activation flows, and the liveness probe. The first four have no token to present yet, or are presenting the refresh token as the credential. The probe answers only whether the process is serving and reads nothing belonging to the church
-- an endpoint requiring **authentication and no capability**, because it acts on the caller's own session: reading their own claims, signing out, ending their own sessions
+- an endpoint requiring **authentication and no capability**, because it acts on the caller's own session: reading their own claims, signing out, ending their own sessions. **Or because it returns only records the caller's own account created: the Cell leadership requests they sent** (ruling of 2026-09-21), keyed on the caller's account and taking no identifier from the request
 
-Neither ever covers an endpoint that reads or writes a Person, a Cell, attendance, a report, an account other than the caller's own, or a setting. Adding an endpoint to the unauthenticated list is an amendment to this section, not a decision taken in a controller, because that list is the whole of the API's unauthenticated surface and its value is that it can be read in one place.
+Beyond those requests, which carry what their sender asked and the decision on it, neither ever covers an endpoint that reads or writes a Person, a Cell, attendance, a report, an account other than the caller's own, or a setting. Adding an endpoint to the unauthenticated list is an amendment to this section, not a decision taken in a controller, because that list is the whole of the API's unauthenticated surface and its value is that it can be read in one place.
 
 A request is allowed where **any** active role default or active grant for that capability covers the target. Authority only widens; there is no mechanism for narrowing a role default on one account, and none is needed — removing the role or disabling the account is the answer.
 
@@ -3987,7 +3987,7 @@ A dashboard of counts tells a leader nothing to act on. The Dashboard is the sid
 - meetings awaiting a record, for the user's own Cells (Section 13), and for their branch when they choose it (decision 0258, below) — **and for a closed Cell, each meeting shown to the leader it names, while its month's window is open**. It shows each one to the same person Section 7 authorizes to file it
 - Cells needing attention within their scope (Section 15)
 - people with no active Cell membership within their scope (Section 10)
-- the outcome of a Cell leadership request the user submitted, of either kind (Section 10)
+- the outcome of a Cell leadership request the user submitted, of either kind (Section 10): each one they sent, pending or decided within the last 30 days, with its state in words, the reason where it was declined, and the Cell where one was approved (ruling of 2026-09-21, Section 7)
 - people within their scope whose own pastoral leader holds no assignment, so a leader must be found for them (Sections 5 and 20)
 
 Each entry carries the action that resolves it.
@@ -4520,6 +4520,7 @@ GET  /api/v1/cells/meetings/awaiting     Section 19's recording queue, the actor
 
 POST /api/v1/cells/leadership-requests     step one: a new Cell, or a handover
 GET  /api/v1/cells/leadership-requests     the Admin queue: pending, either kind
+GET  /api/v1/cells/leadership-requests/sent  the requests the caller's account sent, decision 0269
 POST /api/v1/cells/leadership-requests/{request_id}/approve
 POST /api/v1/cells/leadership-requests/{request_id}/decline  with a reason from the fixed list
 
