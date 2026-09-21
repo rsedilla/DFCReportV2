@@ -6,7 +6,8 @@ import {
   type ScopeMembership,
 } from '../auth/authorization/authorization.service';
 import { Capability } from '../auth/authorization/capabilities';
-import { canonicalId } from '../common/identifiers';
+import { canonicalId, sameId } from '../common/identifiers';
+import { manilaDayOf } from '../common/time/manila';
 import { assertReportingPeriodHasBegun } from '../common/time/reporting-period';
 import { databaseNow, reportingMonthOf, windowClosesAt } from '../common/time/submission-window';
 import { DATABASE, type Db } from '../database/database.module';
@@ -81,7 +82,14 @@ export class CellsIndexService {
 
   async list(
     actor: Actor,
-    query: { month: string; ledBy?: 'me'; limit?: number; cursor?: string; q?: string },
+    query: {
+      month: string;
+      ledBy?: 'me';
+      limit?: number;
+      cursor?: string;
+      q?: string;
+      state?: 'ACTIVE' | 'CLOSED';
+    },
   ): Promise<Record<string, unknown>> {
     const reportingMonth = reportingMonthOf(query.month);
 
@@ -133,6 +141,10 @@ export class CellsIndexService {
     // straddle a month boundary.
     const now = await databaseNow(this.db);
 
+    if (query.state === 'CLOSED') {
+      return this.listClosed(actor, leaderIds, reportingMonth, now, limit, after, query.q);
+    }
+
     // One more than asked for, so whether another page exists is answered by the read
     // rather than by a second count, and the extra row is dropped before it is returned.
     const rows =
@@ -173,6 +185,7 @@ export class CellsIndexService {
         return {
           id: row.id,
           cell_id: row.cellId,
+          state: 'ACTIVE',
           category: row.category,
           schedule: { day_of_week: row.dayOfWeek, time_of_day: row.timeOfDay },
           member_count: row.memberCount,
@@ -187,6 +200,90 @@ export class CellsIndexService {
             recorded: recorded.get(row.id) ?? 0,
             scheduled: scheduled.get(row.id) ?? 0,
           },
+        };
+      }),
+      next_cursor:
+        rows.length > limit && last !== undefined
+          ? encodeCellIndexCursor({ cellId: last.cellId })
+          : null,
+    };
+  }
+
+  /**
+   * The `CLOSED` view (decision 0266): the closed Cells whose last leader the actor's
+   * `cell.view_subtree` reaches, each with what it closed on and why, and whether this
+   * actor may request its restart (decision 0264).
+   *
+   * **`may_restart` is the server's answer and never a client's derivation** (section 7).
+   * It is the scope half of what a restart request checks — `cell.request_leadership`
+   * over the last leader, who must never be the actor, and `cell.manage_lifecycle` over the
+   * same person (decision 0265) — with the Cell's own state: not closed as created in
+   * error, and not already restarted. It does not replay the request's refusals about
+   * the leader themselves; a submission refused for one of those answers in its own
+   * words.
+   */
+  private async listClosed(
+    actor: Actor,
+    leaderIds: string[] | null,
+    reportingMonth: string,
+    now: Date,
+    limit: number,
+    after: ReturnType<typeof decodeCellIndexCursor>,
+    q: string | undefined,
+  ): Promise<Record<string, unknown>> {
+    const rows =
+      leaderIds !== null && leaderIds.length === 0
+        ? []
+        : await this.cells.closedCellsInScope(this.db, leaderIds, {
+            limit: limit + 1,
+            after: after?.cellId ?? null,
+            search: q ?? null,
+          });
+
+    const visible = rows.slice(0, limit);
+    const cellIds = visible.map((row) => row.id);
+
+    const [scheduled, recorded, leaders, mayRequest, mayManage] = await Promise.all([
+      this.cells.scheduledCountsIn(this.db, cellIds, reportingMonth),
+      this.recordedCounts(cellIds, reportingMonth),
+      this.people.namesOf(visible.map((row) => row.leaderId)),
+      this.authorization.scopeMembership(actor, Capability.CellRequestLeadership),
+      this.authorization.scopeMembership(actor, Capability.CellManageLifecycle),
+    ]);
+
+    const last = visible.at(-1);
+
+    return {
+      reporting_month: reportingMonth,
+      open: now.getTime() < windowClosesAt(reportingMonth).getTime(),
+      data: visible.map((row) => {
+        const leader = leaders.get(row.leaderId);
+
+        return {
+          id: row.id,
+          cell_id: row.cellId,
+          state: 'CLOSED',
+          category: row.category,
+          schedule: { day_of_week: row.dayOfWeek, time_of_day: row.timeOfDay },
+          member_count: 0,
+          leader: {
+            person_id: row.leaderId,
+            member_id: leader?.memberId ?? '',
+            full_name: leader?.fullName ?? '',
+          },
+          coverage: {
+            recorded: recorded.get(row.id) ?? 0,
+            scheduled: scheduled.get(row.id) ?? 0,
+          },
+          closed_on: manilaDayOf(row.closedAt),
+          closure_reason: row.closureReason,
+          restarted_as: row.restartedAs,
+          may_restart:
+            row.closureReason !== 'CREATED_IN_ERROR' &&
+            row.restartedAs === null &&
+            !sameId(row.leaderId, actor.personId) &&
+            reaches(mayRequest, row.leaderId) &&
+            reaches(mayManage, row.leaderId),
         };
       }),
       next_cursor:
@@ -285,4 +382,8 @@ function leadersToList(
   }
 
   return membership.personIds.has(canonicalId(actor.personId)) ? [actor.personId] : [];
+}
+
+function reaches(membership: ScopeMembership, personId: string): boolean {
+  return membership.kind === 'WHOLE_CHURCH' || membership.personIds.has(canonicalId(personId));
 }

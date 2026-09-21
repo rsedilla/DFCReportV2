@@ -15,6 +15,7 @@ import {
   mockCellMembersEmpty,
   mockClosedCellMeetings,
   mockCells,
+  mockCellsWithClosed,
 } from './mock-attendance';
 
 /**
@@ -208,5 +209,83 @@ test.describe('people without a Cell', () => {
       },
     ]);
     await expect.poll(() => listReads).toBeGreaterThan(readsBeforeAdding);
+  });
+});
+
+test.describe('closed Cells and their restart (decisions 0264 to 0266)', () => {
+  test('lists closed Cells in their own view, and sends a restart for approval', async ({
+    page,
+  }) => {
+    await mockSignedIn(page);
+    await mockCellsWithClosed(page);
+
+    const sent: unknown[] = [];
+    await page.route('**/api/v1/cells/leadership-requests', (route) => {
+      sent.push(route.request().postDataJSON());
+      return route.fulfill({
+        status: 201,
+        contentType: 'application/json',
+        body: JSON.stringify({ id: 'r1', state: 'PENDING' }),
+      });
+    });
+
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.goto('/cells');
+    await page.getByRole('radio', { name: 'Closed Cells' }).check();
+
+    const table = page.getByRole('table', { name: 'Closed Cells in your scope' });
+    await expect(table.getByRole('columnheader')).toHaveText([
+      'Cell',
+      'Last leader',
+      'Closed',
+      'Why',
+      'Restart',
+    ]);
+    const row = table.getByRole('row', { name: /CELL-000014/ });
+    await expect(row).toContainText('Paolo Reyes');
+    await expect(row).toContainText('12 Jun 2026');
+    await expect(row).toContainText('Members dispersed');
+
+    await row.getByRole('button', { name: 'Restart CELL-000014' }).click();
+
+    const dialog = page.getByRole('dialog', { name: 'Restart CELL-000014' });
+    // Filled in from how it met before, and the leader is a sentence, not a field.
+    await expect(dialog.getByText('Paolo Reyes', { exact: true })).toBeVisible();
+    await expect(dialog.getByRole('radio', { name: 'Young Pro' })).toBeChecked();
+    await expect(dialog.getByRole('radio', { name: 'Friday' })).toBeChecked();
+    await expect(dialog.getByLabel('What time')).toHaveValue('19:30');
+
+    await dialog.getByRole('radio', { name: 'Saturday' }).check();
+    await dialog.getByRole('button', { name: 'Send for approval' }).click();
+
+    await expect(dialog).toBeHidden();
+    expect(sent).toEqual([
+      {
+        kind: 'NEW_CELL',
+        restart_of_cell_id: '4a2c8d90-0000-4000-8000-000000000601',
+        prospective_leader_id: '4a2c8d90-0000-4000-8000-000000000701',
+        category: 'YOUNG_PRO',
+        day_of_week: 6,
+        time_of_day: '19:30',
+      },
+    ]);
+    await expect(row).toContainText('Sent for approval');
+  });
+
+  test('offers no restart where the server says none may be asked for', async ({ page }) => {
+    await mockSignedIn(page);
+    await mockCellsWithClosed(page);
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.goto('/cells');
+    await page.getByRole('radio', { name: 'Closed Cells' }).check();
+
+    const table = page.getByRole('table', { name: 'Closed Cells in your scope' });
+    const restarted = table.getByRole('row', { name: /CELL-000009/ });
+    await expect(restarted).toContainText('Restarted as CELL-000021');
+    await expect(restarted.getByRole('button')).toHaveCount(0);
+
+    const inError = table.getByRole('row', { name: /CELL-000004/ });
+    await expect(inError).toContainText('Created in error');
+    await expect(inError.getByRole('button')).toHaveCount(0);
   });
 });

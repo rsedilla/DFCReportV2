@@ -42,6 +42,72 @@ export interface CellSummary {
   schedule: CellSchedule;
   leader: { person_id: string; member_id: string; full_name: string };
   coverage: CellCoverage;
+  /** `ACTIVE`, or `CLOSED` in the closed view (decision 0266). */
+  state?: 'ACTIVE' | 'CLOSED';
+  /** The closed view only: the Manila day it closed, and why (section 10). */
+  closed_on?: string;
+  closure_reason?: CellClosureReason;
+  /** The closed view only: the Cell that resumed it, where one has (decision 0264). */
+  restarted_as?: string | null;
+  /**
+   * The closed view only: whether this reader may ask for it to restart. The server's
+   * answer, never derived here (section 7).
+   */
+  may_restart?: boolean;
+}
+
+export type CellClosureReason =
+  | 'MERGED_INTO_ANOTHER_CELL'
+  | 'LEADER_STEPPED_DOWN'
+  | 'MEMBERS_DISPERSED'
+  | 'CREATED_IN_ERROR'
+  | 'OTHER';
+
+export function closureReasonLabel(reason: CellClosureReason): string {
+  switch (reason) {
+    case 'MERGED_INTO_ANOTHER_CELL':
+      return 'Merged into another Cell';
+    case 'LEADER_STEPPED_DOWN':
+      return 'Leader stepped down';
+    case 'MEMBERS_DISPERSED':
+      return 'Members dispersed';
+    case 'CREATED_IN_ERROR':
+      return 'Created in error';
+    default:
+      return 'Other';
+  }
+}
+
+/** A `YYYY-MM-DD` day with its year, because a Cell may have closed years ago. */
+export function closedOnLabel(date: string): string {
+  const [year, month, day] = date.split('-').map(Number);
+
+  return new Intl.DateTimeFormat('en-GB', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  }).format(new Date(Date.UTC(year, month - 1, day)));
+}
+
+/**
+ * Ask for a closed Cell to restart (decisions 0264 and 0265): a new-Cell request naming
+ * the Cell it resumes and the leader who led it. Admin approves it like any other.
+ */
+export async function requestCellRestart(
+  body: {
+    restart_of_cell_id: string;
+    prospective_leader_id: string;
+    category: CellCategory;
+    day_of_week: number;
+    time_of_day: string;
+  },
+  idempotencyKey: string,
+): Promise<unknown> {
+  return authenticatedRequest<unknown>('/api/v1/cells/leadership-requests', {
+    method: 'POST',
+    body: { kind: 'NEW_CELL', ...body },
+    idempotencyKey,
+  });
 }
 
 export interface CellIndexPage {
@@ -292,12 +358,22 @@ export async function peopleWithoutACell(
 }
 
 export async function listCells(
-  params: { month: string; ledBy?: 'me'; cursor?: string | null; q?: string; limit?: number },
+  params: {
+    month: string;
+    ledBy?: 'me';
+    cursor?: string | null;
+    q?: string;
+    limit?: number;
+    state?: 'ACTIVE' | 'CLOSED';
+  },
   signal?: AbortSignal,
 ): Promise<CellIndexPage> {
   const query = new URLSearchParams({ month: params.month });
   if (params.ledBy) {
     query.set('led_by', params.ledBy);
+  }
+  if (params.state === 'CLOSED') {
+    query.set('state', 'CLOSED');
   }
   if (params.cursor) {
     query.set('cursor', params.cursor);

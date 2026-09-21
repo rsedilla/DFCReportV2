@@ -69,10 +69,24 @@ export async function mockCellsAtScale(page: Page): Promise<void> {
   }));
 
   await page.route('**/api/v1/cells?*', (route) =>
-    route.fulfill(
+    closedAsked(route.request().url())
+      ? route.fulfill(noClosedCells())
+      : route.fulfill(
       json({ reporting_month: '2026-06-01', open: false, data: cells, next_cursor: null }),
     ),
   );
+}
+
+/**
+ * Whether a request asked for the closed view (decision 0266). The running-Cell mocks answer
+ * it with nothing, so a screen that asks for both is not handed the running rows twice.
+ */
+export function closedAsked(url: string): boolean {
+  return new URL(url).searchParams.get('state') === 'CLOSED';
+}
+
+function noClosedCells() {
+  return json({ reporting_month: '2026-06-01', open: false, data: [], next_cursor: null });
 }
 
 /** `open` is the month's submission window, which the Record queue reads for last month. */
@@ -81,7 +95,9 @@ export async function mockCells(
   { open = false }: { open?: boolean } = {},
 ): Promise<void> {
   await page.route('**/api/v1/cells?*', (route) =>
-    route.fulfill(
+    closedAsked(route.request().url())
+      ? route.fulfill(noClosedCells())
+      : route.fulfill(
       json({
         reporting_month: '2026-06-01',
         open,
@@ -95,7 +111,9 @@ export async function mockCells(
 /** A leader who oversees no Cell this month, which is a sentence rather than an error. */
 export async function mockCellsEmpty(page: Page): Promise<void> {
   await page.route('**/api/v1/cells?*', (route) =>
-    route.fulfill(json({ reporting_month: '2026-06-01', open: false, data: [], next_cursor: null })),
+    closedAsked(route.request().url())
+      ? route.fulfill(noClosedCells())
+      : route.fulfill(json({ reporting_month: '2026-06-01', open: false, data: [], next_cursor: null })),
   );
 }
 
@@ -931,4 +949,65 @@ export async function mockCoverageByLeader(page: Page): Promise<void> {
   };
 
   await page.route('**/api/v1/reports/*/monthly/by-leader*', (route) => route.fulfill(json(body)));
+}
+
+/** A closed Cell a restart may be asked for (decisions 0264 to 0266). */
+export const CLOSED_CELL = {
+  id: '4a2c8d90-0000-4000-8000-000000000601',
+  cell_id: 'CELL-000014',
+  state: 'CLOSED',
+  category: 'YOUNG_PRO',
+  member_count: 0,
+  schedule: { day_of_week: 5, time_of_day: '19:30' },
+  leader: {
+    person_id: '4a2c8d90-0000-4000-8000-000000000701',
+    member_id: 'M-000418',
+    full_name: 'Paolo Reyes',
+  },
+  coverage: { recorded: 1, scheduled: 2 },
+  closed_on: '2026-06-12',
+  closure_reason: 'MEMBERS_DISPERSED',
+  restarted_as: null,
+  may_restart: true,
+};
+
+/** One already restarted, and one closed as created in error: neither offers a restart. */
+const CLOSED_CELLS_WITHOUT_RESTART = [
+  {
+    ...CLOSED_CELL,
+    id: '4a2c8d90-0000-4000-8000-000000000602',
+    cell_id: 'CELL-000009',
+    closure_reason: 'LEADER_STEPPED_DOWN',
+    restarted_as: 'CELL-000021',
+    may_restart: false,
+  },
+  {
+    ...CLOSED_CELL,
+    id: '4a2c8d90-0000-4000-8000-000000000603',
+    cell_id: 'CELL-000004',
+    closure_reason: 'CREATED_IN_ERROR',
+    may_restart: false,
+  },
+];
+
+/**
+ * The Cells index in both views: the running rows as `mockCells` gives them, and the
+ * closed rows when the closed view is asked for. `open` is the month's window.
+ */
+export async function mockCellsWithClosed(
+  page: Page,
+  { open = false }: { open?: boolean } = {},
+): Promise<void> {
+  await page.route('**/api/v1/cells?*', (route) =>
+    route.fulfill(
+      json({
+        reporting_month: '2026-06-01',
+        open,
+        data: closedAsked(route.request().url())
+          ? [CLOSED_CELL, ...CLOSED_CELLS_WITHOUT_RESTART]
+          : [CELL_WITH_MEETINGS, CELL_WITH_NO_SCHEDULE],
+        next_cursor: null,
+      }),
+    ),
+  );
 }

@@ -576,6 +576,17 @@ export class CellIndexDto {
   led_by?: 'me';
 
   /**
+   * `CLOSED` for the closed Cells whose last leader is in scope, `ACTIVE` (the default)
+   * for the running ones (decision 0266). Two views of one list rather than a mixed one,
+   * because every count of Cells means active Cells unless it says otherwise (section 10).
+   */
+  @IsOptional()
+  @IsIn(['ACTIVE', 'CLOSED'], {
+    message: 'state accepts ACTIVE or CLOSED (SKILL.md section 22).',
+  })
+  state?: 'ACTIVE' | 'CLOSED';
+
+  /**
    * Narrows the page to Cells whose identifier contains the term, where the term carries a
    * digit, or whose leader's name contains it (decision 0261). Two characters minimum, for
    * the reason the Person search has one: a one-letter term pages the list rather than

@@ -115,6 +115,13 @@
       "table": "persons",
       "kind": "join",
       "reason": "Decision 0261 lets the Cells list be searched by a leader's name. Rooted in cells and joined for that predicate; returning identifiers would mean searching the church's people to filter a page of Cells. Section 2 argues the shape; the instances are not enumerated there."
+    },
+    {
+      "file": "src/cells/cells.read.service.ts",
+      "method": "closedCellsInScope",
+      "table": "persons",
+      "kind": "join",
+      "reason": "Decision 0266 gives the Cells list a closed view, searched as the running view is (decision 0261) by Cell ID or by the last leader’s name. Rooted in cells and joined for that predicate, for the same reason as cellsInScope. Section 2 argues the shape; the instances are not enumerated there."
     }
   ]
 }

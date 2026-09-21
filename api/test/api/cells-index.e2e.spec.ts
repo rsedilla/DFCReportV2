@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+
 import { sql } from 'kysely';
 import request from 'supertest';
 
@@ -699,6 +701,166 @@ describe('the Cells index (sections 10, 12 and 22)', () => {
 
     expect(response.status).toBe(422);
     expect(response.body.error.code).toBe('VALIDATION_FAILED');
+  });
+  describe('the closed view (decision 0266)', () => {
+    type ClosedRow = {
+      id: string;
+      cell_id: string;
+      state: string;
+      leader: { person_id: string };
+      closed_on: string;
+      closure_reason: string;
+      restarted_as: string | null;
+      may_restart: boolean;
+    };
+
+    const rowsOf = (response: request.Response): ClosedRow[] => response.body.data as ClosedRow[];
+
+    it('lists a closed Cell to the upline of its last leader, and the running view does not', async () => {
+      await closeCellDirectly(db, markCell.id, { reason: 'MEMBERS_DISPERSED' });
+
+      const closed = await list(manuelAccount, { state: 'CLOSED' });
+      const running = await list(manuelAccount);
+
+      expect(closed.status).toBe(200);
+      expect(cellIdsOf(closed)).toEqual([markCell.id]);
+      expect(rowsOf(closed)[0]).toMatchObject({
+        state: 'CLOSED',
+        leader: { person_id: mark.id },
+        closed_on: await today(),
+        closure_reason: 'MEMBERS_DISPERSED',
+        restarted_as: null,
+        may_restart: true,
+      });
+      expect(cellIdsOf(running)).toEqual([manuelCell.id, nathanCell.id].sort());
+    });
+
+    it('shows the former leader their own closed Cell, and never offers them its restart', async () => {
+      // Section 10: no holder of `cell.request_leadership` may name themselves, and a
+      // restart names the Cell's last leader (decision 0264).
+      await closeCellDirectly(db, markCell.id, { reason: 'MEMBERS_DISPERSED' });
+      await closeCellDirectly(db, nathanCell.id, { reason: 'MEMBERS_DISPERSED' });
+
+      const response = await list(markAccount, { state: 'CLOSED' });
+
+      expect(cellIdsOf(response)).toEqual([markCell.id]);
+      expect(rowsOf(response)[0].may_restart).toBe(false);
+    });
+
+    it('offers no restart for a Cell closed as created in error, or one already restarted', async () => {
+      await closeCellDirectly(db, markCell.id, { reason: 'CREATED_IN_ERROR' });
+      await closeCellDirectly(db, nathanCell.id, { reason: 'LEADER_STEPPED_DOWN' });
+      await db
+        .updateTable('cells')
+        .set({ restarted_from_cell_id: nathanCell.id })
+        .where('id', '=', manuelCell.id)
+        .execute();
+
+      const response = await list(manuelAccount, { state: 'CLOSED' });
+      const byId = new Map(rowsOf(response).map((row) => [row.id, row]));
+
+      expect(byId.get(markCell.id)?.may_restart).toBe(false);
+      expect(byId.get(nathanCell.id)).toMatchObject({
+        restarted_as: manuelCell.cellId,
+        may_restart: false,
+      });
+    });
+
+    it('lists every closed Cell to a Whole Church viewer, and offers a restart only over their own subtree', async () => {
+      // Seeing is `cell.view_subtree`, Whole Church for Admin; requesting is
+      // `cell.request_leadership`, which every role holds over its own subtree excluding
+      // itself (section 7). This administrator is outside the tree, so they see the Cell
+      // and may not ask for it to restart.
+      await closeCellDirectly(db, markCell.id, { reason: 'MEMBERS_DISPERSED' });
+
+      const response = await list(admin, { state: 'CLOSED' });
+
+      expect(cellIdsOf(response)).toEqual([markCell.id]);
+      expect(rowsOf(response)[0].may_restart).toBe(false);
+    });
+
+    it('reads the schedule that governed, never a zero-length row a closure left', async () => {
+      // A closure ends a configuration row at `GREATEST(effective_at, started_at)`, so a
+      // change queued for a later month is left zero-length with the latest `started_at`
+      // on the Cell. Section 5: no instant resolves to such a row.
+      const closedAt = new Date('2026-06-15T10:00:00+08:00');
+      await closeCellDirectly(db, markCell.id, { reason: 'MEMBERS_DISPERSED', at: closedAt });
+      await db
+        .insertInto('cell_schedules')
+        .values({
+          cell_id: markCell.id,
+          day_of_week: 2,
+          time_of_day: '20:30',
+          started_at: new Date('2026-07-01T00:00:00+08:00'),
+          ended_at: new Date('2026-07-01T00:00:00+08:00'),
+        })
+        .execute();
+
+      const response = await list(manuelAccount, { state: 'CLOSED' });
+      const row = rowsOf(response)[0] as unknown as {
+        schedule: { day_of_week: number; time_of_day: string };
+      };
+
+      expect(row.schedule).toEqual({ day_of_week: 6, time_of_day: '19:00' });
+    });
+
+    it('agrees with the request route: a row offering a restart is one the route accepts', async () => {
+      // Section 15 calls `may_restart` "the scope half of what the request checks", and two
+      // API answers claimed to be equal need a case that takes one to the other. Without
+      // it each side is pinned alone and they may drift apart silently.
+      await closeCellDirectly(db, markCell.id, { reason: 'MEMBERS_DISPERSED' });
+
+      const listed = await list(manuelAccount, { state: 'CLOSED' });
+      const row = rowsOf(listed)[0];
+
+      expect(row.may_restart).toBe(true);
+
+      const accepted = await request(app.getHttpServer())
+        .post('/api/v1/cells/leadership-requests')
+        .set('Authorization', `Bearer ${manuelAccount.accessToken}`)
+        .set('Idempotency-Key', randomUUID())
+        .send({
+          kind: 'NEW_CELL',
+          prospective_leader_id: row.leader.person_id,
+          restart_of_cell_id: row.id,
+          category: 'YOUTH',
+          day_of_week: 6,
+          time_of_day: '19:00',
+        });
+
+      expect(accepted.status).toBe(201);
+    });
+
+    it('agrees with the request route: a row offering none is one the route refuses', async () => {
+      await closeCellDirectly(db, markCell.id, { reason: 'MEMBERS_DISPERSED' });
+
+      const listed = await list(markAccount, { state: 'CLOSED' });
+      const row = rowsOf(listed)[0];
+
+      expect(row.may_restart).toBe(false);
+
+      const refused = await request(app.getHttpServer())
+        .post('/api/v1/cells/leadership-requests')
+        .set('Authorization', `Bearer ${markAccount.accessToken}`)
+        .set('Idempotency-Key', randomUUID())
+        .send({
+          kind: 'NEW_CELL',
+          prospective_leader_id: row.leader.person_id,
+          restart_of_cell_id: row.id,
+          category: 'YOUTH',
+          day_of_week: 6,
+          time_of_day: '19:00',
+        });
+
+      expect(refused.status).toBeGreaterThanOrEqual(400);
+    });
+
+    it('refuses a state it does not offer', async () => {
+      const response = await list(manuelAccount, { state: 'ARCHIVED' });
+
+      expect(response.status).toBe(422);
+      expect(response.body.error.code).toBe('VALIDATION_FAILED');
+    });
   });
 });
 

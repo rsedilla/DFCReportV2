@@ -63,11 +63,14 @@ write-resolving capability on a closed Cell, is what `CLAUDE.md` still records a
 taken here, because a ruling written past the case in front of it is how this repository has twice
 settled a question nobody had asked.
 
-**Who this reaches, concretely.** Anyone holding `cell.manage_lifecycle` over the Cell's last
-leader: that leader's upline within their own subtree, Admin, the two Senior Pastors — and a
-Network grantee, which is wider than the list Section 10 gives and which Section 10 already names
-as a gap where it states it. Not the former leader themselves: a restart names them as the
-prospective leader, and Section 10 lets no holder of `cell.request_leadership`, at any scope, name
+**Who this reaches, concretely — and it is narrower than this second-object check alone.** This
+ruling decides who has the closed Cell *in scope*: anyone holding `cell.manage_lifecycle` over its
+last leader, which is that leader's upline within their own subtree, Admin, the two Senior Pastors,
+and a Network grantee, the last being wider than the list Section 10 gives and named as a gap where
+Section 10 states it. **Asking for the restart also needs `cell.request_leadership` over the leader**,
+which every role holds at subtree-excluding-self, so the actor must be upline of them in their own
+tree: an administrator outside the tree has the Cell in scope and cannot request its restart. Not the
+former leader themselves, at any scope, because Section 10 lets no holder of that capability name
 themselves.
 
 ---

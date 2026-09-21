@@ -169,6 +169,7 @@ export class CellsController {
       limit: query.limit,
       cursor: query.cursor,
       q: query.q,
+      state: query.state,
     });
   }
 

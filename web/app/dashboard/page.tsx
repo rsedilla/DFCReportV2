@@ -13,6 +13,7 @@ import { Tag } from '@/components/ui/tag';
 import { HeaderCell, Table, rowClasses } from '@/components/ui/table';
 import {
   categoryLabel,
+  closedOnLabel,
   dayOfWeekLabel,
   timeLabel,
   listCells,
@@ -241,6 +242,18 @@ function Dashboard() {
     queryFn: ({ signal }) => listCells({ month }, signal),
   });
 
+  // **Section 15's attention list includes a closed Cell while its month is open**, and
+  // the running view cannot carry one. The closed view (decision 0266) can. A closed
+  // Cell's schedule ends at its closure, so every meeting it counts has already happened
+  // and a shortfall there is a meeting genuinely awaiting a record — which is **not** true
+  // of the running half, whose denominator is the month's whole schedule (decision 0239),
+  // so mid-month it names Cells whose meetings have not come. Both that and what a page
+  // bound owes this list are recorded as open in `CLAUDE.md`; neither is introduced here.
+  const scopedClosed = useQuery({
+    queryKey: ['cells', month, false, 'CLOSED'],
+    queryFn: ({ signal }) => listCells({ month, state: 'CLOSED' }, signal),
+  });
+
   // **The Sundays on the leader's own checklist.** The events index says which of
   // this month's Sundays take a record now; the checklist for each says whether
   // anybody on it is still unmarked. A Sunday that has not happened, was removed,
@@ -380,9 +393,12 @@ function Dashboard() {
     checklists.some((query) => query.isError) ||
     previousFailed !== undefined;
 
-  const needingAttention = (scoped.data?.data ?? []).filter(
-    (cell) => cell.coverage.recorded < cell.coverage.scheduled,
-  );
+  // Bounded by the window rather than by how recently the Cell closed, so the list never
+  // shows a meeting only Admin could act on (section 15).
+  const needingAttention = [
+    ...(scoped.data?.data ?? []),
+    ...(scopedClosed.data?.open ? scopedClosed.data.data : []),
+  ].filter((cell) => cell.coverage.recorded < cell.coverage.scheduled);
 
   // **Every query on this page, not the ones it started with.** Section 19 puts
   // outstanding work above the figures precisely so a leader can trust it, and a
@@ -405,6 +421,8 @@ function Dashboard() {
             ? describeFailure(mine.error)
             : scoped.isError
               ? describeFailure(scoped.error)
+              : scopedClosed.isError
+                ? describeFailure(scopedClosed.error)
               : unplaced.isError
                 ? describeFailure(unplaced.error)
                 : cellFigures.isError
@@ -593,13 +611,12 @@ function Dashboard() {
         <p className="text-muted mt-1 max-w-2xl text-sm leading-relaxed">
           Within your scope, in no particular order. This is a filter, not a ranking.
         </p>
-        {scoped.isPending ? (
+        {scoped.isPending || scopedClosed.isPending ? (
           <p className="text-muted mt-2 text-sm">Loading&hellip;</p>
-        ) : scoped.isError ? null : needingAttention.length === 0 ? (
+        ) : scoped.isError || scopedClosed.isError ? null : needingAttention.length === 0 ? (
           <p className="text-muted mt-2 max-w-2xl text-sm leading-relaxed">
-            Every Cell still open in your scope has recorded all of this month&rsquo;s
-            meetings. A Cell closed this month is not on this list, although section 15 asks
-            for one while its window is open.
+            No Cell on this page of your scope is missing a record for this month, closed
+            Cells included while the month is still open.
           </p>
         ) : (
           <ul className="mt-4 flex flex-col gap-3">
@@ -1076,7 +1093,11 @@ function AttentionRow({ cell, month }: { cell: CellSummary; month: string }) {
           unit="meetings recorded"
         />
       </div>
-      <p className="text-muted mt-2 text-sm">Led by {cell.leader.full_name}</p>
+      <p className="text-muted mt-2 text-sm">
+        {cell.state === 'CLOSED' && cell.closed_on
+          ? `Led by ${cell.leader.full_name} · closed ${closedOnLabel(cell.closed_on)}`
+          : `Led by ${cell.leader.full_name}`}
+      </p>
     </li>
   );
 }

@@ -239,8 +239,7 @@
     },
     {
       "route": "POST /api/v1/cells/leadership-requests",
-      "waived_to": "after the pilot — Admin screens",
-      "reason": "Request-and-approve is how a Cell is created or changes hands (§10). One branch running one month needs neither."
+      "screen": "web/components/restart-cell-dialog.tsx"
     },
     {
       "route": "GET /api/v1/cells/leadership-requests",

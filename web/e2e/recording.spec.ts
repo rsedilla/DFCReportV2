@@ -496,7 +496,7 @@ test.describe('the Record queue', () => {
     await page.goto('/dashboard');
 
     await expect(page.locator('main').getByRole('alert').first()).not.toBeEmpty();
-    await expect(page.getByText('Every Cell in your scope has recorded')).toHaveCount(0);
+    await expect(page.getByText('is missing a record for this month')).toHaveCount(0);
   });
 });
 

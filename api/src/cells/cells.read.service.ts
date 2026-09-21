@@ -1253,6 +1253,145 @@ export class CellsReadService implements CellScopePort, CellRelationshipsPort {
       memberCount: Number(row.member_count),
     }));
   }
+  /**
+   * One page of the `CLOSED` Cells whose **last** leader is one of these people, in
+   * `cell_id` order (decision 0266). `leaderIds` null means every closed Cell.
+   *
+   * **The last leader, because that is what section 7 resolves a closed Cell through.**
+   * Its base bullet falls back to the Cell's last leader where the Cell is closed, and
+   * `cell.view_subtree` is a viewing capability, which that bullet governs without the
+   * tension the closed-Cell clause raises for a write. The ordering is
+   * `leaderForScopeWithin`'s, so the leader this list names is the leader every
+   * Cell-scoped check on the same Cell resolves through.
+   *
+   * **Category and schedule are the last rows each held that were ever in force**, which a
+   * closure ends at its effective date (section 10), and which a restart request pre-fills
+   * from. **A zero-length row is excluded**, as every other configuration derivation in
+   * this file excludes one: a closure ends a configuration row at `GREATEST(effective_at,
+   * started_at)`, so a change queued for next month, or any row starting after a backdated
+   * closure's date, is left zero-length with the latest `started_at` on the Cell — and
+   * section 5 says no instant resolves to such a row. Taking it would publish a day and
+   * time the Cell never met on, beside a coverage denominator derived from the row that
+   * governed. Reproduced by `architecture-guardian` against the database.
+   */
+  async closedCellsInScope(
+    executor: Db | Transaction<Database>,
+    leaderIds: readonly string[] | null,
+    page: { limit: number; after?: string | null; search?: string | null },
+  ): Promise<
+    {
+      id: string;
+      cellId: string;
+      leaderId: string;
+      category: CellCategory;
+      dayOfWeek: number;
+      timeOfDay: string;
+      closedAt: Date;
+      closureReason: string;
+      restartedAs: string | null;
+    }[]
+  > {
+    const after = page.after ?? null;
+
+    const term =
+      page.search === null || page.search === undefined ? null : normalizeName(page.search);
+    const namePattern =
+      term === null || term === '' ? null : `%${escapeLike(term).replace(/\s+/g, '%')}%`;
+    const rawTerm = page.search === null || page.search === undefined ? null : page.search.trim();
+    const codePattern =
+      rawTerm === null || !/[0-9]/.test(rawTerm) ? null : `%${escapeLike(rawTerm.toUpperCase())}%`;
+
+    const rows = await executor
+      .selectFrom('cells')
+      .innerJoin('cell_leaderships as last_leader', (join) =>
+        join.onRef('last_leader.cell_id', '=', 'cells.id').on(
+          'last_leader.id',
+          '=',
+          sql<string>`(SELECT l.id FROM cell_leaderships AS l
+                        WHERE l.cell_id = cells.id
+                        ORDER BY l.started_at DESC, l.ended_at DESC NULLS FIRST, l.id DESC
+                        LIMIT 1)`,
+        ),
+      )
+      .innerJoin('cell_categories as last_category', (join) =>
+        join.onRef('last_category.cell_id', '=', 'cells.id').on(
+          'last_category.id',
+          '=',
+          sql<string>`(SELECT c.id FROM cell_categories AS c
+                        WHERE c.cell_id = cells.id
+                          AND c.ended_at IS DISTINCT FROM c.started_at
+                        ORDER BY c.started_at DESC, c.ended_at DESC NULLS FIRST, c.id DESC
+                        LIMIT 1)`,
+        ),
+      )
+      .innerJoin('cell_schedules as last_schedule', (join) =>
+        join.onRef('last_schedule.cell_id', '=', 'cells.id').on(
+          'last_schedule.id',
+          '=',
+          sql<string>`(SELECT sc.id FROM cell_schedules AS sc
+                        WHERE sc.cell_id = cells.id
+                          AND sc.ended_at IS DISTINCT FROM sc.started_at
+                        ORDER BY sc.started_at DESC, sc.ended_at DESC NULLS FIRST, sc.id DESC
+                        LIMIT 1)`,
+        ),
+      )
+      .leftJoin('cells as restart', 'restart.restarted_from_cell_id', 'cells.id')
+      .innerJoin('persons', 'persons.id', 'last_leader.person_id')
+      .select([
+        'cells.id as id',
+        'cells.cell_id as cell_id',
+        'last_leader.person_id as leader_id',
+        'last_category.category as category',
+        'last_schedule.day_of_week as day_of_week',
+        'last_schedule.time_of_day as time_of_day',
+        'cells.closed_at as closed_at',
+        'cells.closure_reason as closure_reason',
+        'restart.cell_id as restarted_as',
+      ])
+      .where('cells.state', '=', 'CLOSED')
+      .$if(leaderIds !== null, (query) =>
+        query.where('last_leader.person_id', 'in', leaderIds as readonly string[]),
+      )
+      .$if(after !== null, (query) => query.where('cells.cell_id', '>', after as string))
+      .$if(codePattern !== null || namePattern !== null, (query) =>
+        query.where((eb) =>
+          eb.or([
+            ...(codePattern === null
+              ? []
+              : [eb(sql<string>`upper(cells.cell_id)`, 'like', codePattern)]),
+            ...(namePattern === null
+              ? []
+              : [
+                  eb(
+                    sql<string>`lower(translate(persons.first_name || ' ' || persons.last_name, ${ACCENTED}, ${UNACCENTED}))`,
+                    'like',
+                    namePattern,
+                  ),
+                  eb(
+                    sql<string>`lower(translate(persons.last_name, ${ACCENTED}, ${UNACCENTED}))`,
+                    'like',
+                    namePattern,
+                  ),
+                ]),
+          ]),
+        ),
+      )
+      .orderBy('cells.cell_id')
+      .limit(page.limit)
+      .execute();
+
+    return rows.map((row) => ({
+      id: row.id,
+      cellId: row.cell_id,
+      leaderId: row.leader_id,
+      category: row.category,
+      dayOfWeek: Number(row.day_of_week),
+      timeOfDay: String(row.time_of_day).slice(0, 5),
+      closedAt: row.closed_at as Date,
+      closureReason: row.closure_reason as string,
+      restartedAs: row.restarted_as ?? null,
+    }));
+  }
 
   /**
    * Every meeting the month has scheduled, church-wide, each with the leader who led its
