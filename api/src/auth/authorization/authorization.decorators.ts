@@ -114,11 +114,14 @@ export function Public(reason: string): CustomDecorator<string> {
 /**
  * An endpoint that requires authentication and no capability, because it acts on
  * the caller's own session rather than on church data: reading one's own token
- * claims, signing out, ending one's own sessions.
+ * claims, signing out, ending one's own sessions. Or, since decision 0269, because it
+ * returns only records the caller's own account created: the Cell leadership
+ * requests they sent.
  *
  * This is the only way past the capability guard, and it is deliberately narrow.
- * It never covers an endpoint that reads or writes a Person, a Cell, attendance
- * or a report, whoever the subject is. The reason is required and is reviewed.
+ * Beyond those requests, which name the Person and the Cell their sender named, it
+ * never covers an endpoint that reads or writes a Person, a Cell, attendance or a
+ * report, whoever the subject is. The reason is required and is reviewed.
  */
 export function AuthenticatedOnly(reason: string): CustomDecorator<string> {
   return SetMetadata(AUTHENTICATED_ONLY_METADATA, reason);

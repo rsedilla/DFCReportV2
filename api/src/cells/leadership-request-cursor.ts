@@ -1,6 +1,6 @@
 import { unresolvableCursor } from '../common/cursor';
 
-import type { CellRequestKind } from '../database/schema';
+import type { CellDeclineReason, CellRequestKind, CellRequestState } from '../database/schema';
 import { isStorableText } from '../common/text/storable-text';
 
 /**
@@ -111,6 +111,23 @@ export interface LeadershipRequestRow {
    */
   requested_at_key: string;
   cell_id: string | null;
+}
+
+/** A request as its sender reads it back (decision 0269), paged by the same cursor. */
+export interface SentLeadershipRequestRow {
+  id: string;
+  kind: CellRequestKind;
+  state: CellRequestState;
+  prospective_leader_id: string;
+  requested_at: Date;
+  decided_at: Date | null;
+  decline_reason: CellDeclineReason | null;
+  note: string | null;
+  cell_id: string | null;
+  cell_handle: string | null;
+  restart_of_cell_id: string | null;
+  restart_of_cell_handle: string | null;
+  requested_at_key: string;
 }
 
 export function decodeLeadershipRequestCursor(

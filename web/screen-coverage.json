@@ -242,6 +242,10 @@
       "screen": "web/components/restart-cell-dialog.tsx"
     },
     {
+      "route": "GET /api/v1/cells/leadership-requests/sent",
+      "screen": "web/components/sent-requests.tsx"
+    },
+    {
       "route": "GET /api/v1/cells/leadership-requests",
       "waived_to": "after the pilot — Admin screens",
       "reason": "The Admin queue §19 describes. It pairs with the approve and decline routes below."

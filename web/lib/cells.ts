@@ -428,6 +428,47 @@ export async function listMeetingsAwaiting(
   );
 }
 
+/** A Cell leadership request as its sender reads it back (decision 0269). */
+export interface SentRequest {
+  id: string;
+  kind: 'NEW_CELL' | 'HANDOVER';
+  state: 'PENDING' | 'APPROVED' | 'DECLINED';
+  requested_at: string;
+  decided_at: string | null;
+  prospective_leader: { person_id: string; full_name: string };
+  cell: { id: string; cell_id: string | null } | null;
+  restart_of: { id: string; cell_id: string | null } | null;
+  decline_reason:
+    | 'LEADER_DEVELOPMENT_CONTINUING'
+    | 'TIMING_DEFERRED'
+    | 'DUPLICATE_REQUEST'
+    | 'SUBMITTED_IN_ERROR'
+    | 'OTHER'
+    | null;
+  note: string | null;
+}
+
+/**
+ * The requests the signed-in account sent, pending or decided within 30 days, every
+ * page. A sender has sent few, so the whole list is read rather than offered a pager.
+ */
+export async function listSentRequests(signal?: AbortSignal): Promise<SentRequest[]> {
+  const requests: SentRequest[] = [];
+  let cursor: string | null = null;
+
+  do {
+    const query = new URLSearchParams(cursor === null ? {} : { cursor });
+    const page: { data: SentRequest[]; next_cursor: string | null } = await authenticatedRequest(
+      `/api/v1/cells/leadership-requests/sent${query.size > 0 ? `?${query.toString()}` : ''}`,
+      { signal },
+    );
+    requests.push(...page.data);
+    cursor = page.next_cursor;
+  } while (cursor !== null);
+
+  return requests;
+}
+
 /**
  * One Cell's scheduled and recorded meetings for a month.
  *

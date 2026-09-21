@@ -16,6 +16,7 @@ import {
   ValidationFailedError,
 } from '../common/errors/api-error';
 import { NIL_UUID, sameId } from '../common/identifiers';
+import { databaseNow } from '../common/time/submission-window';
 import { IdempotencyService } from '../common/idempotency/idempotency.service';
 import { CellLock, lockCellsWithin } from '../database/cell-lock';
 import { DATABASE, type Db } from '../database/database.module';
@@ -39,6 +40,9 @@ import type {
   Database,
 } from '../database/schema';
 import type { Transaction } from 'kysely';
+
+/** How long a decided request stays in its sender's list (decision 0269). */
+const SENT_REQUESTS_KEPT_MS = 30 * 24 * 60 * 60 * 1000;
 
 /** The columns approval reads from a `PENDING` request under its row lock. */
 interface PendingRequest {
@@ -779,6 +783,58 @@ export class CellsLeadershipRequestService {
               requestedAt: last.requested_at_key,
               id: last.id,
             })
+          : null,
+    };
+  }
+
+  /**
+   * The requests this account sent, pending or decided within the last 30 days
+   * (decision 0269, section 19): what the sender reads back, and nothing more.
+   *
+   * **Keyed on `requested_by`, which is the whole authorization.** Section 7 lets an
+   * account read the requests it sent with no capability, so this answers only the
+   * caller's own rows and never takes an identifier from the request.
+   */
+  async sentBy(
+    actor: Actor,
+    page: { limit?: number; cursor?: string },
+  ): Promise<{ data: Record<string, unknown>[]; next_cursor: string | null }> {
+    const limit = page.limit ?? 50;
+    const now = await databaseNow(this.db);
+    const since = new Date(now.getTime() - SENT_REQUESTS_KEPT_MS);
+
+    const rows = await this.cells.requestsSentByWithin(this.db, actor.accountId, since, {
+      limit: limit + 1,
+      after: decodeLeadershipRequestCursor(page.cursor),
+    });
+
+    const visible = rows.slice(0, limit);
+    const names = await this.people.namesOf(visible.map((row) => row.prospective_leader_id));
+    const last = visible.at(-1);
+
+    return {
+      data: visible.map((row) => ({
+        id: row.id,
+        kind: row.kind,
+        state: row.state,
+        requested_at: row.requested_at.toISOString(),
+        decided_at: row.decided_at?.toISOString() ?? null,
+        prospective_leader: {
+          person_id: row.prospective_leader_id,
+          full_name: names.get(row.prospective_leader_id)?.fullName ?? '',
+        },
+        // A handover's Cell, or the Cell an approved new-Cell request minted.
+        cell: row.cell_id === null ? null : { id: row.cell_id, cell_id: row.cell_handle },
+        restart_of:
+          row.restart_of_cell_id === null
+            ? null
+            : { id: row.restart_of_cell_id, cell_id: row.restart_of_cell_handle },
+        decline_reason: row.decline_reason,
+        note: row.note,
+      })),
+      next_cursor:
+        rows.length > limit && last !== undefined
+          ? encodeLeadershipRequestCursor({ requestedAt: last.requested_at_key, id: last.id })
           : null,
     };
   }

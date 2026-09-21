@@ -43,7 +43,9 @@ import type { Target } from './scopes';
  * Two decorators pass an endpoint through without a capability, and both name
  * their reason where they are written: `@Public` for sign-in and the password
  * flows, and `@AuthenticatedOnly` for an endpoint acting on the caller's own
- * session. Neither ever covers an endpoint that touches church data.
+ * session or returning only the Cell leadership requests their account sent
+ * (decision 0269). Beyond those requests, neither covers an endpoint that touches
+ * church data.
  */
 @Injectable()
 export class CapabilityGuard implements CanActivate {
