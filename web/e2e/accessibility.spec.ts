@@ -1795,13 +1795,7 @@ test('a Cell meeting screen marks Record as the current page, not Cells', async 
   await expect(current).toHaveText('Record');
 });
 
-/**
- * A reader without a whole-church reporting grant sees Record first.
- *
- * The shared fixture reads reports over one Network, which is not Whole Church, so this
- * is the leader arrangement of decision 0245. It is pinned beside the whole-church case
- * below so that the two arrangements are asserted as a pair and cannot quietly converge.
- */
+/** A reader without a whole-church reporting grant sees Record first (decision 0277). */
 test('a reader without a whole-church grant sees Record first', async ({ page }) => {
   await mockSignedIn(page);
   await mockPeople(page);
@@ -1820,16 +1814,12 @@ test('a reader without a whole-church grant sees Record first', async ({ page })
 });
 
 /**
- * A whole-church reader sees Reports first, and Reports opens on the DCC figures.
- *
- * **Nothing else reaches this arrangement.** Before `mockWholeChurchReader` existed the
- * only account in the suite read reports over one Network, so the order decision 0245
- * gives the two Senior Pastors and Admin, and where their Reports item leads, were
- * untested. Where they *land* is a separate question with its own cases below.
- * The href is asserted separately from the order: a report that moved would otherwise
- * pass as long as the labels stayed put.
+ * A whole-church reader sees the same order (decision 0277), and Reports opens on the DCC
+ * figures. Where they *land* is a separate question with its own cases below.
  */
-test('a whole-church reader sees Reports first, opening on the DCC figures', async ({ page }) => {
+test('a whole-church reader sees the same order, Reports opening on the DCC figures', async ({
+  page,
+}) => {
   await mockSignedIn(page);
   await mockWholeChurchReader(page);
   await mockPeople(page);
@@ -1839,49 +1829,16 @@ test('a whole-church reader sees Reports first, opening on the DCC figures', asy
   const navigation = page.getByRole('navigation', { name: 'Main' });
 
   await expect(navigation.getByRole('link')).toHaveText([
-    'Reports',
     'Record',
-    'Network',
+    'Reports',
     'People',
     'Cells',
+    'Network',
   ]);
   await expect(navigation.getByRole('link', { name: 'Reports', exact: true })).toHaveAttribute(
     'href',
     '/reports/dcc',
   );
-});
-
-/**
- * The navigation renders nothing until the account is described.
- *
- * **Its arrangement depends on the account**, so rendering a guess first would move
- * links under a whole-church reader's pointer as the page loads. `/auth/me` is held
- * here until the shell is on screen, which is the window a slow phone lives in: the
- * footer's account link is there, and no navigation landmark is. Releasing the answer
- * then brings the whole arrangement in at once.
- */
-test('the navigation renders nothing until the account is described', async ({ page }) => {
-  await mockSignedIn(page);
-  await mockPeople(page);
-
-  let answer = () => {};
-  const described = new Promise<void>((resolve) => {
-    answer = resolve;
-  });
-
-  await page.route('**/api/v1/auth/me', async (route) => {
-    await described;
-    await route.fallback();
-  });
-
-  await page.goto('/people');
-
-  await expect(page.getByRole('link', { name: 'Account and session' })).toBeVisible();
-  await expect(page.getByRole('navigation', { name: 'Main' })).toHaveCount(0);
-
-  answer();
-
-  await expect(page.getByRole('navigation', { name: 'Main' }).getByRole('link')).toHaveCount(5);
 });
 
 /**

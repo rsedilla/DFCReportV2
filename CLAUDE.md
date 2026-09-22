@@ -243,9 +243,10 @@ rewritten to remove that language, because resolving each by inference is how a
 false cross-reference gets introduced, and this log records enough of those
 already. Each file carries previous/next links instead, so a positional reference
 resolves exactly as well as it did in the single file and no better. *Recounted on
-2026-09-22, the trigger being decision 0276: of 275 files, 274 carry `Previous:`, 181 carry
-`Next:`, and 180 carry both on one line. 0213 through 0276 each moved the first two and
+2026-09-22, the trigger being decision 0277: of 276 files, 275 carry `Previous:`, 181 carry
+`Next:`, and 180 carry both on one line. 0213 through 0277 each moved the first two and
 neither of the others, none of them carrying a `Next:`. The recount before this one was dated
+2026-09-22 and triggered by 0276, and was left stale by 0277 the same day. The one before that was dated
 2026-09-22 and triggered by 0275, and was left stale by 0276 the same day. The one before that was dated
 2026-09-22 and triggered by 0274, and was left stale by 0275 the same day. The one before that was dated
 2026-09-22 and triggered by 0273, and was left stale by 0274 the same day. The one before that was dated
@@ -597,6 +598,7 @@ one, in the paragraph whose subject is false cross-references, and
 - 2026-09-22 — [Any current Person may have run a Cell meeting, and the screen asks](docs/decisions/0274-any-current-person-may-have-run-a-cell-meeting.md)
 - 2026-09-22 — [A refusal names where it is, and the screen names the line](docs/decisions/0275-a-refusal-names-where-it-is.md)
 - 2026-09-22 — [An administrator gives a person an account from their page](docs/decisions/0276-an-administrator-gives-an-account-from-the-person-page.md)
+- 2026-09-22 — [One sidebar order for every account](docs/decisions/0277-one-sidebar-order-for-every-account.md)
 
 ### Open — awaiting a ruling
 

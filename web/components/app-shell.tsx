@@ -15,7 +15,7 @@ import Link from 'next/link';
 import type { ReactNode } from 'react';
 
 import { RequireSession } from '@/components/require-session';
-import { RECORD_PATH, REPORTS_PATH, readsWholeChurch } from '@/lib/landing';
+import { RECORD_PATH, REPORTS_PATH } from '@/lib/landing';
 import { getMe } from '@/lib/me';
 import { cn } from '@/lib/utils';
 
@@ -131,10 +131,8 @@ export const PAGE_WIDTH = {
  * navigation has to be computed on every page load and arrives stripped of the
  * scope and period that make it readable.
  *
- * **Which arrangement a person sees follows the reach of `reports.view_subtree`**,
- * not a role, because section 7 makes a capability and its scope the thing that
- * decides. The rule lives in `lib/landing.ts` beside the landing path it also
- * decides, so the first item and the screen a person lands on cannot disagree.
+ * **One order for every account** (decision 0277). Where a person lands still follows
+ * the reach of `reports.view_subtree`, and that rule lives in `lib/landing.ts`.
  *
  * **Two arrangements by width, one navigation** (UI-2, owner's choices of
  * 2026-09-15). Below `lg` (1024px) — phones and tablets — the items are a tab bar
@@ -151,16 +149,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   // request per page.
   const me = useQuery({ queryKey: ['me'], queryFn: ({ signal }) => getMe(signal) });
 
-  // **No item renders until the account is described.** The arrangement depends on
-  // it, so rendering the leader order first would move links under a whole-church
-  // reader's pointer and focus on every page load. A failed request falls back to
-  // the leader order, as landing falls back to Record, and if a later refetch then
-  // succeeds for a whole-church reader the navigation reorders once. That is
-  // accepted because it follows a failure rather than every load.
-  const ordered = readsWholeChurch(me.data)
-    ? [REPORTS, RECORD, NETWORK, PEOPLE, CELLS]
-    : [RECORD, REPORTS, PEOPLE, CELLS, NETWORK];
-  const links = me.isPending ? [] : ordered;
+  const links = [RECORD, REPORTS, PEOPLE, CELLS, NETWORK];
 
   // **One entry is current, and it is the one whose match covers most of the address.**
   //
@@ -268,25 +257,18 @@ export function AppShell({ children }: { children: ReactNode }) {
               {APPLICATION_NAME}
             </p>
 
-            {/*
-              **No empty landmark.** While the account loads there are no items, and a
-              navigation landmark named Main with nothing in it is announced as
-              navigation offering nothing, so it is not rendered until it has links.
-            */}
-            {links.length > 0 ? (
-              <nav
-                aria-label="Main"
-                className={cn(
-                  'bg-surface border-edge fixed inset-x-0 bottom-0 z-30 flex border-t',
-                  // The phone's home indicator sits over the bottom few pixels; the
-                  // inset is zero wherever there is none.
-                  'pb-[env(safe-area-inset-bottom)]',
-                  'lg:static lg:flex-col lg:gap-0.5 lg:border-t-0 lg:bg-transparent lg:pb-0',
-                )}
-              >
-                {links.map((link) => renderItem(link))}
-              </nav>
-            ) : null}
+            <nav
+              aria-label="Main"
+              className={cn(
+                'bg-surface border-edge fixed inset-x-0 bottom-0 z-30 flex border-t',
+                // The phone's home indicator sits over the bottom few pixels; the
+                // inset is zero wherever there is none.
+                'pb-[env(safe-area-inset-bottom)]',
+                'lg:static lg:flex-col lg:gap-0.5 lg:border-t-0 lg:bg-transparent lg:pb-0',
+              )}
+            >
+              {links.map((link) => renderItem(link))}
+            </nav>
 
             {/*
               **The account is not a navigation item** (ruling of 2026-09-14). At `lg`
