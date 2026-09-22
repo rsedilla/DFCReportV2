@@ -53,19 +53,16 @@ import { dayLabel, todayInManila } from '@/lib/reporting-month';
  * **A Cell that did not meet says why.** Section 13 requires a reason, and a reason of
  * `OTHER` requires a note saying what happened; Save waits for both.
  *
- * **A recorded meeting is shown as it stands, and correcting it is a deliberate step
- * that corrects the marks and nothing else.** Section 7 guards amending a submitted
+ * **A recorded meeting is shown as it stands, and correcting it is a deliberate step.**
+ * Section 7 guards amending a submitted
  * record with `cell.correct_subtree`, separately from `cell.take_attendance`, so
  * "Edit this record" is offered to an account holding that capability and the marks
  * are read-only until it is pressed. That is a courtesy and never the control: the API
  * resolves the capability against this meeting (section 1, principle 4).
  *
- * While correcting, the status stays the one recorded and is not offered for change.
- * Decision 0195 admits only the transitions section 13 names, none of them from `HELD`
- * to `NOT_HELD` or back, and changing a status recorded in error is an operation
- * section 13 does not define and `CLAUDE.md` records as open. A meeting recorded as
- * **not held** carries no marks to correct and its reason is not changed on this route,
- * so it is shown read-only with no edit offered.
+ * **While correcting, whether it met may be corrected too, with a reason** (decision
+ * 0273): Met ↔ Did not meet, and the first report stays in the meeting's history. A
+ * rescheduled meeting keeps its status here; moving it is its own operation.
  *
  * **The marks the roster carries are shown, which is the whole reason they exist.**
  * Decision 0223 gave the roster each member's mark precisely so that a correction
@@ -127,6 +124,8 @@ function RecordMeeting() {
   const [note, setNote] = useState('');
   const [correctionReason, setCorrectionReason] = useState('');
   const [editing, setEditing] = useState(false);
+  // A corrected answer to "did it meet", while editing a Met or Did-not-meet record.
+  const [statusFix, setStatusFix] = useState<'HELD' | 'NOT_HELD' | null>(null);
 
   // The Cell's category for the line under the date. Same capability as the roster, but
   // resolved against the Cell rather than the meeting, so a leader who led on the meeting's
@@ -170,8 +169,15 @@ function RecordMeeting() {
     [edits],
   );
 
-  // The recorded status while correcting, and the leader's choice on a first record.
-  const status: CellMeetingStatus = recorded?.status ?? statusChoice ?? 'HELD';
+  // Only a Met or Did-not-meet record may have its status corrected (decision 0273).
+  const statusEditable =
+    editing && (recorded?.status === 'HELD' || recorded?.status === 'NOT_HELD');
+
+  // The leader's choice on a first record; the recorded status, or its correction, after.
+  const status: CellMeetingStatus =
+    (statusEditable ? statusFix : null) ?? recorded?.status ?? statusChoice ?? 'HELD';
+  const statusChanged = recorded !== null && status !== recorded.status;
+  const reasonMissing = statusChanged && correctionReason.trim() === '';
   const unmarked = members.filter((member) => markFor(member) === undefined);
   const noteRequired = notHeldReason === 'OTHER';
 
@@ -181,25 +187,32 @@ function RecordMeeting() {
     }
 
     if (status === 'NOT_HELD') {
-      // Only a first record reaches here: a meeting recorded not held is read-only.
-      if (recorded !== null || notHeldReason === '' || (noteRequired && note.trim() === '')) {
+      // A first record, or a Met record corrected to Did not meet (decision 0273).
+      if (
+        (recorded !== null && !statusChanged) ||
+        reasonMissing ||
+        notHeldReason === '' ||
+        (noteRequired && note.trim() === '')
+      ) {
         return null;
       }
 
       return {
         status,
+        version: recorded?.version,
         not_held_reason: notHeldReason,
         not_held_note: note.trim() || undefined,
+        correction_reason: statusChanged ? correctionReason.trim() : undefined,
       };
     }
 
-    if (unmarked.length > 0) {
+    if (unmarked.length > 0 || reasonMissing) {
       return null;
     }
 
     return {
       status,
-      submitted_version: recorded?.version,
+      version: recorded?.version,
       attendance: members.map((member) => ({
         person_id: member.person_id,
         present: markFor(member) === 'present',
@@ -218,6 +231,8 @@ function RecordMeeting() {
     markFor,
     correcting,
     correctionReason,
+    statusChanged,
+    reasonMissing,
   ]);
 
   // Derived from the body rather than generated per attempt (decision 0127): the
@@ -232,6 +247,7 @@ function RecordMeeting() {
     setEditing(false);
     setEdits({});
     setStatusChoice(null);
+    setStatusFix(null);
     setNotHeldReason('');
     setNote('');
     setCorrectionReason('');
@@ -355,24 +371,15 @@ function RecordMeeting() {
             </p>
           ) : null}
 
-          {recorded !== null && recordedNotHeld ? (
-            <div className="border-edge mt-6 border p-4">
-              <p className="text-sm font-bold">Did not meet</p>
-              <p className="mt-1 text-sm">Why: {notHeldReasonLabel(recorded.not_held_reason)}</p>
-              {recorded.not_held_note ? (
-                <p className="text-muted mt-1 text-sm leading-relaxed">{recorded.not_held_note}</p>
-              ) : null}
-              <p className="text-muted mt-3 text-sm leading-relaxed">
-                A meeting recorded as not meeting is not changed from this screen.
-              </p>
-            </div>
-          ) : correcting ? (
+          {correcting ? (
             <div className="border-edge mt-6 border p-4">
               {editing ? (
                 <>
                   <p className="text-sm font-bold">Editing the recorded meeting</p>
                   <p className="text-muted mt-1 text-sm leading-relaxed">
-                    Saving replaces the marks already recorded.
+                    {statusEditable
+                      ? 'Saving replaces what is recorded. If whether it met was recorded wrongly, change the answer below and say why: the first report is kept in the meeting’s history.'
+                      : 'Saving replaces the marks already recorded.'}
                   </p>
                   <Button variant="quiet" className="mt-3" onClick={stopEditing}>
                     Stop editing
@@ -380,8 +387,26 @@ function RecordMeeting() {
                 </>
               ) : (
                 <>
-                  <p className="text-sm font-bold">Already recorded</p>
-                  <p className="text-muted mt-1 text-sm">{recordedSummary(recorded, members)}</p>
+                  {recordedNotHeld ? (
+                    <>
+                      <p className="text-sm font-bold">Did not meet</p>
+                      <p className="mt-1 text-sm">
+                        Why: {notHeldReasonLabel(recorded.not_held_reason)}
+                      </p>
+                      {recorded.not_held_note ? (
+                        <p className="text-muted mt-1 text-sm leading-relaxed">
+                          {recorded.not_held_note}
+                        </p>
+                      ) : null}
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-sm font-bold">Already recorded</p>
+                      <p className="text-muted mt-1 text-sm">
+                        {recordedSummary(recorded, members)}
+                      </p>
+                    </>
+                  )}
                   {me.data ? (
                     canCorrect ? (
                       <Button variant="secondary" className="mt-3" onClick={() => setEditing(true)}>
@@ -399,14 +424,14 @@ function RecordMeeting() {
             </div>
           ) : null}
 
-          {/* Offered on a first record only; a correction keeps the status recorded. */}
-          {correcting ? null : (
+          {/* On a first record, and while correcting a Met or Did-not-meet record. */}
+          {correcting && !statusEditable ? null : (
             <div className="mt-8">
               <RadioGroup
                 legend="Did the meeting take place?"
                 name="status"
                 value={status === 'NOT_HELD' ? 'NOT_HELD' : 'HELD'}
-                onChange={setStatusChoice}
+                onChange={correcting ? setStatusFix : setStatusChoice}
                 options={[
                   // Section 13 fixes these labels so wording cannot drift between screens.
                   { value: 'HELD', label: 'Met' },
@@ -417,7 +442,7 @@ function RecordMeeting() {
           )}
 
           {status === 'NOT_HELD' ? (
-            recorded === null ? (
+            recorded === null || statusChanged ? (
               <div className="mt-6 flex flex-col gap-6">
                 <RadioGroup
                   legend="Why did it not meet?"
@@ -478,24 +503,25 @@ function RecordMeeting() {
                   ))}
                 </ul>
               )}
-
-              {correcting && editing ? (
-                <div className="mt-6">
-                  <label htmlFor="correction-reason" className="field-label block">
-                    Why is this changing? (optional)
-                  </label>
-                  <textarea
-                    id="correction-reason"
-                    value={correctionReason}
-                    onChange={(event) => setCorrectionReason(event.target.value)}
-                    rows={2}
-                    maxLength={500}
-                    className="border-edge focus-visible:outline-accent mt-2 w-full border px-3 py-2 text-sm focus-visible:outline-2 focus-visible:outline-offset-2"
-                  />
-                </div>
-              ) : null}
             </section>
           )}
+
+          {correcting && editing ? (
+            <div className="mt-6">
+              <label htmlFor="correction-reason" className="field-label block">
+                {statusChanged ? 'Why is this being corrected?' : 'Why is this changing? (optional)'}
+              </label>
+              <textarea
+                id="correction-reason"
+                value={correctionReason}
+                onChange={(event) => setCorrectionReason(event.target.value)}
+                rows={2}
+                maxLength={500}
+                required={statusChanged}
+                className="border-edge focus-visible:outline-accent mt-2 w-full border px-3 py-2 text-sm focus-visible:outline-2 focus-visible:outline-offset-2"
+              />
+            </div>
+          ) : null}
 
           {/*
             **Save stays in reach on a phone.** The bar is pinned to the bottom of the
@@ -508,17 +534,21 @@ function RecordMeeting() {
           {locked ? null : (
             <div className="border-edge bg-surface sticky bottom-[calc(3.5625rem+env(safe-area-inset-bottom))] z-20 -mx-5 mt-8 flex flex-col gap-2 border-t px-5 py-3 sm:flex-row sm:items-center sm:justify-between lg:bottom-0">
               <p aria-live="polite" className="text-sm">
-                {status === 'NOT_HELD'
-                  ? notHeldReason === ''
-                    ? 'Choose why it did not meet.'
-                    : noteRequired && note.trim() === ''
-                      ? 'Say what happened to save.'
-                      : 'Ready to save.'
-                  : unmarked.length === 0
-                    ? `All ${members.length} members marked.`
-                    : unmarked.length === 1
-                      ? '1 member still to mark.'
-                      : `${unmarked.length} members still to mark.`}
+                {reasonMissing
+                  ? 'Say why this is being corrected to save.'
+                  : recordedNotHeld && !statusChanged
+                    ? 'Change the answer above to correct it.'
+                    : status === 'NOT_HELD'
+                      ? notHeldReason === ''
+                        ? 'Choose why it did not meet.'
+                        : noteRequired && note.trim() === ''
+                          ? 'Say what happened to save.'
+                          : 'Ready to save.'
+                      : unmarked.length === 0
+                        ? `All ${members.length} members marked.`
+                        : unmarked.length === 1
+                          ? '1 member still to mark.'
+                          : `${unmarked.length} members still to mark.`}
               </p>
               <div className="flex flex-col-reverse gap-2 sm:flex-row sm:items-center">
                 <Link

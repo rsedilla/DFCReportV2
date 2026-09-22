@@ -268,6 +268,7 @@ export type AuditAction =
   // meeting resolves through the Cell.
   | 'cell_meeting.rescheduled'
   | 'cell_meeting.not_held'
+  | 'cell_meeting.status_corrected'
   // The DCC half, targeting the Person for the reason its twins do: a DCC event is
   // church-wide and resolves through nothing, so the Person is what a reader can
   // resolve an entry against (sections 9 and 21, decision 0189).

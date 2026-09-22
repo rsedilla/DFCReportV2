@@ -132,7 +132,10 @@ export class SubmitCellMeetingDto {
   /**
    * Why an already-recorded meeting is being changed (section 14).
    *
-   * Optional, matching `cell_attendance.correction_reason`. Section 14 asks for a reason
+   * Required on a status correction, `HELD` ↔ `NOT_HELD` (decision 0273), which the service
+   * enforces because only it knows what is stored.
+   *
+   * Otherwise optional, matching `cell_attendance.correction_reason`. Section 14 asks for a reason
    * "as appropriate" rather than always: a submission is a whole roster, and requiring one
    * per changed line would put a dialog in front of a leader who noticed one mistake in
    * twenty names.

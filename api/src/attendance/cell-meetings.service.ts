@@ -104,6 +104,8 @@ type MeetingOperation =
   | { kind: 'correction' }
   | { kind: 'reschedule'; actualDate: string }
   | { kind: 'declare_not_held' }
+  /** `HELD` ↔ `NOT_HELD`: the first report was wrong (decision 0273). */
+  | { kind: 'correct_status' }
   | { kind: 'refused'; error: ApiError };
 
 function classifyOperation(
@@ -158,9 +160,8 @@ function classifyOperation(
     // Section 13 requires the reason and section 21 audits it, so silently discarding one
     // is the worst of the three available answers.
     //
-    // Refused rather than applied: changing it is a claim that the first record was wrong,
-    // which is the operation section 13 does not define and `CLAUDE.md` records as open.
-    // An identical resubmission is still a no-op success, because nothing changed.
+    // Refused rather than applied: decision 0273 corrects whether a meeting took place, not
+    // why it did not. An identical resubmission is still a no-op success.
     if (
       storedStatus === 'NOT_HELD' &&
       body.not_held_reason !== undefined &&
@@ -169,14 +170,30 @@ function classifyOperation(
       return {
         kind: 'refused',
         error: new InvariantViolationError(
-          'Changing why a meeting was not held is a correction of the original report, ' +
-            'and this route does not make one (SKILL.md section 13).',
+          'Changing why a meeting was not held is not something this route does (SKILL.md ' +
+            'section 13).',
           details,
         ),
       };
     }
 
     return { kind: 'correction' };
+  }
+
+  // **A status recorded in error is corrected with a reason** (decision 0273). Not a move:
+  // the meeting did not change, the first report was wrong, so the reason is required.
+  if (isStatusCorrection(storedStatus, body.status)) {
+    if (body.correction_reason === undefined) {
+      return {
+        kind: 'refused',
+        error: new InvariantViolationError(
+          'Correcting whether a meeting took place requires a reason (SKILL.md section 13).',
+          details,
+        ),
+      };
+    }
+
+    return { kind: 'correct_status' };
   }
 
   if (body.status !== storedStatus && !isLegalTransition(storedStatus, body.status)) {
@@ -344,27 +361,25 @@ function isLegalTransition(from: string, to: string): boolean {
 }
 
 /**
+ * The two status corrections (decision 0273). A rescheduled meeting is left out: it
+ * already has its own move to `NOT_HELD`, and `RESCHEDULED` counts as held (section 12).
+ */
+function isStatusCorrection(from: string, to: string): boolean {
+  return (from === 'HELD' && to === 'NOT_HELD') || (from === 'NOT_HELD' && to === 'HELD');
+}
+
+/**
  * Why this particular change is refused, rather than one message for all of them.
  *
  * A leader meeting a refusal needs to know whether they asked for something this domain
- * does not do or something it does elsewhere, and the two illegal cases fail for different
- * reasons — one contradicts a fact already recorded, the other is a claim that a record was
- * wrong, which is a different operation from a move (section 13, and recorded as open in
- * `CLAUDE.md`).
+ * does not do or something it does another way: a `NOT_HELD` meeting cannot be moved, and
+ * if it did take place the answer is a status correction (decision 0273).
  */
 function transitionRefusal(from: string, to: string): string {
   if (from === 'NOT_HELD') {
     return (
-      'This meeting was reported as not held, and not being made up. It cannot be moved ' +
-      'or reported as held afterwards (SKILL.md section 13).'
-    );
-  }
-
-  if (from === 'HELD' && to === 'NOT_HELD') {
-    return (
-      'A meeting already reported as held cannot be changed to not held: that is a ' +
-      'correction of the original report rather than a change to the meeting, and this ' +
-      'route does not make one (SKILL.md section 13).'
+      'This meeting was reported as not held, and not being made up, so it cannot be ' +
+      'moved. If it did take place, correct it to held with a reason (SKILL.md section 13).'
     );
   }
 
@@ -1714,6 +1729,7 @@ export class CellMeetingsService implements RecordedMeetingsPort {
   ): Promise<CellMeetingSubmissionResponse> {
     const { cellId, cell, meetingId, existing, body, actor, operation } = params;
     const toRescheduled = operation.kind === 'reschedule';
+    const correctingStatus = operation.kind === 'correct_status';
 
     // **The reason and its note, which section 13 requires of `NOT_HELD` and the DTO
     // cannot.** Both fields are optional there because a first submission of `HELD` carries
@@ -1839,10 +1855,14 @@ export class CellMeetingsService implements RecordedMeetingsPort {
     // **The roster of the day it moved to** (section 12), which is the ruling. On a
     // `NOT_HELD` transition there is no roster at all: the meeting did not happen, so
     // there is nobody to have been absent from it.
+    // A correction to `HELD` takes the scheduled date's roster, as a first submission does:
+    // a `NOT_HELD` meeting has no actual date (decision 0273).
     const roster =
       operation.kind === 'reschedule'
         ? await this.cells.membersAsOfWithin(trx, cellId, operation.actualDate)
-        : [];
+        : correctingStatus && body.status === 'HELD'
+          ? await this.cells.membersAsOfWithin(trx, cellId, meetingId)
+          : [];
 
     // **A date the Cell had nobody on is not a date it could have met on.** Section 12
     // takes the roster from the actual date, and an empty one makes every check below
@@ -1959,7 +1979,14 @@ export class CellMeetingsService implements RecordedMeetingsPort {
     // row below come from here, and the actual time defaults from it.
     const before = await trx
       .selectFrom('cell_meetings')
-      .select(['scheduled_date', 'scheduled_time', 'actual_date', 'actual_time'])
+      .select([
+        'scheduled_date',
+        'scheduled_time',
+        'actual_date',
+        'actual_time',
+        'not_held_reason',
+        'not_held_note',
+      ])
       .where('id', '=', existing.id)
       .executeTakeFirstOrThrow();
 
@@ -1995,8 +2022,9 @@ export class CellMeetingsService implements RecordedMeetingsPort {
         ...(toRescheduled
           ? { actual_date: body.actual_date, actual_time: actualTime }
           : {
-              not_held_reason: body.not_held_reason ?? null,
-              not_held_note: body.not_held_note ?? null,
+              // Only a `NOT_HELD` meeting carries these; a correction to `HELD` clears them.
+              not_held_reason: body.status === 'NOT_HELD' ? (body.not_held_reason ?? null) : null,
+              not_held_note: body.status === 'NOT_HELD' ? (body.not_held_note ?? null) : null,
               // **The actual date is cleared, and the schema is what says so.**
               // `cell_meetings_actual_date_iff_rescheduled` checks
               // `(status = 'RESCHEDULED') = (actual_date IS NOT NULL)`, so a moved meeting
@@ -2035,7 +2063,7 @@ export class CellMeetingsService implements RecordedMeetingsPort {
         from_time: fromTime,
         to_date: toRescheduled ? (body.actual_date as string) : null,
         to_time: actualTime,
-        reason: toRescheduled ? null : (body.not_held_reason ?? null),
+        reason: body.status === 'NOT_HELD' ? (body.not_held_reason ?? null) : null,
         // **Section 13's fifth thing, which had nowhere to go until migration 0014.** A
         // rescheduled meeting must preserve "original scheduled date/time, new scheduled
         // date/time, optional note/context, who rescheduled it, timestamp". This row
@@ -2055,24 +2083,49 @@ export class CellMeetingsService implements RecordedMeetingsPort {
         // note only where the reason is `OTHER`, so `LEADER_UNAVAILABLE` with a note of
         // `"   "` stored the whitespace, in the commit whose own ruling is that one rule
         // enforced on one of two paths is the defect.
-        note: toRescheduled ? (body.correction_reason ?? null) : (body.not_held_note ?? null),
+        // A status correction's note is why the first report was wrong (decision 0273).
+        note:
+          toRescheduled || correctingStatus
+            ? (body.correction_reason ?? null)
+            : (body.not_held_note ?? null),
         actor_id: actor.accountId,
       } as never)
       .execute();
 
     await this.audit.writeWithin(trx, {
       actorId: actor.accountId,
-      action: toRescheduled ? 'cell_meeting.rescheduled' : 'cell_meeting.not_held',
+      action: correctingStatus
+        ? 'cell_meeting.status_corrected'
+        : toRescheduled
+          ? 'cell_meeting.rescheduled'
+          : 'cell_meeting.not_held',
       targetType: 'cell',
       targetId: cellId,
-      reason: toRescheduled ? null : (body.not_held_reason ?? null),
-      before: { meeting_id: meetingId, status: existing.status },
+      reason: correctingStatus
+        ? (body.correction_reason ?? null)
+        : toRescheduled
+          ? null
+          : (body.not_held_reason ?? null),
+      // A correction to `HELD` clears the reason and note on the meeting row, so the
+      // previous values are kept here (section 21) and the first report stays legible.
+      before: {
+        meeting_id: meetingId,
+        status: existing.status,
+        ...(existing.status === 'NOT_HELD'
+          ? { not_held_reason: before.not_held_reason, not_held_note: before.not_held_note }
+          : {}),
+      },
       after: {
         meeting_id: meetingId,
         status: body.status,
         ...(toRescheduled
           ? { actual_date: body.actual_date as string, recorded: attendance.length }
-          : { not_held_reason: body.not_held_reason ?? null }),
+          : body.status === 'NOT_HELD'
+            ? {
+                not_held_reason: body.not_held_reason ?? null,
+                not_held_note: body.not_held_note ?? null,
+              }
+            : { recorded: attendance.length }),
       },
     });
 
@@ -2183,8 +2236,7 @@ export class CellMeetingsService implements RecordedMeetingsPort {
     //
     // **What that answer should be changed with decision 0195**, and this method asserted
     // the withdrawn rule until 2026-09-04: it returned "a status change is a separate
-    // operation", which section 13 no longer says. Four transitions are legal now, so a
-    // status disagreement after a lost race is one of two things.
+    // operation", which section 13 no longer says.
     // **The same question, asked of the committed state**, which is what section 22 means
     // by "the loser re-reads the committed state and answers on what it finds". Asking it
     // through `classifyOperation` rather than by comparing statuses here is the whole

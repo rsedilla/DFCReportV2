@@ -531,7 +531,7 @@ export interface CellSubmission {
    * opposite of the DCC side, where a church-wide event means two leaders recording
    * different people must never conflict.
    */
-  submitted_version?: number;
+  version?: number;
   attendance?: { person_id: string; present: boolean }[];
   correction_reason?: string;
   not_held_reason?: string;
