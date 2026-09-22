@@ -6,6 +6,7 @@ import { useParams } from 'next/navigation';
 import { useCallback, useMemo, useState } from 'react';
 
 import { AppShell, PAGE_WIDTH } from '@/components/app-shell';
+import { PersonPicker } from '@/components/person-picker';
 import { Button } from '@/components/ui/button';
 import { FailureNotice } from '@/components/ui/failure-notice';
 import { RadioGroup, type RadioOption } from '@/components/ui/radio-group';
@@ -49,6 +50,10 @@ import { dayLabel, todayInManila } from '@/lib/reporting-month';
  * **A meeting whose day has not come offers no record.** Decision 0238 refuses one
  * before the day begins in Manila, so the screen says "Not yet" rather than offering a
  * Save the API would refuse.
+ *
+ * **Who ran it defaults to the leader** (decision 0274). "Someone else" opens the person
+ * picker, which searches the church; the API refuses an archived or merged Person. It is
+ * asked on a first record of a meeting that met, since a correction does not change it.
  *
  * **A Cell that did not meet says why.** Section 13 requires a reason, and a reason of
  * `OTHER` requires a note saying what happened; Save waits for both.
@@ -124,6 +129,9 @@ function RecordMeeting() {
   const [note, setNote] = useState('');
   const [correctionReason, setCorrectionReason] = useState('');
   const [editing, setEditing] = useState(false);
+  // Who ran it, on a first record: the leader unless somebody else is chosen.
+  const [ranBy, setRanBy] = useState<'LEADER' | 'OTHER'>('LEADER');
+  const [facilitator, setFacilitator] = useState<{ id: string; full_name: string } | null>(null);
   // A corrected answer to "did it meet", while editing a Met or Did-not-meet record.
   const [statusFix, setStatusFix] = useState<'HELD' | 'NOT_HELD' | null>(null);
 
@@ -178,6 +186,8 @@ function RecordMeeting() {
     (statusEditable ? statusFix : null) ?? recorded?.status ?? statusChoice ?? 'HELD';
   const statusChanged = recorded !== null && status !== recorded.status;
   const reasonMissing = statusChanged && correctionReason.trim() === '';
+  const askRanBy = recorded === null && status === 'HELD';
+  const facilitatorMissing = askRanBy && ranBy === 'OTHER' && facilitator === null;
   const unmarked = members.filter((member) => markFor(member) === undefined);
   const noteRequired = notHeldReason === 'OTHER';
 
@@ -206,7 +216,7 @@ function RecordMeeting() {
       };
     }
 
-    if (unmarked.length > 0 || reasonMissing) {
+    if (unmarked.length > 0 || reasonMissing || facilitatorMissing) {
       return null;
     }
 
@@ -218,6 +228,7 @@ function RecordMeeting() {
         present: markFor(member) === 'present',
       })),
       correction_reason: correcting && correctionReason.trim() ? correctionReason.trim() : undefined,
+      facilitated_by: askRanBy && ranBy === 'OTHER' ? facilitator?.id : undefined,
     };
   }, [
     roster.data,
@@ -233,6 +244,10 @@ function RecordMeeting() {
     correctionReason,
     statusChanged,
     reasonMissing,
+    askRanBy,
+    ranBy,
+    facilitator,
+    facilitatorMissing,
   ]);
 
   // Derived from the body rather than generated per attempt (decision 0127): the
@@ -248,6 +263,8 @@ function RecordMeeting() {
     setEdits({});
     setStatusChoice(null);
     setStatusFix(null);
+    setRanBy('LEADER');
+    setFacilitator(null);
     setNotHeldReason('');
     setNote('');
     setCorrectionReason('');
@@ -287,6 +304,28 @@ function RecordMeeting() {
   }
 
   const markedCount = members.length - unmarked.length;
+
+  // What Save is still waiting for, said rather than left to a greyed button.
+  let saveHint: string;
+  if (reasonMissing) {
+    saveHint = 'Say why this is being corrected to save.';
+  } else if (facilitatorMissing) {
+    saveHint = 'Choose who ran it to save.';
+  } else if (recordedNotHeld && !statusChanged) {
+    saveHint = 'Change the answer above to correct it.';
+  } else if (status === 'NOT_HELD') {
+    saveHint =
+      notHeldReason === ''
+        ? 'Choose why it did not meet.'
+        : noteRequired && note.trim() === ''
+          ? 'Say what happened to save.'
+          : 'Ready to save.';
+  } else if (unmarked.length === 0) {
+    saveHint = `All ${members.length} members marked.`;
+  } else {
+    saveHint =
+      unmarked.length === 1 ? '1 member still to mark.' : `${unmarked.length} members still to mark.`;
+  }
 
   return (
     <main id="main" className={PAGE_WIDTH.READING}>
@@ -441,6 +480,31 @@ function RecordMeeting() {
             </div>
           )}
 
+          {askRanBy ? (
+            <div className="mt-6 flex flex-col gap-4">
+              <RadioGroup
+                legend="Who ran the meeting?"
+                name="ran-by"
+                value={ranBy}
+                onChange={setRanBy}
+                options={[
+                  { value: 'LEADER', label: 'The leader' },
+                  { value: 'OTHER', label: 'Someone else' },
+                ]}
+              />
+              {ranBy === 'OTHER' ? (
+                <PersonPicker
+                  legend="Who ran it"
+                  description="Anyone in the church: a disciple, an upline leader, or a visitor."
+                  searchLabel="Search for a person by name"
+                  selectedId={facilitator?.id ?? null}
+                  selectedName={facilitator?.full_name ?? null}
+                  onSelect={setFacilitator}
+                />
+              ) : null}
+            </div>
+          ) : null}
+
           {status === 'NOT_HELD' ? (
             recorded === null || statusChanged ? (
               <div className="mt-6 flex flex-col gap-6">
@@ -534,21 +598,7 @@ function RecordMeeting() {
           {locked ? null : (
             <div className="border-edge bg-surface sticky bottom-[calc(3.5625rem+env(safe-area-inset-bottom))] z-20 -mx-5 mt-8 flex flex-col gap-2 border-t px-5 py-3 sm:flex-row sm:items-center sm:justify-between lg:bottom-0">
               <p aria-live="polite" className="text-sm">
-                {reasonMissing
-                  ? 'Say why this is being corrected to save.'
-                  : recordedNotHeld && !statusChanged
-                    ? 'Change the answer above to correct it.'
-                    : status === 'NOT_HELD'
-                      ? notHeldReason === ''
-                        ? 'Choose why it did not meet.'
-                        : noteRequired && note.trim() === ''
-                          ? 'Say what happened to save.'
-                          : 'Ready to save.'
-                      : unmarked.length === 0
-                        ? `All ${members.length} members marked.`
-                        : unmarked.length === 1
-                          ? '1 member still to mark.'
-                          : `${unmarked.length} members still to mark.`}
+                {saveHint}
               </p>
               <div className="flex flex-col-reverse gap-2 sm:flex-row sm:items-center">
                 <Link

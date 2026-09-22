@@ -388,11 +388,8 @@ describe('recording a Cell meeting (sections 12, 13 and 14)', () => {
     // `INTERNAL_ERROR` -- section 22's named failure mode, and the last of the reachable
     // 500s on this route.
     //
-    // **Existence only.** What the field may name beyond existing -- any Person, a member
-    // of this Cell, or someone in the leader's subtree -- is three readings that refuse
-    // different bodies, and is recorded as open. Existence is what all three share.
-    //
-    // The mutation: drop the `isForeignKeyViolation` branch and this goes 409 to 500.
+    // Refused before the write since decision 0274; the foreign key translation behind
+    // it stays for the constraint's own sake.
     const one = await member('Aurelio');
 
     const response = await submit({
@@ -408,6 +405,83 @@ describe('recording a Cell meeting (sections 12, 13 and 14)', () => {
     // is still a first submission.
     const rows = await db.selectFrom('cell_meetings').select('id').execute();
     expect(rows).toHaveLength(0);
+  });
+
+  it('lets any current Person run the meeting, in the Cell or not (decision 0274)', async () => {
+    const one = await member('Aurelio');
+    const visitor = await createPerson(db, { firstName: 'Visitante', network: 'WOMENS' });
+
+    const response = await submit({
+      status: 'HELD',
+      facilitated_by: visitor.id,
+      attendance: [{ person_id: one.id, present: true }],
+    });
+
+    expect(response.status).toBe(201);
+    expect(response.body.facilitated_by).toBe(visitor.id);
+
+    // Section 21 audits a facilitator recorded.
+    const entry = await db
+      .selectFrom('audit_log')
+      .select(['after'])
+      .where('action', '=', 'cell_meeting.facilitator_recorded')
+      .executeTakeFirstOrThrow();
+    expect(entry.after).toMatchObject({ facilitated_by: visitor.id });
+  });
+
+  it('writes no facilitator entry when the leader ran it, which is the default', async () => {
+    const one = await member('Aurelio');
+
+    await submit({ status: 'HELD', attendance: [{ person_id: one.id, present: true }] }).expect(
+      201,
+    );
+
+    const entries = await db
+      .selectFrom('audit_log')
+      .select('id')
+      .where('action', '=', 'cell_meeting.facilitator_recorded')
+      .execute();
+    expect(entries).toHaveLength(0);
+  });
+
+  it('refuses a Person absorbed by a merge as the one who ran it (decision 0274)', async () => {
+    const one = await member('Aurelio');
+    const survivor = await createPerson(db, { firstName: 'Sobreviviente', network: 'MENS' });
+    const absorbed = await createPerson(db, { firstName: 'Absorbido', network: 'MENS' });
+    await db
+      .updateTable('persons')
+      .set({ merged_into_id: survivor.id })
+      .where('id', '=', absorbed.id)
+      .execute();
+
+    const response = await submit({
+      status: 'HELD',
+      facilitated_by: absorbed.id,
+      attendance: [{ person_id: one.id, present: true }],
+    });
+
+    expect(response.status).toBe(409);
+    expect(response.body.error.message).toMatch(/merge/);
+  });
+
+  it('refuses an archived Person as the one who ran it (decision 0274)', async () => {
+    const one = await member('Aurelio');
+    const archived = await createPerson(db, {
+      firstName: 'Archivo',
+      network: 'MENS',
+      archived: true,
+    });
+
+    const response = await submit({
+      status: 'HELD',
+      facilitated_by: archived.id,
+      attendance: [{ person_id: one.id, present: true }],
+    });
+
+    expect(response.status).toBe(409);
+    expect(response.body.error.code).toBe('INVARIANT_VIOLATION');
+    expect(response.body.error.message).toMatch(/archived/);
+    expect(await db.selectFrom('cell_meetings').select('id').execute()).toHaveLength(0);
   });
 
   it('refuses an attendance element that is not an object, naming the field', async () => {

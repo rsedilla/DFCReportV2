@@ -66,9 +66,9 @@ export function PersonPicker({
   const results = useQuery({
     queryKey: ['leader-search', submitted],
     // **The pickers keep the church, and the People screen does not** (SKILL.md
-    // section 8, decision 0244). Each of the three surfaces using this component —
-    // Add a Person, Add a Cell member, and naming a new pastoral leader on a
-    // reassignment — names one specific person for one operation rather than
+    // section 8, decision 0244). Each of the four surfaces using this component —
+    // Add a Person, Add a Cell member, naming a new pastoral leader on a
+    // reassignment, and who ran a Cell meeting — names one specific person for one operation rather than
     // offering a place to look around. Section 10 makes Cell membership independent of pastoral assignment,
     // so a Cell legitimately holds members its leader does not pastor: narrowing
     // here would make exactly those people unaddable.

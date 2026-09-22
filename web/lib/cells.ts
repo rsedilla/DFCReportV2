@@ -534,6 +534,8 @@ export interface CellSubmission {
   version?: number;
   attendance?: { person_id: string; present: boolean }[];
   correction_reason?: string;
+  /** Who ran it, where that was not the leader (decision 0274). */
+  facilitated_by?: string;
   not_held_reason?: string;
   not_held_note?: string;
 }
