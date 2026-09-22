@@ -10,6 +10,7 @@ import { AppShell, PAGE_WIDTH } from '@/components/app-shell';
 import { MoveLeaderDialog } from '@/components/move-leader-dialog';
 import { Button, buttonClasses } from '@/components/ui/button';
 import { FailureNotice } from '@/components/ui/failure-notice';
+import { FRAME, ROW } from '@/components/ui/frame';
 import { HeaderCell, Table, rowClasses } from '@/components/ui/table';
 import {
   getPastoralPath,
@@ -187,13 +188,18 @@ function NetworkScreen() {
           : ` Figures for ${monthLabel(month)}${open ? ', a month still open' : ''}.`}
       </p>
 
-      <Search />
+      {/* Everything that moves you around the tree, in one bar (owner's choice, 2026-09-22). */}
+      <div className="border-line bg-raised mt-6 flex flex-wrap items-center justify-between gap-x-6 gap-y-4 border p-4">
+        <Breadcrumb entries={entries} meId={me.data?.person_id} />
+        <Search />
+        {roots.length === 0 && person !== undefined ? (
+          <UpOneLevel entries={entries} meId={me.data?.person_id} isMe={isMe} />
+        ) : null}
+      </div>
 
       <div className="mt-6">
         <FailureNotice failure={failure} />
       </div>
-
-      <Breadcrumb entries={entries} meId={me.data?.person_id} />
 
       {branch.isPending && failure === null ? (
         <p className="text-muted mt-6 text-sm">Loading&hellip;</p>
@@ -205,7 +211,6 @@ function NetworkScreen() {
             person={person}
             entries={entries}
             noLeaderReason={path.data?.no_leader_reason ?? null}
-            meId={me.data?.person_id}
             isMe={isMe}
             mayMove={mayMove}
             onMove={() =>
@@ -233,8 +238,9 @@ function NetworkScreen() {
             />
           </dl>
 
-          <div className="mt-8 flex flex-wrap items-center justify-between gap-3">
-            <h2 className="text-lg font-semibold">
+          <section aria-labelledby="reports-to-heading" className={`mt-6 ${FRAME}`}>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h2 id="reports-to-heading" className="field-label">
               {isMe ? 'Reports to you' : `Reports to ${person.full_name}`}
             </h2>
             {filterReady ? (
@@ -324,9 +330,9 @@ function NetworkScreen() {
                 </tbody>
               </Table>
 
-              <ul className="mt-4 flex flex-col gap-3 lg:hidden">
+              <ul className="mt-4 lg:hidden">
                 {shown.map((row) => (
-                  <li key={row.id} className="border-line border p-4">
+                  <li key={row.id} className={ROW}>
                     <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
                       <h3 className="text-base font-medium">
                         <Link href={focusHref(row.id)} className={LINK}>
@@ -384,6 +390,7 @@ function NetworkScreen() {
               </Button>
             </p>
           ) : null}
+          </section>
         </>
       )}
 
@@ -567,7 +574,7 @@ function Breadcrumb({
   const firstLink = meIndex === -1 ? 0 : meIndex;
 
   return (
-    <nav aria-label="Where this person sits" className="mt-6">
+    <nav aria-label="Where this person sits" className="min-w-0">
       <ol className="text-muted flex flex-wrap items-center gap-x-1.5 gap-y-1 text-sm">
         {entries.map((entry, index) => {
           const current = index === entries.length - 1;
@@ -601,7 +608,6 @@ function FocusBlock({
   person,
   entries,
   noLeaderReason,
-  meId,
   isMe,
   mayMove,
   onMove,
@@ -609,19 +615,14 @@ function FocusBlock({
   person: BranchNode;
   entries: readonly PathEntry[];
   noLeaderReason: PastoralPath['no_leader_reason'];
-  meId: string | undefined;
   isMe: boolean;
   mayMove: boolean;
   onMove: () => void;
 }) {
   const parent = entries.length >= 2 ? entries[entries.length - 2] : null;
-  const meIndex = entries.findIndex((entry) => entry.id === meId);
-  // Up is offered only where the level above is one the reader may open: never from the
-  // reader's own node, and never past it.
-  const canGoUp = parent !== null && !isMe && (meIndex === -1 || meIndex < entries.length - 1);
 
   return (
-    <div className="mt-4 flex flex-wrap items-end justify-between gap-4">
+    <div className="mt-6 flex flex-wrap items-end justify-between gap-4">
       <div>
         <h2 className="text-xl font-semibold">{person.full_name}</h2>
         <p className="text-muted mt-1 text-sm">
@@ -629,26 +630,42 @@ function FocusBlock({
           {parent === null ? noLeaderLabel(entries, noLeaderReason) : `reports to ${parent.full_name}`}
         </p>
       </div>
-      <div className="flex flex-wrap gap-2">
-        {canGoUp && parent !== null ? (
-          <Link
-            href={parent.id === meId ? '/network' : focusHref(parent.id)}
-            className={buttonClasses('secondary')}
-          >
-            Up one level
-          </Link>
-        ) : (
-          <Button variant="secondary" disabled>
-            Up one level
-          </Button>
-        )}
-        {mayMove && !isMe ? (
-          <Button variant="secondary" onClick={onMove}>
-            Move this person
-          </Button>
-        ) : null}
-      </div>
+      {mayMove && !isMe ? (
+        <Button variant="secondary" onClick={onMove}>
+          Move this person
+        </Button>
+      ) : null}
     </div>
+  );
+}
+
+/** Up to the level above, in the bar with the path and the search. */
+function UpOneLevel({
+  entries,
+  meId,
+  isMe,
+}: {
+  entries: readonly PathEntry[];
+  meId: string | undefined;
+  isMe: boolean;
+}) {
+  const parent = entries.length >= 2 ? entries[entries.length - 2] : null;
+  const meIndex = entries.findIndex((entry) => entry.id === meId);
+  // Up is offered only where the level above is one the reader may open: never from the
+  // reader's own node, and never past it.
+  const canGoUp = parent !== null && !isMe && (meIndex === -1 || meIndex < entries.length - 1);
+
+  return canGoUp && parent !== null ? (
+    <Link
+      href={parent.id === meId ? '/network' : focusHref(parent.id)}
+      className={buttonClasses('secondary')}
+    >
+      Up one level
+    </Link>
+  ) : (
+    <Button variant="secondary" disabled>
+      Up one level
+    </Button>
   );
 }
 
@@ -685,7 +702,7 @@ function Search() {
   };
 
   return (
-    <div className="mt-6">
+    <div className="min-w-0">
       <form role="search" onSubmit={submit} className="flex flex-wrap gap-2">
         <label htmlFor="network-search" className="sr-only">
           Search by name
@@ -696,7 +713,7 @@ function Search() {
           value={term}
           onChange={(event) => setTerm(event.target.value)}
           placeholder="Search by name"
-          className="border-edge bg-surface min-h-11 w-full max-w-xs rounded-md border px-3 text-sm"
+          className="border-edge bg-surface min-h-11 w-64 max-w-full min-w-0 flex-1 rounded-md border px-3 text-sm sm:flex-none"
         />
         <Button
           type="submit"
