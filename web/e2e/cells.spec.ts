@@ -1,7 +1,10 @@
 import { expect, test } from '@playwright/test';
 
 import {
+  CREATED_CELL,
   PERSON_IN_SCOPE,
+  mockCellApprover,
+  mockCellCreated,
   mockMembershipAdd,
   mockPeople,
   mockPeopleWithoutACell,
@@ -60,6 +63,55 @@ test.describe('the Cells list', () => {
     // A phone card carries the member count the table does (walkthrough, 2026-09-21).
     const card = page.getByRole('listitem').filter({ hasText: 'CELL-000011' });
     await expect(card).toContainText(/Members\s*4/);
+  });
+});
+
+test.describe('New Cell', () => {
+  test('is offered only to a Whole Church holder of cell.approve_leadership', async ({ page }) => {
+    await mockSignedIn(page);
+    await mockCells(page);
+    await page.goto('/cells');
+    await expect(page.getByRole('heading', { name: 'Cells', exact: true })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'New Cell' })).toHaveCount(0);
+
+    await mockCellApprover(page);
+    await page.reload();
+    await expect(page.getByRole('link', { name: 'New Cell' })).toHaveAttribute(
+      'href',
+      '/cells/new',
+    );
+  });
+
+  test('sends the leader, category, day and time, then opens the new Cell’s members', async ({
+    page,
+  }) => {
+    await mockSignedIn(page);
+    await mockCellApprover(page);
+    await mockPeople(page);
+    await mockCellMembersEmpty(page);
+    const sent = await mockCellCreated(page);
+    await page.goto('/cells/new');
+
+    const create = page.getByRole('button', { name: 'Create Cell' });
+    await expect(create).toBeDisabled();
+
+    await page.getByLabel('Search for the leader by name').fill('Marilou');
+    await page.getByRole('button', { name: 'Find' }).click();
+    await page.getByRole('button', { name: 'Choose' }).first().click();
+    await page.getByRole('radio', { name: 'Young Pro' }).check();
+    await page.getByRole('combobox', { name: 'Meets every' }).selectOption({ label: 'Friday' });
+    await page.getByLabel('At').fill('19:30');
+    await create.click();
+
+    await expect(page).toHaveURL(`/cells/${CREATED_CELL.id}/members`);
+    expect(sent).toEqual([
+      {
+        cell_leader_id: PERSON_IN_SCOPE.id,
+        category: 'YOUNG_PRO',
+        day_of_week: 5,
+        time_of_day: '19:30',
+      },
+    ]);
   });
 });
 

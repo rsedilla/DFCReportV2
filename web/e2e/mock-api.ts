@@ -388,6 +388,39 @@ export async function mockMembershipAdd(
   return sent;
 }
 
+/** The same account, also holding `cell.approve_leadership` at Whole Church, as Admin does. */
+export async function mockCellApprover(page: Page): Promise<void> {
+  const capabilities = [
+    ...CAPABILITIES,
+    {
+      capability: 'cell.approve_leadership',
+      scope_type: 'WHOLE_CHURCH',
+      scope_network: null,
+      read_only: false,
+      source: 'ROLE',
+    },
+  ];
+
+  await page.route('**/api/v1/auth/me', (route) => route.fulfill(json({ ...ME, capabilities })));
+}
+
+export const CREATED_CELL = { id: '3f1b7c6e-0000-4000-8000-000000000199', cell_id: 'CELL-000031' };
+
+/** `POST /cells`, accepted. Returns every body sent. */
+export async function mockCellCreated(page: Page): Promise<unknown[]> {
+  const sent: unknown[] = [];
+
+  await page.route('**/api/v1/cells', (route) => {
+    if (route.request().method() !== 'POST') {
+      return route.fallback();
+    }
+    sent.push(route.request().postDataJSON());
+    return route.fulfill(json({ ...CREATED_CELL, state: 'ACTIVE' }, 201));
+  });
+
+  return sent;
+}
+
 /** `POST /people`, creating `PERSON_IN_SCOPE`. */
 export async function mockPersonCreated(page: Page): Promise<void> {
   await page.route('**/api/v1/people', (route) =>

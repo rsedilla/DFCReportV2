@@ -1,6 +1,6 @@
 'use client';
 
-import { useMutation, useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 
@@ -98,6 +98,7 @@ function EditPersonForm() {
 
 function Fields({ person, id }: { person: PersonFull; id: string }) {
   const router = useRouter();
+  const queryClient = useQueryClient();
 
   const [values, setValues] = useState({
     title: person.title ?? '',
@@ -135,7 +136,16 @@ function Fields({ person, id }: { person: PersonFull; id: string }) {
 
   const save = useMutation({
     mutationFn: (changes: PersonEdit) => editPerson(id, changes, writeKey),
-    onSuccess: () => router.push(`/people/${id}`),
+    // The saved record replaces the cached one before the profile opens. Without this the
+    // profile showed the copy it held from before the edit for up to `staleTime`, so a
+    // saved change looked unsaved and was saved a second time (owner, 2026-09-22).
+    // The lists that show the name are marked stale and not waited for.
+    onSuccess: (saved) => {
+      queryClient.setQueryData(['person', id], saved);
+      void queryClient.invalidateQueries({ queryKey: ['people'] });
+      void queryClient.invalidateQueries({ queryKey: ['pastoral-path'] });
+      router.push(`/people/${id}`);
+    },
     onError: (error) => {
       const next: Record<string, string | null> = {};
       for (const field of ['first_name', 'last_name', 'birth_date', 'mobile_number']) {
