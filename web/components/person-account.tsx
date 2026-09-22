@@ -5,6 +5,7 @@ import { useId, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { FailureNotice } from '@/components/ui/failure-notice';
+import { FRAME } from '@/components/ui/frame';
 import { Field } from '@/components/ui/field';
 import { RadioGroup } from '@/components/ui/radio-group';
 import { Tag } from '@/components/ui/tag';
@@ -61,8 +62,8 @@ export function PersonAccount({ personId, firstName }: { personId: string; first
   const current = account.data?.account ?? null;
 
   return (
-    <section aria-labelledby={headingId} className="border-line mt-8 border-t pt-6">
-      <h2 id={headingId} className="flex flex-wrap items-center gap-2 text-lg font-semibold tracking-tight">
+    <section aria-labelledby={headingId} className={FRAME}>
+      <h2 id={headingId} className="field-label flex flex-wrap items-center gap-2">
         Account
         {current ? <Tag appearance="outline">{accountStatusLabel(current.status)}</Tag> : null}
       </h2>

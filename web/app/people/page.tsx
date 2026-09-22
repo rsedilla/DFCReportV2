@@ -116,7 +116,8 @@ function PeopleList() {
       {/* Stacked on a phone and inline from `sm` up, so the search box keeps its width. */}
       <form
         onSubmit={onSubmit}
-        className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-end"
+        // In the same grey bar as every other screen's controls (owner's choice, 2026-09-22).
+        className="border-line bg-raised mt-6 flex flex-col gap-3 border p-4 sm:flex-row sm:items-end"
         noValidate
       >
         <Field

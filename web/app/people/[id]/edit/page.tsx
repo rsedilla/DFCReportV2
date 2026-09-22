@@ -219,6 +219,14 @@ function Fields({ person, id }: { person: PersonFull; id: string }) {
             note="Middle name is optional."
           />
 
+          {/* The three facts this form cannot change, in one box (owner's choice, 2026-09-22). */}
+          <section
+            aria-labelledby="fixed-heading"
+            className="border-line bg-raised flex flex-col gap-4 border p-4"
+          >
+            <h2 id="fixed-heading" className="text-sm font-bold">
+              Not changed here
+            </h2>
           {/*
             Shown and not editable. Sex is not one of `people.edit_basic`'s fields: it
             decides the Network (section 4), and correcting it is Admin's alone
@@ -260,6 +268,7 @@ function Fields({ person, id }: { person: PersonFull; id: string }) {
               Worked out from their Sundays. If it looks wrong, correct the Sunday on their page.
             </p>
           </div>
+          </section>
           {/*
             Section 7 gives `people.edit_basic` six fields, and civil status is
             the sixth. It belongs here for an ordinary reason: a marriage or a

@@ -5,6 +5,7 @@ import { useId } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { FailureNotice } from '@/components/ui/failure-notice';
+import { FRAME } from '@/components/ui/frame';
 import { Tag } from '@/components/ui/tag';
 import { TextLink } from '@/components/ui/text-link';
 import { ApiRequestError } from '@/lib/api-client';
@@ -61,7 +62,7 @@ export function PersonDcc({ personId }: { personId: string }) {
   });
 
   return (
-    <section aria-labelledby={headingId} className="mt-8">
+    <section aria-labelledby={headingId} className="flex flex-col gap-4">
       <h2 id={headingId} className="sr-only">
         DCC
       </h2>
@@ -83,7 +84,7 @@ export function PersonDcc({ personId }: { personId: string }) {
         </div>
       ) : (
         <>
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid gap-4 sm:grid-cols-2">
             <Card kicker="Journey">
               <p className="text-xl font-bold">
                 {attendance.data.pages[0].classification
@@ -129,8 +130,8 @@ export function PersonDcc({ personId }: { personId: string }) {
 
 function Card({ kicker, children }: { kicker: string; children: React.ReactNode }) {
   return (
-    <div className="bg-raised rounded-lg p-4">
-      <p className="text-muted text-xs font-bold tracking-[0.08em] uppercase">{kicker}</p>
+    <div className={FRAME}>
+      <p className="field-label">{kicker}</p>
       <div className="mt-1">{children}</div>
     </div>
   );
@@ -231,8 +232,8 @@ function DccHistory({
   }
 
   return (
-    <>
-      <h3 className="mt-6 text-lg font-semibold tracking-tight">Recent Sundays</h3>
+    <div className={FRAME}>
+      <h3 className="field-label">Recent Sundays</h3>
       <p className="text-muted mt-1 max-w-2xl text-sm leading-relaxed">
         The stage is worked out from these. If it looks wrong, correct the Sunday it comes from.
       </p>
@@ -241,7 +242,7 @@ function DccHistory({
         <p className="text-muted mt-4 text-sm">No Sundays recorded.</p>
       ) : (
         [...years].map(([year, lines]) => (
-          <div key={year} className="mt-6">
+          <div key={year} className="mt-4">
             <h4 className="text-sm font-semibold">{year}</h4>
             <ul className="border-line divide-line mt-2 divide-y border-t border-b">
               {lines.map((line) => (
@@ -250,9 +251,10 @@ function DccHistory({
                   // The link keeps its place on the right at every width, so a thumb finds
                   // "Open Sunday" in the same spot on each row; on a phone the removed tag
                   // goes under the date instead of pushing the link onto a line of its own.
-                  className="flex items-start justify-between gap-4 py-1 sm:items-center"
+                  className="flex items-start justify-between gap-4 py-1"
                 >
-                  <div className="flex flex-col items-start gap-1 py-2.5 text-sm sm:flex-row sm:items-center sm:gap-x-3 sm:py-0">
+                  {/* The removed tag under the date at every width: the column is narrow from `lg`. */}
+                  <div className="flex flex-col items-start gap-1 py-2.5 text-sm">
                     <span>
                       <span className="text-accent font-medium">{dayLabel(line.event_date)}</span>
                       <span className={line.removed ? 'text-muted ml-3' : 'ml-3'}>
@@ -282,6 +284,6 @@ function DccHistory({
           {loadingMore ? 'Loading…' : 'Show older Sundays'}
         </Button>
       ) : null}
-    </>
+    </div>
   );
 }
