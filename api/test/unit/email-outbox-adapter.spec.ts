@@ -34,6 +34,7 @@ describe('the development email transport (section 6)', () => {
     seniorPastorPersonIds: [],
     emailTransport: 'log',
     emailOutboxDir: null,
+    smtp: null,
     ...over,
   });
 
@@ -46,7 +47,7 @@ describe('the development email transport (section 6)', () => {
     if (port?.useFactory === undefined) {
       throw new Error('EmailModule no longer provides EMAIL_PORT by factory');
     }
-    return port.useFactory(config(over), new LoggingEmailAdapter(), {});
+    return port.useFactory(config(over));
   }
 
   describe('which adapter the module binds', () => {

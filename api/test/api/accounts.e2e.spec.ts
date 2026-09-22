@@ -1135,6 +1135,18 @@ describe('accounts: provisioning, activation and reset (section 6)', () => {
 
       expect(response.status).toBe(204);
     });
+
+    it('answers without waiting for delivery, so a slow provider is not a timing oracle', async () => {
+      // A real provider takes about a second to accept a message and the miss path
+      // sends nothing. The provider here never answers at all.
+      await activeEster();
+      outbox(app).hangNext = true;
+
+      const response = await forgot('ester@example.test');
+
+      expect(response.status).toBe(204);
+      expect(outbox(app).last('PASSWORD_RESET')).toBeDefined();
+    });
   });
 });
 
