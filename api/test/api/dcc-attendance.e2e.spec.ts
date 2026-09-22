@@ -511,6 +511,32 @@ describe('DCC recording (sections 9 and 14)', () => {
 
       expect(response.status).toBe(422);
       expect(response.body.error.code).toBe('VALIDATION_FAILED');
+      // Named where it is, with its message (decision 0275), and `field` as before.
+      expect(response.body.error.details.fields).toEqual([
+        {
+          field: 'amendment',
+          path: 'amendment.reason',
+          problems: [expect.any(String)],
+        },
+      ]);
+    });
+
+    it('names the line and member a refusal inside the records is about (decision 0275)', async () => {
+      const eventId = await createEvent(await closedMonthSunday());
+
+      const response = await submit(manuelAccount, eventId, [
+        { person_id: mark.id, present: true, version: null },
+        { person_id: mark.id, present: true, version: 1, correction_reason: 'x'.repeat(501) },
+      ]);
+
+      expect(response.status).toBe(422);
+      expect(response.body.error.details.fields).toEqual([
+        {
+          field: 'records',
+          path: 'records[1].correction_reason',
+          problems: [expect.stringMatching(/500/)],
+        },
+      ]);
     });
 
     it('records into a closed month with the amendment flag and the capability', async () => {

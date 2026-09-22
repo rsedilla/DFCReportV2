@@ -18,7 +18,7 @@ import {
 } from '@/lib/dcc';
 import { idempotencyKeyFor } from '@/lib/idempotency';
 import { getMe } from '@/lib/me';
-import { describeFailure } from '@/lib/messages';
+import { describeFailure, describeLineFailure } from '@/lib/messages';
 import { dayLabel, todayInManila } from '@/lib/reporting-month';
 
 /**
@@ -192,7 +192,10 @@ function DccChecklist() {
             roster.isError
               ? describeFailure(roster.error)
               : save.isError
-                ? describeFailure(save.error)
+                ? describeLineFailure(save.error, 'records', (index) => {
+                    const personId = records[index]?.person_id;
+                    return lines.find((line) => line.person_id === personId)?.full_name ?? null;
+                  })
                 : null
           }
         />

@@ -24,7 +24,7 @@ import {
 } from '@/lib/cells';
 import { idempotencyKeyFor } from '@/lib/idempotency';
 import { getMe } from '@/lib/me';
-import { describeFailure } from '@/lib/messages';
+import { describeFailure, describeLineFailure } from '@/lib/messages';
 import { dayLabel, todayInManila } from '@/lib/reporting-month';
 
 /**
@@ -378,7 +378,10 @@ function RecordMeeting() {
             roster.isError
               ? describeFailure(roster.error)
               : save.isError
-                ? describeFailure(save.error)
+                ? describeLineFailure(save.error, 'attendance', (index) => {
+                    const member = members[index];
+                    return member ? `${member.first_name} ${member.last_name}` : null;
+                  })
                 : me.isError
                   ? describeFailure(me.error)
                   : null
