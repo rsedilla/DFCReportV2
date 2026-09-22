@@ -7,6 +7,7 @@ import {
   PERSON_IN_SCOPE,
   mockAccepted,
   mockAwaitingReassignment,
+  mockCellApprover,
   mockCellChoices,
   mockCellCorrector,
   mockDuplicateRefusal,
@@ -257,6 +258,18 @@ const SCANS = [
     },
     async arrange(page: import('@playwright/test').Page) {
       await expect(page.getByRole('heading', { name: 'Add a person' })).toBeVisible();
+    },
+  },
+  {
+    name: 'new cell',
+    route: '/cells/new',
+    async before(page: import('@playwright/test').Page) {
+      await mockSignedIn(page);
+      await mockCellApprover(page);
+      await mockPeople(page);
+    },
+    async arrange(page: import('@playwright/test').Page) {
+      await expect(page.getByRole('heading', { name: 'New Cell' })).toBeVisible();
     },
   },
   {
@@ -1017,6 +1030,7 @@ const TARGET_SWEEP = [
   // 5 Field inputs, 5 radios (2 sex + 3 civil status), the leader search input,
   // its Find button, and the submit button.
   { name: 'add a person', route: '/people/new', settle: 'Find', minimum: 13 },
+  { name: 'new cell', route: '/cells/new', settle: 'Find', minimum: 10 },
   {
     name: 'person profile',
     route: `/people/${PERSON_IN_SCOPE.id}`,

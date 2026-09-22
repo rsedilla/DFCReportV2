@@ -7,7 +7,7 @@ import { useState } from 'react';
 import { AppShell, PAGE_WIDTH } from '@/components/app-shell';
 import { CoverageFigure } from '@/components/coverage-figure';
 import { MonthPicker } from '@/components/month-picker';
-import { Button } from '@/components/ui/button';
+import { Button, buttonClasses } from '@/components/ui/button';
 import { FailureNotice } from '@/components/ui/failure-notice';
 import { Field } from '@/components/ui/field';
 import { RadioGroup } from '@/components/ui/radio-group';
@@ -23,6 +23,7 @@ import {
   type CellSummary,
 } from '@/lib/cells';
 import { MINIMUM_SEARCH_LENGTH } from '@/lib/people';
+import { getMe, holdsWholeChurch } from '@/lib/me';
 import { describeFailure } from '@/lib/messages';
 import { reportingMonthOf } from '@/lib/reporting-month';
 
@@ -82,6 +83,9 @@ function CellsIndex() {
   const [restarting, setRestarting] = useState<CellSummary | null>(null);
   const [sent, setSent] = useState<ReadonlySet<string>>(new Set());
   const closed = view === 'CLOSED';
+  // Offered only where the route would answer; the route still decides (section 1, principle 4).
+  const me = useQuery({ queryKey: ['me'], queryFn: ({ signal }) => getMe(signal) });
+  const mayCreate = holdsWholeChurch(me.data, 'cell.approve_leadership');
   const cells = useQuery({
     queryKey: ['cells', month, mineOnly, submitted, cursors[page], PAGE_SIZE, view],
     queryFn: ({ signal }) =>
@@ -110,7 +114,14 @@ function CellsIndex() {
 
   return (
     <main id="main" className={PAGE_WIDTH.INDEX}>
-      <h1 className="text-2xl font-semibold tracking-tight">Cells</h1>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className="text-2xl font-semibold tracking-tight">Cells</h1>
+        {mayCreate ? (
+          <Link href="/cells/new" className={buttonClasses('primary')}>
+            New Cell
+          </Link>
+        ) : null}
+      </div>
       <p className="text-muted mt-2 max-w-2xl text-sm leading-relaxed">
         The Cells you oversee, with how many of the month&rsquo;s scheduled meetings have a
         record. The two figures are shown as two; nothing here is scored, ranked, or ordered

@@ -43,6 +43,7 @@ export function PersonPicker({
   selectedId,
   selectedName,
   onSelect,
+  churchWide = true,
 }: {
   /**
    * What this person is being chosen *as*, and why.
@@ -59,12 +60,17 @@ export function PersonPicker({
   selectedId: string | null;
   selectedName: string | null;
   onSelect: (person: { id: string; full_name: string } | null) => void;
+  /**
+   * False where the searcher's own scope already reaches everyone the operation may name,
+   * so the search does not reach past it: New Cell, whose actor holds Whole Church scope.
+   */
+  churchWide?: boolean;
 }) {
   const [term, setTerm] = useState('');
   const [submitted, setSubmitted] = useState('');
 
   const results = useQuery({
-    queryKey: ['leader-search', submitted],
+    queryKey: ['leader-search', submitted, churchWide],
     // **The pickers keep the church, and the People screen does not** (SKILL.md
     // section 8, decision 0244). Each of the four surfaces using this component —
     // Add a Person, Add a Cell member, naming a new pastoral leader on a
@@ -72,14 +78,14 @@ export function PersonPicker({
     // offering a place to look around. Section 10 makes Cell membership independent of pastoral assignment,
     // so a Cell legitimately holds members its leader does not pastor: narrowing
     // here would make exactly those people unaddable.
-    queryFn: ({ signal }) => searchPeople(submitted, null, signal, { churchWide: true }),
+    queryFn: ({ signal }) => searchPeople(submitted, null, signal, { churchWide }),
     enabled: submitted.trim().length > 0,
   });
 
   if (selectedId && selectedName) {
     return (
       <div className="border-line rounded-md border p-4">
-        <p className="text-sm font-medium">{legend}</p>
+        <p className="field-label">{legend}</p>
         <p className="mt-1 text-sm">{selectedName}</p>
         <Button variant="secondary" className="mt-3" onClick={() => onSelect(null)}>
           Choose someone else
@@ -90,7 +96,7 @@ export function PersonPicker({
 
   return (
     <div className="border-line rounded-md border p-4">
-      <p className="text-sm font-medium">{legend}</p>
+      <p className="field-label">{legend}</p>
       <p className="text-muted mt-1 text-sm leading-relaxed">
         {description}
       </p>
