@@ -296,6 +296,33 @@ test.describe('editing a person', () => {
       page.getByText('Changing it is a move, not an edit. Use Move to another leader on the profile.'),
     ).toBeVisible();
   });
+
+  test('one Save shows the change on the profile at once', async ({ page }) => {
+    // The server holds what was last saved, so a profile showing its older cached copy fails.
+    await signedInWithPeople(page);
+    let current: Record<string, unknown> = { ...PERSON_IN_SCOPE };
+    await page.route(`**/api/v1/people/${PERSON_IN_SCOPE.id}`, async (route) => {
+      if (route.request().method() === 'PATCH') {
+        current = { ...current, ...route.request().postDataJSON() };
+      }
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(current),
+      });
+    });
+
+    await page.goto(PROFILE);
+    const title = page.locator('dt', { hasText: /^Title$/ }).locator('+ dd');
+    await expect(title).toHaveText('—');
+
+    await page.getByRole('link', { name: 'Edit details' }).click();
+    await page.getByLabel('Title').fill('Pastor');
+    await page.getByRole('button', { name: 'Save changes' }).click();
+
+    await expect(page).toHaveURL(PROFILE);
+    await expect(title).toHaveText('Pastor');
+  });
 });
 
 test.describe('who pastors a person', () => {
