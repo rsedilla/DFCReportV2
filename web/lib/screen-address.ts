@@ -3,7 +3,7 @@
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 
 /**
- * Where a report is looking, kept in the address rather than in component state.
+ * Where a screen is looking, kept in the address rather than in component state.
  *
  * **So that the browser's Back steps back through it**, and so that a reload, a
  * bookmark or a pasted link opens the same figures. The month, the month-or-year
@@ -15,7 +15,7 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation';
  *
  * An empty value drops its key, so the plain report has a plain address.
  */
-export function useReportAddress(): (changes: Record<string, string | null>) => void {
+export function useScreenAddress(): (changes: Record<string, string | null>) => void {
   const router = useRouter();
   const pathname = usePathname();
   const search = useSearchParams();

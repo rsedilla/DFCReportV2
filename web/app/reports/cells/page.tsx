@@ -19,7 +19,7 @@ import { listAllCells } from '@/lib/cells';
 import { getMe, holdsWholeChurch } from '@/lib/me';
 import { describeFailure } from '@/lib/messages';
 import { getCellMonthlyReport, hasBuckets, type ReportScope } from '@/lib/reports';
-import { useReportAddress } from '@/lib/report-address';
+import { useScreenAddress } from '@/lib/screen-address';
 import { monthFromQuery } from '@/lib/reporting-month';
 
 /**
@@ -68,7 +68,7 @@ export function CellReport() {
   const search = useSearchParams();
   // Every control lives in the address, so the browser's Back steps back through the
   // month, the period and the Cell, and a reload opens the same figures.
-  const go = useReportAddress();
+  const go = useScreenAddress();
   const month = monthFromQuery(search.get('month'));
   // A month or a year of this report (decision 0257). The year is the month's own year.
   const period: 'month' | 'year' = search.get('period') === 'year' ? 'year' : 'month';
