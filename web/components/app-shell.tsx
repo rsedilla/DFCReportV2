@@ -216,10 +216,13 @@ export function AppShell({ children }: { children: ReactNode }) {
           // **An item at `lg`**: a full-width row of the sidebar, the icon dropped.
           'lg:min-h-11 lg:flex-none lg:flex-row lg:justify-start lg:px-3',
           'lg:text-[0.8125rem] lg:tracking-[0.08em]',
-          // **The current item is a filled block at every width, which is a change of
-          // shape and not of hue alone** (1.4.1). `surface` on `ink` is listed in
-          // `check-contrast.mjs` for both themes, where it flips to a light block.
-          active ? 'bg-ink text-surface' : 'text-ink hover:bg-raised',
+          // **The current item is red on a pale red, with a bar** (owner's choice,
+          // 2026-09-22): along the top of a tab, down the left of a sidebar row. The bar
+          // is a change of shape and not of hue alone (1.4.1), and `accent` on
+          // `accent-tint` is listed in `check-contrast.mjs` for both themes.
+          active
+            ? 'bg-accent-tint text-accent shadow-[inset_0_3px_0_var(--accent)] lg:shadow-[inset_3px_0_0_var(--accent)]'
+            : 'text-ink hover:bg-raised',
         )}
       >
         <Icon aria-hidden="true" strokeWidth={1.5} className="size-5 shrink-0 lg:hidden" />
@@ -249,7 +252,9 @@ export function AppShell({ children }: { children: ReactNode }) {
             className={cn(
               'focus-visible:outline-accent inline-flex size-11 shrink-0 items-center justify-center',
               'focus-visible:outline-2 focus-visible:-outline-offset-2',
-              accountActive ? 'bg-ink text-surface' : 'text-ink hover:bg-raised',
+              accountActive
+                ? 'bg-accent-tint text-accent shadow-[inset_0_-3px_0_var(--accent)]'
+                : 'text-ink hover:bg-raised',
             )}
           >
             <CircleUserRound aria-hidden="true" strokeWidth={1.5} className="size-6" />

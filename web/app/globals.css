@@ -60,6 +60,7 @@
   --color-line: var(--line);
   --color-edge: var(--edge);
   --color-accent: var(--accent);
+  --color-accent-tint: var(--accent-tint);
   --color-field-invalid: var(--field-invalid);
 
   /*
@@ -99,6 +100,8 @@
    * design would have failed the build; this one looks the same and has room.
    */
   --accent: #d20028;
+  /* Behind the current sidebar item, under `accent` text (owner's choice, 2026-09-22). */
+  --accent-tint: #fdecef;
   --field-invalid: #a2001e;
 }
 
@@ -117,6 +120,7 @@
     --line: #303030;
     --edge: #9a9a9a;
     --accent: #ff6b80;
+    --accent-tint: #3a1219;
     --field-invalid: #ffb3be;
   }
 }
