@@ -15,6 +15,7 @@ import { CoverageByLeader, CoverageSwitch } from '@/components/report-coverage-b
 import { PeriodSwitch, YearPicker, YearTable, currentYear } from '@/components/report-year';
 import { ReportsSwitch } from '@/components/reports-switch';
 import { FailureNotice } from '@/components/ui/failure-notice';
+import { CONTROL_BAR, FRAME } from '@/components/ui/frame';
 import { listAllCells } from '@/lib/cells';
 import { getMe, holdsWholeChurch } from '@/lib/me';
 import { describeFailure } from '@/lib/messages';
@@ -116,51 +117,46 @@ export function CellReport() {
 
   return (
     <main id="main" className={PAGE_WIDTH.INDEX}>
-      <h1 className="text-2xl font-semibold tracking-tight">Reports</h1>
-      <div className="mt-4 flex flex-wrap items-center gap-3">
-        <ReportsSwitch current="cells" month={month} />
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className="text-2xl font-semibold tracking-tight">Reports</h1>
         <HowTheseAreCounted report="cells" />
       </div>
-      <p className="text-muted mt-4 max-w-2xl text-sm leading-relaxed">
-        What your Cells recorded this month. Recording coverage comes first, because it is the one
-        figure that cannot be improved by recording less.
+      <p className="text-muted mt-2 max-w-2xl text-sm leading-relaxed">
+        What your Cells recorded {period === 'year' ? 'each month' : 'this month'}.
       </p>
 
-      <PeriodSwitch value={period} onChange={setPeriod} />
-
-      {period === 'month' ? (
-        <MonthPicker month={month} onChange={setMonth} open={report.data?.open} />
-      ) : (
-        <YearPicker year={year} onChange={setYear} />
-      )}
+      {/* Every control in one bar, above every figure (owner's choice, 2026-09-22). */}
+      <div className={`mt-6 ${CONTROL_BAR}`}>
+        <ReportsSwitch current="cells" month={month} />
+        <PeriodSwitch value={period} onChange={setPeriod} />
+        {period === 'month' ? (
+          <MonthPicker month={month} onChange={setMonth} open={report.data?.open} />
+        ) : (
+          <YearPicker year={year} onChange={setYear} />
+        )}
+        <div hidden={leader !== null}>
+          <label htmlFor="cell-scope" className="field-label block">
+            Figures for
+          </label>
+          <select
+            id="cell-scope"
+            value={cellId}
+            onChange={(event) => setCellId(event.target.value)}
+            className="border-line bg-surface focus-visible:outline-accent mt-2 min-h-11 max-w-full rounded-md border px-3 text-sm focus-visible:outline-2 focus-visible:outline-offset-2"
+          >
+            <option value="">
+              {wholeChurch ? 'Everyone in your scope' : 'Everyone you oversee'}
+            </option>
+            {(cells.data ?? []).map((cell) => (
+              <option key={cell.id} value={cell.id}>
+                {cell.cell_id} — {cell.leader.full_name}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
 
       {leader ? <LeaderDrill personId={leader} report="cells" month={month} /> : null}
-
-      <div className="mt-4" hidden={leader !== null}>
-        <label htmlFor="cell-scope" className="field-label block">
-          Figures for
-        </label>
-        <select
-          id="cell-scope"
-          value={cellId}
-          onChange={(event) => setCellId(event.target.value)}
-          className="border-line focus-visible:outline-accent mt-2 min-h-11 rounded-md border px-3 text-sm focus-visible:outline-2 focus-visible:outline-offset-2"
-        >
-          <option value="">
-            {wholeChurch ? 'Everyone in your scope' : 'Everyone you oversee'}
-          </option>
-          {(cells.data ?? []).map((cell) => (
-            <option key={cell.id} value={cell.id}>
-              {cell.cell_id} — {cell.leader.full_name}
-            </option>
-          ))}
-        </select>
-        <p className="text-muted mt-2 max-w-2xl text-sm leading-relaxed">
-          How often people came is shown for a single Cell only. Across several Cells it would mean
-          &ldquo;attended everything their own Cell happened to record&rdquo;, which reads best for
-          the Cells that recorded least.
-        </p>
-      </div>
 
       <div className="mt-8">
         <FailureNotice
@@ -188,43 +184,46 @@ export function CellReport() {
       ) : report.isPending || scope === null ? (
         <p className="text-muted mt-6 text-sm">Loading&hellip;</p>
       ) : report.data ? (
-        <div className="mt-8 flex flex-col gap-10">
-          <section aria-labelledby="coverage-heading">
-            <h2 id="coverage-heading" className="field-label">
-              Recording coverage
-            </h2>
-            <p className="mt-2">
-              <CoverageFigure
-                recorded={report.data.coverage.recorded}
-                scheduled={report.data.coverage.scheduled}
-                unit="meetings recorded"
-              />
-            </p>
-            <p className="text-muted mt-2 max-w-2xl text-sm leading-relaxed">
-              Out of the meetings the schedule says these Cells were due to hold. A Cell that
-              scheduled nothing this month counts as none of each and is not left out.
-            </p>
-          </section>
+        <div className="mt-6 flex flex-col gap-4">
+          {/* Coverage first, because it cannot be improved by recording less (decision 0202). */}
+          <div className="grid gap-4 lg:grid-cols-2">
+            <section aria-labelledby="coverage-heading" className={FRAME}>
+              <h2 id="coverage-heading" className="field-label">
+                Recording coverage
+              </h2>
+              <p className="mt-2">
+                <CoverageFigure
+                  recorded={report.data.coverage.recorded}
+                  scheduled={report.data.coverage.scheduled}
+                  unit="meetings recorded"
+                  headline
+                />
+              </p>
+              <p className="text-muted mt-2 text-sm leading-relaxed">
+                Out of the meetings the schedule says were due.
+              </p>
+            </section>
 
-          <section aria-labelledby="people-heading">
-            <h2 id="people-heading" className="field-label">
-              People who attended
-            </h2>
-            <p className="mt-2 text-xl font-semibold tabular-nums">{report.data.unique_people}</p>
-            <p className="text-muted mt-2 max-w-2xl text-sm leading-relaxed">
-              Counted once each, however many meetings they came to.
-            </p>
-          </section>
+            <section aria-labelledby="people-heading" className={FRAME}>
+              <h2 id="people-heading" className="field-label">
+                People who attended
+              </h2>
+              <p className="mt-2 text-xl font-semibold tabular-nums">{report.data.unique_people}</p>
+              <p className="text-muted mt-2 text-sm leading-relaxed">
+                Counted once, however many meetings.
+              </p>
+            </section>
+          </div>
 
-          {/* Side by side from `lg`, one under the other below it. */}
-          <div className="grid gap-10 lg:grid-cols-2">
+          {/* Side by side from `lg` where a single Cell has buckets; full width otherwise. */}
+          <div className={`grid gap-4 ${hasBuckets(report.data) ? 'lg:grid-cols-2' : ''}`}>
             <ClassificationFigures classification={report.data.classification} />
 
             {hasBuckets(report.data) ? (
               report.data.n === 0 ? (
                 // Section 12: where N is zero the view shows the coverage line alone
                 // and no buckets — a bucket every person satisfies is not a bucket.
-                <p className="text-muted max-w-2xl text-sm leading-relaxed">
+                <p className={`${FRAME} text-muted text-sm leading-relaxed`}>
                   This Cell recorded no meetings this month, so there is nobody to count and no
                   buckets to show. The coverage line above is what explains it.
                 </p>
@@ -244,7 +243,7 @@ export function CellReport() {
             ) : null}
           </div>
 
-          <section aria-labelledby="coverage-by-heading">
+          <section aria-labelledby="coverage-by-heading" className={FRAME}>
             <h2 id="coverage-by-heading" className="field-label">
               Row by row
             </h2>

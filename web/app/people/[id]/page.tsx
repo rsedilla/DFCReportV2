@@ -12,6 +12,7 @@ import { PersonCells } from '@/components/person-cells';
 import { PersonDcc } from '@/components/person-dcc';
 import { Button, buttonClasses } from '@/components/ui/button';
 import { FailureNotice } from '@/components/ui/failure-notice';
+import { CONTROL_BAR, FRAME } from '@/components/ui/frame';
 import { TextLink } from '@/components/ui/text-link';
 import { ApiRequestError } from '@/lib/api-client';
 import { cellShortName, getPersonCells, type PersonCells as PersonCellsData } from '@/lib/cells';
@@ -116,7 +117,7 @@ function PersonDetail() {
     (person.error.code === 'SCOPE_DENIED' || person.error.code === 'CAPABILITY_DENIED');
 
   return (
-    <main id="main" className={PAGE_WIDTH.READING}>
+    <main id="main" className={PAGE_WIDTH.INDEX}>
       <p className="text-sm">
         <TextLink href="/people">Back to people</TextLink>
       </p>
@@ -147,7 +148,8 @@ function PersonDetail() {
             own={own}
           />
 
-          <div className="mt-6 flex flex-wrap gap-3">
+          {/* The actions in one bar under the name (owner's choice, 2026-09-22). */}
+          <div className={`mt-6 ${CONTROL_BAR}`}>
             <Link href={`/people/${id}/edit`} className={cn(buttonClasses('secondary'))}>
               Edit details
             </Link>
@@ -162,16 +164,21 @@ function PersonDetail() {
           </div>
 
 
+          {/*
+            Their attendance on the left, the facts about them on the right, from `lg`;
+            below it one column in the order it always had.
+          */}
+          <div className="mt-6 grid gap-4 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
+          <div className="min-w-0">
           <PersonDcc personId={id} />
-          <PersonCells personId={id} personName={person.data.full_name} />
-          {mayManageAccounts ? (
-            <PersonAccount personId={id} firstName={person.data.first_name} />
-          ) : null}
-          <section aria-labelledby="details-heading" className="border-line mt-8 border-t pt-6">
-            <h2 id="details-heading" className="text-lg font-semibold tracking-tight">
+          </div>
+          <div className="flex min-w-0 flex-col gap-4">
+          <PersonCells personId={id} personName={person.data.full_name} className="" />
+          <section aria-labelledby="details-heading" className={FRAME}>
+            <h2 id="details-heading" className="field-label">
               Details
             </h2>
-          <dl className="mt-4 grid gap-x-6 gap-y-4 sm:grid-cols-[12rem_1fr]">
+          <dl className="mt-3 grid gap-x-6 gap-y-3 sm:grid-cols-[9rem_1fr]">
             <Detail label="Title" value={person.data.title} />
             <Detail label="First name" value={person.data.first_name} />
             <Detail label="Middle name" value={person.data.middle_name} />
@@ -205,6 +212,11 @@ function PersonDetail() {
             />
           </dl>
           </section>
+          {mayManageAccounts ? (
+            <PersonAccount personId={id} firstName={person.data.first_name} />
+          ) : null}
+          </div>
+          </div>
 
           {mayMove ? (
             <MoveLeaderDialog

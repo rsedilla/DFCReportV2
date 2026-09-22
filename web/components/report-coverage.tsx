@@ -71,7 +71,7 @@ export function CoverageByCell({
   const shown = rows.slice(start, start + PAGE_SIZE);
 
   return (
-    <section aria-labelledby="coverage-by-cell-heading">
+    <section aria-labelledby="coverage-by-cell-heading" className="mt-6">
       <h2 id="coverage-by-cell-heading" className="field-label">
         Coverage by Cell
       </h2>
@@ -236,7 +236,7 @@ export function CoverageBySunday({ month }: { month: string }) {
   });
 
   return (
-    <section aria-labelledby="coverage-by-sunday-heading">
+    <section aria-labelledby="coverage-by-sunday-heading" className="mt-6">
       <h2 id="coverage-by-sunday-heading" className="field-label">
         Coverage by Sunday
       </h2>

@@ -29,7 +29,10 @@ export function CoverageFigure({
   scheduled,
   unit,
   nothingOwed,
+  headline = false,
 }: {
+  /** The two figures at the size of a report's other headline figures. */
+  headline?: boolean;
   recorded: number | null;
   scheduled: number | null;
   /** What is being counted — "meetings recorded", "leaders have recorded". */
@@ -43,9 +46,13 @@ export function CoverageFigure({
 
   return (
     <span className="text-sm">
-      <span className="font-medium tabular-nums">{recorded}</span>
+      <span className={headline ? 'text-xl font-semibold tabular-nums' : 'font-medium tabular-nums'}>
+        {recorded}
+      </span>
       <span className="text-muted"> of </span>
-      <span className="font-medium tabular-nums">{scheduled}</span>
+      <span className={headline ? 'text-xl font-semibold tabular-nums' : 'font-medium tabular-nums'}>
+        {scheduled}
+      </span>
       <span className="text-muted"> {unit}</span>
     </span>
   );

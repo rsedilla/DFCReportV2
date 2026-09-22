@@ -4,6 +4,7 @@ import { useQueries } from '@tanstack/react-query';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 
 import { buttonClasses } from '@/components/ui/button';
+import { FRAME } from '@/components/ui/frame';
 import { HeaderCell, Table, rowClasses } from '@/components/ui/table';
 import { getCellMonthlyReport, getDccMonthlyReport, type ReportScope } from '@/lib/reports';
 import { hasNotBegun, monthLabel, reportingMonthOf } from '@/lib/reporting-month';
@@ -184,7 +185,7 @@ export function YearTable({
   const openMonths = loaded.filter((row) => row.open).map((row) => monthName(row.month));
 
   return (
-    <section aria-labelledby="year-heading" className="mt-8">
+    <section aria-labelledby="year-heading" className={`mt-6 ${FRAME}`}>
       <h2 id="year-heading" className="field-label">
         Month by month, {covered}
       </h2>

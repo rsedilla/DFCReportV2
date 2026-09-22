@@ -1,3 +1,4 @@
+import { FRAME } from '@/components/ui/frame';
 import { CLASSIFICATION_LABELS, type AttendanceBucket, type Classification } from '@/lib/reports';
 
 /**
@@ -79,13 +80,12 @@ export function ClassificationFigures({ classification }: { classification: Clas
   const total = CLASSIFICATION_LABELS.reduce((sum, { key }) => sum + classification[key], 0);
 
   return (
-    <section aria-labelledby="classification-heading">
+    <section aria-labelledby="classification-heading" className={FRAME}>
       <h2 id="classification-heading" className="field-label">
         Where people are in their journey
       </h2>
-      <p className="text-muted mt-1 max-w-2xl text-sm leading-relaxed">
-        Counted from how many times each person has attended in total, as it stood at the end
-        of this month.
+      <p className="text-muted mt-1 text-sm leading-relaxed">
+        From everything each person has attended, at the end of the month.
       </p>
 
       <dl className="mt-3">
@@ -136,11 +136,11 @@ export function AttendanceBuckets({
   const total = buckets.reduce((sum, bucket) => sum + bucket.people, 0);
 
   return (
-    <section aria-labelledby="buckets-heading">
+    <section aria-labelledby="buckets-heading" className={FRAME}>
       <h2 id="buckets-heading" className="field-label">
         How often people came
       </h2>
-      <p className="text-muted mt-1 max-w-2xl text-sm leading-relaxed">
+      <p className="text-muted mt-1 text-sm leading-relaxed">
         {summary(n)} Each row counts the people who attended that many of them.
       </p>
 

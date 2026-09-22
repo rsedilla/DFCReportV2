@@ -6,6 +6,7 @@ import { useId, useState } from 'react';
 import { MoveCellDialog } from '@/components/move-cell-dialog';
 import { Button } from '@/components/ui/button';
 import { FailureNotice } from '@/components/ui/failure-notice';
+import { FRAME } from '@/components/ui/frame';
 import { cellShortName, getPersonCells } from '@/lib/cells';
 import { describeFailure } from '@/lib/messages';
 
@@ -25,9 +26,12 @@ export function PersonCells({
   personId,
   personName,
   note,
+  className = 'mt-8',
 }: {
   personId: string;
   personName: string;
+  /** Spacing from what comes before; the person page's column sets its own. */
+  className?: string;
   /** A line under the heading, for a screen where a move could be mistaken for part of Save. */
   note?: string;
 }) {
@@ -40,8 +44,8 @@ export function PersonCells({
   });
 
   return (
-    <section aria-labelledby={headingId} className="border-line mt-8 border-t pt-6">
-      <h2 id={headingId} className="text-lg font-semibold tracking-tight">
+    <section aria-labelledby={headingId} className={`${FRAME} ${className}`}>
+      <h2 id={headingId} className="field-label">
         Cell
       </h2>
       {note ? <p className="text-muted mt-1 text-sm leading-relaxed">{note}</p> : null}

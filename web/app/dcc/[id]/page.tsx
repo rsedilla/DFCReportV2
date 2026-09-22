@@ -8,6 +8,7 @@ import { useMemo, useState } from 'react';
 import { AppShell, PAGE_WIDTH } from '@/components/app-shell';
 import { Button } from '@/components/ui/button';
 import { FailureNotice } from '@/components/ui/failure-notice';
+import { FRAME } from '@/components/ui/frame';
 import { RadioGroup } from '@/components/ui/radio-group';
 import {
   getDccRoster,
@@ -224,8 +225,10 @@ function DccChecklist() {
             </p>
           ) : null}
 
+          {/* The checklist and what is already recorded, in one frame (owner's choice, 2026-09-22). */}
+          <div className={`mt-6 ${FRAME}`}>
           {recordable && recordedCount > 0 ? (
-            <div className="border-edge mt-6 border p-4">
+            <div className="border-line border-b pb-4">
               {editing ? (
                 <>
                   <p className="text-sm font-bold">Changing recorded marks</p>
@@ -262,16 +265,16 @@ function DccChecklist() {
           ) : null}
 
           {lines.length === 0 ? (
-            <p className="text-muted mt-6 max-w-2xl text-sm leading-relaxed">
+            <p className="text-muted mt-4 max-w-2xl text-sm leading-relaxed">
               Nobody is on your checklist for this Sunday. Attendance is recorded by each
               person&rsquo;s direct pastoral leader, so this is empty if you disciple nobody.
             </p>
           ) : (
             <>
-              <p className="mt-6 text-right text-sm">
+              <p className="mt-4 text-right text-sm">
                 {markedCount} of {lines.length} marked
               </p>
-              <ul className="border-line mt-2 border-t">
+              <ul className="border-line mt-2 border-t [&>li:last-child]:border-b-0">
                 {lines.map((line) => (
                   <PersonMark
                     key={line.person_id}
@@ -302,6 +305,7 @@ function DccChecklist() {
               ) : null}
             </>
           )}
+          </div>
 
           {/*
             The roster pages (section 22). A leader's own checklist is short, so
