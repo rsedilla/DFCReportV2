@@ -534,6 +534,81 @@ test.describe('a detail that is not recorded (decision 0272)', () => {
   });
 });
 
+test.describe("a person's account, for an administrator (decision 0276)", () => {
+  const ACCOUNT_ROUTE = `**/api/v1/accounts/for-person/${PERSON_IN_SCOPE.id}`;
+
+  test('is not shown to a reader without accounts.manage', async ({ page }) => {
+    await signedInWithPeople(page);
+    await mockPastoralPath(page);
+    await page.goto(PROFILE);
+
+    await expect(page.getByRole('heading', { name: 'Details' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: /^Account/ })).toHaveCount(0);
+  });
+
+  test('gives an account with an email and a role', async ({ page }) => {
+    await signedInWithPeople(page);
+    await mockGrants(page, ['accounts.manage']);
+    await mockPastoralPath(page);
+    await page.route(ACCOUNT_ROUTE, (route) =>
+      route.fulfill({ status: 200, contentType: 'application/json', body: '{"account":null}' }),
+    );
+    const sent: unknown[] = [];
+    await page.route('**/api/v1/accounts', async (route) => {
+      sent.push(route.request().postDataJSON());
+      await route.fulfill({ status: 201, contentType: 'application/json', body: '{}' });
+    });
+
+    await page.goto(PROFILE);
+    await expect(page.getByText('No account. Marilou cannot sign in.')).toBeVisible();
+    await page.getByRole('button', { name: 'Give Marilou an account' }).click();
+    await page.getByLabel('Email address').fill('marilou@example.test');
+    await page.getByRole('radio', { name: 'Senior Pastor' }).check();
+    await page.getByRole('button', { name: 'Create and send the activation email' }).click();
+
+    await expect.poll(() => sent.length).toBe(1);
+    expect(sent[0]).toEqual({
+      person_id: PERSON_IN_SCOPE.id,
+      email: 'marilou@example.test',
+      role: 'SENIOR_PASTOR',
+    });
+  });
+
+  test('resends the activation email while the account waits', async ({ page }) => {
+    await signedInWithPeople(page);
+    await mockGrants(page, ['accounts.manage']);
+    await mockPastoralPath(page);
+    const accountId = '3f1b7c6e-0000-4000-8000-000000000901';
+    await page.route(ACCOUNT_ROUTE, (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          account: {
+            id: accountId,
+            email: 'marilou@example.test',
+            status: 'PENDING_ACTIVATION',
+            roles: ['LEADER'],
+            created_at: '2026-09-22T02:00:00.000Z',
+          },
+        }),
+      }),
+    );
+    const resent: string[] = [];
+    await page.route('**/api/v1/accounts/*/activation-email', async (route) => {
+      resent.push(new URL(route.request().url()).pathname);
+      await route.fulfill({ status: 204 });
+    });
+
+    await page.goto(PROFILE);
+    await expect(page.getByText('Waiting for activation')).toBeVisible();
+    await page.getByRole('button', { name: 'Resend the activation email' }).click();
+
+    await expect(page.getByText('Sent to marilou@example.test.')).toBeVisible();
+    expect(resent).toEqual([`/api/v1/accounts/${accountId}/activation-email`]);
+  });
+});
+
 test.describe('adding a person with a Cell', () => {
   async function fillTheForm(page: Page) {
     await page.goto('/people/new');

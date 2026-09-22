@@ -4063,7 +4063,7 @@ Admin focuses on platform operations:
 - **The date the DCC calendar reaches** (Section 9). One line, factual: a schedule that stops advancing the horizon is otherwise invisible until a month's figures are already wrong, and this is what makes the command's failure something somebody sees
 - DCC Attendance administration
 - Cell Attendance administration
-- Accounts
+- Accounts — given, and their activation email resent, from the person's page, where the section shows only to a holder of `accounts.manage` (decision 0276)
 - Roles & Permissions
 - Audit Logs
 - System Settings
@@ -4505,6 +4505,7 @@ POST /api/v1/auth/reset-password
 POST /api/v1/auth/activate               sets the first password (Section 6)
 GET  /api/v1/auth/me
 
+GET  /api/v1/accounts/for-person/{person_id}   whether a Person has an account, its status, roles and email; `accounts.manage` (decision 0276)
 POST /api/v1/accounts                    provisioning, `accounts.manage`
 POST /api/v1/accounts/{id}/activation-email   re-send (Section 6)
 

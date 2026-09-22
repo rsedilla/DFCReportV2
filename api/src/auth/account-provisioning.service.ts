@@ -85,6 +85,55 @@ export class AccountProvisioningService {
     private readonly idempotency: IdempotencyService,
   ) {}
 
+  /**
+   * Whether a Person has an account, and in what state (SKILL.md section 6, decision
+   * 0276). What an administrator needs to give one or to resend its activation email:
+   * no password, token or session data, and roles that have not been revoked.
+   */
+  async accountForPerson(personId: string): Promise<{
+    account: {
+      id: string;
+      email: string;
+      status: string;
+      roles: AccountRole[];
+      created_at: string;
+    } | null;
+  }> {
+    const person = await this.people.forDecision(personId);
+
+    if (!person) {
+      throw new NotFoundError('No such person.');
+    }
+
+    const account = await this.db
+      .selectFrom('accounts')
+      .select(['id', 'email', 'status', 'created_at'])
+      .where('person_id', '=', personId)
+      .executeTakeFirst();
+
+    if (account === undefined) {
+      return { account: null };
+    }
+
+    const roles = await this.db
+      .selectFrom('account_roles')
+      .select('role')
+      .where('account_id', '=', account.id)
+      .where('revoked_at', 'is', null)
+      .orderBy('role')
+      .execute();
+
+    return {
+      account: {
+        id: account.id,
+        email: account.email,
+        status: account.status,
+        roles: roles.map((row) => row.role),
+        created_at: new Date(account.created_at).toISOString(),
+      },
+    };
+  }
+
   async provision(
     input: ProvisionAccountInput,
     actor: Actor,

@@ -7,6 +7,7 @@ import { useState } from 'react';
 
 import { AppShell, PAGE_WIDTH } from '@/components/app-shell';
 import { MoveLeaderDialog } from '@/components/move-leader-dialog';
+import { PersonAccount } from '@/components/person-account';
 import { PersonCells } from '@/components/person-cells';
 import { PersonDcc } from '@/components/person-dcc';
 import { Button, buttonClasses } from '@/components/ui/button';
@@ -99,6 +100,11 @@ function PersonDetail() {
       (grant) => grant.capability === 'people.manage_pastoral_assignment',
     );
 
+  // The Account section, for an administrator (decision 0276). The API checks it again.
+  const mayManageAccounts = (me.data?.capabilities ?? []).some(
+    (grant) => grant.capability === 'accounts.manage',
+  );
+
   // An unrecorded birthday or mobile number offers to add it, and there is no list of
   // them anywhere (SKILL.md section 3, decision 0272).
   const mayEdit = (me.data?.capabilities ?? []).some(
@@ -158,6 +164,9 @@ function PersonDetail() {
 
           <PersonDcc personId={id} />
           <PersonCells personId={id} personName={person.data.full_name} />
+          {mayManageAccounts ? (
+            <PersonAccount personId={id} firstName={person.data.first_name} />
+          ) : null}
           <section aria-labelledby="details-heading" className="border-line mt-8 border-t pt-6">
             <h2 id="details-heading" className="text-lg font-semibold tracking-tight">
               Details

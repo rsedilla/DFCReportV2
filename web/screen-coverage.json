@@ -134,14 +134,16 @@
       "reason": "Admin-only (§7, people.correct_sex), and it forces a Network change. It belongs to the Admin surface §19 describes, which the pilot does not need."
     },
     {
+      "route": "GET /api/v1/accounts/for-person/:person_id",
+      "screen": "web/components/person-account.tsx"
+    },
+    {
       "route": "POST /api/v1/accounts",
-      "waived_to": "after the pilot — Admin screens",
-      "reason": "Account provisioning is Admin's operational responsibility (§6, §19). The pilot's accounts are provisioned before it starts."
+      "screen": "web/components/person-account.tsx"
     },
     {
       "route": "POST /api/v1/accounts/:id/activation-email",
-      "waived_to": "after the pilot — Admin screens",
-      "reason": "Resending an activation email is Admin operations, alongside provisioning above."
+      "screen": "web/components/person-account.tsx"
     },
     {
       "route": "GET /api/v1/cells",
