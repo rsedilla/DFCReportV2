@@ -1,8 +1,9 @@
 'use client';
 
-import { useId } from 'react';
+import { useId, useRef } from 'react';
 
 import { Field } from '@/components/ui/field';
+import { capitalizeNameWords } from '@/lib/names';
 
 export interface NameValues {
   title: string;
@@ -37,6 +38,18 @@ export function NameFields({
 }) {
   const noteId = useId();
 
+  // As each name box is left (lib/names.ts), so the person sees the result before saving.
+  // Once per box: a letter the person then lowers again, as in `dela`, stays lowered.
+  const raised = useRef(new Set<keyof NameValues>());
+
+  function capitalize(key: keyof NameValues, value: string) {
+    const next = capitalizeNameWords(value);
+    if (next !== value && !raised.current.has(key)) {
+      raised.current.add(key);
+      onChange(key, next);
+    }
+  }
+
   return (
     <fieldset className="flex flex-col gap-1.5" aria-describedby={noteId}>
       <legend className="field-label">Full name</legend>
@@ -62,6 +75,8 @@ export function NameFields({
           value={values.first_name}
           error={errors.first_name}
           onChange={(event) => onChange('first_name', event.target.value)}
+          autoCapitalize="words"
+          onBlur={(event) => capitalize('first_name', event.target.value)}
         />
         <Field
           label="Middle"
@@ -71,6 +86,8 @@ export function NameFields({
           autoComplete="off"
           value={values.middle_name}
           onChange={(event) => onChange('middle_name', event.target.value)}
+          autoCapitalize="words"
+          onBlur={(event) => capitalize('middle_name', event.target.value)}
         />
         <Field
           label="Last"
@@ -82,6 +99,8 @@ export function NameFields({
           value={values.last_name}
           error={errors.last_name}
           onChange={(event) => onChange('last_name', event.target.value)}
+          autoCapitalize="words"
+          onBlur={(event) => capitalize('last_name', event.target.value)}
         />
       </div>
 

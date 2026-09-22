@@ -636,6 +636,32 @@ test.describe("a person's account, for an administrator (decision 0276)", () => 
   });
 });
 
+test.describe('typing a name', () => {
+  test('raises the first letter of each word as a box is left, and keeps the rest', async ({
+    page,
+  }) => {
+    await signedInWithPeople(page);
+    await page.goto('/people/new');
+
+    await page.getByLabel('First name').fill('juan paulo');
+    await page.getByLabel('Middle name').fill('ballano-reyes');
+    await page.getByLabel('Last name').fill('McDonald III');
+    await page.getByLabel('Last name').blur();
+
+    await expect(page.getByLabel('First name')).toHaveValue('Juan Paulo');
+    await expect(page.getByLabel('Middle name')).toHaveValue('Ballano-Reyes');
+    await expect(page.getByLabel('Last name')).toHaveValue('McDonald III');
+
+    // Lowered again by hand, it stays lowered: the form raises letters in a box once.
+    await page.getByLabel('Last name').fill('dela cruz');
+    await page.getByLabel('Last name').blur();
+    await expect(page.getByLabel('Last name')).toHaveValue('Dela Cruz');
+    await page.getByLabel('Last name').fill('dela Cruz');
+    await page.getByLabel('Last name').blur();
+    await expect(page.getByLabel('Last name')).toHaveValue('dela Cruz');
+  });
+});
+
 test.describe('adding a person with a Cell', () => {
   async function fillTheForm(page: Page) {
     await page.goto('/people/new');
