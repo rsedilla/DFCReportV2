@@ -123,6 +123,26 @@ export async function requestCellRestart(
   });
 }
 
+/**
+ * Create a Cell directly, with its leader (sections 2 and 10). The Admin path while the
+ * initial encoding is open; the server refuses anybody else, and refuses it after.
+ */
+export async function createCell(
+  body: {
+    cell_leader_id: string;
+    category: CellCategory;
+    day_of_week: number;
+    time_of_day: string;
+  },
+  idempotencyKey: string,
+): Promise<{ id: string; cell_id: string }> {
+  return authenticatedRequest<{ id: string; cell_id: string }>('/api/v1/cells', {
+    method: 'POST',
+    body,
+    idempotencyKey,
+  });
+}
+
 export interface CellIndexPage {
   reporting_month: string;
   /** Section 17: whether the month is still open, because the figures still move. */

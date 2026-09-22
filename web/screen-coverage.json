@@ -226,8 +226,8 @@
     },
     {
       "route": "POST /api/v1/cells",
-      "waived_to": "after the pilot — Admin screens",
-      "reason": "Direct creation is Admin's during the initial-encoding phase (§2, §10). The pilot's Cells exist before it starts."
+      "reason": "Direct creation is Admin's during the initial-encoding phase (§2, §10). New Cell, from the Cells list, is how the pilot's Cells are set up.",
+      "screen": "web/app/cells/new/page.tsx"
     },
     {
       "route": "PUT /api/v1/cells/:id/category",
