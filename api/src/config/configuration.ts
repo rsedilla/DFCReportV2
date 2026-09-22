@@ -21,15 +21,37 @@ export interface AppConfig {
   /**
    * Which `EmailPort` implementation is bound (SKILL.md section 6, ruling of
    * 2026-09-11). `log` delivers nothing and is the default; `outbox` writes each
-   * message, token included, to `emailOutboxDir`.
+   * message, token included, to `emailOutboxDir`; `smtp` delivers it.
    */
   emailTransport: EmailTransport;
   /** Required by, and only meaningful to, the `outbox` transport. */
   emailOutboxDir: string | null;
+  /** Required by, and only meaningful to, the `smtp` transport. */
+  smtp: SmtpConfig | null;
 }
 
-/** SKILL.md section 6. A real provider joins this list rather than replacing it. */
-export const EMAIL_TRANSPORTS = ['log', 'outbox'] as const;
+/**
+ * A real provider, reached over SMTP so that choosing or changing one is configuration
+ * rather than code (SKILL.md section 2, Email).
+ */
+export interface SmtpConfig {
+  host: string;
+  port: number;
+  /** Implicit TLS on 465; everywhere else STARTTLS is required, never optional. */
+  secure: boolean;
+  user: string;
+  password: string;
+  /** The `From` header, e.g. `DFC <no-reply@example.org>`. */
+  from: string;
+  /**
+   * The web client's origin, which the links in a message point at. The API cannot
+   * derive it: a request that triggers a message may come from a phone.
+   */
+  linkOrigin: string;
+}
+
+/** SKILL.md section 6. */
+export const EMAIL_TRANSPORTS = ['log', 'outbox', 'smtp'] as const;
 
 export type EmailTransport = (typeof EMAIL_TRANSPORTS)[number];
 
@@ -139,7 +161,7 @@ export function loadConfig(): AppConfig {
     throw new Error(`JWT_SECRET must be at least ${MINIMUM_SECRET_LENGTH} characters`);
   }
 
-  const { emailTransport, emailOutboxDir } = emailDelivery(nodeEnv);
+  const { emailTransport, emailOutboxDir, smtp } = emailDelivery(nodeEnv);
 
   return {
     nodeEnv,
@@ -153,6 +175,7 @@ export function loadConfig(): AppConfig {
     seniorPastorPersonIds: seniorPastorPersonIds(),
     emailTransport,
     emailOutboxDir,
+    smtp,
   };
 }
 
@@ -187,11 +210,12 @@ export function loadConfig(): AppConfig {
 function emailDelivery(nodeEnv: AppConfig['nodeEnv']): {
   emailTransport: EmailTransport;
   emailOutboxDir: string | null;
+  smtp: SmtpConfig | null;
 } {
   const configured = (process.env.EMAIL_TRANSPORT ?? '').trim();
 
   if (configured === '') {
-    return { emailTransport: 'log', emailOutboxDir: null };
+    return { emailTransport: 'log', emailOutboxDir: null, smtp: null };
   }
 
   if (!(EMAIL_TRANSPORTS as readonly string[]).includes(configured)) {
@@ -202,8 +226,12 @@ function emailDelivery(nodeEnv: AppConfig['nodeEnv']): {
 
   const emailTransport = configured as EmailTransport;
 
+  if (emailTransport === 'smtp') {
+    return { emailTransport, emailOutboxDir: null, smtp: smtpConfig(nodeEnv) };
+  }
+
   if (emailTransport !== 'outbox') {
-    return { emailTransport, emailOutboxDir: null };
+    return { emailTransport, emailOutboxDir: null, smtp: null };
   }
 
   if (nodeEnv !== 'development') {
@@ -219,7 +247,50 @@ function emailDelivery(nodeEnv: AppConfig['nodeEnv']): {
     throw new Error('EMAIL_OUTBOX_DIR is required when EMAIL_TRANSPORT=outbox');
   }
 
-  return { emailTransport, emailOutboxDir: dir };
+  return { emailTransport, emailOutboxDir: dir, smtp: null };
+}
+
+/**
+ * Every value is required rather than defaulted, and a link origin that is not a bare
+ * origin is refused: a message whose link points at the wrong place, or at plain HTTP,
+ * hands the token to whoever answers there.
+ */
+function smtpConfig(nodeEnv: AppConfig['nodeEnv']): SmtpConfig {
+  const port = Number.parseInt(required('SMTP_PORT'), 10);
+  if (!Number.isInteger(port) || port <= 0 || port > 65535) {
+    throw new Error(`SMTP_PORT must be a valid port number (got "${process.env.SMTP_PORT}")`);
+  }
+
+  const from = required('EMAIL_FROM').trim();
+  if (!from.includes('@') || /[\r\n]/.test(from)) {
+    throw new Error(`EMAIL_FROM must be an address, optionally with a name (got "${from}")`);
+  }
+
+  const rawOrigin = required('EMAIL_LINK_ORIGIN').trim();
+  let origin: URL;
+  try {
+    origin = new URL(rawOrigin);
+  } catch {
+    throw new Error(`EMAIL_LINK_ORIGIN must be a URL (got "${rawOrigin}")`);
+  }
+  if (origin.origin !== rawOrigin.replace(/\/$/, '')) {
+    throw new Error(
+      `EMAIL_LINK_ORIGIN must be an origin with no path, e.g. https://example.org (got "${rawOrigin}")`,
+    );
+  }
+  if (origin.protocol !== 'https:' && nodeEnv !== 'development') {
+    throw new Error(`EMAIL_LINK_ORIGIN must use https outside development (got "${rawOrigin}")`);
+  }
+
+  return {
+    host: required('SMTP_HOST').trim(),
+    port,
+    secure: port === 465,
+    user: required('SMTP_USER').trim(),
+    password: required('SMTP_PASSWORD'),
+    from,
+    linkOrigin: origin.origin,
+  };
 }
 
 /**
