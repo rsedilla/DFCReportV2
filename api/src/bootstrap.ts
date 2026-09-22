@@ -31,11 +31,43 @@ export function configureApp(app: INestApplication): void {
       // the one error envelope, with VALIDATION_FAILED and the fields at fault.
       exceptionFactory: (errors: ValidationError[]) =>
         new ValidationFailedError('Some fields need correcting.', {
-          fields: errors.map((error) => ({
-            field: error.property,
-            problems: Object.values(error.constraints ?? {}),
-          })),
+          fields: fieldsAtFault(errors),
         }),
     }),
   );
+}
+
+/**
+ * One entry per refusal, naming where it is (SKILL.md section 22, decision 0275).
+ *
+ * `field` stays the top-level property, as it always was; `path` says where inside it,
+ * `records[1].correction_reason`, and `problems` carries that member's messages. A
+ * nested refusal used to name its container with no message at all.
+ */
+function fieldsAtFault(
+  errors: ValidationError[],
+): { field: string; path: string; problems: string[] }[] {
+  return errors.flatMap((error) => {
+    const leaves = leavesOf(error, error.property);
+
+    // A container refused with nothing beneath it still has an entry, as before.
+    return (leaves.length > 0 ? leaves : [{ path: error.property, problems: [] }]).map((leaf) => ({
+      field: error.property,
+      ...leaf,
+    }));
+  });
+}
+
+function leavesOf(error: ValidationError, path: string): { path: string; problems: string[] }[] {
+  const own = Object.values(error.constraints ?? {});
+
+  return [
+    ...(own.length > 0 ? [{ path, problems: own }] : []),
+    ...(error.children ?? []).flatMap((child) =>
+      leavesOf(
+        child,
+        /^\d+$/.test(child.property) ? `${path}[${child.property}]` : `${path}.${child.property}`,
+      ),
+    ),
+  ];
 }

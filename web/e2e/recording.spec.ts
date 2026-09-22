@@ -332,6 +332,45 @@ test.describe('a Sunday with a mark already recorded', () => {
       ],
     });
   });
+
+  // Decision 0275: a refusal inside the records names its path, and the screen names the
+  // person on that line.
+  test('names the person whose line was refused', async ({ page }) => {
+    await mockSignedIn(page);
+    await mockDccRoster(page);
+    await page.route('**/api/v1/dcc/events/*/submit', (route) =>
+      route.fulfill({
+        status: 422,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          error: {
+            code: 'VALIDATION_FAILED',
+            message: 'Some fields need correcting.',
+            details: {
+              fields: [
+                {
+                  field: 'records',
+                  path: 'records[1].present',
+                  problems: ['present must be a boolean value'],
+                },
+              ],
+            },
+          },
+        }),
+      }),
+    );
+
+    await page.goto(SUNDAY);
+    await page
+      .getByRole('group', { name: UNRECORDED.name })
+      .getByRole('radio', { name: 'Present' })
+      .check();
+    await page.getByRole('button', { name: 'Save', exact: true }).click();
+
+    await expect(
+      page.getByText(`${UNRECORDED.name}: the mark must be a boolean value.`),
+    ).toBeVisible();
+  });
 });
 
 /**

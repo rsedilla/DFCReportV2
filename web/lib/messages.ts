@@ -126,6 +126,59 @@ export function describeFailure(
   }
 }
 
+/** How a member of a roster line reads in a sentence, where the API names it. */
+const LINE_FIELD_LABELS: Record<string, string> = {
+  correction_reason: 'the reason',
+  present: 'the mark',
+  person_id: 'the person',
+  version: 'the version',
+};
+
+/**
+ * A refusal inside a roster line, naming the person on that line (decision 0275).
+ *
+ * The API gives each refusal a `path`, `records[1].correction_reason`. Where the path
+ * is inside `collection`, `nameAt` turns its index into the person the screen sent at
+ * that position, so a leader is told whose line to fix rather than "some fields".
+ */
+export function describeLineFailure(
+  error: unknown,
+  collection: string,
+  nameAt: (index: number) => string | null,
+): Failure {
+  const failure = describeFailure(error);
+
+  if (
+    !(error instanceof ApiRequestError) ||
+    error.code !== 'VALIDATION_FAILED' ||
+    !Array.isArray(error.details.fields)
+  ) {
+    return failure;
+  }
+
+  const lines: string[] = [];
+
+  for (const entry of error.details.fields as { path?: unknown; problems?: unknown }[]) {
+    const match = typeof entry.path === 'string' ? /^(\w+)\[(\d+)\](?:\.(\w+))?/.exec(entry.path) : null;
+    const name = match && match[1] === collection ? nameAt(Number(match[2])) : null;
+
+    if (name === null || !Array.isArray(entry.problems)) {
+      continue;
+    }
+
+    const member = match?.[3];
+    for (const problem of entry.problems) {
+      const text = String(problem);
+      const label = member ? LINE_FIELD_LABELS[member] : undefined;
+      lines.push(
+        `${name}: ${label && member && text.startsWith(`${member} `) ? label + text.slice(member.length) : text}.`,
+      );
+    }
+  }
+
+  return lines.length === 0 ? failure : { message: [failure.message, ...lines].join(' '), aboutInput: true };
+}
+
 /**
  * The message the API attached to one field, where the form renders that field.
  *
