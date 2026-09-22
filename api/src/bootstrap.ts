@@ -14,6 +14,16 @@ import type { ValidationError } from 'class-validator';
  * tests something nobody deploys.
  */
 export function configureApp(app: INestApplication): void {
+  // **The visitor's address, from the reverse proxy on this machine and nowhere else.**
+  // Deployed behind nginx, every request arrives from 127.0.0.1, so the rate limits
+  // counted one address for the whole church: one person mistyping a password could
+  // lock everybody out of signing in. `loopback` trusts `X-Forwarded-For` only when the
+  // connection itself comes from this machine, so a client reaching the API directly
+  // cannot choose its own address.
+  (app.getHttpAdapter().getInstance() as { set: (key: string, value: unknown) => void }).set(
+    'trust proxy',
+    'loopback',
+  );
   app.setGlobalPrefix('api/v1');
   app.use(helmet());
   app.useGlobalPipes(
