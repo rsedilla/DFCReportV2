@@ -132,6 +132,78 @@ describe('the email transport (section 6)', () => {
     });
   });
 
+  describe('smtp', () => {
+    const SMTP_VARS = [
+      'SMTP_HOST',
+      'SMTP_PORT',
+      'SMTP_USER',
+      'SMTP_PASSWORD',
+      'EMAIL_FROM',
+      'EMAIL_LINK_ORIGIN',
+    ] as const;
+    const saved = Object.fromEntries(SMTP_VARS.map((name) => [name, process.env[name]]));
+
+    beforeEach(() => {
+      set('NODE_ENV', 'production');
+      set('EMAIL_TRANSPORT', 'smtp');
+      set('SMTP_HOST', 'smtp.example.test');
+      set('SMTP_PORT', '587');
+      set('SMTP_USER', 'user');
+      set('SMTP_PASSWORD', 'not-a-real-password');
+      set('EMAIL_FROM', 'Church <no-reply@example.test>');
+      set('EMAIL_LINK_ORIGIN', 'https://app.example.test');
+    });
+
+    afterEach(() => {
+      for (const name of SMTP_VARS) {
+        set(name, saved[name]);
+      }
+    });
+
+    it('binds in production, requiring STARTTLS on 587 and implicit TLS on 465', () => {
+      const config = loadConfig();
+
+      expect(config.emailTransport).toBe('smtp');
+      expect(config.smtp).toMatchObject({
+        port: 587,
+        secure: false,
+        linkOrigin: 'https://app.example.test',
+      });
+
+      set('SMTP_PORT', '465');
+      expect(loadConfig().smtp?.secure).toBe(true);
+    });
+
+    it('accepts an origin with a trailing slash, and stores it without one', () => {
+      set('EMAIL_LINK_ORIGIN', 'https://app.example.test/');
+
+      expect(loadConfig().smtp?.linkOrigin).toBe('https://app.example.test');
+    });
+
+    it.each(SMTP_VARS)('refuses to start without %s', (name) => {
+      set(name, undefined);
+
+      expect(() => loadConfig()).toThrow(new RegExp(`${name} is required`));
+    });
+
+    it.each([
+      ['a path', 'https://app.example.test/activate'],
+      ['a query', 'https://app.example.test/?x=1'],
+      ['plain http outside development', 'http://app.example.test'],
+      ['not a URL', 'app.example.test'],
+    ])('refuses a link origin with %s', (_l, value) => {
+      set('EMAIL_LINK_ORIGIN', value);
+
+      expect(() => loadConfig()).toThrow(/EMAIL_LINK_ORIGIN must/);
+    });
+
+    it('refuses a From header carrying a line break', () => {
+      set('EMAIL_FROM', 'no-reply@example.test\r\nBcc: x@example.test');
+
+      expect(() => loadConfig()).toThrow(/EMAIL_FROM must be an address/);
+    });
+  });
+
   it('refuses a transport nobody implements, rather than falling back to the default', () => {
     set('EMAIL_TRANSPORT', 'ses');
 

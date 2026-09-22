@@ -46,17 +46,15 @@ export class CredentialsService {
    * wearing a different hat.
    *
    * **The timing is not equalized, and that is a known gap rather than a claim.**
-   * The miss branch returns after one `SELECT`; the hit branch runs a transaction
-   * and attempts a delivery, so the two are distinguishable by a caller who
-   * measures. An earlier version of this comment asserted the opposite — that the
-   * branches did "comparable work" — which was false of the code beneath it.
+   * The miss branch returns after one `SELECT`; the hit branch runs a transaction,
+   * so the two are distinguishable by a caller who measures. An earlier version of
+   * this comment asserted the opposite — that the branches did "comparable work" —
+   * which was false of the code beneath it.
    *
-   * It is left as it is rather than papered over with a decoy, because a decoy that
-   * does not actually match the hit path's cost is a comment claiming a property
-   * nobody measured, which is worse than an acknowledged gap. `PasswordService`
-   * does the real version of this for sign-in, where the comparison is one hash
-   * against one hash and can therefore be made honest. Equalizing here would mean
-   * matching a database write and a network call.
+   * **Delivery is not awaited**, which keeps the gap at the scale of one database
+   * write. A real provider takes around a second to accept a message, and awaiting it
+   * would make the hit path slower by that much. `PasswordService` does the honest
+   * version of equalizing for sign-in, where the comparison is one hash against one.
    */
   async requestPasswordReset(email: string): Promise<void> {
     const account = await this.db
@@ -82,12 +80,19 @@ export class CredentialsService {
       // Through `people`, which owns `persons` (section 2).
       const person = await this.people.forDecision(account.person_id);
 
-      await this.email.send({
-        kind: 'PASSWORD_RESET',
-        to: { email: account.email, name: person?.fullName ?? '' },
-        token: token.token,
-        expiresAt: token.expiresAt,
-      });
+      this.email
+        .send({
+          kind: 'PASSWORD_RESET',
+          to: { email: account.email, name: person?.fullName ?? '' },
+          token: token.token,
+          expiresAt: token.expiresAt,
+        })
+        .catch((error: unknown) => {
+          this.logger.error(
+            `Could not send a password reset for account ${account.id}.`,
+            error instanceof Error ? error.stack : undefined,
+          );
+        });
     } catch (error) {
       this.logger.error(
         `Could not send a password reset for account ${account.id}.`,

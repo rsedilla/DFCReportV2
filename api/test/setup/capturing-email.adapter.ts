@@ -22,6 +22,9 @@ export class CapturingEmailAdapter implements EmailPort {
   /** Set to make the next send throw, for the delivery-failure cases. */
   failNext = false;
 
+  /** Set to make the next send record the message and never settle: a hung provider. */
+  hangNext = false;
+
   send(message: OutboundEmail): Promise<void> {
     if (this.failNext) {
       this.failNext = false;
@@ -29,6 +32,12 @@ export class CapturingEmailAdapter implements EmailPort {
     }
 
     this.sent.push(message);
+
+    if (this.hangNext) {
+      this.hangNext = false;
+      return new Promise<void>(() => undefined);
+    }
+
     return Promise.resolve();
   }
 
@@ -47,5 +56,6 @@ export class CapturingEmailAdapter implements EmailPort {
   reset(): void {
     this.sent.length = 0;
     this.failNext = false;
+    this.hangNext = false;
   }
 }
