@@ -40,6 +40,9 @@ first version of this ruling said recording belongs to `Record` and the applicat
 these screens as `Cells` anyway, because their address begins with a Cell's; review
 raised it as a question the ruling had not answered, and the owner settled it here.
 
+*(The two orders below were replaced by one on 2026-09-22, decision 0277. Where a person
+lands is unchanged.)*
+
 **The order, and the screen a person lands on, follow the reach of `reports.view_subtree`.**
 An account holding it at `WHOLE_CHURCH` sees `Reports · Record · Network · People · Cells`
 and lands on `Reports`. Every other account sees `Record · Reports · People · Cells ·

@@ -4045,7 +4045,7 @@ Network    My Network, the pastoral tree (Section 5)
 
 **A Cell's meeting screens are recording, so they sit under `Record` wherever they are reached from** — a Cell's list of meetings and the screen a meeting is recorded on, whether a leader arrives from Record's outstanding work or from a Cell under `Cells`.
 
-**The order, and the screen a person lands on, follow the reach of `reports.view_subtree` and never a role**, because Section 7 makes a capability and its scope the thing that decides. An account holding it at `WHOLE_CHURCH` sees `Reports · Record · Network · People · Cells` and lands on `Reports`; by the role defaults that is the two Senior Pastors and Admin. Every other account sees `Record · Reports · People · Cells · Network` and lands on `Record`. Both orderings and both landing screens are what the application does today; what it does not yet carry is `Growth`, which joins each arrangement immediately after `Cells` when it is built. **`Growth` takes the position the rest of the arrangement gives it rather than a fixed one** (ruling of 2026-09-16): it sits between `Cells` and `Network` in the ordinary arrangement, and last in the whole-church one, where `Network` has already moved up. `Record` stays in the first arrangement because Section 9 puts a person's DCC record on the checklist of the nearest account-holding leader above them, which a Senior Pastor is for their own direct disciples.
+**Every account sees one order, `Record · Reports · People · Cells · Network`** (ruling of 2026-09-22), and `Growth` joins it between `Cells` and `Network` when it is built. **The screen a person lands on follows the reach of `reports.view_subtree` and never a role**, because Section 7 makes a capability and its scope the thing that decides: an account holding it at `WHOLE_CHURCH` lands on `Reports`, which by the role defaults is the two Senior Pastors and Admin, and every other account lands on `Record`.
 
 When the Admin dashboard below is built, it adds an `Admin` item for the accounts holding the capabilities that screen needs, and becomes their landing screen. Which capabilities those are is settled with that screen, and is recorded as open until then.
 
@@ -5445,7 +5445,7 @@ The screen says the counts are as of now, never "this year". A Reports block wou
 
 ### Where it appears
 
-`Growth` takes the sidebar position the first ruling of 2026-09-16 gave `Conquest`, between `Cells` and `Network` in the ordinary arrangement and last in the whole-church one (Section 19). The sidebar stays at six items, a seventh being more than the phone's bottom bar was drawn for at the narrowest width Section 23's layout check runs at — the width that section calls the one where overflow is hardest.
+`Growth` takes the sidebar position the first ruling of 2026-09-16 gave `Conquest`, between `Cells` and `Network` (Section 19). The sidebar stays at six items, a seventh being more than the phone's bottom bar was drawn for at the narrowest width Section 23's layout check runs at — the width that section calls the one where overflow is hardest.
 
 `SUYNL` and `Training` each carry their own draft and save bar — a batch of ticks, discarded or saved together — because the two are different records with different correction rules. **The `Conquest` tab has neither**, every one of its four goals being derived since Win 3 became so. Section 27 keeps one confirmation that a leader still files, for history the records cannot hold; **where it is filed, now that the tab carries no save bar, is recorded as open in `CLAUDE.md`**.
 

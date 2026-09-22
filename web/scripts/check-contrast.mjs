@@ -70,11 +70,11 @@ const TEXT_PAIRS = [
   // combination nobody lists is one this check cannot see: `bg-accent text-ink`
   // is below 4.5:1 in both themes, and would have passed lint unnoticed.
   ['surface', 'accent'],
-  // The current sidebar item is a filled block: `surface` text on `ink`, the
-  // reverse of body text. Contrast is symmetric, so it clears whenever `ink` on
-  // `surface` does — and it is listed anyway, because an unlisted position is one
-  // this check cannot see.
+  // A selected segment of the Reports switches is a filled block: `surface` text on
+  // `ink`, listed because an unlisted position is one this check cannot see.
   ['surface', 'ink'],
+  // The current sidebar item: `accent` text on its tint (owner's choice, 2026-09-22).
+  ['accent', 'accent-tint'],
   // `field-invalid` is held to the body-text ratio although no message is set in
   // it any more: since labels became red, a refusal's words render in `ink` beside
   // a `field-invalid` icon (`components/ui/field.tsx`). The pair stays so that a
