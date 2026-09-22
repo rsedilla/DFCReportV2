@@ -76,6 +76,11 @@ const TEXT: Record<'cells' | 'dcc', Term[]> = {
       definition:
         '“All of them” means every Sunday this month that had a service. A Sunday with no service is not counted.',
     },
+    {
+      term: 'A Network',
+      definition:
+        'Counts the people who belong to it, so the people who attended in the two Networks normally add up to the whole church. Recording coverage does not split that way, because it counts records owed, not people.',
+    },
     OPEN_MONTH,
   ],
 };

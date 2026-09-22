@@ -15,6 +15,7 @@ import { PeriodSwitch, YearPicker, YearTable, currentYear } from '@/components/r
 import { LeaderDrill } from '@/components/leader-drill';
 import { ReportsSwitch } from '@/components/reports-switch';
 import { FailureNotice } from '@/components/ui/failure-notice';
+import { CONTROL_BAR, FRAME } from '@/components/ui/frame';
 import { getMe, holdsWholeChurch } from '@/lib/me';
 import { describeFailure } from '@/lib/messages';
 import { getDccMonthlyReport, type ReportNetwork, type ReportScope } from '@/lib/reports';
@@ -107,49 +108,44 @@ export function DccReport() {
 
   return (
     <main id="main" className={PAGE_WIDTH.INDEX}>
-      <h1 className="text-2xl font-semibold tracking-tight">Reports</h1>
-      <div className="mt-4 flex flex-wrap items-center gap-3">
-        <ReportsSwitch current="dcc" month={month} />
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className="text-2xl font-semibold tracking-tight">Reports</h1>
         <HowTheseAreCounted report="dcc" />
       </div>
-      <p className="text-muted mt-4 max-w-2xl text-sm leading-relaxed">
+      <p className="text-muted mt-2 max-w-2xl text-sm leading-relaxed">
         What the people you oversee recorded for{' '}
-        {period === 'year' ? 'each month’s' : 'this month’s'} Sundays, and how many of the leaders
-        who owed a record filed one.
+        {period === 'year' ? 'each month’s' : 'this month’s'} Sundays.
       </p>
 
-      <PeriodSwitch value={period} onChange={setPeriod} />
-
-      {period === 'month' ? (
-        <MonthPicker month={month} onChange={setMonth} open={report.data?.open} />
-      ) : (
-        <YearPicker year={year} onChange={setYear} />
-      )}
+      {/* Every control in one bar, above every figure (owner's choice, 2026-09-22). */}
+      <div className={`mt-6 ${CONTROL_BAR}`}>
+        <ReportsSwitch current="dcc" month={month} />
+        <PeriodSwitch value={period} onChange={setPeriod} />
+        {period === 'month' ? (
+          <MonthPicker month={month} onChange={setMonth} open={report.data?.open} />
+        ) : (
+          <YearPicker year={year} onChange={setYear} />
+        )}
+        {wholeChurch && !leader ? (
+          <div>
+            <label htmlFor="dcc-scope" className="field-label block">
+              Figures for
+            </label>
+            <select
+              id="dcc-scope"
+              value={network}
+              onChange={(event) => setNetwork(event.target.value as ReportNetwork | '')}
+              className="border-line bg-surface focus-visible:outline-accent mt-2 min-h-11 rounded-md border px-3 text-sm focus-visible:outline-2 focus-visible:outline-offset-2"
+            >
+              <option value="">The whole church</option>
+              <option value="MENS">Men&rsquo;s Network</option>
+              <option value="WOMENS">Women&rsquo;s Network</option>
+            </select>
+          </div>
+        ) : null}
+      </div>
 
       {leader ? <LeaderDrill personId={leader} report="dcc" month={month} /> : null}
-
-      {wholeChurch && !leader ? (
-        <div className="mt-4">
-          <label htmlFor="dcc-scope" className="field-label block">
-            Figures for
-          </label>
-          <select
-            id="dcc-scope"
-            value={network}
-            onChange={(event) => setNetwork(event.target.value as ReportNetwork | '')}
-            className="border-line focus-visible:outline-accent mt-2 min-h-11 rounded-md border px-3 text-sm focus-visible:outline-2 focus-visible:outline-offset-2"
-          >
-            <option value="">The whole church</option>
-            <option value="MENS">Men&rsquo;s Network</option>
-            <option value="WOMENS">Women&rsquo;s Network</option>
-          </select>
-          <p className="text-muted mt-2 max-w-2xl text-sm leading-relaxed">
-            A Network counts the people who belong to it. The people who attended in the two
-            Networks normally add up to the whole church. Recording coverage doesn&rsquo;t split
-            that way, because it counts records owed, not people.
-          </p>
-        </div>
-      ) : null}
 
       <div className="mt-8">
         <FailureNotice
@@ -177,42 +173,48 @@ export function DccReport() {
       ) : report.isPending || scope === null ? (
         <p className="text-muted mt-6 text-sm">Loading&hellip;</p>
       ) : report.data ? (
-        <div className="mt-8 flex flex-col gap-10">
-          <section aria-labelledby="coverage-heading">
-            <h2 id="coverage-heading" className="field-label">
-              Recording coverage
-            </h2>
-            <p className="mt-2">
-              <CoverageFigure
-                recorded={report.data.coverage.met}
-                scheduled={report.data.coverage.owed}
-                unit="records filed"
-              />
-            </p>
-            <p className="text-muted mt-2 max-w-2xl text-sm leading-relaxed">
-              Counted across every Sunday of the month. A leader owes one record for each Sunday
-              they were responsible for somebody, and a Sunday that has not happened owes nobody
-              anything.
-            </p>
-          </section>
-
-          {/* Two short figures, side by side from `sm`. */}
-          <div className="grid gap-10 sm:grid-cols-2">
-            <section aria-labelledby="month-heading">
-              <h2 id="month-heading" className="field-label">
-                The month
+        <div className="mt-6 flex flex-col gap-4">
+          {/*
+            Three headline figures, side by side from `lg`, coverage first because it is the
+            one figure that cannot be improved by recording less (decision 0202).
+          */}
+          <div className="grid gap-4 lg:grid-cols-3">
+            <section aria-labelledby="coverage-heading" className={FRAME}>
+              <h2 id="coverage-heading" className="field-label">
+                Recording coverage
               </h2>
-              <p className="mt-2 text-sm">
-                <span className="text-xl font-semibold tabular-nums">{report.data.n}</span>
-                <span className="text-muted">
-                  {' '}
-                  {report.data.n === 1 ? 'Sunday counted' : 'Sundays counted'}
-                </span>
+              <p className="mt-2">
+                <CoverageFigure
+                  recorded={report.data.coverage.met}
+                  scheduled={report.data.coverage.owed}
+                  unit="records filed"
+                  headline
+                />
               </p>
+              <p className="text-muted mt-2 text-sm leading-relaxed">
+                One per Sunday a leader was responsible for somebody.
+              </p>
+            </section>
+
+            <section aria-labelledby="people-heading" className={FRAME}>
+              <h2 id="people-heading" className="field-label">
+                People who attended
+              </h2>
+              <p className="mt-2 text-xl font-semibold tabular-nums">{report.data.unique_people}</p>
+              <p className="text-muted mt-2 text-sm leading-relaxed">
+                Counted once, however many Sundays.
+              </p>
+            </section>
+
+            <section aria-labelledby="month-heading" className={FRAME}>
+              <h2 id="month-heading" className="field-label">
+                Sundays counted
+              </h2>
+              <p className="mt-2 text-xl font-semibold tabular-nums">{report.data.n}</p>
               {report.data.removed_events.length > 0 ? (
                 // Section 9: a removal records a decision, so it is named rather
                 // than left as a smaller number nobody can explain.
-                <p className="text-muted mt-2 max-w-2xl text-sm leading-relaxed">
+                <p className="text-muted mt-2 text-sm leading-relaxed">
                   No service was held on{' '}
                   {report.data.removed_events.map((date) => dayLabel(date)).join(', ')}, so
                   {report.data.removed_events.length === 1
@@ -220,26 +222,20 @@ export function DccReport() {
                     : ' those Sundays are'}{' '}
                   not counted.
                 </p>
-              ) : null}
-            </section>
-
-            <section aria-labelledby="people-heading">
-              <h2 id="people-heading" className="field-label">
-                People who attended
-              </h2>
-              <p className="mt-2 text-xl font-semibold tabular-nums">{report.data.unique_people}</p>
-              <p className="text-muted mt-2 max-w-2xl text-sm leading-relaxed">
-                Counted once each, however many Sundays they came to.
-              </p>
+              ) : (
+                <p className="text-muted mt-2 text-sm leading-relaxed">
+                  The month&rsquo;s Sundays that had a service.
+                </p>
+              )}
             </section>
           </div>
 
           {/* Side by side from `lg`, one under the other below it. */}
-          <div className="grid gap-10 lg:grid-cols-2">
+          <div className="grid gap-4 lg:grid-cols-2">
             <ClassificationFigures classification={report.data.classification} />
 
             {report.data.n === 0 ? (
-              <p className="text-muted max-w-2xl text-sm leading-relaxed">
+              <p className={`${FRAME} text-muted text-sm leading-relaxed`}>
                 No Sundays were counted this month, so there is nothing to break down.
               </p>
             ) : (
@@ -257,7 +253,7 @@ export function DccReport() {
             )}
           </div>
 
-          <section aria-labelledby="coverage-by-heading">
+          <section aria-labelledby="coverage-by-heading" className={FRAME}>
             <h2 id="coverage-by-heading" className="field-label">
               Row by row
             </h2>
