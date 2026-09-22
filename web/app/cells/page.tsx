@@ -9,6 +9,7 @@ import { CoverageFigure } from '@/components/coverage-figure';
 import { MonthPicker } from '@/components/month-picker';
 import { Button, buttonClasses } from '@/components/ui/button';
 import { FailureNotice } from '@/components/ui/failure-notice';
+import { CONTROL_BAR } from '@/components/ui/frame';
 import { Field } from '@/components/ui/field';
 import { RadioGroup } from '@/components/ui/radio-group';
 import { RestartCellDialog } from '@/components/restart-cell-dialog';
@@ -128,7 +129,7 @@ function CellsIndex() {
         by how much is missing.
       </p>
 
-      <p className="mt-4">
+      <p className="mt-2">
         {/*
           Section 15 puts the people-without-a-Cell list in this module, so it is reached
           from here as well as from the dashboard.
@@ -138,6 +139,8 @@ function CellsIndex() {
         </Link>
       </p>
 
+      {/* Every control in one bar, above the table (owner's choice, 2026-09-22). */}
+      <div className={`mt-6 ${CONTROL_BAR}`}>
       {/*
         **The search narrows the whole scope, on the server** (decision 0261): a church-wide
         reader holds hundreds of Cells, and a filter over the page on screen would search ten
@@ -150,7 +153,7 @@ function CellsIndex() {
             restart(() => setSubmitted(trimmed));
           }
         }}
-        className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-end"
+        className="flex w-full min-w-0 flex-col gap-3 sm:flex-row sm:items-end lg:w-auto lg:min-w-72 lg:flex-1"
         noValidate
       >
         <Field
@@ -172,7 +175,6 @@ function CellsIndex() {
         means active Cells unless it says otherwise (section 10), so a closed Cell is shown
         only where the reader has asked for closed ones.
       */}
-      <div className="mt-6">
         <RadioGroup
           legend="Show"
           name="view"
@@ -183,16 +185,12 @@ function CellsIndex() {
             { value: 'CLOSED', label: 'Closed Cells' },
           ]}
         />
-      </div>
 
-      <div className="flex flex-wrap items-center justify-between gap-x-4">
         {/*
           No month in the closed view: it lists when a Cell closed and whether it may
           restart, and neither is a figure for a period.
         */}
-        {closed ? (
-          <span />
-        ) : (
+        {closed ? null : (
           <MonthPicker
             month={month}
             onChange={(next) => restart(() => setMonth(next))}
@@ -202,7 +200,6 @@ function CellsIndex() {
         <Button
           type="button"
           variant="secondary"
-          className="mt-6"
           aria-pressed={mineOnly}
           onClick={() => restart(() => setMineOnly((on) => !on))}
         >
