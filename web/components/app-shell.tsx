@@ -91,8 +91,9 @@ const APPLICATION_NAME = 'G12 Church Management';
  * **A laptop is wider than anything worth reading across.** Left unconstrained, a
  * form field on a 1920px display becomes a 1900px input and a paragraph runs to
  * 200 characters a line, which is harder to read than the same thing on a phone.
- * So content stops widening and the page centres it — the same layout from a
- * 1024px laptop to a 4K display, with more margin rather than more line.
+ * So content stops widening. Below `lg` the page centres it; from `lg` it starts 40px
+ * from the sidebar and the spare width falls to the right, as the owner's design draws
+ * it (owner's choice, 2026-09-22), rather than opening a gap that grows with the screen.
  *
  * Two values for a page of content, where there were four.
  *
@@ -115,8 +116,8 @@ const APPLICATION_NAME = 'G12 Church Management';
  * and jumps to another.
  */
 export const PAGE_WIDTH = {
-  READING: 'mx-auto max-w-3xl px-5 py-8 sm:py-12',
-  INDEX: 'mx-auto max-w-5xl px-5 py-8 sm:py-12',
+  READING: 'mx-auto max-w-3xl px-5 py-8 sm:py-12 lg:mx-0 lg:px-10',
+  INDEX: 'mx-auto max-w-5xl px-5 py-8 sm:py-12 lg:mx-0 lg:px-10',
 } as const;
 
 /**
