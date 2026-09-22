@@ -58,7 +58,8 @@ export interface Match {
  */
 
 /**
- * A candidate's full name as every surface displays it.
+ * A candidate's full name, without a title: the matcher compares names alone
+ * (decision 0271), and this list shows the name it matched.
  *
  * Here rather than beside either caller — the redaction, which uses it as half of
  * the order key section 3 defines, and the tree import's dry-run report — because
@@ -70,8 +71,8 @@ export interface Match {
  * specifically, and section 2 does not reach a seam inside one module
  * (2026-08-24), so either would have been defensible.
  *
- * A whitespace-only middle name counts as absent, matching `composeName` in
- * `people.shared.ts`, which does the same job for a row's snake_case fields. Two
+ * A whitespace-only middle name counts as absent, as in `composeName` in
+ * `people.shared.ts`, which also puts a title first. Two
  * shapes, and deliberately not four compositions: the redaction's argument for
  * ordering on the name rests on the sort key and the displayed name being the
  * same string, which is not a property that survives being written out twice.

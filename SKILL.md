@@ -411,7 +411,9 @@ Validation must support legitimate names containing spaces, hyphens, apostrophes
 
 **Never write one into `middle_name`.** The matcher does not look there and middle name is not compared at all, so a suffix recorded there is silently invisible — and a father and son then lose the one signal this section gives for telling them apart, with nothing reporting it. `first_name` would in fact work, since both name fields are stripped and both are read for a suffix, but one stated place beats two working ones: otherwise the same family is recorded two ways and every screen shows it inconsistently.
 
-**The four are a closed list.** A qualification that is not one of them — a degree, a profession, an honorific, a church title — is not a suffix, is not stored in a name field, and has no field of its own. Where such a thing belongs is an open question and is deliberately not answered here; what is settled is that a name field is not the answer, because anything put there is compared as though it were part of the person's name.
+**The four are a closed list.** A qualification that is not one of them — a degree, a profession, an honorific, a church title — is not a suffix and is not stored in a name field, because anything put there is compared as though it were part of the person's name.
+
+**A title has a field of its own, `title`, shown before the name and never compared** (ruling of 2026-09-22, decision 0271). Bishop, Pastora and the like. It is optional, and blank is stored as absent. Duplicate matching and search read the name fields alone, so `Pastora Lina Ocampo` and `Lina Ocampo` are the same person to the matcher. It holds the current title only and is not effective-dated: it is for display, and no report counts it.
 
 ### Duplicate prevention
 
@@ -1589,7 +1591,7 @@ Admins may have system-wide operational permissions even if they are not pastora
 
 ### Scope of `people.edit_basic`
 
-`people.edit_basic` covers corrections to a person's own descriptive fields only: first name, middle name, last name, birthday, civil status, and mobile number.
+`people.edit_basic` covers corrections to a person's own descriptive fields only: title, first name, middle name, last name, birthday, civil status, and mobile number.
 
 It does not cover sex, Network, pastoral assignment, Cell membership, Cell leadership, lifecycle state, or account state. Each of those is governed by its own capability — sex and the Network change it forces by `people.correct_sex`.
 
@@ -2060,10 +2062,10 @@ For a person within the searching leader's authorized pastoral scope, return ful
 For a person outside the searching leader's authorized pastoral scope, return only the minimum information necessary to identify a possible existing record:
 
 - Member ID
-- Full Name
+- Full Name, with any title first (Section 3)
 - Sex
 - Current Network
-- Current Direct Leader's name
+- Current Direct Leader's name, the same way
 
 Do not expose, for a person outside the searching leader's pastoral scope:
 

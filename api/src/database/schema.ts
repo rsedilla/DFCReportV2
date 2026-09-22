@@ -30,6 +30,8 @@ export type Json = string | number | boolean | Json[] | { [key: string]: Json | 
 export interface PersonsTable {
   id: Generated<string>;
   member_id: Generated<string>;
+  /** Bishop, Pastora (decision 0271). Display only, never compared. */
+  title: string | null;
   first_name: string;
   middle_name: string | null;
   last_name: string;

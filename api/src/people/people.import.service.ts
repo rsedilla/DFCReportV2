@@ -302,6 +302,7 @@ export class PeopleImportService {
         'persons.id as id',
         'persons.member_id as member_id',
         'persons.first_name as first_name',
+        'persons.title as title',
         'persons.middle_name as middle_name',
         'persons.last_name as last_name',
         'persons.sex as sex',

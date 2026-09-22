@@ -157,6 +157,7 @@ function PersonDetail() {
               Details
             </h2>
           <dl className="mt-4 grid gap-x-6 gap-y-4 sm:grid-cols-[12rem_1fr]">
+            <Detail label="Title" value={person.data.title} />
             <Detail label="First name" value={person.data.first_name} />
             <Detail label="Middle name" value={person.data.middle_name} />
             <Detail label="Last name" value={person.data.last_name} />

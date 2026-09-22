@@ -165,6 +165,7 @@ export class PeopleReassignmentService {
         .select([
           'id',
           'member_id',
+          'title',
           'first_name',
           'middle_name',
           'last_name',

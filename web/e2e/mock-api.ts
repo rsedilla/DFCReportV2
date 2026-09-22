@@ -157,6 +157,7 @@ export const PERSON_IN_SCOPE = {
   scope: 'FULL',
   id: '11111111-2222-4333-8444-555555555555',
   member_id: 'M-000042',
+  title: null,
   first_name: 'Marilou',
   middle_name: 'Reyes',
   last_name: 'Santos',

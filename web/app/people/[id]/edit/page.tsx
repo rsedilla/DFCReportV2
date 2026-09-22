@@ -100,6 +100,7 @@ function Fields({ person, id }: { person: PersonFull; id: string }) {
   const router = useRouter();
 
   const [values, setValues] = useState({
+    title: person.title ?? '',
     first_name: person.first_name,
     middle_name: person.middle_name ?? '',
     last_name: person.last_name,
@@ -142,6 +143,7 @@ function Fields({ person, id }: { person: PersonFull; id: string }) {
     setFieldErrors({});
 
     const changes: PersonEdit = {
+      title: values.title.trim() || null,
       first_name: values.first_name.trim(),
       middle_name: values.middle_name.trim() || null,
       last_name: values.last_name.trim(),

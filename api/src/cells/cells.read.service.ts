@@ -578,6 +578,7 @@ export class CellsReadService implements CellScopePort, CellRelationshipsPort {
       .select([
         'cell_memberships.person_id as person_id',
         'persons.member_id as member_id',
+        'persons.title as title',
         'persons.first_name as first_name',
         'persons.middle_name as middle_name',
         'persons.last_name as last_name',
@@ -623,7 +624,7 @@ export class CellsReadService implements CellScopePort, CellRelationshipsPort {
     return rows.map((row) => ({
       person_id: row.person_id,
       member_id: row.member_id,
-      full_name: [row.first_name, row.middle_name, row.last_name]
+      full_name: [row.title, row.first_name, row.middle_name, row.last_name]
         .filter((part): part is string => part !== null && part !== '')
         .join(' '),
       last_name: row.last_name,
