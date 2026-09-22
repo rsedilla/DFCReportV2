@@ -2,7 +2,7 @@
 
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { useParams, useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import Link from 'next/link';
 
@@ -109,6 +109,15 @@ function Fields({ person, id }: { person: PersonFull; id: string }) {
     mobile_number: person.mobile_number ?? '',
   });
   const [failure, setFailure] = useState<Failure | null>(null);
+
+  // "Add" on the person page lands here with the field named in the hash
+  // (decision 0272). Focus only: nothing is copied into state.
+  useEffect(() => {
+    const field = window.location.hash.slice(1);
+    if (field === 'birth_date' || field === 'mobile_number') {
+      document.querySelector<HTMLInputElement>(`input[name="${field}"]`)?.focus();
+    }
+  }, []);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string | null>>({});
 
   /**
