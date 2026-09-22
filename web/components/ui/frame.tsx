@@ -5,6 +5,9 @@
  */
 export const FRAME = 'border-line bg-surface border p-5';
 
+/** One entry of a list inside a frame: a rule between entries rather than a box round each. */
+export const ROW = 'border-line border-t py-3 first:border-t-0';
+
 /** The report's controls, in one bar above the figures, so no control reads as a figure. */
 export const CONTROL_BAR =
   'border-line bg-raised flex flex-wrap items-end gap-x-6 gap-y-4 border p-4 *:mt-0';

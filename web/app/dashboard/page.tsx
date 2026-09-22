@@ -9,6 +9,7 @@ import { CoverageFigure } from '@/components/coverage-figure';
 import { SentRequests } from '@/components/sent-requests';
 import { buttonClasses } from '@/components/ui/button';
 import { FailureNotice } from '@/components/ui/failure-notice';
+import { CONTROL_BAR, FRAME, ROW } from '@/components/ui/frame';
 import { RadioGroup } from '@/components/ui/radio-group';
 import { Tag } from '@/components/ui/tag';
 import { HeaderCell, Table, rowClasses } from '@/components/ui/table';
@@ -447,8 +448,8 @@ function Dashboard() {
         <FailureNotice failure={failure} />
       </div>
 
-      <div className="mt-8 grid gap-10 lg:grid-cols-[minmax(0,1fr)_18rem]">
-        <section aria-labelledby="awaiting-heading" className="min-w-0">
+      <div className="mt-8 grid gap-6 lg:grid-cols-[minmax(0,1fr)_18rem]">
+        <section aria-labelledby="awaiting-heading" className={`min-w-0 ${FRAME}`}>
           <h2 id="awaiting-heading" className="text-lg font-bold tracking-tight">
             Awaiting a record
           </h2>
@@ -461,7 +462,7 @@ function Dashboard() {
             here is scored or ranked.
           </p>
 
-          <div className="mt-4 flex flex-wrap gap-x-8 gap-y-4">
+          <div className={`mt-4 ${CONTROL_BAR}`}>
             <RadioGroup
               legend="Whose"
               name="queue-whose"
@@ -603,7 +604,9 @@ function Dashboard() {
       {/* The reader's own requests, beside their own work (decision 0269). */}
       <SentRequests />
 
-      <section className="mt-10" aria-labelledby="attention-heading">
+      {/* The three attention lists side by side from `lg`, one frame each. */}
+      <div className="mt-6 grid gap-4 lg:grid-cols-3">
+      <section className={FRAME} aria-labelledby="attention-heading">
         <h2 id="attention-heading" className="text-lg font-bold tracking-tight">
           Cells with meetings still to record
         </h2>
@@ -630,7 +633,7 @@ function Dashboard() {
             )}
           </p>
         ) : (
-          <ul className="mt-4 flex flex-col gap-3">
+          <ul className="mt-3">
             {needingAttention.map((cell) => (
               <AttentionRow key={cell.id} cell={cell} month={month} />
             ))}
@@ -649,7 +652,7 @@ function Dashboard() {
         selector and make it look like a figure for a period, which is exactly the line
         section 3 draws and section 19 says a dashboard is where it is most easily lost.
       */}
-      <section className="mt-10" aria-labelledby="unplaced-heading">
+      <section className={FRAME} aria-labelledby="unplaced-heading">
         <h2 id="unplaced-heading" className="text-lg font-bold tracking-tight">
           People needing a leader
         </h2>
@@ -668,9 +671,9 @@ function Dashboard() {
                 with a wider scope may see them.
               </p>
             ) : (
-              <ul className="mt-4 flex flex-col gap-3">
+              <ul className="mt-3">
                 {unplaced.data.data.slice(0, UNPLACED_TILE).map((person) => (
-                  <li key={person.id} className="border-line border p-4">
+                  <li key={person.id} className={ROW}>
                     {/*
                       The action that resolves it (section 19) is the reassignment, which
                       lives on the person's place in the tree.
@@ -720,7 +723,7 @@ function Dashboard() {
         section 10's closure flow fills (decision 0233). Undated, so it sits above the
         period heading with the other current-state work.
       */}
-      <section className="mt-10" aria-labelledby="without-cell-heading">
+      <section className={FRAME} aria-labelledby="without-cell-heading">
         <h2 id="without-cell-heading" className="text-lg font-bold tracking-tight">
           People without a Cell
         </h2>
@@ -738,9 +741,9 @@ function Dashboard() {
                 may see them.
               </p>
             ) : (
-              <ul className="mt-4 flex flex-col gap-3">
+              <ul className="mt-3">
                 {withoutACell.data.data.slice(0, UNPLACED_TILE).map((person) => (
-                  <li key={person.id} className="border-line border p-4">
+                  <li key={person.id} className={ROW}>
                     <Link
                       href={`/people/${person.id}`}
                       className="focus-visible:outline-accent inline-flex min-h-6 items-center text-base font-medium underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2"
@@ -767,6 +770,7 @@ function Dashboard() {
           </>
         ) : null}
       </section>
+      </div>
 
       <section className="mt-10" aria-labelledby="current-heading">
         <h2 id="current-heading" className="text-lg font-bold tracking-tight">
@@ -1088,7 +1092,7 @@ function Tile({
 
 function AttentionRow({ cell, month }: { cell: CellSummary; month: string }) {
   return (
-    <li className="border-line border p-4">
+    <li className={ROW}>
       <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
         <h3 className="text-base font-medium">
           <Link

@@ -11,6 +11,7 @@ import { CoverageFigure } from '@/components/coverage-figure';
 import { MonthPicker } from '@/components/month-picker';
 import { Button, buttonClasses } from '@/components/ui/button';
 import { FailureNotice } from '@/components/ui/failure-notice';
+import { CONTROL_BAR, FRAME, ROW } from '@/components/ui/frame';
 import { HeaderCell, Table, rowClasses } from '@/components/ui/table';
 import { Tag } from '@/components/ui/tag';
 import {
@@ -95,16 +96,25 @@ function CellMeetings() {
         not happen.
       </p>
 
-      <div className="mt-4 flex flex-wrap gap-3">
-        <Link href={`/cells/${params.id}/members`} className={buttonClasses('secondary')}>
-          Members
-        </Link>
-        {/* A closed Cell's schedule is refused by the route, so it is not offered. */}
-        {meetings.data && meetings.data.cell_closed_on == null ? (
-          <Button variant="secondary" onClick={() => setChanging(true)}>
-            Change when it meets
-          </Button>
-        ) : null}
+      {/* Every control in one bar, above the meetings (owner's choice, 2026-09-22). */}
+      <div className={`mt-6 ${CONTROL_BAR}`}>
+        <div className="flex flex-wrap gap-3">
+          <Link href={`/cells/${params.id}/members`} className={buttonClasses('secondary')}>
+            Members
+          </Link>
+          {/* A closed Cell's schedule is refused by the route, so it is not offered. */}
+          {meetings.data && meetings.data.cell_closed_on == null ? (
+            <Button variant="secondary" onClick={() => setChanging(true)}>
+              Change when it meets
+            </Button>
+          ) : null}
+        </div>
+        {/*
+          No `open` flag here: this route does not return one. It is shown on the
+          Cells index and on the reports, and claiming it from a clock this screen
+          does not own would be a second answer to a question the API settles.
+        */}
+        <MonthPicker month={month} onChange={setMonth} />
       </div>
 
       {savedFrom ? (
@@ -121,23 +131,20 @@ function CellMeetings() {
         cellHandle={handle}
       />
 
-      {/*
-        No `open` flag here: this route does not return one. It is shown on the
-        Cells index and on the reports, and claiming it from a clock this screen
-        does not own would be a second answer to a question the API settles.
-      */}
-      <MonthPicker month={month} onChange={setMonth} />
-
-      <div className="mt-8">
+      <div className="mt-6">
         <FailureNotice failure={meetings.isError ? describeFailure(meetings.error) : null} />
       </div>
 
       {meetings.isPending ? (
         <p className="text-muted mt-6 text-sm">Loading&hellip;</p>
       ) : meetings.data ? (
-        <>
-          <p className="mt-6">
+        <section aria-labelledby="this-month-heading" className={FRAME}>
+          <h2 id="this-month-heading" className="field-label">
+            This month
+          </h2>
+          <p className="mt-2">
             <CoverageFigure
+              headline
               recorded={meetings.data.recorded_count}
               scheduled={meetings.data.scheduled_count}
               unit="meetings recorded"
@@ -180,11 +187,11 @@ function CellMeetings() {
                 </tbody>
               </Table>
 
-              <ul className="mt-6 flex flex-col gap-3 lg:hidden">
+              <ul className="mt-4 lg:hidden">
                 {meetings.data.meetings.map((entry) => (
-                  <li key={entry.scheduled_date} className="border-line border p-4">
+                  <li key={entry.scheduled_date} className={ROW}>
                     <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-                      <h2 className="text-base font-medium">
+                      <h3 className="text-base font-medium">
                         <Link
                           href={`/cells/${params.id}/meetings/${entry.scheduled_date}`}
                           className={`${LINK} text-accent`}
@@ -195,7 +202,7 @@ function CellMeetings() {
                           {' '}
                           at {timeLabel(entry.scheduled_time)}
                         </span>
-                      </h2>
+                      </h3>
                       <MeetingState entry={entry} today={today} />
                     </div>
                     <MeetingDetail entry={entry} />
@@ -204,7 +211,7 @@ function CellMeetings() {
               </ul>
             </>
           )}
-        </>
+        </section>
       ) : null}
     </main>
   );
