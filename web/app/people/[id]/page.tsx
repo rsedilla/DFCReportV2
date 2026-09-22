@@ -99,6 +99,12 @@ function PersonDetail() {
       (grant) => grant.capability === 'people.manage_pastoral_assignment',
     );
 
+  // An unrecorded birthday or mobile number offers to add it, and there is no list of
+  // them anywhere (SKILL.md section 3, decision 0272).
+  const mayEdit = (me.data?.capabilities ?? []).some(
+    (grant) => grant.capability === 'people.edit_basic',
+  );
+
   const refused =
     person.error instanceof ApiRequestError &&
     (person.error.code === 'SCOPE_DENIED' || person.error.code === 'CAPABILITY_DENIED');
@@ -169,6 +175,7 @@ function PersonDetail() {
               // Not "unknown" and not "missing": section 3 permits no birthday,
               // and somebody may have chosen not to give one.
               absent="Not recorded"
+              add={mayEdit ? { href: `/people/${id}/edit#birth_date`, what: 'a birthday' } : null}
             />
             <Detail
               label="Age"
@@ -179,7 +186,14 @@ function PersonDetail() {
               // birthday contradicts the line above it.
               absent="Needs a birthday"
             />
-            <Detail label="Mobile number" value={person.data.mobile_number} absent="Not recorded" />
+            <Detail
+              label="Mobile number"
+              value={person.data.mobile_number}
+              absent="Not recorded"
+              add={
+                mayEdit ? { href: `/people/${id}/edit#mobile_number`, what: 'a mobile number' } : null
+              }
+            />
           </dl>
           </section>
 
@@ -264,15 +278,28 @@ function Detail({
   label,
   value,
   absent = '—',
+  add = null,
 }: {
   label: string;
   value: string | null;
   absent?: string;
+  /** Offered only where the value is absent and the reader may edit it. */
+  add?: { href: string; what: string } | null;
 }) {
   return (
     <>
       <dt className="text-sm font-medium">{label}</dt>
-      <dd className={value ? 'text-sm' : 'text-muted text-sm'}>{value || absent}</dd>
+      <dd className={value ? 'text-sm' : 'text-muted text-sm'}>
+        {value || absent}
+        {!value && add ? (
+          <>
+            {' · '}
+            <TextLink href={add.href} aria-label={`Add ${add.what}`}>
+              Add
+            </TextLink>
+          </>
+        ) : null}
+      </dd>
     </>
   );
 }

@@ -320,6 +320,8 @@ Two situations produce a Person with no birthday, and the second is why this is 
 
 **Never fabricate one.** A placeholder is indistinguishable from a fact afterwards, and it is the failure this rule exists to prevent rather than a shortcut around it.
 
+**No list of people missing a birthday or a mobile number is offered** (ruling of 2026-09-22, decision 0272). A list would keep pressing the people who chose not to give one. Instead the person's own record offers to add a detail that is not recorded, to a reader who may edit it.
+
 **Absence is honest, and the matcher already accounts for it.** With no birthday on either side, neither of the two Tier 1 rules that read one can fire. Where the first and last names are equal the pair falls to the Tier 2 rule below that names an absent birthday explicitly, which is correct: less is known, so less is claimed.
 
 **The second of those two rules usually falls to nothing at all**, and that is worth saying because the fall-through is not uniform. Tier 1's nickname-or-near-miss rule reads a last name, a first name and a birthday; the Tier 2 rule that catches an absent birthday requires **both** names equal. So two records with the same surname and a first name that is a nickname or a typo — `Mary` against `Maria`, `Jaun` against `Juan` — surface at no tier once the birthday is gone.

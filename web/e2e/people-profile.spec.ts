@@ -15,6 +15,7 @@ import {
   mockPersonCreated,
   mockPersonDccRefused,
   mockSignedIn,
+  mockWithoutEditBasic,
 } from './mock-api';
 import { mockPastoralPath } from './mock-attendance';
 
@@ -493,6 +494,43 @@ test.describe('the Add and Edit person forms', () => {
     await expect(page).toHaveURL(new RegExp(`${PROFILE}$`));
     expect(sent).toHaveLength(1);
     expect(sent[0]).toMatchObject({ title: 'Bishop', first_name: PERSON_IN_SCOPE.first_name });
+  });
+});
+
+test.describe('a detail that is not recorded (decision 0272)', () => {
+  async function withNothingRecorded(page: Page) {
+    await signedInWithPeople(page);
+    await mockPastoralPath(page);
+    await page.route(`**/api/v1/people/${PERSON_IN_SCOPE.id}`, (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ ...PERSON_IN_SCOPE, birth_date: null, mobile_number: null }),
+      }),
+    );
+  }
+
+  test('offers to add it, and the edit form opens on that field', async ({ page }) => {
+    await withNothingRecorded(page);
+    await page.goto(PROFILE);
+
+    await expect(page.getByRole('link', { name: 'Add a mobile number' })).toHaveAttribute(
+      'href',
+      `${PROFILE}/edit#mobile_number`,
+    );
+    await page.getByRole('link', { name: 'Add a birthday' }).click();
+
+    await expect(page).toHaveURL(new RegExp(`${PROFILE}/edit#birth_date$`));
+    await expect(page.locator('input[name="birth_date"]')).toBeFocused();
+  });
+
+  test('offers nothing to a reader who may not edit the person', async ({ page }) => {
+    await withNothingRecorded(page);
+    await mockWithoutEditBasic(page);
+    await page.goto(PROFILE);
+
+    await expect(page.getByText('Not recorded').first()).toBeVisible();
+    await expect(page.getByRole('link', { name: /^Add a/ })).toHaveCount(0);
   });
 });
 

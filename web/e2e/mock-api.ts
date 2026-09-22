@@ -98,6 +98,13 @@ export async function mockWholeChurchReader(page: Page): Promise<void> {
   await page.route('**/api/v1/auth/me', (route) => route.fulfill(json({ ...ME, capabilities })));
 }
 
+/** The same account without `people.edit_basic`, overriding `/auth/me` alone as above. */
+export async function mockWithoutEditBasic(page: Page): Promise<void> {
+  const capabilities = CAPABILITIES.filter((grant) => grant.capability !== 'people.edit_basic');
+
+  await page.route('**/api/v1/auth/me', (route) => route.fulfill(json({ ...ME, capabilities })));
+}
+
 /** The shared account's person, for a case about viewing your own record. */
 export const SIGNED_IN_PERSON_ID = ME.person_id;
 
