@@ -136,6 +136,7 @@ export class PeopleReadService {
         'persons.id as id',
         'persons.member_id as member_id',
         'persons.first_name as first_name',
+        'persons.title as title',
         'persons.middle_name as middle_name',
         'persons.last_name as last_name',
         'persons.merged_into_id as merged_into_id',
@@ -191,6 +192,7 @@ export class PeopleReadService {
         'persons.id as id',
         'persons.member_id as member_id',
         'persons.first_name as first_name',
+        'persons.title as title',
         'persons.middle_name as middle_name',
         'persons.last_name as last_name',
         'persons.merged_into_id as merged_into_id',
@@ -279,6 +281,7 @@ export class PeopleReadService {
       .select([
         'id',
         'member_id',
+        'title',
         'first_name',
         'middle_name',
         'last_name',
@@ -326,7 +329,7 @@ export class PeopleReadService {
 
     const rows = await this.db
       .selectFrom('persons')
-      .select(['id', 'member_id', 'first_name', 'middle_name', 'last_name'])
+      .select(['id', 'member_id', 'title', 'first_name', 'middle_name', 'last_name'])
       .where('id', 'in', [...personIds])
       .execute();
 
@@ -410,6 +413,7 @@ export class PeopleReadService {
       .select([
         'id',
         'member_id',
+        'title',
         'first_name',
         'middle_name',
         'last_name',
@@ -600,11 +604,13 @@ export class PeopleReadService {
     rows: {
       id: string;
       member_id: string;
+      title: string | null;
       first_name: string;
       middle_name: string | null;
       last_name: string;
       leader_id: string;
       leader_member_id: string;
+      leader_title: string | null;
       leader_first_name: string;
       leader_middle_name: string | null;
       leader_last_name: string;
@@ -687,6 +693,7 @@ export class PeopleReadService {
         'person.id as id',
         'person.member_id as member_id',
         'person.first_name as first_name',
+        'person.title as title',
         'person.middle_name as middle_name',
         'person.last_name as last_name',
       ])
@@ -785,6 +792,7 @@ export class PeopleReadService {
       {
         leader_id: string;
         leader_member_id: string;
+        leader_title: string | null;
         leader_first_name: string;
         leader_middle_name: string | null;
         leader_last_name: string;
@@ -797,7 +805,7 @@ export class PeopleReadService {
 
     const rows = await this.db
       .selectFrom('persons')
-      .select(['id', 'member_id', 'first_name', 'middle_name', 'last_name'])
+      .select(['id', 'member_id', 'title', 'first_name', 'middle_name', 'last_name'])
       .where('id', 'in', [...leaderIds])
       .execute();
 
@@ -807,6 +815,7 @@ export class PeopleReadService {
         {
           leader_id: row.id,
           leader_member_id: row.member_id,
+          leader_title: row.title,
           leader_first_name: row.first_name,
           leader_middle_name: row.middle_name,
           leader_last_name: row.last_name,
@@ -890,6 +899,7 @@ export class PeopleReadService {
     rows: {
       id: string;
       member_id: string;
+      title: string | null;
       first_name: string;
       middle_name: string | null;
       last_name: string;
@@ -907,6 +917,7 @@ export class PeopleReadService {
         'person.id as id',
         'person.member_id as member_id',
         'person.first_name as first_name',
+        'person.title as title',
         'person.middle_name as middle_name',
         'person.last_name as last_name',
       ])

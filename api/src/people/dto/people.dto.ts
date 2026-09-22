@@ -58,6 +58,16 @@ const CIVIL_STATUSES: CivilStatus[] = ['SINGLE', 'MARRIED', 'WIDOWED'];
  * spellings, which is how duplicates get made.
  */
 export class CreatePersonDto {
+  /**
+   * Bishop, Pastora and the like (section 3, decision 0271). Shown before the name
+   * and never compared as part of it. Blank is stored as null.
+   */
+  @IsOptional()
+  @IsString()
+  @Length(0, 40)
+  @IsStorableText()
+  title?: string | null;
+
   @IsString()
   @Length(1, NAME_FIELD_MAX_LENGTH)
   @IsStorableText()
@@ -132,6 +142,13 @@ export class CreatePersonDto {
  * request carrying `sex` is refused rather than quietly ignored.
  */
 export class EditPersonDto {
+  /** As on create; null or blank clears it (decision 0271). */
+  @IsOptional()
+  @IsString()
+  @Length(0, 40)
+  @IsStorableText()
+  title?: string | null;
+
   @IsOptional()
   @IsString()
   @Length(1, NAME_FIELD_MAX_LENGTH)

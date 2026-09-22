@@ -38,6 +38,8 @@ export interface PersonFull {
   scope: 'FULL';
   id: string;
   member_id: string;
+  /** Bishop, Pastora (decision 0271). Already in `full_name`. */
+  title: string | null;
   first_name: string;
   middle_name: string | null;
   last_name: string;
@@ -115,6 +117,7 @@ export async function getPerson(id: string, signal?: AbortSignal): Promise<Perso
 }
 
 export interface PersonInput {
+  title?: string | null;
   first_name: string;
   middle_name?: string | null;
   last_name: string;
@@ -157,7 +160,7 @@ export async function createPerson(
 }
 
 export type PersonEdit = Partial<
-  Pick<PersonInput, 'first_name' | 'middle_name' | 'last_name' | 'birth_date' | 'mobile_number'>
+  Pick<PersonInput, 'title' | 'first_name' | 'middle_name' | 'last_name' | 'birth_date' | 'mobile_number'>
 > & { civil_status?: CivilStatus };
 
 /** The key is the caller's, for the reason given on `createPerson`. */

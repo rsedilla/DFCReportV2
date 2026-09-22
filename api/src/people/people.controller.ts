@@ -101,6 +101,7 @@ export class PeopleController {
   ): Promise<Record<string, unknown>> {
     return this.people.create(
       {
+        title: body.title ?? null,
         firstName: body.first_name,
         middleName: body.middle_name ?? null,
         lastName: body.last_name,
@@ -247,6 +248,7 @@ export class PeopleController {
           person_id: row.leader_id,
           member_id: row.leader_member_id,
           full_name: composeName({
+            title: row.leader_title,
             first_name: row.leader_first_name,
             middle_name: row.leader_middle_name,
             last_name: row.leader_last_name,
@@ -467,6 +469,7 @@ export class PeopleController {
     return this.people.editBasic(
       id,
       {
+        title: body.title,
         firstName: body.first_name,
         middleName: body.middle_name,
         lastName: body.last_name,

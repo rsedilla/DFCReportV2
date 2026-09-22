@@ -5,6 +5,7 @@ import { useId } from 'react';
 import { Field } from '@/components/ui/field';
 
 export interface NameValues {
+  title: string;
   first_name: string;
   middle_name: string;
   last_name: string;
@@ -19,6 +20,9 @@ export interface NameValues {
  *
  * **Each box shows a short label and is announced by its full one**, so a screen reader
  * hears "First name" rather than "First" on its own.
+ *
+ * **Title comes first and is optional** (decision 0271): Bishop, Pastora. It is stored
+ * apart from the name, so it is never compared as part of it.
  */
 export function NameFields({
   values,
@@ -37,7 +41,17 @@ export function NameFields({
     <fieldset className="flex flex-col gap-1.5" aria-describedby={noteId}>
       <legend className="field-label">Full name</legend>
 
-      <div className="mt-1 grid gap-4 sm:grid-cols-3">
+      <div className="mt-1 grid gap-4 sm:grid-cols-4">
+        <Field
+          label="Title"
+          quietLabel
+          aria-label="Title, optional"
+          name="title"
+          autoComplete="off"
+          placeholder="Optional"
+          value={values.title}
+          onChange={(event) => onChange('title', event.target.value)}
+        />
         <Field
           label="First"
           quietLabel

@@ -71,6 +71,8 @@ export type PersonPlacement =
   | { kind: 'ROOT' };
 
 export interface CreatePersonInput {
+  /** Shown before the name, never compared (decision 0271). */
+  title?: string | null;
   firstName: string;
   middleName?: string | null;
   lastName: string;
@@ -117,6 +119,7 @@ export function fullProfile(person: PersonRecord): Record<string, unknown> {
   return {
     id: person.id,
     member_id: person.member_id,
+    title: person.title,
     first_name: person.first_name,
     middle_name: person.middle_name,
     last_name: person.last_name,
@@ -132,12 +135,17 @@ export function fullProfile(person: PersonRecord): Record<string, unknown> {
   };
 }
 
+/**
+ * The name as displayed, a title first where there is one (decision 0271). Display
+ * only: duplicate matching and search compose from the name fields alone.
+ */
 export function composeName(person: {
+  title?: string | null;
   first_name: string;
   middle_name: string | null;
   last_name: string;
 }): string {
-  return [person.first_name, person.middle_name, person.last_name]
+  return [person.title ?? null, person.first_name, person.middle_name, person.last_name]
     .filter((part): part is string => part !== null && part.trim() !== '')
     .join(' ');
 }
@@ -145,6 +153,7 @@ export function composeName(person: {
 export interface PersonRecord {
   id: string;
   member_id: string;
+  title: string | null;
   first_name: string;
   middle_name: string | null;
   last_name: string;

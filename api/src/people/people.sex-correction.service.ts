@@ -199,6 +199,7 @@ export class PeopleSexCorrectionService {
         .select([
           'id',
           'member_id',
+          'title',
           'first_name',
           'middle_name',
           'last_name',
@@ -338,6 +339,7 @@ export class PeopleSexCorrectionService {
         .returning([
           'id',
           'member_id',
+          'title',
           'first_name',
           'middle_name',
           'last_name',

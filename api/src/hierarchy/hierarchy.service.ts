@@ -774,6 +774,7 @@ export class HierarchyService {
       .select([
         'disciple.id as id',
         'disciple.member_id as member_id',
+        'disciple.title as title',
         'disciple.first_name as first_name',
         'disciple.middle_name as middle_name',
         'disciple.last_name as last_name',
@@ -938,12 +939,14 @@ export class HierarchyService {
     const row = await this.db
       .selectFrom('pastoral_assignments as pa')
       .innerJoin('persons as leader', 'leader.id', 'pa.leader_id')
-      .select(['leader.first_name', 'leader.last_name'])
+      .select(['leader.title', 'leader.first_name', 'leader.last_name'])
       .where('pa.person_id', '=', personId)
       .where('pa.ended_at', 'is', null)
       .executeTakeFirst();
 
-    return row === undefined ? null : `${row.first_name} ${row.last_name}`;
+    return row === undefined
+      ? null
+      : [row.title, row.first_name, row.last_name].filter((part) => part !== null).join(' ');
   }
 
   /**
@@ -1270,14 +1273,16 @@ export class HierarchyService {
  * way for one pure function is how a cycle starts. It applies the same rule as
  * that one and as `fullNameOf` in the matcher -- a whitespace-only middle name
  * counts as absent -- and the three are kept in step by review rather than by the
- * compiler, which is the accepted cost of not creating that edge.
+ * compiler, which is the accepted cost of not creating that edge. The matcher's
+ * copy takes no title, which is the point of it (decision 0271).
  */
 function composeName(row: {
+  title: string | null;
   first_name: string;
   middle_name: string | null;
   last_name: string;
 }): string {
-  return [row.first_name, row.middle_name, row.last_name]
+  return [row.title, row.first_name, row.middle_name, row.last_name]
     .filter((part): part is string => part !== null && part.trim() !== '')
     .join(' ');
 }

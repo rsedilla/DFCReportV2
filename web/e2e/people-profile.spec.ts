@@ -468,6 +468,32 @@ test.describe('the Add and Edit person forms', () => {
     await expect(page.getByText('Regular', { exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: /Correct this stage/ })).toHaveCount(0);
   });
+
+  test('sends a title apart from the name (decision 0271)', async ({ page }) => {
+    await signedInWithPeople(page);
+    await mockPastoralPath(page);
+
+    const sent: Record<string, unknown>[] = [];
+    await page.route(`**/api/v1/people/${PERSON_IN_SCOPE.id}`, async (route) => {
+      if (route.request().method() !== 'PATCH') {
+        return route.fallback();
+      }
+      sent.push(route.request().postDataJSON());
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ ...PERSON_IN_SCOPE, title: 'Bishop' }),
+      });
+    });
+
+    await page.goto(`${PROFILE}/edit`);
+    await page.getByLabel('Title, optional').fill('Bishop');
+    await page.getByRole('button', { name: 'Save changes' }).click();
+
+    await expect(page).toHaveURL(new RegExp(`${PROFILE}$`));
+    expect(sent).toHaveLength(1);
+    expect(sent[0]).toMatchObject({ title: 'Bishop', first_name: PERSON_IN_SCOPE.first_name });
+  });
 });
 
 test.describe('adding a person with a Cell', () => {

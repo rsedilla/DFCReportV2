@@ -175,6 +175,7 @@ export class PeopleService {
       const person = await trx
         .insertInto('persons')
         .values({
+          title: input.title?.trim() || null,
           first_name: input.firstName.trim(),
           middle_name: input.middleName?.trim() || null,
           last_name: input.lastName.trim(),
@@ -187,6 +188,7 @@ export class PeopleService {
         .returning([
           'id',
           'member_id',
+          'title',
           'first_name',
           'middle_name',
           'last_name',
@@ -269,7 +271,7 @@ export class PeopleService {
   /**
    * Corrections to a person's own descriptive fields, and nothing else.
    *
-   * Section 7 is explicit about the boundary: `people.edit_basic` covers first,
+   * Section 7 is explicit about the boundary: `people.edit_basic` covers title, first,
    * middle and last name, birthday, civil status and mobile number. **Not sex** —
    * that determines Network, which determines which pastoral edges are legal, so
    * it has its own capability and its own audited path (section 4).
@@ -277,6 +279,7 @@ export class PeopleService {
   async editBasic(
     personId: string,
     changes: {
+      title?: string | null;
       firstName?: string;
       middleName?: string | null;
       lastName?: string;
@@ -297,6 +300,7 @@ export class PeopleService {
         .select([
           'id',
           'member_id',
+          'title',
           'first_name',
           'middle_name',
           'last_name',
@@ -315,6 +319,7 @@ export class PeopleService {
       const person = await trx
         .updateTable('persons')
         .set({
+          ...(changes.title === undefined ? {} : { title: changes.title?.trim() || null }),
           ...(changes.firstName === undefined ? {} : { first_name: changes.firstName.trim() }),
           ...(changes.middleName === undefined
             ? {}
@@ -333,6 +338,7 @@ export class PeopleService {
         .returning([
           'id',
           'member_id',
+          'title',
           'first_name',
           'middle_name',
           'last_name',

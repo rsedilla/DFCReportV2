@@ -412,6 +412,70 @@ describe('people (SKILL.md sections 3, 7 and 8)', () => {
     });
   });
 
+  describe('a title (SKILL.md section 3, decision 0271)', () => {
+    it('is shown before the name and never matched as part of it', async () => {
+      const titled = await post(raymondAccount, randomUUID()).send(
+        personBody({
+          pastoral_leader_id: manuel.id,
+          title: 'Pastor',
+          first_name: 'Lino',
+          last_name: 'Ocampo',
+          birth_date: '1970-02-02',
+        }),
+      );
+
+      expect(titled.status).toBe(201);
+      expect(titled.body.title).toBe('Pastor');
+      expect(titled.body.full_name).toBe('Pastor Lino Ocampo');
+
+      // The same person entered again without the title is a Tier 1 duplicate, which
+      // it could not be if the title were compared as part of the name.
+      const again = await post(raymondAccount, randomUUID()).send(
+        personBody({
+          pastoral_leader_id: manuel.id,
+          first_name: 'Lino',
+          last_name: 'Ocampo',
+          birth_date: '1970-02-02',
+        }),
+      );
+
+      expect(again.status).toBe(409);
+      expect(again.body.error.details.candidates).toEqual([
+        expect.objectContaining({ id: titled.body.id, tier: 1 }),
+      ]);
+    });
+
+    it('stores a blank title as none, and an edit sets and clears one', async () => {
+      const created = await post(raymondAccount, randomUUID()).send(
+        personBody({ pastoral_leader_id: manuel.id, title: '   ', first_name: 'Ramon' }),
+      );
+      expect(created.status).toBe(201);
+      expect(created.body.title).toBeNull();
+
+      const edit = (body: Record<string, unknown>) =>
+        request(app.getHttpServer())
+          .patch(`/api/v1/people/${created.body.id}`)
+          .set('Authorization', `Bearer ${raymondAccount.accessToken}`)
+          .set('Idempotency-Key', randomUUID())
+          .send(body);
+
+      const titled = await edit({ title: 'Bishop' });
+      expect(titled.status).toBe(200);
+      expect(titled.body.full_name).toMatch(/^Bishop Ramon /);
+
+      const cleared = await edit({ title: null });
+      expect(cleared.status).toBe(200);
+      expect(cleared.body.title).toBeNull();
+      expect(cleared.body.full_name).toMatch(/^Ramon /);
+    });
+
+    it('is refused blank by the database, not only by the service', async () => {
+      await expect(
+        db.updateTable('persons').set({ title: ' ' }).where('id', '=', juan.id).execute(),
+      ).rejects.toThrow(/persons_title_not_blank/);
+    });
+  });
+
   describe('the pre-flight duplicate check (SKILL.md section 3)', () => {
     it('surfaces Tier 2 candidates, which creation alone never shows', async () => {
       // Creation can only refuse on Tier 1, so without this endpoint every Tier 2

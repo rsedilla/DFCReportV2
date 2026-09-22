@@ -76,6 +76,7 @@ export default function NewPersonPage() {
 }
 
 const EMPTY = {
+  title: '',
   first_name: '',
   middle_name: '',
   last_name: '',
@@ -199,6 +200,7 @@ function NewPersonForm() {
     mutationFn: ({ acknowledgedIds, key }: { acknowledgedIds: string[]; key: string }) =>
       createPerson(
         {
+          title: values.title.trim() || null,
           first_name: values.first_name.trim(),
           middle_name: values.middle_name.trim() || null,
           last_name: values.last_name.trim(),
