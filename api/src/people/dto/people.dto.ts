@@ -422,8 +422,8 @@ export class SearchPeopleDto {
    * out, rather than church-wide unless somebody remembers to opt it in.
    *
    * `true` restores exactly the previous behaviour: every match in the church, with
-   * the fields scoped per person rather than the rows. It is what the three person
-   * pickers send, and nothing else should.
+   * the fields scoped per person rather than the rows. It is what the person pickers
+   * send, and nothing else should.
    *
    * **It widens no authority.** The capability guarding this route is unchanged and
    * its scope still decides what a `true` here can reach; the flag chooses only

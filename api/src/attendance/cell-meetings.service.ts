@@ -955,10 +955,8 @@ export class CellMeetingsService implements RecordedMeetingsPort {
       // server-derived value, so one of those failing is a defect and must keep failing
       // loudly rather than being reported to a leader as their typo.
       //
-      // **What the field may name beyond existing is still open** (`CLAUDE.md`): any
-      // Person, a member of that Cell, or someone in the leader's subtree are three
-      // readings that refuse different bodies. Existence is the part all three share, so
-      // it is the part that can be enforced without settling the rest.
+      // `assertMayFacilitate` now refuses this first (decision 0274); the translation stays
+      // for the constraint's own sake.
       if (isForeignKeyViolation(error) && violatedConstraint(error) === FACILITATOR_IS_A_PERSON) {
         throw new InvariantViolationError(
           'The person named as the facilitator does not exist (SKILL.md section 13).',
@@ -1217,6 +1215,15 @@ export class CellMeetingsService implements RecordedMeetingsPort {
       // constraints behind it were guarded on the transition path and on neither here.
       assertNotHeldIsExplained(body, { cell_id: cellId, meeting_id: meetingId });
 
+      // **Any current Person may have run it** (decision 0274): not one absorbed by a
+      // merge or archived, which is what Cell membership refuses too (section 10).
+      if (body.facilitated_by !== undefined) {
+        await this.assertMayFacilitate(trx, body.facilitated_by, {
+          cell_id: cellId,
+          meeting_id: meetingId,
+        });
+      }
+
       const members = await this.cells.membersAsOfWithin(trx, cellId, meetingId);
       const attendance = assertAttendanceMatchesRoster(body, members, {
         cellId,
@@ -1285,6 +1292,22 @@ export class CellMeetingsService implements RecordedMeetingsPort {
             responsible_leader_id: responsibleLeaderId,
             recorded: attendance.length,
             present: attendance.filter((line) => line.present).length,
+          },
+        });
+      }
+
+      // **A facilitator named on the submission is audited** (section 21 lists "Cell meeting
+      // facilitator recorded"; decision 0274). The default, the leader, names nobody.
+      if (body.facilitated_by !== undefined) {
+        await this.audit.writeWithin(trx, {
+          actorId: actor.accountId,
+          action: 'cell_meeting.facilitator_recorded',
+          targetType: 'cell',
+          targetId: cellId,
+          after: {
+            meeting_id: meetingId,
+            facilitated_by: body.facilitated_by,
+            responsible_leader_id: responsibleLeaderId,
           },
         });
       }
@@ -2138,6 +2161,38 @@ export class CellMeetingsService implements RecordedMeetingsPort {
         corrected,
       },
     );
+  }
+
+  /** Refuses a facilitator who is not a current Person (decision 0274). */
+  private async assertMayFacilitate(
+    trx: Transaction<Database>,
+    personId: string,
+    context: { cell_id: string; meeting_id: string },
+  ): Promise<void> {
+    const person = await this.people.forDecisionWithin(trx, personId);
+    const details = { ...context, facilitated_by: personId };
+
+    if (!person) {
+      throw new InvariantViolationError(
+        'The person named as the facilitator does not exist (SKILL.md section 13).',
+        details,
+      );
+    }
+
+    if (person.mergedIntoId !== null) {
+      throw new InvariantViolationError(
+        'The person named as the facilitator was absorbed by a merge. Name the surviving ' +
+          'Person instead (SKILL.md section 13).',
+        details,
+      );
+    }
+
+    if (person.isArchived) {
+      throw new InvariantViolationError(
+        'The person named as the facilitator is archived (SKILL.md section 13).',
+        details,
+      );
+    }
   }
 
   /** The date a meeting currently stands on, where it has already moved. */

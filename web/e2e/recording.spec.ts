@@ -1,9 +1,11 @@
 import { expect, test, type Page } from '@playwright/test';
 
 import {
+  PERSON_IN_SCOPE,
   mockAwaitingReassignment,
   mockCellCorrector,
   mockGrants,
+  mockPeople,
   mockPeopleWithoutACell,
   mockSignedIn,
 } from './mock-api';
@@ -160,6 +162,53 @@ test.describe('a recorded Cell meeting', () => {
 
     await expect(page.getByText('Why: Weather or calamity')).toBeVisible();
     await expect(page.getByRole('button', { name: 'Edit this record' })).toHaveCount(0);
+  });
+});
+
+// Decision 0274: who ran it defaults to the leader and may be anyone in the church.
+test.describe('who ran a Cell meeting', () => {
+  async function markEveryone(page: Page) {
+    // `all()` does not wait, so wait for the roster first.
+    await expect(page.getByRole('radio', { name: 'Present' })).toHaveCount(2);
+    for (const radio of await page.getByRole('radio', { name: 'Present' }).all()) {
+      await radio.check();
+    }
+  }
+
+  test('sends nobody for the leader, which is the default', async ({ page }) => {
+    await mockSignedIn(page);
+    await mockMeetingRoster(page);
+    const sent = await captureSubmissions(page);
+
+    await page.goto(MEETING);
+    await expect(page.getByRole('radio', { name: 'The leader' })).toBeChecked();
+    await markEveryone(page);
+    await page.getByRole('button', { name: 'Save this meeting' }).click();
+
+    await expect.poll(() => sent.length).toBe(1);
+    expect(sent[0]).not.toHaveProperty('facilitated_by');
+  });
+
+  test('sends the person chosen, and waits for one', async ({ page }) => {
+    await mockSignedIn(page);
+    await mockPeople(page);
+    await mockMeetingRoster(page);
+    const sent = await captureSubmissions(page);
+
+    await page.goto(MEETING);
+    await markEveryone(page);
+    await page.getByRole('radio', { name: 'Someone else' }).check();
+
+    await expect(page.getByText('Choose who ran it to save.')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Save this meeting' })).toBeDisabled();
+
+    await page.getByLabel('Search for a person by name').fill('Marilou');
+    await page.getByRole('button', { name: 'Find' }).click();
+    await page.getByRole('button', { name: 'Choose' }).first().click();
+    await page.getByRole('button', { name: 'Save this meeting' }).click();
+
+    await expect.poll(() => sent.length).toBe(1);
+    expect(sent[0]).toMatchObject({ status: 'HELD', facilitated_by: PERSON_IN_SCOPE.id });
   });
 });
 
