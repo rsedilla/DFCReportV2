@@ -1,4 +1,4 @@
-import { Body, Controller, HttpCode, HttpStatus, Param, Post } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, HttpStatus, Param, Post } from '@nestjs/common';
 
 import { Capability } from './authorization/capabilities';
 import { RequiresCapability } from './authorization/authorization.decorators';
@@ -46,6 +46,17 @@ export class AccountsController {
       actor,
       claim,
     );
+  }
+
+  /**
+   * Whether a Person has an account, and its state (section 6, decision 0276): what the
+   * person page's Account section shows an administrator. Guarded like provisioning,
+   * against the Person.
+   */
+  @Get('for-person/:person_id')
+  @RequiresCapability(Capability.AccountsManage, { kind: 'person', from: 'params.person_id' })
+  async forPerson(@Param('person_id') personId: string): Promise<Record<string, unknown>> {
+    return this.provisioning.accountForPerson(personId);
   }
 
   /**

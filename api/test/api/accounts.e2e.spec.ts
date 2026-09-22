@@ -78,6 +78,51 @@ describe('accounts: provisioning, activation and reset (section 6)', () => {
       .send(body);
   }
 
+  describe("a person's account, read by an administrator (decision 0276)", () => {
+    function forPerson(personId: string, account: TestAccount = admin): request.Test {
+      return request(app.getHttpServer())
+        .get(`/api/v1/accounts/for-person/${personId}`)
+        .set('Authorization', `Bearer ${account.accessToken}`);
+    }
+
+    it('answers no account, then the account with its state and roles once provisioned', async () => {
+      expect((await forPerson(ester.id).expect(200)).body).toEqual({ account: null });
+
+      await provision({ person_id: ester.id, email: 'ester@example.test', role: 'ADMIN' }).expect(
+        201,
+      );
+
+      const read = await forPerson(ester.id).expect(200);
+      expect(read.body.account).toEqual({
+        id: expect.any(String),
+        email: 'ester@example.test',
+        status: 'PENDING_ACTIVATION',
+        roles: ['ADMIN'],
+        created_at: expect.any(String),
+      });
+      // Nothing a credential is made of.
+      expect(JSON.stringify(read.body)).not.toMatch(/password|token|session/i);
+    });
+
+    it('refuses an account without accounts.manage', async () => {
+      const leader = await createAccount(app, db, {
+        person: await createPerson(db, { firstName: 'Lorna', network: 'WOMENS' }),
+        roles: ['LEADER'],
+      });
+
+      const response = await forPerson(ester.id, leader);
+      expect(response.status).toBe(403);
+      expect(response.body.error.details.capability).toBe('accounts.manage');
+
+      // The same refusal for somebody who does not exist, so a non-holder learns nothing.
+      expect((await forPerson(randomUUID(), leader)).status).toBe(403);
+    });
+
+    it('answers NOT_FOUND for an identifier naming nobody', async () => {
+      await forPerson(randomUUID()).expect(404);
+    });
+  });
+
   describe('provisioning', () => {
     it('creates the account, grants the role, and mails an activation token', async () => {
       const response = await provision({
