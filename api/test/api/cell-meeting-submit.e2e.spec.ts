@@ -1449,7 +1449,7 @@ describe('recording a Cell meeting (sections 12, 13 and 14)', () => {
       expect(await db.selectFrom('cell_meetings').select('id').execute()).toHaveLength(0);
     });
 
-    it('refuses a status change, which is a separate operation', async () => {
+    it('refuses a status change with no reason, which a correction requires (decision 0273)', async () => {
       const one = await member('Aurelio');
       const { version } = await recorded([{ person_id: one.id, present: true }]);
 
@@ -1839,7 +1839,7 @@ describe('recording a Cell meeting (sections 12, 13 and 14)', () => {
       expect(revive.body.error.details.current_status).toBe('NOT_HELD');
     });
 
-    it('refuses HELD to NOT_HELD, which is a correction rather than a move', async () => {
+    it('refuses HELD to NOT_HELD with no reason: it is a correction, not a move (decision 0273)', async () => {
       const one = await member('Aurelio');
 
       await submit({
@@ -2694,6 +2694,152 @@ describe('recording a Cell meeting (sections 12, 13 and 14)', () => {
 
       expect(response.status).toBe(409);
       expect(response.body.error.code).toBe('INVARIANT_VIOLATION');
+    });
+  });
+
+  describe('correcting a status recorded in error (section 13, decision 0273)', () => {
+    const changeRows = () =>
+      db
+        .selectFrom('cell_meeting_changes')
+        .select(['from_status', 'to_status', 'reason', 'note'])
+        .orderBy('occurred_at')
+        .execute();
+
+    const liveRows = () =>
+      db
+        .selectFrom('cell_attendance')
+        .select(['person_id', 'present', 'correction_reason'])
+        .where('superseded_at', 'is', null)
+        .execute();
+
+    it('corrects HELD to NOT_HELD with a reason, closing the marks and keeping the first report', async () => {
+      const one = await member('Aurelio');
+
+      await submit({ status: 'HELD', attendance: [{ person_id: one.id, present: true }] }).expect(
+        201,
+      );
+
+      const corrected = await submit({
+        status: 'NOT_HELD',
+        version: 1,
+        not_held_reason: 'LEADER_UNAVAILABLE',
+        correction_reason: 'Filed as met by mistake.',
+      });
+
+      expect(corrected.status).toBe(201);
+      expect(corrected.body.status).toBe('NOT_HELD');
+      expect(await liveRows()).toHaveLength(0);
+
+      // Closed, never deleted: the first report's mark still exists and names itself.
+      const rows = await db.selectFrom('cell_attendance').select(['id', 'superseded_by']).execute();
+      expect(rows).toHaveLength(1);
+      expect(rows[0].superseded_by).toBe(rows[0].id);
+
+      expect(await changeRows()).toEqual([
+        {
+          from_status: 'HELD',
+          to_status: 'NOT_HELD',
+          reason: 'LEADER_UNAVAILABLE',
+          note: 'Filed as met by mistake.',
+        },
+      ]);
+
+      const entry = await db
+        .selectFrom('audit_log')
+        .select(['action', 'reason'])
+        .where('action', '=', 'cell_meeting.status_corrected')
+        .executeTakeFirstOrThrow();
+      expect(entry.reason).toBe('Filed as met by mistake.');
+    });
+
+    it('corrects NOT_HELD to HELD with a reason and the whole roster', async () => {
+      const one = await member('Aurelio');
+      const two = await member('Benita');
+
+      await submit({
+        status: 'NOT_HELD',
+        not_held_reason: 'OTHER',
+        not_held_note: 'Venue flooded.',
+      }).expect(201);
+
+      // The roster rule of a first submission holds: every member, exactly once.
+      const partial = await submit({
+        status: 'HELD',
+        version: 1,
+        correction_reason: 'It did meet.',
+        attendance: [{ person_id: one.id, present: true }],
+      });
+      expect(partial.status).toBe(409);
+      expect(partial.body.error.code).toBe('INVARIANT_VIOLATION');
+
+      const corrected = await submit({
+        status: 'HELD',
+        version: 1,
+        correction_reason: 'It did meet.',
+        attendance: [
+          { person_id: one.id, present: true },
+          { person_id: two.id, present: false },
+        ],
+      });
+
+      expect(corrected.status).toBe(201);
+      expect(corrected.body.status).toBe('HELD');
+
+      const meeting = await db
+        .selectFrom('cell_meetings')
+        .select(['status', 'not_held_reason', 'not_held_note', 'version'])
+        .executeTakeFirstOrThrow();
+      expect(meeting).toEqual({
+        status: 'HELD',
+        not_held_reason: null,
+        not_held_note: null,
+        version: 2,
+      });
+
+      const live = await liveRows();
+      expect(live).toHaveLength(2);
+      expect(live.every((row) => row.correction_reason === 'It did meet.')).toBe(true);
+
+      expect(await changeRows()).toEqual([
+        { from_status: 'NOT_HELD', to_status: 'HELD', reason: null, note: 'It did meet.' },
+      ]);
+
+      // The meeting row clears the first report's reason and note; the audit entry keeps them.
+      const entry = await db
+        .selectFrom('audit_log')
+        .select(['before', 'reason'])
+        .where('action', '=', 'cell_meeting.status_corrected')
+        .executeTakeFirstOrThrow();
+      expect(entry.reason).toBe('It did meet.');
+      expect(entry.before).toMatchObject({
+        status: 'NOT_HELD',
+        not_held_reason: 'OTHER',
+        not_held_note: 'Venue flooded.',
+      });
+    });
+
+    it('asks cell.correct_subtree of a status correction, as of any amendment', async () => {
+      const one = await member('Aurelio');
+
+      await submit({ status: 'HELD', attendance: [{ person_id: one.id, present: true }] }).expect(
+        201,
+      );
+
+      const upline = await granted(['cell.take_attendance', 'cell.submit_on_behalf']);
+
+      const response = await submit(
+        {
+          status: 'NOT_HELD',
+          version: 1,
+          not_held_reason: 'LEADER_UNAVAILABLE',
+          correction_reason: 'Filed as met by mistake.',
+        },
+        upline,
+      );
+
+      expect(response.status).toBe(403);
+      expect(response.body.error.details.capability).toBe('cell.correct_subtree');
+      expect(await liveRows()).toHaveLength(1);
     });
   });
 

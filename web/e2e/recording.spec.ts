@@ -56,23 +56,53 @@ test.describe('a recorded Cell meeting', () => {
     await expect(page.getByRole('button', { name: /^Save/ })).toHaveCount(0);
   });
 
-  test('unlocks its marks for an account that may correct it, keeping the recorded status', async ({
+  test('unlocks its marks for an account that may correct it, sending the meeting version', async ({
     page,
   }) => {
     await mockSignedIn(page);
     await mockCellCorrector(page);
     await mockRecordedMeetingRoster(page, 'HELD');
+    const sent = await captureSubmissions(page);
 
     await page.goto(MEETING);
     await page.getByRole('button', { name: 'Edit this record' }).click();
 
-    await expect(page.getByRole('radio', { name: 'Present' }).first()).toBeEnabled();
     await expect(page.getByLabel('Why is this changing? (optional)')).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Save the correction' })).toBeVisible();
+    await page.getByRole('radio', { name: 'Absent' }).first().check();
+    await page.getByRole('button', { name: 'Save the correction' }).click();
 
-    // Decision 0195 admits no move between met and did not meet, so a correction does
-    // not offer one.
-    await expect(page.getByRole('radio', { name: 'Did not meet' })).toHaveCount(0);
+    // `version`, the field the API declares: it refuses any field it does not.
+    await expect.poll(() => sent.length).toBe(1);
+    expect(sent[0]).toMatchObject({ status: 'HELD', version: 3 });
+    expect(sent[0]).not.toHaveProperty('submitted_version');
+  });
+
+  // Decision 0273: whether it met may be corrected, with a reason, and the reason is
+  // what Save waits for.
+  test('corrects Met to Did not meet, asking why before it saves', async ({ page }) => {
+    await mockSignedIn(page);
+    await mockCellCorrector(page);
+    await mockRecordedMeetingRoster(page, 'HELD');
+    const sent = await captureSubmissions(page);
+
+    await page.goto(MEETING);
+    await page.getByRole('button', { name: 'Edit this record' }).click();
+    await page.getByRole('radio', { name: 'Did not meet' }).check();
+    await page.getByRole('radio', { name: 'Leader could not be there' }).check();
+
+    await expect(page.getByText('Say why this is being corrected to save.')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Save the correction' })).toBeDisabled();
+
+    await page.getByLabel('Why is this being corrected?').fill('Filed as met by mistake');
+    await page.getByRole('button', { name: 'Save the correction' }).click();
+
+    await expect.poll(() => sent.length).toBe(1);
+    expect(sent[0]).toEqual({
+      status: 'NOT_HELD',
+      version: 3,
+      not_held_reason: 'LEADER_UNAVAILABLE',
+      correction_reason: 'Filed as met by mistake',
+    });
   });
 
   // Owner's design, adjusted (2026-09-19): the Cell by name under the date, and the
@@ -91,9 +121,39 @@ test.describe('a recorded Cell meeting', () => {
     await expect(summary).toHaveText('First recorded on 27 Jun · 1 present, 1 absent');
   });
 
-  test('recorded as did not meet is shown with its reason, and offers no edit', async ({ page }) => {
+  test('corrects Did not meet to Met, with the whole roster and a reason', async ({ page }) => {
     await mockSignedIn(page);
     await mockCellCorrector(page);
+    await mockRecordedMeetingRoster(page, 'NOT_HELD');
+    const sent = await captureSubmissions(page);
+
+    await page.goto(MEETING);
+
+    await expect(page.getByText('Why: Weather or calamity')).toBeVisible();
+    await page.getByRole('button', { name: 'Edit this record' }).click();
+    await page.getByRole('radio', { name: 'Met', exact: true }).check();
+
+    await page.getByRole('radio', { name: 'Present' }).first().check();
+    await page.getByRole('radio', { name: 'Absent' }).nth(1).check();
+    await page.getByLabel('Why is this being corrected?').fill('It did meet');
+    await page.getByRole('button', { name: 'Save the correction' }).click();
+
+    await expect.poll(() => sent.length).toBe(1);
+    expect(sent[0]).toEqual({
+      status: 'HELD',
+      version: 3,
+      attendance: [
+        { person_id: '3f1b7c6e-0000-4000-8000-000000000601', present: true },
+        { person_id: '3f1b7c6e-0000-4000-8000-000000000602', present: false },
+      ],
+      correction_reason: 'It did meet',
+    });
+  });
+
+  test('offers no edit of a did-not-meet record to an account that may not correct it', async ({
+    page,
+  }) => {
+    await mockSignedIn(page);
     await mockRecordedMeetingRoster(page, 'NOT_HELD');
 
     await page.goto(MEETING);
@@ -102,6 +162,17 @@ test.describe('a recorded Cell meeting', () => {
     await expect(page.getByRole('button', { name: 'Edit this record' })).toHaveCount(0);
   });
 });
+
+/** Every Cell meeting submission the page sends, answered as the API would. */
+async function captureSubmissions(page: Page): Promise<Record<string, unknown>[]> {
+  const sent: Record<string, unknown>[] = [];
+  await page.route('**/api/v1/cells/*/meetings/*/submit', async (route) => {
+    sent.push(route.request().postDataJSON());
+    await route.fulfill({ status: 201, contentType: 'application/json', body: '{}' });
+  });
+
+  return sent;
+}
 
 // Decision 0238: a Cell meeting takes no record before its day has begun, so the screen
 // offers none rather than a Save the API would refuse.
