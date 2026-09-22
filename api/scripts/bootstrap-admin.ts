@@ -157,12 +157,11 @@ Created the first Admin account.
   Account   ${result.email}  role ADMIN
   Audit     person.created, account.created, role.granted  (actor: system)
 
-Set your password with this activation token. It expires in 7 days, is single-use,
-and is the only copy — the database holds a hash of it and nothing else.
+Set your password by opening this on the web app, after its address — for example
+https://your-domain/activate?token=... . The token expires in 7 days, is single-use,
+and is the only copy: the database holds a hash of it and nothing else. Do not share it.
 
-  ${result.activationToken}
-
-  POST /api/v1/auth/activate   { "token": "...", "password": "..." }
+  /activate?token=${result.activationToken}
 
 This command will refuse to run again while any account exists.
 `);
