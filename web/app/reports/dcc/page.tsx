@@ -2,7 +2,6 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { useSearchParams } from 'next/navigation';
-import { useState } from 'react';
 
 import { AppShell, PAGE_WIDTH } from '@/components/app-shell';
 import { AttendanceBuckets, ClassificationFigures } from '@/components/attendance-figures';
@@ -19,6 +18,7 @@ import { CONTROL_BAR, FRAME } from '@/components/ui/frame';
 import { getMe, holdsWholeChurch } from '@/lib/me';
 import { describeFailure } from '@/lib/messages';
 import { getDccMonthlyReport, type ReportNetwork, type ReportScope } from '@/lib/reports';
+import { useReportAddress } from '@/lib/report-address';
 import { dayLabel, monthFromQuery } from '@/lib/reporting-month';
 
 /**
@@ -60,23 +60,28 @@ export default function DccReportPage() {
 
 export function DccReport() {
   const search = useSearchParams();
-  const [month, setMonth] = useState(() => monthFromQuery(search.get('month')));
+  // Every control lives in the address, so the browser's Back steps back through the
+  // month, the period and the scope, and a reload opens the same figures.
+  const go = useReportAddress();
+  const month = monthFromQuery(search.get('month'));
   // A month or a year of this report (decision 0257). The year is the month's own year.
-  const [period, setPeriod] = useState<'month' | 'year'>(() =>
-    search.get('period') === 'year' ? 'year' : 'month',
-  );
-  const [year, setYear] = useState(() => Math.min(Number(month.slice(0, 4)), currentYear()));
+  const period: 'month' | 'year' = search.get('period') === 'year' ? 'year' : 'month';
+  const year = Math.min(Number(search.get('year') ?? month.slice(0, 4)), currentYear());
 
   // **Section 19's Senior Pastor scope selector.** Empty means the whole church; the
   // two Networks are the only other values section 4 defines. It is offered only to
   // a Whole Church holder, because that is the grant section 19 describes a Senior
   // Pastor by — a leader-scoped viewer has one scope and a control with one option
   // is a control that lies about having a choice.
-  const [network, setNetwork] = useState<ReportNetwork | ''>('');
+  const network = (search.get('network') === 'MENS'
+    ? 'MENS'
+    : search.get('network') === 'WOMENS'
+      ? 'WOMENS'
+      : '') as ReportNetwork | '';
   // A leader opened from the By leader table (decision 0254), carried in the address so
   // the browser's Back returns to the report it was opened from.
   const leader = search.get('leader');
-  const [coverageBy, setCoverageBy] = useState<'first' | 'leader'>('first');
+  const coverageBy: 'first' | 'leader' = search.get('by') === 'leader' ? 'leader' : 'first';
 
   const me = useQuery({ queryKey: ['me'], queryFn: ({ signal }) => getMe(signal) });
 
@@ -120,11 +125,18 @@ export function DccReport() {
       {/* Every control in one bar, above every figure (owner's choice, 2026-09-22). */}
       <div className={`mt-6 ${CONTROL_BAR}`}>
         <ReportsSwitch current="dcc" month={month} />
-        <PeriodSwitch value={period} onChange={setPeriod} />
+        <PeriodSwitch
+          value={period}
+          onChange={(value) => go({ period: value === 'year' ? 'year' : null })}
+        />
         {period === 'month' ? (
-          <MonthPicker month={month} onChange={setMonth} open={report.data?.open} />
+          <MonthPicker
+            month={month}
+            onChange={(value) => go({ month: value })}
+            open={report.data?.open}
+          />
         ) : (
-          <YearPicker year={year} onChange={setYear} />
+          <YearPicker year={year} onChange={(value) => go({ year: String(value) })} />
         )}
         {wholeChurch && !leader ? (
           <div>
@@ -134,7 +146,7 @@ export function DccReport() {
             <select
               id="dcc-scope"
               value={network}
-              onChange={(event) => setNetwork(event.target.value as ReportNetwork | '')}
+              onChange={(event) => go({ network: event.target.value })}
               className="border-line bg-surface focus-visible:outline-accent mt-2 min-h-11 rounded-md border px-3 text-sm focus-visible:outline-2 focus-visible:outline-offset-2"
             >
               <option value="">The whole church</option>
@@ -265,7 +277,7 @@ export function DccReport() {
             <CoverageSwitch
               first={network === '' && !leader ? 'By Sunday' : null}
               value={network === '' && !leader ? coverageBy : 'leader'}
-              onChange={setCoverageBy}
+              onChange={(value) => go({ by: value === 'leader' ? 'leader' : null })}
             />
             {network === '' && !leader && coverageBy === 'first' ? (
               <CoverageBySunday month={month} />

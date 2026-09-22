@@ -2,7 +2,6 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { useSearchParams } from 'next/navigation';
-import { useState } from 'react';
 
 import { AppShell, PAGE_WIDTH } from '@/components/app-shell';
 import { AttendanceBuckets, ClassificationFigures } from '@/components/attendance-figures';
@@ -20,6 +19,7 @@ import { listAllCells } from '@/lib/cells';
 import { getMe, holdsWholeChurch } from '@/lib/me';
 import { describeFailure } from '@/lib/messages';
 import { getCellMonthlyReport, hasBuckets, type ReportScope } from '@/lib/reports';
+import { useReportAddress } from '@/lib/report-address';
 import { monthFromQuery } from '@/lib/reporting-month';
 
 /**
@@ -66,17 +66,18 @@ export default function CellReportPage() {
 
 export function CellReport() {
   const search = useSearchParams();
-  const [month, setMonth] = useState(() => monthFromQuery(search.get('month')));
+  // Every control lives in the address, so the browser's Back steps back through the
+  // month, the period and the Cell, and a reload opens the same figures.
+  const go = useReportAddress();
+  const month = monthFromQuery(search.get('month'));
   // A month or a year of this report (decision 0257). The year is the month's own year.
-  const [period, setPeriod] = useState<'month' | 'year'>(() =>
-    search.get('period') === 'year' ? 'year' : 'month',
-  );
-  const [year, setYear] = useState(() => Math.min(Number(month.slice(0, 4)), currentYear()));
-  const [cellId, setCellId] = useState<string>('');
+  const period: 'month' | 'year' = search.get('period') === 'year' ? 'year' : 'month';
+  const year = Math.min(Number(search.get('year') ?? month.slice(0, 4)), currentYear());
+  const cellId = search.get('cell') ?? '';
   // A leader opened from the By leader table (decision 0254), carried in the address so
   // the browser's Back returns to the report it was opened from.
   const leader = search.get('leader');
-  const [coverageBy, setCoverageBy] = useState<'first' | 'leader'>('first');
+  const coverageBy: 'first' | 'leader' = search.get('by') === 'leader' ? 'leader' : 'first';
 
   const me = useQuery({ queryKey: ['me'], queryFn: ({ signal }) => getMe(signal) });
   const wholeChurch = holdsWholeChurch(me.data, 'reports.view_subtree');
@@ -128,11 +129,18 @@ export function CellReport() {
       {/* Every control in one bar, above every figure (owner's choice, 2026-09-22). */}
       <div className={`mt-6 ${CONTROL_BAR}`}>
         <ReportsSwitch current="cells" month={month} />
-        <PeriodSwitch value={period} onChange={setPeriod} />
+        <PeriodSwitch
+          value={period}
+          onChange={(value) => go({ period: value === 'year' ? 'year' : null })}
+        />
         {period === 'month' ? (
-          <MonthPicker month={month} onChange={setMonth} open={report.data?.open} />
+          <MonthPicker
+            month={month}
+            onChange={(value) => go({ month: value })}
+            open={report.data?.open}
+          />
         ) : (
-          <YearPicker year={year} onChange={setYear} />
+          <YearPicker year={year} onChange={(value) => go({ year: String(value) })} />
         )}
         <div hidden={leader !== null}>
           <label htmlFor="cell-scope" className="field-label block">
@@ -141,7 +149,7 @@ export function CellReport() {
           <select
             id="cell-scope"
             value={cellId}
-            onChange={(event) => setCellId(event.target.value)}
+            onChange={(event) => go({ cell: event.target.value })}
             className="border-line bg-surface focus-visible:outline-accent mt-2 min-h-11 max-w-full rounded-md border px-3 text-sm focus-visible:outline-2 focus-visible:outline-offset-2"
           >
             <option value="">
@@ -255,7 +263,7 @@ export function CellReport() {
             <CoverageSwitch
               first={cellId === '' && !leader ? 'By Cell' : null}
               value={cellId === '' && !leader ? coverageBy : 'leader'}
-              onChange={setCoverageBy}
+              onChange={(value) => go({ by: value === 'leader' ? 'leader' : null })}
             />
             {cellId === '' && !leader && coverageBy === 'first' ? (
               <CoverageByCell month={month} behindOnlyAtFirst={search.get('behind') === '1'} />
