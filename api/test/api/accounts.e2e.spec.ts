@@ -1109,6 +1109,21 @@ describe('accounts: provisioning, activation and reset (section 6)', () => {
       expect(answers.slice(5)).toEqual([429, 429]);
     });
 
+    it('limits each forwarded address separately, because behind nginx every request is from 127.0.0.1', async () => {
+      await activeEster();
+
+      const from = (address: string) =>
+        forgot('ester@example.test').set('X-Forwarded-For', address);
+
+      const first: number[] = [];
+      for (let attempt = 0; attempt < 6; attempt += 1) {
+        first.push((await from('198.51.100.7')).status);
+      }
+
+      expect(first).toEqual([204, 204, 204, 204, 204, 429]);
+      expect((await from('203.0.113.9')).status).toBe(204);
+    });
+
     it('answers 204 even when delivery fails, so the outcome is not an oracle', async () => {
       // **An error on the hit path and a success on the miss path is the same
       // disclosure the identical response exists to prevent**, wearing a different
