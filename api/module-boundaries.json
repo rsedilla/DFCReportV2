@@ -49,7 +49,10 @@
     "cell_meeting_changes": "attendance",
     "audit_log": "audit",
     "idempotency_keys": null,
-    "settings": "admin"
+    "settings": "admin",
+    "suynl_lessons": "suynl",
+    "training_graduations": "training",
+    "conquest_confirmations": "conquest"
   },
   "infrastructure": ["database"],
   "crossModule": [

@@ -1,9 +1,9 @@
 /**
- * The capabilities of SKILL.md section 7 that guard a route today, as a closed
- * enumeration. Section 7 names more: the Conquest, SUYNL and Training
- * capabilities are specified (sections 27 and 28) and nothing is built that could
- * hold one, so they join this list and the `capability` enum in the migration
- * that builds those modules.
+ * The capabilities of SKILL.md section 7, as a closed enumeration.
+ *
+ * The nine Conquest, SUYNL and Training capabilities joined this list and the
+ * `capability` enum together, in migration `0017_growth.sql`, which is what this
+ * file said would happen when those modules were built (sections 27 and 28).
  *
  * A guard cannot fail closed against an open list. Adding a capability is an
  * amendment to the specification, a migration on the `capability` type, and a
@@ -39,6 +39,15 @@ export const Capability = {
   AccountsManage: 'accounts.manage',
   RolesManage: 'roles.manage',
   AuditView: 'audit.view',
+  ConquestViewSubtree: 'conquest.view_subtree',
+  ConquestConfirm: 'conquest.confirm',
+  ConquestConfirmOnBehalf: 'conquest.confirm_on_behalf',
+  SuynlViewSubtree: 'suynl.view_subtree',
+  SuynlConfirm: 'suynl.confirm',
+  SuynlConfirmOnBehalf: 'suynl.confirm_on_behalf',
+  TrainingViewSubtree: 'training.view_subtree',
+  TrainingConfirm: 'training.confirm',
+  TrainingConfirmOnBehalf: 'training.confirm_on_behalf',
 } as const;
 
 export type Capability = (typeof Capability)[keyof typeof Capability];
@@ -47,10 +56,9 @@ export type Capability = (typeof Capability)[keyof typeof Capability];
 export const ALL_CAPABILITIES: readonly Capability[] = Object.values(Capability);
 
 /**
- * The read capabilities of the list above. Section 7 names eight and says in terms
- * that the three homes do not agree until those modules are built. `read_only` is valid only on one of these; a write
- * capability granted read-only is rejected at creation rather than stored as a row
- * that grants nothing (SKILL.md section 7).
+ * The eight read capabilities of the list above. `read_only` is valid only on one
+ * of these; a write capability granted read-only is rejected at creation rather
+ * than stored as a row that grants nothing (SKILL.md section 7).
  */
 export const READ_CAPABILITIES: readonly Capability[] = [
   Capability.PeopleViewSubtree,
@@ -58,6 +66,9 @@ export const READ_CAPABILITIES: readonly Capability[] = [
   Capability.CellViewSubtree,
   Capability.ReportsViewSubtree,
   Capability.AuditView,
+  Capability.ConquestViewSubtree,
+  Capability.SuynlViewSubtree,
+  Capability.TrainingViewSubtree,
 ];
 
 export function isReadCapability(capability: Capability): boolean {

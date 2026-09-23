@@ -1,6 +1,7 @@
 import { sql } from 'kysely';
 import { Client } from 'pg';
 
+import { READ_CAPABILITIES } from '../../src/auth/authorization/capabilities';
 import { createTestDb, truncateAll } from '../setup/database';
 import { assignTo, createPerson, EPOCH } from '../setup/fixtures';
 
@@ -1511,6 +1512,68 @@ describe('the database enforces the section 3 and section 7 rules it can', () =>
         })
         .execute(),
     ).resolves.toBeDefined();
+  });
+
+  /**
+   * The other direction, and the one a live defect went through on 2026-09-23.
+   *
+   * `capability_grants_read_only_is_a_read` enumerates the read capabilities by
+   * name, and `read_only` defaults to `true` -- so a read capability missing from
+   * that list is not merely ungrantable read-only, it is **ungrantable**, and an
+   * ordinary grant of it fails at the INSERT. Migration 0001's list held the five
+   * read capabilities that existed then; sections 27 and 28 took section 7's read
+   * list to eight, and the first version of `0017_growth.sql` added the nine new
+   * capabilities to the `capability` enum and left this CHECK alone. So
+   * `conquest.view_subtree`, `suynl.view_subtree` and `training.view_subtree`
+   * could not be granted at all -- decision 0204's failure, one capability class
+   * over.
+   *
+   * **Neither direction catches the other, and both were green throughout.** The
+   * case above grants one *write* capability read-only and expects a refusal,
+   * which holds whatever the read list contains; the shape test in
+   * `schema.spec.ts` asserted only that the definition mentioned `read_only`.
+   * This case in turn would pass over a constraint naming every capability in the
+   * church, which is why that shape test now asserts the list *equals*
+   * `READ_CAPABILITIES`. The equality owes the "nothing else is named" half, and
+   * this case owes the half no catalog read can reach: that a grant of each one
+   * is actually storable.
+   *
+   * **Driven from the constant rather than from a written-out list**, so that a
+   * capability added to the read list is exercised here without anybody
+   * remembering to add a case -- which is the failure being closed, one layer up.
+   * The constant is itself pinned to section 7's list, transcribed literally, in
+   * `test/unit/capabilities.spec.ts`.
+   */
+  it('accepts a read-only grant of every read capability', async () => {
+    const account = await accountFor(db, 'Rowena', 'WOMENS');
+
+    for (const capability of READ_CAPABILITIES) {
+      await expect(
+        db
+          .insertInto('capability_grants')
+          .values({
+            account_id: account,
+            capability,
+            scope_type: 'WHOLE_CHURCH',
+            read_only: true,
+            reason: 'Exercising the read_only rule.',
+            granted_by: account,
+          })
+          .execute(),
+      ).resolves.toBeDefined();
+    }
+
+    // Read back rather than trust the loop. A loop over an empty constant passes
+    // while asserting nothing, and this is the one case whose whole content is
+    // that every member of that constant was reached.
+    const stored = await db
+      .selectFrom('capability_grants')
+      .select('capability')
+      .where('account_id', '=', account)
+      .where('read_only', '=', true)
+      .execute();
+
+    expect(stored.map((row) => row.capability).sort()).toEqual([...READ_CAPABILITIES].sort());
   });
 });
 

@@ -7,15 +7,12 @@ import { ALL_SCOPE_TYPES } from '../../src/auth/authorization/scopes';
 
 /**
  * SKILL.md section 7 calls the capability list and the scope list closed
- * enumerations, because a guard cannot fail closed against an open one. The scope
- * test is a second transcription of section 7's four. The capability test is not:
- * it pins what the application declares, which is a subset of what section 7
- * names.
+ * enumerations, because a guard cannot fail closed against an open one. Both
+ * tests are a second transcription of section 7's own lists, in its order.
  *
- * Section 7 names more capabilities than this file does, and deliberately: the
- * Conquest, SUYNL and Training capabilities are specified (sections 27 and 28)
- * and nothing is built that could hold one, so they are absent here and from the
- * `capability` enum until the migration that builds those modules adds them.
+ * The nine Conquest, SUYNL and Training capabilities joined the declaration and
+ * the `capability` enum with migration `0017_growth.sql` (sections 27 and 28), so
+ * what the application declares and what section 7 names are now the same list.
  */
 describe('the capability enumeration the application declares', () => {
   const DECLARED = [
@@ -46,6 +43,15 @@ describe('the capability enumeration the application declares', () => {
     'accounts.manage',
     'roles.manage',
     'audit.view',
+    'conquest.view_subtree',
+    'conquest.confirm',
+    'conquest.confirm_on_behalf',
+    'suynl.view_subtree',
+    'suynl.confirm',
+    'suynl.confirm_on_behalf',
+    'training.view_subtree',
+    'training.confirm',
+    'training.confirm_on_behalf',
   ];
 
   it('is exactly the capabilities the application declares', () => {
@@ -56,17 +62,24 @@ describe('the capability enumeration the application declares', () => {
     expect(new Set(ALL_CAPABILITIES).size).toBe(ALL_CAPABILITIES.length);
   });
 
-  it('divides into five reads and twenty-two writes', () => {
+  // Section 7 names eight read capabilities, and `read_only` is valid on those
+  // alone. The three Growth reads arrived with their modules; the counts are
+  // written out rather than derived, because a count computed from the list it is
+  // checking agrees with it whatever the list says.
+  it('divides into eight reads and twenty-eight writes', () => {
     expect([...READ_CAPABILITIES]).toEqual([
       'people.view_subtree',
       'dcc.view_subtree',
       'cell.view_subtree',
       'reports.view_subtree',
       'audit.view',
+      'conquest.view_subtree',
+      'suynl.view_subtree',
+      'training.view_subtree',
     ]);
 
     const writes = ALL_CAPABILITIES.filter((capability) => !isReadCapability(capability));
-    expect(writes).toHaveLength(22);
+    expect(writes).toHaveLength(28);
   });
 });
 

@@ -1,8 +1,8 @@
 /**
  * The role catalog of SKILL.md section 7, transcribed for the capabilities this
- * application declares. Section 7's table carries more rows: the Conquest, SUYNL
- * and Training capabilities are specified (sections 27 and 28) and nothing is
- * built that could hold one, so their defaults arrive with those modules.
+ * application declares. The nine Conquest, SUYNL and Training rows arrived with
+ * those modules (sections 27 and 28), where section 7 gives all three roles the
+ * same scopes it gives the DCC and Cell capabilities they are modelled on.
  *
  * Role defaults are specification, not data. This table is not editable at
  * runtime, and `roles.manage` governs which roles an account holds, never what a
@@ -28,6 +28,30 @@ import { ScopeType } from './scopes';
 import type { AccountRole } from '../../database/schema';
 
 export type RoleDefaults = Partial<Record<Capability, ScopeType>>;
+
+/**
+ * The nine Growth capabilities at one scope, written once for the three roles.
+ *
+ * Section 7 gives every one of them the same scope as the role's other subtree
+ * capabilities — Whole Church for a Senior Pastor and an Admin, own subtree for a
+ * Leader — so the only thing that varies between the three roles is the scope,
+ * and nine lines repeated three times would be nine chances to mistype one.
+ */
+function growthAt(scope: ScopeType): RoleDefaults {
+  return {
+    [Capability.ConquestViewSubtree]: scope,
+    [Capability.ConquestConfirm]: scope,
+    [Capability.ConquestConfirmOnBehalf]: scope,
+    [Capability.SuynlViewSubtree]: scope,
+    [Capability.SuynlConfirm]: scope,
+    [Capability.SuynlConfirmOnBehalf]: scope,
+    [Capability.TrainingViewSubtree]: scope,
+    [Capability.TrainingConfirm]: scope,
+    [Capability.TrainingConfirmOnBehalf]: scope,
+  };
+}
+
+const GROWTH_WHOLE_CHURCH = growthAt(ScopeType.WholeChurch);
 
 const SENIOR_PASTOR: RoleDefaults = {
   [Capability.PeopleViewSubtree]: ScopeType.WholeChurch,
@@ -55,6 +79,7 @@ const SENIOR_PASTOR: RoleDefaults = {
   [Capability.CellManageLifecycle]: ScopeType.WholeChurch,
   [Capability.ReportsViewSubtree]: ScopeType.WholeChurch,
   [Capability.AuditView]: ScopeType.WholeChurch,
+  ...GROWTH_WHOLE_CHURCH,
 };
 
 const ADMIN: RoleDefaults = {
@@ -88,6 +113,7 @@ const ADMIN: RoleDefaults = {
   [Capability.AccountsManage]: ScopeType.WholeChurch,
   [Capability.RolesManage]: ScopeType.WholeChurch,
   [Capability.PeopleMerge]: ScopeType.WholeChurch,
+  ...GROWTH_WHOLE_CHURCH,
 };
 
 const LEADER: RoleDefaults = {
@@ -109,6 +135,7 @@ const LEADER: RoleDefaults = {
   [Capability.CellRequestLeadership]: ScopeType.SubtreeExclSelf,
   [Capability.CellManageLifecycle]: ScopeType.OwnSubtree,
   [Capability.ReportsViewSubtree]: ScopeType.OwnSubtree,
+  ...growthAt(ScopeType.OwnSubtree),
 };
 
 export const ROLE_DEFAULTS: Record<AccountRole, RoleDefaults> = {
