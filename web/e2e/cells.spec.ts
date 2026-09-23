@@ -246,6 +246,19 @@ test.describe('a Cell’s members', () => {
     await expect(page.getByText(`Added ${PERSON_IN_SCOPE.full_name}.`)).toBeVisible();
   });
 
+  test('dates "member since" by the Manila day, not the UTC one', async ({ page }) => {
+    await mockSignedIn(page);
+    await mockPeople(page);
+    await mockCellMeetings(page);
+    await mockCellMembers(page);
+
+    await page.goto(MEMBERS);
+
+    // Added at 1 am on 12 May in Manila, which is 11 May in UTC.
+    await expect(page.getByText('Tuesday 12 May').first()).toBeVisible();
+    await expect(page.getByText('Monday 11 May')).toHaveCount(0);
+  });
+
   test('a closed Cell says so and is offered nothing to add', async ({ page }) => {
     await mockSignedIn(page);
     await mockClosedCellMeetings(page);
