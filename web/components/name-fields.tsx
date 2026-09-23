@@ -39,13 +39,17 @@ export function NameFields({
   const noteId = useId();
 
   // As each name box is left (lib/names.ts), so the person sees the result before saving.
-  // Once per box: a letter the person then lowers again, as in `dela`, stays lowered.
-  const raised = useRef(new Set<keyof NameValues>());
+  // A letter the person lowers again in the name just raised, as in `dela`, stays lowered;
+  // a name typed afresh is raised again.
+  const raised = useRef(new Map<keyof NameValues, string>());
 
   function capitalize(key: keyof NameValues, value: string) {
     const next = capitalizeNameWords(value);
-    if (next !== value && !raised.current.has(key)) {
-      raised.current.add(key);
+    const last = raised.current.get(key);
+    const loweredByHand = last !== undefined && last.toLowerCase() === value.toLowerCase();
+
+    if (next !== value && !loweredByHand) {
+      raised.current.set(key, next);
       onChange(key, next);
     }
   }

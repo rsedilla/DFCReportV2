@@ -652,13 +652,28 @@ test.describe('typing a name', () => {
     await expect(page.getByLabel('Middle name')).toHaveValue('Ballano-Reyes');
     await expect(page.getByLabel('Last name')).toHaveValue('McDonald III');
 
-    // Lowered again by hand, it stays lowered: the form raises letters in a box once.
+    // Lowered again by hand in the name just raised, it stays lowered.
     await page.getByLabel('Last name').fill('dela cruz');
     await page.getByLabel('Last name').blur();
     await expect(page.getByLabel('Last name')).toHaveValue('Dela Cruz');
     await page.getByLabel('Last name').fill('dela Cruz');
     await page.getByLabel('Last name').blur();
     await expect(page.getByLabel('Last name')).toHaveValue('dela Cruz');
+  });
+
+  test('raises a name typed again after the box was raised once', async ({ page }) => {
+    await signedInWithPeople(page);
+    await page.goto('/people/new');
+
+    const first = page.getByLabel('First name');
+    await first.fill('roy');
+    await first.press('Tab');
+    await expect(first).toHaveValue('Roy');
+
+    // Retyped rather than lowered by hand: new words are raised again.
+    await first.fill('roy sam');
+    await first.press('Tab');
+    await expect(first).toHaveValue('Roy Sam');
   });
 });
 
