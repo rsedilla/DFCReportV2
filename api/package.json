@@ -27,6 +27,17 @@
     "format:check": "prettier --check \"src/**/*.ts\" \"test/**/*.ts\" \"scripts/**/*.ts\" \"*.ts\"",
     "import:tree": "ts-node scripts/import-tree.ts"
   },
+  "comment:overrides": [
+    "multer arrives only through @nestjs/platform-express, which pins 2.2.0 exactly, and every",
+    "advisory against it is about parsing a multipart request. This API registers no upload route",
+    "and no multipart parser, so none of them is reachable — but an unreachable advisory is still",
+    "an advisory somebody has to re-triage, and the alternative fix npm offers is a NestJS major",
+    "upgrade. The patched 2.x is API-compatible, so it is forced here instead.",
+    "Remove this when @nestjs/platform-express ships a version that depends on 2.3.0 or later."
+  ],
+  "overrides": {
+    "multer": "^2.4.0"
+  },
   "dependencies": {
     "@nestjs/common": "^11.2.1",
     "@nestjs/config": "^4.0.4",
