@@ -27,6 +27,8 @@ import { CellMeetingsScopeService } from './attendance/cell-meetings.scope.servi
 import { CellsModule } from './cells/cells.module';
 import { CellsReadService } from './cells/cells.read.service';
 import { PeopleModule } from './people/people.module';
+import { SuynlModule } from './suynl/suynl.module';
+import { TrainingModule } from './training/training.module';
 
 /**
  * A modular monolith (SKILL.md section 1, principle 13). Modules are named in
@@ -66,6 +68,8 @@ import { PeopleModule } from './people/people.module';
     CellsModule,
     AttendanceModule,
     ReportingModule,
+    SuynlModule,
+    TrainingModule,
     CellRelationshipsBindingModule,
     AdminAccountsBindingModule,
     RecordedMeetingsBindingModule,

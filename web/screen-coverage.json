@@ -23,7 +23,8 @@
   "stages": [
     "screens block",
     "after the pilot — Admin screens",
-    "after the pilot — flat subtree view"
+    "after the pilot — flat subtree view",
+    "Growth part three — the SUYNL and Training tabs"
   ],
   "routes": [
     {
@@ -271,6 +272,36 @@
       "route": "GET /api/v1/reports/cells/monthly",
       "reason": "Cell classification, and the monthly-attendance buckets §12 puts at Cell scope only. Cell Attendance is the screen in that block which shows them, and it does not exist yet. The screen owes more than this route returns: §12 requires the coverage line beside the buckets, and coverage is its own slice — so this waiver is not discharged by a screen that renders the buckets alone.",
       "screen": "web/app/reports/cells/page.tsx"
+    },
+    {
+      "route": "GET /api/v1/suynl/counts",
+      "waived_to": "Growth part three — the SUYNL and Training tabs",
+      "reason": "The SUYNL tab’s three count cards (decision 0281)."
+    },
+    {
+      "route": "GET /api/v1/suynl/people",
+      "waived_to": "Growth part three — the SUYNL and Training tabs",
+      "reason": "The SUYNL tab’s list (section 28)."
+    },
+    {
+      "route": "POST /api/v1/suynl/submit",
+      "waived_to": "Growth part three — the SUYNL and Training tabs",
+      "reason": "The SUYNL tab’s save bar (section 28; decision 0282)."
+    },
+    {
+      "route": "GET /api/v1/training/counts",
+      "waived_to": "Growth part three — the SUYNL and Training tabs",
+      "reason": "The Training tab’s count cards (decision 0281)."
+    },
+    {
+      "route": "GET /api/v1/training/people",
+      "waived_to": "Growth part three — the SUYNL and Training tabs",
+      "reason": "The Training tab’s list (section 28)."
+    },
+    {
+      "route": "POST /api/v1/training/submit",
+      "waived_to": "Growth part three — the SUYNL and Training tabs",
+      "reason": "The Training tab’s save bar (section 28; decision 0282)."
     },
     {
       "route": "GET /api/v1/health",

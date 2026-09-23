@@ -259,6 +259,10 @@ That divergence is what the ruling of 2026-09-06 is about. A stage's bullet list
 
 *Decision 0245 replaced that sidebar with five items — `Record`, `Reports`, `People`, `Cells` and `Network` — after this list was written. The list is the screens block's scope and is left as it stood; every screen in it is still reached, under the item the ruling's table names.*
 
+### Growth part three — the SUYNL and Training tabs
+
+The `/api/v1/suynl` and `/api/v1/training` routes ship without a screen. This stage owes the `Growth` sidebar item between `Cells` and `Network` (§19, §28) and two of its three tabs: `SUYNL` and `Training`, each with its count cards (decision 0281), its list and its save bar, which shows a stale save's refusal (decision 0282). The `Conquest` tab waits for its own routes.
+
 ### After the pilot — flat subtree view
 
 `GET /api/v1/leaders/{id}/descendants` ships with the Network screen's routes and no screen reaches it. The Network screen goes one generation at a time (decision 0252) and the People screen already lists the searcher's own scope (decision 0244), so this stage owes a flat view of a subtree only once somebody names a use for one.
