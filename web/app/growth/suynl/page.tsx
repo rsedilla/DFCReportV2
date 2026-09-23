@@ -26,6 +26,7 @@ import {
 } from '@/lib/growth';
 import { idempotencyKeyFor } from '@/lib/idempotency';
 import { describeFailure } from '@/lib/messages';
+import { usePageSize } from '@/lib/page-size';
 import { useScreenAddress } from '@/lib/screen-address';
 
 /**
@@ -52,7 +53,6 @@ export default function SuynlPage() {
   );
 }
 
-const PAGE_SIZE = 50;
 const LESSONS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10] as const;
 
 interface DraftEntry {
@@ -77,7 +77,9 @@ function SuynlTab() {
 
   const [cursors, setCursors] = useState<(string | null)[]>([null]);
   const [page, setPage] = useState(0);
-  const filterKey = `${q}|${mine}|${step ?? ''}`;
+  const pageSize = usePageSize();
+  // A new size starts the list again, so no row is skipped between two page lengths.
+  const filterKey = `${q}|${mine}|${step ?? ''}|${pageSize}`;
   const [lastFilter, setLastFilter] = useState(filterKey);
   if (lastFilter !== filterKey) {
     setLastFilter(filterKey);
@@ -90,7 +92,7 @@ function SuynlTab() {
     queryFn: ({ signal }) => getSuynlCounts(signal),
   });
   const people = useQuery({
-    queryKey: ['suynl-people', q, mine, step, cursors[page]],
+    queryKey: ['suynl-people', q, mine, step, cursors[page], pageSize],
     queryFn: ({ signal }) =>
       listSuynlPeople(
         {
@@ -98,7 +100,7 @@ function SuynlTab() {
           mine,
           step: step ?? undefined,
           cursor: cursors[page],
-          limit: PAGE_SIZE,
+          limit: pageSize,
         },
         signal,
       ),

@@ -352,3 +352,18 @@ test.describe('the Training tab', () => {
     });
   });
 });
+
+test.describe('how many names a page shows', () => {
+  for (const [width, size] of [
+    [1280, '15'],
+    [800, '12'],
+    [390, '10'],
+  ] as const) {
+    test(`asks for ${size} names at ${width}px`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 800 });
+      const traffic = await openSuynl(page);
+
+      expect(traffic.lists.at(-1)?.get('limit')).toBe(size);
+    });
+  }
+});
