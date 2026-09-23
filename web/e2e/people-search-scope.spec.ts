@@ -101,6 +101,25 @@ test.describe('which search each surface asks for', () => {
   });
 });
 
+test.describe('the browser Back button on the People screen', () => {
+  test('keeps the search in the address, so Back and a reload return to it', async ({ page }) => {
+    await mockSignedIn(page);
+    await mockPeople(page);
+    await page.goto('/people');
+
+    await page.getByLabel('Search by name or Member ID').fill('mar');
+    await page.getByRole('button', { name: 'Search' }).click();
+    await expect(page).toHaveURL(/q=mar/);
+
+    await page.reload();
+    await expect(page.getByLabel('Search by name or Member ID')).toHaveValue('mar');
+
+    await page.goBack();
+    await expect(page).not.toHaveURL(/q=mar/);
+    await expect(page.getByLabel('Search by name or Member ID')).toHaveValue('');
+  });
+});
+
 test.describe('what the People screen says when it finds nobody', () => {
   test('does not claim it searched the whole church', async ({ page }) => {
     await mockSignedIn(page);

@@ -72,6 +72,64 @@ test.describe('the Reports switch', () => {
   });
 });
 
+test.describe('the browser Back button', () => {
+  test('steps back through the month, the period and the Network, and a reload keeps them', async ({
+    page,
+  }) => {
+    await page.clock.setFixedTime(NOW);
+    await mockSignedIn(page);
+    await mockWholeChurchReader(page);
+    await mockDccReport(page);
+    await page.goto('/reports/dcc');
+
+    await expect(page.getByText('June 2026', { exact: true })).toBeVisible();
+
+    await page.getByRole('button', { name: 'Show May 2026' }).click();
+    await expect(page.getByText('May 2026', { exact: true })).toBeVisible();
+    await page.getByRole('button', { name: 'Show April 2026' }).click();
+    await expect(page.getByText('April 2026', { exact: true })).toBeVisible();
+
+    // The month is in the address, so a reload opens the same figures.
+    await page.reload();
+    await expect(page.getByText('April 2026', { exact: true })).toBeVisible();
+
+    await page.getByLabel('Figures for').selectOption('MENS');
+    await expect(page).toHaveURL(/network=MENS/);
+
+    await page.getByRole('radiogroup', { name: 'Report period' }).getByText('Year').click();
+    await expect(page).toHaveURL(/period=year/);
+
+    // Back through each change, in the order they were made.
+    await page.goBack();
+    await expect(page).not.toHaveURL(/period=year/);
+    await expect(page).toHaveURL(/network=MENS/);
+
+    await page.goBack();
+    await expect(page).not.toHaveURL(/network=MENS/);
+    await expect(page.getByText('April 2026', { exact: true })).toBeVisible();
+
+    await page.goBack();
+    await expect(page.getByText('May 2026', { exact: true })).toBeVisible();
+
+    await page.goBack();
+    await expect(page.getByText('June 2026', { exact: true })).toBeVisible();
+  });
+
+  test('steps back through the Cell chosen on the Cells report', async ({ page }) => {
+    await mockSignedIn(page);
+    await mockCells(page);
+    await mockCellReportForOneCell(page);
+    await page.goto('/reports/cells');
+
+    await page.getByLabel('Figures for').selectOption('3f1b7c6e-0000-4000-8000-000000000101');
+    await expect(page).toHaveURL(/cell=3f1b7c6e-0000-4000-8000-000000000101/);
+
+    await page.goBack();
+    await expect(page).not.toHaveURL(/cell=/);
+    await expect(page.getByLabel('Figures for')).toHaveValue('');
+  });
+});
+
 test.describe('the report figures', () => {
   test('each list closes with a Total that is the sum of its rows', async ({ page }) => {
     await mockSignedIn(page);

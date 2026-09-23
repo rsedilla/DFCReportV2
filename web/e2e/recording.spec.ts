@@ -934,6 +934,26 @@ test.describe('your month, from the queue (owner’s design, 2026-09-19)', () =>
     await mockDccRoster(page);
   }
 
+  test('keeps the month in the address, so Back returns to the month before it', async ({
+    page,
+  }) => {
+    await page.clock.setFixedTime(JUNE_20);
+    await mockMonth(page);
+
+    await page.goto('/dcc');
+    await expect(page.getByText('June 2026', { exact: true })).toBeVisible();
+
+    await page.getByRole('button', { name: 'Show May 2026' }).click();
+    await expect(page).toHaveURL(/month=2026-05-01/);
+    await expect(page.getByText('May 2026', { exact: true })).toBeVisible();
+
+    await page.reload();
+    await expect(page.getByText('May 2026', { exact: true })).toBeVisible();
+
+    await page.goBack();
+    await expect(page.getByText('June 2026', { exact: true })).toBeVisible();
+  });
+
   test('lists every date the reader owes, in words, each opening its record', async ({ page }) => {
     await page.clock.setFixedTime(JUNE_20);
     await mockMonth(page);
