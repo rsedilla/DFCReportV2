@@ -36,22 +36,6 @@ CREATE TYPE conquest_goal AS ENUM (
   'RAISE_12_LEADERS'
 );
 
--- The nine capabilities sections 27 and 28 add, in the order section 7 lists
--- them. `capabilities.ts` says these join the enum in the migration that builds
--- the modules, and this is it. A value added here is not used by this migration:
--- PostgreSQL refuses a new enum value in the transaction that created it, and
--- nothing is granted here anyway — a grant is an operator action.
-ALTER TYPE capability ADD VALUE IF NOT EXISTS 'conquest.view_subtree';
-ALTER TYPE capability ADD VALUE IF NOT EXISTS 'conquest.confirm';
-ALTER TYPE capability ADD VALUE IF NOT EXISTS 'conquest.confirm_on_behalf';
-ALTER TYPE capability ADD VALUE IF NOT EXISTS 'suynl.view_subtree';
-ALTER TYPE capability ADD VALUE IF NOT EXISTS 'suynl.confirm';
-ALTER TYPE capability ADD VALUE IF NOT EXISTS 'suynl.confirm_on_behalf';
-ALTER TYPE capability ADD VALUE IF NOT EXISTS 'training.view_subtree';
-ALTER TYPE capability ADD VALUE IF NOT EXISTS 'training.confirm';
-ALTER TYPE capability ADD VALUE IF NOT EXISTS 'training.confirm_on_behalf';
-
--- ---------------------------------------------------------------------------
 -- `read_only` is valid on a read capability, and section 7 now names eight
 --
 -- `capability_grants_read_only_is_a_read` (0001) listed the five read

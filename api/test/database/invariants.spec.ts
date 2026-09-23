@@ -1522,7 +1522,7 @@ describe('the database enforces the section 3 and section 7 rules it can', () =>
    * that list is not merely ungrantable read-only, it is **ungrantable**, and an
    * ordinary grant of it fails at the INSERT. Migration 0001's list held the five
    * read capabilities that existed then; sections 27 and 28 took section 7's read
-   * list to eight, and the first version of `0017_growth.sql` added the nine new
+   * list to eight, and the first version of that migration added the nine new
    * capabilities to the `capability` enum and left this CHECK alone. So
    * `conquest.view_subtree`, `suynl.view_subtree` and `training.view_subtree`
    * could not be granted at all -- decision 0204's failure, one capability class

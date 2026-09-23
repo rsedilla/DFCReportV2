@@ -2,7 +2,7 @@
  * The capabilities of SKILL.md section 7, as a closed enumeration.
  *
  * The nine Conquest, SUYNL and Training capabilities joined this list and the
- * `capability` enum together, in migration `0017_growth.sql`, which is what this
+ * `capability` enum together, in `0017_growth_capabilities.sql`, which is what this
  * file said would happen when those modules were built (sections 27 and 28).
  *
  * A guard cannot fail closed against an open list. Adding a capability is an

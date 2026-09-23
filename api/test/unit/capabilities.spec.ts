@@ -11,8 +11,8 @@ import { ALL_SCOPE_TYPES } from '../../src/auth/authorization/scopes';
  * tests are a second transcription of section 7's own lists, in its order.
  *
  * The nine Conquest, SUYNL and Training capabilities joined the declaration and
- * the `capability` enum with migration `0017_growth.sql` (sections 27 and 28), so
- * what the application declares and what section 7 names are now the same list.
+ * the `capability` enum with `0017_growth_capabilities.sql` (sections 27 and 28),
+ * so what the application declares and what section 7 names are now the same list.
  */
 describe('the capability enumeration the application declares', () => {
   const DECLARED = [
