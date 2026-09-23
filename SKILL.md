@@ -5242,7 +5242,7 @@ Adding a structure to this list is part of the change that introduces the rule n
 
 Conquest records, for every person under a leader's care, the four G12 goals in ladder order: **Win 3**, **Open a cell**, **Completion of 12**, **Raise 12 leaders** (ruling of 2026-09-16). It is a new module, `conquest`, and it owns one table.
 
-**The tables and the capabilities exist; nothing else does.** Migrations `0017_growth_capabilities.sql` and `0018_growth.sql` added the three `conquest.*` capabilities and created `conquest_confirmations`, and there is no endpoint, no screen, and no sidebar item whose tab it would be (Section 28). Tests are owed by each change that builds a part, and the schema's are in `api/test/database/growth.spec.ts`.
+**The tables and the capabilities exist; nothing else does.** Migrations `0017_growth_capabilities.sql` and `0018_growth.sql` added the three `conquest.*` capabilities and created `conquest_confirmations`, and there is no endpoint and no screen; the `Growth` sidebar item it would be a tab of exists (Section 28). Tests are owed by each change that builds a part, and the schema's are in `api/test/database/growth.spec.ts`.
 
 ### What each goal means
 
@@ -5315,7 +5315,7 @@ Section 16 counts two conditions closely related to these rungs and identical to
 
 ### Where it appears
 
-Conquest is a tab of the sidebar's `Growth` item, placed as Section 19 places it, and it carries the four counts, the people a leader cares for, and the confirmation above. *(It was given its own sidebar item by the ruling of 2026-09-16 and became a tab by the second ruling of that day; the application has carried neither.)* **Where the confirmation above is filed, that tab carrying no save bar now that every goal is derived, is recorded as open in `CLAUDE.md`** (Section 28). **A person who has reached all four carries a plain label rather than an accented tag**: a tag shown only to those who reached everything colours a person by a figure derived from their records (Sections 17 and 19). **The table is ordered by name**, which is this section's choice; a progress ordering offered later would be bound by Sections 13 and 17 as any other is.
+Conquest is a tab of the sidebar's `Growth` item, placed as Section 19 places it, and it carries the four counts, the people a leader cares for, and the confirmation above. *(It was given its own sidebar item by the ruling of 2026-09-16 and became a tab by the second ruling of that day; the application carries the `Growth` item and not yet this tab.)* **Where the confirmation above is filed, that tab carrying no save bar now that every goal is derived, is recorded as open in `CLAUDE.md`** (Section 28). **A person who has reached all four carries a plain label rather than an accented tag**: a tag shown only to those who reached everything colours a person by a figure derived from their records (Sections 17 and 19). **The table is ordered by name**, which is this section's choice; a progress ordering offered later would be bound by Sections 13 and 17 as any other is.
 
 ### Structure
 
@@ -5356,7 +5356,7 @@ Writes obey Section 22: they are idempotent, they carry `Idempotency-Key`, and e
 
 `Growth` records the discipleship pathway a person has travelled: the **SUYNL** lessons they have done, the five schools they have graduated from — the **Encounter** first — and the Conquest goals of Section 27 (the second ruling of 2026-09-16). It is a sidebar item with three tabs — `SUYNL`, `Training`, `Conquest` — and behind it are three modules, `suynl`, `training` and `conquest`, each owning its own table.
 
-**The tables, the capabilities and the routes exist; the screens do not.** Migrations `0017_growth_capabilities.sql` and `0018_growth.sql` added the six `suynl.*` and `training.*` capabilities and created `suynl_lessons` and `training_graduations`, and `/api/v1/suynl` and `/api/v1/training` each carry a list, its counts and a save. Tests are owed by each change that builds a part, and the schema's are in `api/test/database/growth.spec.ts`.
+**The tables, the capabilities, the routes and the two tabs exist.** Migrations `0017_growth_capabilities.sql` and `0018_growth.sql` added the six `suynl.*` and `training.*` capabilities and created `suynl_lessons` and `training_graduations`, `/api/v1/suynl` and `/api/v1/training` each carry a list, its counts and a save, and `web/app/growth` carries the `SUYNL` and `Training` tabs. Tests are owed by each change that builds a part, and the schema's are in `api/test/database/growth.spec.ts`.
 
 **`Growth` is the label on a sidebar item and never a module.** Section 2 names a module for what it owns, and these are three domains with different records, different correction rules and different capabilities; they are grouped because a leader asks about them in one sitting, not because they are one thing. A `growth` module owning all three tables would be a module named after a screen.
 

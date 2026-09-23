@@ -8,6 +8,7 @@ import {
   LayoutGrid,
   type LucideIcon,
   Network,
+  Sprout,
   Users,
 } from 'lucide-react';
 import { usePathname } from 'next/navigation';
@@ -75,6 +76,13 @@ const NETWORK: NavEntry = {
 };
 const PEOPLE: NavEntry = { href: '/people', label: 'People', icon: Users, matches: ['/people'] };
 const CELLS: NavEntry = { href: '/cells', label: 'Cells', icon: LayoutGrid, matches: ['/cells'] };
+/** SUYNL and Training, one item with a tab each (SKILL.md sections 19 and 28). */
+const GROWTH: NavEntry = {
+  href: '/growth/suynl',
+  label: 'Growth',
+  icon: Sprout,
+  matches: ['/growth'],
+};
 const ACCOUNT: NavEntry = {
   href: '/session',
   label: 'Account and session',
@@ -123,7 +131,7 @@ export const PAGE_WIDTH = {
 /**
  * The frame every signed-in screen sits in.
  *
- * **Five items, and the split is between recording and reading** (SKILL.md section
+ * **Six items, and the split is between recording and reading** (SKILL.md section
  * 19, ruling of 2026-09-14). What a person fills in is under `Record`; what they
  * read is under `Reports`. Each module keeps its own name; the label is what
  * reaches it.
@@ -150,7 +158,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   // request per page.
   const me = useQuery({ queryKey: ['me'], queryFn: ({ signal }) => getMe(signal) });
 
-  const links = [RECORD, REPORTS, PEOPLE, CELLS, NETWORK];
+  const links = [RECORD, REPORTS, PEOPLE, CELLS, GROWTH, NETWORK];
 
   // **One entry is current, and it is the one whose match covers most of the address.**
   //
@@ -200,12 +208,16 @@ export function AppShell({ children }: { children: ReactNode }) {
           'lg:focus-visible:outline-offset-2',
           // **A tab below `lg`**: an equal share of the bar, the icon over the word,
           // and 56px tall against the 44px minimum a phone held standing up needs
-          // (2.5.8). `min-w-0` so five of them share 320px without pushing past it.
-          'flex min-h-14 min-w-0 flex-1 flex-col items-center justify-center gap-1 px-1',
-          'text-[0.625rem] leading-none font-bold tracking-[0.04em] uppercase',
+          // (2.5.8). `min-w-0` so six of them share 320px without pushing past it.
+          // `flex-auto`: each tab starts from its own label's width and shares what is left,
+          // so a long label (Network) is not squeezed to the width of a short one (Cells).
+          'flex min-h-14 min-w-0 flex-auto flex-col items-center justify-center gap-1 px-1',
+          // Sentence case at 11px, so six labels fit 320px (owner's choice, 2026-09-24):
+          // capitals at 10px cut four of them off once Growth made six.
+          'text-[0.6875rem] leading-none font-bold',
           // **An item at `lg`**: a full-width row of the sidebar, the icon dropped.
           'lg:min-h-11 lg:flex-none lg:flex-row lg:justify-start lg:px-3',
-          'lg:text-[0.8125rem] lg:tracking-[0.08em]',
+          'lg:text-[0.8125rem] lg:tracking-[0.08em] lg:uppercase',
           // **The current item is red on a pale red, with a bar** (owner's choice,
           // 2026-09-22): along the top of a tab, down the left of a sidebar row. The bar
           // is a change of shape and not of hue alone (1.4.1), and `accent` on
