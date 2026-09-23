@@ -3,6 +3,7 @@
 import { useQueries, useQuery } from '@tanstack/react-query';
 import { Lock } from 'lucide-react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { useState } from 'react';
 
 import { AppShell, PAGE_WIDTH } from '@/components/app-shell';
@@ -19,6 +20,7 @@ import {
   searchPeople,
   type Person,
 } from '@/lib/people';
+import { useScreenAddress } from '@/lib/screen-address';
 import { cn } from '@/lib/utils';
 
 /**
@@ -70,10 +72,28 @@ export default function PeoplePage() {
 const PAGE_SIZE = 10;
 
 function PeopleList() {
-  const [term, setTerm] = useState('');
-  const [submitted, setSubmitted] = useState('');
+  // The search lives in the address, so Back returns to the previous one and a reload — or a
+  // link somebody sends — opens the same results.
+  const search = useSearchParams();
+  const go = useScreenAddress();
+  const submitted = search.get('q') ?? '';
+  // What is being typed is not yet what is being asked, so it stays here and follows the
+  // address, which Back and a reload change underneath it.
+  const [term, setTerm] = useState(submitted);
+  // Paging is deliberately not in the address: a cursor belongs to one set of rows. A new
+  // search — including one arrived at by pressing Back — starts the list again.
   const [cursors, setCursors] = useState<(string | null)[]>([null]);
   const [page, setPage] = useState(0);
+
+  // Adjusted while rendering rather than in an effect, which is React's own answer for state
+  // that follows something from outside: an effect would render the old results once first.
+  const [lastSubmitted, setLastSubmitted] = useState(submitted);
+  if (lastSubmitted !== submitted) {
+    setLastSubmitted(submitted);
+    setTerm(submitted);
+    setCursors([null]);
+    setPage(0);
+  }
 
   const results = useQuery({
     queryKey: ['people', submitted, cursors[page], PAGE_SIZE],
@@ -99,9 +119,7 @@ function PeopleList() {
     if (tooShort) {
       return;
     }
-    setCursors([null]);
-    setPage(0);
-    setSubmitted(trimmed);
+    go({ q: trimmed });
   }
 
   return (

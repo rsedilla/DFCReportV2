@@ -66,6 +66,42 @@ test.describe('the Cells list', () => {
   });
 });
 
+test.describe('the browser Back button on the Cells list', () => {
+  test('steps back through the search, the filter and the closed view', async ({ page }) => {
+    await mockSignedIn(page);
+    await mockCellsWithClosed(page);
+    await page.goto('/cells');
+
+    await page.getByLabel('Search by Cell ID or leader').fill('youth');
+    await page.getByRole('button', { name: 'Search' }).click();
+    await expect(page).toHaveURL(/q=youth/);
+
+    await page.getByRole('button', { name: 'Show only my Cells' }).click();
+    await expect(page).toHaveURL(/mine=1/);
+
+    await page.getByRole('radio', { name: 'Closed Cells' }).check();
+    await expect(page).toHaveURL(/view=CLOSED/);
+
+    // A reload keeps all three, because they are in the address rather than on the screen.
+    await page.reload();
+    await expect(page.getByRole('radio', { name: 'Closed Cells' })).toBeChecked();
+    await expect(page.getByLabel('Search by Cell ID or leader')).toHaveValue('youth');
+
+    await page.goBack();
+    await expect(page).not.toHaveURL(/view=CLOSED/);
+    await expect(page).toHaveURL(/mine=1/);
+
+    await page.goBack();
+    await expect(page).not.toHaveURL(/mine=1/);
+    await expect(page).toHaveURL(/q=youth/);
+
+    await page.goBack();
+    await expect(page).not.toHaveURL(/q=youth/);
+    // The box follows the address back, rather than keeping a term nobody is searching for.
+    await expect(page.getByLabel('Search by Cell ID or leader')).toHaveValue('');
+  });
+});
+
 test.describe('New Cell', () => {
   test('is offered only to a Whole Church holder of cell.approve_leadership', async ({ page }) => {
     await mockSignedIn(page);

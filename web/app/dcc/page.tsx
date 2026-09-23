@@ -2,7 +2,7 @@
 
 import { useQueries, useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
-import { useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 
 import { AppShell, PAGE_WIDTH } from '@/components/app-shell';
 import { MonthPicker } from '@/components/month-picker';
@@ -18,6 +18,7 @@ import {
 import { getWholeDccRoster, listDccEvents } from '@/lib/dcc';
 import { describeFailure } from '@/lib/messages';
 import { dayLabel, reportingMonthOf, todayInManila } from '@/lib/reporting-month';
+import { useScreenAddress } from '@/lib/screen-address';
 
 /**
  * The reader's month: every date they owe a record, their own Cells' meetings and their own
@@ -47,7 +48,11 @@ interface DayItem {
 }
 
 function YourMonth() {
-  const [month, setMonth] = useState(() => reportingMonthOf());
+  // The month lives in the address, so Back returns to the month before it and a reload — or
+  // a link somebody sends — opens the same one.
+  const search = useSearchParams();
+  const go = useScreenAddress();
+  const month = search.get('month') ?? reportingMonthOf();
   const today = todayInManila();
   // A month that has not begun is shown for its Sundays alone: the Cells index refuses it
   // (decision 0216), and a removed Sunday is worth seeing ahead of time (section 9).
@@ -194,7 +199,7 @@ function YourMonth() {
       {/* A month not begun has no open or closed state (section 20), so none is shown. */}
       <MonthPicker
         month={month}
-        onChange={setMonth}
+        onChange={(next) => go({ month: next })}
         open={future ? undefined : events.data?.open}
         allowFuture
       />

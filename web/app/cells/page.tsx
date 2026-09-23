@@ -2,6 +2,7 @@
 
 import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { useState } from 'react';
 
 import { AppShell, PAGE_WIDTH } from '@/components/app-shell';
@@ -27,6 +28,7 @@ import { MINIMUM_SEARCH_LENGTH } from '@/lib/people';
 import { getMe, holdsWholeChurch } from '@/lib/me';
 import { describeFailure } from '@/lib/messages';
 import { reportingMonthOf } from '@/lib/reporting-month';
+import { useScreenAddress } from '@/lib/screen-address';
 
 /** Ten a page, as the People list pages (decision 0261). */
 const PAGE_SIZE = 10;
@@ -74,13 +76,39 @@ export default function CellsPage() {
 }
 
 function CellsIndex() {
-  const [month, setMonth] = useState(() => reportingMonthOf());
-  const [mineOnly, setMineOnly] = useState(false);
-  const [term, setTerm] = useState('');
-  const [submitted, setSubmitted] = useState('');
+  // What the reader is looking at lives in the address, so Back steps back through the
+  // month, the search, the filter and the view, and a reload opens the same list.
+  const search = useSearchParams();
+  const go = useScreenAddress();
+  const month = search.get('month') ?? reportingMonthOf();
+  const mineOnly = search.get('mine') === '1';
+  const submitted = search.get('q') ?? '';
+  const viewInAddress: 'ACTIVE' | 'CLOSED' = search.get('view') === 'CLOSED' ? 'CLOSED' : 'ACTIVE';
+  // The radio follows the click at once and the address a moment later, because a control
+  // that waits for a navigation to show what was chosen reads as a control that missed it.
+  // The address still decides, which is what makes Back and a reload work: the block below
+  // takes whatever it says.
+  const [view, setView] = useState(viewInAddress);
+  // What is being typed is not yet what is being asked, so it stays here; it follows the
+  // address, which is what Back and a reload change underneath it.
+  const [term, setTerm] = useState(submitted);
+  // Paging is deliberately not in the address: a cursor belongs to one set of rows, and an
+  // address carrying one would break as soon as the rows behind it changed. Any narrowing —
+  // including one arrived at by pressing Back — starts the list again.
   const [cursors, setCursors] = useState<(string | null)[]>([null]);
   const [page, setPage] = useState(0);
-  const [view, setView] = useState<'ACTIVE' | 'CLOSED'>('ACTIVE');
+
+  // Adjusted while rendering rather than in an effect, which is React's own answer for state
+  // that follows something from outside: an effect would render the old list once first.
+  const asked = `${month}|${String(mineOnly)}|${submitted}|${viewInAddress}`;
+  const [lastAsked, setLastAsked] = useState(asked);
+  if (lastAsked !== asked) {
+    setLastAsked(asked);
+    setTerm(submitted);
+    setView(viewInAddress);
+    setCursors([null]);
+    setPage(0);
+  }
   const [restarting, setRestarting] = useState<CellSummary | null>(null);
   const [sent, setSent] = useState<ReadonlySet<string>>(new Set());
   const closed = view === 'CLOSED';
@@ -106,12 +134,6 @@ function CellsIndex() {
   const trimmed = term.trim();
   const tooShort = trimmed.length > 0 && trimmed.length < MINIMUM_SEARCH_LENGTH;
 
-  /** Any narrowing starts the list again: a cursor belongs to one set of rows. */
-  function restart(change: () => void) {
-    change();
-    setCursors([null]);
-    setPage(0);
-  }
 
   return (
     <main id="main" className={PAGE_WIDTH.INDEX}>
@@ -150,7 +172,7 @@ function CellsIndex() {
         onSubmit={(event) => {
           event.preventDefault();
           if (!tooShort) {
-            restart(() => setSubmitted(trimmed));
+            go({ q: trimmed });
           }
         }}
         className="flex w-full min-w-0 flex-col gap-3 sm:flex-row sm:items-end lg:w-auto lg:min-w-72 lg:flex-1"
@@ -179,7 +201,10 @@ function CellsIndex() {
           legend="Show"
           name="view"
           value={view}
-          onChange={(next) => restart(() => setView(next))}
+          onChange={(next) => {
+            setView(next);
+            go({ view: next === 'CLOSED' ? 'CLOSED' : null });
+          }}
           options={[
             { value: 'ACTIVE', label: 'Running Cells' },
             { value: 'CLOSED', label: 'Closed Cells' },
@@ -193,7 +218,7 @@ function CellsIndex() {
         {closed ? null : (
           <MonthPicker
             month={month}
-            onChange={(next) => restart(() => setMonth(next))}
+            onChange={(next) => go({ month: next })}
             open={cells.data?.open}
           />
         )}
@@ -201,7 +226,7 @@ function CellsIndex() {
           type="button"
           variant="secondary"
           aria-pressed={mineOnly}
-          onClick={() => restart(() => setMineOnly((on) => !on))}
+          onClick={() => go({ mine: mineOnly ? null : '1' })}
         >
           {closed
             ? mineOnly
