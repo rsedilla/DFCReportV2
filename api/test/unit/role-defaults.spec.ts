@@ -6,8 +6,8 @@ import type { AccountRole } from '../../src/database/schema';
 
 /**
  * The role catalog of SKILL.md section 7, transcribed a second time, cell by
- * cell, for the capabilities this application declares — section 7's table
- * carries more rows than that, and says so.
+ * cell. Every row of that table is here since the Growth modules were built
+ * (sections 27 and 28), which is what the case below asserts.
  *
  * A dash in the specification's table is an absence here. The five deliberate
  * absences have their own cases below, because each of them looks like an
@@ -113,6 +113,51 @@ const TABLE: Record<Capability, Record<AccountRole, string | null>> = {
   'accounts.manage': { SENIOR_PASTOR: null, ADMIN: 'WHOLE_CHURCH', LEADER: null },
   'roles.manage': { SENIOR_PASTOR: null, ADMIN: 'WHOLE_CHURCH', LEADER: null },
   'people.merge': { SENIOR_PASTOR: null, ADMIN: 'WHOLE_CHURCH', LEADER: null },
+  // Sections 27 and 28. Every one of the nine is given to all three roles, at the
+  // role's usual scope: there is no dash in these rows, which is why they are
+  // written out rather than generated — a generated row would agree with the code
+  // it is checking by construction.
+  'conquest.view_subtree': {
+    SENIOR_PASTOR: 'WHOLE_CHURCH',
+    ADMIN: 'WHOLE_CHURCH',
+    LEADER: 'OWN_SUBTREE',
+  },
+  'conquest.confirm': {
+    SENIOR_PASTOR: 'WHOLE_CHURCH',
+    ADMIN: 'WHOLE_CHURCH',
+    LEADER: 'OWN_SUBTREE',
+  },
+  'conquest.confirm_on_behalf': {
+    SENIOR_PASTOR: 'WHOLE_CHURCH',
+    ADMIN: 'WHOLE_CHURCH',
+    LEADER: 'OWN_SUBTREE',
+  },
+  'suynl.view_subtree': {
+    SENIOR_PASTOR: 'WHOLE_CHURCH',
+    ADMIN: 'WHOLE_CHURCH',
+    LEADER: 'OWN_SUBTREE',
+  },
+  'suynl.confirm': { SENIOR_PASTOR: 'WHOLE_CHURCH', ADMIN: 'WHOLE_CHURCH', LEADER: 'OWN_SUBTREE' },
+  'suynl.confirm_on_behalf': {
+    SENIOR_PASTOR: 'WHOLE_CHURCH',
+    ADMIN: 'WHOLE_CHURCH',
+    LEADER: 'OWN_SUBTREE',
+  },
+  'training.view_subtree': {
+    SENIOR_PASTOR: 'WHOLE_CHURCH',
+    ADMIN: 'WHOLE_CHURCH',
+    LEADER: 'OWN_SUBTREE',
+  },
+  'training.confirm': {
+    SENIOR_PASTOR: 'WHOLE_CHURCH',
+    ADMIN: 'WHOLE_CHURCH',
+    LEADER: 'OWN_SUBTREE',
+  },
+  'training.confirm_on_behalf': {
+    SENIOR_PASTOR: 'WHOLE_CHURCH',
+    ADMIN: 'WHOLE_CHURCH',
+    LEADER: 'OWN_SUBTREE',
+  },
 };
 
 const ROLES: AccountRole[] = ['SENIOR_PASTOR', 'ADMIN', 'LEADER'];

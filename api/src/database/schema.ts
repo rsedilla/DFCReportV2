@@ -660,6 +660,46 @@ export interface CellMeetingChangesTable {
   occurred_at: ServerTimestamp;
 }
 
+export type TrainingProgram = 'ENCOUNTER' | 'LIFE_CLASS' | 'SOL_1' | 'SOL_2' | 'SOL_3';
+export type ConquestGoal = 'WIN_3' | 'OPEN_A_CELL' | 'COMPLETION_OF_12' | 'RAISE_12_LEADERS';
+
+/**
+ * What every Growth record carries (SKILL.md sections 27 and 28).
+ *
+ * The three tables differ in what they are about and agree on everything else:
+ * whose statement it is, which account filed it, and the correction that
+ * superseded it. `confirmed_by` is null only for a Network root, who has no
+ * pastoral leader to confirm for them; the three correction columns are set
+ * together or not at all, which the database enforces rather than this type.
+ */
+interface GrowthStatement {
+  id: Generated<string>;
+  person_id: string;
+  confirmed_by: string | null;
+  recorded_by: string;
+  confirmed_at: ServerTimestamp;
+  superseded_at: ColumnType<Date | null, Date | null | undefined, Date | null>;
+  corrected_by: string | null;
+  correction_reason: string | null;
+}
+
+export interface SuynlLessonsTable extends GrowthStatement {
+  /** 1 to 10. The day the tick carries is `confirmed_at` in Manila, never a stated date. */
+  lesson: number;
+}
+
+export interface TrainingGraduationsTable extends GrowthStatement {
+  program: TrainingProgram;
+  /** Null where the leader does not know it (section 28). */
+  graduated_on: DateOnly | null;
+}
+
+export interface ConquestConfirmationsTable extends GrowthStatement {
+  goal: ConquestGoal;
+  /** Required: a confirmation of history nobody else holds says nothing undated. */
+  reached_on: DateOnly;
+}
+
 export interface Database {
   persons: PersonsTable;
   person_lifecycle: PersonLifecycleTable;
@@ -684,4 +724,7 @@ export interface Database {
   audit_log: AuditLogTable;
   idempotency_keys: IdempotencyKeysTable;
   settings: SettingsTable;
+  suynl_lessons: SuynlLessonsTable;
+  training_graduations: TrainingGraduationsTable;
+  conquest_confirmations: ConquestConfirmationsTable;
 }

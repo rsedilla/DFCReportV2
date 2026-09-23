@@ -1,6 +1,6 @@
 import { sql, type Kysely } from 'kysely';
 
-import { ALL_CAPABILITIES } from '../../src/auth/authorization/capabilities';
+import { ALL_CAPABILITIES, READ_CAPABILITIES } from '../../src/auth/authorization/capabilities';
 import { ALL_SCOPE_TYPES } from '../../src/auth/authorization/scopes';
 import { createTestDb } from '../setup/database';
 
@@ -429,8 +429,37 @@ describe('the schema (SKILL.md sections 4, 5, 6 and 7)', () => {
       expect(await enumLabels(db, 'scope_type')).toEqual([...ALL_SCOPE_TYPES]);
     });
 
-    it('rejects read_only on a write capability at creation', async () => {
+    it('names exactly the read capabilities, so read_only is storable on those and no others', async () => {
+      // Section 7: "`read_only` is valid only on a read capability", enumerated
+      // by name in this constraint. It is the second of the three homes that
+      // section names for that list -- the `capability` enum above is not one of
+      // them, and `READ_CAPABILITIES` is the third -- and it warns that "a
+      // capability added to the list above owes an edit in all three places, and
+      // naming two of them is how one gets missed".
+      //
+      // **An equality, because both directions are rules and each fails
+      // differently.** A read capability left out is not merely ungrantable
+      // read-only: `capability_grants.read_only` defaults to `true`, so an
+      // ordinary grant of it is *uninsertable*, which is decision 0204's failure
+      // one capability class over. A write capability wrongly added would make a
+      // `read_only` grant of it storable, which section 7 forbids in terms.
+      //
+      // **Compared against `READ_CAPABILITIES` rather than against a list
+      // written out here, which is the opposite of what the enum case above
+      // does, and deliberately.** That constant is itself pinned to section 7's
+      // list, transcribed literally, in `test/unit/capabilities.spec.ts`. So the
+      // chain runs specification -> constant -> constraint with something able to
+      // fail at each link, and a second transcription here would be a third copy
+      // to keep in step rather than a second check.
+      //
+      // This case asserted only that the definition matched `/CHECK/i` and
+      // `/read_only/i` until 2026-09-23, which is why the list stood at the five
+      // of migration 0001 while section 7 named eight, with the whole suite
+      // green. The two `toMatch` lines are kept beneath the equality because they
+      // fail with a clearer message when the constraint is not a CHECK at all.
       const constraint = await constraintDefinition(db, 'capability_grants_read_only_is_a_read');
+
+      expect(capabilitiesNamedIn(constraint).sort()).toEqual([...READ_CAPABILITIES].sort());
 
       expect(constraint).toMatch(/CHECK/i);
       expect(constraint).toMatch(/read_only/i);
@@ -696,6 +725,20 @@ async function constraintTriggerFacts(
   }
 
   return result.rows[0];
+}
+
+/**
+ * The capability identifiers a constraint definition names.
+ *
+ * `pg_get_constraintdef` renders an `IN (...)` list as `= ANY (ARRAY[...])` and
+ * casts every element, so each one arrives as `'people.view_subtree'::capability`.
+ * The cast is matched deliberately rather than every quoted literal: it is what
+ * tells a capability apart from whatever else a constraint on this table might
+ * one day carry, and it means a rewrite of the list into some other shape yields
+ * an empty array and fails loudly rather than matching something by accident.
+ */
+function capabilitiesNamedIn(definition: string): string[] {
+  return [...definition.matchAll(/'([^']+)'::capability\b/g)].map((match) => match[1]);
 }
 
 async function constraintDefinition(db: Kysely<Database>, name: string): Promise<string> {
