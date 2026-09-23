@@ -5305,7 +5305,7 @@ Only a stated confirmation is corrected this way. A derived goal that looks wron
 
 **Conquest figures do not enter the reporting surface** (Sections 18 and 20). The four counts at the head of its tab are the whole of its aggregate view.
 
-**Those counts have a stated population.** Each is `COUNT(DISTINCT person_id)` over exactly the people the screen lists — everyone the actor's `conquest.view_subtree` grant reaches **at the scope that grant carries**, resolved as things stand **now**, the screen naming no period — of those who have reached that goal. It is stated as the grant's reach rather than as a subtree walk because an administrator outside the pastoral structure has no subtree and Section 5 provides for one. A count filters this tab's own list to the people behind it. Nothing is attributed to a leader or compared across scopes. **A figure asked for at a scope the actor does not hold, or for a past period, is governed by Section 20 and not by this section**, and is recorded as open in `CLAUDE.md`.
+**Those counts have a stated population.** Each is `COUNT(DISTINCT person_id)` over exactly the people the screen lists — every current Person the actor's `conquest.view_subtree` grant reaches **at the scope that grant carries**, resolved as things stand **now**, the screen naming no period — of those who have reached that goal. It is stated as the grant's reach rather than as a subtree walk because an administrator outside the pastoral structure has no subtree and Section 5 provides for one. A count filters this tab's own list to the people behind it. Nothing is attributed to a leader or compared across scopes. **A figure asked for at a scope the actor does not hold, or for a past period, is governed by Section 20 and not by this section**, and is recorded as open in `CLAUDE.md`.
 
 Section 16 counts two conditions closely related to these rungs and identical to neither: *Leaders with 12+ Direct Leaders*, and *New Cell Leaders*, which counts a first **qualifying** leadership in a period and so counts a leader who took a Cell over after the church was encoded, whom Open a cell does not. A Reports block would put near-identical counts in front of one leader with nothing saying which question each answers. Whether Conquest counts should replace Section 16's, sit beside them, or stay separate is a reporting decision and is not taken here.
 
@@ -5340,7 +5340,7 @@ A partial unique index over rows where `superseded_at` is null: one current row 
 
 A derived goal has no row at all unless a leader confirmed it.
 
-**Whether an archived or merged Person may be given a row, and how a merged pair is counted in the figures above, is recorded as open in `CLAUDE.md`** — a silence this section shares with Section 28, where Sections 5 and 10 both answer for their own domains.
+**An archived or merged Person is not listed and is given no row** (decision 0279, which Section 28 states for all three tabs).
 
 Writes obey Section 22: they are idempotent, they carry `Idempotency-Key`, and each records its completion inside the transaction that performs it.
 
@@ -5441,7 +5441,7 @@ Six capabilities, three for each of the two modules this section introduces, in 
 
 **Growth figures do not enter the reporting surface** (Sections 18 and 20). The counts at the head of the `SUYNL` and `Training` tabs are the whole of their aggregate view.
 
-**Those counts have a stated population.** Each is `COUNT(DISTINCT person_id)` over exactly the people the tab lists — everyone the actor's `suynl.view_subtree` or `training.view_subtree` grant reaches **at the scope that grant carries**, resolved as things stand **now**, the screen naming no period — of those who have reached that step. **A count filters this tab's own list to the people behind it**, which Section 27's four also do. Nothing is attributed to a leader, ranked or compared across scopes (Sections 13, 17 and 19), and nothing is colour-graded.
+**Those counts have a stated population.** Each is `COUNT(DISTINCT person_id)` over exactly the people the tab lists — every current Person the actor's `suynl.view_subtree` or `training.view_subtree` grant reaches **at the scope that grant carries**, resolved as things stand **now**, the screen naming no period — of those who have reached that step. **A count filters this tab's own list to the people behind it**, which Section 27's four also do. Nothing is attributed to a leader, ranked or compared across scopes (Sections 13, 17 and 19), and nothing is colour-graded.
 
 The screen says the counts are as of now, never "this year". A Reports block would make them period figures, which is the trigger the date ruling above turns on, and Section 16 defines no metric these duplicate.
 
@@ -5495,7 +5495,7 @@ One partial unique index on each, over rows where `superseded_at` is null: one c
 
 Writes obey Section 22: they are idempotent, they carry `Idempotency-Key`, and each records its completion inside the transaction that performs it.
 
-**Whether an archived or merged Person may be given a row of either table, and how a merged pair is counted in the figures above, is recorded as open in `CLAUDE.md`** — a silence this section shares with Section 27, where Sections 5 and 10 both answer for their own domains.
+**A Person who is archived, or whose record was absorbed by a merge, is not listed on the `SUYNL`, `Training` or `Conquest` tab and is given no row** (ruling of 2026-09-23, decision 0279). A write naming one is refused, a correction included: an archived Person is restored to `CURRENT` first, as Section 5 requires before a reassignment, and a merge is irreversible, so a new record names the surviving Person (Section 5). Lifecycle is read as things stand now, as the tabs are. What they already have is kept, and the counts above count current people only. **Whether a survivor inherits an absorbed record's rows is Person Merge's question** and is recorded as open in `CLAUDE.md`.
 
 ### What Section 21 records
 
