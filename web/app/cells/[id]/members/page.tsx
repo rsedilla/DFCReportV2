@@ -20,7 +20,7 @@ import {
 } from '@/lib/cells';
 import { idempotencyKeyFor } from '@/lib/idempotency';
 import { describeFailure } from '@/lib/messages';
-import { dayLabel, reportingMonthOf } from '@/lib/reporting-month';
+import { dayLabel, reportingMonthOf, todayInManila } from '@/lib/reporting-month';
 
 const LINK =
   'focus-visible:outline-accent inline-flex min-h-6 items-center underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2';
@@ -204,7 +204,7 @@ function CellMembers() {
                     <MemberName member={member} />
                   </td>
                   <td className="text-muted px-3 py-3 align-top">
-                    {dayLabel(member.started_at.slice(0, 10))}
+                    {dayLabel(todayInManila(new Date(member.started_at)))}
                   </td>
                   <td className="px-3 py-3 text-right align-top">
                     <RemoveControl
@@ -227,7 +227,7 @@ function CellMembers() {
                   <div>
                     <MemberName member={member} />
                     <p className="text-muted mt-1 text-sm">
-                      A member since {dayLabel(member.started_at.slice(0, 10))}
+                      A member since {dayLabel(todayInManila(new Date(member.started_at)))}
                     </p>
                   </div>
                   <RemoveControl

@@ -671,7 +671,8 @@ export async function mockCellMembers(page: Page): Promise<void> {
             person_id: '3f1b7c6e-0000-4000-8000-000000000602',
             member_id: 'M-000702',
             full_name: 'Bienvenido Trinidad',
-            started_at: '2026-05-12T00:00:00.000Z',
+            // 1 am on 12 May in Manila, which is still 11 May in UTC.
+            started_at: '2026-05-11T17:00:00.000Z',
           },
         ],
         next_cursor: null,
