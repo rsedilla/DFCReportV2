@@ -5,8 +5,8 @@
  *
  * **The form applies it as a box is left, never the server**, so what is saved is what
  * the person saw and could change back: SKILL.md section 3 forbids altering a stored
- * name, and a leader may want `dela` kept small. `NameFields` raises letters in a box
- * once, so a letter lowered again by hand stays lowered.
+ * name, and a leader may want `dela` kept small. `NameFields` leaves a letter lowered
+ * by hand in the name it just raised, and raises a name typed afresh.
  */
 export function capitalizeNameWords(name: string): string {
   return name.replace(
