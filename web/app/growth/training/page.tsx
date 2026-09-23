@@ -28,6 +28,7 @@ import {
   type TrainingProgram,
 } from '@/lib/growth';
 import { idempotencyKeyFor } from '@/lib/idempotency';
+import { getMe } from '@/lib/me';
 import { describeFailure } from '@/lib/messages';
 import { todayInManila } from '@/lib/reporting-month';
 import { usePageSize } from '@/lib/page-size';
@@ -88,6 +89,7 @@ function TrainingTab() {
 
   const [cursors, setCursors] = useState<(string | null)[]>([null]);
   const [page, setPage] = useState(0);
+  const me = useQuery({ queryKey: ['me'], queryFn: ({ signal }) => getMe(signal) });
   const pageSize = usePageSize();
   // A new size starts the list again, so no row is skipped between two page lengths.
   const filterKey = `${q}|${mine}|${step ?? ''}|${pageSize}`;
@@ -293,7 +295,7 @@ function TrainingTab() {
                 {rows.map((row) => (
                   <tr key={row.person_id} className={rowClasses}>
                     <td className="px-3 py-3 align-top">
-                      <PersonName row={row} />
+                      <PersonName row={row} self={row.person_id === me.data?.person_id} />
                     </td>
                     {TRAINING_PROGRAMS.map((program) => (
                       <td key={program} className="px-1 py-3 text-center align-top">
@@ -310,7 +312,7 @@ function TrainingTab() {
               {rows.map((row) => (
                 <li key={row.person_id} className="py-4">
                   <div className="flex items-start justify-between gap-3">
-                    <PersonName row={row} />
+                    <PersonName row={row} self={row.person_id === me.data?.person_id} />
                     <span className="text-sm">{doneLabel(row, draft)}</span>
                   </div>
                   <ul className="mt-2">
@@ -379,7 +381,7 @@ function TrainingTab() {
   );
 }
 
-function PersonName({ row }: { row: TrainingPerson }) {
+function PersonName({ row, self }: { row: TrainingPerson; self: boolean }) {
   return (
     <div>
       <Link
@@ -390,7 +392,11 @@ function PersonName({ row }: { row: TrainingPerson }) {
       </Link>
       <span className="text-muted block font-mono text-xs">{row.member_id}</span>
       {!row.may_file ? (
-        <span className="text-muted block text-xs">Filed by their own leader</span>
+        // Decision 0280: nobody records their own; anyone else here is somebody the
+        // reader may not file for, a Network root among them, who has no leader.
+        <span className="text-muted block text-xs">
+          {self ? 'You · another leader records these' : 'Not yours to record'}
+        </span>
       ) : null}
     </div>
   );

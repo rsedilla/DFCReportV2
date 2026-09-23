@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 
-import { mockSignedIn } from './mock-api';
+import { SIGNED_IN_PERSON_ID, mockSignedIn } from './mock-api';
 import {
   SUYNL_IN_PROGRESS,
   TRAINING_NONE,
@@ -196,7 +196,7 @@ test.describe('the SUYNL tab', () => {
 
     const row = page.getByRole('row', { name: /Bayani Castillo/ });
     await expect(row).toBeVisible();
-    await expect(row.getByText('Filed by their own leader')).toBeVisible();
+    await expect(row.getByText('Not yours to record')).toBeVisible();
     await expect(row.getByRole('checkbox')).toHaveCount(0);
     await expect(page.getByRole('checkbox', { name: /Bayani Castillo/ })).toHaveCount(0);
     await expect(row).toContainText('1 of 10');
@@ -238,7 +238,7 @@ test.describe('the Training tab', () => {
     await expect(page.getByRole('row', { name: /Lualhati Dizon/ })).toContainText('All five');
 
     const notMine = page.getByRole('row', { name: /Bayani Castillo/ });
-    await expect(notMine.getByText('Filed by their own leader')).toBeVisible();
+    await expect(notMine.getByText('Not yours to record')).toBeVisible();
     await expect(notMine.getByRole('checkbox')).toHaveCount(0);
   });
 
@@ -366,4 +366,34 @@ test.describe('how many names a page shows', () => {
       expect(traffic.lists.at(-1)?.get('limit')).toBe(size);
     });
   }
+});
+
+test('the reader\'s own row says another leader records it (decision 0280)', async ({ page }) => {
+  await mockSignedIn(page);
+  await page.route('**/api/v1/suynl/counts', (route) =>
+    route.fulfill({ json: { people: 1, not_started: 1, in_progress: 0, graduated: 0 } }),
+  );
+  await page.route('**/api/v1/suynl/people?*', (route) =>
+    route.fulfill({
+      json: {
+        data: [
+          {
+            person_id: SIGNED_IN_PERSON_ID,
+            member_id: 'M-000900',
+            full_name: 'Signed-in Reader',
+            lessons: [],
+            graduated_on: null,
+            may_file: false,
+          },
+        ],
+        next_cursor: null,
+      },
+    }),
+  );
+  await page.goto('/growth/suynl');
+
+  await expect(
+    page.getByText('You · another leader records these').filter({ visible: true }),
+  ).toBeVisible();
+  await expect(page.getByRole('checkbox')).toHaveCount(0);
 });
