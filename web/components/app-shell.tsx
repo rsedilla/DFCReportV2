@@ -209,7 +209,9 @@ export function AppShell({ children }: { children: ReactNode }) {
           // **A tab below `lg`**: an equal share of the bar, the icon over the word,
           // and 56px tall against the 44px minimum a phone held standing up needs
           // (2.5.8). `min-w-0` so six of them share 320px without pushing past it.
-          'flex min-h-14 min-w-0 flex-1 flex-col items-center justify-center gap-1 px-1',
+          // `flex-auto`: each tab starts from its own label's width and shares what is left,
+          // so a long label (Network) is not squeezed to the width of a short one (Cells).
+          'flex min-h-14 min-w-0 flex-auto flex-col items-center justify-center gap-1 px-1',
           // Sentence case at 11px, so six labels fit 320px (owner's choice, 2026-09-24):
           // capitals at 10px cut four of them off once Growth made six.
           'text-[0.6875rem] leading-none font-bold',

@@ -1948,6 +1948,8 @@ test('at 320px the tab bar fits all six items, none of them clipped', { tag: [CR
   await mockSuynl(page);
 
   await page.goto('/growth/suynl');
+  // Measured in the application's own font: a fallback shown while it loads is wider.
+  await page.evaluate(() => document.fonts.ready);
 
   const navigation = page.getByRole('navigation', { name: 'Main' });
   await expect(navigation.getByRole('link')).toHaveText([
@@ -1977,7 +1979,9 @@ test('at 320px the tab bar fits all six items, none of them clipped', { tag: [CR
 
   for (const tab of tabs) {
     expect(tab.left, `${tab.text} starts off screen`).toBeGreaterThanOrEqual(0);
-    expect(tab.right, `${tab.text} ends past 320px`).toBeLessThanOrEqual(320);
+    // Half a pixel for sub-pixel layout: tabs sized by their labels have fractional widths,
+    // and WebKit places the last edge at 320.016.
+    expect(tab.right, `${tab.text} ends past 320px`).toBeLessThanOrEqual(320.5);
     expect(tab.width, `${tab.text} is ${tab.width}px wide`).toBeGreaterThanOrEqual(24);
     expect(tab.height, `${tab.text} is ${tab.height}px tall`).toBeGreaterThanOrEqual(44);
   }
