@@ -43,6 +43,7 @@ import {
   mockClosedDccRoster,
   mockRecordedMeetingRoster,
 } from './mock-attendance';
+import { mockSuynl, mockTraining } from './mock-growth';
 
 /**
  * axe-core over every route, in both themes, with a violation failing the build.
@@ -944,6 +945,73 @@ const SCANS = [
       await expect(page.getByText('Not recorded yet')).toBeVisible();
     },
   },
+  {
+    // SUYNL (section 28): three count cards, ten boxes a person, a graduated row folded to
+    // its date with Correct, and a row the reader may not file for, which shows marks.
+    name: 'growth suynl',
+    route: '/growth/suynl',
+    async before(page: import('@playwright/test').Page) {
+      await mockSignedIn(page);
+      await mockSuynl(page);
+    },
+    async arrange(page: import('@playwright/test').Page) {
+      await expect(page.getByRole('button', { name: 'Correct' })).toBeVisible();
+      await expect(
+        page.getByRole('checkbox', { name: 'Lesson 3, Dalisay Soriano' }),
+      ).toBeVisible();
+      await expect(page.getByText('Filed by their own leader').filter({ visible: true })).toBeVisible();
+    },
+  },
+  {
+    // An untick of a saved lesson, which renders the required reason box in the save bar.
+    name: 'growth suynl, withdrawing a lesson',
+    route: '/growth/suynl',
+    async before(page: import('@playwright/test').Page) {
+      await mockSignedIn(page);
+      await mockSuynl(page);
+    },
+    async arrange(page: import('@playwright/test').Page) {
+      await page
+        .getByRole('checkbox', { name: 'Lesson 2, filed 6 September 2026, Dalisay Soriano' })
+        .uncheck();
+      await expect(page.getByLabel('Why is this being withdrawn or changed? (required)')).toBeVisible();
+    },
+  },
+  {
+    // Training (section 28): six overlapping cards, a box per school with its saved date,
+    // "2 of 5" and "All five", and a row the reader may not file for.
+    name: 'growth training',
+    route: '/growth/training',
+    async before(page: import('@playwright/test').Page) {
+      await mockSignedIn(page);
+      await mockTraining(page);
+    },
+    async arrange(page: import('@playwright/test').Page) {
+      await expect(
+        page.getByRole('checkbox', { name: 'Encounter, Ernani Pascual' }),
+      ).toBeVisible();
+      await expect(page.getByText('All five').filter({ visible: true })).toBeVisible();
+    },
+  },
+  {
+    // A saved date being changed: the date input in place of the date, and the reason box.
+    name: 'growth training, changing a date',
+    route: '/growth/training',
+    async before(page: import('@playwright/test').Page) {
+      await mockSignedIn(page);
+      await mockTraining(page);
+    },
+    async arrange(page: import('@playwright/test').Page) {
+      await page
+        .getByRole('button', { name: 'Change the date of Encounter, Dalisay Soriano, now 8 March 2026' })
+        .click();
+      await page
+        .getByLabel('Date of Encounter, Dalisay Soriano, optional')
+        .filter({ visible: true })
+        .fill('2026-03-15');
+      await expect(page.getByLabel('Why is this being withdrawn or changed? (required)')).toBeVisible();
+    },
+  },
 ] as const;
 
 for (const theme of THEMES) {
@@ -1244,6 +1312,25 @@ const TARGET_SWEEP = [
     settle: 'Sunday 7 June',
     minimum: 5,
   },
+  {
+    // The two tabs, three cards, the search, Search and the filter, four name links,
+    // twenty boxes across the two rows the reader may file for, Correct on the graduated
+    // row, and the two pager buttons. Settled on Correct, which renders from the data.
+    name: 'growth suynl',
+    route: '/growth/suynl',
+    settle: 'Correct',
+    minimum: 35,
+  },
+  {
+    // The two tabs, six cards, the search, Search and the filter, four name links,
+    // fifteen boxes, a date button per saved dated or undated graduation on the three
+    // rows the reader may file for (seven), and the two pager buttons.
+    name: 'growth training',
+    route: '/growth/training',
+    settleRole: 'link' as const,
+    settle: 'Dalisay Soriano',
+    minimum: 39,
+  },
 ] as const;
 
 /**
@@ -1446,6 +1533,20 @@ const TARGET_EXEMPT: { name: string; why: string }[] = [
       'link that "dcc checklist" does not. Measuring it would need a second roster mock on the ' +
       'same URL.',
   },
+  {
+    name: 'growth suynl, withdrawing a lesson',
+    why:
+      'Reached by unticking a saved lesson, which this sweep cannot do. Its controls are the ' +
+      'measured "growth suynl" ones plus a full-width two-row textarea and Discard and Save, ' +
+      'the Button primitive measured on every screen.',
+  },
+  {
+    name: 'growth training, changing a date',
+    why:
+      'Reached by pressing a saved date, which this sweep cannot do. It swaps that min-h-6 date ' +
+      'button, measured under "growth training", for a min-h-6 w-36 date input, and adds the ' +
+      'reason textarea and Discard and Save, the measured Button primitive.',
+  },
 ];
 
 test('every interactive target meets the 24px minimum', async ({ page }) => {
@@ -1476,6 +1577,8 @@ test('every interactive target meets the 24px minimum', async ({ page }) => {
   await mockAwaitingReassignment(page);
   await mockPeopleWithoutACell(page);
   await mockCoverageByLeader(page);
+  await mockSuynl(page);
+  await mockTraining(page);
 
   for (const entry of TARGET_SWEEP) {
     const { route, settle, minimum } = entry;
@@ -1823,8 +1926,69 @@ test('a reader without a whole-church grant sees Record first', async ({ page })
     'Reports',
     'People',
     'Cells',
+    'Growth',
     'Network',
   ]);
+});
+
+/**
+ * At 320px the phone's tab bar holds all six items, each label whole and each a full target.
+ *
+ * **The sideways-scroll sweep cannot see this.** The bar is `position: fixed`, and a fixed
+ * element's overflow does not reach the document's scroll width, so a label pushed past its
+ * tab reads green there. Worse, each label is `truncate`d, so a label that no longer fits is
+ * clipped to an ellipsis rather than overflowing anything: the failure is silent by design.
+ * Growth made it six items in 320px, which is what this pins, on both engines.
+ */
+test('at 320px the tab bar fits all six items, none of them clipped', { tag: [CROSS_BROWSER_TAG] }, async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 320, height: 568 });
+  await mockSignedIn(page);
+  await mockSuynl(page);
+
+  await page.goto('/growth/suynl');
+
+  const navigation = page.getByRole('navigation', { name: 'Main' });
+  await expect(navigation.getByRole('link')).toHaveText([
+    'Record',
+    'Reports',
+    'People',
+    'Cells',
+    'Growth',
+    'Network',
+  ]);
+
+  const tabs = await navigation.getByRole('link').evaluateAll((links) =>
+    links.map((link) => {
+      const box = link.getBoundingClientRect();
+      const label = link.querySelector('span') as HTMLElement;
+      return {
+        text: label.textContent,
+        left: box.left,
+        right: box.right,
+        width: box.width,
+        height: box.height,
+        labelScroll: label.scrollWidth,
+        labelClient: label.clientWidth,
+      };
+    }),
+  );
+
+  for (const tab of tabs) {
+    expect(tab.left, `${tab.text} starts off screen`).toBeGreaterThanOrEqual(0);
+    expect(tab.right, `${tab.text} ends past 320px`).toBeLessThanOrEqual(320);
+    expect(tab.width, `${tab.text} is ${tab.width}px wide`).toBeGreaterThanOrEqual(24);
+    expect(tab.height, `${tab.text} is ${tab.height}px tall`).toBeGreaterThanOrEqual(44);
+  }
+
+  // Every clipped label at once, so a failure names all of them rather than the first.
+  expect(
+    tabs
+      .filter((tab) => tab.labelScroll > tab.labelClient)
+      .map((tab) => `${tab.text}: ${tab.labelScroll}px of label in ${tab.labelClient}px`),
+    'a tab label is truncated to an ellipsis',
+  ).toEqual([]);
 });
 
 /**
@@ -1847,6 +2011,7 @@ test('a whole-church reader sees the same order, Reports opening on the DCC figu
     'Reports',
     'People',
     'Cells',
+    'Growth',
     'Network',
   ]);
   await expect(navigation.getByRole('link', { name: 'Reports', exact: true })).toHaveAttribute(

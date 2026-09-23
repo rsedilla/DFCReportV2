@@ -23,8 +23,7 @@
   "stages": [
     "screens block",
     "after the pilot — Admin screens",
-    "after the pilot — flat subtree view",
-    "Growth part three — the SUYNL and Training tabs"
+    "after the pilot — flat subtree view"
   ],
   "routes": [
     {
@@ -275,33 +274,33 @@
     },
     {
       "route": "GET /api/v1/suynl/counts",
-      "waived_to": "Growth part three — the SUYNL and Training tabs",
-      "reason": "The SUYNL tab’s three count cards (decision 0281)."
+      "reason": "The SUYNL tab’s three count cards (decision 0281).",
+      "screen": "web/app/growth/suynl/page.tsx"
     },
     {
       "route": "GET /api/v1/suynl/people",
-      "waived_to": "Growth part three — the SUYNL and Training tabs",
-      "reason": "The SUYNL tab’s list (section 28)."
+      "reason": "The SUYNL tab’s list (section 28).",
+      "screen": "web/app/growth/suynl/page.tsx"
     },
     {
       "route": "POST /api/v1/suynl/submit",
-      "waived_to": "Growth part three — the SUYNL and Training tabs",
-      "reason": "The SUYNL tab’s save bar (section 28; decision 0282)."
+      "reason": "The SUYNL tab’s save bar (section 28; decision 0282).",
+      "screen": "web/app/growth/suynl/page.tsx"
     },
     {
       "route": "GET /api/v1/training/counts",
-      "waived_to": "Growth part three — the SUYNL and Training tabs",
-      "reason": "The Training tab’s count cards (decision 0281)."
+      "reason": "The Training tab’s count cards (decision 0281).",
+      "screen": "web/app/growth/training/page.tsx"
     },
     {
       "route": "GET /api/v1/training/people",
-      "waived_to": "Growth part three — the SUYNL and Training tabs",
-      "reason": "The Training tab’s list (section 28)."
+      "reason": "The Training tab’s list (section 28).",
+      "screen": "web/app/growth/training/page.tsx"
     },
     {
       "route": "POST /api/v1/training/submit",
-      "waived_to": "Growth part three — the SUYNL and Training tabs",
-      "reason": "The Training tab’s save bar (section 28; decision 0282)."
+      "reason": "The Training tab’s save bar (section 28; decision 0282).",
+      "screen": "web/app/growth/training/page.tsx"
     },
     {
       "route": "GET /api/v1/health",
