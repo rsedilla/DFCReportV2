@@ -365,7 +365,13 @@ export class PeopleReadService {
     limit: number,
     cursor: SearchCursor | null = null,
     restrictTo: ReadonlySet<string> | null = null,
-    options: { memberId?: boolean } = {},
+    options: {
+      memberId?: boolean;
+      /** Leave out archived Persons, for a list of current people only (decision 0279). */
+      currentOnly?: boolean;
+      /** Leave out these Persons, applied in SQL for the reason `restrictTo` is. */
+      exclude?: ReadonlySet<string>;
+    } = {},
   ): Promise<{ rows: PersonRecord[]; nextCursor: SearchCursor | null }> {
     // Both sides normalized. Normalizing only the term meant `Nuñez` was searched
     // for as `nunez` against a raw stored `Nuñez` and never found -- and a miss here
@@ -426,6 +432,23 @@ export class PeopleReadService {
       // identity (section 3, Person Merge).
       .where('merged_into_id', 'is', null)
       .$if(restrictTo !== null, (qb) => qb.where('id', 'in', [...(restrictTo ?? [])]))
+      .$if((options.exclude?.size ?? 0) > 0, (qb) =>
+        qb.where('id', 'not in', [...(options.exclude ?? [])]),
+      )
+      .$if(options.currentOnly === true, (qb) =>
+        qb.where((eb) =>
+          eb.not(
+            eb.exists(
+              eb
+                .selectFrom('person_lifecycle')
+                .select('person_lifecycle.person_id')
+                .whereRef('person_lifecycle.person_id', '=', 'persons.id')
+                .where('person_lifecycle.ended_at', 'is', null)
+                .where('person_lifecycle.state', '=', 'ARCHIVED'),
+            ),
+          ),
+        ),
+      )
       .$if(pattern !== null, (qb) =>
         qb.where((eb) =>
           eb.or([
@@ -474,6 +497,37 @@ export class PeopleReadService {
           ? { lastName: last.last_name, firstName: last.first_name, id: last.id }
           : null,
     };
+  }
+
+  /**
+   * How many current Persons a scope holds: neither archived nor absorbed by a merge
+   * (decision 0279). `null` is no restriction, as in {@link searchByName}.
+   */
+  async countCurrent(restrictTo: ReadonlySet<string> | null): Promise<number> {
+    if (restrictTo !== null && restrictTo.size === 0) {
+      return 0;
+    }
+
+    const row = await this.db
+      .selectFrom('persons')
+      .select((eb) => eb.fn.countAll<string>().as('count'))
+      .where('merged_into_id', 'is', null)
+      .$if(restrictTo !== null, (qb) => qb.where('id', 'in', [...(restrictTo ?? [])]))
+      .where((eb) =>
+        eb.not(
+          eb.exists(
+            eb
+              .selectFrom('person_lifecycle')
+              .select('person_lifecycle.person_id')
+              .whereRef('person_lifecycle.person_id', '=', 'persons.id')
+              .where('person_lifecycle.ended_at', 'is', null)
+              .where('person_lifecycle.state', '=', 'ARCHIVED'),
+          ),
+        ),
+      )
+      .executeTakeFirstOrThrow();
+
+    return Number(row.count);
   }
 
   /**

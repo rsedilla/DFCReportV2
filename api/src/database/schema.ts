@@ -216,6 +216,11 @@ export type AuditAction =
   // would be readable by nobody's scope.
   | 'dcc_attendance.submitted_on_behalf'
   | 'dcc_attendance.corrected'
+  // Section 28's four, each targeting the Person the record is about (section 21).
+  | 'suynl_lesson.confirmed'
+  | 'suynl_lesson.corrected'
+  | 'training_graduation.confirmed'
+  | 'training_graduation.corrected'
   // The Cell counterpart of the pair above, on the same reading of section 21: it
   // lists "Attendance submission on behalf" without naming a domain, and lists no
   // ordinary first submission — which is the record itself. `cell_attendance` rather
