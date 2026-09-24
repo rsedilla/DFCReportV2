@@ -51,6 +51,17 @@ export function GrowthTabs({ current }: { current: (typeof TABS)[number]['href']
   );
 }
 
+/**
+ * The cards fill the row on a wide screen, however many a tab has (owner's choice of
+ * 2026-09-24): SUYNL's three, Conquest's four, Training's six. Spelled out whole so
+ * Tailwind sees each class.
+ */
+const COLUMNS: Record<number, string> = {
+  3: 'sm:grid-cols-3',
+  4: 'lg:grid-cols-4',
+  6: 'sm:grid-cols-3 lg:grid-cols-6',
+};
+
 export interface GrowthCard {
   step: string;
   label: string;
@@ -71,7 +82,7 @@ export function GrowthCards({
   onSelect: (step: string | null) => void;
 }) {
   return (
-    <ul className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+    <ul className={cn('mt-6 grid grid-cols-2 gap-3', COLUMNS[cards.length] ?? COLUMNS[6])}>
       {cards.map((card) => {
         const pressed = card.step === selected;
 
@@ -82,7 +93,8 @@ export function GrowthCards({
               aria-pressed={pressed}
               onClick={() => onSelect(pressed ? null : card.step)}
               className={cn(
-                'bg-surface flex min-h-11 w-full flex-col items-start border p-3 text-left',
+                // h-full: every card in a row is as tall as the tallest, whose label wraps.
+                'bg-surface flex h-full min-h-11 w-full flex-col items-start border p-3 text-left',
                 'focus-visible:outline-accent focus-visible:outline-2 focus-visible:outline-offset-2',
                 pressed
                   ? 'border-accent shadow-[inset_0_0_0_1px_var(--accent)]'
@@ -93,7 +105,7 @@ export function GrowthCards({
                 {card.label}
               </span>
               <span className="mt-1 text-2xl font-bold tabular-nums">{card.count ?? '–'}</span>
-              <span className="text-muted mt-1 text-xs">
+              <span className="text-muted mt-auto pt-1 text-xs">
                 {pressed ? 'Showing these' : 'Show these'}
               </span>
             </button>

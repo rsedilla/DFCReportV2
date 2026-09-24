@@ -223,4 +223,41 @@ test.describe('the Conquest tab', () => {
       'Raise 12 leaders',
     ]);
   });
+
+  // The owner saw the four cards at different heights where two labels wrap (2026-09-24).
+  for (const width of [1440, 1024, 390]) {
+    test(`draws the four cards the same height at ${width}px`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 900 });
+      await openConquest(page);
+      await page.evaluate(() => document.fonts.ready);
+
+      const heights = await page
+        .getByRole('button', { name: /Show these|Showing these/ })
+        .evaluateAll((cards) => cards.map((card) => Math.round(card.getBoundingClientRect().height)));
+      // Cards on one row share a height; at 390px they sit two to a row.
+      const rows = width === 390 ? [heights.slice(0, 2), heights.slice(2, 4)] : [heights];
+      expect(heights).toHaveLength(4);
+      for (const row of rows) {
+        expect(new Set(row).size).toBe(1);
+      }
+    });
+  }
+
+  // The owner asked for the row of cards to fill the screen's width (2026-09-24).
+  for (const width of [1440, 1024]) {
+    test(`fills the row with the four cards at ${width}px`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 900 });
+      await openConquest(page);
+
+      const cards = page.getByRole('button', { name: /Show these|Showing these/ });
+      const first = await cards.first().boundingBox();
+      const last = await cards.last().boundingBox();
+      const bar = await page.locator('form').filter({ has: page.getByRole('searchbox') }).boundingBox();
+      if (!first || !last || !bar) throw new Error('A card or the search bar was not laid out.');
+
+      expect(Math.round(first.y)).toBe(Math.round(last.y));
+      expect(Math.abs(first.x - bar.x)).toBeLessThanOrEqual(1);
+      expect(Math.abs(last.x + last.width - (bar.x + bar.width))).toBeLessThanOrEqual(1);
+    });
+  }
 });
