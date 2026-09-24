@@ -119,6 +119,8 @@ export interface TrainingCounts {
   sol_1: number;
   sol_2: number;
   sol_3: number;
+  /** Not a card: how many the list's opening view leaves out (decision 0287). */
+  all_five: number;
 }
 
 export interface TrainingGraduation {

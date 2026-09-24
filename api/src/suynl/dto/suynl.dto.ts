@@ -20,8 +20,11 @@ import {
 import { GrowthListDto } from '../../common/growth/growth-list.dto';
 import { IsStorableText } from '../../common/text/is-storable-text';
 
-/** The three SUYNL count cards, which add up to everyone listed (decision 0281). */
-export const SUYNL_STEPS = ['NOT_STARTED', 'IN_PROGRESS', 'GRADUATED'] as const;
+/**
+ * The three SUYNL count cards, which add up to everyone listed (decision 0281), and the
+ * list's opening view, everyone short of ten (decision 0287).
+ */
+export const SUYNL_STEPS = ['NOT_STARTED', 'IN_PROGRESS', 'GRADUATED', 'STILL_TO_FINISH'] as const;
 export type SuynlStep = (typeof SUYNL_STEPS)[number];
 
 /** `GET /api/v1/suynl/people` (SKILL.md section 28). */

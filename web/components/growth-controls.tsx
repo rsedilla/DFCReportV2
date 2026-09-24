@@ -104,6 +104,42 @@ export function GrowthCards({
   );
 }
 
+/**
+ * What the list's opening view leaves out, and the way to see it (decision 0287). The
+ * list opens on the people still to finish; this line names how many have finished, so
+ * nobody looks missing, and switches to everyone and back.
+ */
+export function StillToFinish({
+  everyone,
+  finished,
+  what,
+  onChange,
+}: {
+  everyone: boolean;
+  /** How many have finished, from the counts; nothing is said until it is read. */
+  finished: number | undefined;
+  /** "all ten" or "all five". */
+  what: string;
+  onChange: (everyone: boolean) => void;
+}) {
+  if (finished === undefined || finished === 0) {
+    return null;
+  }
+
+  return (
+    <p className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-2 text-sm">
+      <span className="text-muted">
+        {everyone
+          ? `Showing everyone, the ${finished} who ${finished === 1 ? 'has' : 'have'} finished ${what} included.`
+          : `${finished} who ${finished === 1 ? 'has' : 'have'} finished ${what} ${finished === 1 ? 'is' : 'are'} not shown.`}
+      </span>
+      <Button variant="secondary" onClick={() => onChange(!everyone)}>
+        {everyone ? 'Show only those still to finish' : 'Show everyone'}
+      </Button>
+    </p>
+  );
+}
+
 /** The search and the "only my disciples" toggle, in the grey bar every screen's controls sit in. */
 export function GrowthFilters({
   submitted,
@@ -148,7 +184,7 @@ export function GrowthFilters({
         className="w-full min-w-0 sm:w-auto sm:flex-1"
       />
       <Button type="submit" disabled={tooShort}>
-        {trimmed.length === 0 && submitted !== '' ? 'Show everyone' : 'Search'}
+        {trimmed.length === 0 && submitted !== '' ? 'Clear search' : 'Search'}
       </Button>
       <Button variant="secondary" aria-pressed={mine} onClick={() => onMine(!mine)}>
         {mine ? 'Showing only my disciples' : 'Only my disciples'}

@@ -713,6 +713,68 @@ describe('SUYNL (section 28)', () => {
   });
 
   // ---------------------------------------------------------------------------
+  // 8a. The opening view: those still to finish (decision 0287)
+  // ---------------------------------------------------------------------------
+
+  describe('step=STILL_TO_FINISH (decision 0287)', () => {
+    beforeEach(async () => {
+      await seedLessons(timothy.id, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10], mark.id);
+      await seedLessons(nathan.id, [1, 2, 3, 4, 5, 6, 7, 8, 9], manuel.id);
+    });
+
+    it('leaves out a person with ten current lessons and keeps everyone with nought to nine', async () => {
+      const rows = await allPages(manuelAccount, 'step=STILL_TO_FINISH&limit=1');
+
+      // Manuel and Mark hold none, Nathan nine; Timothy's ten take him off.
+      expect(idsOf(rows)).toHaveLength(3);
+      expect(new Set(idsOf(rows))).toEqual(new Set([manuel.id, mark.id, nathan.id]));
+    });
+
+    it('leaves out exactly as many as the Graduated card counts', async () => {
+      const counts = (await get(manuelAccount, 'counts')).body;
+      const still = await allPages(manuelAccount, 'step=STILL_TO_FINISH');
+
+      expect(counts.graduated).toBe(1);
+      expect(still).toHaveLength(counts.people - counts.graduated);
+      expect(still).toHaveLength(counts.not_started + counts.in_progress);
+    });
+
+    it('puts a person back once one of their ten is withdrawn', async () => {
+      const row = await currentRow(timothy.id, 10);
+      const response = await submit(markAccount, [
+        { person_id: timothy.id, lesson: 10, done: false, seen_id: row.id, reason: 'Not done.' },
+      ]);
+      expect(response.status).toBe(201);
+
+      const rows = await allPages(manuelAccount, 'step=STILL_TO_FINISH');
+      expect(idsOf(rows)).toContain(timothy.id);
+    });
+
+    it('narrows together with mine=true', async () => {
+      await seedLessons(mark.id, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10], manuel.id);
+
+      const rows = await allPages(manuelAccount, 'mine=true&step=STILL_TO_FINISH');
+
+      expect(idsOf(rows)).toEqual([nathan.id]);
+    });
+
+    it('lists the finished person when no step is sent', async () => {
+      const rows = await allPages(manuelAccount, 'limit=200');
+
+      expect(idsOf(rows)).toContain(timothy.id);
+    });
+
+    it('still refuses a step it does not know', async () => {
+      for (const step of ['still_to_finish', 'ALL_FIVE', 'FINISHED', 'STILL_TO_FINISH,GRADUATED']) {
+        const response = await get(manuelAccount, `people?step=${encodeURIComponent(step)}`);
+
+        expect(response.status).toBe(422);
+        expect(response.body.error.code).toBe('VALIDATION_FAILED');
+      }
+    });
+  });
+
+  // ---------------------------------------------------------------------------
   // 9. The list
   // ---------------------------------------------------------------------------
 
