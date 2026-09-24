@@ -956,8 +956,10 @@ const SCANS = [
   {
     // SUYNL (section 28): three count cards, ten boxes a person, a graduated row folded to
     // its date with Change lessons, and a row the reader may not file for, which shows marks.
+    // Everyone, because the opening view leaves the graduated row out (decision 0287); the
+    // opening view is the one "withdrawing a lesson" scans below.
     name: 'growth suynl',
-    route: '/growth/suynl',
+    route: '/growth/suynl?all=1',
     async before(page: import('@playwright/test').Page) {
       await mockSignedIn(page);
       await mockSuynl(page);
@@ -968,10 +970,14 @@ const SCANS = [
         page.getByRole('checkbox', { name: 'Lesson 3, Dalisay Soriano' }),
       ).toBeVisible();
       await expect(page.getByText('Not yours to record').filter({ visible: true })).toBeVisible();
+      await expect(
+        page.getByRole('button', { name: 'Show only those still to finish' }),
+      ).toBeVisible();
     },
   },
   {
     // An untick of a saved lesson, which renders the required reason box in the save bar.
+    // On the opening view, so its "not shown" line is scanned too (decision 0287).
     name: 'growth suynl, withdrawing a lesson',
     route: '/growth/suynl',
     async before(page: import('@playwright/test').Page) {
@@ -983,13 +989,16 @@ const SCANS = [
         .getByRole('checkbox', { name: 'Lesson 2, filed 6 September 2026, Dalisay Soriano' })
         .uncheck();
       await expect(page.getByLabel('Why is this being withdrawn or changed? (required)')).toBeVisible();
+      await expect(page.getByText('1 who has finished all ten is not shown.')).toBeVisible();
     },
   },
   {
     // Training (section 28): six overlapping cards, a box per school with its saved date,
-    // "2 of 5" and "All five", and a row the reader may not file for.
+    // "2 of 5" and "All five", and a row the reader may not file for. Everyone, because the
+    // opening view leaves the "All five" row out (decision 0287); "changing a date" below
+    // scans the opening view.
     name: 'growth training',
-    route: '/growth/training',
+    route: '/growth/training?all=1',
     async before(page: import('@playwright/test').Page) {
       await mockSignedIn(page);
       await mockTraining(page);
@@ -998,7 +1007,13 @@ const SCANS = [
       await expect(
         page.getByRole('checkbox', { name: 'Encounter, Ernani Pascual' }),
       ).toBeVisible();
-      await expect(page.getByText('All five').filter({ visible: true })).toBeVisible();
+      // Exact, because the line above the list says "finished all five" too (decision 0287).
+      await expect(
+        page.getByText('All five', { exact: true }).filter({ visible: true }),
+      ).toBeVisible();
+      await expect(
+        page.getByRole('button', { name: 'Show only those still to finish' }),
+      ).toBeVisible();
     },
   },
   {
@@ -1325,23 +1340,27 @@ const TARGET_SWEEP = [
     minimum: 5,
   },
   {
-    // The two tabs, three cards, the search, Search and the filter, four name links,
-    // twenty boxes across the two rows the reader may file for, Change lessons on the graduated
-    // row, and the two pager buttons. Settled on Change lessons, which renders from the data.
+    // The two tabs, three cards, the search, Search and the filter, the line's Show only
+    // those still to finish, four name links, twenty boxes across the two rows the reader
+    // may file for, Change lessons on the graduated row, and the two pager buttons. Settled
+    // on Change lessons, which renders from the data. Everyone, because the opening view
+    // leaves the graduated row out (decision 0287).
     name: 'growth suynl',
-    route: '/growth/suynl',
+    route: '/growth/suynl?all=1',
     settle: 'Change lessons',
-    minimum: 35,
+    minimum: 36,
   },
   {
-    // The two tabs, six cards, the search, Search and the filter, four name links,
-    // fifteen boxes, a date button per saved dated or undated graduation on the three
-    // rows the reader may file for (seven), and the two pager buttons.
+    // The two tabs, six cards, the search, Search and the filter, the line's Show only
+    // those still to finish, four name links, fifteen boxes, a date button per saved dated
+    // or undated graduation on the three rows the reader may file for (seven), and the two
+    // pager buttons. Everyone, because the opening view leaves out the row holding all five
+    // (decision 0287).
     name: 'growth training',
-    route: '/growth/training',
+    route: '/growth/training?all=1',
     settleRole: 'link' as const,
-    settle: 'Dalisay Soriano',
-    minimum: 39,
+    settle: 'Lualhati Dizon',
+    minimum: 40,
   },
 ] as const;
 

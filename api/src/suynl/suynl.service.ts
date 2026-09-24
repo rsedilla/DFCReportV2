@@ -519,6 +519,8 @@ function narrowingFor(
       return { include: idsWhere(progress, (count) => count < 10) };
     case 'GRADUATED':
       return { include: idsWhere(progress, (count) => count === 10) };
+    case 'STILL_TO_FINISH':
+      return { exclude: idsWhere(progress, (count) => count === 10) };
     default:
       return {};
   }

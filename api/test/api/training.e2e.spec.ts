@@ -609,6 +609,7 @@ describe('Training (section 28)', () => {
         sol_1: 0,
         sol_2: 0,
         sol_3: 0,
+        all_five: 0,
       });
 
       const listed = await allPages(manuelAccount, 'limit=200');
@@ -649,6 +650,93 @@ describe('Training (section 28)', () => {
 
       const mine = await allPages(manuelAccount, 'mine=true');
       expect(new Set(idsOf(mine))).toEqual(new Set([mark.id, nathan.id]));
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // The opening view: those still to finish (decision 0287)
+  // ---------------------------------------------------------------------------
+
+  describe('step=STILL_TO_FINISH and all_five (decision 0287)', () => {
+    const FIVE: TrainingProgram[] = ['ENCOUNTER', 'LIFE_CLASS', 'SOL_1', 'SOL_2', 'SOL_3'];
+
+    const seed = async (personId: string, programs: TrainingProgram[]) => {
+      for (const program of programs) {
+        await db
+          .insertInto('training_graduations')
+          .values({ person_id: personId, program, confirmed_by: null, recorded_by: admin.id })
+          .execute();
+      }
+    };
+
+    beforeEach(async () => {
+      await seed(timothy.id, FIVE);
+      // Four of the five: still to finish.
+      await seed(nathan.id, ['ENCOUNTER', 'LIFE_CLASS', 'SOL_1', 'SOL_2']);
+      // Archived with all five: neither listed nor counted (decision 0279).
+      await seed(silas.id, FIVE);
+    });
+
+    it('leaves out a person holding all five and keeps everyone short of them', async () => {
+      const rows = await allPages(manuelAccount, 'step=STILL_TO_FINISH&limit=1');
+
+      expect(idsOf(rows)).toHaveLength(3);
+      expect(new Set(idsOf(rows))).toEqual(new Set([manuel.id, mark.id, nathan.id]));
+    });
+
+    it('counts all_five over current people only, and leaves out exactly that many', async () => {
+      const counts = (await get(manuelAccount, 'counts')).body;
+
+      expect(counts.all_five).toBe(1);
+      expect(counts.people).toBe(4);
+
+      const still = await allPages(manuelAccount, 'step=STILL_TO_FINISH');
+      expect(still).toHaveLength(counts.people - counts.all_five);
+
+      const everyone = await allPages(admin, 'limit=200');
+      const wholeChurch = (await get(admin, 'counts')).body;
+      expect(wholeChurch.all_five).toBe(1);
+      expect(await allPages(admin, 'step=STILL_TO_FINISH')).toHaveLength(
+        everyone.length - wholeChurch.all_five,
+      );
+    });
+
+    it('puts a person back, and all_five down, once one of their five is withdrawn', async () => {
+      const row = await currentRow(timothy.id, 'SOL_3');
+      const response = await submit(markAccount, [
+        {
+          person_id: timothy.id,
+          program: 'SOL_3',
+          graduated: false,
+          seen_id: row.id,
+          reason: 'Did not finish.',
+        },
+      ]);
+      expect(response.status).toBe(201);
+
+      expect((await get(manuelAccount, 'counts')).body.all_five).toBe(0);
+      expect(idsOf(await allPages(manuelAccount, 'step=STILL_TO_FINISH'))).toContain(timothy.id);
+    });
+
+    it('narrows together with mine=true', async () => {
+      await seed(mark.id, FIVE);
+
+      const rows = await allPages(manuelAccount, 'mine=true&step=STILL_TO_FINISH');
+
+      expect(idsOf(rows)).toEqual([nathan.id]);
+    });
+
+    it('lists the person holding all five when no step is sent', async () => {
+      expect(idsOf(await allPages(manuelAccount, 'limit=200'))).toContain(timothy.id);
+    });
+
+    it('still refuses a step it does not know', async () => {
+      for (const step of ['still_to_finish', 'ALL_FIVE', 'GRADUATED', 'SOL_4']) {
+        const response = await get(manuelAccount, `people?step=${encodeURIComponent(step)}`);
+
+        expect(response.status).toBe(422);
+        expect(response.body.error.code).toBe('VALIDATION_FAILED');
+      }
     });
   });
 

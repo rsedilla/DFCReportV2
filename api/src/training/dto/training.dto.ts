@@ -29,9 +29,12 @@ export const TRAINING_PROGRAMS: readonly TrainingProgram[] = [
   'SOL_3',
 ];
 
-/** A card per school and one for people who have none yet (decision 0281). */
-export const TRAINING_STEPS = ['NOT_STARTED', ...TRAINING_PROGRAMS] as const;
-export type TrainingStep = 'NOT_STARTED' | TrainingProgram;
+/**
+ * A card per school and one for people who have none yet (decision 0281), and the list's
+ * opening view, everyone short of all five (decision 0287).
+ */
+export const TRAINING_STEPS = ['NOT_STARTED', ...TRAINING_PROGRAMS, 'STILL_TO_FINISH'] as const;
+export type TrainingStep = 'NOT_STARTED' | TrainingProgram | 'STILL_TO_FINISH';
 
 /** `GET /api/v1/training/people` (SKILL.md section 28). */
 export class TrainingListDto extends GrowthListDto {
