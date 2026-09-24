@@ -7,6 +7,7 @@ import { useSearchParams } from 'next/navigation';
 import { Suspense, useEffect, useState, type FormEvent } from 'react';
 
 import { AppShell, PAGE_WIDTH } from '@/components/app-shell';
+import { PeopleTabs } from '@/components/people-tabs';
 import { MoveLeaderDialog } from '@/components/move-leader-dialog';
 import { Button, buttonClasses } from '@/components/ui/button';
 import { FailureNotice } from '@/components/ui/failure-notice';
@@ -187,6 +188,8 @@ function NetworkScreen() {
           ? null
           : ` Figures for ${monthLabel(month)}${open ? ', a month still open' : ''}.`}
       </p>
+
+      <PeopleTabs current="/network" />
 
       {/* Everything that moves you around the tree, in one bar (owner's choice, 2026-09-22). */}
       <div className="border-line bg-raised mt-6 flex flex-wrap items-center justify-between gap-x-6 gap-y-4 border p-4">
