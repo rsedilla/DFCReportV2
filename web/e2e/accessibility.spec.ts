@@ -43,7 +43,7 @@ import {
   mockClosedDccRoster,
   mockRecordedMeetingRoster,
 } from './mock-attendance';
-import { mockSuynl, mockTraining } from './mock-growth';
+import { mockPersonGrowth, mockSuynl, mockTraining } from './mock-growth';
 
 /**
  * axe-core over every route, in both themes, with a violation failing the build.
@@ -160,8 +160,12 @@ const SCANS = [
     pattern: '/people/[id]',
     async before(page: import('@playwright/test').Page) {
       await mockSignedIn(page);
+      // The Growth frame renders only for a reader holding these, so without them the
+      // scan would never see it.
+      await mockGrants(page, ['suynl.view_subtree', 'training.view_subtree']);
       await mockPeople(page);
       await mockPastoralPath(page);
+      await mockPersonGrowth(page);
     },
     async arrange(page: import('@playwright/test').Page) {
       await expect(page.getByRole('heading', { name: 'Marilou Reyes Santos' })).toBeVisible();
@@ -171,6 +175,10 @@ const SCANS = [
       // a profile nobody sees.
       await expect(page.getByRole('button', { name: 'Move to another Cell' })).toBeVisible();
       await expect(page.getByText('Service removed · not counted')).toBeVisible();
+      // The Growth frame, both halves, which renders nothing at all until they arrive.
+      const growth = page.getByRole('region', { name: 'Growth' });
+      await expect(growth.getByRole('link', { name: 'Open SUYNL' })).toBeVisible();
+      await expect(growth.getByRole('link', { name: 'Open Training' })).toBeVisible();
     },
   },
   {
@@ -947,7 +955,7 @@ const SCANS = [
   },
   {
     // SUYNL (section 28): three count cards, ten boxes a person, a graduated row folded to
-    // its date with Correct, and a row the reader may not file for, which shows marks.
+    // its date with Change lessons, and a row the reader may not file for, which shows marks.
     name: 'growth suynl',
     route: '/growth/suynl',
     async before(page: import('@playwright/test').Page) {
@@ -955,7 +963,7 @@ const SCANS = [
       await mockSuynl(page);
     },
     async arrange(page: import('@playwright/test').Page) {
-      await expect(page.getByRole('button', { name: 'Correct' })).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Change lessons' })).toBeVisible();
       await expect(
         page.getByRole('checkbox', { name: 'Lesson 3, Dalisay Soriano' }),
       ).toBeVisible();
@@ -1105,9 +1113,13 @@ const TARGET_SWEEP = [
     // Settled on a link: Edit details and Pastoral network navigate. With the link to the
     // leader who pastors them, three; the Cell and DCC sections add more once they load.
     // No Move to another leader for this account, which may not move people.
+    //
+    // **Settled on the Growth frame's last link rather than on Edit details**, because the
+    // frame renders nothing, not even "Loading…", until its lists answer, so the wait for
+    // every pending section below cannot see it. Its two links make five.
     settleRole: 'link' as const,
-    settle: 'Edit details',
-    minimum: 3,
+    settle: 'Open Training',
+    minimum: 5,
   },
   {
     name: 'edit a person',
@@ -1314,11 +1326,11 @@ const TARGET_SWEEP = [
   },
   {
     // The two tabs, three cards, the search, Search and the filter, four name links,
-    // twenty boxes across the two rows the reader may file for, Correct on the graduated
-    // row, and the two pager buttons. Settled on Correct, which renders from the data.
+    // twenty boxes across the two rows the reader may file for, Change lessons on the graduated
+    // row, and the two pager buttons. Settled on Change lessons, which renders from the data.
     name: 'growth suynl',
     route: '/growth/suynl',
-    settle: 'Correct',
+    settle: 'Change lessons',
     minimum: 35,
   },
   {
@@ -1579,6 +1591,11 @@ test('every interactive target meets the 24px minimum', async ({ page }) => {
   await mockCoverageByLeader(page);
   await mockSuynl(page);
   await mockTraining(page);
+  // The person page's Growth frame, which asks the same two lists by Member ID and falls
+  // through to the two above for anything else. It renders only for a reader holding the
+  // two view capabilities, and no other screen reads them.
+  await mockGrants(page, ['suynl.view_subtree', 'training.view_subtree']);
+  await mockPersonGrowth(page);
 
   for (const entry of TARGET_SWEEP) {
     const { route, settle, minimum } = entry;

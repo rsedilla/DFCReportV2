@@ -1,5 +1,7 @@
 import type { Page } from '@playwright/test';
 
+import { PERSON_IN_SCOPE } from './mock-api';
+
 /**
  * The two Growth tabs, SUYNL and Training (SKILL.md section 28; decisions 0278 to 0282).
  *
@@ -213,4 +215,99 @@ export function mockTraining(
     [TRAINING_TWO, TRAINING_NONE, TRAINING_ALL, TRAINING_NOT_MINE],
     outcome,
   );
+}
+
+/**
+ * `PERSON_IN_SCOPE`'s own SUYNL row for the person page's Growth frame: three lessons
+ * with a gap, so a box left empty between two ticked ones is reachable, filed on three
+ * different days, so "latest" has to pick one.
+ */
+export const PERSON_SUYNL = {
+  person_id: PERSON_IN_SCOPE.id,
+  member_id: PERSON_IN_SCOPE.member_id,
+  full_name: PERSON_IN_SCOPE.full_name,
+  lessons: [
+    { id: '7d000000-0000-4000-8000-000000000001', lesson: 1, filed_on: '2026-08-02' },
+    { id: '7d000000-0000-4000-8000-000000000004', lesson: 4, filed_on: '2026-09-06' },
+    { id: '7d000000-0000-4000-8000-000000000002', lesson: 2, filed_on: '2026-08-16' },
+  ],
+  graduated_on: null,
+  may_file: true,
+};
+
+/**
+ * Two schools, listed Life Class first so the frame's Encounter-first order is its own
+ * rather than the fixture's, and one of them with no date.
+ */
+export const PERSON_TRAINING = {
+  person_id: PERSON_IN_SCOPE.id,
+  member_id: PERSON_IN_SCOPE.member_id,
+  full_name: PERSON_IN_SCOPE.full_name,
+  graduations: [
+    { id: '7e000000-0000-4000-8000-000000000002', program: 'LIFE_CLASS', graduated_on: null },
+    { id: '7e000000-0000-4000-8000-000000000001', program: 'ENCOUNTER', graduated_on: '2026-03-08' },
+  ],
+  may_file: true,
+};
+
+/**
+ * What one Growth list answers the person page: the rows to return, or a refusal, or a
+ * failure that is not a refusal.
+ */
+export type PersonGrowthAnswer =
+  | { rows: unknown[] }
+  | { refused: 'CAPABILITY_DENIED' | 'SCOPE_DENIED' }
+  | { failed: true };
+
+/**
+ * The two Growth lists as the person page asks them: searched by `PERSON_IN_SCOPE`'s
+ * Member ID. A request for anything else falls through to whatever was registered
+ * before, so this composes with `mockSuynl` and `mockTraining`.
+ *
+ * Returns every query string each list received for that Member ID.
+ */
+export async function mockPersonGrowth(
+  page: Page,
+  answers: { suynl?: PersonGrowthAnswer; training?: PersonGrowthAnswer } = {},
+): Promise<{ suynl: URLSearchParams[]; training: URLSearchParams[] }> {
+  const traffic = { suynl: [] as URLSearchParams[], training: [] as URLSearchParams[] };
+  const defaults = { suynl: { rows: [PERSON_SUYNL] }, training: { rows: [PERSON_TRAINING] } };
+
+  for (const tab of ['suynl', 'training'] as const) {
+    const answer = answers[tab] ?? defaults[tab];
+
+    await page.route(`**/api/v1/${tab}/people?*`, (route) => {
+      const params = new URL(route.request().url()).searchParams;
+      if (params.get('q') !== PERSON_IN_SCOPE.member_id) {
+        return route.fallback();
+      }
+      traffic[tab].push(params);
+
+      if ('refused' in answer) {
+        return route.fulfill(
+          json(
+            {
+              error: {
+                code: answer.refused,
+                message: `You hold no ${tab}.view_subtree over this person.`,
+                details: {},
+              },
+            },
+            403,
+          ),
+        );
+      }
+      if ('failed' in answer) {
+        return route.fulfill(
+          json(
+            { error: { code: 'INTERNAL_ERROR', message: 'Something went wrong.', details: {} } },
+            500,
+          ),
+        );
+      }
+      return route.fulfill(json({ data: answer.rows, next_cursor: null }));
+    });
+  }
+
+  return traffic;
 }
