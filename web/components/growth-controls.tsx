@@ -18,9 +18,10 @@ import { cn } from '@/lib/utils';
 const TABS = [
   { href: '/growth/suynl', label: 'SUYNL' },
   { href: '/growth/training', label: 'Training' },
+  { href: '/growth/conquest', label: 'Conquest' },
 ] as const;
 
-/** The two tabs, as links: each is its own address, so Back and a reload keep the tab. */
+/** The tabs, as links: each is its own address, so Back and a reload keep the tab. */
 export function GrowthTabs({ current }: { current: (typeof TABS)[number]['href'] }) {
   return (
     <nav aria-label="Growth" className="border-line mt-6 flex border-b">
@@ -33,7 +34,8 @@ export function GrowthTabs({ current }: { current: (typeof TABS)[number]['href']
             href={tab.href}
             aria-current={active ? 'page' : undefined}
             className={cn(
-              'focus-visible:outline-accent inline-flex min-h-11 items-center border border-b-0 px-4',
+              // px-3 below `sm`: three tabs fit a 320px phone with room for font differences.
+              'focus-visible:outline-accent inline-flex min-h-11 items-center border border-b-0 px-3 sm:px-4',
               'text-xs font-bold tracking-[0.08em] uppercase',
               'focus-visible:outline-2 focus-visible:-outline-offset-2',
               active

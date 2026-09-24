@@ -1082,6 +1082,73 @@ export class CellsReadService implements CellScopePort, CellRelationshipsPort {
   }
 
   /**
+   * Every Cell leadership these people held, with its dates, leaving out a Cell closed
+   * `CREATED_IN_ERROR` (SKILL.md section 27; decisions 0285 and 0286). A leadership row
+   * in force is a current Cell Leader (section 11): closing a Cell ends its leadership.
+   */
+  async leadershipPeriodsOf(
+    personIds: readonly string[],
+  ): Promise<{ personId: string; startedAt: Date; endedAt: Date | null }[]> {
+    if (personIds.length === 0) {
+      return [];
+    }
+
+    const rows = await this.db
+      .selectFrom('cell_leaderships')
+      .innerJoin('cells', 'cells.id', 'cell_leaderships.cell_id')
+      .select([
+        'cell_leaderships.person_id',
+        'cell_leaderships.started_at',
+        'cell_leaderships.ended_at',
+      ])
+      .where('cell_leaderships.person_id', 'in', [...personIds])
+      .where((eb) =>
+        eb.or([
+          eb('cells.closure_reason', 'is', null),
+          eb('cells.closure_reason', '!=', 'CREATED_IN_ERROR'),
+        ]),
+      )
+      .execute();
+
+    return rows.map((row) => ({
+      personId: row.person_id,
+      startedAt: row.started_at,
+      endedAt: row.ended_at,
+    }));
+  }
+
+  /**
+   * When each of these people first opened a Cell (SKILL.md section 27, *Open a cell*):
+   * the earliest start among the Cells whose first leadership is theirs, leaving out a
+   * Cell closed `CREATED_IN_ERROR` (decision 0283). A Cell is created only by initial
+   * encoding or an approved `NEW_CELL` request, and both open its first leadership, so
+   * that row is its opener; a handover is a later row. Where two rows share the first
+   * start, one of them zero-length from a correction, the other is the first. `null` is
+   * everyone.
+   */
+  async openingsOf(personIds: readonly string[] | null): Promise<Map<string, Date>> {
+    if (personIds !== null && personIds.length === 0) {
+      return new Map();
+    }
+
+    const result = await sql<{ person_id: string; opened_at: Date }>`
+      SELECT first.person_id, min(first.started_at) AS opened_at
+      FROM (
+        SELECT DISTINCT ON (cl.cell_id) cl.cell_id, cl.person_id, cl.started_at
+        FROM cell_leaderships cl
+        JOIN cells c ON c.id = cl.cell_id
+        WHERE c.closure_reason IS DISTINCT FROM 'CREATED_IN_ERROR'
+        ORDER BY cl.cell_id, cl.started_at,
+          (cl.ended_at IS NOT NULL AND cl.ended_at = cl.started_at)
+      ) first
+      ${personIds === null ? sql`` : sql`WHERE first.person_id IN (${sql.join([...personIds])})`}
+      GROUP BY first.person_id
+    `.execute(this.db);
+
+    return new Map(result.rows.map((row) => [row.person_id, row.opened_at]));
+  }
+
+  /**
    * Whether this Person is a current Cell Leader (SKILL.md section 11).
    *
    * **Both halves, and the second cannot be shown to matter — which is stated here

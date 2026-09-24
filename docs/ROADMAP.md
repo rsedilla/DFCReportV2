@@ -261,7 +261,7 @@ That divergence is what the ruling of 2026-09-06 is about. A stage's bullet list
 
 ### Growth part three — the SUYNL and Training tabs — **delivered**
 
-The `Growth` sidebar item between `Cells` and `Network` (§19, §28) and two of its three tabs: `SUYNL` and `Training`, each with its count cards (decision 0281), its list and its save bar, which shows a stale save's refusal (decision 0282). The `Conquest` tab waits for its own routes.
+The `Growth` sidebar item between `Cells` and `Network` (§19, §28) and its three tabs: `SUYNL` and `Training`, each with its count cards (decision 0281), its list and its save bar, which shows a stale save's refusal (decision 0282). The `Conquest` tab is read-only, with its four derived goals (decisions 0283 to 0286).
 
 ### After the pilot — flat subtree view
 

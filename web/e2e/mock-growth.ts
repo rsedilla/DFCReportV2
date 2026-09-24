@@ -3,7 +3,8 @@ import type { Page } from '@playwright/test';
 import { PERSON_IN_SCOPE } from './mock-api';
 
 /**
- * The two Growth tabs, SUYNL and Training (SKILL.md section 28; decisions 0278 to 0282).
+ * The Growth tabs, SUYNL, Training and Conquest (SKILL.md sections 27 and 28; decisions
+ * 0278 to 0286).
  *
  * A companion to `mock-api.ts` and `mock-attendance.ts`, and a stand-in for the transport
  * in the same sense: nothing here decides anything. The shapes are the ones
@@ -256,6 +257,79 @@ export function mockTraining(
     fixture.rows ?? [TRAINING_TWO, TRAINING_NONE, TRAINING_ALL, TRAINING_NOT_MINE],
     outcome,
   );
+}
+
+/**
+ * The Conquest tab (SKILL.md section 27), read-only: its two routes, in the shapes
+ * `api/src/conquest/conquest.service.ts` builds.
+ *
+ * **Each row carries goal states the screen words differently**: reached with today's count
+ * below the target, at it, and past it; not reached with a count; and Open a cell, which
+ * carries no count, both reached and not.
+ */
+export const CONQUEST_PARTWAY = {
+  person_id: IN_PROGRESS_ID,
+  member_id: 'M-004101',
+  full_name: 'Dalisay Soriano',
+  goals: {
+    // Reached, and fewer than three today: "Reached Mar 2026" over "2 of 3 now".
+    win_3: { reached_on: '2026-03-08', now: 2 },
+    open_a_cell: { reached_on: '2025-11-02' },
+    // Reached, and past the target today: "13 now".
+    completion_of_12: { reached_on: '2026-01-20', now: 13 },
+    // Not reached: "7 of 12 so far".
+    raise_12_leaders: { reached_on: null, now: 7 },
+  },
+};
+
+export const CONQUEST_NONE = {
+  person_id: NOT_STARTED_ID,
+  member_id: 'M-004102',
+  full_name: 'Ernani Pascual',
+  goals: {
+    win_3: { reached_on: null, now: 0 },
+    open_a_cell: { reached_on: null },
+    completion_of_12: { reached_on: null, now: 4 },
+    raise_12_leaders: { reached_on: null, now: 0 },
+  },
+};
+
+export const CONQUEST_ALL = {
+  person_id: GRADUATED_ID,
+  member_id: 'M-004103',
+  full_name: 'Lualhati Dizon',
+  goals: {
+    win_3: { reached_on: '2025-01-12', now: 3 },
+    open_a_cell: { reached_on: '2025-03-01' },
+    // Reached and exactly at the target today: "12 of 12 now".
+    completion_of_12: { reached_on: '2025-11-30', now: 12 },
+    raise_12_leaders: { reached_on: '2026-03-15', now: 11 },
+  },
+};
+
+/** A card per goal, which overlap, and everyone listed (section 27). */
+export const CONQUEST_COUNTS = {
+  people: 3,
+  win_3: 2,
+  open_a_cell: 2,
+  completion_of_12: 2,
+  raise_12_leaders: 1,
+};
+
+/** The Conquest tab's two routes. Returns every list request's query string, in order. */
+export async function mockConquest(page: Page): Promise<{ lists: URLSearchParams[] }> {
+  const traffic = { lists: [] as URLSearchParams[] };
+
+  await page.route('**/api/v1/conquest/counts', (route) => route.fulfill(json(CONQUEST_COUNTS)));
+
+  await page.route('**/api/v1/conquest/people?*', (route) => {
+    traffic.lists.push(new URL(route.request().url()).searchParams);
+    return route.fulfill(
+      json({ data: [CONQUEST_PARTWAY, CONQUEST_NONE, CONQUEST_ALL], next_cursor: null }),
+    );
+  });
+
+  return traffic;
 }
 
 /**

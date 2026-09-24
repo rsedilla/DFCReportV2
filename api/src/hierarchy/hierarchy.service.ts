@@ -1083,6 +1083,37 @@ export class HierarchyService {
   }
 
   /**
+   * Every pastoral edge ever held under these leaders, with its dates, for a derivation
+   * that asks when a condition over several edges first held (SKILL.md section 27;
+   * decisions 0284 and 0285). `null` is every leader; an empty array is nobody. A root's
+   * own row names no leader and yields no edge.
+   */
+  async edgeHistoryOf(
+    executor: Db,
+    leaderIds: readonly string[] | null,
+  ): Promise<{ leaderId: string; personId: string; startedAt: Date; endedAt: Date | null }[]> {
+    if (leaderIds !== null && leaderIds.length === 0) {
+      return [];
+    }
+
+    const rows = await executor
+      .selectFrom('pastoral_assignments')
+      .select(['leader_id', 'person_id', 'started_at', 'ended_at'])
+      .where('leader_id', 'is not', null)
+      .$if(leaderIds !== null, (query) =>
+        query.where('leader_id', 'in', leaderIds as readonly string[]),
+      )
+      .execute();
+
+    return rows.map((row) => ({
+      leaderId: row.leader_id as string,
+      personId: row.person_id,
+      startedAt: row.started_at,
+      endedAt: row.ended_at,
+    }));
+  }
+
+  /**
    * The Network roots as of an instant — the people holding a row with no leader
    * above them (section 5, Network roots).
    *
