@@ -243,9 +243,10 @@ rewritten to remove that language, because resolving each by inference is how a
 false cross-reference gets introduced, and this log records enough of those
 already. Each file carries previous/next links instead, so a positional reference
 resolves exactly as well as it did in the single file and no better. *Recounted on
-2026-09-24, the trigger being decision 0288: of 287 files, 286 carry `Previous:`, 181 carry
-`Next:`, and 180 carry both on one line. 0213 through 0288 each moved the first two and
+2026-09-25, the trigger being decision 0289: of 288 files, 287 carry `Previous:`, 181 carry
+`Next:`, and 180 carry both on one line. 0213 through 0289 each moved the first two and
 neither of the others, none of them carrying a `Next:`. The recount before this one was dated
+2026-09-24 and triggered by 0288, and was left stale by 0289 the next day. The one before that was dated
 2026-09-24 and triggered by 0287, and was left stale by 0288 the same day. The one before that was dated
 2026-09-24 and triggered by 0283 to 0286, and was left stale by 0287 the same day. The one before that was dated
 2026-09-24 and triggered by 0281 and 0282, and was left stale by 0283 the same day. The one before that was dated
@@ -617,6 +618,7 @@ one, in the paragraph whose subject is false cross-references, and
 - 2026-09-24 — [A Cell created in error raises no leader](docs/decisions/0286-a-cell-created-in-error-raises-no-leader.md)
 - 2026-09-24 — [Growth lists open on those still to finish](docs/decisions/0287-growth-lists-open-on-those-still-to-finish.md)
 - 2026-09-24 — [Network is a tab of People](docs/decisions/0288-network-is-a-tab-of-people.md)
+- 2026-09-25 — [The Cells page carries its totals](docs/decisions/0289-the-cells-page-carries-its-totals.md)
 
 ### Open — awaiting a ruling
 

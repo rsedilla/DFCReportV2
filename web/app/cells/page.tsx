@@ -29,6 +29,7 @@ import { getMe, holdsWholeChurch } from '@/lib/me';
 import { describeFailure } from '@/lib/messages';
 import { reportingMonthOf } from '@/lib/reporting-month';
 import { useScreenAddress } from '@/lib/screen-address';
+import { cn } from '@/lib/utils';
 
 /** Ten a page, as the People list pages (decision 0261). */
 const PAGE_SIZE = 10;
@@ -139,27 +140,28 @@ function CellsIndex() {
     <main id="main" className={PAGE_WIDTH.INDEX}>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-semibold tracking-tight">Cells</h1>
-        {mayCreate ? (
-          <Link href="/cells/new" className={buttonClasses('primary')}>
-            New Cell
+        {/* Section 15 puts the people-without-a-Cell list in this module (owner's choice of
+            2026-09-25: a button beside New Cell). */}
+        <div className="flex flex-wrap gap-3">
+          <Link href="/cells/people-without-a-cell" className={buttonClasses('secondary')}>
+            People without a Cell
           </Link>
-        ) : null}
+          {mayCreate ? (
+            <Link href="/cells/new" className={buttonClasses('primary')}>
+              New Cell
+            </Link>
+          ) : null}
+        </div>
       </div>
       <p className="text-muted mt-2 max-w-2xl text-sm leading-relaxed">
-        The Cells you oversee, with how many of the month&rsquo;s scheduled meetings have a
-        record. The two figures are shown as two; nothing here is scored, ranked, or ordered
-        by how much is missing.
+        Your Cells, and this month&rsquo;s meetings recorded.
       </p>
 
-      <p className="mt-2">
-        {/*
-          Section 15 puts the people-without-a-Cell list in this module, so it is reached
-          from here as well as from the dashboard.
-        */}
-        <Link href="/cells/people-without-a-cell" className={`${LINK} text-sm`}>
-          People without a Cell
-        </Link>
-      </p>
+      <CellTotals
+        current={!closed && submitted === '' && month === reportingMonthOf()}
+        mineOnly={mineOnly}
+        onChoose={(mine) => go({ mine: mine ? '1' : null, month: null, view: null, q: null })}
+      />
 
       {/* Every control in one bar, above the table (owner's choice, 2026-09-22). */}
       <div className={`mt-6 ${CONTROL_BAR}`}>
@@ -416,6 +418,104 @@ function CellsIndex() {
         />
       ) : null}
     </main>
+  );
+}
+
+/**
+ * How many running Cells, counted through every page, since the list returns no total
+ * (section 22).
+ */
+async function countCells(month: string, mine: boolean, signal?: AbortSignal): Promise<number> {
+  let count = 0;
+  let cursor: string | null = null;
+
+  do {
+    const page = await listCells(
+      { month, ledBy: mine ? 'me' : undefined, cursor, limit: 200 },
+      signal,
+    );
+    count += page.data.length;
+    cursor = page.next_cursor;
+  } while (cursor !== null);
+
+  return count;
+}
+
+/**
+ * The two totals, as of today, at the head of the list they count (decision 0289). Each
+ * is also the filter that shows those Cells, the way the Growth tabs' cards are, and the
+ * one matching what the list shows is marked as pressed.
+ */
+function CellTotals({
+  current,
+  mineOnly,
+  onChoose,
+}: {
+  /** The list is today's running Cells, unsearched, so a total describes it. */
+  current: boolean;
+  mineOnly: boolean;
+  onChoose: (mine: boolean) => void;
+}) {
+  const month = reportingMonthOf();
+  const mine = useQuery({
+    queryKey: ['cells-count', month, true],
+    queryFn: ({ signal }) => countCells(month, true, signal),
+  });
+  const scoped = useQuery({
+    queryKey: ['cells-count', month, false],
+    queryFn: ({ signal }) => countCells(month, false, signal),
+  });
+
+  // Every figure carries its scope (section 19), and a whole-church reader's is the church.
+  const me = useQuery({ queryKey: ['me'], queryFn: ({ signal }) => getMe(signal) });
+  const scopeLabel = holdsWholeChurch(me.data, 'cell.view_subtree')
+    ? 'Whole Church'
+    : 'The Cells you oversee';
+
+  const cards = [
+    { mine: true, label: 'Cells you lead', value: mine.data, scope: 'Your own Cells' },
+    { mine: false, label: 'Cells in your scope', value: scoped.data, scope: scopeLabel },
+  ];
+
+  // A total that failed to load says why, rather than showing a bare dash.
+  const failed = mine.isError ? mine.error : scoped.isError ? scoped.error : null;
+
+  return (
+    <>
+    {failed ? (
+      <div className="mt-6">
+        <FailureNotice failure={describeFailure(failed)} />
+      </div>
+    ) : null}
+    <ul className="mt-6 grid gap-3 sm:grid-cols-2">
+      {cards.map((card) => {
+        const pressed = current && mineOnly === card.mine;
+
+        return (
+          <li key={card.label}>
+            <button
+              type="button"
+              aria-pressed={pressed}
+              onClick={() => onChoose(card.mine)}
+              className={cn(
+                'bg-surface flex h-full min-h-11 w-full flex-col items-start border p-3 text-left',
+                'focus-visible:outline-accent focus-visible:outline-2 focus-visible:outline-offset-2',
+                pressed
+                  ? 'border-accent shadow-[inset_0_0_0_1px_var(--accent)]'
+                  : 'border-edge hover:bg-raised',
+              )}
+            >
+              <span className="text-accent text-xs font-bold tracking-[0.08em] uppercase">
+                {card.label}
+              </span>
+              <span className="mt-1 text-2xl font-bold tabular-nums">{card.value ?? '–'}</span>
+              <span className="text-muted mt-auto pt-1 text-xs">{card.scope} · as of today</span>
+            </button>
+          </li>
+        );
+      })}
+    </ul>
+    </>
   );
 }
 

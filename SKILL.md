@@ -3971,7 +3971,7 @@ Historical reports must respect historical pastoral assignments and Cell categor
 
 ### The sidebar is navigation
 
-The sidebar carries links, never counts. Metrics belong on the Dashboard and inside the reporting modules, where they can carry the scope and period that make them meaningful. Adding live numbers to navigation means computing scoped queries on every page load and displaying figures stripped of the context needed to read them. **The Network screen is a page reached from the sidebar rather than navigation, and carries figures with their branch and month stated** (ruling of 2026-09-18, Section 17). **A person's page carries that person's DCC figures** (decisions 0247 and 0260, Section 9).
+The sidebar carries links, never counts. Metrics belong on the Dashboard and inside the reporting modules, where they can carry the scope and period that make them meaningful. Adding live numbers to navigation means computing scoped queries on every page load and displaying figures stripped of the context needed to read them. **The Network screen is a page reached from the sidebar rather than navigation, and carries figures with their branch and month stated** (ruling of 2026-09-18, Section 17). **A person's page carries that person's DCC figures** (decisions 0247 and 0260, Section 9). **The Cells page carries two totals, the Cells a person leads and the Cells in their scope, each dated as of today and each the filter that shows those Cells** (ruling of 2026-09-25, decision 0289), above the list they count.
 
 This is the same rule already applied to leadership-development metrics and Participation, both of which live inside Network Summary rather than earning their own sidebar link (Section 16).
 
