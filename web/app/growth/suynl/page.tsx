@@ -25,7 +25,9 @@ import {
   type SuynlPerson,
 } from '@/lib/growth';
 import { idempotencyKeyFor } from '@/lib/idempotency';
+import { getMe } from '@/lib/me';
 import { describeFailure } from '@/lib/messages';
+import { usePageSize } from '@/lib/page-size';
 import { useScreenAddress } from '@/lib/screen-address';
 
 /**
@@ -52,7 +54,6 @@ export default function SuynlPage() {
   );
 }
 
-const PAGE_SIZE = 50;
 const LESSONS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10] as const;
 
 interface DraftEntry {
@@ -77,7 +78,10 @@ function SuynlTab() {
 
   const [cursors, setCursors] = useState<(string | null)[]>([null]);
   const [page, setPage] = useState(0);
-  const filterKey = `${q}|${mine}|${step ?? ''}`;
+  const me = useQuery({ queryKey: ['me'], queryFn: ({ signal }) => getMe(signal) });
+  const pageSize = usePageSize();
+  // A new size starts the list again, so no row is skipped between two page lengths.
+  const filterKey = `${q}|${mine}|${step ?? ''}|${pageSize}`;
   const [lastFilter, setLastFilter] = useState(filterKey);
   if (lastFilter !== filterKey) {
     setLastFilter(filterKey);
@@ -90,7 +94,7 @@ function SuynlTab() {
     queryFn: ({ signal }) => getSuynlCounts(signal),
   });
   const people = useQuery({
-    queryKey: ['suynl-people', q, mine, step, cursors[page]],
+    queryKey: ['suynl-people', q, mine, step, cursors[page], pageSize],
     queryFn: ({ signal }) =>
       listSuynlPeople(
         {
@@ -98,7 +102,7 @@ function SuynlTab() {
           mine,
           step: step ?? undefined,
           cursor: cursors[page],
-          limit: PAGE_SIZE,
+          limit: pageSize,
         },
         signal,
       ),
@@ -261,7 +265,7 @@ function SuynlTab() {
                 {rows.map((row) => (
                   <tr key={row.person_id} className={rowClasses}>
                     <td className="px-3 py-3 align-top">
-                      <PersonName row={row} />
+                      <PersonName row={row} self={row.person_id === me.data?.person_id} />
                     </td>
                     {folded(row, opened, draft) ? (
                       <td colSpan={10} className="px-1 py-3 align-top">
@@ -289,7 +293,7 @@ function SuynlTab() {
               {rows.map((row) => (
                 <li key={row.person_id} className="py-4">
                   <div className="flex items-start justify-between gap-3">
-                    <PersonName row={row} />
+                    <PersonName row={row} self={row.person_id === me.data?.person_id} />
                     <span className="text-sm tabular-nums">{doneCount(row, draft)} of 10</span>
                   </div>
                   {folded(row, opened, draft) ? (
@@ -365,7 +369,7 @@ function SuynlTab() {
   );
 }
 
-function PersonName({ row }: { row: SuynlPerson }) {
+function PersonName({ row, self }: { row: SuynlPerson; self: boolean }) {
   return (
     <div>
       <Link
@@ -376,7 +380,11 @@ function PersonName({ row }: { row: SuynlPerson }) {
       </Link>
       <span className="text-muted block font-mono text-xs">{row.member_id}</span>
       {!row.may_file ? (
-        <span className="text-muted block text-xs">Filed by their own leader</span>
+        // Decision 0280: nobody records their own; anyone else here is somebody the
+        // reader may not file for, a Network root among them, who has no leader.
+        <span className="text-muted block text-xs">
+          {self ? 'You · another leader records these' : 'Not yours to record'}
+        </span>
       ) : null}
     </div>
   );
