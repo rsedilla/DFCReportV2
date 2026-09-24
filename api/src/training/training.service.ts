@@ -113,7 +113,8 @@ export class TrainingService {
       ]),
     );
 
-    return { people, not_started: people - held.size, ...perProgram };
+    // `all_five` is not a card: it is how many the list's opening view leaves out (decision 0287).
+    return { people, not_started: people - held.size, ...perProgram, all_five: allFive(held).size };
   }
 
   /** `GET /api/v1/training/people`: the tab's list, one page (section 28). */
@@ -594,9 +595,22 @@ function narrowingFor(
     return { exclude: new Set(held.keys()) };
   }
 
+  if (step === 'STILL_TO_FINISH') {
+    return { exclude: allFive(held) };
+  }
+
   return {
     include: new Set([...held].filter(([, programs]) => programs.has(step)).map(([id]) => id)),
   };
+}
+
+/** The people holding all five schools (decision 0287). */
+function allFive(held: Map<string, Set<TrainingProgram>>): Set<string> {
+  return new Set(
+    [...held]
+      .filter(([, programs]) => programs.size === TRAINING_PROGRAMS.length)
+      .map(([id]) => id),
+  );
 }
 
 /** Whether the actor is withdrawing somebody else's statement (section 14). */

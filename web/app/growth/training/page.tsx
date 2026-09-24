@@ -11,6 +11,7 @@ import {
   GrowthFilters,
   GrowthSaveBar,
   GrowthTabs,
+  StillToFinish,
   longDay,
 } from '@/components/growth-controls';
 import { Button } from '@/components/ui/button';
@@ -86,13 +87,17 @@ function TrainingTab() {
   const q = search.get('q') ?? '';
   const mine = search.get('mine') === '1';
   const step = search.get('step');
+  const everyone = search.get('all') === '1';
+  // Opens on those still to finish (decision 0287); a card, a search, Only my disciples or
+  // Show everyone widens it.
+  const listStep = step ?? (q === '' && !mine && !everyone ? 'STILL_TO_FINISH' : null);
 
   const [cursors, setCursors] = useState<(string | null)[]>([null]);
   const [page, setPage] = useState(0);
   const me = useQuery({ queryKey: ['me'], queryFn: ({ signal }) => getMe(signal) });
   const pageSize = usePageSize();
   // A new size starts the list again, so no row is skipped between two page lengths.
-  const filterKey = `${q}|${mine}|${step ?? ''}|${pageSize}`;
+  const filterKey = `${q}|${mine}|${listStep ?? ''}|${pageSize}`;
   const [lastFilter, setLastFilter] = useState(filterKey);
   if (lastFilter !== filterKey) {
     setLastFilter(filterKey);
@@ -105,13 +110,13 @@ function TrainingTab() {
     queryFn: ({ signal }) => getTrainingCounts(signal),
   });
   const people = useQuery({
-    queryKey: ['training-people', q, mine, step, cursors[page], pageSize],
+    queryKey: ['training-people', q, mine, listStep, cursors[page], pageSize],
     queryFn: ({ signal }) =>
       listTrainingPeople(
         {
           q,
           mine,
-          step: step ?? undefined,
+          step: listStep ?? undefined,
           cursor: cursors[page],
           limit: pageSize,
         },
@@ -241,7 +246,11 @@ function TrainingTab() {
 
       <GrowthTabs current="/growth/training" />
 
-      <GrowthCards cards={cards} selected={step} onSelect={(next) => go({ step: next })} />
+      <GrowthCards
+        cards={cards}
+        selected={step}
+        onSelect={(next) => go({ step: next, all: null })}
+      />
 
       <GrowthFilters
         submitted={q}
@@ -249,6 +258,15 @@ function TrainingTab() {
         onSearch={(term) => go({ q: term })}
         onMine={(next) => go({ mine: next ? '1' : null })}
       />
+
+      {step === null && q === '' && !mine ? (
+        <StillToFinish
+          everyone={everyone}
+          finished={counts.data?.all_five}
+          what="all five"
+          onChange={(all) => go({ all: all ? '1' : null })}
+        />
+      ) : null}
 
       <div className="mt-8">
         <FailureNotice

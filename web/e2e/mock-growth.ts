@@ -130,6 +130,8 @@ export const TRAINING_COUNTS = {
   sol_1: 1,
   sol_2: 1,
   sol_3: 1,
+  /** Not a card: how many the opening view leaves out (decision 0287). */
+  all_five: 1,
 };
 
 export interface GrowthTraffic {
@@ -139,10 +141,45 @@ export interface GrowthTraffic {
   submitted: { body: { changes: Record<string, unknown>[] }; key: string | undefined }[];
 }
 
+/** How far a SUYNL row has got, as `narrowingFor` in `suynl.service.ts` reads it. */
+function suynlStep(row: { lessons: unknown[] }): string {
+  return row.lessons.length === 0
+    ? 'NOT_STARTED'
+    : row.lessons.length === 10
+      ? 'GRADUATED'
+      : 'IN_PROGRESS';
+}
+
+/**
+ * Whether a row is in the list a `step` asks for, as the two services narrow it: a card
+ * names its own people, and `STILL_TO_FINISH`, the opening view, everyone who has not
+ * finished (decision 0287). No `step` is everyone.
+ */
+function inStep(tab: 'suynl' | 'training', row: unknown, step: string | null): boolean {
+  if (step === null) {
+    return true;
+  }
+
+  if (tab === 'suynl') {
+    const reached = suynlStep(row as { lessons: unknown[] });
+    return step === 'STILL_TO_FINISH' ? reached !== 'GRADUATED' : reached === step;
+  }
+
+  const held = (row as { graduations: { program: string }[] }).graduations.map((g) => g.program);
+  if (step === 'STILL_TO_FINISH') {
+    return held.length < 5;
+  }
+  return step === 'NOT_STARTED' ? held.length === 0 : held.includes(step);
+}
+
 /**
  * One tab's three routes. `outcome` decides what a submission answers: accepted as the
  * API accepts it (201 with its counts), or refused as a lost race is (409
  * `VERSION_CONFLICT`, with the message the SUYNL service writes).
+ *
+ * The list honours `step`, so the opening view leaves out whoever has finished as the API
+ * does, and a screen that sent the wrong step would show the wrong people. `q` and `mine`
+ * are recorded and not applied.
  */
 async function mockTab(
   page: Page,
@@ -156,8 +193,10 @@ async function mockTab(
   await page.route(`**/api/v1/${tab}/counts`, (route) => route.fulfill(json(counts)));
 
   await page.route(`**/api/v1/${tab}/people?*`, (route) => {
-    traffic.lists.push(new URL(route.request().url()).searchParams);
-    return route.fulfill(json({ data: rows, next_cursor: null }));
+    const params = new URL(route.request().url()).searchParams;
+    traffic.lists.push(params);
+    const data = rows.filter((row) => inStep(tab, row, params.get('step')));
+    return route.fulfill(json({ data, next_cursor: null }));
   });
 
   await page.route(`**/api/v1/${tab}/submit`, async (route) => {
@@ -194,12 +233,13 @@ async function mockTab(
 export function mockSuynl(
   page: Page,
   outcome: 'accepted' | 'conflict' = 'accepted',
+  fixture: { counts?: unknown; rows?: unknown[] } = {},
 ): Promise<GrowthTraffic> {
   return mockTab(
     page,
     'suynl',
-    SUYNL_COUNTS,
-    [SUYNL_IN_PROGRESS, SUYNL_NOT_STARTED, SUYNL_GRADUATED, SUYNL_NOT_MINE],
+    fixture.counts ?? SUYNL_COUNTS,
+    fixture.rows ?? [SUYNL_IN_PROGRESS, SUYNL_NOT_STARTED, SUYNL_GRADUATED, SUYNL_NOT_MINE],
     outcome,
   );
 }
@@ -207,12 +247,13 @@ export function mockSuynl(
 export function mockTraining(
   page: Page,
   outcome: 'accepted' | 'conflict' = 'accepted',
+  fixture: { counts?: unknown; rows?: unknown[] } = {},
 ): Promise<GrowthTraffic> {
   return mockTab(
     page,
     'training',
-    TRAINING_COUNTS,
-    [TRAINING_TWO, TRAINING_NONE, TRAINING_ALL, TRAINING_NOT_MINE],
+    fixture.counts ?? TRAINING_COUNTS,
+    fixture.rows ?? [TRAINING_TWO, TRAINING_NONE, TRAINING_ALL, TRAINING_NOT_MINE],
     outcome,
   );
 }
