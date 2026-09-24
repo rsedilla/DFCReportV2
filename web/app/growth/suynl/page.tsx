@@ -40,7 +40,8 @@ import { useScreenAddress } from '@/lib/screen-address';
  *
  * **Three cards that add up to everyone listed**, each narrowing the list to its people.
  * A person who has done all ten folds to one line with the day the tenth was filed, and
- * a Correct action that opens the ten boxes again.
+ * a Change lessons action that opens the ten boxes again, and Close to fold them back
+ * while nothing has changed.
  *
  * **A row the reader may not file for shows marks rather than boxes** (`may_file`),
  * which covers the reader's own row (decision 0280). The API decides; this only shows
@@ -188,6 +189,12 @@ function SuynlTab() {
     });
   }
 
+  function close(row: SuynlPerson) {
+    const next = new Set(opened);
+    next.delete(row.person_id);
+    setOpened(next);
+  }
+
   const cards = [
     {
       step: 'NOT_STARTED',
@@ -283,6 +290,16 @@ function SuynlTab() {
                     )}
                     <td className="px-3 py-3 text-right align-top tabular-nums">
                       {doneCount(row, draft)} of 10
+                      {closable(row, opened, draft) ? (
+                        <Button
+                          variant="secondary"
+                          className="mt-2"
+                          aria-label={`Close, ${row.full_name}`}
+                          onClick={() => close(row)}
+                        >
+                          Close
+                        </Button>
+                      ) : null}
                     </td>
                   </tr>
                 ))}
@@ -315,6 +332,16 @@ function SuynlTab() {
                       ))}
                     </div>
                   )}
+                  {closable(row, opened, draft) ? (
+                    <Button
+                      variant="secondary"
+                      className="mt-3"
+                      aria-label={`Close, ${row.full_name}`}
+                      onClick={() => close(row)}
+                    >
+                      Close
+                    </Button>
+                  ) : null}
                 </li>
               ))}
             </ul>
@@ -434,10 +461,23 @@ function Graduated({ row, onCorrect }: { row: SuynlPerson; onCorrect: () => void
       <span>Graduated {row.graduated_on ? longDay(row.graduated_on) : ''}</span>
       {row.may_file ? (
         <Button variant="secondary" onClick={onCorrect}>
-          Correct
+          Change lessons
         </Button>
       ) : null}
     </p>
+  );
+}
+
+/** Opened with Change lessons and nothing changed yet: Close folds it again. */
+function closable(
+  row: SuynlPerson,
+  opened: Set<string>,
+  draft: Record<string, DraftEntry>,
+): boolean {
+  return (
+    row.graduated_on !== null &&
+    opened.has(row.person_id) &&
+    !Object.values(draft).some((entry) => entry.person_id === row.person_id)
   );
 }
 

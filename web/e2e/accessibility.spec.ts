@@ -955,7 +955,7 @@ const SCANS = [
   },
   {
     // SUYNL (section 28): three count cards, ten boxes a person, a graduated row folded to
-    // its date with Correct, and a row the reader may not file for, which shows marks.
+    // its date with Change lessons, and a row the reader may not file for, which shows marks.
     name: 'growth suynl',
     route: '/growth/suynl',
     async before(page: import('@playwright/test').Page) {
@@ -963,7 +963,7 @@ const SCANS = [
       await mockSuynl(page);
     },
     async arrange(page: import('@playwright/test').Page) {
-      await expect(page.getByRole('button', { name: 'Correct' })).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Change lessons' })).toBeVisible();
       await expect(
         page.getByRole('checkbox', { name: 'Lesson 3, Dalisay Soriano' }),
       ).toBeVisible();
@@ -1326,11 +1326,11 @@ const TARGET_SWEEP = [
   },
   {
     // The two tabs, three cards, the search, Search and the filter, four name links,
-    // twenty boxes across the two rows the reader may file for, Correct on the graduated
-    // row, and the two pager buttons. Settled on Correct, which renders from the data.
+    // twenty boxes across the two rows the reader may file for, Change lessons on the graduated
+    // row, and the two pager buttons. Settled on Change lessons, which renders from the data.
     name: 'growth suynl',
     route: '/growth/suynl',
-    settle: 'Correct',
+    settle: 'Change lessons',
     minimum: 35,
   },
   {
