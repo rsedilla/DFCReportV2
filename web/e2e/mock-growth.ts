@@ -65,7 +65,7 @@ export const SUYNL_GRADUATED = {
   may_file: true,
 };
 
-/** Filed by their own leader, so this reader sees marks and no boxes. */
+/** Not the reader's to record, so this reader sees marks and no boxes. */
 export const SUYNL_NOT_MINE = {
   person_id: NOT_MINE_ID,
   member_id: 'M-004104',

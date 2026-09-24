@@ -959,7 +959,7 @@ const SCANS = [
       await expect(
         page.getByRole('checkbox', { name: 'Lesson 3, Dalisay Soriano' }),
       ).toBeVisible();
-      await expect(page.getByText('Filed by their own leader').filter({ visible: true })).toBeVisible();
+      await expect(page.getByText('Not yours to record').filter({ visible: true })).toBeVisible();
     },
   },
   {
