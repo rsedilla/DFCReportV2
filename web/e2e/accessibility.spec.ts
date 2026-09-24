@@ -1159,14 +1159,18 @@ const TARGET_SWEEP = [
     minimum: 11,
   },
   {
-    // The link to people without a Cell, two month controls, the "only my Cells" filter,
-    // and a link per Cell. The month controls are icon-only and are the reason this state
-    // is measured rather than exempted: an icon button is where a 24px target goes wrong.
+    // The link to people without a Cell, the two totals (decision 0289), the search box
+    // and its button, the two view radios, two month controls, the "only my Cells"
+    // filter, a link per Cell in both the table and the cards (the hidden rendering is
+    // counted too), and the pager's two buttons: **sixteen**, measured on 2026-09-25. The
+    // month controls are icon-only and are the reason this state is measured rather than
+    // exempted: an icon button is where a 24px target goes wrong. The totals are the
+    // other reason: each is a button carrying a figure, sized by its own padding.
     name: 'cells',
     route: '/cells',
     settleRole: 'link' as const,
     settle: 'Youth · Sat',
-    minimum: 6,
+    minimum: 16,
   },
   {
     name: 'cell meetings',
@@ -1234,6 +1238,14 @@ const TARGET_SWEEP = [
     // buttons, one each. The queue shows "Loading…" until every read it is built from
     // has answered, and the sweep waits for no "Loading…" to remain before counting, so
     // both kinds of row are there when it counts.
+    //
+    // **Still twenty-one after decision 0289, recounted rather than decremented.** The
+    // two "as of today" tiles left for the Cells page, so the six tile links are the four
+    // month cards; the queue's two "Whose" radios (decision 0258) were never added above,
+    // so the page owned twenty-three against this floor until the tiles went. Measured on
+    // 2026-09-25: five radios, four Record buttons, See the whole month, four month
+    // cards, one attention link, two people needing a leader and their list link, two
+    // people without a Cell and theirs.
     minimum: 21,
   },
   {

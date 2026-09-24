@@ -651,19 +651,35 @@ test.describe('the Record queue', () => {
     await expect.poll(() => asked).toBe(2);
   });
 
-  test('the Cells you lead tile opens the Cells list filtered to your own', async ({ page }) => {
+  // Decision 0289: the two "as of today" Cell totals left Record for the Cells page, so
+  // Record carries neither tile, nor the section that held them, nor the read behind
+  // "Cells you lead". Waited on the last section to load, so an absence below is not a
+  // page still loading.
+  test('carries no Cell totals, and never asks for the Cells the reader leads', async ({
+    page,
+  }) => {
     await mockRecordScreen(page, {});
-    await page.goto('/dashboard');
+    const ledByMe: string[] = [];
+    page.on('request', (request) => {
+      const url = new URL(request.url());
+      if (url.pathname === '/api/v1/cells' && url.searchParams.has('led_by')) {
+        ledByMe.push(request.url());
+      }
+    });
 
-    await expect(page.getByRole('link', { name: /Cells you lead/i })).toHaveAttribute(
-      'href',
-      '/cells?mine=1',
-    );
+    await page.goto('/dashboard');
+    await expect(page.getByRole('link', { name: 'Bituin Carreon' })).toBeVisible();
+    await expect(page.locator('main').getByText('Loading…')).toHaveCount(0);
+
+    await expect(page.getByRole('heading', { name: 'As things stand today' })).toHaveCount(0);
+    await expect(page.getByRole('link', { name: /Cells you lead/i })).toHaveCount(0);
+    await expect(page.getByRole('link', { name: /Cells in your scope/i })).toHaveCount(0);
+    expect(ledByMe).toEqual([]);
   });
 
-  // The Cells index no longer feeds the queue, and still feeds the attention list and
-  // the "Cells you lead" tile — so its failure must still reach the notice rather than
-  // leaving a tile reading an em dash with no reason given.
+  // The Cells index no longer feeds the queue, and still feeds the attention list — so
+  // its failure must still reach the notice rather than leaving that list silent with no
+  // reason given.
   test('reports a failed Cells read although the queue no longer depends on it', async ({
     page,
   }) => {

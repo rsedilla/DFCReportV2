@@ -228,14 +228,6 @@ function Dashboard() {
     queryFn: ({ signal }) => listMeetingsAwaiting(month, signal, whose),
   });
 
-  // **The tile's own read, and no longer the queue's.** "Cells you lead" is a
-  // current-state figure and the `ACTIVE`-only index is exactly right for it: a closed
-  // Cell is not one you lead. The queue needs the opposite and now asks its own route.
-  const mine = useQuery({
-    queryKey: ['cells', month, true],
-    queryFn: ({ signal }) => listCells({ month, ledBy: 'me' }, signal),
-  });
-
   const scoped = useQuery({
     queryKey: ['cells', month, false],
     queryFn: ({ signal }) => listCells({ month }, signal),
@@ -401,9 +393,7 @@ function Dashboard() {
   // outstanding work above the figures precisely so a leader can trust it, and a
   // failed load that renders as an empty queue says "nothing to do" on this screen's
   // authority. The queue's own reads matter most and come first: without them it is
-  // empty, which is the opposite of the truth. `mine` is named here although it now
-  // feeds only a tile — a tile reading `—` because its read failed says nothing about
-  // why, and this rule is about every query rather than about the queue's.
+  // empty, which is the opposite of the truth.
   const checklistFailed = checklists.find((query) => query.isError);
 
   const failure = awaiting.isError
@@ -414,9 +404,7 @@ function Dashboard() {
         ? describeFailure(checklistFailed.error)
         : previousFailed
           ? describeFailure(previousFailed.error)
-          : mine.isError
-            ? describeFailure(mine.error)
-            : scoped.isError
+          : scoped.isError
               ? describeFailure(scoped.error)
               : scopedClosed.isError
                 ? describeFailure(scopedClosed.error)
@@ -772,28 +760,7 @@ function Dashboard() {
       </section>
       </div>
 
-      <section className="mt-10" aria-labelledby="current-heading">
-        <h2 id="current-heading" className="text-lg font-bold tracking-tight">
-          As things stand today
-        </h2>
-        <div className="mt-4 grid gap-4 sm:grid-cols-2">
-          <Tile
-            counts="Cells you lead"
-            value={mine.data ? String(mine.data.data.length) : '—'}
-            scope="Your own Cells"
-            period="As of today"
-            // The Cells list reads `mine`; `led_by` was never a parameter it knew.
-            href="/cells?mine=1"
-          />
-          <Tile
-            counts="Cells in your scope"
-            value={scoped.data ? String(scoped.data.data.length) : '—'}
-            scope={scopeLabel}
-            period="As of today"
-            href="/cells"
-          />
-        </div>
-      </section>
+      {/* The two "as of today" Cell totals moved to the Cells page (decision 0289). */}
     </main>
   );
 }
@@ -1050,44 +1017,6 @@ function shortDayLabel(date: string): string {
 
   return new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short' }).format(
     new Date(Date.UTC(year, month - 1, day)),
-  );
-}
-
-/**
- * One tile, carrying the four things section 19 requires of every one.
- *
- * The scope and period are not decoration and are not optional props: a figure
- * without them cannot be discussed or compared, which is that section's own
- * reason. They are required by this component's type so a tile cannot be added
- * without them.
- */
-function Tile({
-  counts,
-  value,
-  unit,
-  scope,
-  period,
-  href,
-}: {
-  counts: string;
-  value: React.ReactNode;
-  unit?: string;
-  scope: string;
-  period: string;
-  href: string;
-}) {
-  return (
-    <Link
-      href={href}
-      className="border-edge hover:bg-raised focus-visible:outline-accent block border p-4 focus-visible:outline-2 focus-visible:outline-offset-2"
-    >
-      <p className="text-muted text-xs font-bold tracking-[0.08em] uppercase">{counts}</p>
-      <p className="mt-1 text-2xl font-bold">{value}</p>
-      {unit ? <p className="text-muted text-sm">{unit}</p> : null}
-      <p className="text-muted mt-3 text-sm">
-        {scope} · {period}
-      </p>
-    </Link>
   );
 }
 

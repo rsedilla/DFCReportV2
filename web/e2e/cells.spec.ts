@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 
 import {
   CREATED_CELL,
@@ -13,6 +13,7 @@ import {
 import {
   CELL_WITH_MEETINGS,
   CELL_WITH_NO_SCHEDULE,
+  closedAsked,
   mockCellMeetings,
   mockCellMembers,
   mockCellMembersEmpty,
@@ -52,10 +53,12 @@ test.describe('the Cells list', () => {
     // The Cell is named rather than coded, with its identifier beneath (decision 0261).
     await expect(table.getByRole('link', { name: 'Couple · Wed' })).toBeVisible();
     await expect(table.getByRole('row', { name: /Couple · Wed/ })).toContainText('4');
+    // A link styled as a button in the header (decision 0289), and still a link.
     await expect(page.getByRole('link', { name: 'People without a Cell' })).toHaveAttribute(
       'href',
       '/cells/people-without-a-cell',
     );
+    await expect(page.getByText('Your Cells, and this month’s meetings recorded.')).toBeVisible();
 
     await page.setViewportSize({ width: 390, height: 844 });
     await expect(table).toBeHidden();
@@ -63,6 +66,208 @@ test.describe('the Cells list', () => {
     // A phone card carries the member count the table does (walkthrough, 2026-09-21).
     const card = page.getByRole('listitem').filter({ hasText: 'CELL-000011' });
     await expect(card).toContainText(/Members\s*4/);
+  });
+});
+
+/**
+ * The Cells index as the totals see it: every page of a count read (`limit=200`) is
+ * answered separately from the list's own ten-a-page read, so a count that stops after
+ * its first page reads short. The scope count spans two pages of 2 and 3; the Cells the
+ * reader leads are one page of 1. Every request is kept, so a case can say what was asked.
+ */
+async function mockCellTotals(page: Page): Promise<URL[]> {
+  const asked: URL[] = [];
+  const cell = (n: number) => ({
+    ...CELL_WITH_MEETINGS,
+    id: `3f1b7c6e-0000-4000-8000-0000000003${String(n).padStart(2, '0')}`,
+    cell_id: `CELL-0003${String(n).padStart(2, '0')}`,
+  });
+  const body = (data: unknown[], next_cursor: string | null) => ({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({ reporting_month: '2026-06-01', open: true, data, next_cursor }),
+  });
+
+  await page.route('**/api/v1/cells?*', (route) => {
+    const url = new URL(route.request().url());
+    asked.push(url);
+    const mine = url.searchParams.get('led_by') === 'me';
+
+    if (closedAsked(url.toString())) {
+      return route.fulfill(body([], null));
+    }
+    if (url.searchParams.get('limit') === '200') {
+      if (mine) {
+        return route.fulfill(body([cell(1)], null));
+      }
+      return url.searchParams.get('cursor') === 'second-page'
+        ? route.fulfill(body([cell(3), cell(4), cell(5)], null))
+        : route.fulfill(body([cell(1), cell(2)], 'second-page'));
+    }
+    return route.fulfill(
+      body(mine ? [CELL_WITH_MEETINGS] : [CELL_WITH_MEETINGS, CELL_WITH_NO_SCHEDULE], null),
+    );
+  });
+
+  return asked;
+}
+
+/** The list's own reads, as opposed to the totals' (which ask for 200 a page). */
+function listReads(asked: URL[]): URL[] {
+  return asked.filter((url) => url.searchParams.get('limit') !== '200');
+}
+
+test.describe('the Cells totals (decision 0289)', () => {
+  // 10:00 on 24 June in Manila, so the current month is June 2026 and May is one back.
+  test.beforeEach(async ({ page }) => {
+    await page.clock.setFixedTime(new Date('2026-06-24T02:00:00Z'));
+  });
+
+  const lead = (page: Page) => page.getByRole('button', { name: /^Cells you lead/ });
+  const scope = (page: Page) => page.getByRole('button', { name: /^Cells in your scope/ });
+
+  test('shows both totals, each counted and dated as of today', async ({ page }) => {
+    await mockSignedIn(page);
+    await mockCellTotals(page);
+    await page.goto('/cells');
+
+    await expect(lead(page)).toContainText(/Cells you lead\s*1\s*Your own Cells · as of today/);
+    await expect(scope(page)).toContainText(
+      /Cells in your scope\s*5\s*The Cells you oversee · as of today/,
+    );
+  });
+
+  test('counts every page, 200 at a time, and asks for the reader’s own by led_by=me', async ({
+    page,
+  }) => {
+    await mockSignedIn(page);
+    const asked = await mockCellTotals(page);
+    await page.goto('/cells');
+    // Both totals have arrived, so every page either one asked for has been asked.
+    await expect(scope(page)).toContainText(/Cells in your scope\s*5\s*The/);
+    await expect(lead(page)).toContainText(/Cells you lead\s*1\s*Your/);
+
+    const counts = asked.filter((url) => url.searchParams.get('limit') === '200');
+    const mine = counts.filter((url) => url.searchParams.get('led_by') === 'me');
+    const scoped = counts.filter((url) => !url.searchParams.has('led_by'));
+
+    // The current month, running Cells only: a count never asks for the closed view.
+    for (const url of counts) {
+      expect(url.searchParams.get('month')).toBe('2026-06-01');
+      expect(url.searchParams.has('state')).toBe(false);
+      expect(url.searchParams.has('q')).toBe(false);
+    }
+    expect(mine.length).toBeGreaterThanOrEqual(1);
+    // Both pages of the scope count were asked for, the second by the first's cursor.
+    expect(scoped.map((url) => url.searchParams.get('cursor'))).toEqual(
+      expect.arrayContaining([null, 'second-page']),
+    );
+  });
+
+  test('pressing Cells you lead shows only the reader’s own, and pressing the other clears it', async ({
+    page,
+  }) => {
+    await mockSignedIn(page);
+    const asked = await mockCellTotals(page);
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.goto('/cells');
+
+    // The unfiltered list of this month's running Cells is what "in your scope" counts.
+    await expect(scope(page)).toHaveAttribute('aria-pressed', 'true');
+    await expect(lead(page)).toHaveAttribute('aria-pressed', 'false');
+
+    await lead(page).click();
+    await expect(page).toHaveURL(/[?&]mine=1(&|$)/);
+    await expect(lead(page)).toHaveAttribute('aria-pressed', 'true');
+    await expect(scope(page)).toHaveAttribute('aria-pressed', 'false');
+    await expect
+      .poll(() => listReads(asked).some((url) => url.searchParams.get('led_by') === 'me'))
+      .toBe(true);
+    const table = page.getByRole('table', { name: 'Cells in your scope' });
+    await expect(table.getByRole('link', { name: 'Youth · Sat' })).toBeVisible();
+    await expect(table.getByRole('link', { name: 'Couple · Wed' })).toHaveCount(0);
+
+    await scope(page).click();
+    await expect(page).not.toHaveURL(/mine=/);
+    await expect(scope(page)).toHaveAttribute('aria-pressed', 'true');
+    await expect(lead(page)).toHaveAttribute('aria-pressed', 'false');
+    await expect(table.getByRole('link', { name: 'Couple · Wed' })).toBeVisible();
+  });
+
+  test('another month is not what the totals count, and pressing one returns to this month', async ({
+    page,
+  }) => {
+    await mockSignedIn(page);
+    await mockCellTotals(page);
+    await page.goto('/cells?mine=1');
+    await expect(lead(page)).toHaveAttribute('aria-pressed', 'true');
+
+    await page.getByRole('button', { name: 'Show May 2026' }).click();
+    await expect(page).toHaveURL(/month=2026-05-01/);
+    await expect(lead(page)).toHaveAttribute('aria-pressed', 'false');
+    await expect(scope(page)).toHaveAttribute('aria-pressed', 'false');
+
+    await lead(page).click();
+    await expect(page).not.toHaveURL(/month=/);
+    await expect(page).toHaveURL(/[?&]mine=1(&|$)/);
+    await expect(lead(page)).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  test('the closed view is not what the totals count, and pressing one returns to running Cells', async ({
+    page,
+  }) => {
+    await mockSignedIn(page);
+    await mockCellTotals(page);
+    await page.goto('/cells');
+
+    await page.getByRole('radio', { name: 'Closed Cells' }).check();
+    await expect(page).toHaveURL(/view=CLOSED/);
+    await expect(lead(page)).toHaveAttribute('aria-pressed', 'false');
+    await expect(scope(page)).toHaveAttribute('aria-pressed', 'false');
+
+    await scope(page).click();
+    await expect(page).not.toHaveURL(/view=/);
+    await expect(page.getByRole('radio', { name: 'Running Cells' })).toBeChecked();
+    await expect(scope(page)).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  test('a search is not what the totals count, and pressing one clears it', async ({ page }) => {
+    await mockSignedIn(page);
+    await mockCellTotals(page);
+    await page.goto('/cells');
+
+    await page.getByLabel('Search by Cell ID or leader').fill('youth');
+    await page.getByRole('button', { name: 'Search' }).click();
+    await expect(page).toHaveURL(/q=youth/);
+    await expect(lead(page)).toHaveAttribute('aria-pressed', 'false');
+    await expect(scope(page)).toHaveAttribute('aria-pressed', 'false');
+
+    await lead(page).click();
+    await expect(page).not.toHaveURL(/q=/);
+    await expect(page.getByLabel('Search by Cell ID or leader')).toHaveValue('');
+    await expect(lead(page)).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  test('the header puts People without a Cell beside New Cell, over the new line', async ({
+    page,
+  }) => {
+    await mockSignedIn(page);
+    await mockCellApprover(page);
+    await mockCellTotals(page);
+    await page.goto('/cells');
+
+    const header = page.locator('main > div').first();
+    await expect(header.getByRole('heading', { name: 'Cells', exact: true })).toBeVisible();
+    await expect(header.getByRole('link')).toHaveText(['People without a Cell', 'New Cell']);
+    await expect(header.getByRole('link', { name: 'People without a Cell' })).toHaveAttribute(
+      'href',
+      '/cells/people-without-a-cell',
+    );
+    await expect(header.getByRole('link', { name: 'New Cell' })).toHaveAttribute(
+      'href',
+      '/cells/new',
+    );
+    await expect(page.getByText('Your Cells, and this month’s meetings recorded.')).toBeVisible();
   });
 });
 
