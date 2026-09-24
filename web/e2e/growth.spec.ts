@@ -173,15 +173,18 @@ test.describe('the SUYNL tab', () => {
     expect(traffic.submitted[0].key).toMatch(UUID);
   });
 
-  test('folds a graduated row to its date, and Correct opens the ten boxes', async ({ page }) => {
+  test('folds a graduated row to its date, and Change lessons opens the ten boxes', async ({
+    page,
+  }) => {
     await openSuynl(page);
 
     const row = page.getByRole('row', { name: /Lualhati Dizon/ });
     await expect(row.getByText('Graduated 14 August 2026')).toBeVisible();
     await expect(row.getByRole('checkbox')).toHaveCount(0);
     await expect(row).toContainText('10 of 10');
+    await expect(row.getByRole('button', { name: /^Close/ })).toHaveCount(0);
 
-    await row.getByRole('button', { name: 'Correct' }).click();
+    await row.getByRole('button', { name: 'Change lessons' }).click();
 
     const boxes = page.getByRole('checkbox', { name: /, Lualhati Dizon$/ });
     await expect(boxes).toHaveCount(10);
@@ -189,6 +192,30 @@ test.describe('the SUYNL tab', () => {
       await expect(boxes.nth(index)).toBeChecked();
     }
     await expect(row.getByText(/^Graduated /)).toHaveCount(0);
+  });
+
+  test('Close folds an opened graduated row while nothing has changed', async ({ page }) => {
+    const traffic = await openSuynl(page);
+
+    const row = page.getByRole('row', { name: /Lualhati Dizon/ });
+    await row.getByRole('button', { name: 'Change lessons' }).click();
+    await row.getByRole('button', { name: 'Close, Lualhati Dizon' }).click();
+
+    await expect(row.getByText('Graduated 14 August 2026')).toBeVisible();
+    await expect(row.getByRole('checkbox')).toHaveCount(0);
+    expect(traffic.submitted).toHaveLength(0);
+  });
+
+  test('offers no Close once a box on the opened row has changed', async ({ page }) => {
+    await openSuynl(page);
+
+    const row = page.getByRole('row', { name: /Lualhati Dizon/ });
+    await row.getByRole('button', { name: 'Change lessons' }).click();
+    await page.getByRole('checkbox', { name: /^Lesson 10, .*Lualhati Dizon$/ }).uncheck();
+
+    await expect(row).toContainText('9 of 10');
+    await expect(row.getByRole('button', { name: /^Close/ })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Discard' })).toBeVisible();
   });
 
   test('offers no box on a row the reader may not file for', async ({ page }) => {
