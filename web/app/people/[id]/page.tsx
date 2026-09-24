@@ -10,6 +10,7 @@ import { MoveLeaderDialog } from '@/components/move-leader-dialog';
 import { PersonAccount } from '@/components/person-account';
 import { PersonCells } from '@/components/person-cells';
 import { PersonDcc } from '@/components/person-dcc';
+import { PersonGrowth } from '@/components/person-growth';
 import { Button, buttonClasses } from '@/components/ui/button';
 import { FailureNotice } from '@/components/ui/failure-notice';
 import { CONTROL_BAR, FRAME } from '@/components/ui/frame';
@@ -169,8 +170,9 @@ function PersonDetail() {
             below it one column in the order it always had.
           */}
           <div className="mt-6 grid gap-4 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
-          <div className="min-w-0">
+          <div className="flex min-w-0 flex-col gap-4">
           <PersonDcc personId={id} />
+          <PersonGrowth personId={id} memberId={person.data.member_id} />
           </div>
           <div className="flex min-w-0 flex-col gap-4">
           <PersonCells personId={id} personName={person.data.full_name} className="" />
