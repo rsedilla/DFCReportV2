@@ -782,7 +782,8 @@ function Dashboard() {
             value={mine.data ? String(mine.data.data.length) : '—'}
             scope="Your own Cells"
             period="As of today"
-            href="/cells?led_by=me"
+            // The Cells list reads `mine`; `led_by` was never a parameter it knew.
+            href="/cells?mine=1"
           />
           <Tile
             counts="Cells in your scope"

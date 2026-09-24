@@ -651,6 +651,16 @@ test.describe('the Record queue', () => {
     await expect.poll(() => asked).toBe(2);
   });
 
+  test('the Cells you lead tile opens the Cells list filtered to your own', async ({ page }) => {
+    await mockRecordScreen(page, {});
+    await page.goto('/dashboard');
+
+    await expect(page.getByRole('link', { name: /Cells you lead/i })).toHaveAttribute(
+      'href',
+      '/cells?mine=1',
+    );
+  });
+
   // The Cells index no longer feeds the queue, and still feeds the attention list and
   // the "Cells you lead" tile — so its failure must still reach the notice rather than
   // leaving a tile reading an em dash with no reason given.
