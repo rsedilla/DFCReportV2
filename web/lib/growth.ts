@@ -166,6 +166,60 @@ export function listTrainingPeople(
   });
 }
 
+// ---------------------------------------------------------------------------
+// Conquest
+// ---------------------------------------------------------------------------
+
+export type ConquestGoal = 'WIN_3' | 'OPEN_A_CELL' | 'COMPLETION_OF_12' | 'RAISE_12_LEADERS';
+
+/** A card per goal, which overlap, and everyone listed (section 27). */
+export interface ConquestCounts {
+  people: number;
+  win_3: number;
+  open_a_cell: number;
+  completion_of_12: number;
+  raise_12_leaders: number;
+}
+
+/** One goal: the Manila day it was first reached, and today's count toward it. */
+export interface ConquestGoalState {
+  reached_on: string | null;
+  /** Absent for Open a cell, which counts nothing. */
+  now?: number;
+}
+
+export interface ConquestPerson {
+  person_id: string;
+  member_id: string;
+  full_name: string;
+  goals: {
+    win_3: ConquestGoalState;
+    open_a_cell: ConquestGoalState;
+    completion_of_12: ConquestGoalState;
+    raise_12_leaders: ConquestGoalState;
+  };
+}
+
+export interface ConquestPage {
+  data: ConquestPerson[];
+  next_cursor: string | null;
+}
+
+export function getConquestCounts(signal?: AbortSignal): Promise<ConquestCounts> {
+  return authenticatedRequest<ConquestCounts>('/api/v1/conquest/counts', { signal });
+}
+
+export function listConquestPeople(
+  query: GrowthListQuery & { goal?: ConquestGoal },
+  signal?: AbortSignal,
+): Promise<ConquestPage> {
+  const params = new URLSearchParams(listQuery(query));
+  if (query.goal) params.set('goal', query.goal);
+  return authenticatedRequest<ConquestPage>(`/api/v1/conquest/people?${params.toString()}`, {
+    signal,
+  });
+}
+
 export function submitTraining(
   changes: TrainingChange[],
   idempotencyKey: string,

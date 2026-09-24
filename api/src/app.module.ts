@@ -27,6 +27,7 @@ import { CellMeetingsScopeService } from './attendance/cell-meetings.scope.servi
 import { CellsModule } from './cells/cells.module';
 import { CellsReadService } from './cells/cells.read.service';
 import { PeopleModule } from './people/people.module';
+import { ConquestModule } from './conquest/conquest.module';
 import { SuynlModule } from './suynl/suynl.module';
 import { TrainingModule } from './training/training.module';
 
@@ -69,6 +70,7 @@ import { TrainingModule } from './training/training.module';
     AttendanceModule,
     ReportingModule,
     SuynlModule,
+    ConquestModule,
     TrainingModule,
     CellRelationshipsBindingModule,
     AdminAccountsBindingModule,

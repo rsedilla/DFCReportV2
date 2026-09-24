@@ -19,5 +19,6 @@ import { SuynlService } from './suynl.service';
   imports: [HierarchyModule, PeopleModule, AuthModule, AuthorizationModule, AuditModule],
   controllers: [SuynlController],
   providers: [SuynlService],
+  exports: [SuynlService],
 })
 export class SuynlModule {}

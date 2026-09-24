@@ -273,6 +273,16 @@
       "screen": "web/app/reports/cells/page.tsx"
     },
     {
+      "route": "GET /api/v1/conquest/counts",
+      "reason": "The Conquest tab’s four count cards (section 27).",
+      "screen": "web/app/growth/conquest/page.tsx"
+    },
+    {
+      "route": "GET /api/v1/conquest/people",
+      "reason": "The Conquest tab’s list (section 27).",
+      "screen": "web/app/growth/conquest/page.tsx"
+    },
+    {
       "route": "GET /api/v1/suynl/counts",
       "reason": "The SUYNL tab’s three count cards (decision 0281).",
       "screen": "web/app/growth/suynl/page.tsx"

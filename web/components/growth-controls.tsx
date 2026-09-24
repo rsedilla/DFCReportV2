@@ -18,9 +18,10 @@ import { cn } from '@/lib/utils';
 const TABS = [
   { href: '/growth/suynl', label: 'SUYNL' },
   { href: '/growth/training', label: 'Training' },
+  { href: '/growth/conquest', label: 'Conquest' },
 ] as const;
 
-/** The two tabs, as links: each is its own address, so Back and a reload keep the tab. */
+/** The tabs, as links: each is its own address, so Back and a reload keep the tab. */
 export function GrowthTabs({ current }: { current: (typeof TABS)[number]['href'] }) {
   return (
     <nav aria-label="Growth" className="border-line mt-6 flex border-b">

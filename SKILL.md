@@ -5242,7 +5242,7 @@ Adding a structure to this list is part of the change that introduces the rule n
 
 Conquest records, for every person under a leader's care, the four G12 goals in ladder order: **Win 3**, **Open a cell**, **Completion of 12**, **Raise 12 leaders** (ruling of 2026-09-16). It is a new module, `conquest`, and it owns one table.
 
-**The tables and the capabilities exist; nothing else does.** Migrations `0017_growth_capabilities.sql` and `0018_growth.sql` added the three `conquest.*` capabilities and created `conquest_confirmations`, and there is no endpoint and no screen; the `Growth` sidebar item it would be a tab of exists (Section 28). Tests are owed by each change that builds a part, and the schema's are in `api/test/database/growth.spec.ts`.
+**The read-only tab exists; confirming does not.** Migrations `0017_growth_capabilities.sql` and `0018_growth.sql` added the three `conquest.*` capabilities and created `conquest_confirmations`. `GET /api/v1/conquest/counts` and `GET /api/v1/conquest/people` serve the `Conquest` tab of `Growth` (Section 28), showing the four derived goals; nothing writes a confirmation yet, so nothing reads one. Tests are owed by each change that builds a part, and the schema's are in `api/test/database/growth.spec.ts`.
 
 ### What each goal means
 

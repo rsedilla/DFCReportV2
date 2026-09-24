@@ -43,7 +43,7 @@ import {
   mockClosedDccRoster,
   mockRecordedMeetingRoster,
 } from './mock-attendance';
-import { mockPersonGrowth, mockSuynl, mockTraining } from './mock-growth';
+import { mockConquest, mockPersonGrowth, mockSuynl, mockTraining } from './mock-growth';
 
 /**
  * axe-core over every route, in both themes, with a violation failing the build.
@@ -1020,6 +1020,21 @@ const SCANS = [
       await expect(page.getByLabel('Why is this being withdrawn or changed? (required)')).toBeVisible();
     },
   },
+  {
+    // Conquest (section 27), read-only: four cards, and each goal as its month with today's
+    // count beneath it, or how far it is, or "Not yet". No box and no save bar.
+    name: 'growth conquest',
+    route: '/growth/conquest',
+    async before(page: import('@playwright/test').Page) {
+      await mockSignedIn(page);
+      await mockConquest(page);
+    },
+    async arrange(page: import('@playwright/test').Page) {
+      await expect(page.getByRole('button', { name: /^Raise 12 leaders/ })).toContainText('1');
+      await expect(page.getByText('Reached Mar 2026').filter({ visible: true }).first()).toBeVisible();
+      await expect(page.getByText('Not yet').filter({ visible: true })).toBeVisible();
+    },
+  },
 ] as const;
 
 for (const theme of THEMES) {
@@ -1343,6 +1358,16 @@ const TARGET_SWEEP = [
     settle: 'Dalisay Soriano',
     minimum: 39,
   },
+  {
+    // The three tabs, four cards, the search, Search and the filter, a name link per person
+    // in the table and in the list below `lg` (six, the hidden rendering counted as on
+    // "cell attendance report"), and the two pager buttons. No box: every goal is derived.
+    name: 'growth conquest',
+    route: '/growth/conquest',
+    settleRole: 'link' as const,
+    settle: 'Dalisay Soriano',
+    minimum: 18,
+  },
 ] as const;
 
 /**
@@ -1591,6 +1616,7 @@ test('every interactive target meets the 24px minimum', async ({ page }) => {
   await mockCoverageByLeader(page);
   await mockSuynl(page);
   await mockTraining(page);
+  await mockConquest(page);
   // The person page's Growth frame, which asks the same two lists by Member ID and falls
   // through to the two above for anything else. It renders only for a reader holding the
   // two view capabilities, and no other screen reads them.

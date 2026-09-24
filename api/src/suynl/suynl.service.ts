@@ -314,6 +314,38 @@ export class SuynlService {
     }
   }
 
+  /**
+   * When each of these people's third current lesson was filed, for Win 3 (SKILL.md
+   * section 27; decision 0284). A lesson corrected away never counted (section 28), so
+   * only current rows are read; somebody with fewer than three is absent.
+   */
+  async thirdLessonInstantsOf(personIds: readonly string[]): Promise<Map<string, Date>> {
+    if (personIds.length === 0) {
+      return new Map();
+    }
+
+    const rows = await this.db
+      .selectFrom('suynl_lessons')
+      .select(['person_id', 'confirmed_at'])
+      .where('person_id', 'in', [...personIds])
+      .where('superseded_at', 'is', null)
+      .orderBy('confirmed_at')
+      .execute();
+
+    const seen = new Map<string, number>();
+    const third = new Map<string, Date>();
+
+    for (const row of rows) {
+      const count = (seen.get(row.person_id) ?? 0) + 1;
+      seen.set(row.person_id, count);
+      if (count === 3) {
+        third.set(row.person_id, row.confirmed_at);
+      }
+    }
+
+    return third;
+  }
+
   /** Each current person with at least one current lesson, and how many they hold. */
   private async currentProgress(
     population: ReadonlySet<string> | null,
