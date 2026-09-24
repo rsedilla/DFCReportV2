@@ -4026,14 +4026,14 @@ No dashboard ranks leaders, scores them, or colour-grades them (Section 13, Meet
 
 ### Sidebar
 
-The sidebar has six items (ruling of 2026-09-14, extended by the first ruling of 2026-09-16 which added `Conquest`, and renamed by the second, which made Conquest one tab of `Growth` alongside SUYNL and Training). The sixth is not built: the application ships five while Growth waits for code both of those rulings defer past the pilot. What a person fills in is under `Record`, and what they read is under `Reports`. Each module keeps its section and its name; the label is what reaches it.
+The sidebar has six items (ruling of 2026-09-14, extended by the first ruling of 2026-09-16 which added `Conquest`, and renamed by the second, which made Conquest one tab of `Growth` alongside SUYNL and Training). What a person fills in is under `Record`, and what they read is under `Reports`. Each module keeps its section and its name; the label is what reaches it.
 
 ```text
 Record     the Dashboard, and recording DCC and Cell attendance (Sections 9, 12, 13)
 Reports    DCC and Cell figures, and Network Summary when it is built (Section 16)
 People     My People and Search (Sections 3 and 8)
 Cells      the Cell Leaders module (Section 15)
-Growth     SUYNL, Training and the four G12 goals (Sections 27 and 28), when it is built
+Growth     SUYNL, Training and the four G12 goals (Sections 27 and 28)
 Network    My Network, the pastoral tree (Section 5)
 ```
 
@@ -4045,7 +4045,7 @@ Network    My Network, the pastoral tree (Section 5)
 
 **A Cell's meeting screens are recording, so they sit under `Record` wherever they are reached from** — a Cell's list of meetings and the screen a meeting is recorded on, whether a leader arrives from Record's outstanding work or from a Cell under `Cells`.
 
-**Every account sees one order, `Record · Reports · People · Cells · Network`** (ruling of 2026-09-22), and `Growth` joins it between `Cells` and `Network` when it is built. **The screen a person lands on follows the reach of `reports.view_subtree` and never a role**, because Section 7 makes a capability and its scope the thing that decides: an account holding it at `WHOLE_CHURCH` lands on `Reports`, which by the role defaults is the two Senior Pastors and Admin, and every other account lands on `Record`.
+**Every account sees one order, `Record · Reports · People · Cells · Network`** (ruling of 2026-09-22), and `Growth` sits between `Cells` and `Network`. **The screen a person lands on follows the reach of `reports.view_subtree` and never a role**, because Section 7 makes a capability and its scope the thing that decides: an account holding it at `WHOLE_CHURCH` lands on `Reports`, which by the role defaults is the two Senior Pastors and Admin, and every other account lands on `Record`.
 
 When the Admin dashboard below is built, it adds an `Admin` item for the accounts holding the capabilities that screen needs, and becomes their landing screen. Which capabilities those are is settled with that screen, and is recorded as open until then.
 
@@ -4491,9 +4491,9 @@ Recommended REST areas:
 /api/v1/dcc
 /api/v1/reports
 /api/v1/search
-/api/v1/conquest                          Section 27, when it is built
-/api/v1/suynl                             Section 28, when it is built
-/api/v1/training                          Section 28, when it is built
+/api/v1/conquest                          Section 27
+/api/v1/suynl                             Section 28
+/api/v1/training                          Section 28
 ```
 
 Examples:
@@ -5259,7 +5259,7 @@ Conquest records, for every person under a leader's care, the four G12 goals in 
 
 All four are computed from `cell_leadership_requests`, `cells`, `cell_leaderships`, `pastoral_assignments` and `suynl_lessons` — every one of them either effective-dated or carrying the instant it was filed — so each goal and the date it was first reached are questions the database answers. A leader never ticks one to say it has been reached now; the one exception below is about history the records cannot hold. Section 9 states the rule for classification — do not let leaders maintain by hand what attendance history derives — and decision 0249 applies it here, a tick beside records that answer the same question being free to contradict them.
 
-**`conquest` owns none of those tables and does not query them.** `cells` computes the Cell half, `hierarchy` the pastoral half, `suynl` the lesson half, and `conquest` composes what the three return with its own confirmations — Section 2's ordinary route, and the one it already names for `reporting`. **Win 3's date is computed by `conquest`** (ruling of 2026-09-24, decision 0284). `hierarchy` returns each direct discipling edge with its dates, `suynl` returns the instant each person's third current lesson was filed, and `conquest` finds the earliest instant at which edges to three different disciples are in force, each at or after its disciple's third lesson. **Raise 12 leaders' date is computed by `conquest` the same way** (ruling of 2026-09-24, decision 0285): `cells` returns the periods in which each person was a current Cell Leader (Section 11), leaving out a Cell closed `CREATED_IN_ERROR` (decision 0286), and `conquest` finds the earliest instant at which edges to twelve different disciples are in force, each disciple inside such a period at that instant. At Whole Church the tab's counts read every edge, third-lesson instant and Cell Leader period in the church, which Section 2's recorded scale keeps small.
+**`conquest` owns none of those tables and does not query them.** `cells` computes the Cell half, `hierarchy` the pastoral half, `suynl` the lesson half, and `conquest` composes what the three return with its own confirmations — Section 2's ordinary route, and the one it already names for `reporting`. **Win 3's date is computed by `conquest`** (ruling of 2026-09-24, decision 0284). `hierarchy` returns each direct discipling edge with its dates, `suynl` returns the instant each person's third current lesson was filed, and `conquest` finds the earliest instant at which edges to three different disciples are in force, each at or after its disciple's third lesson. **Raise 12 leaders' date is computed by `conquest` the same way** (ruling of 2026-09-24, decision 0285): `cells` returns the periods in which each person was a current Cell Leader (Section 11), leaving out a Cell closed `CREATED_IN_ERROR` (decision 0286), and `conquest` finds the earliest instant at which edges to twelve different disciples are in force, each disciple inside such a period at that instant. At Whole Church the tab's counts read every edge, third-lesson instant and Cell Leader period in the church.
 
 **Win 3 was stated by a leader until 2026-09-16, and is now derived** (Section 28). Nothing records who brought whom, and nothing has been added that does: Section 9's VIP workflow captures the leader a person is *placed under*, which is a different fact, and a *brought by* field on Section 3 is still not added. What SUYNL supplies is not that record but the church's own evidence of discipling one to one — three direct disciples each carrying at least three lessons. **It is a proxy and its two edges are stated rather than hidden**: somebody who won three people placed under another leader reads as not reached, and somebody handed three disciples who did their lessons under a previous leader reads as reached. Both follow from counting placement, which this paragraph has just called a different fact.
 
@@ -5315,7 +5315,7 @@ Section 16 counts two conditions closely related to these rungs and identical to
 
 ### Where it appears
 
-Conquest is a tab of the sidebar's `Growth` item, placed as Section 19 places it, and it carries the four counts, the people a leader cares for, and the confirmation above. *(It was given its own sidebar item by the ruling of 2026-09-16 and became a tab by the second ruling of that day; the application carries the `Growth` item and not yet this tab.)* **Where the confirmation above is filed, that tab carrying no save bar now that every goal is derived, is recorded as open in `CLAUDE.md`** (Section 28). **A person who has reached all four carries a plain label rather than an accented tag**: a tag shown only to those who reached everything colours a person by a figure derived from their records (Sections 17 and 19). **The table is ordered by name**, which is this section's choice; a progress ordering offered later would be bound by Sections 13 and 17 as any other is.
+Conquest is a tab of the sidebar's `Growth` item, placed as Section 19 places it, and it carries the four counts and the people a leader cares for. *(It was given its own sidebar item by the ruling of 2026-09-16 and became a tab by the second ruling of that day.)* **Where the confirmation above is filed, that tab carrying no save bar now that every goal is derived, is recorded as open in `CLAUDE.md`** (Section 28). **A person who has reached all four carries a plain label rather than an accented tag**: a tag shown only to those who reached everything colours a person by a figure derived from their records (Sections 17 and 19). **The table is ordered by name**, which is this section's choice; a progress ordering offered later would be bound by Sections 13 and 17 as any other is.
 
 ### Structure
 

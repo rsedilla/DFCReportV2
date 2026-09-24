@@ -203,7 +203,7 @@ export class ConquestService {
 
       result.set(key, {
         WIN_3: dated(win, TARGETS.WIN_3, at),
-        OPEN_A_CELL: { reachedAt: openings.get(key) ?? null, now: null },
+        OPEN_A_CELL: { reachedAt: notAfter(openings.get(key) ?? null, at), now: null },
         COMPLETION_OF_12: dated(completion, TARGETS.COMPLETION_OF_12, at),
         RAISE_12_LEADERS: dated(raise, TARGETS.RAISE_12_LEADERS, at),
       });
@@ -216,11 +216,15 @@ export class ConquestService {
 function dated(periods: ReadonlyMap<string, readonly Period[]>, target: number, at: number): Goal {
   const reached = earliestReached(periods, target);
   return {
-    // A period that starts after now has not happened (section 27 reads the records as
-    // they stand), so neither has a goal reached inside one.
+    // `now` is read before the other statements, so a row committed while they run is
+    // left out rather than dated after the moment the request asks about.
     reachedAt: reached === null || reached > at ? null : new Date(reached),
     now: countedAt(periods, at),
   };
+}
+
+function notAfter(instant: Date | null, at: number): Date | null {
+  return instant === null || instant.getTime() > at ? null : instant;
 }
 
 function shape(goal: Goal): Record<string, unknown> {
