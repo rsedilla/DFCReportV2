@@ -7,6 +7,7 @@ import { useSearchParams } from 'next/navigation';
 import { useState } from 'react';
 
 import { AppShell, PAGE_WIDTH } from '@/components/app-shell';
+import { PeopleTabs } from '@/components/people-tabs';
 import { buttonClasses } from '@/components/ui/button';
 import { Button } from '@/components/ui/button';
 import { FailureNotice } from '@/components/ui/failure-notice';
@@ -130,6 +131,8 @@ function PeopleList() {
         Cell, still searches the whole church, so you can find an existing record rather than
         create a second one.
       </p>
+
+      <PeopleTabs current="/people" />
 
       {/* Stacked on a phone and inline from `sm` up, so the search box keeps its width. */}
       <form

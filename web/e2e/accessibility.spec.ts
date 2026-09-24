@@ -1911,8 +1911,11 @@ test('only the most specific navigation entry is marked as the current page', as
 
   await page.goto('/people');
 
+  // Network is a tab of People (decision 0288): the tab is followed, and People stays
+  // the one current entry of the main navigation while the tab marks Network.
   const navigation = page.getByRole('navigation', { name: 'Main' });
-  await navigation.getByRole('link', { name: 'Network', exact: true }).click();
+  const tabs = page.getByRole('navigation', { name: 'People' });
+  await tabs.getByRole('link', { name: 'Network', exact: true }).click();
 
   await expect(page).toHaveURL(/\/network$/);
 
@@ -1921,7 +1924,28 @@ test('only the most specific navigation entry is marked as the current page', as
   await expect(current, 'more than one navigation entry claims to be the current page').toHaveCount(
     1,
   );
-  await expect(current).toHaveText('Network');
+  await expect(current).toHaveText('People');
+  await expect(tabs.locator('a[aria-current="page"]')).toHaveText('Network');
+});
+
+/** People carries two tabs, People and Network, each marked on its own screen (decision 0288). */
+test('the People item carries a People tab and a Network tab', async ({ page }) => {
+  await mockSignedIn(page);
+  await mockPeople(page);
+  await mockNetworkTree(page);
+
+  await page.goto('/people');
+  const tabs = page.getByRole('navigation', { name: 'People' });
+  await expect(tabs.getByRole('link')).toHaveText(['People', 'Network']);
+  await expect(tabs.locator('a[aria-current="page"]')).toHaveText('People');
+  await expect(tabs.getByRole('link', { name: 'Network', exact: true })).toHaveAttribute(
+    'href',
+    '/network',
+  );
+
+  await tabs.getByRole('link', { name: 'People', exact: true }).focus();
+  await page.keyboard.press('Tab');
+  await expect(tabs.getByRole('link', { name: 'Network', exact: true })).toBeFocused();
 });
 
 /**
@@ -1989,20 +2013,19 @@ test('a reader without a whole-church grant sees Record first', async ({ page })
     'People',
     'Cells',
     'Growth',
-    'Network',
   ]);
 });
 
 /**
- * At 320px the phone's tab bar holds all six items, each label whole and each a full target.
+ * At 320px the phone's tab bar holds all five items, each label whole and each a full target.
  *
  * **The sideways-scroll sweep cannot see this.** The bar is `position: fixed`, and a fixed
  * element's overflow does not reach the document's scroll width, so a label pushed past its
  * tab reads green there. Worse, each label is `truncate`d, so a label that no longer fits is
  * clipped to an ellipsis rather than overflowing anything: the failure is silent by design.
- * Growth made it six items in 320px, which is what this pins, on both engines.
+ * Growth made it six items in 320px, and decision 0288 five; this pins it on both engines.
  */
-test('at 320px the tab bar fits all six items, none of them clipped', { tag: [CROSS_BROWSER_TAG] }, async ({
+test('at 320px the tab bar fits all five items, none of them clipped', { tag: [CROSS_BROWSER_TAG] }, async ({
   page,
 }) => {
   await page.setViewportSize({ width: 320, height: 568 });
@@ -2020,7 +2043,6 @@ test('at 320px the tab bar fits all six items, none of them clipped', { tag: [CR
     'People',
     'Cells',
     'Growth',
-    'Network',
   ]);
 
   const tabs = await navigation.getByRole('link').evaluateAll((links) =>
@@ -2078,7 +2100,6 @@ test('a whole-church reader sees the same order, Reports opening on the DCC figu
     'People',
     'Cells',
     'Growth',
-    'Network',
   ]);
   await expect(navigation.getByRole('link', { name: 'Reports', exact: true })).toHaveAttribute(
     'href',

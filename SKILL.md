@@ -4026,26 +4026,25 @@ No dashboard ranks leaders, scores them, or colour-grades them (Section 13, Meet
 
 ### Sidebar
 
-The sidebar has six items (ruling of 2026-09-14, extended by the first ruling of 2026-09-16 which added `Conquest`, and renamed by the second, which made Conquest one tab of `Growth` alongside SUYNL and Training). What a person fills in is under `Record`, and what they read is under `Reports`. Each module keeps its section and its name; the label is what reaches it.
+The sidebar has five items (ruling of 2026-09-14, extended by the first ruling of 2026-09-16 which added `Conquest`, and renamed by the second, which made Conquest one tab of `Growth` alongside SUYNL and Training; `Network` became a tab of `People` by the ruling of 2026-09-24). What a person fills in is under `Record`, and what they read is under `Reports`. Each module keeps its section and its name; the label is what reaches it.
 
 ```text
 Record     the Dashboard, and recording DCC and Cell attendance (Sections 9, 12, 13)
 Reports    DCC and Cell figures, and Network Summary when it is built (Section 16)
-People     My People and Search (Sections 3 and 8)
+People     My People and Search (Sections 3 and 8), and My Network, the pastoral tree (Section 5)
 Cells      the Cell Leaders module (Section 15)
 Growth     SUYNL, Training and the four G12 goals (Sections 27 and 28)
-Network    My Network, the pastoral tree (Section 5)
 ```
 
 **`Growth` is its own item rather than a screen under `Record`**, even though a leader files lessons, graduations and confirmations there. `Record` is the recording of attendance against a dated event — a Sunday, a meeting — with a submission window closing behind it (Sections 9 and 13). A lesson is done, a school is graduated and a goal is reached on days nobody scheduled, and none of them shuts. Putting Growth under `Record` would put screens with no window inside the one place a window always applies.
 
-**`Growth` carries three tabs — `SUYNL`, `Training`, `Conquest` — rather than three items**, which keeps the sidebar at six, a seventh being more than that bar was drawn for at the narrowest width Section 23's layout check runs at. The three are also what one leader asks one person about in one sitting.
+**`Growth` carries three tabs — `SUYNL`, `Training`, `Conquest` — rather than three items**, which keeps the sidebar short, a seventh item being more than that bar was drawn for at the narrowest width Section 23's layout check runs at. The three are also what one leader asks one person about in one sitting.
 
 `Account and session` sits in the sidebar's footer, under the signed-in person's name, and is not one of the items.
 
 **A Cell's meeting screens are recording, so they sit under `Record` wherever they are reached from** — a Cell's list of meetings and the screen a meeting is recorded on, whether a leader arrives from Record's outstanding work or from a Cell under `Cells`.
 
-**Every account sees one order, `Record · Reports · People · Cells · Network`** (ruling of 2026-09-22), and `Growth` sits between `Cells` and `Network`. **The screen a person lands on follows the reach of `reports.view_subtree` and never a role**, because Section 7 makes a capability and its scope the thing that decides: an account holding it at `WHOLE_CHURCH` lands on `Reports`, which by the role defaults is the two Senior Pastors and Admin, and every other account lands on `Record`.
+**Every account sees one order, `Record · Reports · People · Cells · Growth`** (rulings of 2026-09-22 and 2026-09-24). **`People` carries two tabs, `People` and `Network`, each its own address and each screen as it was** (decision 0288): finding a person and seeing one's branch are one question from two sides. **The screen a person lands on follows the reach of `reports.view_subtree` and never a role**, because Section 7 makes a capability and its scope the thing that decides: an account holding it at `WHOLE_CHURCH` lands on `Reports`, which by the role defaults is the two Senior Pastors and Admin, and every other account lands on `Record`.
 
 When the Admin dashboard below is built, it adds an `Admin` item for the accounts holding the capabilities that screen needs, and becomes their landing screen. Which capabilities those are is settled with that screen, and is recorded as open until then.
 
@@ -5453,7 +5452,7 @@ The screen says the counts are as of now, never "this year". A Reports block wou
 
 ### Where it appears
 
-`Growth` takes the sidebar position the first ruling of 2026-09-16 gave `Conquest`, between `Cells` and `Network` (Section 19). The sidebar stays at six items, a seventh being more than the phone's bottom bar was drawn for at the narrowest width Section 23's layout check runs at — the width that section calls the one where overflow is hardest.
+`Growth` takes the sidebar position the first ruling of 2026-09-16 gave `Conquest`, after `Cells` (Section 19). The sidebar stays short, a seventh item being more than the phone's bottom bar was drawn for at the narrowest width Section 23's layout check runs at — the width that section calls the one where overflow is hardest.
 
 `SUYNL` and `Training` each carry their own draft and save bar — a batch of ticks, discarded or saved together — because the two are different records with different correction rules. **The `Conquest` tab has neither**, every one of its four goals being derived since Win 3 became so. Section 27 keeps one confirmation that a leader still files, for history the records cannot hold; **where it is filed, now that the tab carries no save bar, is recorded as open in `CLAUDE.md`**.
 
