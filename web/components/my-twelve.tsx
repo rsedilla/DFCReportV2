@@ -2,8 +2,7 @@ import Link from 'next/link';
 
 import { FRAME } from '@/components/ui/frame';
 import { HeaderCell, Table, rowClasses } from '@/components/ui/table';
-import { networkLabel } from '@/lib/people';
-import type { CellTwelve, Classification } from '@/lib/reports';
+import type { CellTwelve, Classification, TwelveFigure } from '@/lib/reports';
 import { rangeLabel, shiftRange, type RangeKind } from '@/lib/report-range';
 import { cn } from '@/lib/utils';
 
@@ -122,14 +121,16 @@ export function RangeNavigator({
 }
 
 /**
- * My 12 (SKILL.md sections 12, 13, 17 and 20; decision 0293).
+ * My 12 (SKILL.md sections 9, 12, 13, 17 and 20; decisions 0293 and 0294).
  *
- * **The subject's direct disciples, then their own Cell groups, then the total**, each a
- * count of different people who came to a Cell in the period, once each, split by the stage
- * each had reached by its last day. Rows are in the API's order (surname, or Network for a whole-church reader), never
- * numbered, never sorted by a figure, never coloured (section 13). Each name opens that
+ * **The subject's direct disciples, then their own row, then the total**, each a count of
+ * different people who came in the period, once each, split by the stage each had reached by
+ * its last day. The own row is the subject's own Cell groups for Cell Groups, and the subject
+ * alone for DCC, whose attendance nobody records for themselves. Rows are in the API's order
+ * (surname, or Network for a whole-church reader), never numbered, never sorted by a figure,
+ * never coloured (section 13). Each name opens that
  * leader's report, which shows their 12. A whole-church reader's rows are the Network roots,
- * labelled by their Network, since that reader disciples neither.
+ * named by the pastor with their Network beside, since that reader disciples neither.
  *
  * **Each row is that leader's own figure**, so somebody at Cells in two branches is in both
  * rows; a line takes off each count beyond a person's first, and another adds those in no
@@ -140,22 +141,35 @@ export function TwelveTable({
   kind,
   subjectName,
   openHref,
+  where = 'a Cell',
+  title: heading,
 }: {
-  twelve: CellTwelve;
+  /** The table's own title, where it is neither the reader's nor an opened leader's 12. */
+  title?: string;
+  /** `own.cells` is present for Cell Groups; DCC's own row is the subject alone. */
+  twelve: Omit<CellTwelve, 'own' | 'coverage'> & {
+    own: (TwelveFigure & { cells?: number }) | null;
+  };
   kind: RangeKind;
+  /** What people came to: "a Cell" or "DCC". */
+  where?: string;
   /** Null for the reader's own view; the leader's name when one was opened. */
   subjectName: string | null;
   openHref: (leaderId: string) => string;
 }) {
   const cell = 'px-3 py-3 text-right tabular-nums';
   const own = twelve.own;
-  const byNetwork = twelve.rows.length > 0 && twelve.rows.every((row) => row.network);
+  // A whole-church reader's rows are the two roots, each named by the pastor with their
+  // Network beside (decision 0294): a Network's own figure is its membership, not a root's 12.
+  const byRoot = twelve.rows.length > 0 && twelve.rows.every((row) => row.network);
   const title =
-    subjectName !== null ? `${subjectName}’s 12` : byNetwork ? 'The Networks' : 'My 12';
+    heading ?? (subjectName !== null ? `${subjectName}’s 12` : byRoot ? 'The whole church' : 'My 12');
   const ownLabel =
     own === null
       ? null
-      : `${subjectName === null ? 'You' : subjectName} · ${
+      : own.cells === undefined
+        ? (subjectName ?? 'You')
+        : `${subjectName === null ? 'You' : subjectName} · ${
           own.cells === 0
             ? `no Cell of ${subjectName === null ? 'your' : 'their'} own`
             : own.cells === 1
@@ -169,15 +183,15 @@ export function TwelveTable({
         {title} · where people are in their journey
       </h2>
       <p className="text-muted mt-1 text-sm leading-relaxed">
-        Different people who came to a Cell {WHAT[kind]}, once each, at the stage they had
-        reached by {BY[kind]}{twelve.open ? ', or so far while it is open' : ''}. Open a name
-        to see their 12.
+        Different people who came to {where} {WHAT[kind]}, once each, at the stage they had
+        reached by {BY[kind]}{twelve.open ? ', or so far while it is open' : ''}.
+        {twelve.rows.length > 0 ? ' Open a name to see their 12.' : ''}
       </p>
 
       <Table caption={title} className="mt-3">
         <thead>
           <tr>
-            <HeaderCell>{byNetwork ? 'Network' : 'Leader'}</HeaderCell>
+            <HeaderCell>Leader</HeaderCell>
             {STAGES.map(([key, label]) => (
               <HeaderCell key={key} className="text-right">
                 {label}
@@ -197,7 +211,9 @@ export function TwelveTable({
                     href={openHref(row.leader.id)}
                     className="text-accent focus-visible:outline-accent inline-flex min-h-6 items-center underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2"
                   >
-                    {row.network ? networkLabel(row.network) : row.leader.full_name}
+                    {row.network
+                      ? `${row.leader.full_name} · ${row.network === 'MENS' ? "Men's" : "Women's"}`
+                      : row.leader.full_name}
                   </Link>
                 )}
               </td>

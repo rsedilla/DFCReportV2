@@ -94,7 +94,7 @@ const periodLabel = (page: Page, label: string) =>
 const twelveTable = (page: Page) =>
   page
     .getByRole('table')
-    .filter({ has: page.getByRole('columnheader', { name: /^(Leader|Network)$/ }) });
+    .filter({ has: page.getByRole('columnheader', { name: 'Leader', exact: true }) });
 
 /** A body row's cell texts, trimmed. */
 async function cellsOf(row: Locator): Promise<string[]> {
@@ -394,7 +394,7 @@ test.describe('My 12', () => {
     });
   }
 
-  test('a whole-church reader’s rows are the Networks, by name of Network, with no row of their own', async ({
+  test('a whole-church reader’s rows are the two pastors, each with their Network, and no own row', async ({
     page,
   }) => {
     const asked = await arrange(page);
@@ -404,18 +404,18 @@ test.describe('My 12', () => {
     await expectAsked(asked, { scope: 'WHOLE_CHURCH', leader_id: null });
     const rows = twelveTable(page).locator('tbody tr');
     await expect(rows).toHaveCount(4);
-    // The reader disciples neither root, so the rows say which Network, not whose name.
-    await expect(page.getByRole('heading', { name: /^The Networks · / })).toBeVisible();
-    await expect(twelveTable(page).getByRole('columnheader').first()).toHaveText('Network');
-    await expect(rows.nth(0).getByRole('link', { name: "Men's Network" })).toHaveAttribute(
-      'href',
-      new RegExp(`[?&]leader=${TWELVE.bonifacio.id}`),
-    );
-    await expect(rows.nth(1).getByRole('link', { name: "Women's Network" })).toHaveAttribute(
-      'href',
-      new RegExp(`[?&]leader=${TWELVE.aurora.id}`),
-    );
-    await expect(twelveTable(page).getByText('Aurora Dizon')).toHaveCount(0);
+    // Each row is that pastor's 12, so it names the pastor with the Network beside (decision
+    // 0294); nothing on the table is titled or headed by Network.
+    await expect(page.getByRole('heading', { name: /^The whole church · / })).toBeVisible();
+    await expect(page.getByRole('heading', { name: /^The Networks · / })).toHaveCount(0);
+    await expect(twelveTable(page).getByRole('columnheader').first()).toHaveText('Leader');
+    await expect(
+      rows.nth(0).getByRole('link', { name: "Bonifacio Esguerra · Men's", exact: true }),
+    ).toHaveAttribute('href', new RegExp(`[?&]leader=${TWELVE.bonifacio.id}`));
+    await expect(
+      rows.nth(1).getByRole('link', { name: "Aurora Dizon · Women's", exact: true }),
+    ).toHaveAttribute('href', new RegExp(`[?&]leader=${TWELVE.aurora.id}`));
+    await expect(twelveTable(page).getByText("Men's Network")).toHaveCount(0);
     // With no own row there is no branch to be elsewhere in: the line says "In no row".
     expect(await cellsOf(rows.nth(2))).toEqual(['In no row', '+1']);
     expect(await cellsOf(rows.nth(3))).toEqual(['Total', '5', '3', '1', '1', '7', '17']);
@@ -446,18 +446,23 @@ test.describe('Figures for', () => {
     await expect(page).not.toHaveURL(/leader=/);
   });
 
-  test('offers a whole-church reader everyone in scope and the Networks', async ({ page }) => {
+  test('offers a whole-church reader everyone in scope and the two pastors by name', async ({
+    page,
+  }) => {
     await arrange(page);
     await mockWholeChurchReader(page);
     await page.goto('/reports/cells');
 
     const select = page.getByLabel('Figures for');
-    await expect(select.locator('optgroup')).toHaveAttribute('label', 'The Networks');
+    await expect(select.locator('optgroup')).toHaveAttribute('label', 'The pastors’ 12');
+    // Cell Groups has no Network figure of its own, so no Network option (unlike DCC).
     await expect(select.locator('option')).toHaveText([
       'Everyone in your scope',
-      "Men's Network",
-      "Women's Network",
+      'Bonifacio Esguerra',
+      'Aurora Dizon',
     ]);
+    await select.selectOption({ label: 'Aurora Dizon' });
+    await expect(page).toHaveURL(new RegExp(`[?&]leader=${TWELVE.aurora.id}`));
   });
 });
 
@@ -533,7 +538,9 @@ test.describe('the sentence under My 12', () => {
     await page.getByRole('button', { name: 'How these are counted' }).click();
     const dialog = page.getByRole('dialog', { name: 'How these are counted' });
     await expect(dialog.getByText('My 12', { exact: true })).toBeVisible();
-    await expect(dialog.getByText(/\(for a whole-church reader, the two Networks\)/)).toBeVisible();
+    await expect(
+      dialog.getByText(/\(for a whole-church reader, the two pastors at the root of each Network\)/),
+    ).toBeVisible();
     await expect(dialog.getByText('People who attended', { exact: true })).toHaveCount(0);
   });
 });

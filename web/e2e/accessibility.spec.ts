@@ -40,6 +40,7 @@ import {
   mockCellTwelve,
   mockDccReport,
   mockDccRoster,
+  mockDccTwelve,
   mockMeetingRoster,
   mockClosedDccRoster,
   mockRecordedMeetingRoster,
@@ -884,7 +885,8 @@ const SCANS = [
     },
   },
   {
-    // A whole-church reader: the Network roots as rows, and no row of their own.
+    // A whole-church reader: the Network roots as rows, each named by the pastor with their
+    // Network beside (decision 0294), and no row of their own.
     name: 'cell attendance report, whole church',
     route: '/reports/cells',
     async before(page: import('@playwright/test').Page) {
@@ -893,7 +895,7 @@ const SCANS = [
       await mockCellTwelve(page);
     },
     async arrange(page: import('@playwright/test').Page) {
-      await expect(page.getByRole('link', { name: "Women's Network" })).toBeVisible();
+      await expect(page.getByRole('link', { name: "Aurora Dizon · Women's" })).toBeVisible();
       await expect(page.getByText('Loading…')).toHaveCount(0);
     },
   },
@@ -1044,15 +1046,17 @@ const SCANS = [
     },
   },
   {
-    // A year of the DCC report (decision 0257): one row per month that has begun, and a year
-    // row adding up Owed and Filed only.
+    // A year of the DCC report: My 12 over the year (decision 0294), then one row per month
+    // that has begun, and a year row adding up Owed and Filed only (decision 0257).
     name: 'dcc figures report, year',
     route: '/reports/dcc?period=year&month=2026-06-01',
     async before(page: import('@playwright/test').Page) {
       await mockSignedIn(page);
       await mockDccReport(page);
+      await mockDccTwelve(page);
     },
     async arrange(page: import('@playwright/test').Page) {
+      await expect(page.getByRole('heading', { name: /^My 12 · / })).toBeVisible();
       await expect(page.getByRole('heading', { name: /Month by month/ })).toBeVisible();
       await expect(page.getByText('Year so far')).toBeVisible();
       await expect(page.getByText('Loading…')).toHaveCount(0);
@@ -1093,20 +1097,37 @@ const SCANS = [
     },
   },
   {
-    // The removed Sunday is named, because section 9 requires a removal to be
-    // explained rather than left as a smaller number.
+    // The coverage line, the Sundays counted naming the removed one (section 9 requires a
+    // removal to be explained rather than left as a smaller number), My 12 with the reader
+    // alone as "You", and How often people came, Monthly's alone (decision 0294).
     name: 'dcc figures report',
     route: '/reports/dcc',
     async before(page: import('@playwright/test').Page) {
       await mockSignedIn(page);
-      await mockDccReport(page);
-      await mockDccEvents(page);
+      await mockDccTwelve(page);
     },
     async arrange(page: import('@playwright/test').Page) {
       await expect(page.getByRole('heading', { name: 'Reports', exact: true })).toBeVisible();
-      await expect(page.getByText('12 of 18 records filed')).toBeVisible();
-      await expect(page.getByText(/No service was held on Sunday 14 June/)).toBeVisible();
-      await expect(page.getByRole('link', { name: /row by row, under Filed reports/ })).toBeVisible();
+      await expect(page.getByText('12 of 18 records filed in the month')).toBeVisible();
+      await expect(page.getByText(/no service on Sunday 14 June/)).toBeVisible();
+      await expect(page.getByRole('heading', { name: /^My 12 · / })).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'How often people came' })).toBeVisible();
+      await expect(page.getByRole('link', { name: 'see Filed reports' })).toBeVisible();
+    },
+  },
+  {
+    // One Network chosen by a whole-church reader (decision 0294): the Network's own total by
+    // membership, the Total row alone, and Figures for offering the Networks and the pastors.
+    name: 'dcc figures report, one network',
+    route: '/reports/dcc?network=MENS',
+    async before(page: import('@playwright/test').Page) {
+      await mockSignedIn(page);
+      await mockWholeChurchReader(page);
+      await mockDccTwelve(page);
+    },
+    async arrange(page: import('@playwright/test').Page) {
+      await expect(page.getByRole('heading', { name: /^Men's Network · / })).toBeVisible();
+      await expect(page.getByText('10 of 12 records filed in the month')).toBeVisible();
     },
   },
   {
@@ -1456,13 +1477,13 @@ const TARGET_SWEEP = [
     minimum: 18,
   },
   {
-    // The six report tabs, How these are counted, the Month and Year choices and the two
-    // year controls; the table itself holds no control.
+    // "dcc figures report" less the Filed reports link, which is offered on Monthly alone:
+    // **seventeen** (decision 0294). The month-by-month table holds no control.
     name: 'dcc figures report, year',
     route: '/reports/dcc?period=year&month=2026-06-01',
     settleRole: 'heading' as const,
     settle: 'Month by month',
-    minimum: 11,
+    minimum: 17,
   },
   {
     // "cell attendance report" less the Filed reports link, which is offered on Monthly alone:
@@ -1484,15 +1505,14 @@ const TARGET_SWEEP = [
     minimum: 17,
   },
   {
-    // The six report tabs, How these are counted, two month controls and the link to Filed
-    // reports: **ten**. Coverage by Sunday moved to "filed reports, dcc". No scope select for
-    // this fixture's viewer: the DCC report offers its Network select only to a
-    // whole-church reader, and this fixture's reporting grant is one Network.
+    // The six report tabs, How these are counted, the four period buttons, the navigator's
+    // two, the Figures for select, the link to Filed reports and the three names of My 12
+    // (decision 0294): **eighteen**, as Cell Groups.
     name: 'dcc figures report',
     route: '/reports/dcc',
-    settleRole: 'heading' as const,
-    settle: 'Recording coverage',
-    minimum: 10,
+    settleRole: 'link' as const,
+    settle: 'see Filed reports',
+    minimum: 18,
   },
   {
     // The six report tabs, the two Which records buttons, two month controls, the By Cell and
@@ -1783,6 +1803,13 @@ const TARGET_EXEMPT: { name: string; why: string }[] = [
       'Measuring it would re-measure controls already covered.',
   },
   {
+    name: 'dcc figures report, one network',
+    why:
+      'The controls of the measured "dcc figures report" less its My 12 name links, since a ' +
+      "Network's table is its Total row alone; Figures for gains two Network options inside " +
+      'the one select. It needs the whole-church /auth/me mock the sweep does not install.',
+  },
+  {
     name: 'cell attendance report, whole church',
     why:
       'The controls of the measured "cell attendance report" with two row links rather than ' +
@@ -1879,6 +1906,7 @@ test('every interactive target meets the 24px minimum', async ({ page }) => {
   await mockCellReport(page);
   // Before the Network screen's mock, whose own children route must win for its leaders.
   await mockCellTwelve(page);
+  await mockDccTwelve(page);
   await mockDccReport(page);
   await mockCellMembers(page);
   await mockCoverageGaps(page);

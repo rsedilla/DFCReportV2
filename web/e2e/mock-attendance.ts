@@ -1167,8 +1167,16 @@ export async function mockCellTwelve(
     );
   });
 
-  // The opened leader's name, which the heading and Figures for read from their branch. Only
-  // the leaders above are answered, so a Network screen mock installed beside this keeps its own.
+  await mockTwelveLeaders(page);
+
+  return asked;
+}
+
+/**
+ * The opened leader's name, which the heading and Figures for read from their branch. Only the
+ * leaders in `TWELVE` are answered, so a Network screen mock installed beside this keeps its own.
+ */
+async function mockTwelveLeaders(page: Page): Promise<void> {
   await page.route('**/api/v1/leaders/*/children*', (route) => {
     const id = new URL(route.request().url()).pathname.split('/').at(-2);
     const person = Object.values(TWELVE).find((leader) => leader.id === id);
@@ -1183,6 +1191,157 @@ export async function mockCellTwelve(
           }),
         );
   });
+}
+
+/**
+ * `GET /reports/dcc/twelve` (decision 0294), shaped as the API answers it, and every figure
+ * reconciling as the API's must (section 20): rows, plus the own row, less `overlap`, plus
+ * `elsewhere`, is the total; each row's five stages sum to its People; and, for a month, the
+ * buckets sum to the same total (section 9).
+ *
+ * - The reader's own 12: three rows, the reader alone as the own row (1 person), nobody in two
+ *   rows and two elsewhere, so the "Elsewhere in this branch" line renders.
+ * - Consuelo's 12, opened from a row: one row, and Consuelo herself did not come, so her own
+ *   row reads 0 with its numbers shown -- a DCC own row has no Cell to be missing.
+ * - Whole Church: the two Network roots, and no own row.
+ * - A Network: no rows, and its membership as the total (10 Men's, 8 Women's), which is more
+ *   than its root's row, so a screen showing the root's figure for it would be caught.
+ *
+ * `n` and `removed_events` are the period's Sundays: the week of 8 June 2026 held only the
+ * removed 14th, so it counts none; any other week one; June three, with the 14th removed;
+ * a quarter twelve and a year twenty-four, each naming the 14th. `buckets` is a month's only.
+ *
+ * `open` and `expectPeriod` are as {@link mockCellTwelve}'s. Returns every query asked.
+ */
+export async function mockDccTwelve(
+  page: Page,
+  {
+    today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila' }).format(new Date()),
+    expectPeriod,
+  }: { today?: string; expectPeriod?: string } = {},
+): Promise<URLSearchParams[]> {
+  const asked: URLSearchParams[] = [];
+
+  await page.route('**/api/v1/reports/dcc/twelve*', (route) => {
+    const params = new URL(route.request().url()).searchParams;
+    asked.push(params);
+
+    const kind = params.get('kind') ?? 'MONTH';
+    const start = params.get('start') ?? '';
+    const end = twelveEnd(kind, start);
+    const [year, month] = end.split('-').map(Number);
+    const closes = new Date(Date.UTC(year, month, 7)).toISOString().slice(0, 10);
+    const sundays =
+      kind === 'WEEK'
+        ? start === '2026-06-08'
+          ? { n: 0, removed_events: ['2026-06-14'] }
+          : { n: 1, removed_events: [] }
+        : { n: { MONTH: 3, QUARTER: 12, YEAR: 24 }[kind as 'MONTH'], removed_events: ['2026-06-14'] };
+    const period = {
+      kind,
+      start,
+      end,
+      open: today <= closes,
+      coverage: { met: 12, owed: 18 },
+      ...sundays,
+    };
+    const buckets = (people: number[]) =>
+      kind === 'MONTH'
+        ? people.map((count, index) => ({
+            times: index + 1,
+            people: count,
+            completed: index + 1 === people.length,
+          }))
+        : null;
+
+    if (expectPeriod !== undefined && params.get('period') !== expectPeriod) {
+      return route.fulfill(
+        json(
+          {
+            error: {
+              code: 'VALIDATION_FAILED',
+              message: `This period is read as of ${expectPeriod}.`,
+              details: { field: 'period', value: params.get('period'), expected: expectPeriod },
+            },
+          },
+          422,
+        ),
+      );
+    }
+
+    if (params.get('scope') === 'NETWORK') {
+      // A Network's own figure, by membership (decision 0219): no rows, so everybody is
+      // elsewhere. It is more than its root's row below, which counts the root's 12 alone.
+      const total =
+        params.get('network') === 'WOMENS' ? stages(3, 1, 0, 1, 3) : stages(2, 2, 1, 1, 4);
+
+      return route.fulfill(
+        json({
+          ...period,
+          coverage: { met: 10, owed: 12 },
+          rows: [],
+          own: null,
+          overlap: 0,
+          elsewhere: total.unique_people,
+          total,
+          buckets: buckets(params.get('network') === 'WOMENS' ? [5, 2, 1] : [6, 3, 1]),
+        }),
+      );
+    }
+
+    if (params.get('scope') === 'WHOLE_CHURCH') {
+      return route.fulfill(
+        json({
+          ...period,
+          // The Network roots, ordered by their Network (decision 0294).
+          rows: [
+            { leader: TWELVE.bonifacio, network: 'MENS', ...stages(2, 2, 1, 0, 4) },
+            { leader: TWELVE.aurora, network: 'WOMENS', ...stages(3, 1, 0, 1, 2) },
+          ],
+          own: null,
+          overlap: 0,
+          // Somebody in the total and under neither root: the "In no row" line (9 + 7 + 1).
+          elsewhere: 1,
+          total: stages(5, 3, 1, 1, 7),
+          buckets: buckets([9, 5, 3]),
+        }),
+      );
+    }
+
+    if (params.get('leader_id') === TWELVE.consuelo.id) {
+      return route.fulfill(
+        json({
+          ...period,
+          coverage: { met: 2, owed: 3 },
+          rows: [{ leader: TWELVE.lourdes, network: null, ...stages(1, 1, 0, 1, 1) }],
+          own: stages(0, 0, 0, 0, 0),
+          overlap: 0,
+          elsewhere: 0,
+          total: stages(1, 1, 0, 1, 1),
+          buckets: buckets([2, 1, 1]),
+        }),
+      );
+    }
+
+    // The reader's own, and any other leader opened: 3 + 4 + 0 + 1 - 0 + 2 = 10.
+    return route.fulfill(
+      json({
+        ...period,
+        rows: [
+          { leader: TWELVE.teresita, network: null, ...stages(1, 0, 1, 0, 1) },
+          { leader: TWELVE.consuelo, network: null, ...stages(1, 1, 0, 1, 1) },
+          { leader: TWELVE.efren, network: null, ...stages(0, 0, 0, 0, 0) },
+        ],
+        own: stages(0, 1, 0, 0, 0),
+        overlap: 0,
+        elsewhere: 2,
+        total: stages(3, 2, 1, 1, 3),
+        buckets: buckets([4, 4, 2]),
+      }),
+    );
+  });
+
+  await mockTwelveLeaders(page);
 
   return asked;
 }

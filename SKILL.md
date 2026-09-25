@@ -2170,7 +2170,7 @@ Report that figure at every scope, as a single line, on the same terms as Cell c
 
 A row carries the event's date, whether it is recordable, and its coverage as **two figures** — leaders with a record out of leaders who owe one, never divided. **A removed event and one whose Manila day has not begun both carry no coverage** (ruling of 2026-09-09, decision 0229), because nobody owes a record for a service that was not held or has not happened. The row is still listed and says why it takes no record: the calendar runs thirteen months ahead and this section wants the month seen whole. A month whose window has **closed** is the opposite case and keeps its figure, which is the frozen record Sections 13 and 20 require a report covering that month to keep showing. Rows are ordered by date and never by coverage, and none is colour-graded (Sections 13, 17 and 19).
 
-**Over a month, that single line is the number of leader-events with a record over the number of leader-events owed** (ruling of 2026-09-09), summed across the month's events. Both terms are reported and the figure is never divided into a percentage. Section 20 attributes coverage "by the obligation rather than by the record", and this is that sentence made arithmetic: a leader owes one record for each event they were the responsible leader at, and coverage is the fraction of those obligations discharged. It inherits the instant Section 20 already fixes — the denominator is the responsible leaders **as of the event date** — so a leader assigned in the third week owes records from that date and not before it, with nothing further needed to make a mid-month arrival correct.
+**Over a month, that single line is the number of leader-events with a record over the number of leader-events owed** (ruling of 2026-09-09), summed across the month's events. Both terms are reported and the figure is never divided into a percentage. Section 20 attributes coverage "by the obligation rather than by the record", and this is that sentence made arithmetic: a leader owes one record for each event they were the responsible leader at, and coverage is the fraction of those obligations discharged. It inherits the instant Section 20 already fixes — the denominator is the responsible leaders **as of the event date** — so a leader assigned in the third week owes records from that date and not before it, with nothing further needed to make a mid-month arrival correct. **Over a week, a quarter or a year it is the same sum over that period's events** (ruling of 2026-09-26, decision 0294).
 
 *The mean of the per-event ratios was rejected: it weights every Sunday equally however many leaders it involved, so a sparse event moves the month as much as a full one, and the line comes to depend on the shape of the calendar rather than on what was recorded. Counting only leaders who recorded for **every** event was rejected too — it measures per-leader completeness rather than whether records exist, and one missed Sunday removes a leader from the numerator entirely.*
 
@@ -2394,6 +2394,8 @@ Never label buckets from the number of Sundays in the calendar. A month with fiv
 Cell monthly attendance derives its denominator the same way (Section 12), but the two domains diverge deliberately beyond that: DCC aggregates its buckets at any scope because one applicable event set covers the whole church, while a Cell's N belongs to that Cell alone and its buckets are a Cell-scope view only. Section 12 gives the reason.
 
 All bucket counts must sum to the same unique total.
+
+These buckets exist for a month only. A DCC report over a week, a quarter or a year (decision 0294) carries the classification view and not this one, because N is defined over a month.
 
 ---
 
@@ -3625,7 +3627,7 @@ Ranking is prohibited. Never present:
 - value-laden encoding of meeting status, such as red/amber/green, cross marks, or `underperforming`
 - side-by-side comparison of leaders who do not oversee one another, offered as a feature
 
-**A reader's own direct disciples may be shown side by side, and so may those of a leader the reader opened** (ruling of 2026-09-25, decision 0293), because the reader oversees every row: in surname order and never sorted by a figure, with no row numbers, colour, percentages or bars, each name opening that leader's own report. A whole-church reader's rows are the two Network roots, labelled and ordered by their Network rather than by name, because that reader disciples neither. That is the My 12 table (Section 20), and nothing else here is loosened by it.
+**A reader's own direct disciples may be shown side by side, and so may those of a leader the reader opened** (ruling of 2026-09-25, decision 0293), because the reader oversees every row: in surname order and never sorted by a figure, with no row numbers, colour, percentages or bars, each name opening that leader's own report. A whole-church reader's rows are the two Network roots, each named by the pastor with their Network beside and in Network order, because that reader disciples neither. That is the My 12 table (Section 20), and nothing else here is loosened by it.
 
 The reason is practical as well as pastoral. `NOT_HELD` exists to obtain honest reporting of Cells that are not meeting. If declaring it places a leader at the bottom of a visible ranking, leaders will record `HELD` instead, and the signal the status was created to capture is lost. Ranking the measure destroys the measure.
 
@@ -4048,7 +4050,7 @@ Growth     SUYNL, Training and the four G12 goals (Sections 27 and 28)
 
 **`Growth` carries three tabs — `SUYNL`, `Training`, `Conquest` — rather than three items**, which keeps the sidebar short, a seventh item being more than that bar was drawn for at the narrowest width Section 23's layout check runs at. The three are also what one leader asks one person about in one sitting.
 
-**`Reports` carries six tabs — `Cell Groups`, `DCC`, `SUYNL`, `Training`, `Conquest` and `Filed reports`** (ruling of 2026-09-25, decision 0292), each its own address. Cell Groups and DCC keep their recording coverage first (Section 12). Cell Groups carries Weekly, Monthly, Quarterly and Year, each opening on My 12, with coverage as one line above it (decision 0293). Filed reports holds the rows behind that figure — By Cell or By Sunday, and By leader. SUYNL, Training and Conquest show their Growth tab's counts read only, as of now. Nothing under `Reports` files or changes a record.
+**`Reports` carries six tabs — `Cell Groups`, `DCC`, `SUYNL`, `Training`, `Conquest` and `Filed reports`** (ruling of 2026-09-25, decision 0292), each its own address. Cell Groups and DCC keep their recording coverage first (Section 12). Cell Groups carries Weekly, Monthly, Quarterly and Year, each opening on My 12, with coverage as one line above it (decision 0293), and DCC carries the same, with the Sundays counted under its coverage line, "How often people came" on Monthly only, and the Men's and Women's Networks kept in Figures for, each showing its own total (decision 0294). Filed reports holds the rows behind that figure — By Cell or By Sunday, and By leader. SUYNL, Training and Conquest show their Growth tab's counts read only, as of now. Nothing under `Reports` files or changes a record.
 
 `Account and session` sits in the sidebar's footer, under the signed-in person's name, and is not one of the items.
 
@@ -4163,7 +4165,7 @@ classification.* The stage is settled above; what is named rather than settled i
 documented as a reporting month and has no yearly one, so a stored yearly figure has nowhere
 to go and cannot be composed from stored monthly ones either.
 
-**My 12** (ruling of 2026-09-25, decision 0293) breaks a leader's Cell figure into one row per direct disciple at the period's end, each counting that disciple's placement subtree; then the leader's own Cell group, the people at meetings the leader led as responsible leader, across every Cell they led in the period; then the total. A whole-church reader's rows are the Network roots, each labelled by its Network and in Network order. Each row is that leader's own figure, so a person at Cells in two branches is in both rows and once in the total, and the table takes off each count beyond a person’s first and adds those in the total who are in no row, so the rows reconcile to the total in plain sight.
+**My 12** (ruling of 2026-09-25, decision 0293) breaks a leader's Cell figure into one row per direct disciple at the period's end, each counting that disciple's placement subtree; then the leader's own Cell group, the people at meetings the leader led as responsible leader, across every Cell they led in the period; then the total. A whole-church reader's rows are the Network roots, each named by the pastor with their Network beside and in Network order. Each row is that leader's own figure, so a person at Cells in two branches is in both rows and once in the total, and the table takes off each count beyond a person’s first and adds those in the total who are in no row, so the rows reconcile to the total in plain sight. **DCC's My 12** (ruling of 2026-09-26, decision 0294) is the same table attributed by the person: each row counts the placement subtree the DCC report counts for that leader, and the leader's own row is the leader alone. A whole-church reader's rows name the pastor with their Network beside, because a Network's DCC figure is its membership (decision 0219) and can differ from its root's 12; choosing a Network shows that total, with no rows.
 
 ### Which tree a report walks, and what attributes a figure to a scope
 
@@ -4567,6 +4569,7 @@ GET  /api/v1/reports/dcc/monthly/by-leader    the coverage line, one row per lea
 GET  /api/v1/reports/cells/monthly
 GET  /api/v1/reports/cells/monthly/by-leader  the coverage line, one row per leader (decision 0254)
 GET  /api/v1/reports/cells/twelve            My 12 over a week, month, quarter or year (decision 0293)
+GET  /api/v1/reports/dcc/twelve              DCC's My 12 over a week, month, quarter or year (decision 0294)
 GET  /api/v1/reports/cells/yearly
 GET  /api/v1/reports/network-summary
 ```

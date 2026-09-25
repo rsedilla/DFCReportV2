@@ -9,6 +9,7 @@ import { canonicalId } from '../common/identifiers';
 import { decodeRosterCursor, encodeRosterCursor, type RosterCursor } from '../common/roster-cursor';
 import { reportingPeriodBounds } from '../common/time/reporting-period';
 import { CellsReadService } from '../cells/cells.read.service';
+import type { NetworkName } from '../database/schema';
 import { PeopleReadService } from '../people/people.read.service';
 
 import {
@@ -17,10 +18,12 @@ import {
   CellTwelveDto,
   DccByLeaderDto,
   DccMonthlyReportDto,
+  DccTwelveDto,
 } from './dto/reporting.dto';
 import {
   ReportingService,
   type CellMonthlyReport,
+  type Classification,
   type CellReportScope,
   type CoverageByLeader,
   type DccMonthlyReport,
@@ -235,68 +238,14 @@ export class ReportingController {
       query.period,
     );
 
-    // **The actor's reach is checked again at the instant the figures were read** (decision
-    // 0214). The guard reads a month, and a week's month ends up to thirty days after the week
-    // does, so a leader who joined the actor's subtree later in the month would otherwise be
-    // readable for that week. Both checks must pass; the rows are named at the same instant.
-    const at = twelve.at;
-    const [reaches] = await this.authorization.coversEach(actor, Capability.ReportsViewSubtree, [
-      {
-        kind: 'report_scope' as const,
-        selector:
-          scope.kind === 'LEADER'
-            ? { kind: 'LEADER' as const, personId: scope.person_id }
-            : { kind: 'WHOLE_CHURCH' as const },
-        at,
-      },
-    ]);
-    if (!reaches) {
-      throw new ScopeDeniedError('This report is outside your scope for the period asked.', {
-        scope: scope.kind,
-      });
-    }
-    const admitted = await this.authorization.coversEach(
+    const rows = await this.nameTwelveRows(
       actor,
-      Capability.ReportsViewSubtree,
-      twelve.rows.map((row) => ({
-        kind: 'report_scope' as const,
-        selector: { kind: 'LEADER' as const, personId: row.leader_id },
-        at,
-      })),
+      scope.kind === 'LEADER'
+        ? { kind: 'LEADER', person_id: scope.person_id }
+        : { kind: 'WHOLE_CHURCH' },
+      twelve.at,
+      twelve.rows,
     );
-    const identities = await this.people.forDecisions(
-      twelve.rows.filter((_, index) => admitted[index]).map((row) => row.leader_id),
-    );
-
-    const rows = twelve.rows
-      .map((row, index) => {
-        const identity = admitted[index] ? identities.get(row.leader_id) : undefined;
-
-        return {
-          key: identity === undefined ? null : keyOf(identity),
-          network: row.network,
-          row: {
-            leader:
-              identity === undefined
-                ? null
-                : { id: row.leader_id, member_id: identity.memberId, full_name: identity.fullName },
-            network: row.network,
-            unique_people: row.unique_people,
-            classification: row.classification,
-          },
-        };
-      })
-      // A whole-church reader's rows are labelled by Network, so they are in that order.
-      .sort((left, right) =>
-        left.key === null
-          ? 1
-          : right.key === null
-            ? -1
-            : left.network !== null && right.network !== null
-              ? left.network.localeCompare(right.network)
-              : compareKeys(left.key, right.key),
-      )
-      .map((entry) => entry.row);
 
     return {
       kind: query.kind,
@@ -310,6 +259,140 @@ export class ReportingController {
       elsewhere: twelve.elsewhere,
       total: twelve.total,
     };
+  }
+
+  /**
+   * `GET /api/v1/reports/dcc/twelve` -- DCC's My 12 over a week, a month, a quarter or a year
+   * (SKILL.md sections 9, 13, 17 and 20; decision 0294).
+   *
+   * **The Cell table's route on the DCC report's guard and selector.** A whole-church reader's
+   * rows are the two roots' 12s; a `NETWORK` selector returns the Network's total, by
+   * membership, and no rows. The reach check, naming and order are the Cell table's, shared.
+   */
+  @Get('dcc/twelve')
+  @RequiresCapability(Capability.ReportsViewSubtree, {
+    kind: 'report_scope',
+    scopeFrom: 'query.scope',
+    leaderFrom: 'query.leader_id',
+    networkFrom: 'query.network',
+    periodFrom: 'query.period',
+  })
+  async dccTwelve(
+    @Query() query: DccTwelveDto,
+    @CurrentActor() actor: Actor,
+  ): Promise<Record<string, unknown>> {
+    const scope = scopeOf(query);
+    await this.assertNamesSomebody(scope);
+
+    const subject = scope;
+    const twelve = await this.reporting.dccTwelve(subject, query.kind, query.start, query.period);
+    const rows = await this.nameTwelveRows(actor, subject, twelve.at, twelve.rows);
+
+    return {
+      kind: query.kind,
+      start: twelve.from,
+      end: twelve.to,
+      open: twelve.open,
+      coverage: twelve.coverage,
+      n: twelve.n,
+      removed_events: twelve.removed_events,
+      rows,
+      own: twelve.own,
+      overlap: twelve.overlap,
+      elsewhere: twelve.elsewhere,
+      total: twelve.total,
+      buckets: twelve.buckets,
+    };
+  }
+
+  /**
+   * Checks the actor's reach at the instant a My 12 table was read, and names and orders its
+   * rows (decisions 0214, 0254, 0293 and 0294).
+   *
+   * **The actor's reach is checked again at the instant the figures were read** (decision
+   * 0214). The guard reads a month, and a week's month ends up to thirty days after the week
+   * does, so a leader who joined the actor's subtree later in the month would otherwise be
+   * readable for that week. Both checks must pass; the rows are named at the same instant.
+   */
+  private async nameTwelveRows(
+    actor: Actor,
+    scope:
+      | { kind: 'LEADER'; person_id: string }
+      | { kind: 'WHOLE_CHURCH' }
+      | { kind: 'NETWORK'; network: NetworkName },
+    at: Date,
+    rows: readonly {
+      leader_id: string;
+      network: NetworkName | null;
+      unique_people: number;
+      classification: Classification;
+    }[],
+  ): Promise<Record<string, unknown>[]> {
+    const [reaches] = await this.authorization.coversEach(actor, Capability.ReportsViewSubtree, [
+      {
+        kind: 'report_scope' as const,
+        selector:
+          scope.kind === 'LEADER'
+            ? { kind: 'LEADER' as const, personId: scope.person_id }
+            : scope.kind === 'NETWORK'
+              ? { kind: 'NETWORK' as const, network: scope.network }
+              : { kind: 'WHOLE_CHURCH' as const },
+        at,
+      },
+    ]);
+    if (!reaches) {
+      throw new ScopeDeniedError('This report is outside your scope for the period asked.', {
+        scope: scope.kind,
+      });
+    }
+    const admitted = await this.authorization.coversEach(
+      actor,
+      Capability.ReportsViewSubtree,
+      rows.map((row) => ({
+        kind: 'report_scope' as const,
+        selector: { kind: 'LEADER' as const, personId: row.leader_id },
+        at,
+      })),
+    );
+    const identities = await this.people.forDecisions(
+      rows.filter((_, index) => admitted[index]).map((row) => row.leader_id),
+    );
+
+    return (
+      rows
+        .map((row, index) => {
+          const identity = admitted[index] ? identities.get(row.leader_id) : undefined;
+
+          return {
+            key: identity === undefined ? null : keyOf(identity),
+            network: row.network,
+            row: {
+              leader:
+                identity === undefined
+                  ? null
+                  : {
+                      id: row.leader_id,
+                      member_id: identity.memberId,
+                      full_name: identity.fullName,
+                    },
+              network: row.network,
+              unique_people: row.unique_people,
+              classification: row.classification,
+            },
+          };
+        })
+        // A whole-church reader's rows are labelled by Network, so they are in that order.
+        .sort((left, right) =>
+          left.key === null
+            ? 1
+            : right.key === null
+              ? -1
+              : left.network !== null && right.network !== null
+                ? left.network.localeCompare(right.network)
+                : compareKeys(left.key, right.key),
+        )
+        .map((entry) => entry.row)
+    );
   }
 
   /**

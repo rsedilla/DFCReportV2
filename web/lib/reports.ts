@@ -235,6 +235,54 @@ export interface CellTwelve {
   total: TwelveFigure;
 }
 
+/**
+ * DCC's My 12 over one period (decision 0294): the Cell table's shape, with `own` the reader
+ * alone, the period's services as `n`, and buckets for a month only.
+ */
+export interface DccTwelve extends Omit<CellTwelve, 'coverage' | 'own'> {
+  coverage: DccCoverage;
+  n: number;
+  removed_events: string[];
+  own: TwelveFigure | null;
+  buckets: AttendanceBucket[] | null;
+}
+
+/** `GET /reports/dcc/twelve`, retried once with the guard month the API names, as below. */
+export async function getDccTwelve(
+  kind: RangeKind,
+  start: string,
+  guardMonth: string,
+  subject:
+    | { kind: 'LEADER'; person_id: string }
+    | { kind: 'WHOLE_CHURCH' }
+    | { kind: 'NETWORK'; network: ReportNetwork },
+  signal?: AbortSignal,
+): Promise<DccTwelve> {
+  const params = new URLSearchParams({ kind, start, period: guardMonth, scope: subject.kind });
+  if (subject.kind === 'LEADER') {
+    params.set('leader_id', subject.person_id);
+  }
+  if (subject.kind === 'NETWORK') {
+    params.set('network', subject.network);
+  }
+
+  try {
+    return await authenticatedRequest<DccTwelve>(`/api/v1/reports/dcc/twelve?${params.toString()}`, {
+      signal,
+    });
+  } catch (error) {
+    const expected = error instanceof ApiRequestError ? error.details.expected : undefined;
+    if (typeof expected !== 'string' || expected === guardMonth) {
+      throw error;
+    }
+    params.set('period', expected);
+
+    return authenticatedRequest<DccTwelve>(`/api/v1/reports/dcc/twelve?${params.toString()}`, {
+      signal,
+    });
+  }
+}
+
 /** `GET /reports/cells/twelve`: a leader's, or Whole Church for a whole-church reader. */
 export async function getCellTwelve(
   kind: RangeKind,

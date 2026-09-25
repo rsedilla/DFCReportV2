@@ -65,6 +65,8 @@ should have been reportable.
 differently from Cell coverage": a Cell has one leader and counts recorded meetings out of
 scheduled meetings. That figure is already monthly and needs no aggregation rule.
 
+Decision 0294 applies the same sum over a week, a quarter and a year.
+
 ---
 
 Decision 0224, indexed in [CLAUDE.md](../../CLAUDE.md).
