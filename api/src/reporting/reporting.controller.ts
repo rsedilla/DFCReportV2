@@ -198,7 +198,8 @@ export class ReportingController {
    * the subject's own disciple, so every row is named in practice; one that is not stays a
    * row, unnamed and not opening, so the People column still reconciles.
    *
-   * **In surname order, never by a figure** (section 13, decision 0293): no row numbers, and
+   * **In surname order, or a whole-church reader's in Network order, never by a figure**
+   * (section 13, decision 0293): no row numbers, and
    * nothing a client can sort by a count.
    */
   @Get('cells/twelve')
@@ -273,18 +274,27 @@ export class ReportingController {
 
         return {
           key: identity === undefined ? null : keyOf(identity),
+          network: row.network,
           row: {
             leader:
               identity === undefined
                 ? null
                 : { id: row.leader_id, member_id: identity.memberId, full_name: identity.fullName },
+            network: row.network,
             unique_people: row.unique_people,
             classification: row.classification,
           },
         };
       })
+      // A whole-church reader's rows are labelled by Network, so they are in that order.
       .sort((left, right) =>
-        left.key === null ? 1 : right.key === null ? -1 : compareKeys(left.key, right.key),
+        left.key === null
+          ? 1
+          : right.key === null
+            ? -1
+            : left.network !== null && right.network !== null
+              ? left.network.localeCompare(right.network)
+              : compareKeys(left.key, right.key),
       )
       .map((entry) => entry.row);
 

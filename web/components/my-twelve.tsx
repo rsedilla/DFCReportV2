@@ -2,6 +2,7 @@ import Link from 'next/link';
 
 import { FRAME } from '@/components/ui/frame';
 import { HeaderCell, Table, rowClasses } from '@/components/ui/table';
+import { networkLabel } from '@/lib/people';
 import type { CellTwelve, Classification } from '@/lib/reports';
 import { rangeLabel, shiftRange, type RangeKind } from '@/lib/report-range';
 import { cn } from '@/lib/utils';
@@ -125,9 +126,10 @@ export function RangeNavigator({
  *
  * **The subject's direct disciples, then their own Cell groups, then the total**, each a
  * count of different people who came to a Cell in the period, once each, split by the stage
- * each had reached by its last day. Rows are in surname order as the API returns them, never
+ * each had reached by its last day. Rows are in the API's order (surname, or Network for a whole-church reader), never
  * numbered, never sorted by a figure, never coloured (section 13). Each name opens that
- * leader's report, which shows their 12.
+ * leader's report, which shows their 12. A whole-church reader's rows are the Network roots,
+ * labelled by their Network, since that reader disciples neither.
  *
  * **Each row is that leader's own figure**, so somebody at Cells in two branches is in both
  * rows; a line takes off each count beyond a person's first, and another adds those in no
@@ -147,6 +149,9 @@ export function TwelveTable({
 }) {
   const cell = 'px-3 py-3 text-right tabular-nums';
   const own = twelve.own;
+  const byNetwork = twelve.rows.length > 0 && twelve.rows.every((row) => row.network);
+  const title =
+    subjectName !== null ? `${subjectName}’s 12` : byNetwork ? 'The Networks' : 'My 12';
   const ownLabel =
     own === null
       ? null
@@ -161,8 +166,7 @@ export function TwelveTable({
   return (
     <section aria-labelledby="twelve-heading" className={FRAME}>
       <h2 id="twelve-heading" className="field-label">
-        {subjectName === null ? 'My 12' : `${subjectName}’s 12`} · where people are in their
-        journey
+        {title} · where people are in their journey
       </h2>
       <p className="text-muted mt-1 text-sm leading-relaxed">
         Different people who came to a Cell {WHAT[kind]}, once each, at the stage they had
@@ -170,10 +174,10 @@ export function TwelveTable({
         to see their 12.
       </p>
 
-      <Table caption={subjectName === null ? 'My 12' : `${subjectName}’s 12`} className="mt-3">
+      <Table caption={title} className="mt-3">
         <thead>
           <tr>
-            <HeaderCell>Leader</HeaderCell>
+            <HeaderCell>{byNetwork ? 'Network' : 'Leader'}</HeaderCell>
             {STAGES.map(([key, label]) => (
               <HeaderCell key={key} className="text-right">
                 {label}
@@ -193,7 +197,7 @@ export function TwelveTable({
                     href={openHref(row.leader.id)}
                     className="text-accent focus-visible:outline-accent inline-flex min-h-6 items-center underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2"
                   >
-                    {row.leader.full_name}
+                    {row.network ? networkLabel(row.network) : row.leader.full_name}
                   </Link>
                 )}
               </td>

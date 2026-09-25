@@ -218,9 +218,13 @@ export interface CellTwelve {
   open: boolean;
   /** Meetings due and recorded through `through`: the current month's end at most. */
   coverage: { recorded: number; scheduled: number; through: string };
-  /** In surname order. `leader` is null for a row the reader may not open. */
+  /**
+   * In surname order, or Network order where `network` is set. `leader` is null for a row the reader may not open. `network` is set
+   * on a whole-church reader's rows, the Network roots, which are labelled by it.
+   */
   rows: (TwelveFigure & {
     leader: { id: string; member_id: string; full_name: string } | null;
+    network?: 'MENS' | 'WOMENS' | null;
   })[];
   /** The subject's own Cell groups; null for Whole Church. */
   own: (TwelveFigure & { cells: number }) | null;

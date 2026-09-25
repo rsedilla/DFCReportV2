@@ -128,7 +128,10 @@ describe('GET /api/v1/reports/cells/twelve (sections 12, 13 and 20; decision 029
     end: string;
     open: boolean;
     coverage: { recorded: number; scheduled: number; through: string };
-    rows: (Figure & { leader: { id: string; member_id: string; full_name: string } | null })[];
+    rows: (Figure & {
+      leader: { id: string; member_id: string; full_name: string } | null;
+      network: 'MENS' | 'WOMENS' | null;
+    })[];
     own: (Figure & { cells: number }) | null;
     overlap: number;
     elsewhere: number;
@@ -262,7 +265,12 @@ describe('GET /api/v1/reports/cells/twelve (sections 12, 13 and 20; decision 029
       expect(body.total.unique_people).toBe(3);
       // Section 13: no row number, no rank, no proportion.
       for (const row of body.rows) {
-        expect(Object.keys(row).sort()).toEqual(['classification', 'leader', 'unique_people']);
+        expect(Object.keys(row).sort()).toEqual([
+          'classification',
+          'leader',
+          'network',
+          'unique_people',
+        ]);
       }
       expect(JSON.stringify(body)).not.toMatch(/percent|rank|position/);
     });
@@ -417,9 +425,19 @@ describe('GET /api/v1/reports/cells/twelve (sections 12, 13 and 20; decision 029
         adminAccount,
       );
 
-      // Abad before Alvarez.
-      expect(body.rows.map((row) => row.leader?.id)).toEqual([oriel.id, raymond.id]);
+      // Labelled by Network, so in that order rather than by surname (decision 0293).
+      expect(body.rows.map((row) => [row.leader?.id, row.network])).toEqual([
+        [raymond.id, 'MENS'],
+        [oriel.id, 'WOMENS'],
+      ]);
       expect(body.own).toBeNull();
+
+      // A leader's rows are their disciples, and carry no Network.
+      const leader = await ok(
+        `kind=MONTH&start=${JUNE}&period=${JUNE}&scope=LEADER&leader_id=${raymond.id}`,
+        adminAccount,
+      );
+      expect(leader.rows.every((row) => row.network === null)).toBe(true);
       expect(rowOf(body, oriel).unique_people).toBe(1);
       expect(rowOf(body, raymond).unique_people).toBe(2);
       expect(body.total.unique_people).toBe(3);

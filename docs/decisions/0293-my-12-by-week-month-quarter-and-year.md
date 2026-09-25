@@ -34,7 +34,9 @@ and once in the total, and a line takes off each count beyond a person's first; 
 those in the total who are in no row. So the People column adds up in plain sight.
 
 A whole-church reader's rows are the Network roots, where the Network screen starts them
-(decision 0268).
+(decision 0268). They are labelled "Men's Network" and "Women's Network", in that order, rather than by the
+pastors' names and surname order, because that reader disciples neither, and each opens that
+root's 12.
 
 ## Why
 

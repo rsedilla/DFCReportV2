@@ -233,7 +233,8 @@ export interface CellTwelve {
   at: Date;
   /** Coverage counts meetings due through this day, the end of the current month at most. */
   coverage: CellCoverage & { through: string };
-  rows: (TwelveFigure & { leader_id: string })[];
+  /** `network` is set on a whole-church reader's rows, which are the Network roots. */
+  rows: (TwelveFigure & { leader_id: string; network: NetworkName | null })[];
   own: (TwelveFigure & { cells: number }) | null;
   overlap: number;
   elsewhere: number;
@@ -529,19 +530,28 @@ export class ReportingService {
         classification: classify(people),
       });
 
-      const rowIds =
+      // A whole-church reader disciples neither root, so each root row is labelled by its
+      // Network rather than by name (decision 0293).
+      const rowIds: { personId: string; network: NetworkName | null }[] =
         subject.kind === 'LEADER'
-          ? await this.hierarchy.directChildrenAsOf(trx, subject.person_id, end)
-          : await this.hierarchy.rootsAsOf(trx, end);
+          ? (await this.hierarchy.directChildrenAsOf(trx, subject.person_id, end)).map(
+              (personId) => ({ personId, network: null }),
+            )
+          : await this.hierarchy.rootSeatsAsOf(trx, end);
 
       // Sequential for the reason `cellCoverage` gives: one connection, one transaction.
-      const rows: (TwelveFigure & { leader_id: string; people: Set<string> })[] = [];
-      for (const leaderId of rowIds) {
+      const rows: (TwelveFigure & {
+        leader_id: string;
+        network: NetworkName | null;
+        people: Set<string>;
+      })[] = [];
+      for (const { personId: leaderId, network } of rowIds) {
         const people = await peopleOf(
           await this.hierarchy.reportingSubtree(trx, leaderId, start, end),
         );
         rows.push({
           leader_id: leaderId,
+          network,
           ...figureOf(people),
           people: new Set(people.map((p) => canonicalId(p.personId))),
         });
@@ -592,6 +602,7 @@ export class ReportingService {
         },
         rows: rows.map((row) => ({
           leader_id: row.leader_id,
+          network: row.network,
           unique_people: row.unique_people,
           classification: row.classification,
         })),

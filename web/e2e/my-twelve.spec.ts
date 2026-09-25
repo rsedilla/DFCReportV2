@@ -92,7 +92,9 @@ const periodGroup = (page: Page) => page.getByRole('group', { name: 'Report peri
 const periodLabel = (page: Page, label: string) =>
   page.locator('main').getByText(label, { exact: true });
 const twelveTable = (page: Page) =>
-  page.getByRole('table').filter({ has: page.getByRole('columnheader', { name: 'Leader' }) });
+  page
+    .getByRole('table')
+    .filter({ has: page.getByRole('columnheader', { name: /^(Leader|Network)$/ }) });
 
 /** A body row's cell texts, trimmed. */
 async function cellsOf(row: Locator): Promise<string[]> {
@@ -392,7 +394,7 @@ test.describe('My 12', () => {
     });
   }
 
-  test('a whole-church reader’s rows are the Network roots, with no row of their own', async ({
+  test('a whole-church reader’s rows are the Networks, by name of Network, with no row of their own', async ({
     page,
   }) => {
     const asked = await arrange(page);
@@ -402,8 +404,18 @@ test.describe('My 12', () => {
     await expectAsked(asked, { scope: 'WHOLE_CHURCH', leader_id: null });
     const rows = twelveTable(page).locator('tbody tr');
     await expect(rows).toHaveCount(4);
-    await expect(rows.nth(0).getByRole('cell').first()).toHaveText('Aurora Dizon');
-    await expect(rows.nth(1).getByRole('cell').first()).toHaveText('Bonifacio Esguerra');
+    // The reader disciples neither root, so the rows say which Network, not whose name.
+    await expect(page.getByRole('heading', { name: /^The Networks · / })).toBeVisible();
+    await expect(twelveTable(page).getByRole('columnheader').first()).toHaveText('Network');
+    await expect(rows.nth(0).getByRole('link', { name: "Men's Network" })).toHaveAttribute(
+      'href',
+      new RegExp(`[?&]leader=${TWELVE.bonifacio.id}`),
+    );
+    await expect(rows.nth(1).getByRole('link', { name: "Women's Network" })).toHaveAttribute(
+      'href',
+      new RegExp(`[?&]leader=${TWELVE.aurora.id}`),
+    );
+    await expect(twelveTable(page).getByText('Aurora Dizon')).toHaveCount(0);
     // With no own row there is no branch to be elsewhere in: the line says "In no row".
     expect(await cellsOf(rows.nth(2))).toEqual(['In no row', '+1']);
     expect(await cellsOf(rows.nth(3))).toEqual(['Total', '5', '3', '1', '1', '7', '17']);
@@ -443,8 +455,8 @@ test.describe('Figures for', () => {
     await expect(select.locator('optgroup')).toHaveAttribute('label', 'The Networks');
     await expect(select.locator('option')).toHaveText([
       'Everyone in your scope',
-      'Aurora Dizon',
-      'Bonifacio Esguerra',
+      "Men's Network",
+      "Women's Network",
     ]);
   });
 });

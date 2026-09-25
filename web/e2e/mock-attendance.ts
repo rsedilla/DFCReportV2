@@ -1122,9 +1122,10 @@ export async function mockCellTwelve(
       return route.fulfill(
         json({
           ...period,
+          // The Network roots, labelled and ordered by their Network (decision 0293).
           rows: [
-            { leader: TWELVE.aurora, ...stages(3, 1, 0, 1, 2) },
-            { leader: TWELVE.bonifacio, ...stages(2, 2, 1, 0, 4) },
+            { leader: TWELVE.bonifacio, network: 'MENS', ...stages(2, 2, 1, 0, 4) },
+            { leader: TWELVE.aurora, network: 'WOMENS', ...stages(3, 1, 0, 1, 2) },
           ],
           own: null,
           overlap: 0,

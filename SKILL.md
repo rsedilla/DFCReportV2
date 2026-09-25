@@ -3625,7 +3625,7 @@ Ranking is prohibited. Never present:
 - value-laden encoding of meeting status, such as red/amber/green, cross marks, or `underperforming`
 - side-by-side comparison of leaders who do not oversee one another, offered as a feature
 
-**A reader's own direct disciples may be shown side by side, and so may those of a leader the reader opened** (ruling of 2026-09-25, decision 0293), because the reader oversees every row: in surname order and never sorted by a figure, with no row numbers, colour, percentages or bars, each name opening that leader's own report. That is the My 12 table (Section 20), and nothing else here is loosened by it.
+**A reader's own direct disciples may be shown side by side, and so may those of a leader the reader opened** (ruling of 2026-09-25, decision 0293), because the reader oversees every row: in surname order and never sorted by a figure, with no row numbers, colour, percentages or bars, each name opening that leader's own report. A whole-church reader's rows are the two Network roots, labelled and ordered by their Network rather than by name, because that reader disciples neither. That is the My 12 table (Section 20), and nothing else here is loosened by it.
 
 The reason is practical as well as pastoral. `NOT_HELD` exists to obtain honest reporting of Cells that are not meeting. If declaring it places a leader at the bottom of a visible ranking, leaders will record `HELD` instead, and the signal the status was created to capture is lost. Ranking the measure destroys the measure.
 
@@ -4163,7 +4163,7 @@ classification.* The stage is settled above; what is named rather than settled i
 documented as a reporting month and has no yearly one, so a stored yearly figure has nowhere
 to go and cannot be composed from stored monthly ones either.
 
-**My 12** (ruling of 2026-09-25, decision 0293) breaks a leader's Cell figure into one row per direct disciple at the period's end, each counting that disciple's placement subtree; then the leader's own Cell group, the people at meetings the leader led as responsible leader, across every Cell they led in the period; then the total. A whole-church reader's rows are the Network roots. Each row is that leader's own figure, so a person at Cells in two branches is in both rows and once in the total, and the table takes off each count beyond a person’s first and adds those in the total who are in no row, so the rows reconcile to the total in plain sight.
+**My 12** (ruling of 2026-09-25, decision 0293) breaks a leader's Cell figure into one row per direct disciple at the period's end, each counting that disciple's placement subtree; then the leader's own Cell group, the people at meetings the leader led as responsible leader, across every Cell they led in the period; then the total. A whole-church reader's rows are the Network roots, each labelled by its Network and in Network order. Each row is that leader's own figure, so a person at Cells in two branches is in both rows and once in the total, and the table takes off each count beyond a person’s first and adds those in the total who are in no row, so the rows reconcile to the total in plain sight.
 
 ### Which tree a report walks, and what attributes a figure to a scope
 

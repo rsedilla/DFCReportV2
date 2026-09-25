@@ -893,7 +893,7 @@ const SCANS = [
       await mockCellTwelve(page);
     },
     async arrange(page: import('@playwright/test').Page) {
-      await expect(page.getByRole('link', { name: 'Aurora Dizon' })).toBeVisible();
+      await expect(page.getByRole('link', { name: "Women's Network" })).toBeVisible();
       await expect(page.getByText('Loading…')).toHaveCount(0);
     },
   },
