@@ -37,7 +37,7 @@ import {
   mockCoverageByLeader,
   mockCellMembersEmpty,
   mockCellReport,
-  mockCellReportForOneCell,
+  mockCellTwelve,
   mockDccReport,
   mockDccRoster,
   mockMeetingRoster,
@@ -831,24 +831,70 @@ const SCANS = [
     },
   },
   {
-    // The aggregate arm: coverage leads, and no buckets, which section 12 makes a
-    // structural rule rather than a rendering choice.
+    // My 12 over a month (decision 0293): the coverage line, then the reader's direct 12,
+    // their own Cell groups, both conditional lines and the Total.
     name: 'cell attendance report',
     route: '/reports/cells',
     async before(page: import('@playwright/test').Page) {
       await mockSignedIn(page);
-      await mockCells(page);
-      await mockCellReport(page);
+      await mockCellTwelve(page);
     },
     async arrange(page: import('@playwright/test').Page) {
-      await expect(page.getByRole('heading', { name: 'Recording coverage' })).toBeVisible();
-      await expect(page.getByText('6 of 8 meetings recorded')).toBeVisible();
-      await expect(page.getByRole('heading', { name: 'How often people came' })).toHaveCount(0);
-      // The six tabs, and the link to the rows that moved to Filed reports (decision 0292).
+      // Coverage leads as one line, then My 12 (decision 0293), and the six tabs.
+      await expect(page.getByText(/^6 of 8 meetings recorded/)).toBeVisible();
+      await expect(page.getByRole('heading', { name: /^My 12 · / })).toBeVisible();
+      await expect(page.getByText('Counted in more than one row', { exact: true })).toBeVisible();
+      await expect(page.getByText('Loading…')).toHaveCount(0);
       await expect(
         page.getByRole('navigation', { name: 'Which report' }).locator('a[aria-current="page"]'),
       ).toHaveText('Cell Groups');
-      await expect(page.getByRole('link', { name: /row by row, under Filed reports/ })).toBeVisible();
+      await expect(page.getByRole('link', { name: 'see Filed reports' })).toBeVisible();
+    },
+  },
+  {
+    // My 12 over a week (decision 0293), its period button pressed.
+    name: 'cell attendance report, week',
+    route: '/reports/cells?period=week',
+    async before(page: import('@playwright/test').Page) {
+      await mockSignedIn(page);
+      await mockCellTwelve(page);
+    },
+    async arrange(page: import('@playwright/test').Page) {
+      await expect(
+        page.getByRole('group', { name: 'Report period' }).getByRole('button', { name: 'Weekly' }),
+      ).toHaveAttribute('aria-pressed', 'true');
+      await expect(page.getByRole('heading', { name: /^My 12 · / })).toBeVisible();
+      await expect(page.getByText('Loading…')).toHaveCount(0);
+    },
+  },
+  {
+    // My 12 over a quarter (decision 0293), its period button pressed.
+    name: 'cell attendance report, quarter',
+    route: '/reports/cells?period=quarter',
+    async before(page: import('@playwright/test').Page) {
+      await mockSignedIn(page);
+      await mockCellTwelve(page);
+    },
+    async arrange(page: import('@playwright/test').Page) {
+      await expect(
+        page.getByRole('group', { name: 'Report period' }).getByRole('button', { name: 'Quarterly' }),
+      ).toHaveAttribute('aria-pressed', 'true');
+      await expect(page.getByRole('heading', { name: /^My 12 · / })).toBeVisible();
+      await expect(page.getByText('Loading…')).toHaveCount(0);
+    },
+  },
+  {
+    // A whole-church reader: the Network roots as rows, and no row of their own.
+    name: 'cell attendance report, whole church',
+    route: '/reports/cells',
+    async before(page: import('@playwright/test').Page) {
+      await mockSignedIn(page);
+      await mockWholeChurchReader(page);
+      await mockCellTwelve(page);
+    },
+    async arrange(page: import('@playwright/test').Page) {
+      await expect(page.getByRole('link', { name: 'Aurora Dizon' })).toBeVisible();
+      await expect(page.getByText('Loading…')).toHaveCount(0);
     },
   },
   {
@@ -857,30 +903,13 @@ const SCANS = [
     route: '/reports/cells',
     async before(page: import('@playwright/test').Page) {
       await mockSignedIn(page);
-      await mockCells(page);
-      await mockCellReport(page);
+      await mockCellTwelve(page);
     },
     async arrange(page: import('@playwright/test').Page) {
       await page.getByRole('button', { name: 'How these are counted' }).click();
       await expect(
         page.getByRole('dialog', { name: 'How these are counted' }).getByText('An open month'),
       ).toBeVisible();
-    },
-  },
-  {
-    // One Cell, which is where section 12 permits buckets. The completed column
-    // carries the API's own flag rather than a comparison against the calendar.
-    name: 'cell attendance report, one Cell',
-    route: '/reports/cells',
-    async before(page: import('@playwright/test').Page) {
-      await mockSignedIn(page);
-      await mockCells(page);
-      await mockCellReportForOneCell(page);
-    },
-    async arrange(page: import('@playwright/test').Page) {
-      await page.getByLabel('Figures for').selectOption('3f1b7c6e-0000-4000-8000-000000000101');
-      await expect(page.getByRole('heading', { name: 'How often people came' })).toBeVisible();
-      await expect(page.getByText('3 times — all of them')).toBeVisible();
     },
   },
   {
@@ -1032,13 +1061,15 @@ const SCANS = [
   {
     // The same for the Cell report.
     name: 'cell attendance report, year',
-    route: '/reports/cells?period=year&month=2026-06-01',
+    route: '/reports/cells?period=year',
     async before(page: import('@playwright/test').Page) {
       await mockSignedIn(page);
-      await mockCells(page);
       await mockCellReport(page);
+      await mockCellTwelve(page);
     },
     async arrange(page: import('@playwright/test').Page) {
+      // My 12 over the year, and its month-by-month table beneath (decisions 0257, 0293).
+      await expect(page.getByRole('heading', { name: /^My 12 · / })).toBeVisible();
       await expect(page.getByRole('heading', { name: /Month by month/ })).toBeVisible();
       await expect(page.getByText('Year so far')).toBeVisible();
       await expect(page.getByText('Loading…')).toHaveCount(0);
@@ -1051,14 +1082,14 @@ const SCANS = [
     route: '/reports/cells?month=2026-06-01&leader=3f1b7c6e-0000-4000-8000-000000000701',
     async before(page: import('@playwright/test').Page) {
       await mockSignedIn(page);
-      await mockCells(page);
-      await mockCellReport(page);
-      await mockCoverageByLeader(page);
+      await mockCellTwelve(page);
     },
     async arrange(page: import('@playwright/test').Page) {
+      // That leader's 12, with no Cell of their own: the row carries no numbers.
       await expect(page.getByRole('link', { name: 'Back to your report' })).toBeVisible();
-      await expect(page.getByText('6 of 8 meetings recorded')).toBeVisible();
-      await expect(page.getByRole('link', { name: /row by row, under Filed reports/ })).toBeVisible();
+      await expect(page.getByRole('heading', { name: /’s 12 · / })).toBeVisible();
+      await expect(page.getByText(/no Cell of (your|their) own/)).toBeVisible();
+      await expect(page.getByRole('link', { name: 'see Filed reports' })).toBeVisible();
     },
   },
   {
@@ -1415,14 +1446,14 @@ const TARGET_SWEEP = [
     minimum: 6,
   },
   {
-    // The six report tabs (decision 0292), How these are counted, two month controls, the
-    // scope select, and the link to the rows under Filed reports: **eleven**. The Coverage
-    // by Cell links this floor used to count moved to "filed reports".
+    // The six report tabs (decision 0292), How these are counted, the four period buttons,
+    // the navigator's two, the Figures for select, the link to Filed reports and the three
+    // names of My 12 (decision 0293): **eighteen**.
     name: 'cell attendance report',
     route: '/reports/cells',
-    settleRole: 'heading' as const,
-    settle: 'Recording coverage',
-    minimum: 11,
+    settleRole: 'link' as const,
+    settle: 'see Filed reports',
+    minimum: 18,
   },
   {
     // The six report tabs, How these are counted, the Month and Year choices and the two
@@ -1434,20 +1465,23 @@ const TARGET_SWEEP = [
     minimum: 11,
   },
   {
+    // "cell attendance report" less the Filed reports link, which is offered on Monthly alone:
+    // **seventeen**. The month-by-month table holds no control.
     name: 'cell attendance report, year',
-    route: '/reports/cells?period=year&month=2026-06-01',
+    route: '/reports/cells?period=year',
     settleRole: 'heading' as const,
     settle: 'Month by month',
-    minimum: 11,
+    minimum: 17,
   },
   {
-    // The six report tabs, How these are counted, two month controls, the Back link and the
-    // link to Filed reports, at least.
+    // The six report tabs, How these are counted, the four period buttons, the navigator's
+    // two, the Figures for select, the Back link, the link to Filed reports and the one name
+    // in that leader's 12: **seventeen**.
     name: 'cell attendance report, one leader',
     route: '/reports/cells?month=2026-06-01&leader=3f1b7c6e-0000-4000-8000-000000000701',
     settleRole: 'link' as const,
     settle: 'Back to your report',
-    minimum: 11,
+    minimum: 17,
   },
   {
     // The six report tabs, How these are counted, two month controls and the link to Filed
@@ -1736,11 +1770,23 @@ const TARGET_EXEMPT: { name: string; why: string }[] = [
       'the measured "people without a cell": a SelectField and two Buttons.',
   },
   {
-    name: 'cell attendance report, one Cell',
+    name: 'cell attendance report, week',
     why:
-      'It renders the same three controls as "cell attendance report", which is measured, ' +
-      'and differs only in what the report returns. Measuring it would need a second mock on ' +
-      'the same URL to re-measure controls already covered.',
+      'The same controls as the measured "cell attendance report" -- the four period buttons, ' +
+      'the navigator, Figures for and the My 12 links -- with Weekly pressed rather than Monthly and no Filed reports link.',
+  },
+  {
+    name: 'cell attendance report, quarter',
+    why:
+      'The controls of the measured "cell attendance report" less its Filed reports link, with ' +
+      'Quarterly pressed. ' +
+      'Measuring it would re-measure controls already covered.',
+  },
+  {
+    name: 'cell attendance report, whole church',
+    why:
+      'The controls of the measured "cell attendance report" with two row links rather than ' +
+      'three and no own row, which holds no control. It needs a second /auth/me mock.',
   },
   {
     name: 'cells, none in scope',
@@ -1831,6 +1877,8 @@ test('every interactive target meets the 24px minimum', async ({ page }) => {
   await mockMeetingRoster(page);
   await mockDccRoster(page);
   await mockCellReport(page);
+  // Before the Network screen's mock, whose own children route must win for its leaders.
+  await mockCellTwelve(page);
   await mockDccReport(page);
   await mockCellMembers(page);
   await mockCoverageGaps(page);

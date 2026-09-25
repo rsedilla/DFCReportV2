@@ -1572,6 +1572,22 @@ export class CellsReadService implements CellScopePort, CellRelationshipsPort {
     executor: Db | Transaction<Database>,
     reportingMonth: string,
   ): Promise<{ cellId: string; scheduledDate: string; leaderId: string | null }[]> {
+    const [year, month] = reportingMonth.split('-').map(Number);
+    const last = new Date(Date.UTC(year, month, 0)).toISOString().slice(0, 10);
+
+    return this.scheduledMeetingsWithLeaderBetween(executor, reportingMonth, last);
+  }
+
+  /**
+   * {@link scheduledMeetingsWithLeaderIn} over any run of days, inclusive — a week, a
+   * quarter or a year (decision 0293). One derivation serves both, so a month asked for as
+   * a range and as a month cannot disagree.
+   */
+  async scheduledMeetingsWithLeaderBetween(
+    executor: Db | Transaction<Database>,
+    from: string,
+    to: string,
+  ): Promise<{ cellId: string; scheduledDate: string; leaderId: string | null }[]> {
     const result = await sql<{
       cell_id: string;
       scheduled_date: string;
@@ -1582,8 +1598,8 @@ export class CellsReadService implements CellScopePort, CellRelationshipsPort {
              leader.person_id AS leader_id
         FROM cells AS cell
         CROSS JOIN generate_series(
-               ${reportingMonth}::date,
-               (${reportingMonth}::date + interval '1 month' - interval '1 day')::date,
+               ${from}::date,
+               ${to}::date,
                interval '1 day'
              ) AS day
         -- The identical derivation scheduledCountsIn performs: one governing schedule per

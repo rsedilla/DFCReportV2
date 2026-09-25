@@ -4,6 +4,7 @@ import { mockSignedIn, mockWholeChurchReader } from './mock-api';
 import {
   mockCellReport,
   mockCellReportForOneCell,
+  mockCellTwelve,
   mockCells,
   mockCellsAtScale,
   mockCoverageByLeader,
@@ -68,6 +69,7 @@ async function mockEveryReport(page: Page) {
   await mockSignedIn(page);
   await mockCells(page);
   await mockCellReport(page);
+  await mockCellTwelve(page, { today: '2026-06-20' });
   await mockDccEvents(page);
   await mockDccReport(page);
   await mockCoverageByLeader(page);
@@ -219,17 +221,19 @@ test.describe('the browser Back button', () => {
     await expect(page.getByText('June 2026', { exact: true })).toBeVisible();
   });
 
-  test('steps back through the Cell chosen on the Cells report', async ({ page }) => {
+  test('steps back through the leader chosen in Figures for on Cell Groups (decision 0293)', async ({
+    page,
+  }) => {
+    await page.clock.setFixedTime(NOW);
     await mockSignedIn(page);
-    await mockCells(page);
-    await mockCellReportForOneCell(page);
+    await mockCellTwelve(page, { today: '2026-06-20' });
     await page.goto('/reports/cells');
 
-    await page.getByLabel('Figures for').selectOption('3f1b7c6e-0000-4000-8000-000000000101');
-    await expect(page).toHaveURL(/cell=3f1b7c6e-0000-4000-8000-000000000101/);
+    await page.getByLabel('Figures for').selectOption(LEADER);
+    await expect(page).toHaveURL(new RegExp(`leader=${LEADER}`));
 
     await page.goBack();
-    await expect(page).not.toHaveURL(/cell=/);
+    await expect(page).not.toHaveURL(/leader=/);
     await expect(page.getByLabel('Figures for')).toHaveValue('');
   });
 });
@@ -249,19 +253,6 @@ test.describe('the report figures', () => {
     await expect(often.getByRole('term').last()).toHaveText('Total');
     await expect(often.getByRole('definition').last()).toHaveText('7');
     await expect(often.getByRole('term').filter({ hasText: '3 times — all of them' })).toBeVisible();
-  });
-
-  test('a single Cell shows how often people came, with its own Total', async ({ page }) => {
-    await mockSignedIn(page);
-    await mockCells(page);
-    await mockCellReportForOneCell(page);
-    await page.goto('/reports/cells');
-
-    await page.getByLabel('Figures for').selectOption('3f1b7c6e-0000-4000-8000-000000000101');
-
-    // The fixture: buckets 1 + 2 + 1, four people.
-    const often = page.getByRole('region', { name: 'How often people came' });
-    await expect(often.getByRole('definition').last()).toHaveText('4');
   });
 });
 
@@ -434,27 +425,33 @@ test.describe('the coverage tables, under Filed reports (decision 0292)', () => 
 });
 
 test.describe('Cell Groups and DCC keep coverage first, and send the rows to Filed reports', () => {
-  test('Cell Groups opens on recording coverage, with no row-by-row table of its own', async ({
+  test('Cell Groups opens on recording coverage as one line, with no row-by-row table of its own', async ({
     page,
   }) => {
     await page.clock.setFixedTime(NOW);
     await mockSignedIn(page);
-    await mockCells(page);
-    await mockCellReport(page);
+    await mockCellTwelve(page, { today: '2026-06-20' });
     await page.goto('/reports/cells?month=2026-05-01');
 
-    await expect(page.getByText('What your Cells recorded this month.')).toBeVisible();
-    // Section 12 and decision 0202: coverage is the first figure, before anybody is counted.
-    await expect(page.locator('main h2').filter({ visible: true }).first()).toHaveText('Recording coverage');
-    await expect(page.getByText('6 of 8 meetings recorded')).toBeVisible();
+    await expect(page.getByText('Who came to a Cell, and where they are in their journey.')).toBeVisible();
+    // Section 12 and decision 0202: coverage is the first figure, before anybody is counted,
+    // and decision 0293 makes it one line above My 12.
+    const coverage = page.getByText('6 of 8 meetings recorded in the month');
+    await expect(coverage).toBeVisible();
+    const twelve = page.getByRole('heading', { name: /^My 12 · / });
+    await expect(twelve).toBeVisible();
+    const [line, heading] = await Promise.all([coverage.boundingBox(), twelve.boundingBox()]);
+    expect(line!.y, 'the coverage line sits above My 12').toBeLessThan(heading!.y);
 
+    await expect(page.getByRole('heading', { name: 'Recording coverage' })).toHaveCount(0);
     await expect(page.getByRole('heading', { name: 'Row by row' })).toHaveCount(0);
     await expect(page.getByRole('radiogroup', { name: 'Group coverage by' })).toHaveCount(0);
     await expect(page.getByRole('region', { name: 'Coverage by Cell' })).toHaveCount(0);
 
-    await expect(
-      page.getByRole('link', { name: 'By Cell and by leader, row by row, under Filed reports' }),
-    ).toHaveAttribute('href', '/reports/filed?month=2026-05-01');
+    await expect(page.getByRole('link', { name: 'see Filed reports' })).toHaveAttribute(
+      'href',
+      '/reports/filed?month=2026-05-01',
+    );
   });
 
   test('DCC opens on recording coverage, with no row-by-row table of its own', async ({ page }) => {
@@ -482,15 +479,15 @@ test.describe('Cell Groups and DCC keep coverage first, and send the rows to Fil
   test('a leader opened from By leader carries into Filed reports, By leader', async ({ page }) => {
     await page.clock.setFixedTime(NOW);
     await mockSignedIn(page);
-    await mockCells(page);
-    await mockCellReport(page);
+    await mockCellTwelve(page, { today: '2026-06-20' });
     await mockDccReport(page);
     await mockCoverageByLeader(page);
 
     await page.goto(`/reports/cells?month=2026-06-01&leader=${LEADER}`);
-    await expect(
-      page.getByRole('link', { name: 'By Cell and by leader, row by row, under Filed reports' }),
-    ).toHaveAttribute('href', `/reports/filed?month=2026-06-01&leader=${LEADER}&by=leader`);
+    await expect(page.getByRole('link', { name: 'see Filed reports' })).toHaveAttribute(
+      'href',
+      `/reports/filed?month=2026-06-01&leader=${LEADER}&by=leader`,
+    );
 
     await page.goto(`/reports/dcc?month=2026-06-01&leader=${LEADER}`);
     await expect(
@@ -663,9 +660,12 @@ test.describe('Filed reports keeps the narrower scope its report had', () => {
 
   const CELL = '3f1b7c6e-0000-4000-8000-000000000101';
 
-  test('one Cell chosen on Cell Groups stays chosen, and only By leader is offered', async ({
-    page,
-  }) => {
+  /**
+   * **Cell Groups no longer offers a Cell** (decision 0293 took the Cell choices out of its
+   * Figures for), so this state is reached by its address alone. The sentence it shows still
+   * no longer says the Cell was "chosen on Cell Groups", which nothing there can now do.
+   */
+  test('one Cell in the address stays chosen, and only By leader is offered', async ({ page }) => {
     await page.clock.setFixedTime(NOW);
     await mockSignedIn(page);
     await mockCells(page);
@@ -675,16 +675,10 @@ test.describe('Filed reports keeps the narrower scope its report had', () => {
     await mockCoverageByLeader(page);
     const scopes = recordScopes(page);
 
-    await page.goto('/reports/cells');
-    await page.getByLabel('Figures for').selectOption(CELL);
-    const link = page.getByRole('link', {
-      name: 'By Cell and by leader, row by row, under Filed reports',
-    });
-    await expect(link).toHaveAttribute('href', `/reports/filed?month=2026-06-01&cell=${CELL}`);
-    await link.click();
+    await page.goto(`/reports/filed?month=2026-06-01&cell=${CELL}`);
 
     await expect(page).toHaveURL(/\/reports\/filed\?/);
-    await expect(page.getByText('Figures for one Cell, chosen on Cell Groups.')).toBeVisible();
+    await expect(page.getByText(/^Figures for one Cell/)).toBeVisible();
     // The one-Cell fixture's own figure, not the reader's whole branch.
     await expect(page.getByText('3 of 4 meetings recorded')).toBeVisible();
     await expect(page.getByRole('radiogroup', { name: 'Group coverage by' })).toHaveCount(0);
@@ -697,7 +691,7 @@ test.describe('Filed reports keeps the narrower scope its report had', () => {
     await page.getByRole('group', { name: 'Which records' }).getByRole('button', { name: 'DCC' }).click();
     await expect(page).toHaveURL(/[?&]kind=dcc/);
     await expect(page).not.toHaveURL(/[?&]cell=/);
-    await expect(page.getByText('Figures for one Cell, chosen on Cell Groups.')).toHaveCount(0);
+    await expect(page.getByText(/^Figures for one Cell/)).toHaveCount(0);
     await expect(page.getByRole('radio', { name: 'By Sunday' })).toBeChecked();
     await expect(page.getByText('12 of 18 records filed')).toBeVisible();
     expect(scopes.filter((scope) => scope.startsWith('dcc')).every((scope) => !scope.includes('cell_id'))).toBe(
@@ -755,7 +749,7 @@ test.describe('Filed reports keeps the narrower scope its report had', () => {
 
     await page.goto(`/reports/filed?month=2026-06-01&kind=dcc&cell=${CELL}`);
     await expect(page.getByRole('radio', { name: 'By Sunday' })).toBeChecked();
-    await expect(page.getByText('Figures for one Cell, chosen on Cell Groups.')).toHaveCount(0);
+    await expect(page.getByText(/^Figures for one Cell/)).toHaveCount(0);
     await expect.poll(() => scopes).toContain('dcc scope=WHOLE_CHURCH');
 
     await page.goto('/reports/filed?month=2026-06-01&network=MENS');

@@ -13,6 +13,7 @@ import {
 
 import { CURSOR_MAX_LENGTH } from '../../common/cursor';
 import { IsManilaCalendarDate } from '../../common/time/is-manila-calendar-date';
+import { REPORT_RANGE_KINDS, type ReportRangeKind } from '../../common/time/report-range';
 
 /**
  * The scope selectors the **DCC** monthly report is asked for (SKILL.md section 7).
@@ -175,4 +176,18 @@ export class CellByLeaderDto extends CellMonthlyReportDto {
   @IsString()
   @Length(1, CURSOR_MAX_LENGTH)
   cursor?: string;
+}
+
+/**
+ * `GET /reports/cells/twelve`: My 12 over a week, a month, a quarter or a year (decision
+ * 0293). `period` is the month the capability guard resolves the scope at, which the service
+ * derives from `kind` and `start` and refuses any other; `CELL` is refused in the controller,
+ * because a Cell has members rather than disciples and so has no 12.
+ */
+export class CellTwelveDto extends CellMonthlyReportDto {
+  @IsIn(REPORT_RANGE_KINDS)
+  kind!: ReportRangeKind;
+
+  @IsManilaCalendarDate({ message: 'start must be a real calendar date, YYYY-MM-DD' })
+  start!: string;
 }

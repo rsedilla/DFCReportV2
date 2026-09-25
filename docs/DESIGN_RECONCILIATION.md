@@ -27,7 +27,7 @@ church's leadership tree, and this repository is public.
 | Journey stage | *Correct this stage* with a reason | No override. The stage is shown with the attendance behind it and a link to correct that attendance | §9 | UI-4 |
 | Export | *Export CSV* from Reports | Not in the pilot; left as an open question (PR #127) | — | — |
 | Dark theme | None | Kept: a dark version of the design is derived | §23, decision 0235 | UI-1 |
-| Year view | Person by month for the year | Left out of the pilot, although §18 asks for January to December reports. Two open questions bear on it: which month's classification an in-progress year carries, and whether §20's placement graph may authorize a per-person view | §18, decision 0222 | — |
+| Year view | Person by month for the year | Left out of the pilot, although §18 asks for January to December reports. One open question bears on it: whether §20's placement graph may authorize a per-person view (which month's classification an in-progress year carries was settled by decision 0293) | §18, decision 0222 | — |
 | Preview as | See the app as another person | Dropped: prototype only | — | — |
 | Offline queue | "Saved on this device" states | Dropped for now | §23, *Deferred until required* | — |
 

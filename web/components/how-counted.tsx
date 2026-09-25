@@ -41,18 +41,19 @@ const TEXT: Record<'cells' | 'dcc', Term[]> = {
         'Meetings with a record, out of the meetings each Cell’s schedule says it was due to hold. A Cell that scheduled nothing this month reads 0 of 0 and is still counted.',
     },
     {
-      term: 'People who attended',
-      definition: 'Each person once, however many meetings they came to.',
+      term: 'My 12',
+      definition:
+        'Your direct disciples (for a whole-church reader, the two Networks), each counting everyone under them, then your own Cell groups, then the total. People are counted once each, however many meetings they came to.',
     },
     {
       term: 'Where people are in their journey',
       definition:
-        'From every Cell meeting a person has ever attended, as it stood at the end of the month: the 1st makes them a VIP, then 2nd, 3rd and 4th Timer, and Regular from the 5th. A later meeting never changes a past month’s stage.',
+        'From every Cell meeting a person has ever attended, as it stood at the end of the week, month, quarter or year: the 1st makes them a VIP, then 2nd, 3rd and 4th Timer, and Regular from the 5th. A later meeting never changes a past period’s stage, and periods are never added together.',
     },
     {
-      term: 'How often people came',
+      term: 'Counted in more than one row, and elsewhere',
       definition:
-        'Shown for one Cell at a time. “All of them” means every meeting that Cell held and recorded. A meeting that did not happen, or has no record yet, is not counted.',
+        'Somebody who came to Cells in two branches is in both rows and once in the total, so the extra count is taken off. People in the total who are in no row, such as those under a leader who left, are added back.',
     },
     OPEN_MONTH,
   ],

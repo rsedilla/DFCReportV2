@@ -4,8 +4,15 @@ import { CellFiguresService, type CellFiguresPopulation } from '../attendance/ce
 import { DccCoverageService, type DccCoverageScope } from '../attendance/dcc-coverage.service';
 import { DccFiguresService } from '../attendance/dcc-figures.service';
 import { CellsReadService } from '../cells/cells.read.service';
-import { endOfManilaDay } from '../common/time/manila';
-import { isMonthOpen } from '../common/time/submission-window';
+import { ValidationFailedError } from '../common/errors/api-error';
+import { endOfManilaDay, manilaDayOf, startOfManilaDay } from '../common/time/manila';
+import {
+  assertReportRangeStart,
+  reportRangeEnd,
+  reportRangeGuardMonth,
+  type ReportRangeKind,
+} from '../common/time/report-range';
+import { databaseNow, isMonthOpen } from '../common/time/submission-window';
 import { canonicalId } from '../common/identifiers';
 import { DATABASE, type Db } from '../database/database.module';
 import type { Database, NetworkName } from '../database/schema';
@@ -198,6 +205,43 @@ export interface CellCoverage {
   recorded: number;
   scheduled: number;
 }
+
+/** One row of a My 12 table: people, once each, and the stage each had reached. */
+export interface TwelveFigure {
+  unique_people: number;
+  classification: Classification;
+}
+
+/**
+ * A My 12 table over one period (decision 0293), before `people` names its rows.
+ *
+ * `rows` are the subject's direct disciples at the period's end, each counting their whole
+ * branch; `own` is the subject's own Cell groups, absent for Whole Church; `overlap` is how
+ * many counts are beyond a person's first; `elsewhere` is how many in the total are in no row,
+ * such as the disciples of a leader who left within the period. So the People column always
+ * reconciles: the rows, less `overlap`, plus `elsewhere`, is the total.
+ */
+export interface CellTwelve {
+  open: boolean;
+  from: string;
+  to: string;
+  /**
+   * The instant the rows were read at: the period's last millisecond, or today's where the
+   * period is still running. The route checks the actor's reach at this same instant, since
+   * the guard can only name a month (decision 0214).
+   */
+  at: Date;
+  /** Coverage counts meetings due through this day, the end of the current month at most. */
+  coverage: CellCoverage & { through: string };
+  rows: (TwelveFigure & { leader_id: string })[];
+  own: (TwelveFigure & { cells: number }) | null;
+  overlap: number;
+  elsewhere: number;
+  total: TwelveFigure;
+}
+
+/** Who a My 12 table is about: one leader, or Whole Church for a whole-church reader. */
+export type CellTwelveSubject = { kind: 'LEADER'; person_id: string } | { kind: 'WHOLE_CHURCH' };
 
 /**
  * A Cell monthly report, shaped so that section 12's one hard structural rule cannot be
@@ -415,6 +459,165 @@ export class ReportingService {
         // Decision 0202: coverage is the figure an aggregate view leads with, and the
         // only one of the three that survives having no `N` to measure against.
         coverage: await this.cellCoverage(trx, period, scope),
+      };
+    });
+  }
+
+  /**
+   * My 12 over a week, a month, a quarter or a year (SKILL.md sections 12, 13 and 20;
+   * decision 0293).
+   *
+   * **Rows are the subject's direct disciples at the period's end**, each counting the
+   * placement subtree section 20 walks for any leader-scoped figure; a whole-church reader's
+   * rows are the Network roots, where the Network screen starts them (decision 0268). **The
+   * subject's own row is the people at the meetings they led**, across every Cell they led
+   * in the period, by the meeting's frozen responsible leader — so a Cell handed over
+   * mid-period splits by meeting, as section 20 already splits it.
+   *
+   * **Each row is that leader's true figure.** A person at Cells in two branches is in both
+   * rows and once in the total, and `overlap` is the counts beyond each person's first
+   * rather than one row being chosen for them. It is computed person by person, not as a
+   * difference of counts, and so is `elsewhere`.
+   *
+   * **Coverage leads, as one line** (decision 0202): meetings recorded over meetings the
+   * schedule made due in the period, attributed as the monthly report attributes them.
+   *
+   * **Through the report seam** (decision 0210): `guardMonth` is the month the capability
+   * guard resolved the scope at, so the period's shape, the one-snapshot transaction and the
+   * has-begun refusal are all applied once, here, as for every other report.
+   */
+  async cellTwelve(
+    subject: CellTwelveSubject,
+    kind: ReportRangeKind,
+    from: string,
+    guardMonth: string,
+  ): Promise<CellTwelve> {
+    assertReportRangeStart(kind, from);
+    const to = reportRangeEnd(kind, from);
+
+    return this.overPeriod(guardMonth, async (trx) => {
+      // **The period has begun, and the guard resolved it at the month this derives**, both
+      // against the database's clock (decision 0216). A client names the month for the guard
+      // because the guard reads one; any other month than this one is refused, so a client
+      // cannot choose the instant its own authorization is decided at.
+      const today = manilaDayOf(await databaseNow(trx));
+      if (from > today) {
+        throw new ValidationFailedError(
+          'A report covers a period that has begun. This one has not started yet.',
+          {
+            field: 'start',
+            value: from,
+          },
+        );
+      }
+      const expected = reportRangeGuardMonth(kind, from, today);
+      if (guardMonth !== expected) {
+        throw new ValidationFailedError(`This period is read as of ${expected}.`, {
+          field: 'period',
+          value: guardMonth,
+          expected,
+        });
+      }
+
+      const start = startOfManilaDay(from);
+      const end = endOfManilaDay(to);
+
+      const peopleOf = (leaders: readonly string[] | null) =>
+        this.cellFigures.rangeFigures(trx, from, to, leaders);
+      const figureOf = (people: readonly { lifetimeThroughMonth: number }[]): TwelveFigure => ({
+        unique_people: people.length,
+        classification: classify(people),
+      });
+
+      const rowIds =
+        subject.kind === 'LEADER'
+          ? await this.hierarchy.directChildrenAsOf(trx, subject.person_id, end)
+          : await this.hierarchy.rootsAsOf(trx, end);
+
+      // Sequential for the reason `cellCoverage` gives: one connection, one transaction.
+      const rows: (TwelveFigure & { leader_id: string; people: Set<string> })[] = [];
+      for (const leaderId of rowIds) {
+        const people = await peopleOf(
+          await this.hierarchy.reportingSubtree(trx, leaderId, start, end),
+        );
+        rows.push({
+          leader_id: leaderId,
+          ...figureOf(people),
+          people: new Set(people.map((p) => canonicalId(p.personId))),
+        });
+      }
+
+      const ownPeople = subject.kind === 'LEADER' ? await peopleOf([subject.person_id]) : null;
+      const totalPeople = await peopleOf(
+        subject.kind === 'LEADER'
+          ? await this.hierarchy.reportingSubtree(trx, subject.person_id, start, end)
+          : null,
+      );
+
+      // **Due meetings stop at the end of the current month.** A month that has not begun is
+      // not reported (decision 0216), and a running year returns the months that have begun
+      // (decision 0222), so a year's denominator must not count October's schedule in
+      // September. Within the current month the whole month is due, as a month's own
+      // coverage line counts it (decision 0239).
+      const dueTo = to < rangeMonthEnd(today) ? to : rangeMonthEnd(today);
+      const pairs = await this.cells.scheduledMeetingsWithLeaderBetween(trx, from, dueTo);
+      const recorded = await this.cellFigures.recordedScheduledDatesBetween(trx, from, dueTo);
+      const scope: CellReportScope =
+        subject.kind === 'LEADER'
+          ? { kind: 'LEADER', person_id: subject.person_id }
+          : { kind: 'WHOLE_CHURCH' };
+      const inScope = await this.scheduledPairsInScope(trx, pairs, scope);
+
+      const union = new Set<string>();
+      let counted = 0;
+      for (const set of [
+        ...rows.map((row) => row.people),
+        new Set((ownPeople ?? []).map((p) => canonicalId(p.personId))),
+      ]) {
+        counted += set.size;
+        set.forEach((id) => union.add(id));
+      }
+      const elsewhere = totalPeople.filter((p) => !union.has(canonicalId(p.personId))).length;
+
+      return {
+        open: await isMonthOpen(trx, `${to.slice(0, 7)}-01`),
+        from,
+        to,
+        at: endOfManilaDay(to < today ? to : today),
+        coverage: {
+          through: dueTo,
+          scheduled: inScope.length,
+          recorded: inScope.filter((pair) => recorded.has(`${pair.cellId}|${pair.scheduledDate}`))
+            .length,
+        },
+        rows: rows.map((row) => ({
+          leader_id: row.leader_id,
+          unique_people: row.unique_people,
+          classification: row.classification,
+        })),
+        own:
+          subject.kind === 'LEADER' && ownPeople !== null
+            ? {
+                ...figureOf(ownPeople),
+                // Cells scheduled under the leader and Cells whose recorded meetings they led,
+                // so a row with people never reads as having no Cell.
+                cells: new Set([
+                  ...pairs
+                    .filter(
+                      (pair) =>
+                        pair.leaderId !== null &&
+                        canonicalId(pair.leaderId) === canonicalId(subject.person_id),
+                    )
+                    .map((pair) => canonicalId(pair.cellId)),
+                  ...(await this.cellFigures.cellsLedBetween(trx, from, to, subject.person_id)).map(
+                    canonicalId,
+                  ),
+                ]).size,
+              }
+            : null,
+        overlap: counted - union.size,
+        elsewhere,
+        total: figureOf(totalPeople),
       };
     });
   }
@@ -679,6 +882,11 @@ function coverageScopeOf(scope: DccReportScope): DccCoverageScope {
       return unreached;
     }
   }
+}
+
+/** The last day of the month holding `day`, a calendar date. */
+function rangeMonthEnd(day: string): string {
+  return reportRangeEnd('MONTH', `${day.slice(0, 7)}-01`);
 }
 
 /**
