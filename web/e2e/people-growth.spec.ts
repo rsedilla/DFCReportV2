@@ -125,7 +125,7 @@ test.describe('a person’s Growth, read-only', () => {
 
     const growth = frame(page);
     await expect(growth.getByText('No lessons yet', { exact: true })).toBeVisible();
-    await expect(growth.getByText('No schools yet', { exact: true })).toBeVisible();
+    await expect(growth.getByText('No graduations yet', { exact: true })).toBeVisible();
     await expect(growth.getByRole('list', { name: 'Lessons' }).getByRole('listitem')).toHaveText(
       boxes([]),
     );
