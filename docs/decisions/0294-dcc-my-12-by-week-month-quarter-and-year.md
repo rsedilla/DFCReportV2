@@ -13,8 +13,8 @@ opened, each counting the placement subtree the DCC report counts for that leade
 20). A whole-church reader's rows are the two Networks, labelled and ordered as in 0293.
 
 **2. The reader's own row is the reader alone**, 1 if they came and 0 if not, labelled "You"
-or with the opened leader's name. Nobody's DCC attendance is recorded by themselves, so
-there is no own group to count, and the reader is in their own total.
+or with the opened leader's name. DCC has no own group to count, and the reader is in
+their own total.
 
 **3. Coverage leads as one line, over the period's Sundays.** Decision 0224's obligations,
 summed across the period's events as a month sums its own; a Sunday that has not come owes

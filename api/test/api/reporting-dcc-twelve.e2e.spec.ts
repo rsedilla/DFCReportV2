@@ -319,7 +319,7 @@ describe('GET /api/v1/reports/dcc/twelve (sections 9, 13 and 20; decision 0294)'
       expect(body.total.unique_people).toBe(2);
       expect(body.overlap).toBe(0);
       expect(body.elsewhere).toBe(0);
-      // No `cells` on a DCC own row: nobody's DCC attendance is recorded by themselves.
+      // No `cells` on a DCC own row: it is the subject alone.
       expect(Object.keys(body.own!).sort()).toEqual(['classification', 'unique_people']);
     });
 

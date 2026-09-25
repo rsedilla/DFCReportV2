@@ -221,8 +221,7 @@ export class DccFiguresService {
    * **`monthFigures`' rule on another length, in one statement for the reason it gives.** The
    * population is the people present at a service dated in the range; the stage is their
    * lifetime DCC attendance through its last day; `n` and `removed` are the range's services
-   * and removed Sundays. A range that is exactly a month answers what `monthFigures` answers,
-   * less the per-person count within it, which only a month's buckets use.
+   * and removed Sundays. A range that is exactly a month answers what `monthFigures` answers.
    *
    * `personIds` narrows the population exactly as it does there, and `undefined` is Whole
    * Church.

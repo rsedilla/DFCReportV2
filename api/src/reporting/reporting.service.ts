@@ -644,8 +644,7 @@ export class ReportingService {
    *
    * **The Cell table's rule, attributed by the person** (section 20). Rows are the subject's
    * direct disciples at the period's end, or the Network roots for a whole-church reader,
-   * each counting the placement subtree the DCC monthly report counts for that leader. That
-   * subtree includes the subject, so the subject's own row is the subject alone.
+   * each counting the placement subtree the DCC monthly report counts for that leader.
    *
    * **Coverage sums decision 0224's obligations over the period's Sundays**, placed at each
    * event date as the month's line is; a Sunday that has not come owes nothing.
