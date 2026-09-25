@@ -68,6 +68,31 @@ import { mockConquest, mockPersonGrowth, mockSuynl, mockTraining } from './mock-
 
 const THEMES = ['light', 'dark'] as const;
 
+/** Every read the Record screen makes, answered, so each of its four lists has rows. */
+async function mockDashboard(page: import('@playwright/test').Page) {
+  await mockSignedIn(page);
+  await mockCells(page);
+  await mockCellMeetings(page);
+  await mockMeetingsAwaiting(page);
+  await mockCellReport(page);
+  await mockDccReport(page);
+  await mockDccEvents(page);
+  await mockDccRoster(page);
+  await mockAwaitingReassignment(page);
+  await mockPeopleWithoutACell(page);
+}
+
+/**
+ * Presses one of Record's four list buttons (decision 0290). Each list is rendered only
+ * once chosen, so a state that is never chosen is never scanned.
+ */
+async function chooseRecordList(page: import('@playwright/test').Page, name: RegExp) {
+  await page
+    .getByRole('group', { name: 'Outstanding work' })
+    .getByRole('button', { name })
+    .click();
+}
+
 /**
  * Every route, and the state worth scanning it in.
  *
@@ -551,76 +576,84 @@ const SCANS = [
   },
   {
     // Where a leader lands: outstanding work above the numbers (section 19).
+    // It opens on Awaiting a record, Cell Group first (decision 0290).
     name: 'dashboard',
     route: '/dashboard',
-    async before(page: import('@playwright/test').Page) {
-      await mockSignedIn(page);
-      await mockCells(page);
-      await mockCellMeetings(page);
-      await mockMeetingsAwaiting(page);
-      await mockCellReport(page);
-      await mockDccReport(page);
-      await mockDccEvents(page);
-      await mockDccRoster(page);
-      await mockAwaitingReassignment(page);
-      await mockPeopleWithoutACell(page);
-    },
+    before: mockDashboard,
     async arrange(page: import('@playwright/test').Page) {
       await expect(page.getByRole('heading', { name: 'Awaiting a record' })).toBeVisible();
-      // **A row of each kind in the queue, so axe scans both.** The Cell rows wait on
-      // their per-Cell meetings reads and the Sunday rows on their checklists, and
-      // nothing orders the two, so each is waited for.
-      await expect(page.getByRole('link', { name: /^Record CELL-/ }).first()).toBeVisible();
-      await expect(page.getByRole('link', { name: /^Record DCC,/ }).first()).toBeVisible();
+      // A Cell meeting's row, the half the screen opens on. A Sunday's row is behind
+      // Doulos Cell Celebration and is scanned under "dashboard, own DCC checklist".
+      await expect(
+        page.getByRole('link', { name: /^Record Young Pro · CELL-000007,/ }),
+      ).toBeVisible();
       // A tile carries its scope and its period, which section 19 requires of
       // every one of them.
       await expect(page.getByText(/· People you oversee/).first()).toBeVisible();
-      // **Both of the above render before any query resolves** — the heading is
-      // static and the scope label defaults while `me.data` is undefined — so axe
-      // would otherwise scan a page with no rows on it.
-      await expect(page.getByRole('link', { name: 'Amihan Bacani' })).toBeVisible();
+      // **The heading and the scope label render before any query resolves**, so
+      // the scan waits for the last of the four buttons' counts too: without them
+      // axe would scan buttons whose count boxes had not arrived.
+      const lists = page.getByRole('group', { name: 'Outstanding work' });
+      await expect(lists.getByRole('button', { name: /^Needs a new leader\s*2$/ })).toBeVisible();
+      await expect(lists.getByRole('button', { name: /^Not in a Cell\s*2$/ })).toBeVisible();
     },
   },
   {
     // The queue's branch view (decision 0258): a downline leader's meeting.
     name: 'dashboard, people I oversee',
     route: '/dashboard',
-    async before(page: import('@playwright/test').Page) {
-      await mockSignedIn(page);
-      await mockCells(page);
-      await mockCellMeetings(page);
-      await mockMeetingsAwaiting(page);
-      await mockCellReport(page);
-      await mockDccReport(page);
-      await mockDccEvents(page);
-      await mockDccRoster(page);
-      await mockAwaitingReassignment(page);
-      await mockPeopleWithoutACell(page);
-    },
+    before: mockDashboard,
     async arrange(page: import('@playwright/test').Page) {
       await page.getByRole('radio', { name: 'People I oversee' }).check();
-      await expect(page.getByRole('link', { name: /^Record CELL-000021,/ })).toBeVisible();
+      await expect(
+        page.getByRole('link', { name: /^Record Young Pro · CELL-000021,/ }),
+      ).toBeVisible();
     },
   },
   {
-    // The reader's own DCC checklist across the month, under the DCC filter.
+    // The reader's own DCC checklist across the month, under Doulos Cell Celebration,
+    // with the Sundays still awaiting a record above it.
     name: 'dashboard, own DCC checklist',
     route: '/dashboard',
-    async before(page: import('@playwright/test').Page) {
-      await mockSignedIn(page);
-      await mockCells(page);
-      await mockCellMeetings(page);
-      await mockMeetingsAwaiting(page);
-      await mockCellReport(page);
-      await mockDccReport(page);
-      await mockDccEvents(page);
-      await mockDccRoster(page);
-      await mockAwaitingReassignment(page);
-      await mockPeopleWithoutACell(page);
-    },
+    before: mockDashboard,
     async arrange(page: import('@playwright/test').Page) {
-      await page.getByRole('radio', { name: 'DCC' }).check();
+      await page
+        .getByRole('group', { name: 'Awaiting a record' })
+        .getByRole('button', { name: /^Doulos Cell Celebration/ })
+        .click();
+      await expect(page.getByRole('link', { name: /^Record DCC · / }).first()).toBeVisible();
       await expect(page.getByRole('table', { name: /Your DCC checklist by Sunday/ })).toBeVisible();
+    },
+  },
+  {
+    // Record's second list (decision 0290): a table from lg, a card per Cell below it.
+    name: 'dashboard, cells behind',
+    route: '/dashboard',
+    before: mockDashboard,
+    async arrange(page: import('@playwright/test').Page) {
+      await chooseRecordList(page, /^Cells behind/);
+      await expect(page.getByRole('heading', { name: 'Cells behind' })).toBeVisible();
+      await expect(page.getByRole('link', { name: 'CELL-000007' })).toBeVisible();
+    },
+  },
+  {
+    // Record's third list, section 20's attention list (decisions 0232 and 0290).
+    name: 'dashboard, needs a new leader',
+    route: '/dashboard',
+    before: mockDashboard,
+    async arrange(page: import('@playwright/test').Page) {
+      await chooseRecordList(page, /^Needs a new leader/);
+      await expect(page.getByRole('link', { name: 'Amihan Bacani' })).toBeVisible();
+    },
+  },
+  {
+    // Record's fourth list, section 15's people-without-a-Cell list (decisions 0233, 0290).
+    name: 'dashboard, not in a cell',
+    route: '/dashboard',
+    before: mockDashboard,
+    async arrange(page: import('@playwright/test').Page) {
+      await chooseRecordList(page, /^Not in a Cell/);
+      await expect(page.getByRole('link', { name: 'Bituin Carreon' })).toBeVisible();
     },
   },
   {
@@ -649,19 +682,6 @@ const SCANS = [
       await page.getByRole('button', { name: 'Add to a Cell' }).first().click();
       const dialog = page.getByRole('dialog', { name: 'Add Bituin Carreon to a Cell' });
       await expect(dialog.getByRole('combobox', { name: 'Cell' })).toBeVisible();
-    },
-  },
-  {
-    // Section 20's attention list, which the placement graph's reconstruction would
-    // otherwise keep invisible (decision 0232).
-    name: 'people awaiting reassignment',
-    route: '/people/awaiting-reassignment',
-    async before(page: import('@playwright/test').Page) {
-      await mockSignedIn(page);
-      await mockAwaitingReassignment(page);
-    },
-    async arrange(page: import('@playwright/test').Page) {
-      await expect(page.getByRole('heading', { name: 'Amihan Bacani' })).toBeVisible();
     },
   },
   {
@@ -1214,39 +1234,21 @@ const TARGET_SWEEP = [
     // file's fourth encounter with the same trap.
     name: 'dashboard',
     route: '/dashboard',
-    // **Settled on a person in the last section to load, not on the first heading.**
-    // The page heading and the awaiting-a-record heading both render before the
-    // queries resolve, so counting there counted six controls on a page that owns
-    // more — which is what the floor caught when this section was added.
+    // **Settled on a Cell meeting's Record button, not on the first heading.** The page
+    // heading and the awaiting-a-record heading both render before the queries resolve,
+    // so counting there counted six controls on a page that owns more.
     //
-    // **It settles on a row of *People without a Cell*, which is the last section in
-    // the page.** It settled on `Amihan Bacani` — a row of *People needing a leader*,
-    // one section earlier — for as long as that was the last one. Adding a section
-    // after it left the settle resolving before the new queries did, and the count ran
-    // two targets short: green on a fast machine and red in CI, which is the trap this
-    // comment already records three earlier encounters with. The rule it states was
-    // right and the name under it went stale, so moving a section means moving this.
+    // **Recounted for decision 0290 rather than decremented.** Record now shows one list
+    // at a time and opens on Awaiting a record, Cell Group, so the attention lists'
+    // names and their links are no longer on the page it opens on, and nothing is below
+    // the queue but the month's cards. Measured on 2026-09-25: the four list buttons,
+    // the two Cell Group / Doulos Cell Celebration buttons, the two "Whose" radios, the
+    // two Cell rows' Record buttons twice over (the table and the cards are both in the
+    // page, one of them hidden, and a hidden one is counted and not measured), See the
+    // whole month, and the four month cards: **seventeen**.
     settleRole: 'link' as const,
-    settle: 'Bituin Carreon',
-    // Fifteen: the twelve above plus the two people without a Cell and the link into
-    // that list, which section 15's second attention list contributes. Sixteen since
-    // decision 0245 moved the way in to the DCC calendar from the sidebar onto this
-    // page, so losing that link is something the floor now notices.
-    //
-    // **Twenty-one since UI-3**: the queue's three filter choices and its two Sunday
-    // rows' Record buttons. The two awaiting-a-record links became the Cell rows' Record
-    // buttons, one each. The queue shows "Loading…" until every read it is built from
-    // has answered, and the sweep waits for no "Loading…" to remain before counting, so
-    // both kinds of row are there when it counts.
-    //
-    // **Still twenty-one after decision 0289, recounted rather than decremented.** The
-    // two "as of today" tiles left for the Cells page, so the six tile links are the four
-    // month cards; the queue's two "Whose" radios (decision 0258) were never added above,
-    // so the page owned twenty-three against this floor until the tiles went. Measured on
-    // 2026-09-25: five radios, four Record buttons, See the whole month, four month
-    // cards, one attention link, two people needing a leader and their list link, two
-    // people without a Cell and theirs.
-    minimum: 21,
+    settle: 'Record Young Pro · CELL-000007',
+    minimum: 17,
   },
   {
     // The back link, a name link and an Add to a Cell button per person, and the pager's two
@@ -1256,19 +1258,6 @@ const TARGET_SWEEP = [
     route: '/cells/people-without-a-cell',
     settleRole: 'heading' as const,
     settle: 'Bituin Carreon',
-    minimum: 5,
-  },
-  {
-    // The back link, one link per person — the reassignment section 19 asks each entry to
-    // carry — and the pager's two buttons (decision 0261).
-    //
-    // **Settled on a person rather than on the page heading**, which renders before
-    // the list arrives — the lesson the meeting-roster entry above records, and the
-    // one this file has now learned three times.
-    name: 'people awaiting reassignment',
-    route: '/people/awaiting-reassignment',
-    settleRole: 'heading' as const,
-    settle: 'Amihan Bacani',
     minimum: 5,
   },
   {
@@ -1419,8 +1408,29 @@ const TARGET_EXEMPT: { name: string; why: string }[] = [
   {
     name: 'dashboard, own DCC checklist',
     why:
-      'Reached by choosing DCC, which this sweep cannot do. The table below the queue holds no ' +
-      'control; the rest are the measured "dashboard" controls.',
+      'Reached by pressing Doulos Cell Celebration, which this sweep cannot do. The table below ' +
+      'the queue holds no control; the Sundays\' Record buttons are the same Button primitive as ' +
+      'the measured "dashboard" Cell rows, and the rest are the measured "dashboard" controls.',
+  },
+  {
+    name: 'dashboard, cells behind',
+    why:
+      'Reached by pressing Cells behind, which this sweep cannot do. Beyond the measured ' +
+      '"dashboard" buttons and month cards its only controls are a Cell link per row, carrying ' +
+      'min-h-6 as the name links measured on "cells" do.',
+  },
+  {
+    name: 'dashboard, needs a new leader',
+    why:
+      'Reached by pressing Needs a new leader, which this sweep cannot do. Its controls are a ' +
+      'min-h-6 name link per person, as on "cells", and Show more when there is another page, ' +
+      'the secondary Button primitive measured on every screen.',
+  },
+  {
+    name: 'dashboard, not in a cell',
+    why:
+      'Reached by pressing Not in a Cell, which this sweep cannot do. The same controls as ' +
+      '"dashboard, needs a new leader": a min-h-6 name link per person and Show more.',
   },
   {
     name: 'dcc figures report, by leader',

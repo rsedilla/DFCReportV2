@@ -81,7 +81,7 @@
     },
     {
       "route": "GET /api/v1/people/awaiting-reassignment",
-      "screen": "web/app/people/awaiting-reassignment/page.tsx"
+      "screen": "web/app/dashboard/page.tsx"
     },
     {
       "route": "GET /api/v1/people/:id/pastoral-path",

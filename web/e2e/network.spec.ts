@@ -70,3 +70,36 @@ test.describe('the Network screen’s starting point', () => {
     await expect(page.getByRole('heading', { name: 'Network roots' })).toHaveCount(0);
   });
 });
+
+/**
+ * The focus person's four figures, in the words of the 2026-09-25 pass over the screens.
+ * The two figures still to record stay two, each named, and are never added together
+ * (SKILL.md section 19).
+ */
+test.describe('the Network screen’s figures', () => {
+  test('names the branch’s figures, and keeps DCC and Cell apart', async ({ page }) => {
+    await signedInReader(page);
+    await page.goto('/network');
+
+    const cards = page
+      .locator('main dl')
+      .filter({ has: page.getByRole('term').filter({ hasText: 'Still to record' }) });
+    await expect(cards.getByRole('term')).toHaveText([
+      'Direct disciples',
+      'People beneath',
+      'Cell Leaders beneath',
+      'Still to record',
+    ]);
+    await expect(cards.getByRole('definition')).toHaveText([
+      '3',
+      '9',
+      '2',
+      /^4\s*DCC\s*·\s*1\s*Cell$/,
+    ]);
+
+    for (const old of ['Direct reports', 'Whole branch', 'Cell leaders in branch']) {
+      await expect(page.getByRole('term').filter({ hasText: old })).toHaveCount(0);
+    }
+    await expect(page.getByText('DCC records · Cell meetings')).toHaveCount(0);
+  });
+});

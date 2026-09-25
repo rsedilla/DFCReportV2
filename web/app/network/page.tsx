@@ -1,5 +1,7 @@
 'use client';
 
+import type { ReactNode } from 'react';
+
 import { useInfiniteQuery, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ChevronRight } from 'lucide-react';
 import Link from 'next/link';
@@ -181,13 +183,15 @@ function NetworkScreen() {
 
   return (
     <main id="main" className={PAGE_WIDTH.INDEX}>
+      <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
       <h1 className="text-2xl font-semibold tracking-tight">Network</h1>
-      <p className="text-muted mt-2 max-w-2xl text-sm leading-relaxed">
+      <p className="text-muted text-sm">
         The people under your care, one level at a time.
         {month === null
           ? null
           : ` Figures for ${monthLabel(month)}${open ? ', a month still open' : ''}.`}
       </p>
+      </div>
 
       <PeopleTabs current="/network" />
 
@@ -226,18 +230,23 @@ function NetworkScreen() {
           />
 
           <dl className="mt-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
-            <Card label="Direct reports" value={String(person.direct_reports)} />
+            <Card label="Direct disciples" value={String(person.direct_reports)} />
             <Card label="People beneath" value={String(person.beneath)} />
             <Card
               label="Cell Leaders beneath"
               value={cells.data === undefined ? '—' : String(cells.data.cell_leaders_beneath)}
             />
             <Card
-              label={`Behind${month === null ? '' : ` in ${monthLabel(month)}`}`}
-              value={`${dcc.data === undefined ? '—' : dcc.data.branch_behind} · ${
-                cells.data === undefined ? '—' : cells.data.branch_meetings_behind
-              }`}
-              note="DCC records · Cell meetings"
+              label="Still to record"
+              value={
+                <>
+                  {dcc.data === undefined ? '—' : dcc.data.branch_behind}
+                  <span className="text-muted ml-1 text-sm font-normal">DCC</span>
+                  <span className="text-muted mx-2 text-sm font-normal">·</span>
+                  {cells.data === undefined ? '—' : cells.data.branch_meetings_behind}
+                  <span className="text-muted ml-1 text-sm font-normal">Cell</span>
+                </>
+              }
             />
           </dl>
 
@@ -473,7 +482,7 @@ function RootsView({
             </div>
             <dl className="text-muted mt-2 grid grid-cols-2 gap-2 text-sm lg:grid-cols-4">
               <div>
-                <dt>Direct reports</dt>
+                <dt>Direct disciples</dt>
                 <dd className="text-ink tabular-nums">{root.direct_reports}</dd>
               </div>
               <div>
@@ -521,11 +530,11 @@ function figure(value: number | null): string {
   return value === null ? '—' : String(value);
 }
 
-function Card({ label, value, note }: { label: string; value: string; note?: string }) {
+function Card({ label, value, note }: { label: string; value: ReactNode; note?: string }) {
   return (
-    <div className="border-line border p-3">
-      <dt className="text-muted text-xs font-bold tracking-[0.07em] uppercase">{label}</dt>
-      <dd className="mt-1 text-2xl font-semibold tabular-nums">{value}</dd>
+    <div className="bg-surface border-edge border p-3">
+      <dt className="text-accent text-xs font-bold tracking-[0.08em] uppercase">{label}</dt>
+      <dd className="mt-1 text-2xl font-bold tabular-nums">{value}</dd>
       {note === undefined ? null : <dd className="text-muted text-xs">{note}</dd>}
     </div>
   );
