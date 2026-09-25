@@ -2102,6 +2102,8 @@ Senior Pastors retain authorized whole-church visibility across both Men's and W
 
 Sidebar: recorded under `Record` and read under `Reports` (Section 19, ruling of 2026-09-14).
 
+**DCC is the Doulos Cell Celebration** (ruling of 2026-09-25, decision 0291).
+
 DCC uses Blackboard-style checklist attendance.
 
 ### DCC calendar
