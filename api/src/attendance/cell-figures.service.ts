@@ -158,6 +158,106 @@ export class CellFiguresService {
   }
 
   /**
+   * The `(Cell, scheduled date)` pairs carrying a record between two calendar dates,
+   * inclusive — {@link recordedScheduledDatesIn} over a run of days rather than a
+   * reporting month, for a week, a quarter or a year (decision 0293).
+   */
+  async recordedScheduledDatesBetween(
+    executor: Db | Transaction<Database>,
+    from: string,
+    to: string,
+  ): Promise<Set<string>> {
+    const rows = await executor
+      .selectFrom('cell_meetings')
+      .select(['cell_id', 'scheduled_date'])
+      .where('scheduled_date', '>=', from)
+      .where('scheduled_date', '<=', to)
+      .execute();
+
+    return new Set(rows.map((row) => `${row.cell_id}|${String(row.scheduled_date)}`));
+  }
+
+  /**
+   * The Cells whose meetings scheduled in the range were recorded with this person as
+   * responsible leader, for My 12's own-row label (decision 0293).
+   */
+  async cellsLedBetween(
+    executor: Db | Transaction<Database>,
+    from: string,
+    to: string,
+    leaderId: string,
+  ): Promise<string[]> {
+    const rows = await executor
+      .selectFrom('cell_meetings')
+      .select('cell_id')
+      .distinct()
+      .where('responsible_leader_id', '=', leaderId)
+      .where('scheduled_date', '>=', from)
+      .where('scheduled_date', '<=', to)
+      .execute();
+
+    return rows.map((row) => row.cell_id);
+  }
+
+  /**
+   * Who attended a Cell between two calendar dates, and the stage each had reached by the
+   * last of them (decision 0293, SKILL.md section 12).
+   *
+   * **Section 12's month rule on another length.** The population is the people present at
+   * a recorded meeting (`HELD` or `RESCHEDULED`) scheduled in the range; the stage is their
+   * lifetime Cell attendance through its last day, across every Cell. Dates are *scheduled*
+   * dates, a meeting's identity (section 13), which is the date `reporting_month` is taken
+   * from — so a range that is exactly a month answers exactly what `monthFigures` answers.
+   *
+   * **Narrowed by the meeting's frozen responsible leader**, the key section 20 gives every
+   * Cell figure, so a Cell handed over mid-range splits between its two leaders. `null`
+   * narrows nothing, which is Whole Church. The caller receives each person rather than a
+   * count so that rows may be compared with their total person by person, which is how
+   * decision 0293's "counted in two rows" line is computed rather than inferred.
+   */
+  async rangeFigures(
+    executor: Db | Transaction<Database>,
+    from: string,
+    to: string,
+    leaders: readonly string[] | null,
+  ): Promise<CellClassificationFigure[]> {
+    const list = leaders === null ? null : [...leaders];
+
+    const rows = await sql<{ person_id: string; lifetime: string }>`
+      WITH scoped AS (
+        SELECT id
+          FROM cell_meetings
+         WHERE scheduled_date BETWEEN ${from}::date AND ${to}::date
+           AND status IN ('HELD', 'RESCHEDULED')
+           AND (${list}::uuid[] IS NULL OR responsible_leader_id = ANY (${list}::uuid[]))
+      ),
+      live AS (
+        SELECT a.person_id, a.cell_meeting_id
+          FROM cell_attendance a
+          JOIN cell_meetings m ON m.id = a.cell_meeting_id
+         WHERE a.present = true
+           AND a.superseded_at IS NULL
+           AND m.status IN ('HELD', 'RESCHEDULED')
+           AND m.scheduled_date <= ${to}::date
+      ),
+      attended AS (
+        SELECT DISTINCT person_id
+          FROM live
+         WHERE cell_meeting_id IN (SELECT id FROM scoped)
+      )
+      SELECT p.person_id, count(*)::text AS lifetime
+        FROM attended p
+        JOIN live l ON l.person_id = p.person_id
+       GROUP BY p.person_id
+    `.execute(executor);
+
+    return rows.rows.map((row) => ({
+      personId: row.person_id,
+      lifetimeThroughMonth: Number(row.lifetime),
+    }));
+  }
+
+  /**
    * Every figure a Cell monthly report needs, from one statement.
    *
    * **One statement rather than several, for the reason `DccFiguresService` gives.**

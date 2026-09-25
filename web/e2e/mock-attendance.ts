@@ -1021,3 +1021,168 @@ export async function mockCellsWithClosed(
     ),
   );
 }
+
+const leaderOf = (id: string, member: string, name: string) => ({ id, member_id: member, full_name: name });
+
+/**
+ * The leaders My 12 names (decision 0293). Surname order is Alcantara, Bautista,
+ * Dimaculangan, and the People column runs 3, 4, 0 -- so the order is neither ascending nor
+ * descending by a figure, which is what a case pinning section 13's "never sorted by a
+ * figure" needs. Invented names.
+ */
+export const TWELVE = {
+  teresita: leaderOf('3f1b7c6e-0000-4000-8000-000000000704', 'M-000804', 'Teresita Alcantara'),
+  consuelo: leaderOf('3f1b7c6e-0000-4000-8000-000000000701', 'M-000801', 'Consuelo Bautista'),
+  efren: leaderOf('3f1b7c6e-0000-4000-8000-000000000702', 'M-000802', 'Efren Dimaculangan'),
+  lourdes: leaderOf('3f1b7c6e-0000-4000-8000-000000000703', 'M-000803', 'Lourdes Magsaysay'),
+  aurora: leaderOf('3f1b7c6e-0000-4000-8000-000000000705', 'M-000805', 'Aurora Dizon'),
+  bonifacio: leaderOf('3f1b7c6e-0000-4000-8000-000000000706', 'M-000806', 'Bonifacio Esguerra'),
+} as const;
+
+const stages = (vip: number, second: number, third: number, fourth: number, regular: number) => ({
+  unique_people: vip + second + third + fourth + regular,
+  classification: {
+    vip,
+    second_timer: second,
+    third_timer: third,
+    fourth_timer: fourth,
+    regular,
+  },
+});
+
+/** The last day of the period, computed as the API computes it. */
+function twelveEnd(kind: string, start: string): string {
+  const [year, month, day] = start.split('-').map(Number);
+  const at =
+    kind === 'WEEK'
+      ? new Date(Date.UTC(year, month - 1, day + 6))
+      : new Date(Date.UTC(year, month - 1 + { MONTH: 1, QUARTER: 3, YEAR: 12 }[kind as 'MONTH'], 0));
+
+  return at.toISOString().slice(0, 10);
+}
+
+/**
+ * `GET /reports/cells/twelve` (decision 0293), shaped as the API answers it, and every figure
+ * reconciling as the API's must (section 20): rows, plus the own row, less `overlap`, plus
+ * `elsewhere`, is the total, and each row's five stages sum to its People.
+ *
+ * - The reader's own 12: three rows, their own two Cells, one person in two rows and two
+ *   elsewhere, so both conditional lines render. `ownCells` changes the own row's label.
+ * - Consuelo's 12, opened from a row: one row, no Cell of her own, and neither line.
+ * - Whole Church: the two Network roots, and no own row.
+ *
+ * `open` is decided from `today` as the API decides it -- the month holding the period's
+ * last day is open until the 7th of the month after -- so a case with a fixed clock passes
+ * that day, and so is `coverage.through`, the period's end or the current month's, whichever
+ * comes first.
+ *
+ * `expectPeriod`, where given, is the one guard month the server accepts: any other is
+ * answered 422 naming it in `details.expected`, as the API answers a device whose clock
+ * disagrees with the database's about the month. Returns every query asked, in order.
+ */
+export async function mockCellTwelve(
+  page: Page,
+  {
+    today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila' }).format(new Date()),
+    ownCells = 2,
+    expectPeriod,
+  }: { today?: string; ownCells?: number; expectPeriod?: string } = {},
+): Promise<URLSearchParams[]> {
+  const asked: URLSearchParams[] = [];
+
+  await page.route('**/api/v1/reports/cells/twelve*', (route) => {
+    const params = new URL(route.request().url()).searchParams;
+    asked.push(params);
+
+    const kind = params.get('kind') ?? 'MONTH';
+    const start = params.get('start') ?? '';
+    const end = twelveEnd(kind, start);
+    const [year, month] = end.split('-').map(Number);
+    const closes = new Date(Date.UTC(year, month, 7)).toISOString().slice(0, 10);
+    const monthEnd = twelveEnd('MONTH', `${today.slice(0, 7)}-01`);
+    const through = end < monthEnd ? end : monthEnd;
+    const period = { kind, start, end, open: today <= closes, coverage: { recorded: 6, scheduled: 8, through } };
+
+    if (expectPeriod !== undefined && params.get('period') !== expectPeriod) {
+      return route.fulfill(
+        json(
+          {
+            error: {
+              code: 'VALIDATION_FAILED',
+              message: `This period is read as of ${expectPeriod}.`,
+              details: { field: 'period', value: params.get('period'), expected: expectPeriod },
+            },
+          },
+          422,
+        ),
+      );
+    }
+
+    if (params.get('scope') === 'WHOLE_CHURCH') {
+      return route.fulfill(
+        json({
+          ...period,
+          // The Network roots, labelled and ordered by their Network (decision 0293).
+          rows: [
+            { leader: TWELVE.bonifacio, network: 'MENS', ...stages(2, 2, 1, 0, 4) },
+            { leader: TWELVE.aurora, network: 'WOMENS', ...stages(3, 1, 0, 1, 2) },
+          ],
+          own: null,
+          overlap: 0,
+          // Somebody in the total and under neither root: the "In no row" line (7 + 9 + 1).
+          elsewhere: 1,
+          total: stages(5, 3, 1, 1, 7),
+        }),
+      );
+    }
+
+    if (params.get('leader_id') === TWELVE.consuelo.id) {
+      return route.fulfill(
+        json({
+          ...period,
+          coverage: { ...period.coverage, recorded: 2, scheduled: 3 },
+          rows: [{ leader: TWELVE.lourdes, ...stages(1, 1, 0, 1, 1) }],
+          own: { cells: 0, ...stages(0, 0, 0, 0, 0) },
+          overlap: 0,
+          elsewhere: 0,
+          total: stages(1, 1, 0, 1, 1),
+        }),
+      );
+    }
+
+    // The reader's own, and any other leader opened: 3 + 4 + 0 + 2 - 1 + 2 = 10.
+    return route.fulfill(
+      json({
+        ...period,
+        rows: [
+          { leader: TWELVE.teresita, ...stages(1, 0, 1, 0, 1) },
+          { leader: TWELVE.consuelo, ...stages(1, 1, 0, 1, 1) },
+          { leader: TWELVE.efren, ...stages(0, 0, 0, 0, 0) },
+        ],
+        own: { cells: ownCells, ...stages(0, 1, 0, 0, 1) },
+        overlap: 1,
+        elsewhere: 2,
+        total: stages(2, 2, 1, 1, 4),
+      }),
+    );
+  });
+
+  // The opened leader's name, which the heading and Figures for read from their branch. Only
+  // the leaders above are answered, so a Network screen mock installed beside this keeps its own.
+  await page.route('**/api/v1/leaders/*/children*', (route) => {
+    const id = new URL(route.request().url()).pathname.split('/').at(-2);
+    const person = Object.values(TWELVE).find((leader) => leader.id === id);
+
+    return person === undefined
+      ? route.fallback()
+      : route.fulfill(
+          json({
+            person: { ...person, leads_anyone: true, direct_reports: 1, beneath: 1 },
+            data: [],
+            next_cursor: null,
+          }),
+        );
+  });
+
+  return asked;
+}

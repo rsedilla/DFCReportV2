@@ -208,4 +208,48 @@ describe('the Cell coverage denominator resolves the same leader as leaderOnDate
       incoming.id,
     ]);
   });
+
+  /**
+   * `scheduledMeetingsWithLeaderIn` now delegates to `scheduledMeetingsWithLeaderBetween`
+   * (decision 0293), so a month asked for as a month and as a run of days answers from one
+   * derivation. What the delegation can still get wrong is the month's last day, which it
+   * computes rather than asks the database for, so February of a leap year is the case: its
+   * fifth Saturday is the 29th.
+   */
+  describe('the range form the month form delegates to (decision 0293)', () => {
+    const byDate = (pairs: { scheduledDate: string }[]) => pairs.map((pair) => pair.scheduledDate);
+
+    it.each([
+      ['June 2020', '2020-06-01', '2020-06-30'],
+      ['February of a leap year', '2020-02-01', '2020-02-29'],
+    ])('answers %s identically as a month and as its days', async (_label, month, last) => {
+      const cell = (
+        await createCell(db, { leader: outgoing, createdAt: new Date('2020-01-01T00:00:00+08:00') })
+      ).id;
+      await handOver(cell, new Date(`${month.slice(0, 7)}-15T00:00:00+08:00`));
+
+      const asMonth = await cells.scheduledMeetingsWithLeaderIn(db, month);
+      const asRange = await cells.scheduledMeetingsWithLeaderBetween(db, month, last);
+
+      expect(asRange).toEqual(asMonth);
+      expect(byDate(asMonth).at(-1)).toBe(month === JUNE ? '2020-06-27' : '2020-02-29');
+    });
+
+    it('includes both ends of a range and nothing outside it', async () => {
+      await createCell(db, { leader: outgoing, createdAt: BEFORE });
+
+      // The week of Monday 1 June holds one Saturday, the 6th.
+      expect(
+        byDate(await cells.scheduledMeetingsWithLeaderBetween(db, '2020-06-01', '2020-06-07')),
+      ).toEqual(['2020-06-06']);
+      // A range of one day that is a meeting day.
+      expect(
+        byDate(await cells.scheduledMeetingsWithLeaderBetween(db, '2020-06-13', '2020-06-13')),
+      ).toEqual(['2020-06-13']);
+      // A range across a month end, which the month form cannot express.
+      expect(
+        byDate(await cells.scheduledMeetingsWithLeaderBetween(db, '2020-06-22', '2020-07-05')),
+      ).toEqual(['2020-06-27', '2020-07-04']);
+    });
+  });
 });

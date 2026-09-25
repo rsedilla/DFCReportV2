@@ -5,54 +5,47 @@ import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 
 import { AppShell, PAGE_WIDTH } from '@/components/app-shell';
-import { AttendanceBuckets, ClassificationFigures } from '@/components/attendance-figures';
-import { CoverageFigure } from '@/components/coverage-figure';
 import { HowTheseAreCounted } from '@/components/how-counted';
-import { MonthPicker } from '@/components/month-picker';
 import { LeaderDrill } from '@/components/leader-drill';
-import { PeriodSwitch, YearPicker, YearTable, currentYear } from '@/components/report-year';
+import { PeriodTabs, RangeNavigator, TwelveTable } from '@/components/my-twelve';
+import { YearTable } from '@/components/report-year';
 import { ReportsHeading, ReportsTabs } from '@/components/reports-tabs';
 import { FailureNotice } from '@/components/ui/failure-notice';
-import { CONTROL_BAR, FRAME } from '@/components/ui/frame';
-import { listAllCells } from '@/lib/cells';
+import { CONTROL_BAR } from '@/components/ui/frame';
 import { getMe, holdsWholeChurch } from '@/lib/me';
 import { describeFailure } from '@/lib/messages';
-import { getCellMonthlyReport, hasBuckets, type ReportScope } from '@/lib/reports';
+import { getBranch } from '@/lib/network';
+import { networkLabel } from '@/lib/people';
+import { getCellTwelve } from '@/lib/reports';
+import {
+  rangeGuardMonth,
+  rangeStartOf,
+  type RangeKind,
+} from '@/lib/report-range';
+import { monthFromQuery, todayInManila } from '@/lib/reporting-month';
 import { useScreenAddress } from '@/lib/screen-address';
-import { monthFromQuery } from '@/lib/reporting-month';
 
 /**
- * Cell attendance figures for a month, one of the two reports under Reports (SKILL.md
- * sections 12, 13, 17, 19 and 20; decisions 0202, 0216, 0225 and 0245).
+ * The Cell Groups report (SKILL.md sections 12, 13, 17, 19 and 20; decisions 0202, 0216,
+ * 0257, 0292 and 0293).
  *
- * **Coverage leads, and that is decision 0202 rather than a layout preference.**
- * It is the first thing on the screen because its denominator is derived from the
- * Cell's schedule against the calendar rather than from anything a leader
- * submitted — so recording less makes it worse and never better, which is the one
- * figure here that cannot be improved by reporting less. Unique people and
- * classification follow it.
+ * **Weekly, Monthly, Quarterly and Year are one rule on four lengths** (decision 0293): the
+ * people who came to a Cell in the period, once each, at the stage they had reached by its
+ * last day. A period still running says so and shows the stage so far; a period that has
+ * not begun is not offered (decision 0216).
  *
- * **Buckets appear only when a single Cell is selected** (section 12). `N` belongs
- * to a Cell, so an aggregate `Completed` would mean "attended everything their own
- * Cell happened to record" and would be inflated by exactly the Cells that
- * recorded least. That is enforced by the report's own type rather than by a
- * condition here: the aggregate arm carries no `buckets` field at all.
+ * **Coverage leads, as one line** (decision 0202): meetings recorded over meetings due,
+ * above the table, because it is the one figure that recording less makes worse rather than
+ * better. The rows behind it are under Filed reports (decision 0292).
  *
- * **The scope options are read from the account's own grants**, so a leader with no
- * church-wide grant is not offered a control that would only ever be refused. That
- * is courtesy and not authorization — the API decides on every request, and this
- * screen would show its refusal if the two ever disagreed.
+ * **My 12 is the reader's direct disciples, then their own Cell groups, then the total**,
+ * in surname order, never numbered, sorted by a figure or coloured (section 13). Opening a
+ * name shows that leader's 12, one generation down; Figures for offers the same names. A
+ * whole-church reader's rows are the Network roots, where the Network screen starts them
+ * (decision 0268), labelled and ordered by their Network (decision 0293).
  *
- * **The next month is not offered.** A report may not name a period that has not
- * begun (decision 0216), so a control leading there would only produce a
- * validation error.
- *
- * **Nothing is ranked or colour-graded** (sections 13, 17 and 19), and the Cell
- * picker lists Cells in the order the API returns them, which ranks nobody. The
- * section labels are red and every figure is not.
- *
- * **The rows behind the coverage figure are under Filed reports** (decision 0292), and a
- * link at the foot opens them for the same month.
+ * **Year keeps its month-by-month table** (decision 0257) beneath its 12, because a year's
+ * stage and its months answer different questions and are never added together.
  */
 export default function CellReportPage() {
   return (
@@ -62,109 +55,137 @@ export default function CellReportPage() {
   );
 }
 
+const PERIOD_PARAM: Record<string, RangeKind> = {
+  week: 'WEEK',
+  quarter: 'QUARTER',
+  year: 'YEAR',
+};
+
 export function CellReport() {
   const search = useSearchParams();
-  // Every control lives in the address, so the browser's Back steps back through the
-  // month, the period and the Cell, and a reload opens the same figures.
+  // Every control lives in the address, so Back steps back through the period, the leader
+  // and the length, and a reload opens the same figures.
   const go = useScreenAddress();
-  const month = monthFromQuery(search.get('month'));
-  // A month or a year of this report (decision 0257). The year is the month's own year.
-  const period: 'month' | 'year' = search.get('period') === 'year' ? 'year' : 'month';
-  const year = Math.min(Number(search.get('year') ?? month.slice(0, 4)), currentYear());
-  const cellId = search.get('cell') ?? '';
-  // A leader opened from the By leader table (decision 0254), carried in the address so
-  // the browser's Back returns to the report it was opened from.
+  const today = todayInManila();
+
+  const kind: RangeKind = PERIOD_PARAM[search.get('period') ?? ''] ?? 'MONTH';
+  const current = rangeStartOf(kind, today);
+  const asked =
+    kind === 'MONTH'
+      ? monthFromQuery(search.get('month'))
+      : rangeStartOf(kind, search.get('start') ?? current);
+  // A period that has not begun is not reported (decision 0216), so an address naming one
+  // opens the current period instead.
+  const start = asked > current ? current : asked;
+  const guardMonth = rangeGuardMonth(kind, start, today);
   const leader = search.get('leader');
 
   const me = useQuery({ queryKey: ['me'], queryFn: ({ signal }) => getMe(signal) });
   const wholeChurch = holdsWholeChurch(me.data, 'reports.view_subtree');
 
-  // Every page of the index, not the first: a picker has to offer the whole list, and
-  // the Coverage by Cell table below reads the same query.
-  const cells = useQuery({
-    queryKey: ['cells-all', month],
-    queryFn: ({ signal }) => listAllCells(month, signal),
+  const own = wholeChurch
+    ? ({ kind: 'WHOLE_CHURCH' } as const)
+    : me.data
+      ? ({ kind: 'LEADER', person_id: me.data.person_id } as const)
+      : null;
+  const subject = leader ? ({ kind: 'LEADER', person_id: leader } as const) : own;
+
+  const twelve = useQuery({
+    queryKey: ['cell-twelve', kind, start, subject],
+    queryFn: ({ signal }) => getCellTwelve(kind, start, guardMonth, subject!, signal),
+    enabled: subject !== null,
+  });
+  // The reader's own rows, which Figures for offers whichever leader is open.
+  const ownTwelve = useQuery({
+    queryKey: ['cell-twelve', kind, start, own],
+    queryFn: ({ signal }) => getCellTwelve(kind, start, guardMonth, own!, signal),
+    enabled: own !== null,
+  });
+  const opened = useQuery({
+    queryKey: ['branch', leader],
+    queryFn: ({ signal }) => getBranch(leader!, undefined, signal),
+    enabled: leader !== null,
   });
 
-  // The actor's own subtree by default: every leader can read it, and it is the
-  // question a leader opening this screen is actually asking.
-  // **A Whole Church grant is read as Whole Church**, and the option's label says
-  // which. Keying on the actor's own subtree is right for a leader and wrong for
-  // anybody holding a church-wide grant who is not in the pastoral tree — section
-  // 5 permits that for an administrator, and section 20 then places them in no
-  // subtree. The label said "Everyone in your scope" while the query asked about
-  // one person, which is the disagreement this closes.
-  // Narrower than `ReportScope`: this route refuses `NETWORK`, because what such a
-  // figure narrows is unstated in section 20 and recorded as open. The type says so.
-  const scope: Exclude<ReportScope, { kind: 'NETWORK' }> | null = leader
-    ? { kind: 'LEADER', person_id: leader }
-    : cellId !== ''
-      ? { kind: 'CELL', cell_id: cellId }
-      : wholeChurch
-        ? { kind: 'WHOLE_CHURCH' }
-        : me.data
-          ? { kind: 'LEADER', person_id: me.data.person_id }
-          : null;
+  const address = (changes: Record<string, string | null>) => go(changes);
+  const periodParams = (extra: Record<string, string>) =>
+    new URLSearchParams({
+      ...(kind === 'MONTH'
+        ? { month: start }
+        : { period: kind.toLowerCase(), start }),
+      ...extra,
+    }).toString();
 
-  const report = useQuery({
-    queryKey: ['cell-report', month, scope],
-    queryFn: ({ signal }) =>
-      getCellMonthlyReport(month, scope as Exclude<ReportScope, { kind: 'NETWORK' }>, signal),
-    enabled: scope !== null && period === 'month',
-  });
+  const options = (ownTwelve.data?.rows ?? []).filter((row) => row.leader !== null);
+  const subjectName = leader ? (opened.data?.person.full_name ?? 'This leader') : null;
+  const what = { WEEK: 'in the week', MONTH: 'in the month', QUARTER: 'in the quarter', YEAR: 'in the year' }[kind];
 
   return (
     <main id="main" className={PAGE_WIDTH.INDEX}>
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <ReportsHeading line={`What your Cells recorded ${period === 'year' ? 'each month' : 'this month'}.`} />
+        <ReportsHeading line="Who came to a Cell, and where they are in their journey." />
         <HowTheseAreCounted report="cells" />
       </div>
-      <ReportsTabs current="cells" month={month} />
+      <ReportsTabs current="cells" month={guardMonth} />
+      <PeriodTabs
+        value={kind}
+        onChange={(value) =>
+          address({
+            period: value === 'MONTH' ? null : value.toLowerCase(),
+            start: null,
+            month: null,
+          })
+        }
+      />
 
       {/* Every control in one bar, above every figure (owner's choice, 2026-09-22). */}
       <div className={`mt-6 ${CONTROL_BAR}`}>
-        <PeriodSwitch
-          value={period}
-          onChange={(value) => go({ period: value === 'year' ? 'year' : null })}
+        <RangeNavigator
+          kind={kind}
+          start={start}
+          current={current}
+          open={twelve.data?.open}
+          onChange={(value) => address(kind === 'MONTH' ? { month: value } : { start: value })}
         />
-        {period === 'month' ? (
-          <MonthPicker
-            month={month}
-            onChange={(value) => go({ month: value })}
-            open={report.data?.open}
-          />
-        ) : (
-          <YearPicker year={year} onChange={(value) => go({ year: String(value) })} />
-        )}
-        <div hidden={leader !== null}>
+        <div>
           <label htmlFor="cell-scope" className="field-label block">
             Figures for
           </label>
           <select
             id="cell-scope"
-            value={cellId}
-            onChange={(event) => go({ cell: event.target.value })}
+            value={leader ?? ''}
+            onChange={(event) => address({ leader: event.target.value === '' ? null : event.target.value })}
             className="border-line bg-surface focus-visible:outline-accent mt-2 min-h-11 max-w-full rounded-md border px-3 text-sm focus-visible:outline-2 focus-visible:outline-offset-2"
           >
-            <option value="">
-              {wholeChurch ? 'Everyone in your scope' : 'Everyone you oversee'}
-            </option>
-            {(cells.data ?? []).map((cell) => (
-              <option key={cell.id} value={cell.id}>
-                {cell.cell_id} — {cell.leader.full_name}
-              </option>
-            ))}
+            <option value="">{wholeChurch ? 'Everyone in your scope' : 'Everyone you oversee'}</option>
+            <optgroup label={wholeChurch ? 'The Networks' : 'Your direct 12'}>
+              {options.map((row) => (
+                <option key={row.leader!.id} value={row.leader!.id}>
+                  {row.network ? networkLabel(row.network) : row.leader!.full_name}
+                </option>
+              ))}
+            </optgroup>
+            {leader !== null && !options.some((row) => row.leader?.id === leader) ? (
+              <option value={leader}>{subjectName}</option>
+            ) : null}
           </select>
         </div>
       </div>
 
-      {leader ? <LeaderDrill personId={leader} report="cells" month={month} /> : null}
+      {leader ? (
+        <LeaderDrill
+          personId={leader}
+          report="cells"
+          month={guardMonth}
+          backHref={`/reports/cells?${periodParams({})}`}
+        />
+      ) : null}
 
       <div className="mt-8">
         <FailureNotice
           failure={
-            report.isError
-              ? describeFailure(report.error)
+            twelve.isError
+              ? describeFailure(twelve.error)
               : me.isError
                 ? describeFailure(me.error)
                 : null
@@ -172,92 +193,50 @@ export function CellReport() {
         />
       </div>
 
-      {period === 'year' ? (
-        scope === null ? (
-          <p className="text-muted mt-6 text-sm">Loading&hellip;</p>
-        ) : (
-          <YearTable
-            key={`${year}-${JSON.stringify(scope)}`}
-            report="cells"
-            year={year}
-            scope={scope}
-          />
-        )
-      ) : report.isPending || scope === null ? (
+      {twelve.isPending || subject === null ? (
         <p className="text-muted mt-6 text-sm">Loading&hellip;</p>
-      ) : report.data ? (
+      ) : twelve.data ? (
         <div className="mt-6 flex flex-col gap-4">
-          {/* Coverage first, because it cannot be improved by recording less (decision 0202). */}
-          <div className="grid gap-4 lg:grid-cols-2">
-            <section aria-labelledby="coverage-heading" className={FRAME}>
-              <h2 id="coverage-heading" className="field-label">
-                Recording coverage
-              </h2>
-              <p className="mt-2">
-                <CoverageFigure
-                  recorded={report.data.coverage.recorded}
-                  scheduled={report.data.coverage.scheduled}
-                  unit="meetings recorded"
-                  headline
-                />
-              </p>
-              <p className="text-muted mt-2 text-sm leading-relaxed">
-                Out of the meetings the schedule says were due.
-              </p>
-            </section>
-
-            <section aria-labelledby="people-heading" className={FRAME}>
-              <h2 id="people-heading" className="field-label">
-                People who attended
-              </h2>
-              <p className="mt-2 text-xl font-semibold tabular-nums">{report.data.unique_people}</p>
-              <p className="text-muted mt-2 text-sm leading-relaxed">
-                Counted once, however many meetings.
-              </p>
-            </section>
-          </div>
-
-          {/* Side by side from `lg` where a single Cell has buckets; full width otherwise. */}
-          <div className={`grid gap-4 ${hasBuckets(report.data) ? 'lg:grid-cols-2' : ''}`}>
-            <ClassificationFigures classification={report.data.classification} />
-
-            {hasBuckets(report.data) ? (
-              report.data.n === 0 ? (
-                // Section 12: where N is zero the view shows the coverage line alone
-                // and no buckets — a bucket every person satisfies is not a bucket.
-                <p className={`${FRAME} text-muted text-sm leading-relaxed`}>
-                  This Cell recorded no meetings this month, so there is nobody to count and no
-                  buckets to show. The coverage line above is what explains it.
-                </p>
-              ) : (
-                <AttendanceBuckets
-                  buckets={report.data.buckets}
-                  n={report.data.n}
-                  // Section 12: N is the meetings that actually took place and were
-                  // recorded, which is not the coverage denominator beside it.
-                  summary={(n) =>
-                    n === 1
-                      ? 'One meeting was recorded this month.'
-                      : `${n} meetings were recorded this month.`
-                  }
-                />
-              )
-            ) : null}
-          </div>
-
-          {/* The rows moved to Filed reports (decision 0292); the figure above stays first. */}
+          {/* Coverage leads, as one line (decision 0202); its rows are under Filed reports. */}
           <p className="text-sm">
-            <Link
-              href={`/reports/filed?${new URLSearchParams({
-                month,
-                ...(leader ? { leader, by: 'leader' } : {}),
-                ...(!leader && cellId !== '' ? { cell: cellId } : {}),
-              }).toString()}`}
-              className="text-accent focus-visible:outline-accent inline-flex min-h-11 items-center underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2"
-            >
-              By Cell and by leader, row by row, under Filed reports
-            </Link>
+            <span className="font-bold tabular-nums">
+              {twelve.data.coverage.recorded} of {twelve.data.coverage.scheduled}
+            </span>{' '}
+            meetings recorded {what}
+            {kind !== 'MONTH' && twelve.data.coverage.through < twelve.data.end
+              ? `, due through ${new Date(`${twelve.data.coverage.through}T00:00:00Z`).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', timeZone: 'UTC' })}`
+              : ''}
+            {kind === 'MONTH' ? (
+              <>
+                {' · '}
+                <Link
+                  href={`/reports/filed?${new URLSearchParams({
+                    month: guardMonth,
+                    ...(leader ? { leader, by: 'leader' } : {}),
+                  }).toString()}`}
+                  className="text-accent focus-visible:outline-accent inline-flex min-h-6 items-center underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2"
+                >
+                  see Filed reports
+                </Link>
+              </>
+            ) : null}
           </p>
+
+          <TwelveTable
+            twelve={twelve.data}
+            kind={kind}
+            subjectName={subjectName}
+            openHref={(id) => `/reports/cells?${periodParams({ leader: id })}`}
+          />
+
+          {kind === 'YEAR' ? (
+            <YearTable
+              key={`${start}-${JSON.stringify(subject)}`}
+              report="cells"
+              year={Number(start.slice(0, 4))}
+              scope={subject}
+            />
+          ) : null}
         </div>
       ) : null}
     </main>

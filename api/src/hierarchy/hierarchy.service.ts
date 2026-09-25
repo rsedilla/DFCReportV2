@@ -1133,6 +1133,26 @@ export class HierarchyService {
     return rows.map((row) => row.person_id);
   }
 
+  /** The Network roots as of an instant, each with the Network whose seat it holds. */
+  async rootSeatsAsOf(
+    executor: Db,
+    at: Date,
+  ): Promise<{ personId: string; network: NetworkName }[]> {
+    const rows = await executor
+      .selectFrom('pastoral_assignments')
+      .select(['person_id', 'root_network'])
+      .where('leader_id', 'is', null)
+      .where('root_network', 'is not', null)
+      .where('started_at', '<=', at)
+      .where((eb) => eb.or([eb('ended_at', 'is', null), eb('ended_at', '>', at)]))
+      .execute();
+
+    return rows.map((row) => ({
+      personId: row.person_id,
+      network: row.root_network as NetworkName,
+    }));
+  }
+
   /**
    * Everyone below the person, **excluding the person**, with the depth each sits at.
    *

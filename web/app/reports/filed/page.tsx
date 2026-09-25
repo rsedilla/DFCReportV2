@@ -136,7 +136,7 @@ function FiledReports() {
         </p>
       ) : null}
       {!leader && cellId !== '' ? (
-        <p className="text-muted mt-4 text-sm">Figures for one Cell, chosen on Cell Groups.</p>
+        <p className="text-muted mt-4 text-sm">Figures for one Cell.</p>
       ) : null}
 
       <div className="mt-8">

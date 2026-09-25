@@ -3010,6 +3010,8 @@ Classification is **evaluated as of the end of the reporting month**, from the a
 
 Classification carries no denominator, so it aggregates at any scope: a person's bucket is the same figure whichever Cell they attended.
 
+**A week, a quarter and a year take the same rule** (ruling of 2026-09-25, decision 0293): the unique people who attended a Cell in the period, each at the stage reached by its last day. A week runs Monday to Sunday (decision 0054); quarters and years are the calendar's. A period still running shows the stage so far and says it is open; one that has not begun is not reported. Periods are never added together, because a person counted in three weeks is one person in the month.
+
 #### Monthly Attendance
 
 Population: the same unique people who attended this Cell at least once in the month. Both views therefore cover the same people and reconcile to the same total (Section 20).
@@ -3623,6 +3625,8 @@ Ranking is prohibited. Never present:
 - value-laden encoding of meeting status, such as red/amber/green, cross marks, or `underperforming`
 - side-by-side comparison of leaders who do not oversee one another, offered as a feature
 
+**A reader's own direct disciples may be shown side by side, and so may those of a leader the reader opened** (ruling of 2026-09-25, decision 0293), because the reader oversees every row: in surname order and never sorted by a figure, with no row numbers, colour, percentages or bars, each name opening that leader's own report. A whole-church reader's rows are the two Network roots, labelled and ordered by their Network rather than by name, because that reader disciples neither. That is the My 12 table (Section 20), and nothing else here is loosened by it.
+
 The reason is practical as well as pastoral. `NOT_HELD` exists to obtain honest reporting of Cells that are not meeting. If declaring it places a leader at the bottom of a visible ranking, leaders will record `HELD` instead, and the signal the status was created to capture is lost. Ranking the measure destroys the measure.
 
 **A count may carry a proportion bar; a coverage figure may not** (ruling of 2026-09-20). A list of counts that sums to a total of its own — classification and the monthly-attendance buckets, which Sections 9 and 12 each define for their own domain — may draw each row's share of that total beside the count. Four conditions bound it: the bar never reorders the rows, it carries no meaning in colour, the count is always beside it and the mark is hidden from assistive technology, and it is never drawn against coverage. The fourth is the load-bearing one. Coverage is two figures this section forbids dividing, and a bar is a division, so a coverage bar is the prohibited ratio drawn rather than written. A share of a reconciled total compares a scope with itself; coverage compares a leader with an expectation.
@@ -4044,7 +4048,7 @@ Growth     SUYNL, Training and the four G12 goals (Sections 27 and 28)
 
 **`Growth` carries three tabs — `SUYNL`, `Training`, `Conquest` — rather than three items**, which keeps the sidebar short, a seventh item being more than that bar was drawn for at the narrowest width Section 23's layout check runs at. The three are also what one leader asks one person about in one sitting.
 
-**`Reports` carries six tabs — `Cell Groups`, `DCC`, `SUYNL`, `Training`, `Conquest` and `Filed reports`** (ruling of 2026-09-25, decision 0292), each its own address. Cell Groups and DCC keep their recording coverage first (Section 12). Filed reports holds the rows behind that figure — By Cell or By Sunday, and By leader. SUYNL, Training and Conquest show their Growth tab's counts read only, as of now. Nothing under `Reports` files or changes a record.
+**`Reports` carries six tabs — `Cell Groups`, `DCC`, `SUYNL`, `Training`, `Conquest` and `Filed reports`** (ruling of 2026-09-25, decision 0292), each its own address. Cell Groups and DCC keep their recording coverage first (Section 12). Cell Groups carries Weekly, Monthly, Quarterly and Year, each opening on My 12, with coverage as one line above it (decision 0293). Filed reports holds the rows behind that figure — By Cell or By Sunday, and By leader. SUYNL, Training and Conquest show their Growth tab's counts read only, as of now. Nothing under `Reports` files or changes a record.
 
 `Account and session` sits in the sidebar's footer, under the signed-in person's name, and is not one of the items.
 
@@ -4149,16 +4153,17 @@ open, so this is that obligation over a longer period rather than a new mechanis
 slice owes its own reconciliation rather than inheriting the monthly one. Classification is a
 lifetime count truncated at the end of the reporting month (Section 12), so the twelve monthly
 reports cannot be added: somebody who was a VIP in March and a Regular by December belongs in
-one bucket for the year, and summing would place them in two. **Which month's classification a
-year carries is not settled here**, and is recorded as open in `CLAUDE.md`. Naming December
-would state an answer the rule above forbids for a year in progress, whose December is among
-the months that report omits. *The double-counting that summing produces is Principle 10's
+one bucket for the year, and summing would place them in two. **A year's classification is each
+person's stage at the year's last day, and while the year is running, the stage so far**
+(decision 0293). Naming December would state an answer the rule above forbids for a year in
+progress, whose December is among the months that report omits. *The double-counting that summing produces is Principle 10's
 rule against counting one person twice, reaching a unit this section's own wording — "across
 multiple weeks or multiple Cells" — does not name, rather than anything peculiar to
-classification.* Both are named rather than settled: they are the first things the yearly slice meets
-after the rule above, together with the fact that `report_snapshots` below carries a `period`
+classification.* The stage is settled above; what is named rather than settled is that `report_snapshots` below carries a `period`
 documented as a reporting month and has no yearly one, so a stored yearly figure has nowhere
 to go and cannot be composed from stored monthly ones either.
+
+**My 12** (ruling of 2026-09-25, decision 0293) breaks a leader's Cell figure into one row per direct disciple at the period's end, each counting that disciple's placement subtree; then the leader's own Cell group, the people at meetings the leader led as responsible leader, across every Cell they led in the period; then the total. A whole-church reader's rows are the Network roots, each labelled by its Network and in Network order. Each row is that leader's own figure, so a person at Cells in two branches is in both rows and once in the total, and the table takes off each count beyond a person’s first and adds those in the total who are in no row, so the rows reconcile to the total in plain sight.
 
 ### Which tree a report walks, and what attributes a figure to a scope
 
@@ -4561,6 +4566,7 @@ GET  /api/v1/reports/dcc/yearly
 GET  /api/v1/reports/dcc/monthly/by-leader    the coverage line, one row per leader (decision 0254)
 GET  /api/v1/reports/cells/monthly
 GET  /api/v1/reports/cells/monthly/by-leader  the coverage line, one row per leader (decision 0254)
+GET  /api/v1/reports/cells/twelve            My 12 over a week, month, quarter or year (decision 0293)
 GET  /api/v1/reports/cells/yearly
 GET  /api/v1/reports/network-summary
 ```

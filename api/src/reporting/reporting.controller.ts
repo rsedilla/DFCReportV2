@@ -4,7 +4,7 @@ import { RequiresCapability } from '../auth/authorization/authorization.decorato
 import { Capability } from '../auth/authorization/capabilities';
 import { type Actor, AuthorizationService } from '../auth/authorization/authorization.service';
 import { CurrentActor } from '../auth/current-actor.decorator';
-import { NotFoundError, ValidationFailedError } from '../common/errors/api-error';
+import { NotFoundError, ScopeDeniedError, ValidationFailedError } from '../common/errors/api-error';
 import { canonicalId } from '../common/identifiers';
 import { decodeRosterCursor, encodeRosterCursor, type RosterCursor } from '../common/roster-cursor';
 import { reportingPeriodBounds } from '../common/time/reporting-period';
@@ -14,6 +14,7 @@ import { PeopleReadService } from '../people/people.read.service';
 import {
   CellByLeaderDto,
   CellMonthlyReportDto,
+  CellTwelveDto,
   DccByLeaderDto,
   DccMonthlyReportDto,
 } from './dto/reporting.dto';
@@ -181,6 +182,134 @@ export class ReportingController {
     const coverage = await this.reporting.cellCoverageByLeader(scope, query.period);
 
     return this.byLeader(coverage, actor, query);
+  }
+
+  /**
+   * `GET /api/v1/reports/cells/twelve` -- My 12 over a week, a month, a quarter or a year
+   * (SKILL.md sections 12, 13, 17 and 20; decision 0293).
+   *
+   * **The same guard as the Cell report, on the same selector**, resolved at the month the
+   * service derives from `kind` and `start` and refuses any other. `CELL` is refused: a Cell
+   * has members rather than disciples, so it has no 12.
+   *
+   * **Rows are named as the by-leader list names them** (decision 0254): a row is named only
+   * where the guard would admit that leader as a selector at the same instant, asked on the
+   * pooled connection after the report's transaction has closed (section 24). Such a leader is
+   * the subject's own disciple, so every row is named in practice; one that is not stays a
+   * row, unnamed and not opening, so the People column still reconciles.
+   *
+   * **In surname order, or a whole-church reader's in Network order, never by a figure**
+   * (section 13, decision 0293): no row numbers, and
+   * nothing a client can sort by a count.
+   */
+  @Get('cells/twelve')
+  @RequiresCapability(Capability.ReportsViewSubtree, {
+    kind: 'report_scope',
+    scopeFrom: 'query.scope',
+    leaderFrom: 'query.leader_id',
+    cellFrom: 'query.cell_id',
+    periodFrom: 'query.period',
+  })
+  async cellsTwelve(
+    @Query() query: CellTwelveDto,
+    @CurrentActor() actor: Actor,
+  ): Promise<Record<string, unknown>> {
+    const scope = cellScopeOf(query);
+    if (scope.kind === 'CELL') {
+      throw new ValidationFailedError(
+        'A Cell has members rather than disciples, so it has no 12.',
+        {
+          field: 'scope',
+          value: 'CELL',
+        },
+      );
+    }
+    await this.assertNamesSomebody(scope);
+
+    const twelve = await this.reporting.cellTwelve(
+      scope.kind === 'LEADER'
+        ? { kind: 'LEADER', person_id: scope.person_id }
+        : { kind: 'WHOLE_CHURCH' },
+      query.kind,
+      query.start,
+      query.period,
+    );
+
+    // **The actor's reach is checked again at the instant the figures were read** (decision
+    // 0214). The guard reads a month, and a week's month ends up to thirty days after the week
+    // does, so a leader who joined the actor's subtree later in the month would otherwise be
+    // readable for that week. Both checks must pass; the rows are named at the same instant.
+    const at = twelve.at;
+    const [reaches] = await this.authorization.coversEach(actor, Capability.ReportsViewSubtree, [
+      {
+        kind: 'report_scope' as const,
+        selector:
+          scope.kind === 'LEADER'
+            ? { kind: 'LEADER' as const, personId: scope.person_id }
+            : { kind: 'WHOLE_CHURCH' as const },
+        at,
+      },
+    ]);
+    if (!reaches) {
+      throw new ScopeDeniedError('This report is outside your scope for the period asked.', {
+        scope: scope.kind,
+      });
+    }
+    const admitted = await this.authorization.coversEach(
+      actor,
+      Capability.ReportsViewSubtree,
+      twelve.rows.map((row) => ({
+        kind: 'report_scope' as const,
+        selector: { kind: 'LEADER' as const, personId: row.leader_id },
+        at,
+      })),
+    );
+    const identities = await this.people.forDecisions(
+      twelve.rows.filter((_, index) => admitted[index]).map((row) => row.leader_id),
+    );
+
+    const rows = twelve.rows
+      .map((row, index) => {
+        const identity = admitted[index] ? identities.get(row.leader_id) : undefined;
+
+        return {
+          key: identity === undefined ? null : keyOf(identity),
+          network: row.network,
+          row: {
+            leader:
+              identity === undefined
+                ? null
+                : { id: row.leader_id, member_id: identity.memberId, full_name: identity.fullName },
+            network: row.network,
+            unique_people: row.unique_people,
+            classification: row.classification,
+          },
+        };
+      })
+      // A whole-church reader's rows are labelled by Network, so they are in that order.
+      .sort((left, right) =>
+        left.key === null
+          ? 1
+          : right.key === null
+            ? -1
+            : left.network !== null && right.network !== null
+              ? left.network.localeCompare(right.network)
+              : compareKeys(left.key, right.key),
+      )
+      .map((entry) => entry.row);
+
+    return {
+      kind: query.kind,
+      start: twelve.from,
+      end: twelve.to,
+      open: twelve.open,
+      coverage: twelve.coverage,
+      rows,
+      own: twelve.own,
+      overlap: twelve.overlap,
+      elsewhere: twelve.elsewhere,
+      total: twelve.total,
+    };
   }
 
   /**

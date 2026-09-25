@@ -1,3 +1,5 @@
+import { ApiRequestError } from './api-client';
+import type { RangeKind } from './report-range';
 import { authenticatedRequest } from './session';
 
 /**
@@ -200,4 +202,70 @@ export async function getCoverageByLeader(
     `/api/v1/reports/${report}/monthly/by-leader?${params.toString()}`,
     { signal },
   );
+}
+
+/** One row of My 12: people, once each, and the stage each had reached (decision 0293). */
+export interface TwelveFigure {
+  unique_people: number;
+  classification: Classification;
+}
+
+/** My 12 over one week, month, quarter or year (decision 0293). */
+export interface CellTwelve {
+  kind: RangeKind;
+  start: string;
+  end: string;
+  open: boolean;
+  /** Meetings due and recorded through `through`: the current month's end at most. */
+  coverage: { recorded: number; scheduled: number; through: string };
+  /**
+   * In surname order, or Network order where `network` is set. `leader` is null for a row the reader may not open. `network` is set
+   * on a whole-church reader's rows, the Network roots, which are labelled by it.
+   */
+  rows: (TwelveFigure & {
+    leader: { id: string; member_id: string; full_name: string } | null;
+    network?: 'MENS' | 'WOMENS' | null;
+  })[];
+  /** The subject's own Cell groups; null for Whole Church. */
+  own: (TwelveFigure & { cells: number }) | null;
+  /** Counts beyond a person's first, for somebody in more than one row. */
+  overlap: number;
+  /** People in the total and in no row. */
+  elsewhere: number;
+  total: TwelveFigure;
+}
+
+/** `GET /reports/cells/twelve`: a leader's, or Whole Church for a whole-church reader. */
+export async function getCellTwelve(
+  kind: RangeKind,
+  start: string,
+  guardMonth: string,
+  subject: { kind: 'LEADER'; person_id: string } | { kind: 'WHOLE_CHURCH' },
+  signal?: AbortSignal,
+): Promise<CellTwelve> {
+  const params = new URLSearchParams({ kind, start, period: guardMonth, scope: subject.kind });
+  if (subject.kind === 'LEADER') {
+    params.set('leader_id', subject.person_id);
+  }
+
+  try {
+    return await authenticatedRequest<CellTwelve>(
+      `/api/v1/reports/cells/twelve?${params.toString()}`,
+      { signal },
+    );
+  } catch (error) {
+    // Across a Manila midnight at a month's end, this device's clock and the database's can
+    // disagree about the month the guard reads. The refusal names the month it expects, so
+    // the request is made once more with it; any other refusal is the caller's to show.
+    const expected = error instanceof ApiRequestError ? error.details.expected : undefined;
+    if (typeof expected !== 'string' || expected === guardMonth) {
+      throw error;
+    }
+    params.set('period', expected);
+
+    return authenticatedRequest<CellTwelve>(
+      `/api/v1/reports/cells/twelve?${params.toString()}`,
+      { signal },
+    );
+  }
 }
