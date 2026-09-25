@@ -637,7 +637,7 @@ function Dashboard() {
                 {behindMore ? (
                   <p className="mt-4">
                     <Link
-                      href={`/reports/cells?${new URLSearchParams({ month, behind: '1' }).toString()}`}
+                      href={`/reports/filed?${new URLSearchParams({ month, behind: '1' }).toString()}`}
                       className="focus-visible:outline-accent text-accent inline-flex min-h-11 items-center text-sm underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2"
                     >
                       See every Cell behind in Reports

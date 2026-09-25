@@ -4034,7 +4034,7 @@ The sidebar has five items (ruling of 2026-09-14, extended by the first ruling o
 
 ```text
 Record     the Dashboard, and recording DCC and Cell attendance (Sections 9, 12, 13)
-Reports    DCC and Cell figures, and Network Summary when it is built (Section 16)
+Reports    Cell Groups, DCC, SUYNL, Training, Conquest and Filed reports, and Network Summary when it is built (Section 16)
 People     My People and Search (Sections 3 and 8), and My Network, the pastoral tree (Section 5)
 Cells      the Cell Leaders module (Section 15)
 Growth     SUYNL, Training and the four G12 goals (Sections 27 and 28)
@@ -4043,6 +4043,8 @@ Growth     SUYNL, Training and the four G12 goals (Sections 27 and 28)
 **`Growth` is its own item rather than a screen under `Record`**, even though a leader files lessons, graduations and confirmations there. `Record` is the recording of attendance against a dated event — a Sunday, a meeting — with a submission window closing behind it (Sections 9 and 13). A lesson is done, a school is graduated and a goal is reached on days nobody scheduled, and none of them shuts. Putting Growth under `Record` would put screens with no window inside the one place a window always applies.
 
 **`Growth` carries three tabs — `SUYNL`, `Training`, `Conquest` — rather than three items**, which keeps the sidebar short, a seventh item being more than that bar was drawn for at the narrowest width Section 23's layout check runs at. The three are also what one leader asks one person about in one sitting.
+
+**`Reports` carries six tabs — `Cell Groups`, `DCC`, `SUYNL`, `Training`, `Conquest` and `Filed reports`** (ruling of 2026-09-25, decision 0292), each its own address. Cell Groups and DCC keep their recording coverage first (Section 12). Filed reports holds the rows behind that figure — By Cell or By Sunday, and By leader. SUYNL, Training and Conquest show their Growth tab's counts read only, as of now. Nothing under `Reports` files or changes a record.
 
 `Account and session` sits in the sidebar's footer, under the signed-in person's name, and is not one of the items.
 
@@ -5306,13 +5308,13 @@ Three capabilities, in the shape Section 9 uses for DCC attendance:
 
 Only a stated confirmation is corrected this way. A derived goal that looks wrong is usually wrong because a Cell leadership, a pastoral assignment or a SUYNL lesson is wrong, and is corrected there — the third since Win 3 became derived (Section 28), on the `SUYNL` tab under `suynl.confirm`. **It is not claimed that every derived goal has such a record to correct.** Where Open a cell rests on an approved `NEW_CELL` request, Section 10 makes that decision final — its remedy for one approved in error being to close the Cell `CREATED_IN_ERROR` rather than to rewrite the decision, and that closure takes the goal with it (decision 0283).
 
-### Conquest is not a report
+### Conquest is not a period report
 
-**Conquest figures do not enter the reporting surface** (Sections 18 and 20). The four counts at the head of its tab are the whole of its aggregate view.
+**Conquest figures are never reported by period** (Sections 18 and 20). The four counts at the head of its tab are the whole of its aggregate view, and `Reports` shows the same four on a tab of its own (decision 0292): the same route, capability and population, read only and as of now.
 
 **Those counts have a stated population.** Each is `COUNT(DISTINCT person_id)` over exactly the people the screen lists — every current Person the actor's `conquest.view_subtree` grant reaches **at the scope that grant carries**, resolved as things stand **now**, the screen naming no period — of those who have reached that goal. It is stated as the grant's reach rather than as a subtree walk because an administrator outside the pastoral structure has no subtree and Section 5 provides for one. A count filters this tab's own list to the people behind it. Nothing is attributed to a leader or compared across scopes. **A figure asked for at a scope the actor does not hold, or for a past period, is governed by Section 20 and not by this section**, and is recorded as open in `CLAUDE.md`.
 
-Section 16 counts two conditions closely related to these rungs and identical to neither: *Leaders with 12+ Direct Leaders*, and *New Cell Leaders*, which counts a first **qualifying** leadership in a period and so counts a leader who took a Cell over after the church was encoded, whom Open a cell does not. A Reports block would put near-identical counts in front of one leader with nothing saying which question each answers. Whether Conquest counts should replace Section 16's, sit beside them, or stay separate is a reporting decision and is not taken here.
+Section 16 counts two conditions closely related to these rungs and identical to neither: *Leaders with 12+ Direct Leaders*, and *New Cell Leaders*, which counts a first **qualifying** leadership in a period and so counts a leader who took a Cell over after the church was encoded, whom Open a cell does not. A Reports block would put near-identical counts in front of one leader with nothing saying which question each answers. Whether Conquest counts should replace Section 16's, sit beside them, or stay separate is a reporting decision and is not taken here; decision 0292 keeps them separate, on a tab of their own, until Network Summary is built.
 
 **A per-leader breakdown of goals reached is not built, by this section's choice rather than by a prohibition.** The figure it would carry — how many goals somebody else's people reached — reads as a standing whatever its order, and Section 13's list of what a dashboard may not do reaches at least as far as a side-by-side comparison of leaders who do not oversee one another. Whether it would be permitted is therefore not claimed either way.
 
@@ -5444,13 +5446,13 @@ Six capabilities, three for each of the two modules this section introduces, in 
 
 **A correction moves whatever derives from it.** Correcting away one of a person's ten SUYNL lessons takes their graduation with it; correcting one that took a disciple to three takes them out of a leader's Win 3, and moves the date that goal was first reached or removes it (Section 27). That is right rather than regrettable: the correction says the tick was wrong, and a derived figure follows the records it derives from.
 
-### Growth is not a report
+### Growth is not a period report
 
-**Growth figures do not enter the reporting surface** (Sections 18 and 20). The counts at the head of the `SUYNL` and `Training` tabs are the whole of their aggregate view.
+**Growth figures are never reported by period** (Sections 18 and 20). The counts at the head of the `SUYNL` and `Training` tabs are the whole of their aggregate view, and `Reports` shows the same counts on tabs of its own (decision 0292): the same routes, capabilities and populations, read only and as of now.
 
 **Those counts have a stated population.** Each is `COUNT(DISTINCT person_id)` over exactly the people the tab lists — every current Person the actor's `suynl.view_subtree` or `training.view_subtree` grant reaches **at the scope that grant carries**, resolved as things stand **now**, the screen naming no period — of those who have reached that step. **SUYNL has three cards — Not started, In progress (one to nine lessons) and Graduated — which add up to everyone listed; Training has one per school, which overlap, and one for people with none yet** (ruling of 2026-09-24, decision 0281). **A count filters this tab's own list to the people behind it**, which Section 27's four also do. **The SUYNL and Training lists open on the people still to finish** — short of ten lessons, or of all five schools — with a line saying how many are left out and a way to show everyone; a card, a search or "Only my disciples" shows whoever it names, and the counts still cover everyone listed (ruling of 2026-09-24, decision 0287). Nothing is attributed to a leader, ranked or compared across scopes (Sections 13, 17 and 19), and nothing is colour-graded.
 
-The screen says the counts are as of now, never "this year". A Reports block would make them period figures, which is the trigger the date ruling above turns on, and Section 16 defines no metric these duplicate.
+The screen says the counts are as of now, never "this year". A Reports block counting them by period would make them period figures, which is the trigger the date ruling above turns on, and Section 16 defines no metric these duplicate.
 
 **A figure asked for at a scope the actor does not hold, or for a past period, is governed by Section 20 and not by this section**, exactly as Section 27 says of its own four, and is recorded as open in `CLAUDE.md`.
 

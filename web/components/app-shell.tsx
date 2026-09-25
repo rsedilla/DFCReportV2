@@ -24,7 +24,7 @@ import { cn } from '@/lib/utils';
  *
  * **An entry can own more than one prefix.** `Record` is the Dashboard and also
  * `/dcc`, the reader's month of records owed, so being on `/dcc/...` is being on
- * Record. `Reports` owns both figures pages the same way.
+ * Record. `Reports` owns the six report tabs (decision 0292) the same way.
  */
 interface NavEntry {
   href: string;
