@@ -5180,7 +5180,7 @@ PERSON
   +-- Cell Leadership Assignments -> 0..many Cells
   +-- Cell Membership -> 0..many Cells
   +-- SUYNL Lessons -> ten; ten of ten is graduation (Section 28)
-  +-- School Graduations -> Encounter, Life Class, SOL 1, SOL 2, SOL 3 (Section 28)
+  +-- Graduations -> Encounter, Life Class, SOL 1, SOL 2, SOL 3 (Section 28)
   +-- Conquest Goals -> four, derived, with a confirmation path for history (Sections 27 and 28)
 
 CELL GROUP
@@ -5368,7 +5368,7 @@ Writes obey Section 22: they are idempotent, they carry `Idempotency-Key`, and e
 
 ## 28. Growth
 
-`Growth` records the discipleship pathway a person has travelled: the **SUYNL** lessons they have done, the five schools they have graduated from — the **Encounter** first — and the Conquest goals of Section 27 (the second ruling of 2026-09-16). It is a sidebar item with three tabs — `SUYNL`, `Training`, `Conquest` — and behind it are three modules, `suynl`, `training` and `conquest`, each owning its own table.
+`Growth` records the discipleship pathway a person has travelled: the **SUYNL** lessons they have done, the **Encounter** and the four schools they have graduated from, and the Conquest goals of Section 27 (the second ruling of 2026-09-16). It is a sidebar item with three tabs — `SUYNL`, `Training`, `Conquest` — and behind it are three modules, `suynl`, `training` and `conquest`, each owning its own table.
 
 **The tables, the capabilities, the routes and the two tabs exist.** Migrations `0017_growth_capabilities.sql` and `0018_growth.sql` added the six `suynl.*` and `training.*` capabilities and created `suynl_lessons` and `training_graduations`, `/api/v1/suynl` and `/api/v1/training` each carry a list, its counts and a save, and `web/app/growth` carries the `SUYNL` and `Training` tabs. Tests are owed by each change that builds a part, and the schema's are in `api/test/database/growth.spec.ts`.
 
@@ -5376,20 +5376,21 @@ Writes obey Section 22: they are idempotent, they carry `Idempotency-Key`, and e
 
 ### The pathway
 
-SUYNL, then the Encounter, then Life Class, then SOL 1, SOL 2, SOL 3.
+SUYNL, then the LC Party, then Life Class, whose fifth lesson is the Encounter, then SOL 1, SOL 2, SOL 3 (ruling of 2026-09-26, decision 0295).
 
-- **SUYNL** — ten lessons, taken one to one. Recorded lesson by lesson.
-- **The Encounter** — a three-day retreat and the first of the five schools, recorded as one graduation (owner's choice of 2026-09-21).
-- **Life Class** — new life, healing, freedom, a personal relationship with Christ: a believer established in faith and ready for discipleship.
-- **SOL 1** — biblical foundations and family: a disciple rooted in doctrine and godly living.
-- **SOL 2** — vision, intercession, evangelism and ministry: a disciple reaching, praying for and caring for people.
-- **SOL 3** — leadership, cell ministry and multiplication: a trained leader ready to lead and develop other disciples.
+- **SUYNL** (Start Up Your New Life) — ten lessons, taken one to one. Recorded lesson by lesson.
+- **The LC Party** (Life Class Party) — held before Life Class lesson 1, and not itself a lesson. Somebody may join here before finishing SUYNL, where their leader judges them ready.
+- **Life Class** — nine lessons: new life, healing, freedom, a personal relationship with Christ, for a believer established in faith and ready for discipleship.
+- **The Encounter** — lesson 5 of Life Class, a three-day weekend held in the first week of April, August and December. Recorded as its own graduation, and first of the five because it is attended before Life Class is completed.
+- **SOL 1** (School of Leaders 1) — biblical foundations and family: a disciple rooted in doctrine and godly living.
+- **SOL 2** (School of Leaders 2) — vision, intercession, evangelism and ministry: a disciple reaching, praying for and caring for people.
+- **SOL 3** (School of Leaders 3) — leadership, cell ministry and multiplication: a trained leader ready to lead and develop other disciples.
 
-Together they run from a personal foundation in Christ to leadership and disciple-making.
+So there are four schools, Life Class and SOL 1 to 3, with the Encounter inside Life Class. Together they run from a personal foundation in Christ to leadership and disciple-making.
 
 **The order is displayed and never enforced.** No rule of this church makes one step a condition of the next, so there is nothing for a refusal to refuse. An eligibility gate on the Encounter — four SUYNL lessons first — was considered while the screens were drawn and withdrawn, because the church applies none.
 
-**Only SUYNL is recorded lesson by lesson, and that is a recording decision rather than a claim about the materials.** Life Class also runs to ten lessons and is recorded here as a single graduation. An enrolment application planned elsewhere will own enrolment and lesson progress for the schools; recording their lessons here as well would give the church two records of one fact, free to disagree, with nothing able to keep them in step.
+**Only SUYNL is recorded lesson by lesson, and that is a recording decision rather than a claim about the materials.** Life Class also runs to nine lessons and is recorded here as a single graduation, with the Encounter as a second. An enrolment application planned elsewhere will own enrolment and lesson progress for the schools; recording their lessons here as well would give the church two records of one fact, free to disagree, with nothing able to keep them in step.
 
 ### SUYNL
 
@@ -5459,7 +5460,7 @@ Six capabilities, three for each of the two modules this section introduces, in 
 
 **Growth figures are never reported by period** (Sections 18 and 20). The counts at the head of the `SUYNL` and `Training` tabs are the whole of their aggregate view, and `Reports` shows the same counts on tabs of its own (decision 0292): the same routes, capabilities and populations, read only and as of now.
 
-**Those counts have a stated population.** Each is `COUNT(DISTINCT person_id)` over exactly the people the tab lists — every current Person the actor's `suynl.view_subtree` or `training.view_subtree` grant reaches **at the scope that grant carries**, resolved as things stand **now**, the screen naming no period — of those who have reached that step. **SUYNL has three cards — Not started, In progress (one to nine lessons) and Graduated — which add up to everyone listed; Training has one per school, which overlap, and one for people with none yet** (ruling of 2026-09-24, decision 0281). **A count filters this tab's own list to the people behind it**, which Section 27's four also do. **The SUYNL and Training lists open on the people still to finish** — short of ten lessons, or of all five schools — with a line saying how many are left out and a way to show everyone; a card, a search or "Only my disciples" shows whoever it names, and the counts still cover everyone listed (ruling of 2026-09-24, decision 0287). Nothing is attributed to a leader, ranked or compared across scopes (Sections 13, 17 and 19), and nothing is colour-graded.
+**Those counts have a stated population.** Each is `COUNT(DISTINCT person_id)` over exactly the people the tab lists — every current Person the actor's `suynl.view_subtree` or `training.view_subtree` grant reaches **at the scope that grant carries**, resolved as things stand **now**, the screen naming no period — of those who have reached that step. **SUYNL has three cards — Not started, In progress (one to nine lessons) and Graduated — which add up to everyone listed; Training has one per school, which overlap, and one for people with none yet** (ruling of 2026-09-24, decision 0281). **A count filters this tab's own list to the people behind it**, which Section 27's four also do. **The SUYNL and Training lists open on the people still to finish** — short of ten lessons, or of all five graduations — with a line saying how many are left out and a way to show everyone; a card, a search or "Only my disciples" shows whoever it names, and the counts still cover everyone listed (ruling of 2026-09-24, decision 0287). Nothing is attributed to a leader, ranked or compared across scopes (Sections 13, 17 and 19), and nothing is colour-graded.
 
 The screen says the counts are as of now, never "this year". A Reports block counting them by period would make them period figures, which is the trigger the date ruling above turns on, and Section 16 defines no metric these duplicate.
 

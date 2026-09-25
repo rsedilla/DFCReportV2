@@ -93,7 +93,7 @@ export function submitSuynl(changes: SuynlChange[], idempotencyKey: string): Pro
 
 export type TrainingProgram = 'ENCOUNTER' | 'LIFE_CLASS' | 'SOL_1' | 'SOL_2' | 'SOL_3';
 
-/** The five schools, the Encounter first (section 28). */
+/** The five graduations: the Encounter (Life Class lesson 5), then the four schools (section 28). */
 export const TRAINING_PROGRAMS: readonly TrainingProgram[] = [
   'ENCOUNTER',
   'LIFE_CLASS',
