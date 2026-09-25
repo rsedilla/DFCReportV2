@@ -1,6 +1,7 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
+import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 
 import { AppShell, PAGE_WIDTH } from '@/components/app-shell';
@@ -8,11 +9,9 @@ import { AttendanceBuckets, ClassificationFigures } from '@/components/attendanc
 import { CoverageFigure } from '@/components/coverage-figure';
 import { HowTheseAreCounted } from '@/components/how-counted';
 import { MonthPicker } from '@/components/month-picker';
-import { CoverageBySunday } from '@/components/report-coverage';
-import { CoverageByLeader, CoverageSwitch } from '@/components/report-coverage-by-leader';
 import { PeriodSwitch, YearPicker, YearTable, currentYear } from '@/components/report-year';
 import { LeaderDrill } from '@/components/leader-drill';
-import { ReportsSwitch } from '@/components/reports-switch';
+import { ReportsHeading, ReportsTabs } from '@/components/reports-tabs';
 import { FailureNotice } from '@/components/ui/failure-notice';
 import { CONTROL_BAR, FRAME } from '@/components/ui/frame';
 import { getMe, holdsWholeChurch } from '@/lib/me';
@@ -46,9 +45,8 @@ import { dayLabel, monthFromQuery } from '@/lib/reporting-month';
  * who came to both Sundays so far reads as two of three — and only the flag says
  * why.
  *
- * **Coverage by Sunday closes the report**, one row per Sunday from the DCC calendar,
- * a removed Sunday kept in its place. It is left out when a Network is chosen and
- * carries no total row; `components/report-coverage.tsx` says why.
+ * **The rows behind the coverage figure are under Filed reports** (decision 0292), and a
+ * link at the foot opens them for the same month.
  */
 export default function DccReportPage() {
   return (
@@ -81,7 +79,6 @@ export function DccReport() {
   // A leader opened from the By leader table (decision 0254), carried in the address so
   // the browser's Back returns to the report it was opened from.
   const leader = search.get('leader');
-  const coverageBy: 'first' | 'leader' = search.get('by') === 'leader' ? 'leader' : 'first';
 
   const me = useQuery({ queryKey: ['me'], queryFn: ({ signal }) => getMe(signal) });
 
@@ -114,17 +111,15 @@ export function DccReport() {
   return (
     <main id="main" className={PAGE_WIDTH.INDEX}>
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl font-semibold tracking-tight">Reports</h1>
+        <ReportsHeading
+          line={`What the people you oversee recorded for ${period === 'year' ? 'each month’s' : 'this month’s'} Sundays.`}
+        />
         <HowTheseAreCounted report="dcc" />
       </div>
-      <p className="text-muted mt-2 max-w-2xl text-sm leading-relaxed">
-        What the people you oversee recorded for{' '}
-        {period === 'year' ? 'each month’s' : 'this month’s'} Sundays.
-      </p>
+      <ReportsTabs current="dcc" month={month} />
 
       {/* Every control in one bar, above every figure (owner's choice, 2026-09-22). */}
       <div className={`mt-6 ${CONTROL_BAR}`}>
-        <ReportsSwitch current="dcc" month={month} />
         <PeriodSwitch
           value={period}
           onChange={(value) => go({ period: value === 'year' ? 'year' : null })}
@@ -265,32 +260,20 @@ export function DccReport() {
             )}
           </div>
 
-          <section aria-labelledby="coverage-by-heading" className={FRAME}>
-            <h2 id="coverage-by-heading" className="field-label">
-              Row by row
-            </h2>
-            {/*
-              By Sunday reads the calendar under the reader's own scope, so it is offered only
-              where that is the report's scope too: not for a Network, and not for a leader
-              opened from the list.
-            */}
-            <CoverageSwitch
-              first={network === '' && !leader ? 'By Sunday' : null}
-              value={network === '' && !leader ? coverageBy : 'leader'}
-              onChange={(value) => go({ by: value === 'leader' ? 'leader' : null })}
-            />
-            {network === '' && !leader && coverageBy === 'first' ? (
-              <CoverageBySunday month={month} />
-            ) : scope ? (
-              <CoverageByLeader
-                key={`${month}-${JSON.stringify(scope)}`}
-                report="dcc"
-                month={month}
-                scope={scope}
-                unit="records"
-              />
-            ) : null}
-          </section>
+          {/* The rows moved to Filed reports (decision 0292); the figure above stays first. */}
+          <p className="text-sm">
+            <Link
+              href={`/reports/filed?${new URLSearchParams({
+                month,
+                kind: 'dcc',
+                ...(leader ? { leader, by: 'leader' } : {}),
+                ...(!leader && network !== '' ? { network } : {}),
+              }).toString()}`}
+              className="text-accent focus-visible:outline-accent inline-flex min-h-11 items-center underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2"
+            >
+              By Sunday and by leader, row by row, under Filed reports
+            </Link>
+          </p>
         </div>
       ) : null}
     </main>

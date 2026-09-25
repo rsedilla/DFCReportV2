@@ -900,7 +900,8 @@ test.describe('the Record queue', () => {
     await expect(attention.getByText('No Cell in your scope is behind this month.')).toHaveCount(0);
     await expect(attention.getByRole('link', { name: 'See every Cell behind in Reports' })).toHaveAttribute(
       'href',
-      /\/reports\/cells\?month=\d{4}-\d{2}-01&behind=1$/,
+      // Decision 0292: the rows behind the Cell figure are under Filed reports.
+      /\/reports\/filed\?month=\d{4}-\d{2}-01&behind=1$/,
     );
   });
 });

@@ -25,6 +25,7 @@ import {
   mockCellMeetings,
   mockMeetingsAwaiting,
   mockCells,
+  mockCellsAtScale,
   mockCellsEmpty,
   mockDccEvents,
   mockCellMembers,
@@ -843,7 +844,11 @@ const SCANS = [
       await expect(page.getByRole('heading', { name: 'Recording coverage' })).toBeVisible();
       await expect(page.getByText('6 of 8 meetings recorded')).toBeVisible();
       await expect(page.getByRole('heading', { name: 'How often people came' })).toHaveCount(0);
-      await expect(page.getByText('3 of 4 meetings recorded').filter({ visible: true })).toBeVisible();
+      // The six tabs, and the link to the rows that moved to Filed reports (decision 0292).
+      await expect(
+        page.getByRole('navigation', { name: 'Which report' }).locator('a[aria-current="page"]'),
+      ).toHaveText('Cell Groups');
+      await expect(page.getByRole('link', { name: /row by row, under Filed reports/ })).toBeVisible();
     },
   },
   {
@@ -879,10 +884,57 @@ const SCANS = [
     },
   },
   {
+    // Filed reports (decision 0292), Cell Groups: the coverage figure, then By Cell — a row
+    // per Cell in the table and the cards, and the Cells-behind filter.
+    name: 'filed reports',
+    route: '/reports/filed',
+    async before(page: import('@playwright/test').Page) {
+      await mockSignedIn(page);
+      await mockCells(page);
+      await mockCellReport(page);
+    },
+    async arrange(page: import('@playwright/test').Page) {
+      await expect(page.getByText('6 of 8 meetings recorded')).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Show only Cells behind' })).toBeVisible();
+      await expect(page.getByText('3 of 4 meetings recorded').filter({ visible: true })).toBeVisible();
+    },
+  },
+  {
+    // Opened from the Record screen's Cells behind link: the filter already pressed.
+    name: 'filed reports, cells behind',
+    route: '/reports/filed?month=2026-06-01&behind=1',
+    async before(page: import('@playwright/test').Page) {
+      await mockSignedIn(page);
+      await mockCellsAtScale(page);
+      await mockCellReport(page);
+    },
+    async arrange(page: import('@playwright/test').Page) {
+      await expect(page.getByRole('button', { name: 'Show only Cells behind' })).toHaveAttribute(
+        'aria-pressed',
+        'true',
+      );
+      await expect(page.getByText('CELL-000011').filter({ visible: true })).toBeVisible();
+    },
+  },
+  {
+    // Filed reports, DCC: the coverage figure, then By Sunday, a removed Sunday in its place.
+    name: 'filed reports, dcc',
+    route: '/reports/filed?kind=dcc',
+    async before(page: import('@playwright/test').Page) {
+      await mockSignedIn(page);
+      await mockDccReport(page);
+      await mockDccEvents(page);
+    },
+    async arrange(page: import('@playwright/test').Page) {
+      await expect(page.getByText('12 of 18 records filed')).toBeVisible();
+      await expect(page.getByText('5 of 8 records filed').filter({ visible: true })).toBeVisible();
+    },
+  },
+  {
     // The By leader table (decision 0254): the reader first, one other leader, the unnamed
-    // line and the total, reached by the switch beside By Sunday.
-    name: 'dcc figures report, by leader',
-    route: '/reports/dcc',
+    // line and the total. It moved from the DCC report to Filed reports (decision 0292).
+    name: 'filed reports, by leader',
+    route: '/reports/filed?kind=dcc&by=leader',
     async before(page: import('@playwright/test').Page) {
       await mockSignedIn(page);
       await mockDccReport(page);
@@ -890,9 +942,76 @@ const SCANS = [
       await mockCoverageByLeader(page);
     },
     async arrange(page: import('@playwright/test').Page) {
-      await page.getByText('By leader', { exact: true }).click();
       await expect(page.getByRole('link', { name: 'Consuelo Bautista' })).toBeVisible();
       await expect(page.getByText('Leaders outside your reach')).toBeVisible();
+    },
+  },
+  {
+    // One leader opened from that table: no By Cell, the leader's table and a way back.
+    name: 'filed reports, one leader',
+    route: '/reports/filed?month=2026-06-01&leader=3f1b7c6e-0000-4000-8000-000000000701&by=leader',
+    async before(page: import('@playwright/test').Page) {
+      await mockSignedIn(page);
+      await mockCellReport(page);
+      await mockCoverageByLeader(page);
+    },
+    async arrange(page: import('@playwright/test').Page) {
+      await expect(page.getByRole('link', { name: 'Back to your report' })).toBeVisible();
+      await expect(page.getByText('Report coverage')).toBeVisible();
+    },
+  },
+  {
+    // One Network carried from the DCC report: the line naming it, and By leader alone.
+    name: 'filed reports, one network',
+    route: '/reports/filed?month=2026-06-01&kind=dcc&network=WOMENS',
+    async before(page: import('@playwright/test').Page) {
+      await mockSignedIn(page);
+      await mockWholeChurchReader(page);
+      await mockDccReport(page);
+      await mockCoverageByLeader(page);
+    },
+    async arrange(page: import('@playwright/test').Page) {
+      await expect(page.getByText('Figures for the Women’s Network.')).toBeVisible();
+      await expect(page.getByText('Report coverage')).toBeVisible();
+    },
+  },
+  {
+    // SUYNL under Reports (decision 0292): three read-only cards and a link to Growth.
+    name: 'suynl report',
+    route: '/reports/suynl',
+    async before(page: import('@playwright/test').Page) {
+      await mockSignedIn(page);
+      await mockSuynl(page);
+    },
+    async arrange(page: import('@playwright/test').Page) {
+      await expect(page.getByText(/^SUYNL for the 4 people/)).toBeVisible();
+      await expect(page.getByRole('link', { name: 'Tick lessons in Growth' })).toBeVisible();
+    },
+  },
+  {
+    // Training under Reports: six read-only cards and section 28's sentence.
+    name: 'training report',
+    route: '/reports/training',
+    async before(page: import('@playwright/test').Page) {
+      await mockSignedIn(page);
+      await mockTraining(page);
+    },
+    async arrange(page: import('@playwright/test').Page) {
+      await expect(page.getByText(/^Training for the 4 people/)).toBeVisible();
+      await expect(page.getByText('A count of graduations in a period counts only the dated ones.')).toBeVisible();
+    },
+  },
+  {
+    // Conquest under Reports: four read-only cards.
+    name: 'conquest report',
+    route: '/reports/conquest',
+    async before(page: import('@playwright/test').Page) {
+      await mockSignedIn(page);
+      await mockConquest(page);
+    },
+    async arrange(page: import('@playwright/test').Page) {
+      await expect(page.getByText(/^The four goals for the 3 people/)).toBeVisible();
+      await expect(page.getByRole('link', { name: 'See each person in Growth' })).toBeVisible();
     },
   },
   {
@@ -938,7 +1057,8 @@ const SCANS = [
     },
     async arrange(page: import('@playwright/test').Page) {
       await expect(page.getByRole('link', { name: 'Back to your report' })).toBeVisible();
-      await expect(page.getByText('Report coverage')).toBeVisible();
+      await expect(page.getByText('6 of 8 meetings recorded')).toBeVisible();
+      await expect(page.getByRole('link', { name: /row by row, under Filed reports/ })).toBeVisible();
     },
   },
   {
@@ -955,7 +1075,7 @@ const SCANS = [
       await expect(page.getByRole('heading', { name: 'Reports', exact: true })).toBeVisible();
       await expect(page.getByText('12 of 18 records filed')).toBeVisible();
       await expect(page.getByText(/No service was held on Sunday 14 June/)).toBeVisible();
-      await expect(page.getByText('5 of 8 records filed').filter({ visible: true })).toBeVisible();
+      await expect(page.getByRole('link', { name: /row by row, under Filed reports/ })).toBeVisible();
     },
   },
   {
@@ -1295,54 +1415,111 @@ const TARGET_SWEEP = [
     minimum: 6,
   },
   {
-    // The two links of the Reports switch, How these are counted, two month controls, the
-    // scope select, and a link per Cell in Coverage by Cell — two Cells, counted in the
-    // table and the cards alike, since the count includes whichever of the two this
-    // viewport hides.
+    // The six report tabs (decision 0292), How these are counted, two month controls, the
+    // scope select, and the link to the rows under Filed reports: **eleven**. The Coverage
+    // by Cell links this floor used to count moved to "filed reports".
     name: 'cell attendance report',
     route: '/reports/cells',
     settleRole: 'heading' as const,
     settle: 'Recording coverage',
-    minimum: 10,
+    minimum: 11,
   },
   {
-    // The Reports switch, How these are counted, the Month and Year choices and the two year
-    // controls; the table itself holds no control.
+    // The six report tabs, How these are counted, the Month and Year choices and the two
+    // year controls; the table itself holds no control.
     name: 'dcc figures report, year',
     route: '/reports/dcc?period=year&month=2026-06-01',
     settleRole: 'heading' as const,
     settle: 'Month by month',
-    minimum: 7,
+    minimum: 11,
   },
   {
     name: 'cell attendance report, year',
     route: '/reports/cells?period=year&month=2026-06-01',
     settleRole: 'heading' as const,
     settle: 'Month by month',
-    minimum: 7,
+    minimum: 11,
   },
   {
-    // The Reports switch, How these are counted, two month controls and the Back link, at
-    // least; the leader links below them vary with the mock.
+    // The six report tabs, How these are counted, two month controls, the Back link and the
+    // link to Filed reports, at least.
     name: 'cell attendance report, one leader',
     route: '/reports/cells?month=2026-06-01&leader=3f1b7c6e-0000-4000-8000-000000000701',
     settleRole: 'link' as const,
     settle: 'Back to your report',
-    minimum: 6,
+    minimum: 11,
   },
   {
-    // The two links of the Reports switch, How these are counted and two month controls,
-    // then Coverage by Sunday:
-    // four Sunday links and the one "who still has to record" link, in the table and the
-    // cards alike. No scope select for this fixture's viewer: the DCC report offers its
-    // Network select only to a whole-church reader, and this fixture's reporting grant is
-    // one Network. That select is why a whole-church reader lands on this report rather
-    // than on the Cell figures.
+    // The six report tabs, How these are counted, two month controls and the link to Filed
+    // reports: **ten**. Coverage by Sunday moved to "filed reports, dcc". No scope select for
+    // this fixture's viewer: the DCC report offers its Network select only to a
+    // whole-church reader, and this fixture's reporting grant is one Network.
     name: 'dcc figures report',
     route: '/reports/dcc',
     settleRole: 'heading' as const,
     settle: 'Recording coverage',
-    minimum: 15,
+    minimum: 10,
+  },
+  {
+    // The six report tabs, the two Which records buttons, two month controls, the By Cell and
+    // By leader radios, Show only Cells behind, and a link per Cell in Coverage by Cell — two
+    // Cells, counted in the table and the cards alike: **seventeen**. Settled on the filter,
+    // which renders only once the Cells have arrived.
+    name: 'filed reports',
+    route: '/reports/filed',
+    settle: 'Show only Cells behind',
+    minimum: 17,
+  },
+  {
+    // The six report tabs, the two Which records buttons, two month controls, the By Sunday
+    // and By leader radios, then four Sunday links and the one "who still has to record"
+    // link, in the table and the cards alike: **twenty-two**.
+    name: 'filed reports, dcc',
+    route: '/reports/filed?kind=dcc',
+    settleRole: 'heading' as const,
+    settle: 'Coverage by Sunday',
+    minimum: 22,
+  },
+  {
+    // The six report tabs, the two Which records buttons, two month controls, the two
+    // radios, and a name link per leader across the fixture's two: **fourteen**.
+    name: 'filed reports, by leader',
+    route: '/reports/filed?kind=dcc&by=leader',
+    settleRole: 'link' as const,
+    settle: 'Consuelo Bautista',
+    minimum: 14,
+  },
+  {
+    // The six report tabs, the two Which records buttons, two month controls, the Back link
+    // and a name link per leader: **thirteen**. No radios: By Cell is not offered for
+    // somebody else's branch.
+    name: 'filed reports, one leader',
+    route: '/reports/filed?month=2026-06-01&leader=3f1b7c6e-0000-4000-8000-000000000701&by=leader',
+    settleRole: 'link' as const,
+    settle: 'Back to your report',
+    minimum: 13,
+  },
+  {
+    // The six report tabs and the link to Growth. The cards are figures, not controls.
+    name: 'suynl report',
+    route: '/reports/suynl',
+    settleRole: 'link' as const,
+    settle: 'Tick lessons in Growth',
+    minimum: 7,
+  },
+  {
+    name: 'training report',
+    route: '/reports/training',
+    settleRole: 'link' as const,
+    settle: 'Record graduations in Growth',
+    minimum: 7,
+  },
+  {
+    name: 'conquest report',
+    route: '/reports/conquest',
+    settleRole: 'link' as const,
+    settle: 'See each person in Growth',
+    minimum: 7,
   },
   {
     // Back link and two radios per person across two people. No Save: it appears once
@@ -1433,11 +1610,18 @@ const TARGET_EXEMPT: { name: string; why: string }[] = [
       '"dashboard, needs a new leader": a min-h-6 name link per person and Show more.',
   },
   {
-    name: 'dcc figures report, by leader',
+    name: 'filed reports, one network',
     why:
-      'Reached by clicking the By leader switch, which this sweep cannot do. Its controls are a ' +
-      'text link per leader (min-h-6, measured on other screens), the switch labels (min-h-11) ' +
-      'and the secondary Button primitive for paging.',
+      'The measured "filed reports, one leader" controls less the Back link: the tabs, the ' +
+      'Which records buttons, the month controls and the leader links, plus one line of text. ' +
+      'Measuring it would need the whole-church /auth/me mock the sweep does not install.',
+  },
+  {
+    name: 'filed reports, cells behind',
+    why:
+      'The measured "filed reports" with Show only Cells behind already pressed: the same tabs, ' +
+      'buttons, month controls and radios, and fewer of the same Cell links. Its own fixture is ' +
+      'eleven Cells, which would need a second Cells mock on the route the sweep already mocks.',
   },
   {
     name: 'person profile, moving to another cell',

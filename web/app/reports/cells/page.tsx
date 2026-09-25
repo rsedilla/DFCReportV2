@@ -1,6 +1,7 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
+import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 
 import { AppShell, PAGE_WIDTH } from '@/components/app-shell';
@@ -9,10 +10,8 @@ import { CoverageFigure } from '@/components/coverage-figure';
 import { HowTheseAreCounted } from '@/components/how-counted';
 import { MonthPicker } from '@/components/month-picker';
 import { LeaderDrill } from '@/components/leader-drill';
-import { CoverageByCell } from '@/components/report-coverage';
-import { CoverageByLeader, CoverageSwitch } from '@/components/report-coverage-by-leader';
 import { PeriodSwitch, YearPicker, YearTable, currentYear } from '@/components/report-year';
-import { ReportsSwitch } from '@/components/reports-switch';
+import { ReportsHeading, ReportsTabs } from '@/components/reports-tabs';
 import { FailureNotice } from '@/components/ui/failure-notice';
 import { CONTROL_BAR, FRAME } from '@/components/ui/frame';
 import { listAllCells } from '@/lib/cells';
@@ -52,9 +51,8 @@ import { monthFromQuery } from '@/lib/reporting-month';
  * picker lists Cells in the order the API returns them, which ranks nobody. The
  * section labels are red and every figure is not.
  *
- * **Coverage by Cell closes the aggregate view**, one row per Cell from the Cells
- * index, and is left out once a single Cell is chosen. It carries no total row;
- * `components/report-coverage.tsx` says why.
+ * **The rows behind the coverage figure are under Filed reports** (decision 0292), and a
+ * link at the foot opens them for the same month.
  */
 export default function CellReportPage() {
   return (
@@ -77,7 +75,6 @@ export function CellReport() {
   // A leader opened from the By leader table (decision 0254), carried in the address so
   // the browser's Back returns to the report it was opened from.
   const leader = search.get('leader');
-  const coverageBy: 'first' | 'leader' = search.get('by') === 'leader' ? 'leader' : 'first';
 
   const me = useQuery({ queryKey: ['me'], queryFn: ({ signal }) => getMe(signal) });
   const wholeChurch = holdsWholeChurch(me.data, 'reports.view_subtree');
@@ -119,16 +116,13 @@ export function CellReport() {
   return (
     <main id="main" className={PAGE_WIDTH.INDEX}>
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl font-semibold tracking-tight">Reports</h1>
+        <ReportsHeading line={`What your Cells recorded ${period === 'year' ? 'each month' : 'this month'}.`} />
         <HowTheseAreCounted report="cells" />
       </div>
-      <p className="text-muted mt-2 max-w-2xl text-sm leading-relaxed">
-        What your Cells recorded {period === 'year' ? 'each month' : 'this month'}.
-      </p>
+      <ReportsTabs current="cells" month={month} />
 
       {/* Every control in one bar, above every figure (owner's choice, 2026-09-22). */}
       <div className={`mt-6 ${CONTROL_BAR}`}>
-        <ReportsSwitch current="cells" month={month} />
         <PeriodSwitch
           value={period}
           onChange={(value) => go({ period: value === 'year' ? 'year' : null })}
@@ -251,32 +245,19 @@ export function CellReport() {
             ) : null}
           </div>
 
-          <section aria-labelledby="coverage-by-heading" className={FRAME}>
-            <h2 id="coverage-by-heading" className="field-label">
-              Row by row
-            </h2>
-            {/*
-              By Cell lists the reader's own Cells, so it is offered only where that is the
-              report's scope: not once one Cell is chosen, and not for a leader opened from
-              the list.
-            */}
-            <CoverageSwitch
-              first={cellId === '' && !leader ? 'By Cell' : null}
-              value={cellId === '' && !leader ? coverageBy : 'leader'}
-              onChange={(value) => go({ by: value === 'leader' ? 'leader' : null })}
-            />
-            {cellId === '' && !leader && coverageBy === 'first' ? (
-              <CoverageByCell month={month} behindOnlyAtFirst={search.get('behind') === '1'} />
-            ) : scope ? (
-              <CoverageByLeader
-                key={`${month}-${JSON.stringify(scope)}`}
-                report="cells"
-                month={month}
-                scope={scope}
-                unit="meetings"
-              />
-            ) : null}
-          </section>
+          {/* The rows moved to Filed reports (decision 0292); the figure above stays first. */}
+          <p className="text-sm">
+            <Link
+              href={`/reports/filed?${new URLSearchParams({
+                month,
+                ...(leader ? { leader, by: 'leader' } : {}),
+                ...(!leader && cellId !== '' ? { cell: cellId } : {}),
+              }).toString()}`}
+              className="text-accent focus-visible:outline-accent inline-flex min-h-11 items-center underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2"
+            >
+              By Cell and by leader, row by row, under Filed reports
+            </Link>
+          </p>
         </div>
       ) : null}
     </main>
