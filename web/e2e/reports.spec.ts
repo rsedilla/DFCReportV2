@@ -11,7 +11,6 @@ import {
   mockDccEvents,
   mockDccReport,
   mockDccTwelve,
-  TWELVE,
 } from './mock-attendance';
 import {
   CONQUEST_COUNTS,
@@ -206,9 +205,9 @@ test.describe('the browser Back button', () => {
     await page.reload();
     await expect(label('April 2026')).toBeVisible();
 
-    // A whole-church reader's Figures for offers the Networks, each a root's 12 (decision 0294).
+    // A whole-church reader's Figures for offers the Networks (decision 0294).
     await page.getByLabel('Figures for').selectOption({ label: "Men's Network" });
-    await expect(page).toHaveURL(new RegExp(`leader=${TWELVE.bonifacio.id}`));
+    await expect(page).toHaveURL(/network=MENS/);
 
     await page
       .getByRole('group', { name: 'Report period' })
@@ -219,10 +218,10 @@ test.describe('the browser Back button', () => {
     // Back through each change, in the order they were made.
     await page.goBack();
     await expect(page).not.toHaveURL(/period=year/);
-    await expect(page).toHaveURL(new RegExp(`leader=${TWELVE.bonifacio.id}`));
+    await expect(page).toHaveURL(/network=MENS/);
 
     await page.goBack();
-    await expect(page).not.toHaveURL(/leader=/);
+    await expect(page).not.toHaveURL(/network=MENS/);
     await expect(label('April 2026')).toBeVisible();
 
     await page.goBack();
@@ -297,6 +296,7 @@ test.describe('how these are counted', () => {
     await expect(dcc.getByText('My 12', { exact: true })).toBeVisible();
     await expect(dcc.getByText(/^Monthly only\./)).toBeVisible();
     await expect(dcc.getByText('People who attended', { exact: true })).toHaveCount(0);
+    await expect(dcc.getByText('A Network', { exact: true })).toBeVisible();
   });
 });
 
@@ -728,13 +728,7 @@ test.describe('Filed reports keeps the narrower scope its report had', () => {
     );
   });
 
-  /**
-   * **DCC no longer offers a Network scope** (decision 0294: a whole-church reader's rows are
-   * the two Networks, each opening that root's 12), so a Network on Filed reports is reached
-   * by its address alone, as one Cell is above. What the DCC page carries instead is the
-   * root, as a leader.
-   */
-  test('a Network in the address stays chosen, and only By leader is offered', async ({ page }) => {
+  test('a Network chosen on DCC stays chosen, and only By leader is offered', async ({ page }) => {
     await page.clock.setFixedTime(NOW);
     await mockSignedIn(page);
     await mockWholeChurchReader(page);
@@ -748,12 +742,13 @@ test.describe('Filed reports keeps the narrower scope its report had', () => {
 
     await page.goto('/reports/dcc');
     await page.getByLabel('Figures for').selectOption({ label: "Men's Network" });
-    await expect(page.getByRole('link', { name: 'see Filed reports' })).toHaveAttribute(
+    const link = page.getByRole('link', { name: 'see Filed reports' });
+    await expect(link).toHaveAttribute(
       'href',
-      `/reports/filed?month=2026-06-01&kind=dcc&leader=${TWELVE.bonifacio.id}&by=leader`,
+      '/reports/filed?month=2026-06-01&kind=dcc&network=MENS',
     );
+    await link.click();
 
-    await page.goto('/reports/filed?month=2026-06-01&kind=dcc&network=MENS');
     await expect(page).toHaveURL(/\/reports\/filed\?/);
     await expect(page.getByText('Figures for the Men’s Network.')).toBeVisible();
     await expect(page.getByRole('radiogroup', { name: 'Group coverage by' })).toHaveCount(0);

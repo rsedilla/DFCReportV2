@@ -10,7 +10,17 @@ take the same layout, saw it running, and settled four questions one at a time.
 people who came to DCC in the period, once each, at the stage reached by its last day, or so
 far while it is open. Rows are the reader's direct disciples, or those of the leader they
 opened, each counting the placement subtree the DCC report counts for that leader (section
-20). A whole-church reader's rows are the two Networks, labelled and ordered as in 0293.
+20). A whole-church reader's rows are the two roots' 12s, named by the pastor with their
+Network beside, in Network order.
+
+**1a. Figures for keeps the Men's and Women's Networks**, each showing the Network's own total
+by membership (decision 0219), with no rows. A root's 12 can differ from it, which is why the
+rows name the pastor rather than the Network (owner's choice after `architecture-guardian`
+found the first version labelled a root's 12 as the Network and left the Network reports of
+sections 17 and 18 reachable from no screen).
+
+**1b. Cell Groups names the pastor the same way** (owner's choice), replacing decision 0293's
+"Men's Network" and "Women's Network" row labels, so the two tabs describe the same rows alike.
 
 **2. The reader's own row is the reader alone**, 1 if they came and 0 if not, labelled "You"
 or with the opened leader's name. DCC has no own group to count, and the reader is in

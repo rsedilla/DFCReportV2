@@ -252,12 +252,18 @@ export async function getDccTwelve(
   kind: RangeKind,
   start: string,
   guardMonth: string,
-  subject: { kind: 'LEADER'; person_id: string } | { kind: 'WHOLE_CHURCH' },
+  subject:
+    | { kind: 'LEADER'; person_id: string }
+    | { kind: 'WHOLE_CHURCH' }
+    | { kind: 'NETWORK'; network: ReportNetwork },
   signal?: AbortSignal,
 ): Promise<DccTwelve> {
   const params = new URLSearchParams({ kind, start, period: guardMonth, scope: subject.kind });
   if (subject.kind === 'LEADER') {
     params.set('leader_id', subject.person_id);
+  }
+  if (subject.kind === 'NETWORK') {
+    params.set('network', subject.network);
   }
 
   try {

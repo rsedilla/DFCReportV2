@@ -78,7 +78,7 @@ const periodGroup = (page: Page) => page.getByRole('group', { name: 'Report peri
 const twelveTable = (page: Page) =>
   page
     .getByRole('table')
-    .filter({ has: page.getByRole('columnheader', { name: /^(Leader|Network)$/ }) });
+    .filter({ has: page.getByRole('columnheader', { name: 'Leader', exact: true }) });
 const coverageLine = (page: Page) =>
   page.locator('main p').filter({ hasText: /^\d+ of \d+ records filed/ });
 const sundaysLine = (page: Page) =>
@@ -302,7 +302,7 @@ test.describe('My 12 on DCC', () => {
     );
   });
 
-  test('a whole-church reader’s rows are the two Networks, with no row of their own', async ({
+  test('a whole-church reader’s rows are the two pastors, each with their Network, and no own row', async ({
     page,
   }) => {
     const asked = await arrange(page);
@@ -310,31 +310,92 @@ test.describe('My 12 on DCC', () => {
     await page.goto('/reports/dcc');
 
     await expectAsked(asked, { scope: 'WHOLE_CHURCH', leader_id: null });
-    await expect(page.getByRole('heading', { name: /^The Networks · / })).toBeVisible();
+    await expect(page.getByRole('heading', { name: /^The whole church · / })).toBeVisible();
     const table = twelveTable(page);
-    await expect(table.getByRole('columnheader').first()).toHaveText('Network');
+    // A root's row is that pastor's 12, not the Network's membership, so it names the pastor.
+    await expect(table.getByRole('columnheader').first()).toHaveText('Leader');
     const rows = table.locator('tbody tr');
     await expect(rows).toHaveCount(4);
-    await expect(rows.nth(0).getByRole('link', { name: "Men's Network" })).toHaveAttribute(
-      'href',
-      `/reports/dcc?month=2026-06-01&leader=${TWELVE.bonifacio.id}`,
-    );
-    await expect(rows.nth(1).getByRole('link', { name: "Women's Network" })).toHaveAttribute(
-      'href',
-      `/reports/dcc?month=2026-06-01&leader=${TWELVE.aurora.id}`,
-    );
+    await expect(
+      rows.nth(0).getByRole('link', { name: "Bonifacio Esguerra · Men's", exact: true }),
+    ).toHaveAttribute('href', `/reports/dcc?month=2026-06-01&leader=${TWELVE.bonifacio.id}`);
+    await expect(
+      rows.nth(1).getByRole('link', { name: "Aurora Dizon · Women's", exact: true }),
+    ).toHaveAttribute('href', `/reports/dcc?month=2026-06-01&leader=${TWELVE.aurora.id}`);
     expect(await cellsOf(rows.nth(2))).toEqual(['In no row', '+1']);
     expect(await cellsOf(rows.nth(3))).toEqual(['Total', '5', '3', '1', '1', '7', '17']);
     await expect(table.getByText('You', { exact: true })).toHaveCount(0);
+    await expect(table.getByText("Men's Network", { exact: true })).toHaveCount(0);
 
     const select = page.getByLabel('Figures for');
+    await expect(select.locator('optgroup')).toHaveAttribute('label', 'The pastors’ 12');
     await expect(select.locator('option')).toHaveText([
-      'Everyone in your scope',
+      'The whole church',
       "Men's Network",
       "Women's Network",
+      'Bonifacio Esguerra',
+      'Aurora Dizon',
     ]);
-    await select.selectOption({ label: "Women's Network" });
+    await select.selectOption({ label: 'Aurora Dizon' });
     await expect(page).toHaveURL(new RegExp(`[?&]leader=${TWELVE.aurora.id}`));
+    await expect(page).not.toHaveURL(/[?&]network=/);
+  });
+
+  test('a Network chosen shows its own total alone, by membership, and carries into Filed reports', async ({
+    page,
+  }) => {
+    const asked = await arrange(page);
+    await mockWholeChurchReader(page);
+    await page.goto(`/reports/dcc?leader=${TWELVE.bonifacio.id}`);
+
+    const select = page.getByLabel('Figures for');
+    await select.selectOption({ label: "Men's Network" });
+    // The Network replaces the leader in the address rather than sitting beside it.
+    await expect(page).toHaveURL(/[?&]network=MENS/);
+    await expect(page).not.toHaveURL(/[?&]leader=/);
+    await expect(select).toHaveValue('MENS');
+    await expectAsked(asked, { scope: 'NETWORK', network: 'MENS', leader_id: null });
+
+    await expect(
+      page.getByRole('heading', { name: "Men's Network · where people are in their journey" }),
+    ).toBeVisible();
+    const rows = twelveTable(page).locator('tbody tr');
+    // The Network's membership (10), not its pastor's row (9): the Total row alone.
+    await expect(rows).toHaveCount(1);
+    expect(await cellsOf(rows.nth(0))).toEqual(['Total', '2', '2', '1', '1', '4', '10']);
+    await expect(twelveTable(page).getByRole('link')).toHaveCount(0);
+    await expect(
+      page.locator('main p').filter({ hasText: /^Different people who came/ }),
+    ).toHaveText(
+      'Different people who came to DCC in the month, once each, at the stage they had reached by its last day, or so far while it is open.',
+    );
+
+    await expect(coverageLine(page)).toHaveText(
+      '10 of 12 records filed in the month · see Filed reports',
+    );
+    await expect(page.getByRole('link', { name: 'see Filed reports' })).toHaveAttribute(
+      'href',
+      '/reports/filed?month=2026-06-01&kind=dcc&network=MENS',
+    );
+    // How often people came follows the Network's figure too.
+    await expect(
+      page.getByRole('region', { name: 'How often people came' }).getByRole('definition').last(),
+    ).toHaveText('10');
+
+    // Back to the whole church drops the Network.
+    await select.selectOption({ label: 'The whole church' });
+    await expect(page).not.toHaveURL(/[?&]network=/);
+    await expect(page.getByRole('heading', { name: /^The whole church · / })).toBeVisible();
+  });
+
+  test('a Network in the address does not widen a leader’s own figures', async ({ page }) => {
+    const asked = await arrange(page);
+    await page.goto('/reports/dcc?network=MENS');
+
+    await expect(page.getByRole('heading', { name: /^My 12 · / })).toBeVisible();
+    await expectAsked(asked, { scope: 'LEADER', leader_id: READER });
+    expect(asked.some((query) => query.get('scope') === 'NETWORK')).toBe(false);
+    await expect(page.getByLabel('Figures for').locator('option[value="MENS"]')).toHaveCount(0);
   });
 
   test('Figures for offers the reader’s direct 12 by name', async ({ page }) => {
@@ -396,20 +457,19 @@ test.describe('How often people came, and Year', () => {
 });
 
 test.describe('what decision 0294 took off this page', () => {
-  test('no Month/Year radio, no Network select, no stages frame and no Recording coverage heading', async ({
+  test('no Month/Year radio, no stages frame and no Recording coverage heading', async ({
     page,
   }) => {
     await arrange(page);
     await mockWholeChurchReader(page);
     await page.goto('/reports/dcc');
-    await expect(page.getByRole('heading', { name: /^The Networks · / })).toBeVisible();
+    await expect(page.getByRole('heading', { name: /^The whole church · / })).toBeVisible();
 
     await expect(page.getByRole('radiogroup', { name: 'Report period' })).toHaveCount(0);
     await expect(
       page.getByRole('region', { name: 'Where people are in their journey', exact: true }),
     ).toHaveCount(0);
     await expect(page.getByRole('heading', { name: 'Recording coverage' })).toHaveCount(0);
-    await expect(page.getByLabel('Figures for').locator('option[value="MENS"]')).toHaveCount(0);
   });
 });
 

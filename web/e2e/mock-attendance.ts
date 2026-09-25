@@ -1204,6 +1204,8 @@ async function mockTwelveLeaders(page: Page): Promise<void> {
  * - Consuelo's 12, opened from a row: one row, and Consuelo herself did not come, so her own
  *   row reads 0 with its numbers shown -- a DCC own row has no Cell to be missing.
  * - Whole Church: the two Network roots, and no own row.
+ * - A Network: no rows, and its membership as the total (10 Men's, 8 Women's), which is more
+ *   than its root's row, so a screen showing the root's figure for it would be caught.
  *
  * `n` and `removed_events` are the period's Sundays: the week of 8 June 2026 held only the
  * removed 14th, so it counts none; any other week one; June three, with the 14th removed;
@@ -1267,11 +1269,31 @@ export async function mockDccTwelve(
       );
     }
 
+    if (params.get('scope') === 'NETWORK') {
+      // A Network's own figure, by membership (decision 0219): no rows, so everybody is
+      // elsewhere. It is more than its root's row below, which counts the root's 12 alone.
+      const total =
+        params.get('network') === 'WOMENS' ? stages(3, 1, 0, 1, 3) : stages(2, 2, 1, 1, 4);
+
+      return route.fulfill(
+        json({
+          ...period,
+          coverage: { met: 10, owed: 12 },
+          rows: [],
+          own: null,
+          overlap: 0,
+          elsewhere: total.unique_people,
+          total,
+          buckets: buckets(params.get('network') === 'WOMENS' ? [5, 2, 1] : [6, 3, 1]),
+        }),
+      );
+    }
+
     if (params.get('scope') === 'WHOLE_CHURCH') {
       return route.fulfill(
         json({
           ...period,
-          // The Network roots, labelled and ordered by their Network (decision 0294).
+          // The Network roots, ordered by their Network (decision 0294).
           rows: [
             { leader: TWELVE.bonifacio, network: 'MENS', ...stages(2, 2, 1, 0, 4) },
             { leader: TWELVE.aurora, network: 'WOMENS', ...stages(3, 1, 0, 1, 2) },

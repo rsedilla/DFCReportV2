@@ -15,7 +15,6 @@ import { CONTROL_BAR } from '@/components/ui/frame';
 import { getMe, holdsWholeChurch } from '@/lib/me';
 import { describeFailure } from '@/lib/messages';
 import { getBranch } from '@/lib/network';
-import { networkLabel } from '@/lib/people';
 import { getCellTwelve } from '@/lib/reports';
 import {
   rangeGuardMonth,
@@ -42,7 +41,7 @@ import { useScreenAddress } from '@/lib/screen-address';
  * in surname order, never numbered, sorted by a figure or coloured (section 13). Opening a
  * name shows that leader's 12, one generation down; Figures for offers the same names. A
  * whole-church reader's rows are the Network roots, where the Network screen starts them
- * (decision 0268), labelled and ordered by their Network (decision 0293).
+ * (decision 0268), each named by the pastor with their Network beside (decision 0294).
  *
  * **Year keeps its month-by-month table** (decision 0257) beneath its 12, because a year's
  * stage and its months answer different questions and are never added together.
@@ -158,10 +157,10 @@ export function CellReport() {
             className="border-line bg-surface focus-visible:outline-accent mt-2 min-h-11 max-w-full rounded-md border px-3 text-sm focus-visible:outline-2 focus-visible:outline-offset-2"
           >
             <option value="">{wholeChurch ? 'Everyone in your scope' : 'Everyone you oversee'}</option>
-            <optgroup label={wholeChurch ? 'The Networks' : 'Your direct 12'}>
+            <optgroup label={wholeChurch ? 'The pastors’ 12' : 'Your direct 12'}>
               {options.map((row) => (
                 <option key={row.leader!.id} value={row.leader!.id}>
-                  {row.network ? networkLabel(row.network) : row.leader!.full_name}
+                  {row.leader!.full_name}
                 </option>
               ))}
             </optgroup>

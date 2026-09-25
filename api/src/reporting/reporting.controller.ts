@@ -265,9 +265,9 @@ export class ReportingController {
    * `GET /api/v1/reports/dcc/twelve` -- DCC's My 12 over a week, a month, a quarter or a year
    * (SKILL.md sections 9, 13, 17 and 20; decision 0294).
    *
-   * **The Cell table's route on the DCC report's guard and selector.** `NETWORK` is refused:
-   * a whole-church reader's rows are the two Networks, each opening that root's 12. The reach
-   * check, naming and order are the Cell table's, shared rather than copied.
+   * **The Cell table's route on the DCC report's guard and selector.** A whole-church reader's
+   * rows are the two roots' 12s; a `NETWORK` selector returns the Network's total, by
+   * membership, and no rows. The reach check, naming and order are the Cell table's, shared.
    */
   @Get('dcc/twelve')
   @RequiresCapability(Capability.ReportsViewSubtree, {
@@ -282,21 +282,9 @@ export class ReportingController {
     @CurrentActor() actor: Actor,
   ): Promise<Record<string, unknown>> {
     const scope = scopeOf(query);
-    if (scope.kind === 'NETWORK') {
-      throw new ValidationFailedError(
-        'A Network is shown as a row of the whole church, so it has no 12 of its own.',
-        {
-          field: 'scope',
-          value: 'NETWORK',
-        },
-      );
-    }
     await this.assertNamesSomebody(scope);
 
-    const subject =
-      scope.kind === 'LEADER'
-        ? ({ kind: 'LEADER', person_id: scope.person_id } as const)
-        : ({ kind: 'WHOLE_CHURCH' } as const);
+    const subject = scope;
     const twelve = await this.reporting.dccTwelve(subject, query.kind, query.start, query.period);
     const rows = await this.nameTwelveRows(actor, subject, twelve.at, twelve.rows);
 
@@ -328,7 +316,10 @@ export class ReportingController {
    */
   private async nameTwelveRows(
     actor: Actor,
-    scope: { kind: 'LEADER'; person_id: string } | { kind: 'WHOLE_CHURCH' },
+    scope:
+      | { kind: 'LEADER'; person_id: string }
+      | { kind: 'WHOLE_CHURCH' }
+      | { kind: 'NETWORK'; network: NetworkName },
     at: Date,
     rows: readonly {
       leader_id: string;
@@ -343,7 +334,9 @@ export class ReportingController {
         selector:
           scope.kind === 'LEADER'
             ? { kind: 'LEADER' as const, personId: scope.person_id }
-            : { kind: 'WHOLE_CHURCH' as const },
+            : scope.kind === 'NETWORK'
+              ? { kind: 'NETWORK' as const, network: scope.network }
+              : { kind: 'WHOLE_CHURCH' as const },
         at,
       },
     ]);

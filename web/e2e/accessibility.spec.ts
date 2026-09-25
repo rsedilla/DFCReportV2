@@ -885,7 +885,8 @@ const SCANS = [
     },
   },
   {
-    // A whole-church reader: the Network roots as rows, and no row of their own.
+    // A whole-church reader: the Network roots as rows, each named by the pastor with their
+    // Network beside (decision 0294), and no row of their own.
     name: 'cell attendance report, whole church',
     route: '/reports/cells',
     async before(page: import('@playwright/test').Page) {
@@ -894,7 +895,7 @@ const SCANS = [
       await mockCellTwelve(page);
     },
     async arrange(page: import('@playwright/test').Page) {
-      await expect(page.getByRole('link', { name: "Women's Network" })).toBeVisible();
+      await expect(page.getByRole('link', { name: "Aurora Dizon · Women's" })).toBeVisible();
       await expect(page.getByText('Loading…')).toHaveCount(0);
     },
   },
@@ -1112,6 +1113,21 @@ const SCANS = [
       await expect(page.getByRole('heading', { name: /^My 12 · / })).toBeVisible();
       await expect(page.getByRole('heading', { name: 'How often people came' })).toBeVisible();
       await expect(page.getByRole('link', { name: 'see Filed reports' })).toBeVisible();
+    },
+  },
+  {
+    // One Network chosen by a whole-church reader (decision 0294): the Network's own total by
+    // membership, the Total row alone, and Figures for offering the Networks and the pastors.
+    name: 'dcc figures report, one network',
+    route: '/reports/dcc?network=MENS',
+    async before(page: import('@playwright/test').Page) {
+      await mockSignedIn(page);
+      await mockWholeChurchReader(page);
+      await mockDccTwelve(page);
+    },
+    async arrange(page: import('@playwright/test').Page) {
+      await expect(page.getByRole('heading', { name: /^Men's Network · / })).toBeVisible();
+      await expect(page.getByText('10 of 12 records filed in the month')).toBeVisible();
     },
   },
   {
@@ -1785,6 +1801,13 @@ const TARGET_EXEMPT: { name: string; why: string }[] = [
       'The controls of the measured "cell attendance report" less its Filed reports link, with ' +
       'Quarterly pressed. ' +
       'Measuring it would re-measure controls already covered.',
+  },
+  {
+    name: 'dcc figures report, one network',
+    why:
+      'The controls of the measured "dcc figures report" less its My 12 name links, since a ' +
+      "Network's table is its Total row alone; Figures for gains two Network options inside " +
+      'the one select. It needs the whole-church /auth/me mock the sweep does not install.',
   },
   {
     name: 'cell attendance report, whole church',

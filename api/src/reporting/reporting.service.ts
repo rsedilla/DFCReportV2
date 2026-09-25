@@ -245,6 +245,13 @@ export interface CellTwelve {
 export type CellTwelveSubject = { kind: 'LEADER'; person_id: string } | { kind: 'WHOLE_CHURCH' };
 
 /**
+ * Who a DCC My 12 table is about: a leader, Whole Church, or a Network (decision 0294). A
+ * Network has no rows: its population is its membership (decision 0219), and it is the
+ * leaders' own 12s, not the Network's, that break a figure down by row.
+ */
+export type DccTwelveSubject = CellTwelveSubject | { kind: 'NETWORK'; network: NetworkName };
+
+/**
  * A DCC My 12 table over one period (decision 0294): the Cell table's shape, attributed by
  * the person rather than by the meeting (section 20).
  *
@@ -644,13 +651,15 @@ export class ReportingService {
    *
    * **The Cell table's rule, attributed by the person** (section 20). Rows are the subject's
    * direct disciples at the period's end, or the Network roots for a whole-church reader,
-   * each counting the placement subtree the DCC monthly report counts for that leader.
+   * each counting the placement subtree the DCC monthly report counts for that leader. A
+   * Network has no rows, and its total is its membership at the period's end, as the monthly
+   * report counts it (decision 0219).
    *
    * **Coverage sums decision 0224's obligations over the period's Sundays**, placed at each
    * event date as the month's line is; a Sunday that has not come owes nothing.
    */
   async dccTwelve(
-    subject: CellTwelveSubject,
+    subject: DccTwelveSubject,
     kind: ReportRangeKind,
     from: string,
     guardMonth: string,
@@ -676,7 +685,9 @@ export class ReportingService {
           ? (await this.hierarchy.directChildrenAsOf(trx, subject.person_id, end)).map(
               (personId) => ({ personId, network: null }),
             )
-          : await this.hierarchy.rootSeatsAsOf(trx, end);
+          : subject.kind === 'NETWORK'
+            ? []
+            : await this.hierarchy.rootSeatsAsOf(trx, end);
 
       // Sequential for the reason `cellCoverage` gives: one connection, one transaction.
       const rows: (TwelveFigure & {
@@ -701,7 +712,9 @@ export class ReportingService {
       const total = await figuresOf(
         subject.kind === 'LEADER'
           ? await this.hierarchy.reportingSubtree(trx, subject.person_id, start, end)
-          : undefined,
+          : subject.kind === 'NETWORK'
+            ? await this.networks.peopleInNetworkAsOf(trx, subject.network, end)
+            : undefined,
       );
 
       const union = new Set<string>();
@@ -724,7 +737,9 @@ export class ReportingService {
           to,
           subject.kind === 'LEADER'
             ? { kind: 'LEADER', personId: subject.person_id }
-            : { kind: 'WHOLE_CHURCH' },
+            : subject.kind === 'NETWORK'
+              ? { kind: 'NETWORK', network: subject.network }
+              : { kind: 'WHOLE_CHURCH' },
           { executor: trx },
         ),
         n: total.n,

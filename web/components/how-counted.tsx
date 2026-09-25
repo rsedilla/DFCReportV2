@@ -43,7 +43,7 @@ const TEXT: Record<'cells' | 'dcc', Term[]> = {
     {
       term: 'My 12',
       definition:
-        'Your direct disciples (for a whole-church reader, the two Networks), each counting everyone under them, then your own Cell groups, then the total. People are counted once each, however many meetings they came to.',
+        'Your direct disciples (for a whole-church reader, the two pastors at the root of each Network), each counting everyone under them, then your own Cell groups, then the total. People are counted once each, however many meetings they came to.',
     },
     {
       term: 'Where people are in their journey',
@@ -66,7 +66,7 @@ const TEXT: Record<'cells' | 'dcc', Term[]> = {
     {
       term: 'My 12',
       definition:
-        'Your direct disciples (for a whole-church reader, the two Networks), each counting everyone under them, then you, then the total. People are counted once each, however many Sundays they came to.',
+        'Your direct disciples (for a whole-church reader, the two pastors at the root of each Network), each counting everyone under them, then you, then the total. People are counted once each, however many Sundays they came to.',
     },
     {
       term: 'Where people are in their journey',
@@ -77,6 +77,11 @@ const TEXT: Record<'cells' | 'dcc', Term[]> = {
       term: 'How often people came',
       definition:
         'Monthly only. “All of them” means every Sunday this month that had a service. A Sunday with no service is not counted.',
+    },
+    {
+      term: 'A Network',
+      definition:
+        'Chosen in Figures for, it counts everyone who belongs to the Network, which can be more than its pastor’s 12. Recording coverage counts records owed, not people.',
     },
     {
       term: 'Elsewhere',

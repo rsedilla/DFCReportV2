@@ -17,7 +17,7 @@ import { getMe, holdsWholeChurch } from '@/lib/me';
 import { describeFailure } from '@/lib/messages';
 import { getBranch } from '@/lib/network';
 import { networkLabel } from '@/lib/people';
-import { getDccTwelve } from '@/lib/reports';
+import { getDccTwelve, type ReportNetwork } from '@/lib/reports';
 import { rangeGuardMonth, rangeStartOf, type RangeKind } from '@/lib/report-range';
 import { dayLabel, monthFromQuery, todayInManila } from '@/lib/reporting-month';
 import { useScreenAddress } from '@/lib/screen-address';
@@ -41,6 +41,11 @@ import { useScreenAddress } from '@/lib/screen-address';
  * two views separate, and both add up to the same people.
  *
  * **Year keeps its month-by-month table** (decision 0257) beneath its 12.
+ *
+ * **A whole-church reader's rows name the pastor, and Figures for keeps the Networks**
+ * (decision 0294). A Network's DCC figure is its membership (decision 0219), which differs
+ * from its root's 12, so a row is labelled by whose 12 it is, and choosing a Network shows the
+ * Network's own total, as sections 17 and 18 require.
  */
 export default function DccReportPage() {
   return (
@@ -74,6 +79,9 @@ export function DccReport() {
   const start = asked > current ? current : asked;
   const guardMonth = rangeGuardMonth(kind, start, today);
   const leader = search.get('leader');
+  const networkParam = search.get('network');
+  const network: ReportNetwork | null =
+    networkParam === 'MENS' || networkParam === 'WOMENS' ? networkParam : null;
 
   const me = useQuery({ queryKey: ['me'], queryFn: ({ signal }) => getMe(signal) });
   const wholeChurch = holdsWholeChurch(me.data, 'reports.view_subtree');
@@ -83,7 +91,12 @@ export function DccReport() {
     : me.data
       ? ({ kind: 'LEADER', person_id: me.data.person_id } as const)
       : null;
-  const subject = leader ? ({ kind: 'LEADER', person_id: leader } as const) : own;
+  // A Network narrows a whole-church grant and never widens a leader's (section 19).
+  const subject = leader
+    ? ({ kind: 'LEADER', person_id: leader } as const)
+    : network !== null && wholeChurch
+      ? ({ kind: 'NETWORK', network } as const)
+      : own;
 
   const twelve = useQuery({
     queryKey: ['dcc-twelve', kind, start, subject],
@@ -145,15 +158,28 @@ export function DccReport() {
           </label>
           <select
             id="dcc-scope"
-            value={leader ?? ''}
-            onChange={(event) => go({ leader: event.target.value === '' ? null : event.target.value })}
+            value={leader ?? (wholeChurch && network !== null ? network : '')}
+            onChange={(event) => {
+              const value = event.target.value;
+              go(
+                value === 'MENS' || value === 'WOMENS'
+                  ? { network: value, leader: null }
+                  : { network: null, leader: value === '' ? null : value },
+              );
+            }}
             className="border-line bg-surface focus-visible:outline-accent mt-2 min-h-11 max-w-full rounded-md border px-3 text-sm focus-visible:outline-2 focus-visible:outline-offset-2"
           >
-            <option value="">{wholeChurch ? 'Everyone in your scope' : 'Everyone you oversee'}</option>
-            <optgroup label={wholeChurch ? 'The Networks' : 'Your direct 12'}>
+            <option value="">{wholeChurch ? 'The whole church' : 'Everyone you oversee'}</option>
+            {wholeChurch ? (
+              <>
+                <option value="MENS">{networkLabel('MENS')}</option>
+                <option value="WOMENS">{networkLabel('WOMENS')}</option>
+              </>
+            ) : null}
+            <optgroup label={wholeChurch ? 'The pastors’ 12' : 'Your direct 12'}>
               {options.map((row) => (
                 <option key={row.leader!.id} value={row.leader!.id}>
-                  {row.network ? networkLabel(row.network) : row.leader!.full_name}
+                  {row.leader!.full_name}
                 </option>
               ))}
             </optgroup>
@@ -204,6 +230,7 @@ export function DccReport() {
                       month: guardMonth,
                       kind: 'dcc',
                       ...(leader ? { leader, by: 'leader' } : {}),
+                      ...(!leader && subject?.kind === 'NETWORK' ? { network: subject.network } : {}),
                     }).toString()}`}
                     className="text-accent focus-visible:outline-accent inline-flex min-h-6 items-center underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2"
                   >
@@ -221,13 +248,25 @@ export function DccReport() {
             </p>
           </div>
 
-          <TwelveTable
-            twelve={twelve.data}
-            kind={kind}
-            subjectName={subjectName}
-            where="DCC"
-            openHref={(id) => `/reports/dcc?${periodParams({ leader: id })}`}
-          />
+          {subject?.kind === 'NETWORK' ? (
+            // A Network's own total, by membership (decision 0219); its rows are the pastors'.
+            <TwelveTable
+              twelve={{ ...twelve.data, rows: [], own: null, overlap: 0, elsewhere: 0 }}
+              kind={kind}
+              subjectName={null}
+              where="DCC"
+              title={networkLabel(subject.network)}
+              openHref={(id) => `/reports/dcc?${periodParams({ leader: id })}`}
+            />
+          ) : (
+            <TwelveTable
+              twelve={twelve.data}
+              kind={kind}
+              subjectName={subjectName}
+              where="DCC"
+              openHref={(id) => `/reports/dcc?${periodParams({ leader: id })}`}
+            />
+          )}
 
           {twelve.data.buckets !== null && twelve.data.n > 0 ? (
             <AttendanceBuckets

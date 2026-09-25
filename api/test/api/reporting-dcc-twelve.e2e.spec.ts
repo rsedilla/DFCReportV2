@@ -819,6 +819,150 @@ describe('GET /api/v1/reports/dcc/twelve (sections 9, 13 and 20; decision 0294)'
   });
 
   // ---------------------------------------------------------------------------------------
+  // A Network (decision 0294, decision 0219)
+  // ---------------------------------------------------------------------------------------
+
+  /**
+   * **A Network's figure is its membership, not its root's subtree**, exactly as the monthly
+   * report counts it (decision 0219), and it has no rows: nothing is in a row, so the whole
+   * total is `elsewhere` and section 20's identity still holds in plain sight.
+   *
+   * Teodoro holds no pastoral assignment and is in the Men's Network, so he is in no root's
+   * subtree and is in the Men's figure. Rosa was in the Men's Network until 20 June and is in
+   * the Women's from then, so the period's end places her in the Women's.
+   */
+  describe('a NETWORK subject', () => {
+    const networkOf = (network: 'MENS' | 'WOMENS', kind = 'MONTH', start = JUNE, period = JUNE) =>
+      `kind=${kind}&start=${start}&period=${period}&scope=NETWORK&network=${network}`;
+
+    beforeEach(async () => {
+      const teodoro = await createPerson(db, {
+        firstName: 'Teodoro',
+        lastName: 'Ignacio',
+        network: 'MENS',
+      });
+      const rosa = await createPerson(db, {
+        firstName: 'Rosa',
+        lastName: 'Limbaga',
+        network: 'MENS',
+      });
+      const switched = new Date('2020-06-20T00:00:00+08:00');
+      await db
+        .updateTable('network_assignments')
+        .set({ ended_at: switched })
+        .where('person_id', '=', rosa.id)
+        .execute();
+      await db
+        .insertInto('network_assignments')
+        .values({
+          person_id: rosa.id,
+          network: 'WOMENS',
+          reason: 'A fixture standing in for a section 4 correction.',
+          actor_id: null,
+          started_at: switched,
+        })
+        .execute();
+
+      for (const sunday of ['2020-04-05', '2020-05-03', '2020-06-07', '2020-06-14', '2020-06-21']) {
+        await eventOn(sunday);
+      }
+      await removeSunday('2020-06-21');
+      await present('2020-04-05', anacleto, mark);
+      await present('2020-06-07', anacleto, mark);
+      await present('2020-06-07', teodoro, null);
+      await present('2020-06-07', rosa, null);
+      await present('2020-06-14', carmelita, oriel);
+      await present('2020-06-14', benigno, onofre);
+      await present('2020-05-03', manuel, raymond);
+    });
+
+    it.each(['MENS', 'WOMENS'] as const)(
+      '%s: a month answers what the monthly NETWORK report answers, with no rows',
+      async (network) => {
+        const month = await monthly(
+          `period=${JUNE}&scope=NETWORK&network=${network}`,
+          adminAccount,
+        );
+        const body = await ok(networkOf(network), adminAccount);
+
+        expect(month.status).toBe(200);
+        expect(body.rows).toEqual([]);
+        expect(body.own).toBeNull();
+        expect(body.overlap).toBe(0);
+        expect(body.elsewhere).toBe(body.total.unique_people);
+        expect(body.total.unique_people).toBe(month.body.unique_people);
+        expect(body.total.classification).toEqual(month.body.classification);
+        expect(body.buckets).toEqual(month.body.buckets);
+        expect(body.coverage).toEqual(month.body.coverage);
+        expect(body.n).toBe(month.body.n);
+        expect(body.removed_events).toEqual(month.body.removed_events);
+        expect(body.open).toBe(month.body.open);
+      },
+    );
+
+    it('counts membership at the period’s end, not a root’s subtree', async () => {
+      const mens = await ok(networkOf('MENS'), adminAccount);
+      const womens = await ok(networkOf('WOMENS'), adminAccount);
+
+      // Men's: Anacleto, Benigno and Teodoro, who is under no root. Women's: Carmelita, and
+      // Rosa, who moved on the 20th.
+      expect(mens.total.unique_people).toBe(3);
+      expect(womens.total.unique_people).toBe(2);
+      expect(mens.total.classification).toEqual({ ...ZERO, vip: 2, second_timer: 1 });
+    });
+
+    it('adds up, Men’s and Women’s, to the whole church (section 20)', async () => {
+      for (const [kind, start, period] of [
+        ['MONTH', JUNE, JUNE],
+        ['WEEK', '2020-06-01', JUNE],
+        ['QUARTER', '2020-04-01', JUNE],
+        ['YEAR', '2020-01-01', '2020-12-01'],
+      ]) {
+        const mens = await ok(networkOf('MENS', kind, start, period), adminAccount);
+        const womens = await ok(networkOf('WOMENS', kind, start, period), adminAccount);
+        const whole = await ok(
+          `kind=${kind}&start=${start}&period=${period}&scope=WHOLE_CHURCH`,
+          adminAccount,
+        );
+
+        expect(mens.total.unique_people + womens.total.unique_people).toBe(
+          whole.total.unique_people,
+        );
+        expect(mens.buckets === null).toBe(kind !== 'MONTH');
+      }
+    });
+
+    it('sums its coverage over a quarter from the months', async () => {
+      const quarter = await ok(networkOf('MENS', 'QUARTER', '2020-04-01', JUNE), adminAccount);
+
+      let met = 0;
+      let owed = 0;
+      for (const month of ['2020-04-01', '2020-05-01', '2020-06-01']) {
+        const response = await monthly(`period=${month}&scope=NETWORK&network=MENS`, adminAccount);
+        expect(response.status).toBe(200);
+        met += response.body.coverage.met;
+        owed += response.body.coverage.owed;
+      }
+
+      expect(quarter.coverage).toEqual({ met, owed });
+      expect(quarter.coverage.owed).toBeGreaterThan(0);
+      expect(quarter.rows).toEqual([]);
+    });
+
+    it.each([
+      ['Manuel', () => manuelAccount],
+      ['Mark', () => markAccount],
+    ])('refuses %s, whose grant is their own subtree, with no figures', async (_label, account) => {
+      const response = await twelve(networkOf('MENS'), account());
+
+      expect(response.status).toBe(403);
+      expect(response.body.error.code).toBe('SCOPE_DENIED');
+      expect(response.body).not.toHaveProperty('total');
+      expect(response.body).not.toHaveProperty('coverage');
+    });
+  });
+
+  // ---------------------------------------------------------------------------------------
   // Refusals
   // ---------------------------------------------------------------------------------------
 
@@ -868,15 +1012,14 @@ describe('GET /api/v1/reports/dcc/twelve (sections 9, 13 and 20; decision 0294)'
       await ok(`kind=QUARTER&start=2020-04-01&period=${JUNE}&scope=WHOLE_CHURCH`, adminAccount);
     });
 
-    it('refuses a NETWORK scope, which is a row of the whole church', async () => {
+    it('refuses a NETWORK scope that names no Network', async () => {
       const response = await twelve(
-        `kind=MONTH&start=${JUNE}&period=${JUNE}&scope=NETWORK&network=MENS`,
+        `kind=MONTH&start=${JUNE}&period=${JUNE}&scope=NETWORK`,
         adminAccount,
       );
 
       expect(response.status).toBe(422);
       expect(response.body.error.code).toBe('VALIDATION_FAILED');
-      expect(refusedFields(response.body)).toEqual(['scope']);
       expect(response.body).not.toHaveProperty('rows');
     });
 
